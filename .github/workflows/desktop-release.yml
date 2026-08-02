@@ -1,0 +1,74 @@
+name: Desktop Release
+
+# Builds the Windows installer for the desktop app (desktop/) and attaches
+# it to a GitHub Release. Two ways to trigger it:
+#   1. Push a tag matching "desktop-v*" (e.g. desktop-v0.1.0)
+#   2. Run it manually from the Actions tab ("Run workflow") and supply a
+#      version number - useful for a test build without cutting a real tag.
+#
+# The release is created as a draft + prerelease so nothing goes public
+# until a maintainer reviews it on GitHub and clicks "Publish release".
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build and tag (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Determine release tag
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag_name=desktop-v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag_name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: ${{ steps.tag.outputs.tag_name }}
+          releaseName: "Lanesra OS Desktop ${{ steps.tag.outputs.tag_name }}"
+          releaseBody: |
+            Early Access Windows build of the Lanesra OS desktop edition.
+            See desktop/README.md for what's included and what's still in progress.
+          releaseDraft: true
+          prerelease: true
