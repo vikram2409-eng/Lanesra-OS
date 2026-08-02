@@ -70,6 +70,18 @@ pub fn run() {
             commands::invoice_commands::void_invoice,
             commands::invoice_commands::record_invoice_payment,
             commands::invoice_commands::refresh_overdue_invoices,
+            commands::contract_commands::list_contracts,
+            commands::contract_commands::list_contracts_by_company,
+            commands::contract_commands::get_contract,
+            commands::contract_commands::create_contract,
+            commands::contract_commands::update_contract,
+            commands::contract_commands::archive_contract,
+            commands::task_commands::list_tasks,
+            commands::task_commands::list_tasks_by_related,
+            commands::task_commands::get_task,
+            commands::task_commands::create_task,
+            commands::task_commands::update_task,
+            commands::task_commands::archive_task,
             commands::dashboard_commands::dashboard_summary,
         ])
         .run(tauri::generate_context!())

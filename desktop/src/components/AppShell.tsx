@@ -8,7 +8,9 @@ export type Section =
   | "opportunities"
   | "quotes"
   | "orders"
-  | "invoices";
+  | "invoices"
+  | "contracts"
+  | "tasks";
 
 const NAV_ITEMS: { section: Section; label: string }[] = [
   { section: "dashboard", label: "Dashboard" },
@@ -19,6 +21,8 @@ const NAV_ITEMS: { section: Section; label: string }[] = [
   { section: "quotes", label: "Quotes" },
   { section: "orders", label: "Orders" },
   { section: "invoices", label: "Invoices" },
+  { section: "contracts", label: "Contracts" },
+  { section: "tasks", label: "Tasks" },
 ];
 
 export function AppShell({

@@ -1,11 +1,13 @@
 pub mod audit;
 pub mod company;
 pub mod contact;
+pub mod contract;
 pub mod dashboard;
 pub mod invoice;
 pub mod opportunity;
 pub mod order;
 pub mod product;
 pub mod quote;
+pub mod task;
 pub mod user;
 pub mod workspace;

@@ -11,6 +11,8 @@ import { Opportunities } from "./features/opportunities/Opportunities";
 import { Quotes } from "./features/quotes/Quotes";
 import { Orders } from "./features/orders/Orders";
 import { Invoices } from "./features/invoices/Invoices";
+import { Contracts } from "./features/contracts/Contracts";
+import { Tasks } from "./features/tasks/Tasks";
 import { api } from "./lib/api";
 import type { User, Workspace } from "./lib/types";
 
@@ -80,6 +82,8 @@ export function App() {
       {section === "quotes" && <Quotes />}
       {section === "orders" && <Orders />}
       {section === "invoices" && <Invoices />}
+      {section === "contracts" && <Contracts />}
+      {section === "tasks" && <Tasks currentUserId={boot.user.id} />}
     </AppShell>
   );
 }

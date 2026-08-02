@@ -1,12 +1,14 @@
 pub mod auth_commands;
 pub mod company_commands;
 pub mod contact_commands;
+pub mod contract_commands;
 pub mod dashboard_commands;
 pub mod invoice_commands;
 pub mod opportunity_commands;
 pub mod order_commands;
 pub mod product_commands;
 pub mod quote_commands;
+pub mod task_commands;
 pub mod workspace_commands;
 
 use rusqlite::Connection;

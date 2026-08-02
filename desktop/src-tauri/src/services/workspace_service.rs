@@ -1,19 +1,22 @@
+use chrono::{Duration, Utc};
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::company::CompanyInput;
 use crate::models::contact::ContactInput;
+use crate::models::contract::ContractInput;
 use crate::models::invoice::PaymentInput;
 use crate::models::opportunity::OpportunityInput;
 use crate::models::order::OrderInput;
 use crate::models::product::ProductInput;
 use crate::models::quote::{QuoteInput, QuoteLineInput};
+use crate::models::task::TaskInput;
 use crate::models::user::User;
 use crate::models::workspace::{Workspace, WorkspaceSetup};
 use crate::repositories::{audit_repo, user_repo, workspace_repo};
 use crate::services::{
-    auth_service, company_service, contact_service, invoice_service, opportunity_service,
-    order_service, product_service, quote_service,
+    auth_service, company_service, contact_service, contract_service, invoice_service,
+    opportunity_service, order_service, product_service, quote_service, task_service,
 };
 
 /// Runs the first-run wizard (5.1): creates the single workspace this
@@ -242,6 +245,102 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
             paid_at: crate::domain::ids::now_iso(),
             method: Some("Bank transfer".into()),
             reference: Some("Partial payment on account".into()),
+        },
+        actor,
+    )?;
+
+    // Contract sourced from the accepted quote, with a renewal date inside
+    // the 60-day alert window so the dashboard's renewal KPI has data
+    // (FR-CTR-05). Deliberately has no opportunity link (FR-CTR-03).
+    let renewal_date = (Utc::now() + Duration::days(45)).format("%Y-%m-%d").to_string();
+    let contract = contract_service::create(
+        conn,
+        &ContractInput {
+            company_id: acme.id.clone(),
+            contact_id: Some(acme_contact.id.clone()),
+            source_quote_id: Some(accepted_quote.quote.id.clone()),
+            title: "Acme Consulting Master Services Agreement".into(),
+            r#type: Some("Master Services Agreement".into()),
+            value_cents: 540000,
+            currency_code: currency_code.to_string(),
+            owner_user_id: Some(actor_user_id.to_string()),
+            start_date: Some((Utc::now() - Duration::days(200)).format("%Y-%m-%d").to_string()),
+            end_date: Some(renewal_date.clone()),
+            renewal_date: Some(renewal_date.clone()),
+            notice_period_days: Some(30),
+            status: "Active".into(),
+            notes: Some("Sample contract seeded by first-run setup".into()),
+        },
+        actor,
+    )?;
+
+    // A general task, plus one linked to each of an opportunity, a
+    // contract and a company (FR-TSK-02), spread across overdue, due
+    // today/upcoming and completed so every task view has sample data.
+    task_service::create(
+        conn,
+        &acme.workspace_id,
+        &TaskInput {
+            title: "Prepare quarterly business review".into(),
+            description: None,
+            owner_user_id: Some(actor_user_id.to_string()),
+            priority: "Normal".into(),
+            status: "Not Started".into(),
+            due_date: Some((Utc::now() + Duration::days(7)).format("%Y-%m-%d").to_string()),
+            reminder_at: None,
+            related_type: None,
+            related_id: None,
+        },
+        actor,
+    )?;
+
+    task_service::create(
+        conn,
+        &acme.workspace_id,
+        &TaskInput {
+            title: "Follow up on revised quote".into(),
+            description: Some("Opportunity next step from the pipeline".into()),
+            owner_user_id: Some(actor_user_id.to_string()),
+            priority: "High".into(),
+            status: "In Progress".into(),
+            due_date: Some((Utc::now() - Duration::days(2)).format("%Y-%m-%d").to_string()),
+            reminder_at: None,
+            related_type: Some("Opportunity".into()),
+            related_id: Some(opportunity.id.clone()),
+        },
+        actor,
+    )?;
+
+    task_service::create(
+        conn,
+        &acme.workspace_id,
+        &TaskInput {
+            title: "Review renewal terms with legal".into(),
+            description: None,
+            owner_user_id: Some(actor_user_id.to_string()),
+            priority: "Urgent".into(),
+            status: "Not Started".into(),
+            due_date: Some((Utc::now() + Duration::days(15)).format("%Y-%m-%d").to_string()),
+            reminder_at: None,
+            related_type: Some("Contract".into()),
+            related_id: Some(contract.id.clone()),
+        },
+        actor,
+    )?;
+
+    task_service::create(
+        conn,
+        &acme.workspace_id,
+        &TaskInput {
+            title: "Send welcome package".into(),
+            description: None,
+            owner_user_id: Some(actor_user_id.to_string()),
+            priority: "Normal".into(),
+            status: "Completed".into(),
+            due_date: Some((Utc::now() - Duration::days(10)).format("%Y-%m-%d").to_string()),
+            reminder_at: None,
+            related_type: Some("Company".into()),
+            related_id: Some(acme.id.clone()),
         },
         actor,
     )?;

@@ -2,6 +2,7 @@ use rusqlite::Connection;
 
 use crate::domain::AppResult;
 use crate::models::dashboard::{DashboardSummary, RecentActivity, StageCount};
+use crate::repositories::{contract_repo, task_repo};
 
 pub fn summary(conn: &Connection, workspace_id: &str) -> AppResult<DashboardSummary> {
     let (open_pipeline_value_cents, open_pipeline_count): (i64, i64) = conn.query_row(
@@ -65,6 +66,11 @@ pub fn summary(conn: &Connection, workspace_id: &str) -> AppResult<DashboardSumm
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
+    let contracts_renewing_30_days = contract_repo::count_renewing_within(conn, workspace_id, 30)?;
+    let contracts_renewing_60_days = contract_repo::count_renewing_within(conn, workspace_id, 60)?;
+    let contracts_renewing_90_days = contract_repo::count_renewing_within(conn, workspace_id, 90)?;
+    let (open_tasks, overdue_tasks) = task_repo::count_open_and_overdue(conn, workspace_id)?;
+
     Ok(DashboardSummary {
         open_pipeline_value_cents,
         open_pipeline_count,
@@ -73,6 +79,11 @@ pub fn summary(conn: &Connection, workspace_id: &str) -> AppResult<DashboardSumm
         overdue_invoices_cents,
         overdue_invoices_count,
         quotes_awaiting_response,
+        contracts_renewing_30_days,
+        contracts_renewing_60_days,
+        contracts_renewing_90_days,
+        open_tasks,
+        overdue_tasks,
         pipeline_by_stage,
         recent_activity,
     })

@@ -47,6 +47,16 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
           <div className="value">{data.quotes_awaiting_response}</div>
           <div className="label">Quotes awaiting response</div>
         </div>
+        <div className="kpi-tile" onClick={() => onNavigate("contracts")}>
+          <div className="value">{data.contracts_renewing_90_days}</div>
+          <div className="label">
+            Renewing 90 days ({data.contracts_renewing_30_days} in 30 / {data.contracts_renewing_60_days} in 60)
+          </div>
+        </div>
+        <div className="kpi-tile" onClick={() => onNavigate("tasks")}>
+          <div className="value">{data.open_tasks}</div>
+          <div className="label">Open tasks ({data.overdue_tasks} overdue)</div>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>

@@ -1,10 +1,12 @@
 pub mod audit_repo;
 pub mod company_repo;
 pub mod contact_repo;
+pub mod contract_repo;
 pub mod invoice_repo;
 pub mod opportunity_repo;
 pub mod order_repo;
 pub mod product_repo;
 pub mod quote_repo;
+pub mod task_repo;
 pub mod user_repo;
 pub mod workspace_repo;

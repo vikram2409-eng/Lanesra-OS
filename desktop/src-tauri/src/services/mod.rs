@@ -1,10 +1,12 @@
 pub mod auth_service;
 pub mod company_service;
 pub mod contact_service;
+pub mod contract_service;
 pub mod dashboard_service;
 pub mod invoice_service;
 pub mod opportunity_service;
 pub mod order_service;
 pub mod product_service;
 pub mod quote_service;
+pub mod task_service;
 pub mod workspace_service;

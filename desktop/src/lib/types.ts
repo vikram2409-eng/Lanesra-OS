@@ -455,8 +455,112 @@ export interface DashboardSummary {
   overdue_invoices_cents: number;
   overdue_invoices_count: number;
   quotes_awaiting_response: number;
+  contracts_renewing_30_days: number;
+  contracts_renewing_60_days: number;
+  contracts_renewing_90_days: number;
+  open_tasks: number;
+  overdue_tasks: number;
   pipeline_by_stage: StageCount[];
   recent_activity: RecentActivity[];
+}
+
+export const CONTRACT_STATUSES = [
+  "Draft",
+  "Under Review",
+  "Active",
+  "Expiring",
+  "Renewed",
+  "Expired",
+  "Terminated",
+] as const;
+
+export interface Contract {
+  id: string;
+  workspace_id: string;
+  contract_number: string;
+  company_id: string;
+  contact_id: string | null;
+  source_quote_id: string | null;
+  title: string;
+  type: string | null;
+  value_cents: number;
+  currency_code: string;
+  owner_user_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  renewal_date: string | null;
+  notice_period_days: number | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+  archived_at: string | null;
+}
+
+// Deliberately has no opportunity_id field - a contract must never
+// reference an opportunity (FR-CTR-03 / BR-009).
+export interface ContractInput {
+  company_id: string;
+  contact_id: string | null;
+  source_quote_id: string | null;
+  title: string;
+  type: string | null;
+  value_cents: number;
+  currency_code: string;
+  owner_user_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  renewal_date: string | null;
+  notice_period_days: number | null;
+  status: string;
+  notes: string | null;
+}
+
+export const TASK_PRIORITIES = ["Low", "Normal", "High", "Urgent"] as const;
+export const TASK_STATUSES = ["Not Started", "In Progress", "Waiting", "Completed", "Cancelled"] as const;
+export const TASK_RELATED_TYPES = [
+  "Company",
+  "Contact",
+  "Opportunity",
+  "Quote",
+  "Order",
+  "Invoice",
+  "Contract",
+] as const;
+export type TaskRelatedType = (typeof TASK_RELATED_TYPES)[number];
+
+export interface Task {
+  id: string;
+  workspace_id: string;
+  task_number: string;
+  title: string;
+  description: string | null;
+  owner_user_id: string | null;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  reminder_at: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+  archived_at: string | null;
+  related_type: string | null;
+  related_id: string | null;
+}
+
+export interface TaskInput {
+  title: string;
+  description: string | null;
+  owner_user_id: string | null;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  reminder_at: string | null;
+  related_type: string | null;
+  related_id: string | null;
 }
 
 export interface AppErrorPayload {

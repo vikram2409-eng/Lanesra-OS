@@ -57,14 +57,12 @@ pub const INVOICE: NumberingConfig = NumberingConfig {
     uses_year: true,
     digits: 6,
 };
-#[allow(dead_code)]
 pub const CONTRACT: NumberingConfig = NumberingConfig {
     entity_type: "contract",
     default_prefix: "CTR",
     uses_year: true,
     digits: 6,
 };
-#[allow(dead_code)]
 pub const TASK: NumberingConfig = NumberingConfig {
     entity_type: "task",
     default_prefix: "TSK",

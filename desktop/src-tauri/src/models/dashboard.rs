@@ -23,6 +23,11 @@ pub struct DashboardSummary {
     pub overdue_invoices_cents: i64,
     pub overdue_invoices_count: i64,
     pub quotes_awaiting_response: i64,
+    pub contracts_renewing_30_days: i64,
+    pub contracts_renewing_60_days: i64,
+    pub contracts_renewing_90_days: i64,
+    pub open_tasks: i64,
+    pub overdue_tasks: i64,
     pub pipeline_by_stage: Vec<StageCount>,
     pub recent_activity: Vec<RecentActivity>,
 }

@@ -1,0 +1,305 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { api, ApiError } from "../../lib/api";
+import {
+  TASK_PRIORITIES,
+  TASK_RELATED_TYPES,
+  TASK_STATUSES,
+  type Task,
+  type TaskInput,
+  type TaskRelatedType,
+} from "../../lib/types";
+
+type Tab = "today" | "upcoming" | "overdue" | "completed" | "mine" | "related";
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+const TABS: { tab: Tab; label: string }[] = [
+  { tab: "today", label: "Today" },
+  { tab: "upcoming", label: "Upcoming" },
+  { tab: "overdue", label: "Overdue" },
+  { tab: "completed", label: "Completed" },
+  { tab: "mine", label: "My Tasks" },
+  { tab: "related", label: "By Related Record" },
+];
+
+function emptyInput(ownerUserId: string | null): TaskInput {
+  return {
+    title: "",
+    description: null,
+    owner_user_id: ownerUserId,
+    priority: "Normal",
+    status: "Not Started",
+    due_date: null,
+    reminder_at: null,
+    related_type: null,
+    related_id: null,
+  };
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function Tasks({ currentUserId }: { currentUserId: string }) {
+  const [view, setView] = useState<View>({ mode: "list" });
+  const [tab, setTab] = useState<Tab>("today");
+  const queryClient = useQueryClient();
+
+  const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
+  const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
+  const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
+  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
+  const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
+  const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
+
+  const relatedLabel = useMemo(() => {
+    const byType: Record<string, Map<string, string>> = {
+      Company: new Map((companies.data ?? []).map((c) => [c.id, c.name])),
+      Contact: new Map((contacts.data ?? []).map((c) => [c.id, `${c.first_name} ${c.last_name}`])),
+      Opportunity: new Map((opportunities.data ?? []).map((o) => [o.id, o.name])),
+      Quote: new Map((quotes.data ?? []).map((q) => [q.id, q.quote_number])),
+      Order: new Map((orders.data ?? []).map((o) => [o.id, o.order_number])),
+      Invoice: new Map((invoices.data ?? []).map((i) => [i.id, i.invoice_number])),
+      Contract: new Map((contracts.data ?? []).map((c) => [c.id, c.contract_number])),
+    };
+    return (task: Task): string | null => {
+      if (!task.related_type || !task.related_id) return null;
+      const label = byType[task.related_type]?.get(task.related_id);
+      return `${task.related_type}: ${label ?? task.related_id}`;
+    };
+  }, [companies.data, contacts.data, opportunities.data, quotes.data, orders.data, invoices.data, contracts.data]);
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  }
+
+  if (view.mode !== "list") {
+    return (
+      <TaskForm
+        taskId={view.mode === "edit" ? view.id : undefined}
+        currentUserId={currentUserId}
+        relatedOptions={{
+          Company: (companies.data ?? []).map((c) => ({ id: c.id, label: c.name })),
+          Contact: (contacts.data ?? []).map((c) => ({ id: c.id, label: `${c.first_name} ${c.last_name}` })),
+          Opportunity: (opportunities.data ?? []).map((o) => ({ id: o.id, label: o.name })),
+          Quote: (quotes.data ?? []).map((q) => ({ id: q.id, label: q.quote_number })),
+          Order: (orders.data ?? []).map((o) => ({ id: o.id, label: o.order_number })),
+          Invoice: (invoices.data ?? []).map((i) => ({ id: i.id, label: i.invoice_number })),
+          Contract: (contracts.data ?? []).map((c) => ({ id: c.id, label: c.contract_number })),
+        }}
+        onDone={() => {
+          invalidate();
+          setView({ mode: "list" });
+        }}
+        onCancel={() => setView({ mode: "list" })}
+      />
+    );
+  }
+
+  const all = tasks.data ?? [];
+  const open = all.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+  const today = todayIso();
+
+  let visible: Task[];
+  if (tab === "today") visible = open.filter((t) => t.due_date === today);
+  else if (tab === "upcoming") visible = open.filter((t) => !!t.due_date && t.due_date > today);
+  else if (tab === "overdue") visible = open.filter((t) => !!t.due_date && t.due_date < today);
+  else if (tab === "completed") visible = all.filter((t) => t.status === "Completed");
+  else if (tab === "mine") visible = all.filter((t) => t.owner_user_id === currentUserId);
+  else visible = all.filter((t) => !!t.related_type);
+
+  return (
+    <div>
+      <div className="toolbar">
+        <h2 style={{ margin: 0 }}>Tasks</h2>
+        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          + New task
+        </button>
+      </div>
+
+      <div className="tab-row">
+        {TABS.map((t) => (
+          <button key={t.tab} className={`tab${tab === t.tab ? " active" : ""}`} onClick={() => setTab(t.tab)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tasks.isLoading && <p>Loading...</p>}
+      {visible.length === 0 && <p className="empty-state">No tasks here.</p>}
+      {visible.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Number</th>
+              <th>Title</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Due date</th>
+              <th>Related to</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((t) => (
+              <tr key={t.id}>
+                <td>{t.task_number}</td>
+                <td>{t.title}</td>
+                <td>{t.priority}</td>
+                <td>{t.status}</td>
+                <td>{t.due_date ?? "—"}</td>
+                <td>{relatedLabel(t) ?? "General"}</td>
+                <td>
+                  <button className="btn" onClick={() => setView({ mode: "edit", id: t.id })}>
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function TaskForm({
+  taskId,
+  currentUserId,
+  relatedOptions,
+  onDone,
+  onCancel,
+}: {
+  taskId?: string;
+  currentUserId: string;
+  relatedOptions: Record<TaskRelatedType, { id: string; label: string }[]>;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const existing = useQuery({
+    queryKey: ["task", taskId],
+    queryFn: () => api.getTask(taskId as string),
+    enabled: !!taskId,
+  });
+  const [input, setInput] = useState<TaskInput>(emptyInput(currentUserId));
+  const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+
+  if (existing.data && loadedFor !== taskId) {
+    const { title, description, owner_user_id, priority, status, due_date, reminder_at, related_type, related_id } =
+      existing.data;
+    setInput({ title, description, owner_user_id, priority, status, due_date, reminder_at, related_type, related_id });
+    setLoadedFor(taskId);
+  }
+
+  const save = useMutation({
+    mutationFn: () => (taskId ? api.updateTask(taskId, input) : api.createTask(input)),
+    onSuccess: onDone,
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the task"),
+  });
+
+  const relatedType = input.related_type as TaskRelatedType | null;
+  const options = relatedType ? relatedOptions[relatedType] ?? [] : [];
+
+  return (
+    <div>
+      <h2>{taskId ? "Edit task" : "New task"}</h2>
+      {error && <div className="error-banner">{error}</div>}
+      <form
+        className="form-grid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <div className="form-field full">
+          <label>Title</label>
+          <input value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })} required />
+        </div>
+        <div className="form-field">
+          <label>Priority</label>
+          <select value={input.priority} onChange={(e) => setInput({ ...input, priority: e.target.value })}>
+            {TASK_PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Status</label>
+          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+            {TASK_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Due date</label>
+          <input type="date" value={input.due_date ?? ""} onChange={(e) => setInput({ ...input, due_date: e.target.value || null })} />
+        </div>
+        <div className="form-field">
+          <label>Reminder</label>
+          <input
+            type="datetime-local"
+            value={input.reminder_at ?? ""}
+            onChange={(e) => setInput({ ...input, reminder_at: e.target.value || null })}
+          />
+        </div>
+        <div className="form-field">
+          <label>Relates to</label>
+          <select
+            value={input.related_type ?? ""}
+            onChange={(e) =>
+              setInput({ ...input, related_type: e.target.value || null, related_id: null })
+            }
+          >
+            <option value="">General (no relation)</option>
+            {TASK_RELATED_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+        {relatedType && (
+          <div className="form-field">
+            <label>{relatedType} record</label>
+            <select
+              value={input.related_id ?? ""}
+              onChange={(e) => setInput({ ...input, related_id: e.target.value || null })}
+              required
+            >
+              <option value="">— Select —</option>
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="form-field full">
+          <label>Description</label>
+          <textarea
+            value={input.description ?? ""}
+            onChange={(e) => setInput({ ...input, description: e.target.value || null })}
+          />
+        </div>
+        <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={save.isPending}>
+            Save
+          </button>
+          <button className="btn" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

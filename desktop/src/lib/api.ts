@@ -5,6 +5,8 @@ import type {
   CompanyInput,
   Contact,
   ContactInput,
+  Contract,
+  ContractInput,
   Credentials,
   DashboardSummary,
   Invoice,
@@ -23,6 +25,8 @@ import type {
   QuoteInput,
   QuoteWithLines,
   PaymentInput,
+  Task,
+  TaskInput,
   User,
   Workspace,
   WorkspaceSetup,
@@ -118,4 +122,20 @@ export const api = {
   refreshOverdueInvoices: () => call<number>("refresh_overdue_invoices"),
 
   dashboardSummary: () => call<DashboardSummary>("dashboard_summary"),
+
+  listContracts: () => call<Contract[]>("list_contracts"),
+  listContractsByCompany: (companyId: string) =>
+    call<Contract[]>("list_contracts_by_company", { companyId }),
+  getContract: (id: string) => call<Contract>("get_contract", { id }),
+  createContract: (input: ContractInput) => call<Contract>("create_contract", { input }),
+  updateContract: (id: string, input: ContractInput) => call<Contract>("update_contract", { id, input }),
+  archiveContract: (id: string) => call<void>("archive_contract", { id }),
+
+  listTasks: () => call<Task[]>("list_tasks"),
+  listTasksByRelated: (relatedType: string, relatedId: string) =>
+    call<Task[]>("list_tasks_by_related", { relatedType, relatedId }),
+  getTask: (id: string) => call<Task>("get_task", { id }),
+  createTask: (input: TaskInput) => call<Task>("create_task", { input }),
+  updateTask: (id: string, input: TaskInput) => call<Task>("update_task", { id, input }),
+  archiveTask: (id: string) => call<void>("archive_task", { id }),
 };
