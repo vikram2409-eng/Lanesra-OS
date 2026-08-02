@@ -1,0 +1,32 @@
+[package]
+name = "lanesra-os"
+version = "0.1.0"
+description = "Lanesra OS Desktop - local-first business management application"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "lanesra_os_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled", "chrono", "uuid"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+argon2 = "0.5"
+rand_core = { version = "0.6", features = ["std"] }
+thiserror = "1"
+
+[dev-dependencies]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"

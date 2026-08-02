@@ -1,0 +1,266 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { api, ApiError } from "../../lib/api";
+import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
+import { OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES, type OpportunityInput } from "../../lib/types";
+
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+function emptyInput(companyId: string, currency: string): OpportunityInput {
+  return {
+    company_id: companyId,
+    primary_contact_id: null,
+    name: "",
+    stage: "New",
+    status: "Open",
+    value_cents: 0,
+    currency_code: currency,
+    probability_bp: 1000,
+    expected_close_date: null,
+    owner_user_id: null,
+    lost_reason: null,
+    next_step: null,
+  };
+}
+
+export function Opportunities() {
+  const [view, setView] = useState<View>({ mode: "list" });
+  const queryClient = useQueryClient();
+  const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["opportunities"] });
+  }
+
+  if (view.mode !== "list") {
+    return (
+      <OpportunityForm
+        opportunityId={view.mode === "edit" ? view.id : undefined}
+        companies={companies.data ?? []}
+        onDone={() => {
+          invalidate();
+          setView({ mode: "list" });
+        }}
+        onCancel={() => setView({ mode: "list" })}
+      />
+    );
+  }
+
+  const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+
+  return (
+    <div>
+      <div className="toolbar">
+        <h2 style={{ margin: 0 }}>Sales Pipeline</h2>
+        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          + New opportunity
+        </button>
+      </div>
+      {opportunities.isLoading && <p>Loading...</p>}
+      {opportunities.data && opportunities.data.length === 0 && (
+        <p className="empty-state">No opportunities yet.</p>
+      )}
+      {opportunities.data && opportunities.data.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Number</th>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Stage</th>
+              <th>Value</th>
+              <th>Probability</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {opportunities.data.map((o) => (
+              <tr key={o.id}>
+                <td>{o.opportunity_number}</td>
+                <td>{o.name}</td>
+                <td>{companyNameById.get(o.company_id) ?? "—"}</td>
+                <td>{o.stage}</td>
+                <td>{formatCents(o.value_cents, o.currency_code)}</td>
+                <td>{(o.probability_bp / 100).toFixed(0)}%</td>
+                <td>
+                  <button className="btn" onClick={() => setView({ mode: "edit", id: o.id })}>
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function OpportunityForm({
+  opportunityId,
+  companies,
+  onDone,
+  onCancel,
+}: {
+  opportunityId?: string;
+  companies: { id: string; name: string; currency_code?: string }[];
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const existing = useQuery({
+    queryKey: ["opportunity", opportunityId],
+    queryFn: () => api.getOpportunity(opportunityId as string),
+    enabled: !!opportunityId,
+  });
+  const [input, setInput] = useState<OpportunityInput>(emptyInput(companies[0]?.id ?? "", "USD"));
+  const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+
+  const contacts = useQuery({
+    queryKey: ["contactsByCompany", input.company_id],
+    queryFn: () => api.listContactsByCompany(input.company_id),
+    enabled: !!input.company_id,
+  });
+
+  if (existing.data && loadedFor !== opportunityId) {
+    const {
+      company_id,
+      primary_contact_id,
+      name,
+      stage,
+      status,
+      value_cents,
+      currency_code,
+      probability_bp,
+      expected_close_date,
+      owner_user_id,
+      lost_reason,
+      next_step,
+    } = existing.data;
+    setInput({
+      company_id,
+      primary_contact_id,
+      name,
+      stage,
+      status,
+      value_cents,
+      currency_code,
+      probability_bp,
+      expected_close_date,
+      owner_user_id,
+      lost_reason,
+      next_step,
+    });
+    setLoadedFor(opportunityId);
+  }
+
+  const save = useMutation({
+    mutationFn: () =>
+      opportunityId ? api.updateOpportunity(opportunityId, input) : api.createOpportunity(input),
+    onSuccess: onDone,
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the opportunity"),
+  });
+
+  return (
+    <div>
+      <h2>{opportunityId ? "Edit opportunity" : "New opportunity"}</h2>
+      {error && <div className="error-banner">{error}</div>}
+      <form
+        className="form-grid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <div className="form-field full">
+          <label>Name</label>
+          <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} required />
+        </div>
+        <div className="form-field">
+          <label>Company</label>
+          <select
+            value={input.company_id}
+            onChange={(e) => setInput({ ...input, company_id: e.target.value, primary_contact_id: null })}
+            required
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Primary contact (optional)</label>
+          <select
+            value={input.primary_contact_id ?? ""}
+            onChange={(e) => setInput({ ...input, primary_contact_id: e.target.value || null })}
+          >
+            <option value="">— None —</option>
+            {(contacts.data ?? []).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.first_name} {c.last_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Stage</label>
+          <select value={input.stage} onChange={(e) => setInput({ ...input, stage: e.target.value })}>
+            {OPPORTUNITY_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Status</label>
+          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+            {OPPORTUNITY_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Value</label>
+          <input
+            type="number"
+            step="0.01"
+            value={centsToInputValue(input.value_cents)}
+            onChange={(e) => setInput({ ...input, value_cents: parseDecimalToCents(e.target.value) })}
+          />
+        </div>
+        <div className="form-field">
+          <label>Probability (%)</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={(input.probability_bp / 100).toString()}
+            onChange={(e) => setInput({ ...input, probability_bp: Math.round(parseFloat(e.target.value || "0") * 100) })}
+          />
+        </div>
+        <div className="form-field full">
+          <label>Next step</label>
+          <input
+            value={input.next_step ?? ""}
+            onChange={(e) => setInput({ ...input, next_step: e.target.value || null })}
+          />
+        </div>
+        <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={save.isPending}>
+            Save
+          </button>
+          <button className="btn" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

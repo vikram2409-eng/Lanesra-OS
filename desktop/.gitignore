@@ -1,0 +1,14 @@
+# Frontend
+node_modules/
+dist/
+*.local
+
+# Rust
+src-tauri/target/
+
+# Tauri generated files
+src-tauri/gen/
+
+# Logs
+*.log
+npm-debug.log*
