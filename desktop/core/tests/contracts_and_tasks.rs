@@ -1,13 +1,13 @@
 use chrono::{Duration, Utc};
 
-use lanesra_os_lib::db::open_in_memory_db;
-use lanesra_os_lib::models::company::CompanyInput;
-use lanesra_os_lib::models::contact::ContactInput;
-use lanesra_os_lib::models::contract::ContractInput;
-use lanesra_os_lib::models::task::TaskInput;
-use lanesra_os_lib::models::workspace::WorkspaceSetup;
-use lanesra_os_lib::repositories::task_repo;
-use lanesra_os_lib::services::{company_service, contact_service, contract_service, task_service, workspace_service};
+use lanesra_core::db::open_in_memory_db;
+use lanesra_core::models::company::CompanyInput;
+use lanesra_core::models::contact::ContactInput;
+use lanesra_core::models::contract::ContractInput;
+use lanesra_core::models::task::TaskInput;
+use lanesra_core::models::workspace::WorkspaceSetup;
+use lanesra_core::repositories::task_repo;
+use lanesra_core::services::{company_service, contact_service, contract_service, task_service, workspace_service};
 
 fn setup_workspace() -> (rusqlite::Connection, String) {
     let conn = open_in_memory_db().unwrap();
@@ -28,7 +28,7 @@ fn setup_workspace() -> (rusqlite::Connection, String) {
 }
 
 fn workspace_id(conn: &rusqlite::Connection) -> String {
-    lanesra_os_lib::repositories::workspace_repo::get_current(conn)
+    lanesra_core::repositories::workspace_repo::get_current(conn)
         .unwrap()
         .unwrap()
         .id

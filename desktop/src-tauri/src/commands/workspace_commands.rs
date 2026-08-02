@@ -1,10 +1,10 @@
 use tauri::State;
 
-use crate::domain::AppResult;
-use crate::models::user::User;
-use crate::models::workspace::{Workspace, WorkspaceSetup};
-use crate::repositories::workspace_repo;
-use crate::services::workspace_service;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::user::User;
+use lanesra_core::models::workspace::{Workspace, WorkspaceSetup};
+use lanesra_core::repositories::workspace_repo;
+use lanesra_core::services::workspace_service;
 use crate::state::AppState;
 
 #[tauri::command]

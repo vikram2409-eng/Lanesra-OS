@@ -1,0 +1,32 @@
+[package]
+name = "lanesra-server"
+version = "0.1.0"
+description = "Lanesra OS Team Workspace HTTP server - one shared instance, multiple authenticated users on the local network"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "lanesra_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lanesra-server"
+path = "src/main.rs"
+
+[dependencies]
+lanesra-core = { path = "../core" }
+axum = "0.7"
+axum-extra = { version = "0.9", features = ["cookie"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs"] }
+tower-http = { version = "0.5", features = ["fs", "trace"] }
+tower = "0.4"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled", "chrono", "uuid"] }
+chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json", "cookies"] }

@@ -4,6 +4,7 @@ dist/
 *.local
 
 # Rust
+target/
 src-tauri/target/
 
 # Tauri generated files

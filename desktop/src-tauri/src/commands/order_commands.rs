@@ -1,10 +1,10 @@
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
-use crate::domain::AppResult;
-use crate::models::invoice::InvoiceWithLines;
-use crate::models::order::{Order, OrderInput, OrderWithLines};
-use crate::services::order_service;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::invoice::InvoiceWithLines;
+use lanesra_core::models::order::{Order, OrderInput, OrderWithLines};
+use lanesra_core::services::order_service;
 use crate::state::AppState;
 
 #[tauri::command]

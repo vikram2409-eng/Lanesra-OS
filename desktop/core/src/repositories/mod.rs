@@ -7,6 +7,7 @@ pub mod opportunity_repo;
 pub mod order_repo;
 pub mod product_repo;
 pub mod quote_repo;
+pub mod session_repo;
 pub mod task_repo;
 pub mod user_repo;
 pub mod workspace_repo;

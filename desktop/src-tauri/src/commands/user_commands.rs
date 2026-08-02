@@ -1,9 +1,9 @@
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
-use crate::domain::AppResult;
-use crate::models::user::{NewUser, PasswordChange, User, UserUpdate};
-use crate::services::user_service;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::user::{NewUser, PasswordChange, User, UserUpdate};
+use lanesra_core::services::user_service;
 use crate::state::AppState;
 
 #[tauri::command]

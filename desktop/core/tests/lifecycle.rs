@@ -1,11 +1,11 @@
-use lanesra_os_lib::db::open_in_memory_db;
-use lanesra_os_lib::models::company::CompanyInput;
-use lanesra_os_lib::models::contact::ContactInput;
-use lanesra_os_lib::models::invoice::PaymentInput;
-use lanesra_os_lib::models::opportunity::OpportunityInput;
-use lanesra_os_lib::models::quote::{QuoteInput, QuoteLineInput};
-use lanesra_os_lib::models::workspace::WorkspaceSetup;
-use lanesra_os_lib::services::{
+use lanesra_core::db::open_in_memory_db;
+use lanesra_core::models::company::CompanyInput;
+use lanesra_core::models::contact::ContactInput;
+use lanesra_core::models::invoice::PaymentInput;
+use lanesra_core::models::opportunity::OpportunityInput;
+use lanesra_core::models::quote::{QuoteInput, QuoteLineInput};
+use lanesra_core::models::workspace::WorkspaceSetup;
+use lanesra_core::services::{
     company_service, contact_service, invoice_service, opportunity_service, order_service,
     quote_service, workspace_service,
 };
@@ -216,7 +216,7 @@ fn company_duplicate_names_are_flagged_but_not_blocked() {
 }
 
 fn workspace_id(conn: &rusqlite::Connection) -> String {
-    lanesra_os_lib::repositories::workspace_repo::get_current(conn)
+    lanesra_core::repositories::workspace_repo::get_current(conn)
         .unwrap()
         .unwrap()
         .id

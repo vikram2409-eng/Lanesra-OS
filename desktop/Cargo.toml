@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["core", "src-tauri", "server"]
+
+[profile.release]
+# Not panic = "abort": the server binary must not take the whole process
+# down if a single request handler panics.
+codegen-units = 1
+lto = true
+opt-level = "s"

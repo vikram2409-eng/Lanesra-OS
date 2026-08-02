@@ -74,6 +74,16 @@ pub fn login(conn: &Connection, workspace_id: &str, credentials: &Credentials) -
     Ok(user)
 }
 
+/// Resolves a session's user_id into the public User shape, or None if the
+/// account no longer exists (e.g. deleted between session creation and use).
+pub fn resolve_user(conn: &Connection, user_id: &str) -> AppResult<Option<User>> {
+    let Some(record) = user_repo::find_by_id(conn, user_id)? else {
+        return Ok(None);
+    };
+    let roles = user_repo::roles_for_user(conn, user_id)?;
+    Ok(Some(user_repo::to_public(record, roles)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,9 +1,9 @@
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
-use crate::domain::AppResult;
-use crate::models::contract::{Contract, ContractInput};
-use crate::services::contract_service;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::contract::{Contract, ContractInput};
+use lanesra_core::services::contract_service;
 use crate::state::AppState;
 
 #[tauri::command]

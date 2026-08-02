@@ -43,10 +43,34 @@ export class ApiError extends Error {
   }
 }
 
+// The desktop app talks to its Rust backend over Tauri's IPC bridge, which
+// only exists inside a Tauri webview. When this same frontend is served by
+// the Team Workspace HTTP server to a plain browser, there is no such
+// bridge - so we fall back to fetching the equivalent HTTP endpoint, which
+// mirrors every Tauri command 1:1 (see server/src/dispatch.rs).
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+async function httpInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`/api/invoke/${command}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args ?? {}),
+  });
+  const body = await response.json();
+  if (!body.ok) {
+    throw new ApiError(body.error as AppErrorPayload);
+  }
+  return body.data as T;
+}
+
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
-    return await invoke<T>(command, args);
+    return isTauriRuntime() ? await invoke<T>(command, args) : await httpInvoke<T>(command, args);
   } catch (err) {
+    if (err instanceof ApiError) throw err;
     if (err && typeof err === "object" && "kind" in err && "message" in err) {
       throw new ApiError(err as AppErrorPayload);
     }

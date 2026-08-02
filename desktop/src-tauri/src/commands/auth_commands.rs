@@ -1,10 +1,9 @@
 use tauri::State;
 
 use crate::commands::require_workspace_id;
-use crate::domain::AppResult;
-use crate::models::user::{Credentials, User};
-use crate::repositories::user_repo;
-use crate::services::auth_service;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::user::{Credentials, User};
+use lanesra_core::services::auth_service;
 use crate::state::AppState;
 
 #[tauri::command]
@@ -29,9 +28,5 @@ pub fn current_user(state: State<AppState>) -> AppResult<Option<User>> {
         return Ok(None);
     };
     let conn = state.conn.lock().unwrap();
-    let Some(record) = user_repo::find_by_id(&conn, &user_id)? else {
-        return Ok(None);
-    };
-    let roles = user_repo::roles_for_user(&conn, &user_id)?;
-    Ok(Some(user_repo::to_public(record, roles)))
+    auth_service::resolve_user(&conn, &user_id)
 }

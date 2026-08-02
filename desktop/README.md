@@ -1,14 +1,19 @@
 # Lanesra OS Desktop
 
 Local-first Windows desktop edition of Lanesra OS, built from
-`Lanesra_OS_Desktop_Windows_Requirements_v1.1.docx`. This is the initial
-foundation plus the full sales lifecycle vertical slice — see "What's here"
-and "What's deferred" below before assuming a feature exists.
+`Lanesra_OS_Desktop_Windows_Requirements_v1.1.docx`. This now covers both
+of the PRD's operating modes - **Personal Workspace** (the Tauri desktop
+app, single user) and **Team Workspace** (one shared instance on a
+network host, multiple authenticated users in their own browsers) - built
+from the same domain logic. See "What's here" and "What's deferred" below
+before assuming a feature exists.
 
 ## Stack
 
-- **UI**: React + TypeScript + Vite
-- **Shell**: Tauri v2 (Rust)
+- **UI**: React + TypeScript + Vite - the same frontend runs unmodified in
+  both operating modes (see "Two operating modes" below)
+- **Personal Workspace shell**: Tauri v2 (Rust)
+- **Team Workspace shell**: axum (Rust), cookie-based sessions, Docker
 - **Database**: SQLite via `rusqlite` (bundled, no system SQLite required),
   foreign keys enforced on every connection, WAL journaling
 - **State/query**: TanStack Query
@@ -16,15 +21,21 @@ and "What's deferred" below before assuming a feature exists.
 
 ## Architecture
 
+This is a Cargo workspace of three crates, so the two operating modes
+share one implementation of every business rule and can never drift apart:
+
 ```
 desktop/
-  src/                  React frontend
-    lib/                api.ts (typed invoke wrapper), types.ts, money.ts
+  Cargo.toml            workspace manifest (core, src-tauri, server)
+  src/                  React frontend - unchanged between operating modes
+    lib/                api.ts (dual transport: Tauri invoke or HTTP fetch,
+                         see "Two operating modes"), types.ts, money.ts
     components/          AppShell, LineItemsEditor, StatusBadge
     features/            firstRun, auth, dashboard, companies, contacts,
                           products, opportunities, quotes, orders, invoices,
                           contracts, tasks, users
-  src-tauri/
+  core/                 lanesra-core: all business logic, no Tauri
+                         dependency, shared by both shells below
     src/
       db/                connection + versioned migration runner
       domain/            money (integer-cents arithmetic), numbering
@@ -33,12 +44,84 @@ desktop/
       repositories/        parameterized SQL, one module per entity
       services/             business rules, relationship validation,
                              conversions, audit logging
-      commands/             thin #[tauri::command] wrappers over services
+    tests/                 lifecycle.rs, contracts_and_tasks.rs,
+                            user_management.rs
+  src-tauri/            Personal Workspace shell (desktop app)
+    src/
+      commands/            thin #[tauri::command] wrappers over
+                            lanesra_core::services, single in-process
+                            session (state.rs)
+  server/               Team Workspace shell (HTTP server)
+    src/
+      dispatch.rs          mirrors every Tauri command 1:1 against the
+                            same lanesra_core::services calls
+      routes.rs            axum router: cookie sessions (web_sessions
+                            table), auth gate, static frontend serving
+      session.rs           HttpOnly session cookie helpers
+    tests/http.rs           login/session/authorization tests over real HTTP
 ```
 
 Layering follows the PRD's component boundaries (11.2): presentation ->
-application services -> domain -> repositories -> SQLite. Commands never
-touch the database directly; they call services, which call repositories.
+application services -> domain -> repositories -> SQLite. Neither shell's
+commands/routes touch the database directly; they call `lanesra_core`
+services, which call its repositories.
+
+## Two operating modes
+
+**Personal Workspace** (`src-tauri`): the Tauri desktop app described in
+the rest of this README below "Running it". One process, one implicit
+session held in memory (`state.rs`) - matches the PRD's "single user /
+shared PC" model.
+
+**Team Workspace** (`server`): an axum HTTP server that serves the same
+built frontend and exposes every business operation at
+`POST /api/invoke/<command>`, matching each Tauri command's name and
+argument shape exactly (`server/src/dispatch.rs` is a line-for-line mirror
+of `src-tauri/src/commands/*.rs`). Multiple team members open the same
+`http://<host>:<port>` in their own browser and authenticate independently
+via an `HttpOnly` session cookie backed by a `web_sessions` table - logging
+one session out never affects another (see `server/tests/http.rs`). Every
+command except `workspace_status`/`first_run_setup`/`login`/`logout`/
+`current_user` requires a valid session; unlike the desktop app (where the
+OS process boundary is the trust boundary), this is enforced by the server
+itself, since anyone on the network can reach the port.
+
+The frontend doesn't know which mode it's running in beyond one runtime
+check: `src/lib/api.ts` calls Tauri's `invoke()` when `window.__TAURI_INTERNALS__`
+exists, and otherwise `fetch()`s the equivalent `/api/invoke/...` endpoint
+with `credentials: "include"`. Every feature screen is unchanged between
+the two modes.
+
+### Running Team Workspace locally
+
+```bash
+cd server
+LANESRA_DATA_DIR=./data LANESRA_FRONTEND_DIR=../dist cargo run
+# then open http://localhost:8080 - first-run wizard creates the workspace
+```
+
+(`../dist` must exist - run `npm run build` in `desktop/` first.)
+
+### Running it with Docker (recommended for a small team)
+
+```bash
+cd desktop
+docker build -t lanesra-os-server .
+docker run -p 8080:8080 -v lanesra-data:/data lanesra-os-server
+# team members open http://<this-machine's-LAN-IP>:8080
+```
+
+Or with Compose: `docker compose up -d`. The named volume
+(`lanesra-data`) is where the SQLite database lives - back that volume up
+the same way you'd back up the desktop app's database file. This has been
+built and run end-to-end in this session (first-run, sample data seeding,
+login, two independent concurrent sessions, and data persisting across a
+container restart all verified against the real image - see "Verification
+performed this session").
+
+This targets the PRD's explicit scope: a local network, not the public
+internet. There's no HTTPS/TLS termination built in - put it behind a
+reverse proxy with TLS if you need that, or keep it LAN-only as intended.
 
 ## What's here
 
@@ -82,6 +165,12 @@ touch the database directly; they call services, which call repositories.
   workspace can never lock itself out. Any authenticated user can list the
   directory (needed to assign task owners) but only an Administrator can
   create/edit/deactivate accounts or reset passwords.
+- **Team Workspace**: a `lanesra-server` axum binary (crate `server/`,
+  Dockerfile + `docker-compose.yml` at the `desktop/` root) that serves the
+  same frontend and business logic over plain HTTP for a small team on one
+  network host, with per-user `HttpOnly` session cookies, a server-side
+  auth gate on every business command, and a persistent SQLite volume. See
+  "Two operating modes" above.
 
 ## What's deferred to a later phase
 
@@ -95,8 +184,6 @@ need to change shape later, but there is no service/command/UI layer yet:
 - Windows notifications for task reminders (FR-TSK-06)
 - Self-service "change my own password" (only an Administrator can reset
   passwords today, from the Users screen)
-- Team Workspace / multi-user LAN mode (the schema's `workspace_id` and
-  `operating_mode` columns are ready for it; Personal mode only for now)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
   Actions workflow at `.github/workflows/desktop-release.yml` now builds
@@ -157,3 +244,31 @@ one. It isn't code-signed yet.
   the seeded "Morgan Reyes" sample user), and the Users screen (listing both
   seeded accounts with correct roles/status) all render real data from the
   SQLite backend with correct numbering and audit trail.
+
+**Team Workspace phase:**
+
+- `cargo test` across the whole workspace (`core`, `src-tauri`, `server`):
+  39/39 passing after splitting the business logic into its own
+  `lanesra-core` crate - the original 30 (now living in `core/`) plus 5 new
+  HTTP integration tests in `server/tests/http.rs`
+  (`health_check_responds`, `unauthenticated_requests_are_rejected`,
+  `login_grants_a_session_that_can_read_data`, `two_sessions_are_independent`,
+  `only_an_administrator_can_create_users`) and 4 new session-repository
+  unit tests.
+- Manual curl testing against the running `lanesra-server` binary caught a
+  real security gap before it shipped: the first HTTP routing draft let
+  unauthenticated requests call business commands directly. Fixed by adding
+  a server-side auth gate in `routes.rs` that every command except
+  `workspace_status`/`first_run_setup`/`login`/`logout`/`current_user` must
+  pass; re-verified with curl that anonymous requests are now rejected
+  while logged-in requests still work.
+- Built the real Docker image (multi-stage: Node frontend build, Rust
+  server build, slim Debian runtime) and ran it end to end: first-run
+  wizard over plain HTTP, sample data seeding, login, two independent
+  concurrent browser sessions (confirmed via cookies that logging one out
+  doesn't affect the other), and data surviving a full container
+  stop/restart against the same named volume.
+- Re-ran the Tauri desktop app under Xvfb after the `core` crate
+  extraction to confirm the Personal Workspace shell still builds and
+  renders correctly (FirstRun screen) with zero behavior change from
+  moving its business logic into a shared crate.

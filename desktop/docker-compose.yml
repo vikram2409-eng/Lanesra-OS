@@ -1,0 +1,12 @@
+services:
+  lanesra:
+    build: .
+    image: lanesra-os-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - lanesra-data:/data
+    restart: unless-stopped
+
+volumes:
+  lanesra-data:

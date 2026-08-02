@@ -1,0 +1,20 @@
+[package]
+name = "lanesra-core"
+version = "0.1.0"
+description = "Lanesra OS domain logic, shared by the desktop app and the Team Workspace server"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "lanesra_core"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled", "chrono", "uuid"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+argon2 = "0.5"
+rand_core = { version = "0.6", features = ["std"] }
+thiserror = "1"

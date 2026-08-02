@@ -1,9 +1,4 @@
 pub mod commands;
-pub mod db;
-pub mod domain;
-pub mod models;
-pub mod repositories;
-pub mod services;
 pub mod state;
 
 use tauri::Manager;
@@ -17,7 +12,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("lanesra.sqlite3");
-            let conn = db::open_workspace_db(db_path)?;
+            let conn = lanesra_core::db::open_workspace_db(db_path)?;
             app.manage(AppState::new(conn));
             Ok(())
         })

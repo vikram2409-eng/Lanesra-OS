@@ -14,8 +14,9 @@ pub mod workspace_commands;
 
 use rusqlite::Connection;
 
-use crate::domain::{AppError, AppResult};
-use crate::repositories::workspace_repo;
+use lanesra_core::domain::{AppError, AppResult};
+use lanesra_core::repositories::workspace_repo;
+
 use crate::state::AppState;
 
 pub(crate) fn require_workspace_id(conn: &Connection) -> AppResult<String> {

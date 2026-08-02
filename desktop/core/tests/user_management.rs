@@ -1,7 +1,7 @@
-use lanesra_os_lib::db::open_in_memory_db;
-use lanesra_os_lib::models::user::{Credentials, NewUser, PasswordChange, UserUpdate};
-use lanesra_os_lib::models::workspace::WorkspaceSetup;
-use lanesra_os_lib::services::{auth_service, user_service, workspace_service};
+use lanesra_core::db::open_in_memory_db;
+use lanesra_core::models::user::{Credentials, NewUser, PasswordChange, UserUpdate};
+use lanesra_core::models::workspace::WorkspaceSetup;
+use lanesra_core::services::{auth_service, user_service, workspace_service};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();

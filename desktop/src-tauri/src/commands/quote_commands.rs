@@ -1,10 +1,10 @@
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
-use crate::domain::AppResult;
-use crate::models::order::OrderWithLines;
-use crate::models::quote::{Quote, QuoteInput, QuoteWithLines};
-use crate::services::quote_service;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::order::OrderWithLines;
+use lanesra_core::models::quote::{Quote, QuoteInput, QuoteWithLines};
+use lanesra_core::services::quote_service;
 use crate::state::AppState;
 
 #[tauri::command]

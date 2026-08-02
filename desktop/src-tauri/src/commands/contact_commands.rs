@@ -1,9 +1,9 @@
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
-use crate::domain::AppResult;
-use crate::models::contact::{Contact, ContactInput};
-use crate::services::contact_service;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::contact::{Contact, ContactInput};
+use lanesra_core::services::contact_service;
 use crate::state::AppState;
 
 #[tauri::command]

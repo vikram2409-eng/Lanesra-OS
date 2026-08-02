@@ -4,7 +4,10 @@ use rusqlite::Connection;
 /// Ordered list of (version, sql). Add new migrations by appending here and
 /// creating a new file under `migrations/`; never edit an already-released
 /// migration in place.
-const MIGRATIONS: &[(i64, &str)] = &[(1, include_str!("migrations/0001_init.sql"))];
+const MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("migrations/0001_init.sql")),
+    (2, include_str!("migrations/0002_web_sessions.sql")),
+];
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
@@ -51,7 +54,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
 
         let table_count: i64 = conn
             .query_row(
