@@ -1,0 +1,44 @@
+# Lanesra OS — Detailed Product Context
+
+Lanesra OS is an independent, open-source business application designed for small businesses that need more structure than spreadsheets but less complexity than enterprise CRM and ERP platforms.
+
+## Product status
+
+The product is currently in Early Access v0.8.0. The public browser demo is usable and includes realistic sample data. The native desktop application is planned next and is not yet available for download.
+
+## Product history
+
+- May 2026: Product idea and vision defined.
+- June 2026: Architecture, scope and offline strategy established.
+- July 2026: Design system and web MVP built.
+- August 2026: Public Early Access launched.
+- Next milestone: Windows desktop edition with SQLite, backup and restore.
+
+## Core workflows
+
+Customer records connect to contacts, opportunities, quotes, orders, invoices, contracts and tasks. Opportunities are optional for quotes. Quotes are optional for orders. Orders are optional for invoices. Relationship dropdowns are filtered by customer to preserve data integrity. Quotes, orders and invoices include product or service line items with quantities and pricing.
+
+## Product principles
+
+- Open source and transparent
+- No licence activation
+- Simple by default
+- Modern user experience
+- Local data ownership for the planned desktop edition
+- Public roadmap and changelog
+
+## Pages
+
+- https://lanesraos.com/
+- https://lanesraos.com/demo
+- https://lanesraos.com/roadmap
+- https://lanesraos.com/changelog
+- https://lanesraos.com/principles
+- https://lanesraos.com/compare
+- https://lanesraos.com/download
+
+## Creator
+
+Lanesra OS was created and is maintained by Vikram Grover. The product remains product-first; creator attribution is intentionally understated.
+
+Creator website: https://vikramgrover.com/
