@@ -34,15 +34,14 @@ Then open `http://localhost:8080`.
 
 ## Current limitation
 
-The downloadable Tauri/SQLite desktop application is the next milestone and is not included in this first web package.
-
+The Tauri/SQLite desktop application is developed separately from this web package, in [`/desktop`](https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop) at the root of this repository. It is not deployed to Netlify and is not included in the web MVP zip. Its foundation and full sales lifecycle (Companies, Contacts, Products, Opportunities, Quotes, Orders, Invoices) are working from source; there is no packaged installer yet.
 
 ## Public product pages
 
 - `/principles` — The product decisions and beliefs behind Lanesra OS
 - `/compare` — A factual market-positioning comparison
-- `/download` — Desktop platform status and planned capabilities
+- `/download` — Desktop platform status, what's available today, and what's still planned
 - `/roadmap` — Current, building and planned capabilities
 - `/changelog` — Release-by-release updates
 
-The desktop edition is still in development and is not included in this package.
+The desktop edition's source is public (see `/desktop` in this repository) but it is still in active development and has no packaged installer yet.

@@ -4,7 +4,7 @@ Lanesra OS is an independent, open-source business application designed for smal
 
 ## Product status
 
-The product is currently in Early Access v0.8.0. The public browser demo is usable and includes realistic sample data. The native desktop application is planned next and is not yet available for download.
+The product is currently in Early Access v0.9.0. The public browser demo is usable and includes realistic sample data. The Windows desktop application is in early development: the source is public today (Tauri v2 + Rust + SQLite), with the full sales lifecycle already working end to end - Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices, including quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication. There is no signed installer yet; it is built and run from source.
 
 ## Product history
 
@@ -12,7 +12,8 @@ The product is currently in Early Access v0.8.0. The public browser demo is usab
 - June 2026: Architecture, scope and offline strategy established.
 - July 2026: Design system and web MVP built.
 - August 2026: Public Early Access launched.
-- Next milestone: Windows desktop edition with SQLite, backup and restore.
+- August 2026: Windows desktop edition foundation published (Tauri + SQLite, full sales lifecycle).
+- Next milestone: Contracts and tasks modules, backup and restore, and a signed desktop installer.
 
 ## Core workflows
 
@@ -24,7 +25,7 @@ Customer records connect to contacts, opportunities, quotes, orders, invoices, c
 - No licence activation
 - Simple by default
 - Modern user experience
-- Local data ownership for the planned desktop edition
+- Local data ownership, now working in the early-access desktop edition
 - Public roadmap and changelog
 
 ## Pages
@@ -36,6 +37,7 @@ Customer records connect to contacts, opportunities, quotes, orders, invoices, c
 - https://lanesraos.com/principles
 - https://lanesraos.com/compare
 - https://lanesraos.com/download
+- Desktop edition source: https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop
 
 ## Creator
 
