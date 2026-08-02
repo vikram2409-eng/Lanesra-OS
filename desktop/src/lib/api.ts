@@ -25,9 +25,12 @@ import type {
   QuoteInput,
   QuoteWithLines,
   PaymentInput,
+  NewUser,
+  PasswordChange,
   Task,
   TaskInput,
   User,
+  UserUpdate,
   Workspace,
   WorkspaceSetup,
 } from "./types";
@@ -138,4 +141,9 @@ export const api = {
   createTask: (input: TaskInput) => call<Task>("create_task", { input }),
   updateTask: (id: string, input: TaskInput) => call<Task>("update_task", { id, input }),
   archiveTask: (id: string) => call<void>("archive_task", { id }),
+
+  listUsers: () => call<User[]>("list_users"),
+  createUser: (input: NewUser) => call<User>("create_user", { input }),
+  updateUser: (id: string, input: UserUpdate) => call<User>("update_user", { id, input }),
+  setUserPassword: (id: string, input: PasswordChange) => call<void>("set_user_password", { id, input }),
 };

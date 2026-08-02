@@ -10,9 +10,10 @@ export type Section =
   | "orders"
   | "invoices"
   | "contracts"
-  | "tasks";
+  | "tasks"
+  | "users";
 
-const NAV_ITEMS: { section: Section; label: string }[] = [
+const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "dashboard", label: "Dashboard" },
   { section: "companies", label: "Companies" },
   { section: "contacts", label: "Contacts" },
@@ -23,6 +24,7 @@ const NAV_ITEMS: { section: Section; label: string }[] = [
   { section: "invoices", label: "Invoices" },
   { section: "contracts", label: "Contracts" },
   { section: "tasks", label: "Tasks" },
+  { section: "users", label: "Users", adminOnly: true },
 ];
 
 export function AppShell({
@@ -38,11 +40,13 @@ export function AppShell({
   onLogout: () => void;
   children: React.ReactNode;
 }) {
+  const isAdmin = user.roles.includes("Administrator");
+
   return (
     <div className="app-shell">
       <nav className="sidebar">
         <div className="sidebar-brand">Lanesra OS</div>
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin).map((item) => (
           <button
             key={item.section}
             className={`nav-item${active === item.section ? " active" : ""}`}

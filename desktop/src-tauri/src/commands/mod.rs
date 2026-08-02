@@ -9,6 +9,7 @@ pub mod order_commands;
 pub mod product_commands;
 pub mod quote_commands;
 pub mod task_commands;
+pub mod user_commands;
 pub mod workspace_commands;
 
 use rusqlite::Connection;

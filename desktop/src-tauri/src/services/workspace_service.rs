@@ -11,12 +11,12 @@ use crate::models::order::OrderInput;
 use crate::models::product::ProductInput;
 use crate::models::quote::{QuoteInput, QuoteLineInput};
 use crate::models::task::TaskInput;
-use crate::models::user::User;
+use crate::models::user::{NewUser, User};
 use crate::models::workspace::{Workspace, WorkspaceSetup};
 use crate::repositories::{audit_repo, user_repo, workspace_repo};
 use crate::services::{
     auth_service, company_service, contact_service, contract_service, invoice_service,
-    opportunity_service, order_service, product_service, quote_service, task_service,
+    opportunity_service, order_service, product_service, quote_service, task_service, user_service,
 };
 
 /// Runs the first-run wizard (5.1): creates the single workspace this
@@ -81,10 +81,25 @@ pub fn first_run_setup(conn: &Connection, setup: &WorkspaceSetup) -> AppResult<(
 
 fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str) -> AppResult<()> {
     let actor = Some(actor_user_id);
+    let workspace_id = workspace_repo::get_current(conn)?.unwrap().id;
+
+    // A second sample user so the Tasks "By Owner" view has more than one
+    // owner to group by.
+    let sales_rep = user_service::create(
+        conn,
+        &workspace_id,
+        &NewUser {
+            username: "morgan".into(),
+            display_name: "Morgan Reyes".into(),
+            password: "sample-password-123".into(),
+            roles: vec!["Sales".into()],
+        },
+        actor,
+    )?;
 
     let acme = company_service::create(
         conn,
-        &workspace_repo::get_current(conn)?.unwrap().id,
+        &workspace_id,
         &CompanyInput {
             name: "Acme Consulting Ltd".into(),
             status: "Active Customer".into(),
@@ -283,7 +298,7 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
         &TaskInput {
             title: "Prepare quarterly business review".into(),
             description: None,
-            owner_user_id: Some(actor_user_id.to_string()),
+            owner_user_id: Some(sales_rep.id.clone()),
             priority: "Normal".into(),
             status: "Not Started".into(),
             due_date: Some((Utc::now() + Duration::days(7)).format("%Y-%m-%d").to_string()),

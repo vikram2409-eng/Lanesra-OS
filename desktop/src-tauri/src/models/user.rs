@@ -40,3 +40,15 @@ pub struct NewUser {
     pub password: String,
     pub roles: Vec<String>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UserUpdate {
+    pub display_name: String,
+    pub roles: Vec<String>,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PasswordChange {
+    pub new_password: String,
+}

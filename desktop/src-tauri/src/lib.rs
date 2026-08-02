@@ -82,6 +82,10 @@ pub fn run() {
             commands::task_commands::create_task,
             commands::task_commands::update_task,
             commands::task_commands::archive_task,
+            commands::user_commands::list_users,
+            commands::user_commands::create_user,
+            commands::user_commands::update_user,
+            commands::user_commands::set_user_password,
             commands::dashboard_commands::dashboard_summary,
         ])
         .run(tauri::generate_context!())

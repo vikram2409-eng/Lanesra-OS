@@ -46,6 +46,25 @@ export interface Credentials {
   password: string;
 }
 
+export const ROLES = ["Administrator", "Manager", "Sales", "Finance", "ReadOnly"] as const;
+
+export interface NewUser {
+  username: string;
+  display_name: string;
+  password: string;
+  roles: string[];
+}
+
+export interface UserUpdate {
+  display_name: string;
+  roles: string[];
+  is_active: boolean;
+}
+
+export interface PasswordChange {
+  new_password: string;
+}
+
 export const COMPANY_STATUSES = ["Prospect", "Active Customer", "Inactive", "Archived"] as const;
 export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
 

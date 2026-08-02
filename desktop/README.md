@@ -23,7 +23,7 @@ desktop/
     components/          AppShell, LineItemsEditor, StatusBadge
     features/            firstRun, auth, dashboard, companies, contacts,
                           products, opportunities, quotes, orders, invoices,
-                          contracts, tasks
+                          contracts, tasks, users
   src-tauri/
     src/
       db/                connection + versioned migration runner
@@ -73,9 +73,15 @@ touch the database directly; they call services, which call repositories.
 - **Tasks**: General or linked to exactly one of Company / Contact /
   Opportunity / Quote / Order / Invoice / Contract (FR-TSK-02), with the
   related-record picker filtered to that type (FR-TSK-03) and validated to
-  actually exist. Today / Upcoming / Overdue / Completed / My Tasks / By
-  Related Record views (FR-TSK-05; "By Owner" is scoped to the current user
-  since there is no user-directory UI yet - see deferred items below).
+  actually exist. Today / Upcoming / Overdue / Completed / By Owner (grouped
+  using the real user directory) / By Related Record views (FR-TSK-05).
+- **User management**: an Administrator can list, create, edit
+  roles/display name/active status, and reset the password for other local
+  users from the Users screen (nav item is admin-only). A safety guard
+  blocks demoting or deactivating the last active Administrator so a
+  workspace can never lock itself out. Any authenticated user can list the
+  directory (needed to assign task owners) but only an Administrator can
+  create/edit/deactivate accounts or reset passwords.
 
 ## What's deferred to a later phase
 
@@ -87,10 +93,8 @@ need to change shape later, but there is no service/command/UI layer yet:
 - Backup/restore (`.lanesra` package format)
 - Reports beyond the dashboard's built-in KPIs
 - Windows notifications for task reminders (FR-TSK-06)
-- User management UI (inviting/listing other local users and roles beyond
-  the first-run administrator - `users`/`roles`/`user_roles` tables and the
-  repository layer exist, but there's no command/UI to manage them yet,
-  which is also why the Tasks "By Owner" view is just "My Tasks" for now)
+- Self-service "change my own password" (only an Administrator can reset
+  passwords today, from the Users screen)
 - Team Workspace / multi-user LAN mode (the schema's `workspace_id` and
   `operating_mode` columns are ready for it; Personal mode only for now)
 - Windows installer signing/packaging (the Tauri bundle config targets
@@ -124,9 +128,11 @@ cargo test     # unit tests (money, numbering, migrations, auth) +
                # integration tests: tests/lifecycle.rs (full company ->
                # opportunity -> quote -> order -> invoice -> payment flow,
                # foreign key enforcement, cross-company relationship
-               # validation) and tests/contracts_and_tasks.rs (contract
+               # validation), tests/contracts_and_tasks.rs (contract
                # numbering/renewal alerts, task relationship validation
-               # and open/overdue counts)
+               # and open/overdue counts), and tests/user_management.rs
+               # (admin-only authorization, last-administrator guard,
+               # password reset)
 ```
 
 Producing the actual signed Windows `.exe`/`.msi` installer requires a
@@ -137,17 +143,17 @@ one. It isn't code-signed yet.
 
 ## Verification performed this session
 
-- `cargo test` (src-tauri): 23/23 passing, including a full lifecycle
+- `cargo test` (src-tauri): 30/30 passing, including a full lifecycle
   integration test asserting exact money math through every conversion step,
-  plus dedicated Contracts/Tasks tests (renewal alert windows, relationship
-  validation, open/overdue counts).
+  dedicated Contracts/Tasks tests (renewal alert windows, relationship
+  validation, open/overdue counts), and user-management tests (non-admin
+  rejection, last-administrator guard, password reset).
 - `npm run build` (frontend): `tsc` + `vite build` both clean.
-- Ran the actual compiled Tauri binary under Xvfb end to end: drove the
-  first-run wizard with sample data through the real UI, and confirmed the
-  dashboard (including the new renewal-alert and task-count KPIs),
-  Contracts list (with the "Renewing soon" badge), and Tasks screens
-  (Overdue tab correctly resolving "Opportunity: Acme Q3 Advisory
-  Engagement", and the New Task form's relationship-type-filtered picker)
-  all render real data from the SQLite backend with correct numbering
-  (`Q-2026-000001` -> `SO-2026-000001` -> `INV-2026-000001`,
-  `CTR-2026-000001`, `TSK-000001`...`TSK-000004`) and audit trail.
+- Ran the actual compiled Tauri binary under Xvfb end to end twice this
+  project: confirmed the dashboard (including renewal-alert and task-count
+  KPIs), Contracts list (with the "Renewing soon" badge), Tasks screens
+  (Overdue tab resolving related-record labels, the relationship-filtered
+  picker, and the By Owner view grouping real tasks under "CoTest Admi" and
+  the seeded "Morgan Reyes" sample user), and the Users screen (listing both
+  seeded accounts with correct roles/status) all render real data from the
+  SQLite backend with correct numbering and audit trail.

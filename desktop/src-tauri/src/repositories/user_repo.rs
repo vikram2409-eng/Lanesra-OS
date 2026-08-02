@@ -52,6 +52,22 @@ pub fn to_public(record: UserRecord, roles: Vec<String>) -> User {
     }
 }
 
+pub fn set_roles(conn: &Connection, user_id: &str, roles: &[String]) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM user_roles WHERE user_id = ?1", [user_id])?;
+    for role_name in roles {
+        let role_id: String = conn.query_row(
+            "SELECT id FROM roles WHERE name = ?1",
+            [role_name],
+            |r| r.get(0),
+        )?;
+        conn.execute(
+            "INSERT INTO user_roles (user_id, role_id) VALUES (?1, ?2)",
+            (user_id, role_id),
+        )?;
+    }
+    Ok(())
+}
+
 pub fn create(
     conn: &Connection,
     workspace_id: &str,
@@ -67,18 +83,45 @@ pub fn create(
          VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?6)",
         (&id, workspace_id, username, display_name, password_hash, &now),
     )?;
-    for role_name in roles {
-        let role_id: String = conn.query_row(
-            "SELECT id FROM roles WHERE name = ?1",
-            [role_name],
-            |r| r.get(0),
-        )?;
-        conn.execute(
-            "INSERT INTO user_roles (user_id, role_id) VALUES (?1, ?2)",
-            (&id, role_id),
-        )?;
-    }
+    set_roles(conn, &id, roles)?;
     find_by_id(conn, &id)?.ok_or(rusqlite::Error::QueryReturnedNoRows)
+}
+
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    display_name: &str,
+    is_active: bool,
+) -> rusqlite::Result<()> {
+    let now = now_iso();
+    conn.execute(
+        "UPDATE users SET display_name = ?1, is_active = ?2, updated_at = ?3 WHERE id = ?4",
+        (display_name, is_active as i64, &now, id),
+    )?;
+    Ok(())
+}
+
+pub fn set_password(conn: &Connection, id: &str, password_hash: &str) -> rusqlite::Result<()> {
+    let now = now_iso();
+    conn.execute(
+        "UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3",
+        (password_hash, &now, id),
+    )?;
+    Ok(())
+}
+
+/// Count of active users in the workspace who currently hold the
+/// Administrator role - used to stop the last one being demoted or
+/// deactivated (there would be no one left who could undo it).
+pub fn count_active_administrators(conn: &Connection, workspace_id: &str) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM users u
+         JOIN user_roles ur ON ur.user_id = u.id
+         JOIN roles r ON r.id = ur.role_id
+         WHERE u.workspace_id = ?1 AND u.is_active = 1 AND r.name = 'Administrator'",
+        [workspace_id],
+        |row| row.get(0),
+    )
 }
 
 pub fn find_by_id(conn: &Connection, id: &str) -> rusqlite::Result<Option<UserRecord>> {

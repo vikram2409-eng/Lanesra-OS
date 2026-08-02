@@ -11,7 +11,7 @@ import {
   type TaskRelatedType,
 } from "../../lib/types";
 
-type Tab = "today" | "upcoming" | "overdue" | "completed" | "mine" | "related";
+type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
 const TABS: { tab: Tab; label: string }[] = [
@@ -19,7 +19,7 @@ const TABS: { tab: Tab; label: string }[] = [
   { tab: "upcoming", label: "Upcoming" },
   { tab: "overdue", label: "Overdue" },
   { tab: "completed", label: "Completed" },
-  { tab: "mine", label: "My Tasks" },
+  { tab: "owner", label: "By Owner" },
   { tab: "related", label: "By Related Record" },
 ];
 
@@ -47,6 +47,7 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
   const queryClient = useQueryClient();
 
   const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
@@ -81,6 +82,7 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
       <TaskForm
         taskId={view.mode === "edit" ? view.id : undefined}
         currentUserId={currentUserId}
+        users={users.data ?? []}
         relatedOptions={{
           Company: (companies.data ?? []).map((c) => ({ id: c.id, label: c.name })),
           Contact: (contacts.data ?? []).map((c) => ({ id: c.id, label: `${c.first_name} ${c.last_name}` })),
@@ -102,14 +104,30 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
   const all = tasks.data ?? [];
   const open = all.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const today = todayIso();
+  const ownerName = (id: string | null): string =>
+    id ? users.data?.find((u) => u.id === id)?.display_name ?? "Unknown user" : "Unassigned";
 
-  let visible: Task[];
-  if (tab === "today") visible = open.filter((t) => t.due_date === today);
-  else if (tab === "upcoming") visible = open.filter((t) => !!t.due_date && t.due_date > today);
-  else if (tab === "overdue") visible = open.filter((t) => !!t.due_date && t.due_date < today);
-  else if (tab === "completed") visible = all.filter((t) => t.status === "Completed");
-  else if (tab === "mine") visible = all.filter((t) => t.owner_user_id === currentUserId);
-  else visible = all.filter((t) => !!t.related_type);
+  let groups: { label: string; rows: Task[] }[];
+  if (tab === "today") groups = [{ label: "Today", rows: open.filter((t) => t.due_date === today) }];
+  else if (tab === "upcoming")
+    groups = [{ label: "Upcoming", rows: open.filter((t) => !!t.due_date && t.due_date > today) }];
+  else if (tab === "overdue")
+    groups = [{ label: "Overdue", rows: open.filter((t) => !!t.due_date && t.due_date < today) }];
+  else if (tab === "completed") groups = [{ label: "Completed", rows: all.filter((t) => t.status === "Completed") }];
+  else if (tab === "related") groups = [{ label: "Related", rows: all.filter((t) => !!t.related_type) }];
+  else {
+    const byOwner = new Map<string, Task[]>();
+    for (const t of all) {
+      const key = t.owner_user_id ?? "";
+      if (!byOwner.has(key)) byOwner.set(key, []);
+      byOwner.get(key)!.push(t);
+    }
+    groups = Array.from(byOwner.entries())
+      .sort(([a], [b]) => ownerName(a || null).localeCompare(ownerName(b || null)))
+      .map(([ownerId, rows]) => ({ label: ownerName(ownerId || null), rows }));
+  }
+
+  const showGroupLabels = tab === "owner";
 
   return (
     <div>
@@ -129,38 +147,46 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
       </div>
 
       {tasks.isLoading && <p>Loading...</p>}
-      {visible.length === 0 && <p className="empty-state">No tasks here.</p>}
-      {visible.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Title</th>
-              <th>Priority</th>
-              <th>Status</th>
-              <th>Due date</th>
-              <th>Related to</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map((t) => (
-              <tr key={t.id}>
-                <td>{t.task_number}</td>
-                <td>{t.title}</td>
-                <td>{t.priority}</td>
-                <td>{t.status}</td>
-                <td>{t.due_date ?? "—"}</td>
-                <td>{relatedLabel(t) ?? "General"}</td>
-                <td>
-                  <button className="btn" onClick={() => setView({ mode: "edit", id: t.id })}>
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {groups.every((g) => g.rows.length === 0) && <p className="empty-state">No tasks here.</p>}
+      {groups.map(
+        (group) =>
+          group.rows.length > 0 && (
+            <div key={group.label} style={{ marginBottom: showGroupLabels ? 24 : 0 }}>
+              {showGroupLabels && <h3>{group.label}</h3>}
+              <table>
+                <thead>
+                  <tr>
+                    <th>Number</th>
+                    <th>Title</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Due date</th>
+                    {!showGroupLabels && <th>Owner</th>}
+                    <th>Related to</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.rows.map((t) => (
+                    <tr key={t.id}>
+                      <td>{t.task_number}</td>
+                      <td>{t.title}</td>
+                      <td>{t.priority}</td>
+                      <td>{t.status}</td>
+                      <td>{t.due_date ?? "—"}</td>
+                      {!showGroupLabels && <td>{ownerName(t.owner_user_id)}</td>}
+                      <td>{relatedLabel(t) ?? "General"}</td>
+                      <td>
+                        <button className="btn" onClick={() => setView({ mode: "edit", id: t.id })}>
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ),
       )}
     </div>
   );
@@ -169,12 +195,14 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
 function TaskForm({
   taskId,
   currentUserId,
+  users,
   relatedOptions,
   onDone,
   onCancel,
 }: {
   taskId?: string;
   currentUserId: string;
+  users: { id: string; display_name: string }[];
   relatedOptions: Record<TaskRelatedType, { id: string; label: string }[]>;
   onDone: () => void;
   onCancel: () => void;
@@ -218,6 +246,21 @@ function TaskForm({
         <div className="form-field full">
           <label>Title</label>
           <input value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })} required />
+        </div>
+        <div className="form-field">
+          <label>Owner</label>
+          <select
+            value={input.owner_user_id ?? ""}
+            onChange={(e) => setInput({ ...input, owner_user_id: e.target.value || null })}
+          >
+            <option value="">— Unassigned —</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.display_name}
+                {u.id === currentUserId ? " (you)" : ""}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-field">
           <label>Priority</label>
