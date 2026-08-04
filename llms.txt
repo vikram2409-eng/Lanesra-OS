@@ -6,7 +6,7 @@ Lanesra OS is a modern, open-source sales and business management application fo
 
 - Early Access v0.9.0
 - Browser-based live demo is available
-- Windows desktop edition is in early development: the source is public today (Tauri + Rust + SQLite) with the full sales lifecycle, Contracts, Tasks, user management and a Team Workspace mode for small teams (Docker) all working. No packaged installer is published yet - build and run it from source, or build one yourself via the repo's CI workflow.
+- Windows desktop edition is in early development: the source is public today (Tauri + Rust + SQLite) with the full sales lifecycle, Contracts, Tasks, user management and a Team Workspace mode for small teams (Docker) all working. An unsigned Early Access Windows installer (.exe/.msi) is available from GitHub Releases; build and run from source is also supported.
 
 ## Core capabilities
 
