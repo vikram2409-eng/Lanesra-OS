@@ -65,6 +65,25 @@ export interface PasswordChange {
   new_password: string;
 }
 
+export interface ChangeOwnPassword {
+  current_password: string;
+  new_password: string;
+}
+
+export interface BackupManifest {
+  format_version: number;
+  schema_version: number;
+  workspace_name: string;
+  created_at: string;
+  app_version: string;
+}
+
+export interface BackupPackage {
+  file_name: string;
+  package_base64: string;
+  manifest: BackupManifest;
+}
+
 export const COMPANY_STATUSES = ["Prospect", "Active Customer", "Inactive", "Archived"] as const;
 export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
 

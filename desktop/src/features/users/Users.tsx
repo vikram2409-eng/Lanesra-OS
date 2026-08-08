@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -81,6 +81,102 @@ export function Users() {
           </tbody>
         </table>
       )}
+
+      <BackupRestore />
+    </div>
+  );
+}
+
+function base64ToBlob(base64: string, contentType: string): Blob {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: contentType });
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // reader.result is a data URL ("data:...;base64,AAAA...") - strip the prefix.
+      const result = reader.result as string;
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function BackupRestore() {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [restoredFrom, setRestoredFrom] = useState<string | null>(null);
+
+  const backup = useMutation({
+    mutationFn: () => api.createBackup(),
+    onSuccess: (pkg) => {
+      setError(null);
+      const blob = base64ToBlob(pkg.package_base64, "application/zip");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = pkg.file_name;
+      link.click();
+      URL.revokeObjectURL(url);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create a backup"),
+  });
+
+  const restore = useMutation({
+    mutationFn: async (file: File) => {
+      const base64 = await blobToBase64(file);
+      return api.restoreBackup(base64);
+    },
+    onSuccess: (manifest) => {
+      setError(null);
+      setRestoredFrom(manifest.created_at);
+      // Every record on screen was just replaced wholesale - a full reload
+      // is simpler and safer than trying to invalidate every query key.
+      window.location.reload();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not restore this backup"),
+  });
+
+  function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow choosing the same file again later
+    if (!file) return;
+    const confirmed = window.confirm(
+      "Restoring a backup replaces every company, contact, quote, order, invoice, contract, task and user in this workspace with what's in the backup file. This cannot be undone. Continue?"
+    );
+    if (confirmed) restore.mutate(file);
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 24, maxWidth: 560 }}>
+      <h3 style={{ marginTop: 0 }}>Backup &amp; restore</h3>
+      <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+        Export the entire workspace - every company, contact, product, opportunity, quote, order,
+        invoice, contract, task and user - as a single <code>.lanesra</code> file, or restore one to
+        replace everything currently here.
+      </p>
+      {error && <div className="error-banner">{error}</div>}
+      {restoredFrom && !error && (
+        <div className="success-banner">Restored from a backup made {restoredFrom}. Reloading...</div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn" onClick={() => backup.mutate()} disabled={backup.isPending}>
+          {backup.isPending ? "Preparing backup..." : "Export backup"}
+        </button>
+        <button
+          className="btn"
+          onClick={() => fileInput.current?.click()}
+          disabled={restore.isPending}
+        >
+          {restore.isPending ? "Restoring..." : "Restore from file..."}
+        </button>
+        <input ref={fileInput} type="file" accept=".lanesra" hidden onChange={handleFileChosen} />
+      </div>
     </div>
   );
 }

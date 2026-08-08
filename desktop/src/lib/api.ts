@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AppErrorPayload,
+  BackupManifest,
+  BackupPackage,
+  ChangeOwnPassword,
   Company,
   CompanyInput,
   Contact,
@@ -85,6 +88,7 @@ export const api = {
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),
   currentUser: () => call<User | null>("current_user"),
+  changeMyPassword: (input: ChangeOwnPassword) => call<void>("change_my_password", { input }),
 
   listCompanies: () => call<Company[]>("list_companies"),
   getCompany: (id: string) => call<Company>("get_company", { id }),
@@ -170,4 +174,8 @@ export const api = {
   createUser: (input: NewUser) => call<User>("create_user", { input }),
   updateUser: (id: string, input: UserUpdate) => call<User>("update_user", { id, input }),
   setUserPassword: (id: string, input: PasswordChange) => call<void>("set_user_password", { id, input }),
+
+  createBackup: () => call<BackupPackage>("create_backup"),
+  restoreBackup: (packageBase64: string) =>
+    call<BackupManifest>("restore_backup", { packageBase64 }),
 };

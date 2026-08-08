@@ -11,7 +11,8 @@ export type Section =
   | "invoices"
   | "contracts"
   | "tasks"
-  | "users";
+  | "users"
+  | "account";
 
 const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "dashboard", label: "Dashboard" },
@@ -60,9 +61,13 @@ export function AppShell({
         <div className="topbar">
           <div />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            <button
+              className="link-button"
+              style={{ fontSize: 13, color: "var(--text-muted)" }}
+              onClick={() => onNavigate("account")}
+            >
               {user.display_name} · {user.roles.join(", ")}
-            </span>
+            </button>
             <button className="btn" onClick={onLogout}>
               Sign out
             </button>

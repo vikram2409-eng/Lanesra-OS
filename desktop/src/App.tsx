@@ -14,6 +14,7 @@ import { Invoices } from "./features/invoices/Invoices";
 import { Contracts } from "./features/contracts/Contracts";
 import { Tasks } from "./features/tasks/Tasks";
 import { Users } from "./features/users/Users";
+import { Account } from "./features/account/Account";
 import { api } from "./lib/api";
 import type { User, Workspace } from "./lib/types";
 
@@ -86,6 +87,7 @@ export function App() {
       {section === "contracts" && <Contracts />}
       {section === "tasks" && <Tasks currentUserId={boot.user.id} />}
       {section === "users" && <Users />}
+      {section === "account" && <Account user={boot.user} />}
     </AppShell>
   );
 }
