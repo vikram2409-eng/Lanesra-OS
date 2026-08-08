@@ -1,4 +1,5 @@
 pub mod auth_service;
+pub mod backup_service;
 pub mod company_service;
 pub mod contact_service;
 pub mod contract_service;

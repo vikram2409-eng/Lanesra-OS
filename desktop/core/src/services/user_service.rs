@@ -5,7 +5,7 @@ use crate::models::user::{NewUser, PasswordChange, User, UserUpdate};
 use crate::repositories::{audit_repo, user_repo};
 use crate::services::auth_service;
 
-fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
+pub(crate) fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
     let roles = user_repo::roles_for_user(conn, actor_id)?;
     if !roles.iter().any(|r| r == "Administrator") {

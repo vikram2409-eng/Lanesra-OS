@@ -3,7 +3,7 @@ use argon2::Argon2;
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
-use crate::models::user::{Credentials, User};
+use crate::models::user::{ChangeOwnPassword, Credentials, User};
 use crate::repositories::{audit_repo, user_repo};
 
 pub fn hash_password(password: &str) -> AppResult<String> {
@@ -72,6 +72,44 @@ pub fn login(conn: &Connection, workspace_id: &str, credentials: &Credentials) -
     )?;
 
     Ok(user)
+}
+
+/// Lets any authenticated user change their own password, given they can
+/// prove they know the current one. Unlike `user_service::set_password`
+/// (an Administrator resetting someone else's account), this needs no
+/// Administrator role - it's the self-service counterpart the README has
+/// been listing as deferred.
+pub fn change_own_password(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+    input: &ChangeOwnPassword,
+) -> AppResult<()> {
+    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+    if input.new_password.len() < 8 {
+        return Err(AppError::Validation("New password must be at least 8 characters".into()));
+    }
+
+    let record = user_repo::find_by_id(conn, actor_id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
+    if !verify_password(&input.current_password, &record.password_hash) {
+        return Err(AppError::Validation("Current password is incorrect".into()));
+    }
+
+    let new_hash = hash_password(&input.new_password)?;
+    user_repo::set_password(conn, actor_id, &new_hash)?;
+
+    audit_repo::record(
+        conn,
+        workspace_id,
+        Some(actor_id),
+        "password_change",
+        Some("user"),
+        Some(actor_id),
+        &format!("User '{}' changed their own password", record.username),
+        None,
+    )?;
+
+    Ok(())
 }
 
 /// Resolves a session's user_id into the public User shape, or None if the

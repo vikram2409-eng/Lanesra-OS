@@ -9,6 +9,22 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (2, include_str!("migrations/0002_web_sessions.sql")),
 ];
 
+/// The newest schema version this build knows about - used to reject
+/// restoring a backup that was made by a newer version of the app than
+/// this one (an older app can't safely open a schema it's never seen).
+pub fn current_schema_version() -> i64 {
+    MIGRATIONS.last().map(|(v, _)| *v).unwrap_or(0)
+}
+
+/// The schema version actually applied to `conn`.
+pub fn schema_version(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+        [],
+        |row| row.get(0),
+    )
+}
+
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (

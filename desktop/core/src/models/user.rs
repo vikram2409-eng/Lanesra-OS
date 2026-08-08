@@ -52,3 +52,12 @@ pub struct UserUpdate {
 pub struct PasswordChange {
     pub new_password: String,
 }
+
+/// Self-service password change - unlike `PasswordChange` (an
+/// Administrator resetting someone else's password), this requires proving
+/// you know the current one.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChangeOwnPassword {
+    pub current_password: String,
+    pub new_password: String,
+}

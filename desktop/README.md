@@ -171,6 +171,21 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   network host, with per-user `HttpOnly` session cookies, a server-side
   auth gate on every business command, and a persistent SQLite volume. See
   "Two operating modes" above.
+- **Backup & restore**: an Administrator can export the entire workspace as
+  a single `.lanesra` file (a zip of a live SQLite snapshot, taken via
+  SQLite's online backup API, plus a manifest with the schema/app version)
+  from the Users screen, and restore one to wholesale-replace the current
+  workspace. Restore stages and fully validates the uploaded file on disk
+  - including rejecting one made by a newer app version than the one
+    running - before it ever touches the live database, and works
+  identically in Personal Workspace and Team Workspace (where restoring
+  safely swaps the shared connection out from under any requests in
+  flight; see `core/src/services/backup_service.rs`).
+- **Self-service password change**: any authenticated user can change
+  their own password (proving they know the current one) from a "My
+  account" screen reachable by clicking their name in the top bar -
+  previously only an Administrator could reset a password, from the Users
+  screen, which is still true for resetting *someone else's*.
 
 ## What's deferred to a later phase
 
@@ -179,15 +194,13 @@ need to change shape later, but there is no service/command/UI layer yet:
 
 - PDF generation and printing for quotes/orders/invoices
 - CSV import/export
-- Backup/restore (`.lanesra` package format)
 - Reports beyond the dashboard's built-in KPIs
 - Windows notifications for task reminders (FR-TSK-06)
-- Self-service "change my own password" (only an Administrator can reset
-  passwords today, from the Users screen)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
   Actions workflow at `.github/workflows/desktop-release.yml` now builds
-  and drafts a release automatically on a `desktop-v*` tag push)
+  and drafts a release automatically on a `desktop-v*` tag push - the
+  v0.1.0 Early Access build is already published, just unsigned)
 
 ## Running it
 
@@ -272,3 +285,28 @@ one. It isn't code-signed yet.
   extraction to confirm the Personal Workspace shell still builds and
   renders correctly (FirstRun screen) with zero behavior change from
   moving its business logic into a shared crate.
+
+**Backup/Restore + self-service password phase:**
+
+- `cargo test` across the whole workspace: 53/53 passing - the prior 39
+  plus 6 new core tests (`core/tests/backup_and_restore.rs`: round-trip
+  backup/restore, non-administrator rejection, garbage-input rejection,
+  future-schema-version rejection, wrong-current-password rejection,
+  too-short-new-password rejection) and 8 HTTP integration tests (2
+  pre-existing plus `backup_then_restore_reverts_data_over_http`,
+  `only_an_administrator_can_restore_a_backup`,
+  `self_service_password_change_over_http`).
+- `npm run build`: `tsc` + `vite build` both clean.
+- Built the real release `lanesra-server` binary and drove the whole
+  feature by hand with curl against a live, file-backed SQLite database
+  (not `:memory:`): first-run, created a company, exported a backup,
+  created a second company, restored the backup, and confirmed via
+  `list_companies` that only the pre-backup company remained - and that
+  the admin's own session (captured inside the backup snapshot) still
+  resolved correctly afterward, since the connection swap happens without
+  touching `web_sessions`. Also exercised wrong-current-password rejection
+  and a successful self-service password change, then logged in with the
+  new password. Restarted the server process entirely afterward and
+  confirmed the restored data was still there and the on-disk directory
+  held one clean `lanesra.sqlite3` (+ WAL/SHM) with no leftover
+  `.restoring` temp file from the swap.
