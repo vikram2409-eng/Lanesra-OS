@@ -1,1 +1,47 @@
-PLACEHOLDER
+# Lanesra OS
+
+Lanesra OS is a modern, open-source sales and business management application for small businesses.
+
+## Current status
+
+- Early Access v0.9.0
+- Browser-based live demo is available
+- Windows desktop edition is in early development: the source is public today (Tauri + Rust + SQLite) with the full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), backup/restore and self-service password change all working. An unsigned Early Access Windows installer (.exe/.msi) is available from GitHub Releases; build and run from source is also supported.
+
+## Core capabilities
+
+- Companies and contacts
+- Opportunities and sales pipeline
+- Products and services
+- Quotes, orders and invoices
+- Contracts
+- Tasks and activities
+- Sales dashboards
+- Connected relationship validation
+- Automatic record numbering
+
+## Product principles
+
+- User ownership of business data
+- Offline-first desktop direction
+- Connected records instead of duplicated free text
+- Simplicity before feature volume
+- Open-source transparency
+- Modern, accessible product design
+
+## Important pages
+
+- Product: https://lanesraos.com/
+- Live demo: https://lanesraos.com/demo
+- Principles: https://lanesraos.com/principles
+- Compare: https://lanesraos.com/compare
+- Download: https://lanesraos.com/download
+- Roadmap: https://lanesraos.com/roadmap
+- Changelog: https://lanesraos.com/changelog
+- Source: https://github.com/vikram2409-eng/Lanesra-OS
+- Desktop edition source: https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop
+
+## Creator
+
+Created and maintained by Vikram Grover.
+https://vikramgrover.com/
