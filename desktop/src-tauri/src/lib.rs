@@ -12,8 +12,8 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("lanesra.sqlite3");
-            let conn = lanesra_core::db::open_workspace_db(db_path)?;
-            app.manage(AppState::new(conn));
+            let conn = lanesra_core::db::open_workspace_db(&db_path)?;
+            app.manage(AppState::new(conn, db_path));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -22,6 +22,7 @@ pub fn run() {
             commands::auth_commands::login,
             commands::auth_commands::logout,
             commands::auth_commands::current_user,
+            commands::auth_commands::change_my_password,
             commands::company_commands::list_companies,
             commands::company_commands::get_company,
             commands::company_commands::create_company,
@@ -82,6 +83,8 @@ pub fn run() {
             commands::user_commands::update_user,
             commands::user_commands::set_user_password,
             commands::dashboard_commands::dashboard_summary,
+            commands::backup_commands::create_backup,
+            commands::backup_commands::restore_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Lanesra OS");

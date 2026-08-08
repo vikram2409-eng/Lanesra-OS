@@ -17,12 +17,12 @@ use lanesra_core::models::order::OrderInput;
 use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
-use lanesra_core::models::user::{NewUser, PasswordChange, UserUpdate};
+use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
-    company_service, contact_service, contract_service, dashboard_service, invoice_service,
-    opportunity_service, order_service, product_service, quote_service, task_service,
-    user_service,
+    auth_service, backup_service, company_service, contact_service, contract_service,
+    dashboard_service, invoice_service, opportunity_service, order_service, product_service,
+    quote_service, task_service, user_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -246,7 +246,20 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             Ok(Value::Null)
         }
 
+        "change_my_password" => {
+            let input: ChangeOwnPassword = arg(args, "input")?;
+            auth_service::change_own_password(conn, &require_workspace_id(conn)?, actor, &input)?;
+            Ok(Value::Null)
+        }
+
         "dashboard_summary" => to_value(dashboard_service::summary(conn, &require_workspace_id(conn)?)?),
+
+        "create_backup" => to_value(backup_service::create_backup(conn, actor)?),
+        // "restore_backup" is deliberately absent here - it replaces the
+        // live connection itself, which this function only ever borrows
+        // immutably. routes.rs special-cases it before locking the
+        // connection, the same way login/logout mutate the session cookie
+        // outside this function.
 
         other => Err(AppError::Validation(format!("Unknown command '{other}'"))),
     }

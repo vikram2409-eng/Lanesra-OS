@@ -1,8 +1,8 @@
 use tauri::State;
 
-use crate::commands::require_workspace_id;
+use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::user::{Credentials, User};
+use lanesra_core::models::user::{ChangeOwnPassword, Credentials, User};
 use lanesra_core::services::auth_service;
 use crate::state::AppState;
 
@@ -29,4 +29,11 @@ pub fn current_user(state: State<AppState>) -> AppResult<Option<User>> {
     };
     let conn = state.conn.lock().unwrap();
     auth_service::resolve_user(&conn, &user_id)
+}
+
+#[tauri::command]
+pub fn change_my_password(state: State<AppState>, input: ChangeOwnPassword) -> AppResult<()> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    auth_service::change_own_password(&conn, &workspace_id, current_actor(&state).as_deref(), &input)
 }

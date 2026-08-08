@@ -12,7 +12,7 @@ use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::user::Credentials;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::repositories::session_repo;
-use lanesra_core::services::{auth_service, workspace_service};
+use lanesra_core::services::{auth_service, backup_service, workspace_service};
 
 use crate::dispatch::{arg, dispatch, require_workspace_id, to_value};
 use crate::session::{clear_session_cookie, current_actor, set_session_cookie, SESSION_COOKIE};
@@ -35,11 +35,32 @@ async fn invoke(
     jar: CookieJar,
     Json(args): Json<Value>,
 ) -> (CookieJar, Json<Value>) {
+    // restore_backup replaces the live connection itself (see
+    // backup_service::restore_from_package), so it needs mutable access to
+    // the mutex slot rather than the shared `&Connection` every other
+    // command gets - handled separately for that reason alone, the same
+    // way login/logout are separated out for mutating the session cookie.
+    if command == "restore_backup" {
+        return match handle_restore(&state, &args, jar.clone()) {
+            Ok((jar, value)) => (jar, Json(json!({"ok": true, "data": value}))),
+            Err(err) => (jar, Json(json!({"ok": false, "error": err}))),
+        };
+    }
+
     let conn = state.conn.lock().unwrap();
     match handle(&command, &args, &conn, jar.clone()) {
         Ok((jar, value)) => (jar, Json(json!({"ok": true, "data": value}))),
         Err(err) => (jar, Json(json!({"ok": false, "error": err}))),
     }
+}
+
+fn handle_restore(state: &SharedState, args: &Value, jar: CookieJar) -> AppResult<(CookieJar, Value)> {
+    let mut conn = state.conn.lock().unwrap();
+    let actor = current_actor(&conn, &jar)
+        .ok_or_else(|| AppError::Validation("Not authenticated - please log in".into()))?;
+    let package_base64: String = arg(args, "packageBase64")?;
+    let manifest = backup_service::restore_from_package(&mut conn, &state.db_path, &package_base64, Some(&actor))?;
+    Ok((jar, to_value(manifest)?))
 }
 
 /// Handles the commands that mutate the session cookie itself; everything

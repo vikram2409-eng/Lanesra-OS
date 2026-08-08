@@ -1,4 +1,5 @@
 pub mod auth_commands;
+pub mod backup_commands;
 pub mod company_commands;
 pub mod contact_commands;
 pub mod contract_commands;

@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 use lanesra_core::db::open_in_memory_db;
 use lanesra_server::{build_router, ServerState};
@@ -6,7 +7,10 @@ use serde_json::{json, Value};
 
 async fn spawn_server() -> SocketAddr {
     let conn = open_in_memory_db().unwrap();
-    let state = ServerState::new(conn);
+    // db_path is unused by every test below - none of them exercise
+    // restore_backup, the only command that touches it - so an in-memory
+    // connection with a placeholder path is fine here.
+    let state = ServerState::new(conn, std::env::temp_dir().join("lanesra-http-test-unused.sqlite3"));
     let frontend_dir = std::env::temp_dir().join("lanesra-server-test-frontend");
     std::fs::create_dir_all(&frontend_dir).unwrap();
     let app = build_router(state, frontend_dir);
@@ -17,6 +21,28 @@ async fn spawn_server() -> SocketAddr {
         axum::serve(listener, app).await.unwrap();
     });
     addr
+}
+
+/// Unlike `spawn_server`, this uses a real file-backed database rather than
+/// `:memory:` - required for backup/restore tests, since restore works by
+/// replacing the database *file* out from under the live connection.
+async fn spawn_file_backed_server() -> (SocketAddr, PathBuf) {
+    let db_path = std::env::temp_dir().join(format!(
+        "lanesra-http-test-{}.sqlite3",
+        lanesra_core::domain::ids::new_uuid()
+    ));
+    let conn = lanesra_core::db::open_workspace_db(&db_path).unwrap();
+    let state = ServerState::new(conn, db_path.clone());
+    let frontend_dir = std::env::temp_dir().join("lanesra-server-test-frontend");
+    std::fs::create_dir_all(&frontend_dir).unwrap();
+    let app = build_router(state, frontend_dir);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    (addr, db_path)
 }
 
 fn client_with_cookies() -> reqwest::Client {
@@ -188,4 +214,115 @@ async fn only_an_administrator_can_create_users() {
     )
     .await;
     assert_eq!(result["ok"], false);
+}
+
+fn company_args(name: &str) -> Value {
+    json!({"input": {
+        "name": name, "status": "Prospect", "owner_user_id": null, "tax_number": null,
+        "billing_address": null, "shipping_address": null, "tags": null, "notes": null
+    }})
+}
+
+#[tokio::test]
+async fn backup_then_restore_reverts_data_over_http() {
+    let (addr, db_path) = spawn_file_backed_server().await;
+    let admin = client_with_cookies();
+    first_run(&admin, addr, "admin", "supersecretpw").await;
+    invoke(&admin, addr, "login", json!({"credentials": {"username": "admin", "password": "supersecretpw"}})).await;
+
+    invoke(&admin, addr, "create_company", company_args("Acme Ltd")).await;
+
+    let backup = invoke(&admin, addr, "create_backup", json!({})).await;
+    assert_eq!(backup["ok"], true);
+    let package_base64 = backup["data"]["package_base64"].as_str().unwrap().to_string();
+
+    invoke(&admin, addr, "create_company", company_args("Widgets Inc")).await;
+    let before_restore = invoke(&admin, addr, "list_companies", json!({})).await;
+    assert_eq!(before_restore["data"].as_array().unwrap().len(), 2);
+
+    let restore = invoke(&admin, addr, "restore_backup", json!({"packageBase64": package_base64})).await;
+    assert_eq!(restore["ok"], true, "restore failed: {restore:?}");
+
+    let after_restore = invoke(&admin, addr, "list_companies", json!({})).await;
+    let companies = after_restore["data"].as_array().unwrap();
+    assert_eq!(companies.len(), 1);
+    assert_eq!(companies[0]["name"], "Acme Ltd");
+
+    // The admin's own session was created before the backup was taken, so
+    // it's part of the snapshot and should still resolve after restore.
+    let who = invoke(&admin, addr, "current_user", json!({})).await;
+    assert_eq!(who["data"]["username"], "admin");
+
+    let _ = std::fs::remove_file(&db_path);
+}
+
+#[tokio::test]
+async fn only_an_administrator_can_restore_a_backup() {
+    let (addr, db_path) = spawn_file_backed_server().await;
+    let admin = client_with_cookies();
+    first_run(&admin, addr, "admin", "supersecretpw").await;
+    invoke(&admin, addr, "login", json!({"credentials": {"username": "admin", "password": "supersecretpw"}})).await;
+
+    invoke(
+        &admin,
+        addr,
+        "create_user",
+        json!({"input": {"username": "sam", "display_name": "Sam", "password": "anothersecretpw", "roles": ["Sales"]}}),
+    )
+    .await;
+    let backup = invoke(&admin, addr, "create_backup", json!({})).await;
+    let package_base64 = backup["data"]["package_base64"].as_str().unwrap().to_string();
+
+    let sam = client_with_cookies();
+    invoke(&sam, addr, "login", json!({"credentials": {"username": "sam", "password": "anothersecretpw"}})).await;
+    let restore = invoke(&sam, addr, "restore_backup", json!({"packageBase64": package_base64})).await;
+    assert_eq!(restore["ok"], false, "a non-administrator must not be able to restore a backup");
+
+    let _ = std::fs::remove_file(&db_path);
+}
+
+#[tokio::test]
+async fn self_service_password_change_over_http() {
+    let addr = spawn_server().await;
+    let admin = client_with_cookies();
+    first_run(&admin, addr, "admin", "supersecretpw").await;
+    invoke(&admin, addr, "login", json!({"credentials": {"username": "admin", "password": "supersecretpw"}})).await;
+
+    let wrong_current = invoke(
+        &admin,
+        addr,
+        "change_my_password",
+        json!({"input": {"current_password": "not the real one", "new_password": "brandnewsecretpw"}}),
+    )
+    .await;
+    assert_eq!(wrong_current["ok"], false);
+
+    let changed = invoke(
+        &admin,
+        addr,
+        "change_my_password",
+        json!({"input": {"current_password": "supersecretpw", "new_password": "brandnewsecretpw"}}),
+    )
+    .await;
+    assert_eq!(changed["ok"], true);
+
+    let new_login = client_with_cookies();
+    let login_result = invoke(
+        &new_login,
+        addr,
+        "login",
+        json!({"credentials": {"username": "admin", "password": "brandnewsecretpw"}}),
+    )
+    .await;
+    assert_eq!(login_result["ok"], true);
+
+    let old_login = client_with_cookies();
+    let old_login_result = invoke(
+        &old_login,
+        addr,
+        "login",
+        json!({"credentials": {"username": "admin", "password": "supersecretpw"}}),
+    )
+    .await;
+    assert_eq!(old_login_result["ok"], false);
 }

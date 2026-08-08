@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
@@ -9,12 +10,16 @@ use rusqlite::Connection;
 /// assumption stops holding.
 pub struct ServerState {
     pub conn: Mutex<Connection>,
+    /// Needed by restore_backup, which replaces the file on disk out from
+    /// under the live connection - every other command only ever needs
+    /// `conn`.
+    pub db_path: PathBuf,
 }
 
 pub type SharedState = Arc<ServerState>;
 
 impl ServerState {
-    pub fn new(conn: Connection) -> SharedState {
-        Arc::new(ServerState { conn: Mutex::new(conn) })
+    pub fn new(conn: Connection, db_path: PathBuf) -> SharedState {
+        Arc::new(ServerState { conn: Mutex::new(conn), db_path })
     }
 }

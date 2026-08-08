@@ -26,7 +26,7 @@ async fn main() {
     let conn = lanesra_core::db::open_workspace_db(&db_path).expect("could not open the workspace database");
     tracing::info!(path = %db_path.display(), "opened workspace database");
 
-    let state = ServerState::new(conn);
+    let state = ServerState::new(conn, db_path);
     let app = build_router(state, frontend_dir);
 
     let addr: SocketAddr = format!("{host}:{port}").parse().expect("invalid HOST/PORT");
