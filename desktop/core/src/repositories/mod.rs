@@ -12,4 +12,5 @@ pub mod quote_repo;
 pub mod session_repo;
 pub mod task_repo;
 pub mod user_repo;
+pub mod workflow_rule_repo;
 pub mod workspace_repo;

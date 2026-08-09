@@ -21,12 +21,14 @@ use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomField
 use lanesra_core::models::field_rule::{FieldRuleInput, FieldRuleUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
+use lanesra_core::models::workflow_rule::{WorkflowRuleInput, WorkflowRuleUpdate};
 use lanesra_core::models::workspace::{WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
     custom_field_service, dashboard_service, field_rule_service, invoice_service, opportunity_service,
-    order_service, product_service, quote_service, report_service, task_service, user_service, workspace_service,
+    order_service, product_service, quote_service, report_service, task_service, user_service, workflow_service,
+    workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -340,6 +342,20 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let id: String = arg(args, "id")?;
             let input: FieldRuleUpdate = arg(args, "input")?;
             to_value(field_rule_service::update_rule(conn, &id, &input, actor)?)
+        }
+
+        "list_workflow_rules" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(workflow_service::list_rules(conn, &require_workspace_id(conn)?, &entity_type, actor)?)
+        }
+        "create_workflow_rule" => {
+            let input: WorkflowRuleInput = arg(args, "input")?;
+            to_value(workflow_service::create_rule(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_workflow_rule" => {
+            let id: String = arg(args, "id")?;
+            let input: WorkflowRuleUpdate = arg(args, "input")?;
+            to_value(workflow_service::update_rule(conn, &id, &input, actor)?)
         }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),

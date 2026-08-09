@@ -7,6 +7,31 @@ use crate::domain::numbering::{self, INVOICE};
 use crate::domain::{AppError, AppResult};
 use crate::models::invoice::{Invoice, InvoiceInput, InvoiceWithLines, PaymentInput, INVOICE_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, invoice_repo};
+use crate::services::workflow_service;
+
+/// FR-WFL: invoices have no owner of their own, so a workflow rule
+/// assigning to "the record's owner" resolves via the invoice's Company
+/// owner - the same attribution `report_service::sales_by_owner` uses.
+fn fire_workflow(
+    conn: &Connection,
+    invoice: &Invoice,
+    old_status: &str,
+    new_status: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
+    let owner_user_id = company_repo::get(conn, &invoice.company_id)?.and_then(|c| c.owner_user_id);
+    workflow_service::fire_transition(
+        conn,
+        &invoice.workspace_id,
+        "Invoice",
+        &invoice.id,
+        old_status,
+        new_status,
+        owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
+    Ok(())
+}
 
 fn validate_relationships(conn: &Connection, input: &InvoiceInput) -> AppResult<String> {
     let company = company_repo::get(conn, &input.company_id)?
@@ -129,6 +154,7 @@ fn set_status(
         &format!("Invoice {} status changed to {}", existing.invoice.invoice_number, status),
         None,
     )?;
+    fire_workflow(conn, &existing.invoice, &existing.invoice.status, status, actor_user_id)?;
     load(conn, id)
 }
 
@@ -171,6 +197,7 @@ pub fn record_payment(
     };
     if new_status != updated.invoice.status {
         invoice_repo::update_status(conn, invoice_id, new_status, actor_user_id)?;
+        fire_workflow(conn, &updated.invoice, &updated.invoice.status, new_status, actor_user_id)?;
     }
 
     audit_repo::record(
@@ -203,6 +230,7 @@ pub fn refresh_overdue(conn: &Connection, workspace_id: &str) -> AppResult<usize
         let is_past_due = invoice.due_date.as_deref().is_some_and(|d| d < today.as_str());
         if is_candidate && is_past_due && invoice.balance_cents > 0 {
             invoice_repo::update_status(conn, &invoice.id, "Overdue", None)?;
+            fire_workflow(conn, &invoice, &invoice.status, "Overdue", None)?;
             updated += 1;
         }
     }

@@ -14,6 +14,7 @@ pub mod quote_commands;
 pub mod report_commands;
 pub mod task_commands;
 pub mod user_commands;
+pub mod workflow_commands;
 pub mod workspace_commands;
 
 use rusqlite::Connection;

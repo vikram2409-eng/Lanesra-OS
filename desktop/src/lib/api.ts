@@ -48,6 +48,10 @@ import type {
   RevenueByMonth,
   SalesByOwner,
   WinRateByOwner,
+  WorkflowEntityType,
+  WorkflowRule,
+  WorkflowRuleInput,
+  WorkflowRuleUpdate,
   Workspace,
   WorkspaceLogo,
   WorkspaceSetup,
@@ -216,6 +220,11 @@ export const api = {
     call<FieldRule[]>("list_field_rules", { entityType, activeOnly }),
   createFieldRule: (input: FieldRuleInput) => call<FieldRule>("create_field_rule", { input }),
   updateFieldRule: (id: string, input: FieldRuleUpdate) => call<FieldRule>("update_field_rule", { id, input }),
+
+  listWorkflowRules: (entityType: WorkflowEntityType) => call<WorkflowRule[]>("list_workflow_rules", { entityType }),
+  createWorkflowRule: (input: WorkflowRuleInput) => call<WorkflowRule>("create_workflow_rule", { input }),
+  updateWorkflowRule: (id: string, input: WorkflowRuleUpdate) =>
+    call<WorkflowRule>("update_workflow_rule", { id, input }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

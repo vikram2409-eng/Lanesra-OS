@@ -762,3 +762,43 @@ export interface FieldRuleUpdate {
   sort_order: number;
   is_active: boolean;
 }
+
+// FR-WFL Phase 1: admin-defined workflow automation - "when an
+// Opportunity's stage (or an Invoice's status) transitions to X, create a
+// follow-up Task automatically." Unlike FR-RUL, every matching active rule
+// fires and creates its own task - there's no "highest wins" conflict to
+// resolve, since the effect is additive (creating a task), not a value.
+export const WORKFLOW_ENTITY_TYPES = ["Opportunity", "Invoice"] as const;
+export type WorkflowEntityType = (typeof WORKFLOW_ENTITY_TYPES)[number];
+
+export interface WorkflowRule {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  trigger_status: string;
+  task_title: string;
+  task_description: string | null;
+  due_in_days: number;
+  assignee_user_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowRuleInput {
+  entity_type: WorkflowEntityType;
+  trigger_status: string;
+  task_title: string;
+  task_description: string | null;
+  due_in_days: number;
+  assignee_user_id: string | null;
+}
+
+export interface WorkflowRuleUpdate {
+  trigger_status: string;
+  task_title: string;
+  task_description: string | null;
+  due_in_days: number;
+  assignee_user_id: string | null;
+  is_active: boolean;
+}

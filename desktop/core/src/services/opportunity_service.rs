@@ -8,6 +8,7 @@ use crate::models::opportunity::{
     OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES,
 };
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo};
+use crate::services::workflow_service;
 
 fn validate(conn: &Connection, input: &OpportunityInput) -> AppResult<String> {
     if input.name.trim().is_empty() {
@@ -107,6 +108,20 @@ pub fn update(
         ),
         None,
     )?;
+
+    // FR-WFL: fire any workflow rules whose trigger stage the opportunity
+    // just moved into (e.g. auto-create a follow-up task on Won).
+    workflow_service::fire_transition(
+        conn,
+        &workspace_id,
+        "Opportunity",
+        id,
+        &before.stage,
+        &opportunity.stage,
+        opportunity.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
+
     Ok(opportunity)
 }
 

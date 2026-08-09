@@ -280,6 +280,35 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   `core/src/services/field_rule_service.rs`,
   `src/features/settings/FieldRulesAdmin.tsx`,
   `src/lib/fieldRules.ts`.
+- **Workflow automation, Phase 1 (FR-WFL)**: an Administrator can
+  auto-create a follow-up Task the moment an Opportunity's stage or an
+  Invoice's status transitions into a chosen value - e.g. "when stage
+  reaches Won, create task 'Send onboarding kit', due in 3 days, assigned
+  to the record's owner" - from a new Workflow automation panel in
+  Settings, right below Business rules. Unlike FR-RUL's field rules, this
+  is purely additive: there's no "highest wins" conflict, since every
+  active rule that matches the new value fires and creates its own task,
+  so two rules on the same trigger create two tasks. "The record's owner"
+  resolves to `Opportunity.owner_user_id`, or - since an Invoice has no
+  owner of its own - its Company's `owner_user_id`, the same attribution
+  `report_service::sales_by_owner` already uses; a rule can also name a
+  specific assignee instead. Firing is a no-op unless the old and new
+  values actually differ, so re-saving a record without changing its
+  stage/status can never re-fire an already-fired rule. Wired into the one
+  choke point each entity already had for status changes -
+  `opportunity_service::update` (comparing stage before/after) and every
+  path that changes an invoice's status: `issue`/`void` (via `set_status`),
+  `record_payment`'s automatic Paid/Partially Paid transition, and
+  `refresh_overdue`. The created Task is linked back via
+  `related_type`/`related_id`, so it shows up wherever tasks for that
+  record already do (e.g. the Tasks screen's "By Related Record" view).
+  Entirely server-side - there is nothing for the client to evaluate live,
+  since (unlike FR-RUL) nothing here changes what a form looks like.
+  Deliberately scoped to these two entities and this one action (task
+  creation) for Phase 1; see "Workflow automation" in the product backlog
+  for the fuller brainstorm this slice was cut from. See
+  `core/src/services/workflow_service.rs`,
+  `src/features/settings/WorkflowRulesAdmin.tsx`.
 
 ## What's deferred to a later phase
 
@@ -290,7 +319,9 @@ need to change shape later, but there is no service/command/UI layer yet:
 - Rule triggers/targets beyond Company/Contact custom fields and the
   built-in `status` field (e.g. rules over other built-in fields, or
   cross-entity rules)
-- Workflow automation (FR-WFL)
+- Workflow automation beyond Phase 1: triggers on entities other than
+  Opportunity/Invoice, actions other than task creation (e.g. sending a
+  notification, updating a field), and multi-step/branching workflows
 - Windows notifications for task reminders (FR-TSK-06)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
@@ -550,3 +581,43 @@ one. It isn't code-signed yet.
   a name, and a Lead Source value, and saved successfully end to end -
   confirming the client-side evaluator and the server's independent
   enforcement agree at every step.
+
+**Workflow automation phase (FR-WFL Phase 1):**
+
+- `cargo test --workspace`: 78/78 passing - 7 new core tests
+  (`core/tests/workflow_rules.rs`: a rule creates its task only once the
+  Opportunity's stage actually reaches the trigger value, not on an
+  intermediate stage; re-saving with an unchanged stage never re-fires it;
+  the created task is assigned to the Opportunity's owner when the rule
+  names no explicit assignee; a non-Administrator cannot define a rule; a
+  trigger status invalid for the entity type is rejected; two active
+  rules matching the same transition each create their own task
+  (additive, not conflict-resolved); and an Invoice's automatic Overdue
+  transition, via `refresh_overdue`, fires a rule assigned through the
+  invoice's Company owner).
+- `npm run build`: `tsc` + `vite build` both clean.
+- With curl (bypassing the UI entirely): defined a rule "when Opportunity
+  stage reaches Won, create task 'Send onboarding kit', due in 3 days";
+  created an Opportunity at stage New and confirmed zero tasks existed;
+  called `update_opportunity` directly to move it to stage Won and
+  confirmed exactly one task was created, correctly linked
+  (`related_type`/`related_id`) and due-dated 3 days out; re-saved the
+  same Opportunity still at stage Won and confirmed the task count stayed
+  at one, not two - proving the "no-op unless the value actually changed"
+  guard is real, not just something the UI happens to avoid triggering.
+  Separately, logged in as a non-Administrator and confirmed
+  `create_workflow_rule` was rejected with `"Only an Administrator can
+  manage workflow automation"`.
+- Built the real release `lanesra-server` binary and drove the admin
+  screen end to end with a real Chromium browser (Playwright): Settings →
+  Workflow automation showed the curl-seeded rule as the plain-English
+  sentence `When stage reaches "Won", create task "Send onboarding kit"
+  (due in 3 days, assigned to the record's owner).`; created a second rule
+  from the UI (Invoice → Overdue, assigned to a specific user by name
+  rather than "the record's owner") and confirmed its sentence rendered
+  correctly, including the resolved display name. Navigated to the Tasks
+  screen's "By Related Record" view and confirmed the task auto-created
+  by the earlier curl-driven Won transition was there, titled correctly
+  and linked back to its Opportunity by name - the same task the direct
+  API call had produced, now visible through the ordinary UI a user would
+  actually use.

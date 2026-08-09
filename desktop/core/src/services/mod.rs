@@ -14,4 +14,5 @@ pub mod quote_service;
 pub mod report_service;
 pub mod task_service;
 pub mod user_service;
+pub mod workflow_service;
 pub mod workspace_service;

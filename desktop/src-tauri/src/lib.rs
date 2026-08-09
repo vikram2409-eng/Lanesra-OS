@@ -100,6 +100,9 @@ pub fn run() {
             commands::field_rule_commands::list_field_rules,
             commands::field_rule_commands::create_field_rule,
             commands::field_rule_commands::update_field_rule,
+            commands::workflow_commands::list_workflow_rules,
+            commands::workflow_commands::create_workflow_rule,
+            commands::workflow_commands::update_workflow_rule,
             commands::backup_commands::create_backup,
             commands::backup_commands::restore_backup,
         ])
