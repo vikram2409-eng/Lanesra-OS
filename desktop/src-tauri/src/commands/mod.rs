@@ -5,6 +5,7 @@ pub mod contact_commands;
 pub mod contract_commands;
 pub mod custom_field_commands;
 pub mod dashboard_commands;
+pub mod field_rule_commands;
 pub mod invoice_commands;
 pub mod opportunity_commands;
 pub mod order_commands;

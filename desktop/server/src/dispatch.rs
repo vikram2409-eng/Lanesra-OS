@@ -18,14 +18,15 @@ use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues};
+use lanesra_core::models::field_rule::{FieldRuleInput, FieldRuleUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workspace::{WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
-    custom_field_service, dashboard_service, invoice_service, opportunity_service, order_service,
-    product_service, quote_service, report_service, task_service, user_service, workspace_service,
+    custom_field_service, dashboard_service, field_rule_service, invoice_service, opportunity_service,
+    order_service, product_service, quote_service, report_service, task_service, user_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -324,6 +325,21 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
         "get_custom_field_values" => {
             to_value(custom_field_service::get_entity_values(conn, &arg::<String>(args, "entityId")?)?)
+        }
+
+        "list_field_rules" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(field_rule_service::list_rules(conn, &require_workspace_id(conn)?, &entity_type, active_only)?)
+        }
+        "create_field_rule" => {
+            let input: FieldRuleInput = arg(args, "input")?;
+            to_value(field_rule_service::create_rule(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_field_rule" => {
+            let id: String = arg(args, "id")?;
+            let input: FieldRuleUpdate = arg(args, "input")?;
+            to_value(field_rule_service::update_rule(conn, &id, &input, actor)?)
         }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),

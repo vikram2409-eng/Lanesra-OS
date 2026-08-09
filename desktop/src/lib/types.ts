@@ -711,3 +711,54 @@ export interface CustomFieldDefinitionUpdate {
 
 /** Values keyed by field key, e.g. { industry: "Retail" }. */
 export type CustomFieldValues = Record<string, string>;
+
+// FR-RUL: admin-defined conditional rules over custom fields, e.g.
+// "require Lead Source when Status = Prospect". Scoped to custom fields
+// as the target (and, for the trigger, either the built-in "status"
+// field or another custom field) - see field_rule_service's doc comment
+// for why built-in fields in general are out of scope.
+export const RULE_OPERATORS = ["equals", "not_equals"] as const;
+export type RuleOperator = (typeof RULE_OPERATORS)[number];
+export const RULE_EFFECTS = ["require", "hide"] as const;
+export type RuleEffect = (typeof RULE_EFFECTS)[number];
+export const TRIGGER_SOURCES = ["builtin", "custom"] as const;
+export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
+export const BUILTIN_TRIGGER_FIELDS = ["status"] as const;
+
+export interface FieldRule {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  trigger_field_source: string;
+  trigger_field_key: string;
+  operator: string;
+  trigger_value: string;
+  target_field_key: string;
+  effect: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FieldRuleInput {
+  entity_type: CustomFieldEntityType;
+  trigger_field_source: TriggerSource;
+  trigger_field_key: string;
+  operator: RuleOperator;
+  trigger_value: string;
+  target_field_key: string;
+  effect: RuleEffect;
+  sort_order: number;
+}
+
+export interface FieldRuleUpdate {
+  trigger_field_source: TriggerSource;
+  trigger_field_key: string;
+  operator: RuleOperator;
+  trigger_value: string;
+  target_field_key: string;
+  effect: RuleEffect;
+  sort_order: number;
+  is_active: boolean;
+}

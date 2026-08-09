@@ -271,7 +271,7 @@ function CompanyForm({
             onChange={(e) => setInput({ ...input, notes: e.target.value || null })}
           />
         </div>
-        <CustomFieldsSection entityType="Company" values={customValues} onChange={setCustomValues} />
+        <CustomFieldsSection entityType="Company" status={input.status} values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             {duplicateWarning ? "Save anyway" : "Save"}

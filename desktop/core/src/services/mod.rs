@@ -5,6 +5,7 @@ pub mod contact_service;
 pub mod contract_service;
 pub mod custom_field_service;
 pub mod dashboard_service;
+pub mod field_rule_service;
 pub mod invoice_service;
 pub mod opportunity_service;
 pub mod order_service;

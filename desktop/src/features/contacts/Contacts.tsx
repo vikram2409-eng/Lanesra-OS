@@ -316,7 +316,7 @@ function ContactForm({
             Primary contact
           </label>
         </div>
-        <CustomFieldsSection entityType="Contact" values={customValues} onChange={setCustomValues} />
+        <CustomFieldsSection entityType="Contact" status={input.status} values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending || !input.company_id}>
             {duplicateWarning ? "Save anyway" : "Save"}

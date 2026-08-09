@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
+import { FieldRulesAdmin } from "./FieldRulesAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -61,6 +62,9 @@ export function Settings() {
       </div>
       <div style={{ marginTop: 16 }}>
         <CustomFieldsAdmin />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <FieldRulesAdmin />
       </div>
     </div>
   );

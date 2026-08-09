@@ -40,6 +40,9 @@ import type {
   CustomFieldDefinitionUpdate,
   CustomFieldEntityType,
   CustomFieldValues,
+  FieldRule,
+  FieldRuleInput,
+  FieldRuleUpdate,
   LostReasonBreakdown,
   ReportRange,
   RevenueByMonth,
@@ -208,6 +211,11 @@ export const api = {
   setCustomFieldValues: (entityType: CustomFieldEntityType, entityId: string, values: CustomFieldValues) =>
     call<void>("set_custom_field_values", { entityType, entityId, values }),
   getCustomFieldValues: (entityId: string) => call<CustomFieldValues>("get_custom_field_values", { entityId }),
+
+  listFieldRules: (entityType: CustomFieldEntityType, activeOnly: boolean) =>
+    call<FieldRule[]>("list_field_rules", { entityType, activeOnly }),
+  createFieldRule: (input: FieldRuleInput) => call<FieldRule>("create_field_rule", { input }),
+  updateFieldRule: (id: string, input: FieldRuleUpdate) => call<FieldRule>("update_field_rule", { id, input }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

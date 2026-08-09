@@ -5,6 +5,7 @@ pub mod contact;
 pub mod contract;
 pub mod custom_field;
 pub mod dashboard;
+pub mod field_rule;
 pub mod invoice;
 pub mod opportunity;
 pub mod order;

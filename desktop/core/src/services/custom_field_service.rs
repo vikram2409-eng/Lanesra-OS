@@ -128,16 +128,21 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
     Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
 }
 
-fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<String> {
+/// Returns (workspace_id, status) - status is the entity's built-in
+/// status field, which field_rule_service needs as the "status" trigger
+/// context even though custom_field_service otherwise has no reason to
+/// know it.
+fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<(String, String)> {
     match entity_type {
-        "Company" => Ok(company_repo::get(conn, entity_id)?
-            .ok_or_else(|| AppError::Validation("Company does not exist".into()))?
-            .workspace_id),
+        "Company" => {
+            let company = company_repo::get(conn, entity_id)?.ok_or_else(|| AppError::Validation("Company does not exist".into()))?;
+            Ok((company.workspace_id, company.status))
+        }
         "Contact" => {
             let contact = contact_repo::get(conn, entity_id)?.ok_or_else(|| AppError::Validation("Contact does not exist".into()))?;
-            Ok(company_repo::get(conn, &contact.company_id)?
-                .ok_or_else(|| AppError::Validation("Contact's company does not exist".into()))?
-                .workspace_id)
+            let company = company_repo::get(conn, &contact.company_id)?
+                .ok_or_else(|| AppError::Validation("Contact's company does not exist".into()))?;
+            Ok((company.workspace_id, contact.status))
         }
         other => Err(AppError::Validation(format!("Unsupported custom field entity type '{other}'"))),
     }
@@ -155,12 +160,25 @@ pub fn set_entity_values(
     values: &CustomFieldValues,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    let workspace_id = resolve_entity_workspace(conn, entity_type, entity_id)?;
+    let (workspace_id, status) = resolve_entity_workspace(conn, entity_type, entity_id)?;
     let definitions = list_definitions(conn, &workspace_id, entity_type, true)?;
 
+    // FR-RUL-05: a field required by an active business rule is enforced
+    // here too, not only in the form - the same reasoning as the static
+    // `required` flag just above. `hide` is not enforced here: it's a
+    // purely cosmetic effect with nothing to validate, so a hidden field
+    // is simply left untouched (skipped) rather than cleared or blocked.
+    let mut trigger_context: CustomFieldValues = values.clone();
+    trigger_context.insert("status".to_string(), status);
+    let rule_effects = crate::services::field_rule_service::effects_for(conn, &workspace_id, entity_type, &trigger_context)?;
+
     for def in &definitions {
+        if rule_effects.get(&def.key).map(|e| e.as_str()) == Some("hide") {
+            continue;
+        }
         let value = values.get(&def.key).map(|s| s.trim()).unwrap_or("");
-        if def.required && value.is_empty() {
+        let required_by_rule = rule_effects.get(&def.key).map(|e| e.as_str()) == Some("require");
+        if (def.required || required_by_rule) && value.is_empty() {
             return Err(AppError::Validation(format!("{} is required", def.label)));
         }
         if !value.is_empty() {

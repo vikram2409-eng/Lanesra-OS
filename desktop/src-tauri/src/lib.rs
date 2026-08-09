@@ -97,6 +97,9 @@ pub fn run() {
             commands::custom_field_commands::deactivate_custom_field_definition,
             commands::custom_field_commands::set_custom_field_values,
             commands::custom_field_commands::get_custom_field_values,
+            commands::field_rule_commands::list_field_rules,
+            commands::field_rule_commands::create_field_rule,
+            commands::field_rule_commands::update_field_rule,
             commands::backup_commands::create_backup,
             commands::backup_commands::restore_backup,
         ])

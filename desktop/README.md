@@ -257,6 +257,29 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   `core/src/services/custom_field_service.rs`,
   `src/components/CustomFieldsSection.tsx`,
   `src/features/settings/CustomFieldsAdmin.tsx`.
+- **Conditional business rules (FR-RUL)**: an Administrator can make a
+  custom field required, or hide it entirely, based on the entity's
+  built-in status (e.g. "require Lead Source when Status = Prospect") from
+  a new Business rules panel in Settings, right below Custom fields. A
+  rule's trigger is either the built-in `status` field or another custom
+  field, compared with `equals`/`not_equals`; its target is always a
+  custom field. When two active rules target the same field, the one with
+  the higher `sort_order` wins - implemented as a single map-insert per
+  rule in ascending sort order, so a later insert simply overwrites an
+  earlier one for that target (`field_rule_service::effects_for`). A
+  hidden field is never required even if it's statically flagged
+  `required`, since there's nothing to validate on a field the user can't
+  see. Only `require` is enforced server-side inside
+  `custom_field_service::set_entity_values` - `hide` is UX-only, since a
+  hidden field has no value to reject. The client mirrors the same
+  evaluation logic (`src/lib/fieldRules.ts`) purely for live form
+  feedback (graying out the asterisk, hiding the field as you change
+  Status) - the server re-validates independently on save regardless, and
+  this phase's testing proves that by calling `set_custom_field_values`
+  directly, bypassing the form entirely. See
+  `core/src/services/field_rule_service.rs`,
+  `src/features/settings/FieldRulesAdmin.tsx`,
+  `src/lib/fieldRules.ts`.
 
 ## What's deferred to a later phase
 
@@ -264,7 +287,10 @@ The database schema already has tables for these so the migration doesn't
 need to change shape later, but there is no service/command/UI layer yet:
 
 - Custom fields as extra columns on list screens, and in CSV import/export
-- Conditional business rules and workflow automation
+- Rule triggers/targets beyond Company/Contact custom fields and the
+  built-in `status` field (e.g. rules over other built-in fields, or
+  cross-entity rules)
+- Workflow automation (FR-WFL)
 - Windows notifications for task reminders (FR-TSK-06)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
@@ -492,3 +518,35 @@ one. It isn't code-signed yet.
   again with `"Not A Real Option"` and got `"'Not A Real Option' is not
   a valid option for Industry"` back - confirming the validation lives
   in the server, not just the form's HTML5 `required` attribute.
+
+**Conditional business rules phase (FR-RUL):**
+
+- `cargo test --workspace`: 71/71 passing - 5 new core tests
+  (`core/tests/field_rules.rs`: a rule only requires its target field
+  when the trigger condition actually matches, a non-Administrator
+  cannot define a rule, a rule's target must be an active custom field,
+  a statically-`required` field is never enforced once a rule hides it,
+  and when two active rules target the same field the one with the
+  higher `sort_order` wins).
+- `npm run build`: `tsc` + `vite build` both clean.
+- With curl (bypassing the UI entirely): defined a "Lead Source" custom
+  field on Company and a rule requiring it when Status = Prospect, then
+  called `set_custom_field_values` directly on a Prospect company with
+  no values and got `"Lead Source is required"` back; supplying
+  `lead_source` then succeeded. A second company created as "Active
+  Customer" (the rule's condition doesn't match) saved successfully with
+  no custom values at all - confirming the trigger condition, not just
+  the target field's existence, is what the server actually evaluates.
+- Built the real release `lanesra-server` binary and drove the whole
+  feature end to end with a real Chromium browser (Playwright): the
+  Settings → Business rules panel showed the seeded rule as the plain-English
+  sentence `When Status is "Prospect", require Lead Source.`; created a
+  second rule from the UI (`hide` Lead Source when Status = Active
+  Customer) and confirmed its sentence rendered correctly too. On the New
+  Company form: with the default Status of Prospect, Lead Source
+  rendered with a required `*`; switching Status to Active Customer made
+  the field disappear entirely; switching to Inactive (a status neither
+  rule mentions) brought it back, optional. Filled in Status = Prospect,
+  a name, and a Lead Source value, and saved successfully end to end -
+  confirming the client-side evaluator and the server's independent
+  enforcement agree at every step.
