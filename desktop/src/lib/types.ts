@@ -626,3 +626,43 @@ export interface AppErrorPayload {
   kind: "database" | "not_found" | "validation" | "conflict";
   message: string;
 }
+
+// FR-RPT: reports beyond the dashboard's KPI tiles. `from`/`to` are ISO
+// dates ("YYYY-MM-DD"); omit either (or both) for an all-time range.
+export interface ReportRange {
+  from: string | null;
+  to: string | null;
+}
+
+export interface RevenueByMonth {
+  month: string;
+  invoice_count: number;
+  total_cents: number;
+}
+
+export interface WinRateByOwner {
+  owner_user_id: string | null;
+  owner_name: string;
+  won_count: number;
+  lost_count: number;
+  won_value_cents: number;
+}
+
+export interface LostReasonBreakdown {
+  reason: string;
+  count: number;
+  value_cents: number;
+}
+
+export interface ArAgingBucket {
+  bucket: string;
+  invoice_count: number;
+  balance_cents: number;
+}
+
+export interface SalesByOwner {
+  owner_user_id: string | null;
+  owner_name: string;
+  invoice_count: number;
+  total_cents: number;
+}

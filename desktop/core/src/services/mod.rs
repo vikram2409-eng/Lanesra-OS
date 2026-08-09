@@ -9,6 +9,7 @@ pub mod opportunity_service;
 pub mod order_service;
 pub mod product_service;
 pub mod quote_service;
+pub mod report_service;
 pub mod task_service;
 pub mod user_service;
 pub mod workspace_service;

@@ -17,13 +17,14 @@ use lanesra_core::models::order::OrderInput;
 use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
+use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workspace::{WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
     dashboard_service, invoice_service, opportunity_service, order_service, product_service,
-    quote_service, task_service, user_service, workspace_service,
+    quote_service, report_service, task_service, user_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -264,6 +265,32 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(workspace_service::set_logo(conn, &input, actor)?)
         }
         "clear_workspace_logo" => to_value(workspace_service::clear_logo(conn, actor)?),
+
+        "report_revenue_by_month" => {
+            let range: ReportRange = arg(args, "range")?;
+            to_value(report_service::revenue_by_month(conn, &require_workspace_id(conn)?, &range.from, &range.to)?)
+        }
+        "report_win_rate_by_owner" => {
+            let range: ReportRange = arg(args, "range")?;
+            to_value(report_service::win_rate_by_owner(conn, &require_workspace_id(conn)?, &range.from, &range.to)?)
+        }
+        "report_lost_reasons" => {
+            let range: ReportRange = arg(args, "range")?;
+            to_value(report_service::lost_reason_breakdown(
+                conn,
+                &require_workspace_id(conn)?,
+                &range.from,
+                &range.to,
+            )?)
+        }
+        "report_ar_aging" => {
+            let as_of_date: Option<String> = arg(args, "asOfDate")?;
+            to_value(report_service::ar_aging(conn, &require_workspace_id(conn)?, &as_of_date)?)
+        }
+        "report_sales_by_owner" => {
+            let range: ReportRange = arg(args, "range")?;
+            to_value(report_service::sales_by_owner(conn, &require_workspace_id(conn)?, &range.from, &range.to)?)
+        }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),
         // "restore_backup" is deliberately absent here - it replaces the

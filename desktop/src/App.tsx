@@ -13,6 +13,7 @@ import { Orders } from "./features/orders/Orders";
 import { Invoices } from "./features/invoices/Invoices";
 import { Contracts } from "./features/contracts/Contracts";
 import { Tasks } from "./features/tasks/Tasks";
+import { Reports } from "./features/reports/Reports";
 import { Users } from "./features/users/Users";
 import { Settings } from "./features/settings/Settings";
 import { Account } from "./features/account/Account";
@@ -87,6 +88,7 @@ export function App() {
       {section === "invoices" && <Invoices />}
       {section === "contracts" && <Contracts />}
       {section === "tasks" && <Tasks currentUserId={boot.user.id} />}
+      {section === "reports" && <Reports />}
       {section === "users" && <Users />}
       {section === "settings" && <Settings />}
       {section === "account" && <Account user={boot.user} />}

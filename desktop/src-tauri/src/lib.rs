@@ -86,6 +86,11 @@ pub fn run() {
             commands::user_commands::update_user,
             commands::user_commands::set_user_password,
             commands::dashboard_commands::dashboard_summary,
+            commands::report_commands::report_revenue_by_month,
+            commands::report_commands::report_win_rate_by_owner,
+            commands::report_commands::report_lost_reasons,
+            commands::report_commands::report_ar_aging,
+            commands::report_commands::report_sales_by_owner,
             commands::backup_commands::create_backup,
             commands::backup_commands::restore_backup,
         ])

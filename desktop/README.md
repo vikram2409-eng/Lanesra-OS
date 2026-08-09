@@ -222,13 +222,26 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   letterhead for quotes/orders/invoices alongside the business name. See
   `core/src/services/workspace_service.rs`,
   `src/features/settings/Settings.tsx`.
+- **Reports (FR-RPT)**: a Reports screen beyond the dashboard's fixed KPI
+  tiles - Revenue by month, Win rate by owner, Lost reasons, AR aging,
+  and Sales by owner, each with a date-range filter (AR aging uses an
+  "as of" date instead) and an Export CSV button reusing the existing
+  CSV helper. A fixed gallery of named reports, not a query builder -
+  see "Reports (Phase 1)" in the product backlog for why. "Win rate by
+  stage" from the original brainstorm was adapted to "by owner" plus a
+  separate lost-reasons breakdown, since stage and status both
+  terminate at Won/Lost for a closed opportunity in this schema, so
+  grouping by stage doesn't produce a meaningful split - see the doc
+  comment on `models::report::WinRateByOwner`. Invoices/orders have no
+  owner of their own, so Sales by owner attributes revenue via the
+  invoice's Company owner. See `core/src/services/report_service.rs`,
+  `src/features/reports/Reports.tsx`.
 
 ## What's deferred to a later phase
 
 The database schema already has tables for these so the migration doesn't
 need to change shape later, but there is no service/command/UI layer yet:
 
-- Reports beyond the dashboard's built-in KPIs
 - Custom fields, conditional business rules, and workflow automation
 - Windows notifications for task reminders (FR-TSK-06)
 - Windows installer signing/packaging (the Tauri bundle config targets
@@ -409,3 +422,26 @@ one. It isn't code-signed yet.
   confirmed it renders correctly both in the Settings screen's preview
   and on the actual quote print letterhead, alongside the new business
   address, next to the business/legal name.
+
+**Reports phase (FR-RPT):**
+
+- `cargo test --workspace`: 59/59 passing - 5 new core tests
+  (`core/tests/reports.rs`: revenue-by-month excludes Draft invoices,
+  win-rate/lost-reasons reflect real opportunity outcomes, AR aging
+  buckets correctly and excludes fully-paid invoices, sales-by-owner
+  attributes correctly via the company owner).
+- `npm run build`: `tsc` + `vite build` both clean.
+- Built the real release `lanesra-server` binary, seeded it via curl
+  with a company, a Won and a Lost opportunity (with a lost reason), an
+  invoice issued this period, and an invoice issued ~60 days ago and
+  now 31-60 days overdue - then drove all five report tabs end to end
+  with a real Chromium browser. Every number on screen was independently
+  cross-checked against the seeded data: Win rate by owner showed
+  exactly 1 won / 1 lost / 50% / $5,000 won value; Lost reasons showed
+  "Went with a competitor" for $1,000; AR aging correctly bucketed the
+  not-yet-due invoice separately from the 31-60-days-overdue one; and
+  both Revenue by month and Sales by owner correctly *excluded* the
+  invoice issued mid-month when the default date range's "To" was still
+  earlier in the month - confirming the date-range filter, not just the
+  aggregation, actually works. Exported Sales by owner to CSV and
+  confirmed the downloaded file matched the on-screen table exactly.

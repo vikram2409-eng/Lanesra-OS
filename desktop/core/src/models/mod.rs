@@ -8,6 +8,7 @@ pub mod invoice;
 pub mod opportunity;
 pub mod order;
 pub mod product;
+pub mod report;
 pub mod quote;
 pub mod task;
 pub mod user;

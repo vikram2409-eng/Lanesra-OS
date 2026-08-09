@@ -34,6 +34,12 @@ import type {
   TaskInput,
   User,
   UserUpdate,
+  ArAgingBucket,
+  LostReasonBreakdown,
+  ReportRange,
+  RevenueByMonth,
+  SalesByOwner,
+  WinRateByOwner,
   Workspace,
   WorkspaceLogo,
   WorkspaceSetup,
@@ -179,6 +185,12 @@ export const api = {
   createUser: (input: NewUser) => call<User>("create_user", { input }),
   updateUser: (id: string, input: UserUpdate) => call<User>("update_user", { id, input }),
   setUserPassword: (id: string, input: PasswordChange) => call<void>("set_user_password", { id, input }),
+
+  reportRevenueByMonth: (range: ReportRange) => call<RevenueByMonth[]>("report_revenue_by_month", { range }),
+  reportWinRateByOwner: (range: ReportRange) => call<WinRateByOwner[]>("report_win_rate_by_owner", { range }),
+  reportLostReasons: (range: ReportRange) => call<LostReasonBreakdown[]>("report_lost_reasons", { range }),
+  reportArAging: (asOfDate: string | null) => call<ArAgingBucket[]>("report_ar_aging", { asOfDate }),
+  reportSalesByOwner: (range: ReportRange) => call<SalesByOwner[]>("report_sales_by_owner", { range }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

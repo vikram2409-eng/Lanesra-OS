@@ -11,6 +11,7 @@ export type Section =
   | "invoices"
   | "contracts"
   | "tasks"
+  | "reports"
   | "users"
   | "settings"
   | "account";
@@ -26,6 +27,7 @@ const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "invoices", label: "Invoices" },
   { section: "contracts", label: "Contracts" },
   { section: "tasks", label: "Tasks" },
+  { section: "reports", label: "Reports" },
   { section: "users", label: "Users", adminOnly: true },
   { section: "settings", label: "Settings", adminOnly: true },
 ];
