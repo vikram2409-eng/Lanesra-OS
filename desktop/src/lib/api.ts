@@ -35,7 +35,9 @@ import type {
   User,
   UserUpdate,
   Workspace,
+  WorkspaceLogo,
   WorkspaceSetup,
+  WorkspaceUpdate,
 } from "./types";
 
 export class ApiError extends Error {
@@ -84,6 +86,9 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 export const api = {
   workspaceStatus: () => call<Workspace | null>("workspace_status"),
   firstRunSetup: (setup: WorkspaceSetup) => call<[Workspace, User]>("first_run_setup", { setup }),
+  updateWorkspace: (input: WorkspaceUpdate) => call<Workspace>("update_workspace", { input }),
+  setWorkspaceLogo: (input: WorkspaceLogo) => call<Workspace>("set_workspace_logo", { input }),
+  clearWorkspaceLogo: () => call<Workspace>("clear_workspace_logo"),
 
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),

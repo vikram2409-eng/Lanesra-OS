@@ -13,6 +13,9 @@ export interface Workspace {
   timezone: string;
   default_tax_rate_bp: number;
   operating_mode: string;
+  business_address: string | null;
+  logo_base64: string | null;
+  logo_mime: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +31,24 @@ export interface WorkspaceSetup {
   admin_display_name: string;
   admin_password: string;
   load_sample_data: boolean;
+}
+
+// FR-BRD-01: editing the workspace profile after first-run. Logo is a
+// separate command (WorkspaceLogo) so a routine text edit never has to
+// re-transmit the image payload.
+export interface WorkspaceUpdate {
+  business_name: string;
+  legal_name: string | null;
+  business_address: string | null;
+  currency_code: string;
+  locale: string;
+  timezone: string;
+  default_tax_rate_bp: number;
+}
+
+export interface WorkspaceLogo {
+  logo_base64: string;
+  logo_mime: string;
 }
 
 export interface User {

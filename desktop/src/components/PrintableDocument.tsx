@@ -54,9 +54,21 @@ export function PrintableDocument(props: PrintableDocumentProps) {
   return (
     <div className="print-doc">
       <div className="print-doc-head">
-        <div>
-          <div className="print-doc-business">{workspace.data?.business_name ?? " "}</div>
-          {workspace.data?.legal_name && <div className="print-doc-muted">{workspace.data.legal_name}</div>}
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          {workspace.data?.logo_base64 && workspace.data.logo_mime && (
+            <img
+              className="print-doc-logo"
+              src={`data:${workspace.data.logo_mime};base64,${workspace.data.logo_base64}`}
+              alt=""
+            />
+          )}
+          <div>
+            <div className="print-doc-business">{workspace.data?.business_name ?? " "}</div>
+            {workspace.data?.legal_name && <div className="print-doc-muted">{workspace.data.legal_name}</div>}
+            {workspace.data?.business_address && (
+              <div className="print-doc-muted">{workspace.data.business_address}</div>
+            )}
+          </div>
         </div>
         <div className="print-doc-heading">
           <h1>{kind}</h1>

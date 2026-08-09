@@ -18,11 +18,12 @@ use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
+use lanesra_core::models::workspace::{WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
     dashboard_service, invoice_service, opportunity_service, order_service, product_service,
-    quote_service, task_service, user_service,
+    quote_service, task_service, user_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -253,6 +254,16 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
 
         "dashboard_summary" => to_value(dashboard_service::summary(conn, &require_workspace_id(conn)?)?),
+
+        "update_workspace" => {
+            let input: WorkspaceUpdate = arg(args, "input")?;
+            to_value(workspace_service::update(conn, &input, actor)?)
+        }
+        "set_workspace_logo" => {
+            let input: WorkspaceLogo = arg(args, "input")?;
+            to_value(workspace_service::set_logo(conn, &input, actor)?)
+        }
+        "clear_workspace_logo" => to_value(workspace_service::clear_logo(conn, actor)?),
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),
         // "restore_backup" is deliberately absent here - it replaces the

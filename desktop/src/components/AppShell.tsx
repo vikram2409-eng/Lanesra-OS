@@ -12,6 +12,7 @@ export type Section =
   | "contracts"
   | "tasks"
   | "users"
+  | "settings"
   | "account";
 
 const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
@@ -26,6 +27,7 @@ const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "contracts", label: "Contracts" },
   { section: "tasks", label: "Tasks" },
   { section: "users", label: "Users", adminOnly: true },
+  { section: "settings", label: "Settings", adminOnly: true },
 ];
 
 export function AppShell({

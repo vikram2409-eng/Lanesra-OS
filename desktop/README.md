@@ -212,6 +212,16 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   One bad row doesn't block the rest, and the after-import summary
   shows created/failed/skipped per row. See
   `src/components/CsvImportDialog.tsx`, `src/lib/csv.ts`.
+- **Branding & print customization (FR-BRD)**: an Administrator can edit
+  the workspace profile - business name, legal name, business address,
+  currency/locale/timezone/tax defaults - at any time from a new Settings
+  screen, not just once at first-run like before. They can also upload a
+  logo (resized to 240px and re-encoded as PNG client-side before upload,
+  validated again server-side for mime type and a 256KB size cap) or
+  remove it. Both the address and the logo now render on the print
+  letterhead for quotes/orders/invoices alongside the business name. See
+  `core/src/services/workspace_service.rs`,
+  `src/features/settings/Settings.tsx`.
 
 ## What's deferred to a later phase
 
@@ -219,6 +229,7 @@ The database schema already has tables for these so the migration doesn't
 need to change shape later, but there is no service/command/UI layer yet:
 
 - Reports beyond the dashboard's built-in KPIs
+- Custom fields, conditional business rules, and workflow automation
 - Windows notifications for task reminders (FR-TSK-06)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
@@ -377,3 +388,24 @@ one. It isn't code-signed yet.
   contacts actually created - confirming a bad row can't block or
   corrupt the rest of the batch, and importing a still-unresolvable row
   in Contacts fails safely rather than creating a dangling reference.
+
+**Branding & print customization phase (FR-BRD):**
+
+- `cargo test --workspace`: 54/54 passing - 6 new core tests
+  (`core/tests/workspace_branding.rs`: profile update, empty-name
+  rejection, non-administrator rejection, logo set/clear,
+  disallowed-mime rejection, oversized-logo rejection) on top of
+  everything from earlier phases.
+- `npm run build`: `tsc` + `vite build` both clean.
+- Built the real release `lanesra-server` binary and drove the whole
+  feature end to end with a real Chromium browser (Playwright) and curl:
+  logged in as the seeded Administrator, opened the new Settings screen,
+  edited the business name/legal name/address/tax rate and confirmed
+  `workspace_status` reflected every field over HTTP. Uploaded a 1x1
+  test logo first, which confirmed the resize-then-cap pipeline stores
+  even a degenerate image correctly (though at 1px it's too small to
+  see, as expected from CSS `max-width`/`max-height` never *enlarging*
+  a naturally-tiny image); re-tested with a realistic 160x160 PNG and
+  confirmed it renders correctly both in the Settings screen's preview
+  and on the actual quote print letterhead, alongside the new business
+  address, next to the business/legal name.

@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use chrono::{Duration, Utc};
 use rusqlite::Connection;
 
@@ -12,12 +14,117 @@ use crate::models::product::ProductInput;
 use crate::models::quote::{QuoteInput, QuoteLineInput};
 use crate::models::task::TaskInput;
 use crate::models::user::{NewUser, User};
-use crate::models::workspace::{Workspace, WorkspaceSetup};
+use crate::models::workspace::{Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate};
 use crate::repositories::{audit_repo, user_repo, workspace_repo};
 use crate::services::{
     auth_service, company_service, contact_service, contract_service, invoice_service,
     opportunity_service, order_service, product_service, quote_service, task_service, user_service,
 };
+
+/// FR-BRD-02: keeps the stored blob small - a business logo has no reason
+/// to be larger than this once client-side compressed, and SQLite rows
+/// stay cheap to read on every print preview / dashboard load.
+const MAX_LOGO_BYTES: usize = 256 * 1024;
+const ALLOWED_LOGO_MIME: &[&str] = &["image/png", "image/jpeg"];
+
+fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
+    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+    let roles = user_repo::roles_for_user(conn, actor_id)?;
+    if !roles.iter().any(|r| r == "Administrator") {
+        return Err(AppError::Validation(
+            "Only an Administrator can edit the workspace profile".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn current(conn: &Connection) -> AppResult<Workspace> {
+    workspace_repo::get_current(conn)?.ok_or_else(|| AppError::Validation("No workspace has been set up yet".into()))
+}
+
+/// FR-BRD-01: an Administrator can edit the workspace profile at any time
+/// after first-run - previously there was no way to do this at all.
+pub fn update(conn: &Connection, input: &WorkspaceUpdate, actor_user_id: Option<&str>) -> AppResult<Workspace> {
+    require_admin(conn, actor_user_id)?;
+    if input.business_name.trim().is_empty() {
+        return Err(AppError::Validation("Business name is required".into()));
+    }
+    if input.currency_code.trim().len() != 3 {
+        return Err(AppError::Validation("Currency code must be 3 letters".into()));
+    }
+
+    let workspace = current(conn)?;
+    let updated = workspace_repo::update(conn, &workspace.id, input)?;
+
+    audit_repo::record(
+        conn,
+        &workspace.id,
+        actor_user_id,
+        "update",
+        Some("workspace"),
+        Some(&workspace.id),
+        "Updated workspace profile",
+        None,
+    )?;
+
+    Ok(updated)
+}
+
+/// FR-BRD-02: rejects anything that isn't PNG/JPEG or that's too large
+/// server-side, not just in the client's upload widget - the same "don't
+/// trust the client" posture every other validated command already takes.
+pub fn set_logo(conn: &Connection, input: &WorkspaceLogo, actor_user_id: Option<&str>) -> AppResult<Workspace> {
+    require_admin(conn, actor_user_id)?;
+    if !ALLOWED_LOGO_MIME.contains(&input.logo_mime.as_str()) {
+        return Err(AppError::Validation("Logo must be a PNG or JPEG image".into()));
+    }
+    let decoded = BASE64
+        .decode(&input.logo_base64)
+        .map_err(|e| AppError::Validation(format!("Invalid logo image data: {e}")))?;
+    if decoded.len() > MAX_LOGO_BYTES {
+        return Err(AppError::Validation(format!(
+            "Logo is too large ({} KB) - please use an image under {} KB",
+            decoded.len() / 1024,
+            MAX_LOGO_BYTES / 1024
+        )));
+    }
+
+    let workspace = current(conn)?;
+    let updated = workspace_repo::set_logo(conn, &workspace.id, &input.logo_base64, &input.logo_mime)?;
+
+    audit_repo::record(
+        conn,
+        &workspace.id,
+        actor_user_id,
+        "update",
+        Some("workspace"),
+        Some(&workspace.id),
+        "Updated workspace logo",
+        None,
+    )?;
+
+    Ok(updated)
+}
+
+/// FR-BRD-03: reverts the print letterhead to text-only.
+pub fn clear_logo(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<Workspace> {
+    require_admin(conn, actor_user_id)?;
+    let workspace = current(conn)?;
+    let updated = workspace_repo::clear_logo(conn, &workspace.id)?;
+
+    audit_repo::record(
+        conn,
+        &workspace.id,
+        actor_user_id,
+        "update",
+        Some("workspace"),
+        Some(&workspace.id),
+        "Removed workspace logo",
+        None,
+    )?;
+
+    Ok(updated)
+}
 
 /// Runs the first-run wizard (5.1): creates the single workspace this
 /// database holds, the local administrator account, and optionally seeds

@@ -19,6 +19,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::workspace_commands::workspace_status,
             commands::workspace_commands::first_run_setup,
+            commands::workspace_commands::update_workspace,
+            commands::workspace_commands::set_workspace_logo,
+            commands::workspace_commands::clear_workspace_logo,
             commands::auth_commands::login,
             commands::auth_commands::logout,
             commands::auth_commands::current_user,

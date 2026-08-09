@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 use crate::domain::ids::{new_uuid, now_iso};
-use crate::models::workspace::{Workspace, WorkspaceSetup};
+use crate::models::workspace::{Workspace, WorkspaceSetup, WorkspaceUpdate};
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Workspace> {
     Ok(Workspace {
@@ -13,6 +13,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Workspace> {
         timezone: row.get("timezone")?,
         default_tax_rate_bp: row.get("default_tax_rate_bp")?,
         operating_mode: row.get("operating_mode")?,
+        business_address: row.get("business_address")?,
+        logo_base64: row.get("logo_base64")?,
+        logo_mime: row.get("logo_mime")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -49,4 +52,40 @@ pub fn create(conn: &Connection, setup: &WorkspaceSetup) -> rusqlite::Result<Wor
         ),
     )?;
     conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [&id], map_row)
+}
+
+pub fn update(conn: &Connection, id: &str, input: &WorkspaceUpdate) -> rusqlite::Result<Workspace> {
+    conn.execute(
+        "UPDATE workspaces SET business_name = ?1, legal_name = ?2, business_address = ?3,
+            currency_code = ?4, locale = ?5, timezone = ?6, default_tax_rate_bp = ?7, updated_at = ?8
+         WHERE id = ?9",
+        (
+            &input.business_name,
+            &input.legal_name,
+            &input.business_address,
+            &input.currency_code,
+            &input.locale,
+            &input.timezone,
+            input.default_tax_rate_bp,
+            now_iso(),
+            id,
+        ),
+    )?;
+    conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
+}
+
+pub fn set_logo(conn: &Connection, id: &str, logo_base64: &str, logo_mime: &str) -> rusqlite::Result<Workspace> {
+    conn.execute(
+        "UPDATE workspaces SET logo_base64 = ?1, logo_mime = ?2, updated_at = ?3 WHERE id = ?4",
+        (logo_base64, logo_mime, now_iso(), id),
+    )?;
+    conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
+}
+
+pub fn clear_logo(conn: &Connection, id: &str) -> rusqlite::Result<Workspace> {
+    conn.execute(
+        "UPDATE workspaces SET logo_base64 = NULL, logo_mime = NULL, updated_at = ?1 WHERE id = ?2",
+        (now_iso(), id),
+    )?;
+    conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
 }

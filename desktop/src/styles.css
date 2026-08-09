@@ -369,6 +369,12 @@ tr:hover td {
   font-size: 18px;
 }
 
+.print-doc-logo {
+  max-width: 64px;
+  max-height: 64px;
+  object-fit: contain;
+}
+
 .print-doc-muted {
   color: #666;
   font-size: 13px;
