@@ -7,10 +7,25 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
 import { PrintableDocument } from "../../components/PrintableDocument";
 import { PrintOverlay } from "../../components/PrintOverlay";
-import type { InvoiceInput, PaymentInput } from "../../lib/types";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import type { Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
+
+function invoiceExportColumns(companyNameById: Map<string, string>) {
+  return [
+    { label: "Number", get: (i: Invoice) => i.invoice_number },
+    { label: "Company", get: (i: Invoice) => companyNameById.get(i.company_id) ?? "" },
+    { label: "Status", get: (i: Invoice) => i.status },
+    { label: "Issue date", get: (i: Invoice) => i.issue_date ?? "" },
+    { label: "Due date", get: (i: Invoice) => i.due_date ?? "" },
+    { label: "Currency", get: (i: Invoice) => i.currency_code },
+    { label: "Total (cents)", get: (i: Invoice) => String(i.total_cents) },
+    { label: "Paid (cents)", get: (i: Invoice) => String(i.amount_paid_cents) },
+    { label: "Balance (cents)", get: (i: Invoice) => String(i.balance_cents) },
+  ];
+}
 
 export function Invoices() {
   const [view, setView] = useState<View>({ mode: "list" });
@@ -45,9 +60,16 @@ export function Invoices() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Invoices</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New invoice
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton
+            rows={invoices.data ?? []}
+            columns={invoiceExportColumns(companyNameById)}
+            filename="invoices.csv"
+          />
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New invoice
+          </button>
+        </div>
       </div>
       {invoices.isLoading && <p>Loading...</p>}
       {invoices.data && invoices.data.length === 0 && <p className="empty-state">No invoices yet.</p>}

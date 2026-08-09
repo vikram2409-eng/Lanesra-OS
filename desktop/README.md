@@ -196,13 +196,28 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   everything else on the page, so it works identically in the Tauri
   webview and a Team Workspace browser tab. See
   `src/components/PrintableDocument.tsx` and `PrintOverlay.tsx`.
+- **CSV export**: every list screen (Companies, Contacts, Products,
+  Sales Pipeline, Quotes, Orders, Invoices, Contracts, Tasks) has an
+  "Export CSV" button that downloads the currently-loaded rows with a
+  UTF-8 BOM and CRLF line endings (so it opens cleanly in Excel), built
+  client-side from data already on screen - no new Rust code.
+- **CSV import**: Companies and Contacts - the two records a new
+  workspace most needs to bulk-load - have an "Import CSV" button that
+  parses a chosen file, previews each row's validity (missing required
+  fields, an unrecognized status, or for contacts an unmatched company
+  name all fail that row with a reason shown before you commit), then
+  imports row by row through the exact same `create_company`/
+  `create_contact` command the manual "New ..." form uses, so a bulk
+  import can never bypass business rules like duplicate-name detection.
+  One bad row doesn't block the rest, and the after-import summary
+  shows created/failed/skipped per row. See
+  `src/components/CsvImportDialog.tsx`, `src/lib/csv.ts`.
 
 ## What's deferred to a later phase
 
 The database schema already has tables for these so the migration doesn't
 need to change shape later, but there is no service/command/UI layer yet:
 
-- CSV import/export
 - Reports beyond the dashboard's built-in KPIs
 - Windows notifications for task reminders (FR-TSK-06)
 - Windows installer signing/packaging (the Tauri bundle config targets
@@ -337,3 +352,28 @@ one. It isn't code-signed yet.
   subtotal/discount/tax/total breakdown, and the quote's notes - all from
   one `PrintableDocument` component shared by quotes, orders and
   invoices.
+
+**CSV import/export phase:**
+
+- `npm run build`: `tsc` + `vite build` both clean (no new Rust code
+  this phase either - it's all client-side, reusing the existing
+  `create_company`/`create_contact` commands for import).
+- Built the real release `lanesra-server` binary against a fresh
+  workspace and drove the whole feature end to end with a real Chromium
+  browser (Playwright): with Companies empty, uploaded a 2-row CSV
+  (one row with a quoted field containing a comma, to prove RFC 4180
+  parsing), confirmed the preview showed both rows "Ready", clicked
+  Import, and confirmed the "Done: 2 created" summary and the resulting
+  company list (correct customer numbers, names, statuses, tax number)
+  matched the CSV exactly.
+- Exported that same list back to CSV and confirmed the downloaded file
+  has a UTF-8 BOM, CRLF line endings, and correctly re-quotes the field
+  containing a comma - a clean round trip.
+- Did the same for Contacts with a 3-row CSV where the third row named
+  a company that doesn't exist ("Ghost Inc"): the preview correctly
+  flagged that one row with `No company named "Ghost Inc" - create it
+  first` while leaving the other two "Ready", and after import the
+  summary read "2 created, 1 skipped (invalid)" with only the two valid
+  contacts actually created - confirming a bad row can't block or
+  corrupt the rest of the batch, and importing a still-unresolvable row
+  in Contacts fails safely rather than creating a dangling reference.

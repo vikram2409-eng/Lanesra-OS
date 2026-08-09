@@ -3,9 +3,79 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { StatusBadge } from "../../components/StatusBadge";
-import { CONTACT_STATUSES, type Contact, type ContactInput } from "../../lib/types";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
+import { field } from "../../lib/csv";
+import { CONTACT_STATUSES, type Company, type Contact, type ContactInput } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+function contactExportColumns(companyNameById: Map<string, string>) {
+  return [
+    { label: "Number", get: (c: Contact) => c.contact_number },
+    { label: "First name", get: (c: Contact) => c.first_name },
+    { label: "Last name", get: (c: Contact) => c.last_name },
+    { label: "Company", get: (c: Contact) => companyNameById.get(c.company_id) ?? "" },
+    { label: "Job title", get: (c: Contact) => c.job_title ?? "" },
+    { label: "Email", get: (c: Contact) => c.email ?? "" },
+    { label: "Phone", get: (c: Contact) => c.phone ?? "" },
+    { label: "Mobile", get: (c: Contact) => c.mobile ?? "" },
+    { label: "Primary", get: (c: Contact) => (c.is_primary ? "Yes" : "No") },
+    { label: "Status", get: (c: Contact) => c.status },
+    { label: "Tags", get: (c: Contact) => c.tags ?? "" },
+    { label: "Notes", get: (c: Contact) => c.notes ?? "" },
+  ];
+}
+
+const CONTACT_IMPORT_COLUMNS = [
+  { label: "First name", required: true },
+  { label: "Last name", required: true },
+  { label: "Company", required: true },
+  { label: "Job title" },
+  { label: "Email" },
+  { label: "Phone" },
+  { label: "Mobile" },
+  { label: "Primary (Yes/No)" },
+  { label: "Status" },
+  { label: "Tags" },
+  { label: "Notes" },
+];
+
+function parseContactRow(record: Record<string, string>, companies: Company[]): ParsedCsvRow<ContactInput> {
+  const firstName = field(record, "First name");
+  const lastName = field(record, "Last name");
+  const companyName = field(record, "Company");
+  const preview = `${firstName} ${lastName}`.trim() || "(unnamed)";
+
+  if (!firstName || !lastName) return { preview, error: "First name and last name are required" };
+  if (!companyName) return { preview, error: "Company is required" };
+
+  const company = companies.find((c) => c.name.toLowerCase() === companyName.toLowerCase());
+  if (!company) return { preview, error: `No company named "${companyName}" - create it first` };
+
+  const statusRaw = field(record, "Status");
+  const status = statusRaw
+    ? CONTACT_STATUSES.find((s) => s.toLowerCase() === statusRaw.toLowerCase())
+    : "Active";
+  if (!status) return { preview, error: `Unknown status "${statusRaw}"` };
+
+  return {
+    preview,
+    input: {
+      company_id: company.id,
+      first_name: firstName,
+      last_name: lastName,
+      job_title: field(record, "Job title") || null,
+      email: field(record, "Email") || null,
+      phone: field(record, "Phone") || null,
+      mobile: field(record, "Mobile") || null,
+      is_primary: field(record, "Primary (Yes/No)", "Primary").toLowerCase() === "yes",
+      status,
+      tags: field(record, "Tags") || null,
+      notes: field(record, "Notes") || null,
+    },
+  };
+}
 
 function emptyInput(companyId: string): ContactInput {
   return {
@@ -25,6 +95,7 @@ function emptyInput(companyId: string): ContactInput {
 
 export function Contacts() {
   const [view, setView] = useState<View>({ mode: "list" });
+  const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
@@ -53,10 +124,30 @@ export function Contacts() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Contacts</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New contact
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton
+            rows={contacts.data ?? []}
+            columns={contactExportColumns(companyNameById)}
+            filename="contacts.csv"
+          />
+          <button className="btn" onClick={() => setImporting((v) => !v)}>
+            Import CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New contact
+          </button>
+        </div>
       </div>
+      {importing && (
+        <CsvImportDialog
+          title="Import contacts"
+          columns={CONTACT_IMPORT_COLUMNS}
+          parseRow={(record) => parseContactRow(record, companies.data ?? [])}
+          createFn={(input) => api.createContact(input)}
+          onImported={invalidate}
+          onClose={() => setImporting(false)}
+        />
+      )}
       {contacts.isLoading && <p>Loading...</p>}
       {contacts.data && contacts.data.length === 0 && (
         <p className="empty-state">No contacts yet. Create your first one.</p>

@@ -4,9 +4,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
-import { CONTRACT_STATUSES, type ContractInput } from "../../lib/types";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { CONTRACT_STATUSES, type Contract, type ContractInput } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+function contractExportColumns(companyNameById: Map<string, string>) {
+  return [
+    { label: "Number", get: (c: Contract) => c.contract_number },
+    { label: "Title", get: (c: Contract) => c.title },
+    { label: "Company", get: (c: Contract) => companyNameById.get(c.company_id) ?? "" },
+    { label: "Status", get: (c: Contract) => c.status },
+    { label: "Value (cents)", get: (c: Contract) => String(c.value_cents) },
+    { label: "Currency", get: (c: Contract) => c.currency_code },
+    { label: "Start date", get: (c: Contract) => c.start_date ?? "" },
+    { label: "End date", get: (c: Contract) => c.end_date ?? "" },
+    { label: "Renewal date", get: (c: Contract) => c.renewal_date ?? "" },
+    { label: "Notes", get: (c: Contract) => c.notes ?? "" },
+  ];
+}
 
 function emptyInput(companyId: string, currency: string): ContractInput {
   return {
@@ -63,9 +79,16 @@ export function Contracts() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Contracts</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New contract
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton
+            rows={contracts.data ?? []}
+            columns={contractExportColumns(companyNameById)}
+            filename="contracts.csv"
+          />
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New contract
+          </button>
+        </div>
       </div>
       {contracts.isLoading && <p>Loading...</p>}
       {contracts.data && contracts.data.length === 0 && <p className="empty-state">No contracts yet.</p>}

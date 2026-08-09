@@ -3,9 +3,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
-import { OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES, type OpportunityInput } from "../../lib/types";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES, type Opportunity, type OpportunityInput } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+function opportunityExportColumns(companyNameById: Map<string, string>) {
+  return [
+    { label: "Number", get: (o: Opportunity) => o.opportunity_number },
+    { label: "Name", get: (o: Opportunity) => o.name },
+    { label: "Company", get: (o: Opportunity) => companyNameById.get(o.company_id) ?? "" },
+    { label: "Stage", get: (o: Opportunity) => o.stage },
+    { label: "Status", get: (o: Opportunity) => o.status },
+    { label: "Value (cents)", get: (o: Opportunity) => String(o.value_cents) },
+    { label: "Currency", get: (o: Opportunity) => o.currency_code },
+    { label: "Probability (bp)", get: (o: Opportunity) => String(o.probability_bp) },
+    { label: "Expected close date", get: (o: Opportunity) => o.expected_close_date ?? "" },
+  ];
+}
 
 function emptyInput(companyId: string, currency: string): OpportunityInput {
   return {
@@ -54,9 +69,16 @@ export function Opportunities() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Sales Pipeline</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New opportunity
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton
+            rows={opportunities.data ?? []}
+            columns={opportunityExportColumns(companyNameById)}
+            filename="opportunities.csv"
+          />
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New opportunity
+          </button>
+        </div>
       </div>
       {opportunities.isLoading && <p>Loading...</p>}
       {opportunities.data && opportunities.data.length === 0 && (

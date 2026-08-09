@@ -3,9 +3,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { centsToInputValue, formatCents, parseDecimalToCents } from "../../lib/money";
-import { PRODUCT_TYPES, type ProductInput } from "../../lib/types";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { PRODUCT_TYPES, type Product, type ProductInput } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+const PRODUCT_EXPORT_COLUMNS = [
+  { label: "Number", get: (p: Product) => p.product_number },
+  { label: "SKU", get: (p: Product) => p.sku ?? "" },
+  { label: "Type", get: (p: Product) => p.type },
+  { label: "Name", get: (p: Product) => p.name },
+  { label: "Category", get: (p: Product) => p.category ?? "" },
+  { label: "Description", get: (p: Product) => p.description ?? "" },
+  { label: "Unit price (cents)", get: (p: Product) => String(p.unit_price_cents) },
+  { label: "Cost (cents)", get: (p: Product) => String(p.cost_cents) },
+  { label: "Tax rate (bp)", get: (p: Product) => String(p.tax_rate_bp) },
+  { label: "Active", get: (p: Product) => (p.is_active ? "Yes" : "No") },
+];
 
 const emptyInput: ProductInput = {
   sku: null,
@@ -46,9 +60,12 @@ export function Products() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Products &amp; Services</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New product
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton rows={products.data ?? []} columns={PRODUCT_EXPORT_COLUMNS} filename="products.csv" />
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New product
+          </button>
+        </div>
       </div>
       {products.isLoading && <p>Loading...</p>}
       {products.data && products.data.length === 0 && <p className="empty-state">No products yet.</p>}

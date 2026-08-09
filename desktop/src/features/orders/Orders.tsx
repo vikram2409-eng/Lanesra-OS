@@ -7,10 +7,26 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
 import { PrintableDocument } from "../../components/PrintableDocument";
 import { PrintOverlay } from "../../components/PrintOverlay";
-import { ORDER_STATUSES, type OrderInput } from "../../lib/types";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { ORDER_STATUSES, type Order, type OrderInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
+
+function orderExportColumns(companyNameById: Map<string, string>) {
+  return [
+    { label: "Number", get: (o: Order) => o.order_number },
+    { label: "Company", get: (o: Order) => companyNameById.get(o.company_id) ?? "" },
+    { label: "Status", get: (o: Order) => o.status },
+    { label: "Order date", get: (o: Order) => o.order_date ?? "" },
+    { label: "From quote", get: (o: Order) => (o.source_quote_id ? "Yes" : "Direct") },
+    { label: "Currency", get: (o: Order) => o.currency_code },
+    { label: "Subtotal (cents)", get: (o: Order) => String(o.subtotal_cents) },
+    { label: "Discount (cents)", get: (o: Order) => String(o.discount_cents) },
+    { label: "Tax (cents)", get: (o: Order) => String(o.tax_cents) },
+    { label: "Total (cents)", get: (o: Order) => String(o.total_cents) },
+  ];
+}
 
 export function Orders() {
   const [view, setView] = useState<View>({ mode: "list" });
@@ -45,9 +61,16 @@ export function Orders() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Orders</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New order
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton
+            rows={orders.data ?? []}
+            columns={orderExportColumns(companyNameById)}
+            filename="orders.csv"
+          />
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New order
+          </button>
+        </div>
       </div>
       {orders.isLoading && <p>Loading...</p>}
       {orders.data && orders.data.length === 0 && <p className="empty-state">No orders yet.</p>}

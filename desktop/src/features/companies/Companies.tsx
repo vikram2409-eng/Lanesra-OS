@@ -3,9 +3,56 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { StatusBadge } from "../../components/StatusBadge";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
+import { field } from "../../lib/csv";
 import { COMPANY_STATUSES, type Company, type CompanyInput } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
+
+const COMPANY_EXPORT_COLUMNS = [
+  { label: "Number", get: (c: Company) => c.customer_number },
+  { label: "Name", get: (c: Company) => c.name },
+  { label: "Status", get: (c: Company) => c.status },
+  { label: "Tax number", get: (c: Company) => c.tax_number ?? "" },
+  { label: "Billing address", get: (c: Company) => c.billing_address ?? "" },
+  { label: "Shipping address", get: (c: Company) => c.shipping_address ?? "" },
+  { label: "Tags", get: (c: Company) => c.tags ?? "" },
+  { label: "Notes", get: (c: Company) => c.notes ?? "" },
+];
+
+const COMPANY_IMPORT_COLUMNS = [
+  { label: "Name", required: true },
+  { label: "Status" },
+  { label: "Tax number" },
+  { label: "Billing address" },
+  { label: "Shipping address" },
+  { label: "Tags" },
+  { label: "Notes" },
+];
+
+function parseCompanyRow(record: Record<string, string>): ParsedCsvRow<CompanyInput> {
+  const name = field(record, "Name");
+  if (!name) return { preview: "(missing name)", error: "Name is required" };
+
+  const statusRaw = field(record, "Status");
+  const status = statusRaw ? COMPANY_STATUSES.find((s) => s.toLowerCase() === statusRaw.toLowerCase()) : "Prospect";
+  if (!status) return { preview: name, error: `Unknown status "${statusRaw}"` };
+
+  return {
+    preview: name,
+    input: {
+      name,
+      status,
+      owner_user_id: null,
+      tax_number: field(record, "Tax number") || null,
+      billing_address: field(record, "Billing address") || null,
+      shipping_address: field(record, "Shipping address") || null,
+      tags: field(record, "Tags") || null,
+      notes: field(record, "Notes") || null,
+    },
+  };
+}
 
 const emptyInput: CompanyInput = {
   name: "",
@@ -20,6 +67,7 @@ const emptyInput: CompanyInput = {
 
 export function Companies() {
   const [view, setView] = useState<View>({ mode: "list" });
+  const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
@@ -54,10 +102,26 @@ export function Companies() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Companies</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New company
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton rows={companies.data ?? []} columns={COMPANY_EXPORT_COLUMNS} filename="companies.csv" />
+          <button className="btn" onClick={() => setImporting((v) => !v)}>
+            Import CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New company
+          </button>
+        </div>
       </div>
+      {importing && (
+        <CsvImportDialog
+          title="Import companies"
+          columns={COMPANY_IMPORT_COLUMNS}
+          parseRow={parseCompanyRow}
+          createFn={(input) => api.createCompany(input)}
+          onImported={invalidate}
+          onClose={() => setImporting(false)}
+        />
+      )}
       {companies.isLoading && <p>Loading...</p>}
       {companies.data && companies.data.length === 0 && (
         <p className="empty-state">No companies yet. Create your first one.</p>

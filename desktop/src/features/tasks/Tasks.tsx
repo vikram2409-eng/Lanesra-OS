@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
 import {
   TASK_PRIORITIES,
   TASK_RELATED_TYPES,
@@ -13,6 +14,19 @@ import {
 
 type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+function taskExportColumns(ownerName: (id: string | null) => string) {
+  return [
+    { label: "Number", get: (t: Task) => t.task_number },
+    { label: "Title", get: (t: Task) => t.title },
+    { label: "Priority", get: (t: Task) => t.priority },
+    { label: "Status", get: (t: Task) => t.status },
+    { label: "Due date", get: (t: Task) => t.due_date ?? "" },
+    { label: "Owner", get: (t: Task) => ownerName(t.owner_user_id) },
+    { label: "Related type", get: (t: Task) => t.related_type ?? "" },
+    { label: "Description", get: (t: Task) => t.description ?? "" },
+  ];
+}
 
 const TABS: { tab: Tab; label: string }[] = [
   { tab: "today", label: "Today" },
@@ -133,9 +147,12 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Tasks</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New task
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton rows={all} columns={taskExportColumns(ownerName)} filename="tasks.csv" />
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New task
+          </button>
+        </div>
       </div>
 
       <div className="tab-row">

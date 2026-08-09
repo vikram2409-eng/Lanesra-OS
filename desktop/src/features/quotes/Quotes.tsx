@@ -7,10 +7,26 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
 import { PrintableDocument } from "../../components/PrintableDocument";
 import { PrintOverlay } from "../../components/PrintOverlay";
-import { QUOTE_STATUSES, type QuoteInput } from "../../lib/types";
+import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { QUOTE_STATUSES, type Quote, type QuoteInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
+
+function quoteExportColumns(companyNameById: Map<string, string>) {
+  return [
+    { label: "Number", get: (q: Quote) => q.quote_number },
+    { label: "Company", get: (q: Quote) => companyNameById.get(q.company_id) ?? "" },
+    { label: "Status", get: (q: Quote) => q.status },
+    { label: "Issue date", get: (q: Quote) => q.issue_date ?? "" },
+    { label: "Expiry date", get: (q: Quote) => q.expiry_date ?? "" },
+    { label: "Currency", get: (q: Quote) => q.currency_code },
+    { label: "Subtotal (cents)", get: (q: Quote) => String(q.subtotal_cents) },
+    { label: "Discount (cents)", get: (q: Quote) => String(q.discount_cents) },
+    { label: "Tax (cents)", get: (q: Quote) => String(q.tax_cents) },
+    { label: "Total (cents)", get: (q: Quote) => String(q.total_cents) },
+  ];
+}
 
 export function Quotes() {
   const [view, setView] = useState<View>({ mode: "list" });
@@ -45,9 +61,16 @@ export function Quotes() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Quotes</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New quote
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportCsvButton
+            rows={quotes.data ?? []}
+            columns={quoteExportColumns(companyNameById)}
+            filename="quotes.csv"
+          />
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New quote
+          </button>
+        </div>
       </div>
       {quotes.isLoading && <p>Loading...</p>}
       {quotes.data && quotes.data.length === 0 && <p className="empty-state">No quotes yet.</p>}
