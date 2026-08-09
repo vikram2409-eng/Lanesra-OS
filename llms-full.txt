@@ -4,7 +4,7 @@ Lanesra OS is an independent, open-source business application designed for smal
 
 ## Product status
 
-The product is currently in Early Access v0.9.0. The public browser demo is usable and includes realistic sample data. The Windows desktop application is in early development: the source is public today (Tauri v2 + Rust + SQLite), with the full sales lifecycle already working end to end - Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices, including quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication. There is no signed installer yet; it is built and run from source.
+The product is currently in Early Access v0.11.0. The public browser demo is usable and includes realistic sample data. The Windows desktop application is in early development: the source is public today (Tauri v2 + Rust + SQLite), with the full sales lifecycle already working end to end - Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices, including quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication. Also working: Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), whole-workspace backup and restore, self-service password change, PDF generation and printing, and CSV import/export. There is no signed installer yet; it is built and run from source, or from an unsigned Early Access Windows installer on GitHub Releases.
 
 ## Product history
 
@@ -13,7 +13,10 @@ The product is currently in Early Access v0.9.0. The public browser demo is usab
 - July 2026: Design system and web MVP built.
 - August 2026: Public Early Access launched.
 - August 2026: Windows desktop edition foundation published (Tauri + SQLite, full sales lifecycle).
-- Next milestone: Contracts and tasks modules, backup and restore, and a signed desktop installer.
+- August 2026: Contracts, Tasks and user management added on desktop.
+- August 2026: Team Workspace mode, backup/restore, and self-service password change shipped.
+- August 2026: PDF generation/printing and CSV import/export shipped.
+- Next milestone: an admin-configurable layer on top of the fixed schema - branding and print customization, reports beyond the dashboard, custom fields, conditional business rules, and workflow automation - followed by a code-signed installer.
 
 ## Core workflows
 
