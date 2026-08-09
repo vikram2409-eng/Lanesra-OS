@@ -4,7 +4,7 @@ Lanesra OS is an independent, open-source business application designed for smal
 
 ## Product status
 
-The product is currently in Early Access v0.11.0. The public browser demo is usable and includes realistic sample data. The Windows desktop application is in early development: the source is public today (Tauri v2 + Rust + SQLite), with the full sales lifecycle already working end to end - Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices, including quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication. Also working: Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), whole-workspace backup and restore, self-service password change, PDF generation and printing, and CSV import/export. There is no signed installer yet; it is built and run from source, or from an unsigned Early Access Windows installer on GitHub Releases.
+The product is currently in Early Access v0.12.0. The public browser demo is usable and includes realistic sample data. The Windows desktop application is in early development: the source is public today (Tauri v2 + Rust + SQLite), with the full sales lifecycle already working end to end - Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices, including quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication. Also working: Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), whole-workspace backup and restore, self-service password change, PDF generation and printing, and CSV import/export. On top of that fixed schema, an admin-configurable layer now ships too: business branding and print customization (logo, letterhead), reports beyond the dashboard (revenue by month, win rate, lost reasons, AR aging, sales by owner), custom fields on Companies and Contacts, conditional business rules that require or hide those fields based on record status, and Phase 1 workflow automation that auto-creates follow-up tasks when an Opportunity's stage or an Invoice's status changes. There is no signed installer yet; it is built and run from source, or from an unsigned Early Access Windows installer on GitHub Releases.
 
 ## Product history
 
@@ -16,7 +16,8 @@ The product is currently in Early Access v0.11.0. The public browser demo is usa
 - August 2026: Contracts, Tasks and user management added on desktop.
 - August 2026: Team Workspace mode, backup/restore, and self-service password change shipped.
 - August 2026: PDF generation/printing and CSV import/export shipped.
-- Next milestone: an admin-configurable layer on top of the fixed schema - branding and print customization, reports beyond the dashboard, custom fields, conditional business rules, and workflow automation - followed by a code-signed installer.
+- August 2026: An admin-configurable layer shipped on top of the fixed schema - branding and print customization, reports beyond the dashboard, custom fields on Companies and Contacts, conditional business rules over those fields, and Phase 1 workflow automation (auto-created follow-up tasks on Opportunity/Invoice status changes).
+- Next milestone: a code-signed installer and task reminder notifications.
 
 ## Core workflows
 

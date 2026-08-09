@@ -4,10 +4,11 @@ Lanesra OS is a modern, open-source sales and business management application fo
 
 ## Current status
 
-- Early Access v0.11.0
+- Early Access v0.12.0
 - Browser-based live demo is available
 - Windows desktop edition is in early development: the source is public today (Tauri + Rust + SQLite) with the full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), backup/restore, self-service password change, PDF generation and printing, and CSV import/export all working. An unsigned Early Access Windows installer (.exe/.msi) is available from GitHub Releases; build and run from source is also supported.
-- Currently building: branding and print customization, reports beyond the dashboard, custom fields, conditional business rules, and workflow automation — an admin-configurable layer on top of the fixed schema.
+- Also shipped: an admin-configurable layer on top of the fixed schema - branding and print customization, reports beyond the dashboard (revenue, win rate, AR aging, sales by owner), custom fields on Companies and Contacts, conditional business rules over those fields, and workflow automation that auto-creates follow-up tasks on Opportunity/Invoice status changes.
+- Next up: a code-signed installer and task reminder notifications.
 
 ## Core capabilities
 
