@@ -666,3 +666,48 @@ export interface SalesByOwner {
   invoice_count: number;
   total_cents: number;
 }
+
+// FR-CFG: custom fields on Companies and Contacts, defined by an
+// Administrator via an attribute side-table rather than a schema change.
+export const CUSTOM_FIELD_TYPES = ["text", "number", "date", "boolean", "select"] as const;
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+export const CUSTOM_FIELD_ENTITY_TYPES = ["Company", "Contact"] as const;
+export type CustomFieldEntityType = (typeof CUSTOM_FIELD_ENTITY_TYPES)[number];
+
+export interface CustomFieldDefinition {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  key: string;
+  label: string;
+  field_type: string;
+  options: string[];
+  required: boolean;
+  show_in_list: boolean;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomFieldDefinitionInput {
+  entity_type: CustomFieldEntityType;
+  label: string;
+  field_type: CustomFieldType;
+  options: string[];
+  required: boolean;
+  show_in_list: boolean;
+  sort_order: number;
+}
+
+export interface CustomFieldDefinitionUpdate {
+  label: string;
+  options: string[];
+  required: boolean;
+  show_in_list: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
+/** Values keyed by field key, e.g. { industry: "Retail" }. */
+export type CustomFieldValues = Record<string, string>;

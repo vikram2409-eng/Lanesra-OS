@@ -17,14 +17,15 @@ use lanesra_core::models::order::OrderInput;
 use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
+use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workspace::{WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
-    dashboard_service, invoice_service, opportunity_service, order_service, product_service,
-    quote_service, report_service, task_service, user_service, workspace_service,
+    custom_field_service, dashboard_service, invoice_service, opportunity_service, order_service,
+    product_service, quote_service, report_service, task_service, user_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -290,6 +291,39 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "report_sales_by_owner" => {
             let range: ReportRange = arg(args, "range")?;
             to_value(report_service::sales_by_owner(conn, &require_workspace_id(conn)?, &range.from, &range.to)?)
+        }
+
+        "list_custom_field_definitions" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(custom_field_service::list_definitions(
+                conn,
+                &require_workspace_id(conn)?,
+                &entity_type,
+                active_only,
+            )?)
+        }
+        "create_custom_field_definition" => {
+            let input: CustomFieldDefinitionInput = arg(args, "input")?;
+            to_value(custom_field_service::create_definition(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_custom_field_definition" => {
+            let id: String = arg(args, "id")?;
+            let input: CustomFieldDefinitionUpdate = arg(args, "input")?;
+            to_value(custom_field_service::update_definition(conn, &id, &input, actor)?)
+        }
+        "deactivate_custom_field_definition" => {
+            to_value(custom_field_service::deactivate_definition(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "set_custom_field_values" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let entity_id: String = arg(args, "entityId")?;
+            let values: CustomFieldValues = arg(args, "values")?;
+            custom_field_service::set_entity_values(conn, &entity_type, &entity_id, &values, actor)?;
+            Ok(Value::Null)
+        }
+        "get_custom_field_values" => {
+            to_value(custom_field_service::get_entity_values(conn, &arg::<String>(args, "entityId")?)?)
         }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),

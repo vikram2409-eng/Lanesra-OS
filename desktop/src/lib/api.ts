@@ -35,6 +35,11 @@ import type {
   User,
   UserUpdate,
   ArAgingBucket,
+  CustomFieldDefinition,
+  CustomFieldDefinitionInput,
+  CustomFieldDefinitionUpdate,
+  CustomFieldEntityType,
+  CustomFieldValues,
   LostReasonBreakdown,
   ReportRange,
   RevenueByMonth,
@@ -191,6 +196,18 @@ export const api = {
   reportLostReasons: (range: ReportRange) => call<LostReasonBreakdown[]>("report_lost_reasons", { range }),
   reportArAging: (asOfDate: string | null) => call<ArAgingBucket[]>("report_ar_aging", { asOfDate }),
   reportSalesByOwner: (range: ReportRange) => call<SalesByOwner[]>("report_sales_by_owner", { range }),
+
+  listCustomFieldDefinitions: (entityType: CustomFieldEntityType, activeOnly: boolean) =>
+    call<CustomFieldDefinition[]>("list_custom_field_definitions", { entityType, activeOnly }),
+  createCustomFieldDefinition: (input: CustomFieldDefinitionInput) =>
+    call<CustomFieldDefinition>("create_custom_field_definition", { input }),
+  updateCustomFieldDefinition: (id: string, input: CustomFieldDefinitionUpdate) =>
+    call<CustomFieldDefinition>("update_custom_field_definition", { id, input }),
+  deactivateCustomFieldDefinition: (id: string) =>
+    call<CustomFieldDefinition>("deactivate_custom_field_definition", { id }),
+  setCustomFieldValues: (entityType: CustomFieldEntityType, entityId: string, values: CustomFieldValues) =>
+    call<void>("set_custom_field_values", { entityType, entityId, values }),
+  getCustomFieldValues: (entityId: string) => call<CustomFieldValues>("get_custom_field_values", { entityId }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

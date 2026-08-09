@@ -5,8 +5,9 @@ import { api, ApiError } from "../../lib/api";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { field } from "../../lib/csv";
-import { COMPANY_STATUSES, type Company, type CompanyInput } from "../../lib/types";
+import { COMPANY_STATUSES, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -168,12 +169,18 @@ function CompanyForm({
     queryFn: () => api.getCompany(companyId as string),
     enabled: !!companyId,
   });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", companyId],
+    queryFn: () => api.getCustomFieldValues(companyId as string),
+    enabled: !!companyId,
+  });
   const [input, setInput] = useState<CompanyInput>(emptyInput);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<Company[] | null>(null);
 
-  if (existing.data && loadedFor !== companyId) {
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== companyId) {
     setInput({
       name: existing.data.name,
       status: existing.data.status,
@@ -184,11 +191,16 @@ function CompanyForm({
       tags: existing.data.tags,
       notes: existing.data.notes,
     });
+    setCustomValues(existingCustomFields.data);
     setLoadedFor(companyId);
   }
 
   const save = useMutation({
-    mutationFn: () => (companyId ? api.updateCompany(companyId, input) : api.createCompany(input)),
+    mutationFn: async () => {
+      const company = companyId ? await api.updateCompany(companyId, input) : await api.createCompany(input);
+      await api.setCustomFieldValues("Company", company.id, customValues);
+      return company;
+    },
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the company"),
   });
@@ -259,6 +271,7 @@ function CompanyForm({
             onChange={(e) => setInput({ ...input, notes: e.target.value || null })}
           />
         </div>
+        <CustomFieldsSection entityType="Company" values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             {duplicateWarning ? "Save anyway" : "Save"}

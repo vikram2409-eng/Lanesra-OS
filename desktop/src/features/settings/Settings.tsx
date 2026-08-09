@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -57,6 +58,9 @@ export function Settings() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
         <ProfileForm workspace={workspace.data} onSaved={invalidate} />
         <LogoCard workspace={workspace.data} onChanged={invalidate} />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsAdmin />
       </div>
     </div>
   );

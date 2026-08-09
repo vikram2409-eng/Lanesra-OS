@@ -236,13 +236,35 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   owner of their own, so Sales by owner attributes revenue via the
   invoice's Company owner. See `core/src/services/report_service.rs`,
   `src/features/reports/Reports.tsx`.
+- **Custom fields (FR-CFG)**: an Administrator can define custom fields on
+  Companies and Contacts from the new Settings screen - label, type
+  (text/number/date/yes-no/select-with-options), required, and
+  active/inactive - without a code change or a schema migration per
+  field. An auto-generated key is uniquified rather than rejected on a
+  duplicate label. Active fields render on the Company/Contact
+  create/edit form and are enforced both client-side (HTML5 `required`,
+  immediate feedback) and server-side inside `set_custom_field_values`
+  (required-field and select-option validation, verified independently
+  of the UI with a direct API call in this phase's testing) - a
+  client-only check would be trivially bypassed by any direct API
+  caller. Bounded to these two entities deliberately; see "Custom
+  fields" in the product backlog for why whole new entity types are a
+  separate, much larger ask this doesn't attempt. Deferred within this
+  phase: showing custom field values as extra columns on the
+  Companies/Contacts list screens (`show_in_list` is stored and
+  editable in the admin screen, just not yet rendered anywhere), and
+  including custom fields in CSV import/export. See
+  `core/src/services/custom_field_service.rs`,
+  `src/components/CustomFieldsSection.tsx`,
+  `src/features/settings/CustomFieldsAdmin.tsx`.
 
 ## What's deferred to a later phase
 
 The database schema already has tables for these so the migration doesn't
 need to change shape later, but there is no service/command/UI layer yet:
 
-- Custom fields, conditional business rules, and workflow automation
+- Custom fields as extra columns on list screens, and in CSV import/export
+- Conditional business rules and workflow automation
 - Windows notifications for task reminders (FR-TSK-06)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
@@ -445,3 +467,28 @@ one. It isn't code-signed yet.
   earlier in the month - confirming the date-range filter, not just the
   aggregation, actually works. Exported Sales by owner to CSV and
   confirmed the downloaded file matched the on-screen table exactly.
+
+**Custom fields phase (FR-CFG):**
+
+- `cargo test --workspace`: 66/66 passing - 7 new core tests
+  (`core/tests/custom_fields.rs`: auto-generated key, duplicate-label
+  uniquification, non-administrator rejection, required-field
+  enforcement, select-option validation, clearing a value deletes its
+  row, deactivating a field stops enforcing it but keeps existing
+  values).
+- `npm run build`: `tsc` + `vite build` both clean.
+- Built the real release `lanesra-server` binary and drove the whole
+  feature end to end with a real Chromium browser (Playwright): from
+  Settings, defined a required "Industry" select field (Retail /
+  Manufacturing / Services) for Companies; opened New Company and
+  confirmed it rendered as a required dropdown; confirmed the browser's
+  native required-field validation blocked submission while it was
+  unset; selected "Retail" and saved successfully; reopened the company
+  for editing and confirmed "Retail" was still selected - a full
+  create/persist/reload round trip.
+- Separately, with curl (bypassing the UI entirely): created a company,
+  then called `set_custom_field_values` directly with the Industry
+  field left empty and got `"Industry is required"` back; called it
+  again with `"Not A Real Option"` and got `"'Not A Real Option' is not
+  a valid option for Industry"` back - confirming the validation lives
+  in the server, not just the form's HTML5 `required` attribute.

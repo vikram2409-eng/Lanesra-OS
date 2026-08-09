@@ -5,8 +5,9 @@ import { api, ApiError } from "../../lib/api";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { field } from "../../lib/csv";
-import { CONTACT_STATUSES, type Company, type Contact, type ContactInput } from "../../lib/types";
+import { CONTACT_STATUSES, type Company, type Contact, type ContactInput, type CustomFieldValues } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -206,20 +207,31 @@ function ContactForm({
     queryFn: () => api.getContact(contactId as string),
     enabled: !!contactId,
   });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", contactId],
+    queryFn: () => api.getCustomFieldValues(contactId as string),
+    enabled: !!contactId,
+  });
   const [input, setInput] = useState<ContactInput>(emptyInput(companies[0]?.id ?? ""));
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<Contact[] | null>(null);
 
-  if (existing.data && loadedFor !== contactId) {
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== contactId) {
     const { first_name, last_name, job_title, email, phone, mobile, is_primary, status, tags, notes, company_id } =
       existing.data;
     setInput({ company_id, first_name, last_name, job_title, email, phone, mobile, is_primary, status, tags, notes });
+    setCustomValues(existingCustomFields.data);
     setLoadedFor(contactId);
   }
 
   const save = useMutation({
-    mutationFn: () => (contactId ? api.updateContact(contactId, input) : api.createContact(input)),
+    mutationFn: async () => {
+      const contact = contactId ? await api.updateContact(contactId, input) : await api.createContact(input);
+      await api.setCustomFieldValues("Contact", contact.id, customValues);
+      return contact;
+    },
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the contact"),
   });
@@ -304,6 +316,7 @@ function ContactForm({
             Primary contact
           </label>
         </div>
+        <CustomFieldsSection entityType="Contact" values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending || !input.company_id}>
             {duplicateWarning ? "Save anyway" : "Save"}

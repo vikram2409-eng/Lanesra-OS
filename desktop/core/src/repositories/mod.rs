@@ -2,6 +2,7 @@ pub mod audit_repo;
 pub mod company_repo;
 pub mod contact_repo;
 pub mod contract_repo;
+pub mod custom_field_repo;
 pub mod invoice_repo;
 pub mod opportunity_repo;
 pub mod order_repo;

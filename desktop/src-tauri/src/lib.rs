@@ -91,6 +91,12 @@ pub fn run() {
             commands::report_commands::report_lost_reasons,
             commands::report_commands::report_ar_aging,
             commands::report_commands::report_sales_by_owner,
+            commands::custom_field_commands::list_custom_field_definitions,
+            commands::custom_field_commands::create_custom_field_definition,
+            commands::custom_field_commands::update_custom_field_definition,
+            commands::custom_field_commands::deactivate_custom_field_definition,
+            commands::custom_field_commands::set_custom_field_values,
+            commands::custom_field_commands::get_custom_field_values,
             commands::backup_commands::create_backup,
             commands::backup_commands::restore_backup,
         ])

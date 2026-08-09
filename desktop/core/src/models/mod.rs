@@ -3,6 +3,7 @@ pub mod backup;
 pub mod company;
 pub mod contact;
 pub mod contract;
+pub mod custom_field;
 pub mod dashboard;
 pub mod invoice;
 pub mod opportunity;
