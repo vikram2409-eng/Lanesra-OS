@@ -5,6 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { formatCents, parseDecimalToCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
+import { PrintableDocument } from "../../components/PrintableDocument";
+import { PrintOverlay } from "../../components/PrintOverlay";
 import type { InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
@@ -203,6 +205,7 @@ function InvoiceDetail({ id, onBack, onChanged }: { id: string; onBack: () => vo
   const [error, setError] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("0.00");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [printing, setPrinting] = useState(false);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["invoice", id] });
@@ -257,7 +260,37 @@ function InvoiceDetail({ id, onBack, onChanged }: { id: string; onBack: () => vo
             Void invoice
           </button>
         )}
+        <button className="btn" onClick={() => setPrinting(true)}>
+          Print / Save as PDF
+        </button>
       </div>
+
+      {printing && (
+        <PrintOverlay onClose={() => setPrinting(false)}>
+          <PrintableDocument
+            kind="Invoice"
+            documentNumber={inv.invoice_number}
+            status={inv.status}
+            currencyCode={inv.currency_code}
+            companyId={inv.company_id}
+            contactId={inv.contact_id}
+            dateFields={[
+              { label: "Issue date", value: inv.issue_date },
+              { label: "Due date", value: inv.due_date },
+            ]}
+            lines={lines}
+            subtotalCents={inv.subtotal_cents}
+            discountCents={inv.discount_cents}
+            taxCents={inv.tax_cents}
+            totalCents={inv.total_cents}
+            extraTotals={[
+              { label: "Paid", value: formatCents(inv.amount_paid_cents, inv.currency_code) },
+              { label: "Balance due", value: formatCents(inv.balance_cents, inv.currency_code), bold: true },
+            ]}
+            notes={inv.notes}
+          />
+        </PrintOverlay>
+      )}
 
       <div className="card" style={{ marginBottom: 16 }}>
         <table>

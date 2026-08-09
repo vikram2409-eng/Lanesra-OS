@@ -186,13 +186,22 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   account" screen reachable by clicking their name in the top bar -
   previously only an Administrator could reset a password, from the Users
   screen, which is still true for resetting *someone else's*.
+- **PDF generation and printing**: quotes, orders and invoices each have a
+  "Print / Save as PDF" button that opens a full-page print preview
+  (business letterhead, Bill To company/contact, dates, line items,
+  totals - plus paid/balance-due for invoices) built from the same data
+  already on screen, then hands off to the browser's native print dialog
+  (`window.print()`) so "Save as PDF" is just the OS/browser print target.
+  No PDF-rendering crate or server-side work - a `@media print` rule hides
+  everything else on the page, so it works identically in the Tauri
+  webview and a Team Workspace browser tab. See
+  `src/components/PrintableDocument.tsx` and `PrintOverlay.tsx`.
 
 ## What's deferred to a later phase
 
 The database schema already has tables for these so the migration doesn't
 need to change shape later, but there is no service/command/UI layer yet:
 
-- PDF generation and printing for quotes/orders/invoices
 - CSV import/export
 - Reports beyond the dashboard's built-in KPIs
 - Windows notifications for task reminders (FR-TSK-06)
@@ -310,3 +319,21 @@ one. It isn't code-signed yet.
   confirmed the restored data was still there and the on-disk directory
   held one clean `lanesra.sqlite3` (+ WAL/SHM) with no leftover
   `.restoring` temp file from the swap.
+
+**PDF printing phase:**
+
+- `npm run build`: `tsc` + `vite build` both clean (104 modules, no new
+  Rust code this phase - printing is entirely client-side).
+- Built the real release `lanesra-server` binary, seeded it via curl with
+  a workspace ("Northstar Digital Solutions"), a company with a billing
+  address, a contact, and a quote with a taxed line item, then drove it
+  end to end with a real Chromium browser (Playwright): logged in, opened
+  the seeded quote, and screenshotted the detail view showing the new
+  "Print / Save as PDF" button next to the existing status actions.
+  Clicked it and screenshotted the resulting print preview, confirming it
+  renders the business name and legal name, "Bill to" with the company's
+  address and the contact's name/email, issue date and valid-until date,
+  the line item table matching the on-screen figures exactly, the
+  subtotal/discount/tax/total breakdown, and the quote's notes - all from
+  one `PrintableDocument` component shared by quotes, orders and
+  invoices.

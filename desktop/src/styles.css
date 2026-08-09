@@ -324,3 +324,145 @@ tr:hover td {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
+
+/* Printable documents (quotes/orders/invoices) - see PrintOverlay and
+   PrintableDocument. On screen this is a full-page preview overlay; the
+   @media print block below hides everything else so window.print() /
+   "Save as PDF" captures only the document itself, in both the Tauri
+   webview and a Team Workspace browser tab. Colors here are deliberately
+   plain black-on-white rather than the app's --text/--bg tokens, since a
+   printed business document shouldn't follow dark mode. */
+.print-overlay {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  color: #111;
+  z-index: 1000;
+  overflow: auto;
+}
+
+.print-overlay-bar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #f2f2f2;
+  border-bottom: 1px solid #ddd;
+}
+
+.print-overlay-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 32px;
+}
+
+.print-doc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.print-doc-business {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.print-doc-muted {
+  color: #666;
+  font-size: 13px;
+}
+
+.print-doc-heading {
+  text-align: right;
+}
+
+.print-doc-heading h1 {
+  margin: 0 0 4px 0;
+  font-size: 20px;
+}
+
+.print-doc-parties {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.print-doc-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #888;
+}
+
+.print-doc-strong {
+  font-weight: 600;
+}
+
+.print-doc-dates {
+  text-align: right;
+  font-size: 13px;
+}
+
+.print-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.print-doc-table th,
+.print-doc-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+  font-size: 13px;
+}
+
+.print-doc-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.print-doc-totals {
+  margin-left: auto;
+  max-width: 280px;
+  font-size: 13px;
+}
+
+.print-doc-totals > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.print-doc-total-line {
+  font-weight: 700;
+  border-top: 1px solid #333;
+  margin-top: 4px;
+  padding-top: 4px !important;
+}
+
+.print-doc-notes {
+  margin-top: 28px;
+  font-size: 13px;
+}
+
+@media print {
+  body > *:not(#print-root) {
+    display: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-overlay {
+    position: static;
+    inset: auto;
+  }
+  .print-overlay-page {
+    max-width: none;
+    padding: 0;
+  }
+}

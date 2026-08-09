@@ -5,6 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
+import { PrintableDocument } from "../../components/PrintableDocument";
+import { PrintOverlay } from "../../components/PrintOverlay";
 import { QUOTE_STATUSES, type QuoteInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
@@ -207,6 +209,7 @@ function QuoteDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
   const queryClient = useQueryClient();
   const quote = useQuery({ queryKey: ["quote", id], queryFn: () => api.getQuote(id) });
   const [error, setError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   const setStatus = useMutation({
     mutationFn: (status: string) => api.setQuoteStatus(id, status),
@@ -252,7 +255,33 @@ function QuoteDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
             Convert to order
           </button>
         )}
+        <button className="btn" onClick={() => setPrinting(true)}>
+          Print / Save as PDF
+        </button>
       </div>
+
+      {printing && (
+        <PrintOverlay onClose={() => setPrinting(false)}>
+          <PrintableDocument
+            kind="Quote"
+            documentNumber={q.quote_number}
+            status={q.status}
+            currencyCode={q.currency_code}
+            companyId={q.company_id}
+            contactId={q.contact_id}
+            dateFields={[
+              { label: "Issue date", value: q.issue_date },
+              { label: "Valid until", value: q.expiry_date },
+            ]}
+            lines={lines}
+            subtotalCents={q.subtotal_cents}
+            discountCents={q.discount_cents}
+            taxCents={q.tax_cents}
+            totalCents={q.total_cents}
+            notes={q.notes}
+          />
+        </PrintOverlay>
+      )}
 
       <div className="card">
         <table>

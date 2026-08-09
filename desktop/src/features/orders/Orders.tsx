@@ -5,6 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
+import { PrintableDocument } from "../../components/PrintableDocument";
+import { PrintOverlay } from "../../components/PrintOverlay";
 import { ORDER_STATUSES, type OrderInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
@@ -192,6 +194,7 @@ function OrderDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
   const queryClient = useQueryClient();
   const order = useQuery({ queryKey: ["order", id], queryFn: () => api.getOrder(id) });
   const [error, setError] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   const setStatus = useMutation({
     mutationFn: (status: string) => api.setOrderStatus(id, status),
@@ -237,7 +240,30 @@ function OrderDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
             Convert to invoice
           </button>
         )}
+        <button className="btn" onClick={() => setPrinting(true)}>
+          Print / Save as PDF
+        </button>
       </div>
+
+      {printing && (
+        <PrintOverlay onClose={() => setPrinting(false)}>
+          <PrintableDocument
+            kind="Sales Order"
+            documentNumber={o.order_number}
+            status={o.status}
+            currencyCode={o.currency_code}
+            companyId={o.company_id}
+            contactId={o.contact_id}
+            dateFields={[{ label: "Order date", value: o.order_date }]}
+            lines={lines}
+            subtotalCents={o.subtotal_cents}
+            discountCents={o.discount_cents}
+            taxCents={o.tax_cents}
+            totalCents={o.total_cents}
+            notes={o.notes}
+          />
+        </PrintOverlay>
+      )}
 
       <div className="card">
         <table>
