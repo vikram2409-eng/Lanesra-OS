@@ -53,9 +53,27 @@ const seed = {
   {id:'t2',title:'Prepare discovery workshop',relatedType:'Opportunity',relatedId:'o2',owner:'Noah Williams',due:'2026-08-04',priority:'Medium',status:'Open'},
   {id:'t3',title:'Review contract renewal',relatedType:'Contract',relatedId:'ct2',owner:'Maya Chen',due:'2026-08-07',priority:'High',status:'Open'},
   {id:'t4',title:'Send final invoice',relatedType:'Invoice',relatedId:'i1',owner:'Liam Singh',due:'2026-07-30',priority:'Low',status:'Completed'}
- ]
+ ],
+ workspace:{name:'Northstar Digital Solutions',address:'120 Bay Street, Suite 400',city:'Toronto, ON',phone:'416-555-0142',logo:''},
+ users:[
+  {id:'u1',name:'Maya Chen',email:'maya@northstar.example',role:'Administrator',status:'Active'},
+  {id:'u2',name:'Noah Williams',email:'noah@northstar.example',role:'Sales Rep',status:'Active'},
+  {id:'u3',name:'Liam Singh',email:'liam@northstar.example',role:'Sales Rep',status:'Active'}
+ ],
+ customFields:[
+  {id:'cf1',entity:'opportunities',key:'leadSource',label:'Lead Source',type:'select',options:'Referral|Website|Event|Cold Outreach|Partner',active:true}
+ ],
+ fieldRules:[
+  {id:'fr1',entity:'opportunities',fieldKey:'leadSource',triggerValue:'Won',effect:'require'}
+ ],
+ workflowRules:[
+  {id:'wf1',entity:'opportunities',toValue:'Won',taskTitle:'Kick off onboarding',daysOffset:2},
+  {id:'wf2',entity:'invoices',toValue:'Overdue',taskTitle:'Follow up on overdue invoice',daysOffset:0}
+ ],
+ numberingOverrides:{},
+ kpiPrefs:[]
 };
-const storeKey='lanesra-os-demo-v6';
+const storeKey='lanesra-os-demo-v7';
 let data = JSON.parse(localStorage.getItem(storeKey)||'null') || structuredClone(seed);
 let current='dashboard';
 let viewFilter=null;
@@ -63,6 +81,7 @@ const save=()=>localStorage.setItem(storeKey,JSON.stringify(data));
 const uid=()=>Math.random().toString(36).slice(2,10);
 const pad=(n,w=4)=>String(n).padStart(w,'0');
 const year=()=>new Date().getFullYear();
+ensureAdminData();
 const numberRules={
  companies:{field:'customerNumber',prefix:'CUS',year:false,width:4},
  contacts:{field:'contactNumber',prefix:'CON',year:false,width:4},
@@ -74,9 +93,14 @@ const numberRules={
  contracts:{field:'number',prefix:'CTR',year:true,width:3},
  tasks:{field:'taskNumber',prefix:'TSK',year:false,width:4}
 };
+function effectiveRule(key){
+ const base=numberRules[key]; if(!base)return null;
+ const o=(data.numberingOverrides||{})[key];
+ return o?{prefix:o.prefix,width:o.width||base.width,field:base.field,custom:true}:{...base,custom:false};
+}
 function nextNumber(key){
- const r=numberRules[key]; if(!r)return '';
- const base=r.year?`${r.prefix}-${year()}-`:`${r.prefix}-`;
+ const r=effectiveRule(key); if(!r)return '';
+ const base=r.custom?r.prefix:(r.year?`${r.prefix}-${year()}-`:`${r.prefix}-`);
  const nums=(data[key]||[]).map(x=>String(x[r.field]||'')).filter(v=>v.startsWith(base)).map(v=>Number(v.slice(base.length))).filter(Number.isFinite);
  return base+pad((nums.length?Math.max(...nums):0)+1,r.width);
 }
@@ -86,8 +110,78 @@ function ensureNumbers(){
  });
  save();
 }
+function ensureAdminData(){
+ if(!data.workspace)data.workspace={name:'Northstar Digital Solutions',address:'120 Bay Street, Suite 400',city:'Toronto, ON',phone:'416-555-0142',logo:''};
+ if(!data.users)data.users=[{id:'u1',name:'Maya Chen',email:'maya@northstar.example',role:'Administrator',status:'Active'}];
+ if(!data.customFields)data.customFields=[];
+ if(!data.fieldRules)data.fieldRules=[];
+ if(!data.workflowRules)data.workflowRules=[];
+ if(!data.numberingOverrides)data.numberingOverrides={};
+ if(!data.kpiPrefs)data.kpiPrefs=[];
+ save();
+}
 const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓'};
 const labels={dashboard:'Dashboard',companies:'Companies',contacts:'Contacts',pipeline:'Sales Pipeline',products:'Products',quotes:'Quotes',orders:'Orders',invoices:'Invoices',contracts:'Contracts',tasks:'Tasks'};
+// Admin panel: entities that support custom fields & business rules are every object with numbering.
+// Workflow automation is limited to the entities Tasks can relate to (see relatedTypeFor).
+let adminTab='profile';
+let cfEntity='companies';
+let ruleEntity='companies';
+let wfEntity='companies';
+const relatedTypeFor={companies:'Company',contacts:'Contact',opportunities:'Opportunity',quotes:'Quote',orders:'Order',invoices:'Invoice',contracts:'Contract'};
+function transitionFieldFor(key){return key==='opportunities'?'stage':'status'}
+function fieldsFnFor(key){return {companies:companyFields,contacts:contactFields,opportunities:opportunityFields,products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[key]}
+function statusOptionsFor(key){
+ const fn=fieldsFnFor(key); if(!fn)return [];
+ const f=fn().find(x=>x[0]===transitionFieldFor(key));
+ return f&&f[3]?f[3].split('|'):[];
+}
+function slugify(label){
+ const parts=String(label).trim().split(/[^a-zA-Z0-9]+/).filter(Boolean);
+ if(!parts.length)return 'field'+uid();
+ return parts[0].toLowerCase()+parts.slice(1).map(w=>w[0].toUpperCase()+w.slice(1).toLowerCase()).join('');
+}
+function customFieldsFor(entityKey){
+ return (data.customFields||[]).filter(f=>f.entity===entityKey&&f.active).map(f=>{
+  if(f.type==='boolean')return [f.key,f.label,'select','Yes|No'];
+  if(f.type==='select')return [f.key,f.label,'select',f.options||''];
+  if(f.type==='number')return [f.key,f.label,'number'];
+  if(f.type==='date')return [f.key,f.label,'date'];
+  return [f.key,f.label,'text'];
+ });
+}
+function fieldsFor(entityKey,builtinFn){return [...builtinFn(),...customFieldsFor(entityKey)]}
+function applyFieldRules(entityKey,form){
+ const tf=transitionFieldFor(entityKey);
+ const trigger=form.elements[tf]; if(!trigger)return;
+ const rules=(data.fieldRules||[]).filter(r=>r.entity===entityKey);
+ if(!rules.length)return;
+ function apply(){
+  const val=trigger.value;
+  rules.forEach(r=>{
+   const input=form.elements[r.fieldKey]; if(!input)return;
+   const wrap=input.closest('.field'); const label=wrap?.querySelector('label');
+   const match=val===r.triggerValue;
+   if(r.effect==='hide'){
+    if(wrap)wrap.style.display=match?'none':'';
+    input.required=false;
+   }else if(r.effect==='require'){
+    if(wrap)wrap.style.display='';
+    input.required=match;
+    if(label){const base=label.textContent.replace(/\s*\*$/,'');label.textContent=match?base+' *':base}
+   }
+  });
+ }
+ trigger.addEventListener('change',apply);
+ apply();
+}
+const KPI_DEFS=[
+ {key:'openPipeline',label:'Open pipeline',nav:'pipeline',filter:'open',value:()=>money(data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).reduce((s,o)=>s+Number(o.value||0),0))},
+ {key:'wonRevenue',label:'Won revenue',nav:'pipeline',filter:'won',value:()=>money(data.opportunities.filter(o=>o.stage==='Won').reduce((s,o)=>s+Number(o.value||0),0))},
+ {key:'outstandingInvoices',label:'Outstanding invoices',nav:'invoices',filter:'outstanding',value:()=>money(data.invoices.filter(i=>!['Paid','Cancelled'].includes(i.status)).reduce((s,i)=>s+docTotal(i),0))},
+ {key:'openTasks',label:'Open tasks',nav:'tasks',filter:'open',value:()=>String(data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).length)}
+];
+function visibleKpis(){const prefs=data.kpiPrefs||[]; return prefs.length?KPI_DEFS.filter(k=>prefs.includes(k.key)):KPI_DEFS}
 
 function landing(){
  document.title='Lanesra OS — Modern open-source sales management';
@@ -106,7 +200,7 @@ function landing(){
 
 function appShell(){
  document.title='Lanesra OS Demo';
- $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav">${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}</nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.12.0</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/changelog">Changelog</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
+ $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav">${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button></nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.13.0</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/changelog">Changelog</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
  document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.nav;viewFilter=null;renderView()});
  $('#resetDemo').onclick=()=>{data=structuredClone(seed);save();toast('Demo data restored');renderView()};
  const searchInput=$('#globalSearch'), searchBox=$('#searchResults');
@@ -146,28 +240,25 @@ function renderView(){
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
  if(current==='dashboard') return dashboard();
  if(current==='pipeline') return pipeline();
+ if(current==='admin') return adminPage();
  const configs={
- companies:{cols:[['customerNumber','Customer ID'],['name','Company'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status']],fields:companyFields},
- contacts:{cols:[['contactNumber','Contact ID'],['name','Contact'],['companyId','Company','company'],['role','Role'],['email','Email'],['status','Status']],fields:contactFields},
- products:{cols:[['productNumber','Product ID'],['name','Product / Service'],['type','Type'],['sku','SKU'],['price','Price','money'],['status','Status']],fields:productFields},
- quotes:{cols:[['number','Quote'],['companyId','Customer','company'],['opportunityId','Opportunity','opportunity'],['amount','Amount','docmoney'],['status','Status']],fields:quoteFields,document:true},
- orders:{cols:[['number','Order'],['companyId','Customer','company'],['quoteId','Quote','quote'],['amount','Amount','docmoney'],['status','Status']],fields:orderFields,document:true},
- invoices:{cols:[['number','Invoice'],['companyId','Customer','company'],['orderId','Order','order'],['amount','Amount','docmoney'],['status','Status']],fields:invoiceFields,document:true},
- contracts:{cols:[['number','Contract'],['companyId','Customer','company'],['title','Title'],['value','Value','money'],['status','Status'],['end','End date']],fields:contractFields},
- tasks:{cols:[['title','Task'],['relatedId','Related to','related'],['owner','Owner'],['due','Due'],['priority','Priority'],['status','Status']],fields:taskFields}
+ companies:{cols:[['customerNumber','Customer ID'],['name','Company'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status']],fields:()=>fieldsFor('companies',companyFields)},
+ contacts:{cols:[['contactNumber','Contact ID'],['name','Contact'],['companyId','Company','company'],['role','Role'],['email','Email'],['status','Status']],fields:()=>fieldsFor('contacts',contactFields)},
+ products:{cols:[['productNumber','Product ID'],['name','Product / Service'],['type','Type'],['sku','SKU'],['price','Price','money'],['status','Status']],fields:()=>fieldsFor('products',productFields)},
+ quotes:{cols:[['number','Quote'],['companyId','Customer','company'],['opportunityId','Opportunity','opportunity'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('quotes',quoteFields),document:true},
+ orders:{cols:[['number','Order'],['companyId','Customer','company'],['quoteId','Quote','quote'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('orders',orderFields),document:true},
+ invoices:{cols:[['number','Invoice'],['companyId','Customer','company'],['orderId','Order','order'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('invoices',invoiceFields),document:true},
+ contracts:{cols:[['number','Contract'],['companyId','Customer','company'],['title','Title'],['value','Value','money'],['status','Status'],['end','End date']],fields:()=>fieldsFor('contracts',contractFields)},
+ tasks:{cols:[['title','Task'],['relatedId','Related to','related'],['owner','Owner'],['due','Due'],['priority','Priority'],['status','Status']],fields:()=>fieldsFor('tasks',taskFields)}
  };
  tablePage(current,configs[current]);
 }
 function dashboard(){
- const openPipe=data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).reduce((s,o)=>s+Number(o.value||0),0);
- const won=data.opportunities.filter(o=>o.stage==='Won').reduce((s,o)=>s+Number(o.value||0),0);
- const outstanding=data.invoices.filter(i=>!['Paid','Cancelled'].includes(i.status)).reduce((s,i)=>s+docTotal(i),0);
- const openTasks=data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).length;
- $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">Northstar Digital Solutions</div><h1>Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div><div class="kpi-grid"><button class="kpi kpi-link" data-kpi-nav="pipeline" data-kpi-filter="open"><div class="kpi-label">Open pipeline</div><div class="kpi-value">${money(openPipe)}</div><span>View open opportunities →</span></button><button class="kpi kpi-link" data-kpi-nav="pipeline" data-kpi-filter="won"><div class="kpi-label">Won revenue</div><div class="kpi-value">${money(won)}</div><span>View won opportunities →</span></button><button class="kpi kpi-link" data-kpi-nav="invoices" data-kpi-filter="outstanding"><div class="kpi-label">Outstanding invoices</div><div class="kpi-value">${money(outstanding)}</div><span>View outstanding invoices →</span></button><button class="kpi kpi-link" data-kpi-nav="tasks" data-kpi-filter="open"><div class="kpi-label">Open tasks</div><div class="kpi-value">${openTasks}</div><span>View open tasks →</span></button></div><div class="grid-2"><section class="panel"><div class="panel-head"><h3>Pipeline snapshot</h3><button class="link-btn" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div>${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="deal"><div style="display:flex;justify-content:space-between"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</section><section class="panel"><div class="panel-head"><h3>Tasks requiring attention</h3><button class="link-btn" data-nav2="tasks" data-filter2="open">View tasks</button></div>${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="deal"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</section></div>`;
+ $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1>Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div><div class="kpi-grid">${visibleKpis().map(k=>`<button class="kpi kpi-link" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value()}</div><span>View ${k.label.toLowerCase()} →</span></button>`).join('')}</div><div class="grid-2"><section class="panel"><div class="panel-head"><h3>Pipeline snapshot</h3><button class="link-btn" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div>${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="deal"><div style="display:flex;justify-content:space-between"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</section><section class="panel"><div class="panel-head"><h3>Tasks requiring attention</h3><button class="link-btn" data-nav2="tasks" data-filter2="open">View tasks</button></div>${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="deal"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</section></div>`;
  document.querySelectorAll('[data-kpi-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.kpiNav;viewFilter=b.dataset.kpiFilter;renderView()});
  document.querySelectorAll('[data-nav2]').forEach(b=>b.onclick=()=>{current=b.dataset.nav2;viewFilter=b.dataset.filter2||null;renderView()});
  const quick=$('#quickNew'),menu=$('#quickMenu'); quick.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden};
- menu.querySelectorAll('[data-create]').forEach(b=>b.onclick=()=>{const k=b.dataset.create;menu.hidden=true;if(k==='opportunities')recordModal('opportunities',opportunityFields());else{const cfg={companies:companyFields,contacts:contactFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[k];recordModal(k,cfg())}});
+ menu.querySelectorAll('[data-create]').forEach(b=>b.onclick=()=>{const k=b.dataset.create;menu.hidden=true;if(k==='opportunities')recordModal('opportunities',fieldsFor('opportunities',opportunityFields));else{const fn={companies:companyFields,contacts:contactFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[k];recordModal(k,fieldsFor(k,fn))}});
  document.addEventListener('click',()=>{if(menu)menu.hidden=true},{once:true});
 }
 function companyFields(){return [['customerNumber','Customer ID','auto'],['name','Company name'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status','select','Lead|Prospect|Customer|Inactive']]}
@@ -184,8 +275,8 @@ function pipeline(){
  if(viewFilter==='open')stages=['Lead','Qualified','Discovery','Proposal','Negotiation'];
  if(viewFilter==='won')stages=['Won'];
  $('#view').innerHTML=`<div class="page-head"><div><h1>${viewFilter==='won'?'Won Opportunities':viewFilter==='open'?'Open Pipeline':'Sales Pipeline'}</h1><p class="muted">Opportunities are optional sales records linked to a customer and, when useful, a primary contact.</p></div><button class="btn btn-primary" id="addDeal">+ New opportunity</button></div><div class="kanban">${stages.map(s=>{const items=data.opportunities.filter(o=>o.stage===s);return `<div class="kanban-col"><div class="kanban-head"><span>${s}</span><span>${items.length}</span></div>${items.map(o=>`<article class="deal"><div class="deal-title">${o.title}</div><small class="muted">${companyName(o.companyId)}${o.contactId?' · '+contactName(o.contactId):''}</small><div class="deal-value">${money(o.value)}</div><small class="muted">${o.probability}% · ${o.close}</small><div class="actions"><button class="icon-btn" data-edit="${o.id}">Edit</button><button class="icon-btn" data-del="${o.id}">Delete</button></div></article>`).join('')}</div>`}).join('')}</div>`;
- $('#addDeal').onclick=()=>recordModal('opportunities',opportunityFields());
- document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('opportunities',opportunityFields(),byId('opportunities',b.dataset.edit)));
+ $('#addDeal').onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields));
+ document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields),byId('opportunities',b.dataset.edit)));
  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('opportunities',b.dataset.del));
 }
 function cellValue(r,c){const [key,,type]=c;if(type==='money')return money(r[key]);if(type==='docmoney')return money(docTotal(r));if(type==='company')return companyName(r[key]);if(type==='opportunity')return opportunityName(r[key]);if(type==='quote')return quoteName(r[key]);if(type==='order')return orderName(r[key]);if(type==='related')return relatedLabel(r);return badgeMaybe(r[key])}
@@ -209,8 +300,18 @@ function recordModal(key,fields,record={}){
  const form=`<form id="recordForm"><div class="form-grid">${fields.map(f=>fieldHtml(f,record)).join('')}${isDoc?lineItemsHtml(record.items||[]):''}</div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>`;
  modal(record.id?'Edit record':'Create record',form); $('[data-close]').onclick=closeModal;
  wireRelations(record); if(isDoc)wireLines();
+ applyFieldRules(key,$('#recordForm'));
  $('#recordForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());
- const relationError=validateRelationships(key,obj);if(relationError)return alert(relationError);fields.filter(f=>f[2]==='number').forEach(f=>obj[f[0]]=Number(obj[f[0]]||0));if(isDoc){obj.items=[...document.querySelectorAll('.line-row')].map(r=>({productId:$('.line-product',r).value,quantity:Number($('.line-qty',r).value||1),unitPrice:Number($('.line-price',r).value||0)})).filter(i=>i.productId);if(!obj.items.length)return alert('Add at least one product or service.')}if(record.id)Object.assign(byId(key,record.id),obj);else{const rule=numberRules[key];if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);data[key].unshift({id:uid(),...obj})}save();closeModal();toast('Record saved');renderView()};
+ const relationError=validateRelationships(key,obj);if(relationError)return alert(relationError);fields.filter(f=>f[2]==='number').forEach(f=>obj[f[0]]=Number(obj[f[0]]||0));if(isDoc){obj.items=[...document.querySelectorAll('.line-row')].map(r=>({productId:$('.line-product',r).value,quantity:Number($('.line-qty',r).value||1),unitPrice:Number($('.line-price',r).value||0)})).filter(i=>i.productId);if(!obj.items.length)return alert('Add at least one product or service.')}
+ const tf=transitionFieldFor(key), wasEdit=!!record.id, oldValue=wasEdit?record[tf]:null;
+ if(wasEdit)Object.assign(byId(key,record.id),obj);else{const rule=numberRules[key];if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);data[key].unshift({id:uid(),...obj})}
+ if(wasEdit&&relatedTypeFor[key]&&obj[tf]!==undefined&&obj[tf]!==oldValue){
+  (data.workflowRules||[]).filter(r=>r.entity===key&&r.toValue===obj[tf]).forEach(r=>{
+   const due=new Date();due.setDate(due.getDate()+Number(r.daysOffset||0));
+   data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:r.taskTitle,relatedType:relatedTypeFor[key],relatedId:record.id,owner:record.owner||'Unassigned',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open'});
+  });
+ }
+ save();closeModal();toast('Record saved');renderView()};
 }
 function wireRelations(record){
  const form=$('#recordForm');
@@ -278,12 +379,169 @@ function modal(title,body){document.body.insertAdjacentHTML('beforeend',`<div cl
 function closeModal(){document.getElementById('modal')?.remove()}
 function toast(msg){document.body.insertAdjacentHTML('beforeend',`<div class="toast">${msg}</div>`);setTimeout(()=>$('.toast')?.remove(),2200)}
 
+// ---- Admin panel ---------------------------------------------------------
+function entityLabel(key){return key==='opportunities'?labels.pipeline:labels[key]}
+function entityPills(keys,active){return `<div class="entity-tabs">${keys.map(k=>`<button class="pill-tab ${k===active?'active':''}" data-entity="${k}">${entityLabel(k)}</button>`).join('')}</div>`}
+function adminPage(){
+ document.title='Admin — Lanesra OS Demo';
+ const tabs=[['profile','Business profile'],['users','Users & roles'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['numbering','Numbering'],['kpis','Dashboard KPIs']];
+ $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>Admin</span></div><h1>Admin panel</h1><p class="muted">Configure your workspace, users and automation. Changes save immediately in this browser.</p></div></div><div class="tabs">${tabs.map(t=>`<button class="tab ${adminTab===t[0]?'active':''}" data-admin-tab="${t[0]}">${t[1]}</button>`).join('')}</div><div id="adminBody" class="admin-body"></div>`;
+ $('[data-clear-filter]').onclick=()=>{current='dashboard';viewFilter=null;renderView()};
+ document.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;renderAdminTab()});
+ renderAdminTab();
+}
+function renderAdminTab(){
+ const body=$('#adminBody');
+ ({profile:profileTab,users:usersTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,numbering:numberingTab,kpis:kpisTab}[adminTab])(body);
+}
+function profileTab(body){
+ const w=data.workspace;
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Business profile</h3><p class="muted">Shown across the workspace.</p><form id="profileForm" class="form-grid">
+ <div class="field"><label>Company name</label><input name="name" value="${w.name}" required></div>
+ <div class="field"><label>Phone</label><input name="phone" value="${w.phone||''}"></div>
+ <div class="field full"><label>Address</label><input name="address" value="${w.address||''}"></div>
+ <div class="field"><label>City / region</label><input name="city" value="${w.city||''}"></div>
+ <div class="field"><label>Logo URL (optional)</label><input name="logo" value="${w.logo||''}" placeholder="https://…"></div>
+ <div class="field full"><button class="btn btn-primary" type="submit">Save business profile</button></div>
+ </form></div>`;
+ $('#profileForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());Object.assign(data.workspace,obj);save();toast('Business profile updated');renderView()};
+}
+function userFields(){return [['name','Full name'],['email','Email'],['role','Role','select','Administrator|Sales Rep|Viewer'],['status','Status','select','Active|Inactive']]}
+function usersTab(body){
+ const arr=data.users;
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Users & roles</h3><button class="btn btn-primary" id="addUser">+ New user</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${badgeMaybe(u.status)}</td><td><div class="actions"><button class="icon-btn" data-edit="${u.id}">Edit</button><button class="icon-btn" data-del="${u.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No users yet</div>'}</div><p class="muted" style="margin-top:12px">Roles are illustrative in this browser demo — the desktop edition enforces per-role access control server-side.</p></div>`;
+ $('#addUser').onclick=()=>recordModal('users',userFields());
+ body.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('users',userFields(),byId('users',b.dataset.edit)));
+ body.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('users',b.dataset.del));
+}
+function fieldsTab(body){
+ const keys=Object.keys(numberRules);
+ const list=(data.customFields||[]).filter(f=>f.entity===cfEntity);
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Custom fields</h3><p class="muted">Add fields to any object. They appear automatically on that object's create/edit form.</p>
+ ${entityPills(keys,cfEntity)}
+ <div class="table-wrap"><table class="table"><thead><tr><th>Field</th><th>Type</th><th>Options</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(f=>`<tr><td>${f.label}</td><td>${f.type}</td><td>${f.type==='select'?f.options:'—'}</td><td>${badgeMaybe(f.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-field="${f.id}">Edit</button><button class="icon-btn" data-del-field="${f.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No custom fields on '+entityLabel(cfEntity)+' yet</div>'}</div>
+ <button class="btn btn-secondary" id="addField" style="margin-top:14px">+ New field</button>
+ </div>`;
+ body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{cfEntity=b.dataset.entity;renderAdminTab()});
+ $('#addField').onclick=()=>customFieldModal();
+ body.querySelectorAll('[data-edit-field]').forEach(b=>b.onclick=()=>customFieldModal(data.customFields.find(f=>f.id===b.dataset.editField)));
+ body.querySelectorAll('[data-del-field]').forEach(b=>b.onclick=()=>{if(confirm('Delete this custom field? Saved values remain on records but the field will no longer appear.')){data.customFields=data.customFields.filter(f=>f.id!==b.dataset.delField);save();toast('Field deleted');renderAdminTab()}});
+}
+function customFieldModal(field){
+ const isEdit=!!field;
+ const f=field||{entity:cfEntity,label:'',type:'text',options:'',active:true};
+ const body=`<form id="cfForm" class="form-grid">
+ <div class="field"><label>Field label</label><input name="label" value="${f.label}" required></div>
+ <div class="field"><label>Type</label><select name="type">${['text','number','date','boolean','select'].map(t=>`<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
+ <div class="field full" id="cfOptionsWrap" ${f.type==='select'?'':'style="display:none"'}><label>Options (separate with |)</label><input name="options" value="${f.options||''}" placeholder="Referral|Website|Event"></div>
+ <div class="field"><label>Active</label><select name="active"><option value="true" ${f.active?'selected':''}>Active</option><option value="false" ${!f.active?'selected':''}>Inactive</option></select></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save field':'Add field'}</button></div>
+ </form>`;
+ modal(isEdit?'Edit custom field':`New custom field on ${entityLabel(cfEntity)}`,body);
+ $('[data-close]').onclick=closeModal;
+ const cfForm=$('#cfForm'), typeSelect=cfForm.elements.type, optWrap=$('#cfOptionsWrap');
+ typeSelect.onchange=()=>{optWrap.style.display=typeSelect.value==='select'?'':'none'};
+ cfForm.onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(fd.type==='select'&&!fd.options.trim())return alert('Add at least one option, separated by |.');
+  if(isEdit){Object.assign(field,{label:fd.label,type:fd.type,options:fd.type==='select'?fd.options:'',active:fd.active==='true'})}
+  else{data.customFields.push({id:uid(),entity:cfEntity,key:slugify(fd.label),label:fd.label,type:fd.type,options:fd.type==='select'?fd.options:'',active:fd.active==='true'})}
+  save();closeModal();toast('Custom field saved');renderView();
+ };
+}
+function rulesTab(body){
+ const keys=Object.keys(numberRules);
+ const fieldsForEntity=(data.customFields||[]).filter(f=>f.entity===ruleEntity&&f.active);
+ const list=(data.fieldRules||[]).filter(r=>r.entity===ruleEntity);
+ const tf=transitionFieldFor(ruleEntity);
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Business rules</h3><p class="muted">Require or hide a custom field based on the record's ${tf}.</p>
+ ${entityPills(keys,ruleEntity)}
+ ${fieldsForEntity.length?`<div class="table-wrap"><table class="table"><thead><tr><th>When ${tf} is</th><th>Then</th><th>Field</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${badgeMaybe(r.triggerValue)}</td><td>${r.effect==='require'?'Require':'Hide'}</td><td>${(data.customFields.find(f=>f.entity===r.entity&&f.key===r.fieldKey)||{}).label||r.fieldKey}</td><td><div class="actions"><button class="icon-btn" data-del-rule="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No business rules on '+entityLabel(ruleEntity)+' yet</div>'}</div><button class="btn btn-secondary" id="addRule" style="margin-top:14px">+ New rule</button>`:`<div class="empty">Add an active custom field on ${entityLabel(ruleEntity)} first — business rules apply to custom fields.</div>`}
+ </div>`;
+ body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{ruleEntity=b.dataset.entity;renderAdminTab()});
+ $('#addRule')?.addEventListener('click',()=>ruleModal(fieldsForEntity,tf));
+ body.querySelectorAll('[data-del-rule]').forEach(b=>b.onclick=()=>{data.fieldRules=data.fieldRules.filter(r=>r.id!==b.dataset.delRule);save();toast('Rule deleted');renderAdminTab()});
+}
+function ruleModal(fieldsForEntity,tf){
+ const statusOpts=statusOptionsFor(ruleEntity);
+ const body=`<form id="ruleForm" class="form-grid">
+ <div class="field"><label>Field</label><select name="fieldKey">${fieldsForEntity.map(f=>`<option value="${f.key}">${f.label}</option>`).join('')}</select></div>
+ <div class="field"><label>When ${tf} is</label><select name="triggerValue">${statusOpts.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></div>
+ <div class="field"><label>Then</label><select name="effect"><option value="require">Require the field</option><option value="hide">Hide the field</option></select></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Add rule</button></div>
+ </form>`;
+ modal(`New business rule on ${entityLabel(ruleEntity)}`,body);
+ $('[data-close]').onclick=closeModal;
+ $('#ruleForm').onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());data.fieldRules.push({id:uid(),entity:ruleEntity,fieldKey:fd.fieldKey,triggerValue:fd.triggerValue,effect:fd.effect});save();closeModal();toast('Business rule added');renderView()};
+}
+function workflowTab(body){
+ const keys=Object.keys(relatedTypeFor);
+ const list=(data.workflowRules||[]).filter(r=>r.entity===wfEntity);
+ const tf=transitionFieldFor(wfEntity);
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Workflow automation</h3><p class="muted">Automatically create a follow-up task when a record's ${tf} changes to a chosen value.</p>
+ ${entityPills(keys,wfEntity)}
+ <div class="table-wrap"><table class="table"><thead><tr><th>When ${tf} becomes</th><th>Creates task</th><th>Due</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${badgeMaybe(r.toValue)}</td><td>${r.taskTitle}</td><td>${r.daysOffset==0?'Same day':r.daysOffset+' day(s) later'}</td><td><div class="actions"><button class="icon-btn" data-del-wf="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No workflow rules on '+entityLabel(wfEntity)+' yet</div>'}</div>
+ <button class="btn btn-secondary" id="addWf" style="margin-top:14px">+ New workflow rule</button>
+ </div>`;
+ body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{wfEntity=b.dataset.entity;renderAdminTab()});
+ $('#addWf').onclick=()=>workflowModal(tf);
+ body.querySelectorAll('[data-del-wf]').forEach(b=>b.onclick=()=>{data.workflowRules=data.workflowRules.filter(r=>r.id!==b.dataset.delWf);save();toast('Workflow rule deleted');renderAdminTab()});
+}
+function workflowModal(tf){
+ const statusOpts=statusOptionsFor(wfEntity);
+ const body=`<form id="wfForm" class="form-grid">
+ <div class="field"><label>When ${tf} becomes</label><select name="toValue">${statusOpts.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></div>
+ <div class="field full"><label>Task title</label><input name="taskTitle" required placeholder="e.g. Kick off onboarding"></div>
+ <div class="field"><label>Due (days after change)</label><input name="daysOffset" type="number" min="0" value="0"></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Add rule</button></div>
+ </form>`;
+ modal(`New workflow rule on ${entityLabel(wfEntity)}`,body);
+ $('[data-close]').onclick=closeModal;
+ $('#wfForm').onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());data.workflowRules.push({id:uid(),entity:wfEntity,toValue:fd.toValue,taskTitle:fd.taskTitle,daysOffset:Number(fd.daysOffset||0)});save();closeModal();toast('Workflow rule added');renderView()};
+}
+function numberingTab(body){
+ const keys=Object.keys(numberRules);
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Numbering</h3><p class="muted">Control the prefix and digit width used for each object's auto-generated ID. Existing numbers are not renumbered.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Object</th><th>Prefix</th><th>Digits</th><th>Example</th><th>Actions</th></tr></thead><tbody>${keys.map(k=>{
+  const base=numberRules[k];const o=data.numberingOverrides[k];
+  const prefix=o?o.prefix:(base.year?`${base.prefix}-${year()}-`:`${base.prefix}-`);
+  const width=o?o.width||base.width:base.width;
+  const example=prefix+pad(1,width);
+  const shownPrefix=o?o.prefix:base.prefix+(base.year?'-YYYY-':'-');
+  return `<tr><td>${entityLabel(k)}</td><td>${shownPrefix}</td><td>${width}</td><td>${example}${o?' <span class="badge">Custom</span>':''}</td><td><div class="actions"><button class="icon-btn" data-edit-num="${k}">Edit</button>${o?`<button class="icon-btn" data-reset-num="${k}">Reset</button>`:''}</div></td></tr>`;
+ }).join('')}</tbody></table></div>
+ </div>`;
+ body.querySelectorAll('[data-edit-num]').forEach(b=>b.onclick=()=>numberingModal(b.dataset.editNum));
+ body.querySelectorAll('[data-reset-num]').forEach(b=>b.onclick=()=>{delete data.numberingOverrides[b.dataset.resetNum];save();toast('Numbering format reset to default');renderAdminTab()});
+}
+function numberingModal(key){
+ const base=numberRules[key];const o=data.numberingOverrides[key];
+ const body=`<form id="numForm" class="form-grid">
+ <div class="field full"><label>Prefix (include any punctuation, e.g. "ACC-" or "ACC-ab")</label><input name="prefix" value="${o?o.prefix:base.prefix+(base.year?'-'+year()+'-':'-')}" required></div>
+ <div class="field"><label>Digits</label><input name="width" type="number" min="1" max="10" value="${o?o.width||base.width:base.width}"></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save format</button></div>
+ </form>`;
+ modal(`Numbering format — ${entityLabel(key)}`,body);
+ $('[data-close]').onclick=closeModal;
+ $('#numForm').onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());if(!fd.prefix.trim())return alert('Enter a prefix.');data.numberingOverrides[key]={prefix:fd.prefix.trim(),width:Math.min(10,Math.max(1,Number(fd.width||base.width)))};save();closeModal();toast('Numbering format updated');renderView()};
+}
+function kpisTab(body){
+ const prefs=data.kpiPrefs||[];
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Dashboard KPIs</h3><p class="muted">Choose which tiles show on the dashboard. Leave all unchecked to show every tile.</p>
+ <form id="kpiForm">${KPI_DEFS.map(k=>`<label class="checkbox-row"><input type="checkbox" name="kpi" value="${k.key}" ${prefs.includes(k.key)?'checked':''}> ${k.label}</label>`).join('')}
+ <div class="modal-actions" style="justify-content:flex-start;margin-top:16px"><button class="btn btn-primary" type="submit">Save selection</button> <button type="button" class="btn btn-secondary" id="showAllKpis">Show all</button></div>
+ </form></div>`;
+ $('#kpiForm').onsubmit=e=>{e.preventDefault();const checked=[...e.target.querySelectorAll('input[name="kpi"]:checked')].map(i=>i.value);data.kpiPrefs=checked;save();toast('Dashboard KPI selection saved');renderView()};
+ $('#showAllKpis').onclick=()=>{data.kpiPrefs=[];save();toast('Dashboard now shows every KPI');renderAdminTab()};
+}
+
 function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links"><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div class="nav-actions"><a class="btn btn-primary mobile-try" href="/demo">Try Online →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a><hr><a href="/roadmap">Roadmap</a><a href="/changelog">Changelog</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
 function publicFooter(){return `<footer class="footer"><div class="container footer-grid"><div><a class="brand footer-brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><span class="muted">Modern, open-source business software for small businesses.</span></div><div><strong>Product</strong><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a></div><div><strong>Development</strong><a href="/roadmap">Roadmap</a><a href="/changelog">Changelog</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div><strong>Creator</strong><a href="https://vikramgrover.com">VikramGrover.com</a></div></div><div class="container footer-bottom"><span>© 2026 Lanesra OS</span><span>Created by Vikram Grover</span></div></footer>`}
-function roadmapPage(){document.title='Roadmap — Lanesra OS';$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Built in public</div><h1>Product roadmap</h1><p>What is available now, what is being built next, and where Lanesra OS is heading.</p><div class="status-row"><span class="status-chip">Early Access v0.12.0</span><span class="muted">Last updated August 2026</span></div></div></section><section class="section roadmap-board"><div class="container roadmap-columns"><div><h2>Available now</h2>${['Companies and contacts','Sales pipeline','Products and services','Quotes, orders and invoices','Contracts and tasks','Interactive dashboards','Connected record relationships','Auto-generated numbering','Windows desktop installer (Early Access, unsigned)','Team Workspace mode for small teams (Docker)','Backup and restore','Self-service password change','PDF generation and printing','CSV import and export','Branding and print customization (logo, editable business profile)','Reports beyond the dashboard (revenue, win rate, AR aging, sales by owner)','Custom fields for Companies and Contacts','Conditional business rules for custom fields','Workflow automation (auto-created follow-up tasks on stage/status changes)'].map(x=>`<p class="roadmap-row done">✓ ${x}</p>`).join('')}</div><div id="desktop"><h2>Building now</h2>${['Code-signed installer','Task reminder notifications'].map(x=>`<p class="roadmap-row active">↻ ${x}</p>`).join('')}<p class="muted"><strong>Windows desktop edition: full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode, backup/restore, PDF printing, CSV import/export, and an admin-configurable layer (branding, reports, custom fields, business rules, workflow automation) all working.</strong> An unsigned installer is available now. <a href="https://github.com/vikram2409-eng/Lanesra-OS/releases" target="_blank" rel="noopener">Download it →</a> · <a href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View desktop source →</a></p></div><div><h2>Planned</h2>${['Projects and milestones','Inventory and suppliers','Recurring invoices','Customer portal','Plugin architecture'].map(x=>`<p class="roadmap-row">○ ${x}</p>`).join('')}</div></div></section></main>${publicFooter()}`;bindPublicNav()}
-function changelogPage(){document.title='Changelog — Lanesra OS';const releases=[['v0.12.0','August 2026','Branding, reports, custom fields, business rules & workflow automation',['Added business branding (logo, editable business profile) shown on the print letterhead for quotes, orders and invoices','Added reports beyond the dashboard: revenue by month, win rate by owner, lost reasons, AR aging and sales by owner','Added admin-defined custom fields on Companies and Contacts (text, number, date, yes/no, select), enforced both client- and server-side','Added conditional business rules that require or hide a custom field based on a record\'s status','Added Phase 1 workflow automation: auto-create a follow-up task when an Opportunity\'s stage or an Invoice\'s status changes']],['v0.11.0','August 2026','PDF printing & CSV import/export',['Added a browser-native "Print / Save as PDF" preview for quotes, orders and invoices, with business letterhead, line items and totals','Added CSV export on every list screen','Added CSV import for Companies and Contacts, validated row by row through the same rules as the manual forms']],['v0.10.0','August 2026','Team Workspace, backup & restore',['Added Team Workspace mode — a small team shares one server over the local network from browser tabs, with per-user sessions','Added whole-workspace backup and restore as a single file, safe to run against a live database','Added self-service password change from a "My account" screen']],['v0.9.0','August 2026','Desktop edition foundation published',['Published the Windows desktop edition source: Tauri v2 + Rust + SQLite','Implemented the full sales lifecycle on desktop — Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices','Added quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication','No packaged installer yet — desktop is available to build and run from source']],['v0.8.0','August 2026','Interactive navigation & public pages',['Made dashboard KPIs clickable with filtered drill-downs','Added a global Quick Create menu','Added mobile navigation while keeping Try Online prominent','Replaced Journey with Principles and added Compare and Download pages','Marked desktop downloads as Coming Soon','Fixed desktop sidebar navigation']],['v0.7.0','August 2026','Trust & product transparency',['Added Roadmap, Changelog and creator attribution','Added Person JSON-LD and updated discovery files']],['v0.6.0','August 2026','Record numbering & search',['Added automatically generated identifiers','Rebuilt global search as one stable result panel','Added keyboard shortcuts and wider search coverage']],['v0.5.0','July 2026','Lanesra OS rebrand',['Renamed BusinessOS to Lanesra OS','Updated product branding, metadata and documentation']],['v0.4.0','July 2026','Relationship integrity',['Added opportunity-to-contact relationship','Removed opportunity-to-contract relationship','Added company-filtered relationship dropdowns']],['v0.3.0','July 2026','Flexible sales flow',['Made opportunities optional for quotes','Made quotes optional for orders','Added products, services and line-item quantities']],['v0.2.0','June 2026','Connected sales MVP',['Added quotes, orders, invoices, contracts and dashboards','Connected core entities using clean relationships']],['v0.1.0','May 2026','First working prototype',['Launched the first browser-based MVP with sample data']]];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Release history</div><h1>Changelog</h1><p>Every meaningful improvement to Lanesra OS, documented publicly.</p><div class="status-row"><span class="status-chip">Latest: v0.12.0</span><span class="muted">Early Access</span></div></div></section><section class="section"><div class="container changelog-list">${releases.map(r=>`<article class="release" id="${r[0].replaceAll('.','-')}"><div class="release-meta"><span class="status-chip">${r[0]}</span><span>${r[1]}</span></div><div><h2>${r[2]}</h2><ul>${r[3].map(x=>`<li>${x}</li>`).join('')}</ul></div></article>`).join('')}</div></section></main>${publicFooter()}`;bindPublicNav()}
+function roadmapPage(){document.title='Roadmap — Lanesra OS';$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Built in public</div><h1>Product roadmap</h1><p>What is available now, what is being built next, and where Lanesra OS is heading.</p><div class="status-row"><span class="status-chip">Early Access v0.13.0</span><span class="muted">Last updated August 2026</span></div></div></section><section class="section roadmap-board"><div class="container roadmap-columns"><div><h2>Available now</h2>${['Companies and contacts','Sales pipeline','Products and services','Quotes, orders and invoices','Contracts and tasks','Interactive dashboards','Connected record relationships','Configurable numbering — admin-controlled prefix and digit width per object','Windows desktop installer (Early Access, unsigned)','Team Workspace mode for small teams (Docker)','Backup and restore','Self-service password change','PDF generation and printing','CSV import and export','Branding and print customization (logo, editable business profile with phone)','Reports beyond the dashboard, plus a simple custom report builder','Custom fields on every major object, not just Companies and Contacts','Conditional business rules on every object with custom fields','Workflow automation across Companies, Contacts, Opportunities, Quotes, Orders, Invoices and Contracts','Admin panel: user roles, dashboard KPI picker, and every configuration screen in one place'].map(x=>`<p class="roadmap-row done">✓ ${x}</p>`).join('')}</div><div id="desktop"><h2>Building now</h2>${['Code-signed installer','Task reminder notifications'].map(x=>`<p class="roadmap-row active">↻ ${x}</p>`).join('')}<p class="muted"><strong>Windows desktop edition: full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode, backup/restore, PDF printing, CSV import/export, and an admin-configurable layer (branding, reports, custom fields, business rules, workflow automation) all working.</strong> An unsigned installer is available now. <a href="https://github.com/vikram2409-eng/Lanesra-OS/releases" target="_blank" rel="noopener">Download it →</a> · <a href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View desktop source →</a></p></div><div><h2>Planned</h2>${['Projects and milestones','Inventory and suppliers','Recurring invoices','Customer portal','Plugin architecture'].map(x=>`<p class="roadmap-row">○ ${x}</p>`).join('')}</div></div></section></main>${publicFooter()}`;bindPublicNav()}
+function changelogPage(){document.title='Changelog — Lanesra OS';const releases=[['v0.13.0','August 2026','Admin panel: users, roles & flexible configuration everywhere',['Added an Admin panel with user & role management, moved out of the main navigation into one dedicated section','Added an editable business profile (name, phone, address, city, logo) shown across the workspace','Generalized custom fields from Companies/Contacts to every major object: Opportunities, Quotes, Orders, Invoices, Contracts, Products and Tasks','Generalized conditional business rules and workflow automation the same way, so any object with custom fields can use them','Added admin-configurable numbering: choose the prefix and digit width used for each object\'s auto-generated ID (e.g. "ACC-000001" or "ACC-ab0001")','Added a simple custom report builder: pick an object, group by any field including custom fields, and count or sum','Added a dashboard KPI picker so admins choose which tiles show, in what selection, for the whole workspace','Updated the online demo with a full working Admin panel — mirrors every feature above in the browser']],['v0.12.0','August 2026','Branding, reports, custom fields, business rules & workflow automation',['Added business branding (logo, editable business profile) shown on the print letterhead for quotes, orders and invoices','Added reports beyond the dashboard: revenue by month, win rate by owner, lost reasons, AR aging and sales by owner','Added admin-defined custom fields on Companies and Contacts (text, number, date, yes/no, select), enforced both client- and server-side','Added conditional business rules that require or hide a custom field based on a record\'s status','Added Phase 1 workflow automation: auto-create a follow-up task when an Opportunity\'s stage or an Invoice\'s status changes']],['v0.11.0','August 2026','PDF printing & CSV import/export',['Added a browser-native "Print / Save as PDF" preview for quotes, orders and invoices, with business letterhead, line items and totals','Added CSV export on every list screen','Added CSV import for Companies and Contacts, validated row by row through the same rules as the manual forms']],['v0.10.0','August 2026','Team Workspace, backup & restore',['Added Team Workspace mode — a small team shares one server over the local network from browser tabs, with per-user sessions','Added whole-workspace backup and restore as a single file, safe to run against a live database','Added self-service password change from a "My account" screen']],['v0.9.0','August 2026','Desktop edition foundation published',['Published the Windows desktop edition source: Tauri v2 + Rust + SQLite','Implemented the full sales lifecycle on desktop — Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices','Added quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication','No packaged installer yet — desktop is available to build and run from source']],['v0.8.0','August 2026','Interactive navigation & public pages',['Made dashboard KPIs clickable with filtered drill-downs','Added a global Quick Create menu','Added mobile navigation while keeping Try Online prominent','Replaced Journey with Principles and added Compare and Download pages','Marked desktop downloads as Coming Soon','Fixed desktop sidebar navigation']],['v0.7.0','August 2026','Trust & product transparency',['Added Roadmap, Changelog and creator attribution','Added Person JSON-LD and updated discovery files']],['v0.6.0','August 2026','Record numbering & search',['Added automatically generated identifiers','Rebuilt global search as one stable result panel','Added keyboard shortcuts and wider search coverage']],['v0.5.0','July 2026','Lanesra OS rebrand',['Renamed BusinessOS to Lanesra OS','Updated product branding, metadata and documentation']],['v0.4.0','July 2026','Relationship integrity',['Added opportunity-to-contact relationship','Removed opportunity-to-contract relationship','Added company-filtered relationship dropdowns']],['v0.3.0','July 2026','Flexible sales flow',['Made opportunities optional for quotes','Made quotes optional for orders','Added products, services and line-item quantities']],['v0.2.0','June 2026','Connected sales MVP',['Added quotes, orders, invoices, contracts and dashboards','Connected core entities using clean relationships']],['v0.1.0','May 2026','First working prototype',['Launched the first browser-based MVP with sample data']]];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Release history</div><h1>Changelog</h1><p>Every meaningful improvement to Lanesra OS, documented publicly.</p><div class="status-row"><span class="status-chip">Latest: v0.13.0</span><span class="muted">Early Access</span></div></div></section><section class="section"><div class="container changelog-list">${releases.map(r=>`<article class="release" id="${r[0].replaceAll('.','-')}"><div class="release-meta"><span class="status-chip">${r[0]}</span><span>${r[1]}</span></div><div><h2>${r[2]}</h2><ul>${r[3].map(x=>`<li>${x}</li>`).join('')}</ul></div></article>`).join('')}</div></section></main>${publicFooter()}`;bindPublicNav()}
 function principlesPage(){document.title='Principles — Lanesra OS';const principles=[['Own your data','Your customer and sales information should remain under your control—not trapped behind a subscription or vendor lock-in.'],['Offline first','Core work should continue even when the internet does not. The downloadable edition is being designed around local SQLite storage.'],['Relationships over spreadsheets','Customers, contacts, opportunities, quotes, orders and invoices stay linked so data remains clean and useful.'],['Simple before powerful','Every feature must reduce effort. Complexity is added only when it clearly improves the work.'],['Open by default','The product roadmap, changelog and source code are public so users can inspect how Lanesra evolves.'],['Business software deserves good design','Small businesses should not have to accept dated interfaces or confusing navigation to access serious capabilities.']];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">How Lanesra is designed</div><h1>Principles before features.</h1><p>The decisions behind Lanesra OS are guided by a small set of practical beliefs about ownership, simplicity and product quality.</p></div></section><section class="section"><div class="container principles-page-grid">${principles.map((p,i)=>`<article class="principle-card"><span>0${i+1}</span><h2>${p[0]}</h2><p>${p[1]}</p></article>`).join('')}</div></section><section class="section maintenance"><div class="container narrow"><div class="eyebrow">The business flow</div><h2>Connected by design.</h2><div class="flow-map"><strong>Customer</strong><span>→</span><div>Contacts<br>Opportunities <em>optional</em><br>Quotes <em>optional</em><br>Orders<br>Invoices<br>Contracts<br>Tasks</div></div></div></section></main>${publicFooter()}`;bindPublicNav()}
 function comparePage(){document.title='Compare — Lanesra OS';const rows=[['Runs without internet','Partial','No','No','Yes'],['Open source','No','No','No','Yes'],['Local database','No','No','No','Planned desktop'],['Mandatory subscription','No','Yes','Yes','No'],['Connected sales workflow','Manual','Limited','Advanced','Yes'],['Designed for small business','General','Yes','Enterprise','Yes'],['Self-owned business data','File-based','Cloud-hosted','Cloud-hosted','Yes']];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Choose with context</div><h1>Where Lanesra fits.</h1><p>A factual comparison for small businesses deciding between spreadsheets, cloud CRMs and a local-first open-source system.</p></div></section><section class="section"><div class="container compare-wrap"><table class="compare-table"><thead><tr><th>Capability</th><th>Excel</th><th>HubSpot</th><th>Salesforce</th><th class="lanesra-col">Lanesra OS</th></tr></thead><tbody>${rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${i===4?'lanesra-col':''}">${x}</td>`).join('')}</tr>`).join('')}</tbody></table><p class="compare-note">Comparisons are intentionally high-level. Product capabilities and commercial terms can change; review each vendor's current documentation before making a purchase decision.</p></div></section></main>${publicFooter()}`;bindPublicNav()}
-function downloadPage(){document.title='Download — Lanesra OS';$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Local-first desktop edition</div><h1>Download Lanesra OS.</h1><p>The independent desktop edition runs locally with no cloud account or mandatory internet connection. It is in active early development, with an Early Access Windows installer now available.</p></div></section><section class="section"><div class="container download-grid"><article class="download-card featured"><span class="status-chip">Early access — installer available</span><h2>Windows</h2><p>Tauri + Rust + SQLite desktop app with the full sales lifecycle, Contracts, Tasks and user management working: Companies, Contacts, Products, Opportunities, Quotes, Orders, Invoices, Contracts and Tasks — plus Team Workspace mode for small teams, backup and restore, PDF printing, CSV import/export, and an admin-configurable layer (branding, reports, custom fields, business rules, workflow automation). Unsigned .exe and .msi installers are on GitHub Releases (Windows will warn on first run since they aren't code-signed yet).</p><a class="btn btn-primary" href="https://github.com/vikram2409-eng/Lanesra-OS/releases" target="_blank" rel="noopener">Download for Windows</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View desktop source on GitHub</a></article><article class="download-card"><span class="status-chip">Planned</span><h2>macOS</h2><p>Apple silicon and Intel packaging will follow the Windows early-access release.</p><button class="btn btn-secondary" disabled>Planned</button></article><article class="download-card"><span class="status-chip">Planned</span><h2>Linux</h2><p>AppImage or Debian packaging is planned after the initial desktop release stabilizes.</p><button class="btn btn-secondary" disabled>Planned</button></article></div></section><section class="section maintenance"><div class="container narrow"><h2>What the desktop edition includes today</h2><div class="download-checks"><span>✓ No licence key</span><span>✓ No cloud account</span><span>✓ Standard SQLite database</span><span>✓ Offline from first launch</span><span>✓ Full sales lifecycle (quotes → orders → invoices)</span><span>✓ Contracts and tasks</span><span>✓ User management</span><span>✓ Team Workspace mode for small teams (Docker)</span><span>✓ Windows installer (unsigned, Early Access)</span><span>✓ Backup and restore</span><span>✓ Self-service password change</span><span>✓ PDF generation and printing</span><span>✓ CSV import and export</span><span>✓ Branding and print customization</span><span>✓ Reports beyond the dashboard</span><span>✓ Custom fields and business rules</span><span>✓ Workflow automation</span><span>✓ Open-source code</span><span>○ Code-signed installer — planned</span></div><div class="hero-actions"><a class="btn btn-secondary" href="/roadmap#desktop">View desktop roadmap</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View source on GitHub</a></div></div></section></main>${publicFooter()}`;bindPublicNav()}
+function downloadPage(){document.title='Download — Lanesra OS';$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Local-first desktop edition</div><h1>Download Lanesra OS.</h1><p>The independent desktop edition runs locally with no cloud account or mandatory internet connection. It is in active early development, with an Early Access Windows installer now available.</p></div></section><section class="section"><div class="container download-grid"><article class="download-card featured"><span class="status-chip">Early access — installer available</span><h2>Windows</h2><p>Tauri + Rust + SQLite desktop app with the full sales lifecycle, Contracts, Tasks and user management working: Companies, Contacts, Products, Opportunities, Quotes, Orders, Invoices, Contracts and Tasks — plus Team Workspace mode for small teams, backup and restore, PDF printing, CSV import/export, and an Admin panel covering branding, user roles, custom fields, business rules and workflow automation on every object, configurable ID formats and a dashboard KPI picker. Unsigned .exe and .msi installers are on GitHub Releases (Windows will warn on first run since they aren't code-signed yet).</p><a class="btn btn-primary" href="https://github.com/vikram2409-eng/Lanesra-OS/releases" target="_blank" rel="noopener">Download for Windows</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View desktop source on GitHub</a></article><article class="download-card"><span class="status-chip">Planned</span><h2>macOS</h2><p>Apple silicon and Intel packaging will follow the Windows early-access release.</p><button class="btn btn-secondary" disabled>Planned</button></article><article class="download-card"><span class="status-chip">Planned</span><h2>Linux</h2><p>AppImage or Debian packaging is planned after the initial desktop release stabilizes.</p><button class="btn btn-secondary" disabled>Planned</button></article></div></section><section class="section maintenance"><div class="container narrow"><h2>What the desktop edition includes today</h2><div class="download-checks"><span>✓ No licence key</span><span>✓ No cloud account</span><span>✓ Standard SQLite database</span><span>✓ Offline from first launch</span><span>✓ Full sales lifecycle (quotes → orders → invoices)</span><span>✓ Contracts and tasks</span><span>✓ User management</span><span>✓ Team Workspace mode for small teams (Docker)</span><span>✓ Windows installer (unsigned, Early Access)</span><span>✓ Backup and restore</span><span>✓ Self-service password change</span><span>✓ PDF generation and printing</span><span>✓ CSV import and export</span><span>✓ Branding and print customization</span><span>✓ Reports, plus a custom report builder</span><span>✓ Custom fields & business rules on every object</span><span>✓ Workflow automation</span><span>✓ Admin panel: user roles & configurable numbering</span><span>✓ Open-source code</span><span>○ Code-signed installer — planned</span></div><div class="hero-actions"><a class="btn btn-secondary" href="/roadmap#desktop">View desktop roadmap</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View source on GitHub</a></div></div></section></main>${publicFooter()}`;bindPublicNav()}
 function bindPublicNav(){document.querySelectorAll('.menu-toggle').forEach(btn=>{btn.onclick=()=>{const nav=btn.closest('.landing-nav');const drawer=nav.querySelector('.mobile-drawer');const open=drawer.hasAttribute('hidden');if(open)drawer.removeAttribute('hidden');else drawer.setAttribute('hidden','');btn.setAttribute('aria-expanded',String(open));btn.textContent=open?'×':'☰'}});document.querySelectorAll('.mobile-drawer a').forEach(a=>a.addEventListener('click',()=>{const drawer=a.closest('.mobile-drawer');drawer.setAttribute('hidden','');const btn=drawer.closest('.landing-nav').querySelector('.menu-toggle');btn.textContent='☰';btn.setAttribute('aria-expanded','false')}))}
 const path=location.pathname.replace(/\/$/,'')||'/'; if(path==='/demo')appShell();else if(path==='/roadmap')roadmapPage();else if(path==='/changelog')changelogPage();else if(path==='/principles'||path==='/journey'||path==='/our-story'||path==='/about')principlesPage();else if(path==='/compare')comparePage();else if(path==='/download')downloadPage();else landing();

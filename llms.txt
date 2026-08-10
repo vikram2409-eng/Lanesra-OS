@@ -4,10 +4,10 @@ Lanesra OS is a modern, open-source sales and business management application fo
 
 ## Current status
 
-- Early Access v0.12.0
-- Browser-based live demo is available
+- Early Access v0.13.0
+- Browser-based live demo is available, including a working Admin panel
 - Windows desktop edition is in early development: the source is public today (Tauri + Rust + SQLite) with the full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), backup/restore, self-service password change, PDF generation and printing, and CSV import/export all working. An unsigned Early Access Windows installer (.exe/.msi) is available from GitHub Releases; build and run from source is also supported.
-- Also shipped: an admin-configurable layer on top of the fixed schema - branding and print customization, reports beyond the dashboard (revenue, win rate, AR aging, sales by owner), custom fields on Companies and Contacts, conditional business rules over those fields, and workflow automation that auto-creates follow-up tasks on Opportunity/Invoice status changes.
+- Also shipped: an Admin panel giving admins broad control without code changes - user & role management, an editable business profile (name, phone, address, logo), branding and print customization, reports beyond the dashboard plus a simple custom report builder (group by any field including custom fields, count or sum), custom fields on every major object (Companies, Contacts, Opportunities, Quotes, Orders, Invoices, Contracts, Products, Tasks), conditional business rules and workflow automation across those same objects, admin-configurable ID/numbering formats per object (choose the prefix and digit width, e.g. "ACC-000001" or "ACC-ab0001"), and a dashboard KPI picker.
 - Next up: a code-signed installer and task reminder notifications.
 
 ## Core capabilities
@@ -18,9 +18,10 @@ Lanesra OS is a modern, open-source sales and business management application fo
 - Quotes, orders and invoices
 - Contracts
 - Tasks and activities
-- Sales dashboards
+- Sales dashboards with an admin-configurable KPI selection
 - Connected relationship validation
-- Automatic record numbering
+- Admin-configurable record numbering (custom prefix and digit width per object)
+- Admin panel: users & roles, business profile, custom fields, business rules, workflow automation, numbering, dashboard KPIs
 
 ## Product principles
 

@@ -158,3 +158,19 @@
  .flow-map{grid-template-columns:1fr;gap:8px;padding:24px}.flow-map>span{transform:rotate(90deg);width:28px}
  .download-card p{min-height:auto}
 }
+
+/* v0.13 admin panel */
+.admin-nav-btn{margin-top:8px;padding-top:15px!important;position:relative}
+.admin-nav-btn:before{content:"";position:absolute;top:0;left:12px;right:12px;border-top:1px solid rgba(148,163,184,.18)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.tab{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;color:#475569}
+.tab:hover{background:#f8fafc}
+.tab.active{background:#111827;color:#fff;border-color:#111827}
+.admin-body{display:flex;flex-direction:column;gap:18px}
+.entity-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.pill-tab{border:1px solid var(--line);background:#f9fafb;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:700;cursor:pointer;color:#475569}
+.pill-tab:hover{background:#f1f5f9}
+.pill-tab.active{background:#eef2ff;color:#4338ca;border-color:#c7d2fe}
+.checkbox-row{display:flex;align-items:center;gap:10px;padding:9px 0;font-weight:600;font-size:14px}
+.checkbox-row input{width:16px;height:16px}
+@media(max-width:620px){.tabs,.entity-tabs{gap:5px}.tab{padding:8px 11px;font-size:12px}}
