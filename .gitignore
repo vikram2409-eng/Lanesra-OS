@@ -1,0 +1,15 @@
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Local env files
+.env
+.env.local
+
+# Logs
+*.log

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/vikram2409-eng/Lanesra-OS/security/advisories/new
+    about: Please report vulnerabilities privately rather than as a public issue - see SECURITY.md
+  - name: Product roadmap
+    url: https://lanesraos.com/roadmap
+    about: Check what's already planned or in progress before filing a feature request

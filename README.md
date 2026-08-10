@@ -1,6 +1,13 @@
 # Lanesra OS
 
+[![License: MIT](https://img.shields.io/github/license/vikram2409-eng/Lanesra-OS)](LICENSE)
+[![Latest desktop release](https://img.shields.io/github/v/release/vikram2409-eng/Lanesra-OS?include_prereleases&label=desktop%20release)](https://github.com/vikram2409-eng/Lanesra-OS/releases)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Try the demo](https://img.shields.io/badge/try%20it-online%20demo-4f7cff)](https://lanesraos.com/demo)
+
 Modern, open-source sales and business management software for small businesses. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
+
+**[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
 ## Features
 
@@ -60,3 +67,11 @@ python3 -m http.server 8080
 ```
 
 Then open `http://localhost:8080`.
+
+## Contributing
+
+Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for dev setup, the branch/PR workflow, and what to verify before opening a pull request. Please report security issues privately per **[SECURITY.md](SECURITY.md)** rather than as a public issue. This project follows the **[Contributor Covenant](CODE_OF_CONDUCT.md)**.
+
+## License
+
+MIT — see **[LICENSE](LICENSE)**. Created by [Vikram Grover](https://vikramgrover.com).

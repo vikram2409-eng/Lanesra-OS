@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that Lanesra OS doesn't support today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+      description: Your proposed solution, if you have one in mind. It's fine to just describe the outcome you want instead.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds you're using today, or other approaches you thought about.
+  - type: checkboxes
+    id: checked-roadmap
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the [roadmap](https://lanesraos.com/roadmap) and this isn't already planned or in progress
+        - label: I searched existing issues and this isn't a duplicate
