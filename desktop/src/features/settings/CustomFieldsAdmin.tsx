@@ -8,10 +8,9 @@ import {
   entityTypeLabel,
   type CustomFieldDefinition,
   type CustomFieldDefinitionInput,
-  type CustomFieldEntityType,
 } from "../../lib/types";
 
-function emptyInput(entityType: CustomFieldEntityType): CustomFieldDefinitionInput {
+function emptyInput(entityType: string): CustomFieldDefinitionInput {
   return { entity_type: entityType, label: "", field_type: "text", options: [], required: false, show_in_list: false, sort_order: 0 };
 }
 
@@ -27,10 +26,19 @@ function textToOptions(text: string): string[] {
 }
 
 export function CustomFieldsAdmin() {
-  const [entityType, setEntityType] = useState<CustomFieldEntityType>("Company");
+  const [entityType, setEntityType] = useState<string>("Company");
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Active custom objects appear as extra tabs alongside the nine built-in
+  // entity types - a custom object's fields go through this exact same
+  // admin screen, not a separate one.
+  const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
+  const entityTabs: { key: string; label: string }[] = [
+    ...CUSTOM_FIELD_ENTITY_TYPES.map((t) => ({ key: t as string, label: entityTypeLabel(t) })),
+    ...(customObjects.data ?? []).map((o) => ({ key: o.key, label: o.plural_label })),
+  ];
 
   const defs = useQuery({
     queryKey: ["customFieldDefinitions", entityType, "all"],
@@ -63,17 +71,17 @@ export function CustomFieldsAdmin() {
       </p>
 
       <div className="tab-row">
-        {CUSTOM_FIELD_ENTITY_TYPES.map((t) => (
+        {entityTabs.map((t) => (
           <button
-            key={t}
-            className={`tab${entityType === t ? " active" : ""}`}
+            key={t.key}
+            className={`tab${entityType === t.key ? " active" : ""}`}
             onClick={() => {
-              setEntityType(t);
+              setEntityType(t.key);
               setCreating(false);
               setEditingId(null);
             }}
           >
-            {entityTypeLabel(t)}
+            {t.label}
           </button>
         ))}
       </div>
@@ -101,7 +109,11 @@ export function CustomFieldsAdmin() {
       )}
 
       {defs.isLoading && <p>Loading...</p>}
-      {defs.data && defs.data.length === 0 && <p className="empty-state">No custom fields defined for {entityTypeLabel(entityType)} yet.</p>}
+      {defs.data && defs.data.length === 0 && (
+        <p className="empty-state">
+          No custom fields defined for {entityTabs.find((t) => t.key === entityType)?.label ?? entityType} yet.
+        </p>
+      )}
       {defs.data && defs.data.length > 0 && !creating && !editing && (
         <table>
           <thead>
@@ -141,7 +153,7 @@ function DefinitionForm({
   onDone,
   onCancel,
 }: {
-  entityType: CustomFieldEntityType;
+  entityType: string;
   onDone: () => void;
   onCancel: () => void;
 }) {

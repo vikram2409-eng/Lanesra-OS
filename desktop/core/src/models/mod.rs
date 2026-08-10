@@ -4,6 +4,8 @@ pub mod company;
 pub mod contact;
 pub mod contract;
 pub mod custom_field;
+pub mod custom_object;
+pub mod custom_record;
 pub mod custom_report;
 pub mod dashboard;
 pub mod field_rule;

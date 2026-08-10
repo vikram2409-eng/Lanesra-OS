@@ -725,7 +725,10 @@ export interface CustomFieldDefinition {
 }
 
 export interface CustomFieldDefinitionInput {
-  entity_type: CustomFieldEntityType;
+  // A built-in entity type or an active custom object's key (see
+  // CustomObjectDefinition) - custom objects widen this beyond the fixed
+  // CustomFieldEntityType union, so it's plain `string` here.
+  entity_type: string;
   label: string;
   field_type: CustomFieldType;
   options: string[];
@@ -774,7 +777,9 @@ export function statusesForEntity(entityType: string): readonly string[] {
     case "Contract": return CONTRACT_STATUSES;
     case "Task": return TASK_STATUSES;
     case "Product": return ["true", "false"];
-    default: return [];
+    // Anything else reaching this point is a custom object - they all
+    // share the same fixed status set (CUSTOM_RECORD_STATUSES).
+    default: return CUSTOM_RECORD_STATUSES;
   }
 }
 
@@ -802,7 +807,7 @@ export interface FieldRule {
 }
 
 export interface FieldRuleInput {
-  entity_type: CustomFieldEntityType;
+  entity_type: string;
   trigger_field_source: TriggerSource;
   trigger_field_key: string;
   operator: RuleOperator;
@@ -919,7 +924,7 @@ export interface CustomReport {
 
 export interface CustomReportInput {
   name: string;
-  entity_type: CustomFieldEntityType;
+  entity_type: string;
   group_by_source: ReportGroupBySource;
   group_by_field: string;
   aggregate: ReportAggregate;
@@ -931,4 +936,68 @@ export type CustomReportUpdate = CustomReportInput;
 export interface CustomReportRow {
   group: string;
   value: number;
+}
+
+// Admin extensibility (spec §20.2): an admin-defined custom object - a
+// whole new business object type, not just a field on an existing one.
+// A custom object's `key` becomes an entity_type value everywhere custom
+// fields, business rules and the custom report builder already accept a
+// string entity_type - see CustomFieldsAdmin/FieldRulesAdmin, which list
+// active custom objects as extra tabs alongside the nine built-in types.
+export const CUSTOM_RECORD_STATUSES = ["Active", "Inactive", "Archived"] as const;
+export type CustomRecordStatus = (typeof CUSTOM_RECORD_STATUSES)[number];
+
+export interface CustomObjectDefinition {
+  id: string;
+  workspace_id: string;
+  key: string;
+  singular_label: string;
+  plural_label: string;
+  icon: string;
+  prefix: string;
+  digits: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomObjectDefinitionInput {
+  singular_label: string;
+  plural_label: string;
+  icon: string;
+  prefix: string;
+  digits: number;
+}
+
+export interface CustomObjectDefinitionUpdate extends CustomObjectDefinitionInput {
+  is_active: boolean;
+}
+
+export interface CustomRecord {
+  id: string;
+  workspace_id: string;
+  object_key: string;
+  display_number: string;
+  primary_name: string;
+  status: string;
+  owner_user_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface CustomRecordInput {
+  object_key: string;
+  primary_name: string;
+  status: string;
+  owner_user_id: string | null;
+  notes: string | null;
+}
+
+export interface CustomRecordUpdate {
+  primary_name: string;
+  status: string;
+  owner_user_id: string | null;
+  notes: string | null;
 }

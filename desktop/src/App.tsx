@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { AppShell, type Section } from "./components/AppShell";
 import { FirstRun } from "./features/firstRun/FirstRun";
@@ -15,6 +16,7 @@ import { Contracts } from "./features/contracts/Contracts";
 import { Tasks } from "./features/tasks/Tasks";
 import { Reports } from "./features/reports/Reports";
 import { AdminPanel } from "./features/settings/Settings";
+import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
 import { api } from "./lib/api";
 import type { User, Workspace } from "./lib/types";
@@ -75,8 +77,29 @@ export function App() {
     setBoot({ phase: "login", workspace: (boot as { workspace: Workspace }).workspace });
   }
 
+  return <Ready section={section} setSection={setSection} user={boot.user} onLogout={handleLogout} />;
+}
+
+/** Split out so its hooks (the active-custom-objects query) only run once
+ * a workspace and a signed-in user actually exist. */
+function Ready({
+  section,
+  setSection,
+  user,
+  onLogout,
+}: {
+  section: Section;
+  setSection: (s: Section) => void;
+  user: User;
+  onLogout: () => void;
+}) {
+  const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
+  const activeCustomObject = section.startsWith("custom:")
+    ? customObjects.data?.find((o) => o.key === section.slice("custom:".length))
+    : undefined;
+
   return (
-    <AppShell active={section} onNavigate={setSection} user={boot.user} onLogout={handleLogout}>
+    <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
       {section === "dashboard" && <Dashboard onNavigate={setSection} />}
       {section === "companies" && <Companies />}
       {section === "contacts" && <Contacts />}
@@ -86,10 +109,11 @@ export function App() {
       {section === "orders" && <Orders />}
       {section === "invoices" && <Invoices />}
       {section === "contracts" && <Contracts />}
-      {section === "tasks" && <Tasks currentUserId={boot.user.id} />}
-      {section === "reports" && <Reports isAdmin={boot.user.roles.includes("Administrator")} />}
+      {section === "tasks" && <Tasks currentUserId={user.id} />}
+      {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
       {section === "admin" && <AdminPanel />}
-      {section === "account" && <Account user={boot.user} />}
+      {section === "account" && <Account user={user} />}
+      {activeCustomObject && <CustomObjectRecords definition={activeCustomObject} />}
     </AppShell>
   );
 }

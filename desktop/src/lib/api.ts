@@ -38,8 +38,13 @@ import type {
   CustomFieldDefinition,
   CustomFieldDefinitionInput,
   CustomFieldDefinitionUpdate,
-  CustomFieldEntityType,
   CustomFieldValues,
+  CustomObjectDefinition,
+  CustomObjectDefinitionInput,
+  CustomObjectDefinitionUpdate,
+  CustomRecord,
+  CustomRecordInput,
+  CustomRecordUpdate,
   CustomReport,
   CustomReportInput,
   CustomReportRow,
@@ -212,7 +217,7 @@ export const api = {
   reportArAging: (asOfDate: string | null) => call<ArAgingBucket[]>("report_ar_aging", { asOfDate }),
   reportSalesByOwner: (range: ReportRange) => call<SalesByOwner[]>("report_sales_by_owner", { range }),
 
-  listCustomFieldDefinitions: (entityType: CustomFieldEntityType, activeOnly: boolean) =>
+  listCustomFieldDefinitions: (entityType: string, activeOnly: boolean) =>
     call<CustomFieldDefinition[]>("list_custom_field_definitions", { entityType, activeOnly }),
   createCustomFieldDefinition: (input: CustomFieldDefinitionInput) =>
     call<CustomFieldDefinition>("create_custom_field_definition", { input }),
@@ -220,11 +225,11 @@ export const api = {
     call<CustomFieldDefinition>("update_custom_field_definition", { id, input }),
   deactivateCustomFieldDefinition: (id: string) =>
     call<CustomFieldDefinition>("deactivate_custom_field_definition", { id }),
-  setCustomFieldValues: (entityType: CustomFieldEntityType, entityId: string, values: CustomFieldValues) =>
+  setCustomFieldValues: (entityType: string, entityId: string, values: CustomFieldValues) =>
     call<void>("set_custom_field_values", { entityType, entityId, values }),
   getCustomFieldValues: (entityId: string) => call<CustomFieldValues>("get_custom_field_values", { entityId }),
 
-  listFieldRules: (entityType: CustomFieldEntityType, activeOnly: boolean) =>
+  listFieldRules: (entityType: string, activeOnly: boolean) =>
     call<FieldRule[]>("list_field_rules", { entityType, activeOnly }),
   createFieldRule: (input: FieldRuleInput) => call<FieldRule>("create_field_rule", { input }),
   updateFieldRule: (id: string, input: FieldRuleUpdate) => call<FieldRule>("update_field_rule", { id, input }),
@@ -245,6 +250,21 @@ export const api = {
     call<CustomReport>("update_custom_report", { id, input }),
   deleteCustomReport: (id: string) => call<void>("delete_custom_report", { id }),
   runCustomReport: (id: string) => call<CustomReportRow[]>("run_custom_report", { id }),
+
+  listCustomObjects: (activeOnly: boolean) => call<CustomObjectDefinition[]>("list_custom_objects", { activeOnly }),
+  createCustomObject: (input: CustomObjectDefinitionInput) =>
+    call<CustomObjectDefinition>("create_custom_object", { input }),
+  updateCustomObject: (id: string, input: CustomObjectDefinitionUpdate) =>
+    call<CustomObjectDefinition>("update_custom_object", { id, input }),
+  deactivateCustomObject: (id: string) => call<CustomObjectDefinition>("deactivate_custom_object", { id }),
+  deleteCustomObject: (id: string) => call<void>("delete_custom_object", { id }),
+
+  listCustomRecords: (objectKey: string) => call<CustomRecord[]>("list_custom_records", { objectKey }),
+  getCustomRecord: (id: string) => call<CustomRecord>("get_custom_record", { id }),
+  createCustomRecord: (input: CustomRecordInput) => call<CustomRecord>("create_custom_record", { input }),
+  updateCustomRecord: (id: string, input: CustomRecordUpdate) =>
+    call<CustomRecord>("update_custom_record", { id, input }),
+  archiveCustomRecord: (id: string) => call<CustomRecord>("archive_custom_record", { id }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

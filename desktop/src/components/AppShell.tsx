@@ -1,5 +1,9 @@
-import type { User } from "../lib/types";
+import type { CustomObjectDefinition, User } from "../lib/types";
 
+// Custom-object sections are dynamic (admin-defined at runtime), so their
+// key is a template literal - `custom:<objectKey>` - rather than one more
+// fixed union member. App.tsx parses this prefix to know when to render
+// CustomObjectRecords instead of a hardcoded screen.
 export type Section =
   | "dashboard"
   | "companies"
@@ -13,7 +17,10 @@ export type Section =
   | "tasks"
   | "reports"
   | "admin"
-  | "account";
+  | "account"
+  | `custom:${string}`;
+
+export const customObjectSection = (key: string): Section => `custom:${key}`;
 
 const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "dashboard", label: "Dashboard" },
@@ -38,12 +45,14 @@ export function AppShell({
   onNavigate,
   user,
   onLogout,
+  customObjects,
   children,
 }: {
   active: Section;
   onNavigate: (section: Section) => void;
   user: User;
   onLogout: () => void;
+  customObjects: CustomObjectDefinition[];
   children: React.ReactNode;
 }) {
   const isAdmin = user.roles.includes("Administrator");
@@ -59,6 +68,16 @@ export function AppShell({
             onClick={() => onNavigate(item.section)}
           >
             {item.label}
+          </button>
+        ))}
+        {customObjects.length > 0 && <div className="sidebar-divider" />}
+        {customObjects.map((o) => (
+          <button
+            key={o.key}
+            className={`nav-item${active === customObjectSection(o.key) ? " active" : ""}`}
+            onClick={() => onNavigate(customObjectSection(o.key))}
+          >
+            {o.icon} {o.plural_label}
           </button>
         ))}
       </nav>

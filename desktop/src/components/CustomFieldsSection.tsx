@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { effectsFor } from "../lib/fieldRules";
-import type { CustomFieldEntityType, CustomFieldValues } from "../lib/types";
+import type { CustomFieldValues } from "../lib/types";
 
 /**
  * Renders the active custom fields for an entity type inside whatever
@@ -22,7 +22,7 @@ export function CustomFieldsSection({
   values,
   onChange,
 }: {
-  entityType: CustomFieldEntityType;
+  entityType: string;
   status: string;
   values: CustomFieldValues;
   onChange: (values: CustomFieldValues) => void;

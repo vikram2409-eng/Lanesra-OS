@@ -1,0 +1,215 @@
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { api, ApiError } from "../../lib/api";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import {
+  CUSTOM_RECORD_STATUSES,
+  type CustomFieldValues,
+  type CustomObjectDefinition,
+  type CustomRecordInput,
+} from "../../lib/types";
+
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+/**
+ * Generic list/create/edit screen for records of one admin-defined custom
+ * object (spec §20.2). Mounted once per active custom object from App.tsx,
+ * the same way Products/Contracts/Tasks etc. are - the only difference is
+ * `objectKey`/`definition` come from data instead of being hardcoded, so
+ * one component serves every custom object rather than one per type.
+ */
+export function CustomObjectRecords({ definition }: { definition: CustomObjectDefinition }) {
+  const [view, setView] = useState<View>({ mode: "list" });
+  const queryClient = useQueryClient();
+  const records = useQuery({
+    queryKey: ["customRecords", definition.key],
+    queryFn: () => api.listCustomRecords(definition.key),
+  });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["customRecords", definition.key] });
+  }
+
+  const ownerName = (id: string | null): string =>
+    id ? users.data?.find((u) => u.id === id)?.display_name ?? "—" : "—";
+
+  if (view.mode !== "list") {
+    return (
+      <RecordForm
+        definition={definition}
+        recordId={view.mode === "edit" ? view.id : undefined}
+        onDone={() => {
+          invalidate();
+          setView({ mode: "list" });
+        }}
+        onCancel={() => setView({ mode: "list" })}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <div className="toolbar">
+        <h2 style={{ margin: 0 }}>
+          {definition.icon} {definition.plural_label}
+        </h2>
+        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          + New {definition.singular_label.toLowerCase()}
+        </button>
+      </div>
+      {records.isLoading && <p>Loading...</p>}
+      {records.data && records.data.length === 0 && (
+        <p className="empty-state">No {definition.plural_label.toLowerCase()} yet.</p>
+      )}
+      {records.data && records.data.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Number</th>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {records.data.map((r) => (
+              <tr key={r.id}>
+                <td>{r.display_number}</td>
+                <td>{r.primary_name}</td>
+                <td>
+                  <span className={`badge${r.status === "Active" ? " badge-success" : ""}`}>{r.status}</span>
+                </td>
+                <td>{ownerName(r.owner_user_id)}</td>
+                <td>
+                  <button className="btn" onClick={() => setView({ mode: "edit", id: r.id })}>
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function RecordForm({
+  definition,
+  recordId,
+  onDone,
+  onCancel,
+}: {
+  definition: CustomObjectDefinition;
+  recordId?: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+  const existing = useQuery({
+    queryKey: ["customRecord", recordId],
+    queryFn: () => api.getCustomRecord(recordId as string),
+    enabled: !!recordId,
+  });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", recordId],
+    queryFn: () => api.getCustomFieldValues(recordId as string),
+    enabled: !!recordId,
+  });
+
+  const [input, setInput] = useState<CustomRecordInput>({
+    object_key: definition.key,
+    primary_name: "",
+    status: "Active",
+    owner_user_id: null,
+    notes: null,
+  });
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
+  const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== recordId) {
+    const { primary_name, status, owner_user_id, notes } = existing.data;
+    setInput({ object_key: definition.key, primary_name, status, owner_user_id, notes });
+    setCustomValues(existingCustomFields.data);
+    setLoadedFor(recordId);
+  }
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const record = recordId
+        ? await api.updateCustomRecord(recordId, {
+            primary_name: input.primary_name,
+            status: input.status,
+            owner_user_id: input.owner_user_id,
+            notes: input.notes,
+          })
+        : await api.createCustomRecord(input);
+      await api.setCustomFieldValues(definition.key, record.id, customValues);
+      return record;
+    },
+    onSuccess: onDone,
+    onError: (err) => setError(err instanceof ApiError ? err.message : `Could not save this ${definition.singular_label.toLowerCase()}`),
+  });
+
+  return (
+    <div>
+      <h2>
+        {recordId ? `Edit ${definition.singular_label.toLowerCase()}` : `New ${definition.singular_label.toLowerCase()}`}
+      </h2>
+      {error && <div className="error-banner">{error}</div>}
+      <form
+        className="form-grid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <div className="form-field full">
+          <label>Name</label>
+          <input value={input.primary_name} onChange={(e) => setInput({ ...input, primary_name: e.target.value })} required />
+        </div>
+        <div className="form-field">
+          <label>Status</label>
+          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+            {CUSTOM_RECORD_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Owner</label>
+          <select
+            value={input.owner_user_id ?? ""}
+            onChange={(e) => setInput({ ...input, owner_user_id: e.target.value || null })}
+          >
+            <option value="">— Unassigned —</option>
+            {(users.data ?? []).map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.display_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field full">
+          <label>Notes</label>
+          <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
+        </div>
+        <CustomFieldsSection entityType={definition.key} status={input.status} values={customValues} onChange={setCustomValues} />
+        <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={save.isPending}>
+            Save
+          </button>
+          <button className="btn" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

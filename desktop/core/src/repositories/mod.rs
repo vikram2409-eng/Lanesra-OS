@@ -3,6 +3,8 @@ pub mod company_repo;
 pub mod contact_repo;
 pub mod contract_repo;
 pub mod custom_field_repo;
+pub mod custom_object_repo;
+pub mod custom_record_repo;
 pub mod custom_report_repo;
 pub mod field_rule_repo;
 pub mod invoice_repo;
