@@ -2,6 +2,7 @@
 name = "lanesra-os"
 version = "0.3.0"
 description = "Lanesra OS Desktop - local-first business management application"
+license = "MIT"
 edition = "2021"
 rust-version = "1.77"
 
