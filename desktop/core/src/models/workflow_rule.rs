@@ -1,9 +1,22 @@
 use serde::{Deserialize, Serialize};
 
 /// Entities whose stage/status transitions can trigger a workflow rule -
-/// see the migration's header comment for why Phase 1 is scoped to these
-/// two.
-pub const WORKFLOW_ENTITY_TYPES: &[&str] = &["Opportunity", "Invoice"];
+/// every entity with a status-like field except Product, which only has a
+/// boolean `is_active` and no meaningful "transition" to automate on.
+pub const WORKFLOW_ENTITY_TYPES: &[&str] = &[
+    "Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task",
+];
+
+/// Which field's value change fires a workflow rule for this entity type -
+/// `stage` for Opportunity (the field that actually flows through the
+/// sales pipeline; `status` there only tracks Open/Won/Lost/Archived,
+/// which overlaps stage's own Won/Lost), `status` for everything else.
+pub fn transition_field_for(entity_type: &str) -> &'static str {
+    match entity_type {
+        "Opportunity" => "stage",
+        _ => "status",
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowRule {

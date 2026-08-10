@@ -3,12 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import {
-  BUILTIN_TRIGGER_FIELDS,
-  COMPANY_STATUSES,
-  CONTACT_STATUSES,
+  builtinTriggerFieldFor,
   CUSTOM_FIELD_ENTITY_TYPES,
+  entityTypeLabel,
   RULE_EFFECTS,
   RULE_OPERATORS,
+  statusesForEntity,
   TRIGGER_SOURCES,
   type CustomFieldEntityType,
   type FieldRule,
@@ -22,7 +22,7 @@ function emptyInput(entityType: CustomFieldEntityType): FieldRuleInput {
   return {
     entity_type: entityType,
     trigger_field_source: "builtin",
-    trigger_field_key: "status",
+    trigger_field_key: builtinTriggerFieldFor(entityType),
     operator: "equals",
     trigger_value: "",
     target_field_key: "",
@@ -31,13 +31,12 @@ function emptyInput(entityType: CustomFieldEntityType): FieldRuleInput {
   };
 }
 
-function statusesFor(entityType: CustomFieldEntityType): readonly string[] {
-  return entityType === "Company" ? COMPANY_STATUSES : CONTACT_STATUSES;
-}
-
 /** Plain-English summary of a rule, e.g. "When Status equals Prospect, require Lead Source." */
 function describeRule(rule: FieldRule, labelByKey: Map<string, string>): string {
-  const triggerLabel = rule.trigger_field_source === "builtin" ? "Status" : labelByKey.get(rule.trigger_field_key) ?? rule.trigger_field_key;
+  const triggerLabel =
+    rule.trigger_field_source === "builtin"
+      ? rule.trigger_field_key === "is_active" ? "Active" : "Status"
+      : labelByKey.get(rule.trigger_field_key) ?? rule.trigger_field_key;
   const op = rule.operator === "equals" ? "is" : "is not";
   const effect = rule.effect === "require" ? "require" : "hide";
   const targetLabel = labelByKey.get(rule.target_field_key) ?? rule.target_field_key;
@@ -52,7 +51,7 @@ function describeRule(rule: FieldRule, labelByKey: Map<string, string>): string 
  * mirrored client-side for live form feedback (see lib/fieldRules.ts).
  */
 export function FieldRulesAdmin() {
-  const [entityType, setEntityType] = useState<CustomFieldEntityType>("Company");
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -94,7 +93,7 @@ export function FieldRulesAdmin() {
         rules target the same field.
       </p>
       {activeDefs.length === 0 && (
-        <p className="empty-state">Add an active custom field for {entityType}s first - rules always target a custom field.</p>
+        <p className="empty-state">Add an active custom field for {entityTypeLabel(entityType)} first - rules always target a custom field.</p>
       )}
 
       <div className="tab-row">
@@ -108,7 +107,7 @@ export function FieldRulesAdmin() {
               setEditingId(null);
             }}
           >
-            {t === "Company" ? "Companies" : "Contacts"}
+            {entityTypeLabel(t)}
           </button>
         ))}
       </div>
@@ -155,7 +154,7 @@ export function FieldRulesAdmin() {
       )}
 
       {rules.isLoading && <p>Loading...</p>}
-      {rules.data && rules.data.length === 0 && <p className="empty-state">No business rules defined for {entityType}s yet.</p>}
+      {rules.data && rules.data.length === 0 && <p className="empty-state">No business rules defined for {entityTypeLabel(entityType)} yet.</p>}
       {rules.data && rules.data.length > 0 && !creating && !editing && (
         <table>
           <thead>
@@ -217,7 +216,8 @@ function RuleForm({
   const [isActive, setIsActive] = useState(initial.is_active ?? true);
   const [error, setError] = useState<string | null>(null);
 
-  const statuses = statusesFor(entityType);
+  const statuses = statusesForEntity(entityType);
+  const builtinField = builtinTriggerFieldFor(entityType);
   const isStatusTrigger = source === "builtin";
 
   const save = useMutation({
@@ -256,7 +256,7 @@ function RuleForm({
             onChange={(e) => {
               const next = e.target.value as TriggerSource;
               setSource(next);
-              setTriggerKey(next === "builtin" ? BUILTIN_TRIGGER_FIELDS[0] : customFields[0]?.key ?? "");
+              setTriggerKey(next === "builtin" ? builtinField : customFields[0]?.key ?? "");
               setTriggerValue("");
             }}
           >
@@ -271,11 +271,7 @@ function RuleForm({
           <label>Trigger field</label>
           {isStatusTrigger ? (
             <select value={triggerKey} onChange={(e) => setTriggerKey(e.target.value)}>
-              {BUILTIN_TRIGGER_FIELDS.map((f) => (
-                <option key={f} value={f}>
-                  Status
-                </option>
-              ))}
+              <option value={builtinField}>{builtinField === "is_active" ? "Active" : "Status"}</option>
             </select>
           ) : (
             <select value={triggerKey} onChange={(e) => setTriggerKey(e.target.value)}>

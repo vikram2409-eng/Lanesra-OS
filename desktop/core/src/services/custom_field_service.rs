@@ -1,8 +1,8 @@
-//! FR-CFG: admin-defined custom fields on Companies and Contacts, via an
-//! attribute side-table rather than a schema change per field. Bounded to
-//! these two entities in Phase 1 - see the product backlog for why "let
-//! admins define whole new entity types" is a separate, much larger ask
-//! this deliberately doesn't attempt.
+//! FR-CFG: admin-defined custom fields on every major entity, via an
+//! attribute side-table rather than a schema change per field. Custom
+//! entity types (letting an admin define a whole new record type, not
+//! just fields on an existing one) remains a separate, much larger ask -
+//! see "Custom entities" in the product backlog.
 
 use rusqlite::Connection;
 
@@ -11,7 +11,11 @@ use crate::models::custom_field::{
     CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues,
     CUSTOM_FIELD_ENTITY_TYPES, CUSTOM_FIELD_TYPES,
 };
-use crate::repositories::{company_repo, contact_repo, custom_field_repo, user_repo};
+use crate::models::field_rule::builtin_trigger_field_for;
+use crate::repositories::{
+    company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
+    product_repo, quote_repo, task_repo, user_repo,
+};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -128,21 +132,50 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
     Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
 }
 
-/// Returns (workspace_id, status) - status is the entity's built-in
-/// status field, which field_rule_service needs as the "status" trigger
-/// context even though custom_field_service otherwise has no reason to
-/// know it.
+/// Returns (workspace_id, builtin_trigger_value) - the value is whatever
+/// `field_rule::builtin_trigger_field_for(entity_type)` names for this
+/// entity ("status" for most, "is_active" as "true"/"false" for Product),
+/// which field_rule_service needs as trigger context even though
+/// custom_field_service otherwise has no reason to know it.
 fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<(String, String)> {
+    let missing = |what: &str| AppError::Validation(format!("{what} does not exist"));
     match entity_type {
         "Company" => {
-            let company = company_repo::get(conn, entity_id)?.ok_or_else(|| AppError::Validation("Company does not exist".into()))?;
-            Ok((company.workspace_id, company.status))
+            let r = company_repo::get(conn, entity_id)?.ok_or_else(|| missing("Company"))?;
+            Ok((r.workspace_id, r.status))
         }
         "Contact" => {
-            let contact = contact_repo::get(conn, entity_id)?.ok_or_else(|| AppError::Validation("Contact does not exist".into()))?;
-            let company = company_repo::get(conn, &contact.company_id)?
-                .ok_or_else(|| AppError::Validation("Contact's company does not exist".into()))?;
+            let contact = contact_repo::get(conn, entity_id)?.ok_or_else(|| missing("Contact"))?;
+            let company = company_repo::get(conn, &contact.company_id)?.ok_or_else(|| missing("Contact's company"))?;
             Ok((company.workspace_id, contact.status))
+        }
+        "Opportunity" => {
+            let r = opportunity_repo::get(conn, entity_id)?.ok_or_else(|| missing("Opportunity"))?;
+            Ok((r.workspace_id, r.status))
+        }
+        "Quote" => {
+            let r = quote_repo::get(conn, entity_id)?.ok_or_else(|| missing("Quote"))?;
+            Ok((r.workspace_id, r.status))
+        }
+        "Order" => {
+            let r = order_repo::get(conn, entity_id)?.ok_or_else(|| missing("Order"))?;
+            Ok((r.workspace_id, r.status))
+        }
+        "Invoice" => {
+            let r = invoice_repo::get(conn, entity_id)?.ok_or_else(|| missing("Invoice"))?;
+            Ok((r.workspace_id, r.status))
+        }
+        "Contract" => {
+            let r = contract_repo::get(conn, entity_id)?.ok_or_else(|| missing("Contract"))?;
+            Ok((r.workspace_id, r.status))
+        }
+        "Task" => {
+            let r = task_repo::get(conn, entity_id)?.ok_or_else(|| missing("Task"))?;
+            Ok((r.workspace_id, r.status))
+        }
+        "Product" => {
+            let r = product_repo::get(conn, entity_id)?.ok_or_else(|| missing("Product"))?;
+            Ok((r.workspace_id, if r.is_active { "true".into() } else { "false".into() }))
         }
         other => Err(AppError::Validation(format!("Unsupported custom field entity type '{other}'"))),
     }
@@ -160,7 +193,7 @@ pub fn set_entity_values(
     values: &CustomFieldValues,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    let (workspace_id, status) = resolve_entity_workspace(conn, entity_type, entity_id)?;
+    let (workspace_id, builtin_value) = resolve_entity_workspace(conn, entity_type, entity_id)?;
     let definitions = list_definitions(conn, &workspace_id, entity_type, true)?;
 
     // FR-RUL-05: a field required by an active business rule is enforced
@@ -169,7 +202,7 @@ pub fn set_entity_values(
     // purely cosmetic effect with nothing to validate, so a hidden field
     // is simply left untouched (skipped) rather than cleared or blocked.
     let mut trigger_context: CustomFieldValues = values.clone();
-    trigger_context.insert("status".to_string(), status);
+    trigger_context.insert(builtin_trigger_field_for(entity_type).to_string(), builtin_value);
     let rule_effects = crate::services::field_rule_service::effects_for(conn, &workspace_id, entity_type, &trigger_context)?;
 
     for def in &definitions {

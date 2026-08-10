@@ -15,10 +15,17 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::opportunity::OPPORTUNITY_STAGES;
+use crate::models::company::COMPANY_STATUSES;
+use crate::models::contact::CONTACT_STATUSES;
+use crate::models::contract::CONTRACT_STATUSES;
 use crate::models::invoice::INVOICE_STATUSES;
-use crate::models::task::TaskInput;
-use crate::models::workflow_rule::{WorkflowRule, WorkflowRuleInput, WorkflowRuleUpdate, WORKFLOW_ENTITY_TYPES};
+use crate::models::opportunity::OPPORTUNITY_STAGES;
+use crate::models::order::ORDER_STATUSES;
+use crate::models::quote::QUOTE_STATUSES;
+use crate::models::task::{TaskInput, TASK_STATUSES};
+use crate::models::workflow_rule::{
+    transition_field_for, WorkflowRule, WorkflowRuleInput, WorkflowRuleUpdate, WORKFLOW_ENTITY_TYPES,
+};
 use crate::repositories::{user_repo, workflow_rule_repo};
 use crate::services::task_service;
 
@@ -33,8 +40,14 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 
 fn valid_statuses_for(entity_type: &str) -> &'static [&'static str] {
     match entity_type {
+        "Company" => COMPANY_STATUSES,
+        "Contact" => CONTACT_STATUSES,
         "Opportunity" => OPPORTUNITY_STAGES,
+        "Quote" => QUOTE_STATUSES,
+        "Order" => ORDER_STATUSES,
         "Invoice" => INVOICE_STATUSES,
+        "Contract" => CONTRACT_STATUSES,
+        "Task" => TASK_STATUSES,
         _ => &[],
     }
 }
@@ -54,7 +67,7 @@ fn validate_shape(
     if !valid_statuses_for(entity_type).contains(&trigger_status) {
         return Err(AppError::Validation(format!(
             "'{trigger_status}' is not a valid {entity_type} {}",
-            if entity_type == "Opportunity" { "stage" } else { "status" }
+            transition_field_for(entity_type)
         )));
     }
     if task_title.trim().is_empty() {

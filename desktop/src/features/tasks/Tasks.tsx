@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import {
   TASK_PRIORITIES,
   TASK_RELATED_TYPES,
   TASK_STATUSES,
+  type CustomFieldValues,
   type Task,
   type TaskInput,
   type TaskRelatedType,
@@ -229,19 +231,30 @@ function TaskForm({
     queryFn: () => api.getTask(taskId as string),
     enabled: !!taskId,
   });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", taskId],
+    queryFn: () => api.getCustomFieldValues(taskId as string),
+    enabled: !!taskId,
+  });
   const [input, setInput] = useState<TaskInput>(emptyInput(currentUserId));
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
-  if (existing.data && loadedFor !== taskId) {
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== taskId) {
     const { title, description, owner_user_id, priority, status, due_date, reminder_at, related_type, related_id } =
       existing.data;
     setInput({ title, description, owner_user_id, priority, status, due_date, reminder_at, related_type, related_id });
+    setCustomValues(existingCustomFields.data);
     setLoadedFor(taskId);
   }
 
   const save = useMutation({
-    mutationFn: () => (taskId ? api.updateTask(taskId, input) : api.createTask(input)),
+    mutationFn: async () => {
+      const task = taskId ? await api.updateTask(taskId, input) : await api.createTask(input);
+      await api.setCustomFieldValues("Task", task.id, customValues);
+      return task;
+    },
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the task"),
   });
@@ -351,6 +364,7 @@ function TaskForm({
             onChange={(e) => setInput({ ...input, description: e.target.value || null })}
           />
         </div>
+        <CustomFieldsSection entityType="Task" status={input.status} values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save

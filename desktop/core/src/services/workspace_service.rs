@@ -14,7 +14,7 @@ use crate::models::product::ProductInput;
 use crate::models::quote::{QuoteInput, QuoteLineInput};
 use crate::models::task::TaskInput;
 use crate::models::user::{NewUser, User};
-use crate::models::workspace::{Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate};
+use crate::models::workspace::{DashboardKpiPrefs, Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate};
 use crate::repositories::{audit_repo, user_repo, workspace_repo};
 use crate::services::{
     auth_service, company_service, contact_service, contract_service, invoice_service,
@@ -120,6 +120,34 @@ pub fn clear_logo(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<W
         Some("workspace"),
         Some(&workspace.id),
         "Removed workspace logo",
+        None,
+    )?;
+
+    Ok(updated)
+}
+
+/// FR-KPI: lets an Administrator choose which Dashboard KPI tiles show,
+/// and in what order - an empty list resets to "show every KPI, default
+/// order" (stored as NULL, not an empty JSON array, so a workspace that
+/// never touches this setting behaves identically to before it existed).
+pub fn set_dashboard_kpis(conn: &Connection, prefs: &DashboardKpiPrefs, actor_user_id: Option<&str>) -> AppResult<Workspace> {
+    require_admin(conn, actor_user_id)?;
+    let workspace = current(conn)?;
+    let json = if prefs.keys.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_string(&prefs.keys).map_err(|e| AppError::Validation(format!("Could not encode KPI preferences: {e}")))?)
+    };
+    let updated = workspace_repo::set_dashboard_kpi_prefs(conn, &workspace.id, json.as_deref())?;
+
+    audit_repo::record(
+        conn,
+        &workspace.id,
+        actor_user_id,
+        "update",
+        Some("workspace"),
+        Some(&workspace.id),
+        "Updated Dashboard KPI preferences",
         None,
     )?;
 

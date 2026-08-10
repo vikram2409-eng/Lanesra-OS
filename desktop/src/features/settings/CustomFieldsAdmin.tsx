@@ -5,6 +5,7 @@ import { api, ApiError } from "../../lib/api";
 import {
   CUSTOM_FIELD_ENTITY_TYPES,
   CUSTOM_FIELD_TYPES,
+  entityTypeLabel,
   type CustomFieldDefinition,
   type CustomFieldDefinitionInput,
   type CustomFieldEntityType,
@@ -57,8 +58,8 @@ export function CustomFieldsAdmin() {
         </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-        Extra fields your business needs that aren't built in - shown on the Company/Contact form. Type and key can't
-        change once created; everything else can.
+        Extra fields your business needs that aren't built in - shown on that record's create/edit form. Type and
+        key can't change once created; everything else can.
       </p>
 
       <div className="tab-row">
@@ -72,7 +73,7 @@ export function CustomFieldsAdmin() {
               setEditingId(null);
             }}
           >
-            {t === "Company" ? "Companies" : "Contacts"}
+            {entityTypeLabel(t)}
           </button>
         ))}
       </div>
@@ -100,7 +101,7 @@ export function CustomFieldsAdmin() {
       )}
 
       {defs.isLoading && <p>Loading...</p>}
-      {defs.data && defs.data.length === 0 && <p className="empty-state">No custom fields defined for {entityType}s yet.</p>}
+      {defs.data && defs.data.length === 0 && <p className="empty-state">No custom fields defined for {entityTypeLabel(entityType)} yet.</p>}
       {defs.data && defs.data.length > 0 && !creating && !editing && (
         <table>
           <thead>

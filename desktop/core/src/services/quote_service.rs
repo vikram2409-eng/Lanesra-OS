@@ -6,6 +6,18 @@ use crate::domain::numbering::{self, QUOTE};
 use crate::domain::{AppError, AppResult};
 use crate::models::quote::{Quote, QuoteInput, QuoteWithLines, QUOTE_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo, quote_repo};
+use crate::services::workflow_service;
+
+/// Quotes have no owner of their own, so a workflow rule assigning to "the
+/// record's owner" resolves via the Quote's Company owner - the same
+/// attribution invoice_service and report_service::sales_by_owner use.
+fn fire_workflow(conn: &Connection, quote: &Quote, old_status: &str, new_status: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+    let owner_user_id = company_repo::get(conn, &quote.company_id)?.and_then(|c| c.owner_user_id);
+    workflow_service::fire_transition(
+        conn, &quote.workspace_id, "Quote", &quote.id, old_status, new_status, owner_user_id.as_deref(), actor_user_id,
+    )?;
+    Ok(())
+}
 
 fn validate_relationships(conn: &Connection, input: &QuoteInput) -> AppResult<String> {
     let company = company_repo::get(conn, &input.company_id)?
@@ -127,6 +139,7 @@ pub fn set_status(
         &format!("Quote {} status changed to {}", existing.quote.quote_number, status),
         None,
     )?;
+    fire_workflow(conn, &existing.quote, &existing.quote.status, status, actor_user_id)?;
     load(conn, id)
 }
 

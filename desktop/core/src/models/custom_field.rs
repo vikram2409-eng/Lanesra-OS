@@ -3,7 +3,13 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 pub const CUSTOM_FIELD_TYPES: &[&str] = &["text", "number", "date", "boolean", "select"];
-pub const CUSTOM_FIELD_ENTITY_TYPES: &[&str] = &["Company", "Contact"];
+/// Admin flexibility: every major entity, not just Company/Contact from
+/// Phase 1 - matches WORKFLOW_ENTITY_TYPES plus Product (which has no
+/// status/stage field to trigger a workflow on, but can still carry custom
+/// fields).
+pub const CUSTOM_FIELD_ENTITY_TYPES: &[&str] = &[
+    "Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task", "Product",
+];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CustomFieldDefinition {

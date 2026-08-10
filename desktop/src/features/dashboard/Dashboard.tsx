@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { api } from "../../lib/api";
 import { formatCents } from "../../lib/money";
 import type { Section } from "../../components/AppShell";
+import { resolveVisibleKpis } from "./kpis";
 
 export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => void }) {
   const queryClient = useQueryClient();
@@ -11,6 +12,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
     queryKey: ["dashboard"],
     queryFn: () => api.dashboardSummary(),
   });
+  const workspace = useQuery({ queryKey: ["workspaceStatus"], queryFn: () => api.workspaceStatus() });
 
   useEffect(() => {
     api.refreshOverdueInvoices().then(() => {
@@ -23,40 +25,18 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
   if (isLoading) return <p>Loading dashboard...</p>;
   if (error || !data) return <div className="error-banner">Could not load the dashboard</div>;
 
+  const visibleKpis = resolveVisibleKpis(workspace.data?.dashboard_kpi_prefs ?? null);
+
   return (
     <div>
       <h2>Dashboard</h2>
       <div className="kpi-row">
-        <div className="kpi-tile" onClick={() => onNavigate("opportunities")}>
-          <div className="value">{formatCents(data.open_pipeline_value_cents)}</div>
-          <div className="label">Open pipeline ({data.open_pipeline_count})</div>
-        </div>
-        <div className="kpi-tile" onClick={() => onNavigate("opportunities")}>
-          <div className="value">{formatCents(data.won_revenue_cents)}</div>
-          <div className="label">Won revenue</div>
-        </div>
-        <div className="kpi-tile" onClick={() => onNavigate("invoices")}>
-          <div className="value">{formatCents(data.outstanding_invoices_cents)}</div>
-          <div className="label">Outstanding invoices</div>
-        </div>
-        <div className="kpi-tile" onClick={() => onNavigate("invoices")}>
-          <div className="value">{formatCents(data.overdue_invoices_cents)}</div>
-          <div className="label">Overdue ({data.overdue_invoices_count})</div>
-        </div>
-        <div className="kpi-tile" onClick={() => onNavigate("quotes")}>
-          <div className="value">{data.quotes_awaiting_response}</div>
-          <div className="label">Quotes awaiting response</div>
-        </div>
-        <div className="kpi-tile" onClick={() => onNavigate("contracts")}>
-          <div className="value">{data.contracts_renewing_90_days}</div>
-          <div className="label">
-            Renewing 90 days ({data.contracts_renewing_30_days} in 30 / {data.contracts_renewing_60_days} in 60)
+        {visibleKpis.map((kpi) => (
+          <div className="kpi-tile" key={kpi.key} onClick={() => onNavigate(kpi.section)}>
+            <div className="value">{kpi.value(data)}</div>
+            <div className="label">{kpi.label(data)}</div>
           </div>
-        </div>
-        <div className="kpi-tile" onClick={() => onNavigate("tasks")}>
-          <div className="value">{data.open_tasks}</div>
-          <div className="label">Open tasks ({data.overdue_tasks} overdue)</div>
-        </div>
+        ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>

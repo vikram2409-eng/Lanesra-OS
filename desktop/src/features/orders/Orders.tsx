@@ -8,7 +8,9 @@ import { LineItemsEditor } from "../../components/LineItemsEditor";
 import { PrintableDocument } from "../../components/PrintableDocument";
 import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { ORDER_STATUSES, type Order, type OrderInput } from "../../lib/types";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { ORDER_STATUSES, type CustomFieldValues, type Order, type OrderInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
@@ -120,6 +122,7 @@ function OrderForm({
   const [lines, setLines] = useState<LineInput[]>([
     { product_id: null, description: "", quantity_milli: 1000, unit_price_cents: 0, discount_bp: 0, tax_rate_bp: 0 },
   ]);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [error, setError] = useState<string | null>(null);
 
   const contacts = useQuery({
@@ -130,7 +133,7 @@ function OrderForm({
   const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const input: OrderInput = {
         company_id: companyId,
         contact_id: contactId,
@@ -139,7 +142,9 @@ function OrderForm({
         notes: notes || null,
         lines,
       };
-      return api.createOrder(input);
+      const result = await api.createOrder(input);
+      await api.setCustomFieldValues("Order", result.order.id, customValues);
+      return result;
     },
     onSuccess: (result) => onDone(result.order.id),
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create the order"),
@@ -196,6 +201,7 @@ function OrderForm({
             <label>Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+          <CustomFieldsSection entityType="Order" status="Draft" values={customValues} onChange={setCustomValues} />
         </div>
 
         <LineItemsEditor lines={lines} onChange={setLines} products={products.data ?? []} currencyCode={currencyCode} />
@@ -315,6 +321,10 @@ function OrderDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
           <div>Tax: {formatCents(o.tax_cents, o.currency_code)}</div>
           <div style={{ fontWeight: 700 }}>Total: {formatCents(o.total_cents, o.currency_code)}</div>
         </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsCard entityType="Order" entityId={o.id} status={o.status} />
       </div>
     </div>
   );

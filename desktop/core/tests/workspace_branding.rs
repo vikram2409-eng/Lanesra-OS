@@ -29,6 +29,7 @@ fn update_input() -> WorkspaceUpdate {
         business_name: "Renamed Co".into(),
         legal_name: Some("Renamed Co LLC".into()),
         business_address: Some("1 Main Street, Springfield".into()),
+        phone: Some("+1 555-0100".into()),
         currency_code: "USD".into(),
         locale: "en-US".into(),
         timezone: "UTC".into(),
@@ -44,6 +45,7 @@ fn administrator_can_update_workspace_profile() {
     assert_eq!(updated.business_name, "Renamed Co");
     assert_eq!(updated.legal_name.as_deref(), Some("Renamed Co LLC"));
     assert_eq!(updated.business_address.as_deref(), Some("1 Main Street, Springfield"));
+    assert_eq!(updated.phone.as_deref(), Some("+1 555-0100"));
     assert_eq!(updated.default_tax_rate_bp, 500);
 }
 

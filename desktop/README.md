@@ -237,23 +237,25 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   invoice's Company owner. See `core/src/services/report_service.rs`,
   `src/features/reports/Reports.tsx`.
 - **Custom fields (FR-CFG)**: an Administrator can define custom fields on
-  Companies and Contacts from the new Settings screen - label, type
+  Companies and Contacts from the new Settings screen (Phase 1; see
+  "Admin flexibility" below for the later phase that generalized this to
+  every major entity) - label, type
   (text/number/date/yes-no/select-with-options), required, and
   active/inactive - without a code change or a schema migration per
   field. An auto-generated key is uniquified rather than rejected on a
-  duplicate label. Active fields render on the Company/Contact
-  create/edit form and are enforced both client-side (HTML5 `required`,
-  immediate feedback) and server-side inside `set_custom_field_values`
+  duplicate label. Active fields render on the record's create/edit form
+  and are enforced both client-side (HTML5 `required`, immediate
+  feedback) and server-side inside `set_custom_field_values`
   (required-field and select-option validation, verified independently
   of the UI with a direct API call in this phase's testing) - a
   client-only check would be trivially bypassed by any direct API
-  caller. Bounded to these two entities deliberately; see "Custom
-  fields" in the product backlog for why whole new entity types are a
-  separate, much larger ask this doesn't attempt. Deferred within this
-  phase: showing custom field values as extra columns on the
-  Companies/Contacts list screens (`show_in_list` is stored and
-  editable in the admin screen, just not yet rendered anywhere), and
-  including custom fields in CSV import/export. See
+  caller. Custom entity types (letting an admin define a whole new record
+  type, not just fields on an existing one) remains out of scope; see
+  "Custom entities" in the product backlog. Deferred within this
+  phase: showing custom field values as extra columns on list screens
+  (`show_in_list` is stored and editable in the admin screen, just not
+  yet rendered anywhere), and including custom fields in CSV
+  import/export. See
   `core/src/services/custom_field_service.rs`,
   `src/components/CustomFieldsSection.tsx`,
   `src/features/settings/CustomFieldsAdmin.tsx`.
@@ -304,11 +306,62 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   record already do (e.g. the Tasks screen's "By Related Record" view).
   Entirely server-side - there is nothing for the client to evaluate live,
   since (unlike FR-RUL) nothing here changes what a form looks like.
-  Deliberately scoped to these two entities and this one action (task
-  creation) for Phase 1; see "Workflow automation" in the product backlog
-  for the fuller brainstorm this slice was cut from. See
-  `core/src/services/workflow_service.rs`,
+  Deliberately scoped to one action (task creation) for Phase 1; see
+  "Workflow automation" in the product backlog for the fuller brainstorm
+  this slice was cut from. See `core/src/services/workflow_service.rs`,
   `src/features/settings/WorkflowRulesAdmin.tsx`.
+- **Admin flexibility - generalized to every major entity**: custom
+  fields (FR-CFG) and business rules (FR-RUL), originally Company/Contact
+  only, and workflow automation (FR-WFL), originally Opportunity/Invoice
+  only, now all work identically across Company, Contact, Opportunity,
+  Quote, Order, Invoice, Contract and Task (custom fields also cover
+  Product, which has no status/stage field to trigger a rule or workflow
+  on). Each entity's one built-in "trigger" field is `status` for all of
+  them except Product (`is_active`, compared as `"true"`/`"false"`) -
+  `field_rule::builtin_trigger_field_for` in the core, mirrored in the
+  frontend as `builtinTriggerFieldFor`. Workflow automation keeps
+  Opportunity's existing special case of triggering on `stage` rather
+  than `status` (`workflow_rule::transition_field_for`), since that's the
+  field that actually flows through the sales pipeline. The entity_type
+  CHECK constraints from the original migrations were dropped (SQLite
+  can't ALTER one in place) in favor of the application layer, which was
+  already the real source of truth. Every entity's create/edit form
+  (or, for Quote/Order/Invoice, which have no full edit form, a "Custom
+  fields" card on their detail view) now renders `CustomFieldsSection` /
+  `CustomFieldsCard`. See `core/src/db/migrations/0007_broaden_entity_types.sql`.
+- **Admin panel navigation**: Users moved from its own sidebar item into
+  a tabbed "Admin" panel alongside Business profile, Custom fields,
+  Business rules, Workflow automation, Numbering and Dashboard KPIs - one
+  nav entry for every administrator-facing capability instead of two.
+  See `src/features/settings/Settings.tsx` (`AdminPanel`).
+- **Business phone number**: alongside the existing address/logo
+  branding fields, shown on the print letterhead when set.
+- **Configurable ID/numbering format**: an Administrator can change the
+  prefix and zero-padded digit width used for any entity's
+  auto-generated number (e.g. "CUS-000001" → "ACC-000001", or
+  "ACC-ab0001" - the letters are just part of the chosen prefix text,
+  there's no separate alpha-segment syntax). Changing the format never
+  resets or renumbers already-issued numbers: the underlying sequence in
+  `number_sequences` is untouched, only the formatting changes going
+  forward - proven in this phase's testing by issuing a number, changing
+  the prefix, and confirming the *next* number continues the same
+  sequence with the new prefix. `domain::numbering::allocate_number`
+  looks up an optional override directly (the same way it already talks
+  straight to `number_sequences` without a repository); the admin CRUD
+  layer lives in `numbering_service.rs`.
+- **Simple report builder**: an Administrator picks an entity, a field to
+  group by (the entity's built-in status/stage, or any active custom
+  field), and an aggregate - count of records, or sum of a numeric custom
+  field - and saves it as a named custom report any user can run from
+  Reports → Custom reports. Deliberately not a full drag-and-drop
+  builder; see "Report builder" in the product backlog for the fuller
+  version this was scoped down from. See
+  `core/src/services/custom_report_service.rs`.
+- **Dashboard KPI picker**: an Administrator can choose which of the 7
+  Dashboard KPI tiles show, from Admin → Dashboard KPIs. Reordering isn't
+  exposed yet - the stored preference (`Workspace.dashboard_kpi_prefs`,
+  JSON) is already an ordered list, so that's addable later without a
+  schema change. See `src/features/dashboard/kpis.tsx`.
 
 ## What's deferred to a later phase
 
@@ -316,12 +369,14 @@ The database schema already has tables for these so the migration doesn't
 need to change shape later, but there is no service/command/UI layer yet:
 
 - Custom fields as extra columns on list screens, and in CSV import/export
-- Rule triggers/targets beyond Company/Contact custom fields and the
-  built-in `status` field (e.g. rules over other built-in fields, or
-  cross-entity rules)
-- Workflow automation beyond Phase 1: triggers on entities other than
-  Opportunity/Invoice, actions other than task creation (e.g. sending a
-  notification, updating a field), and multi-step/branching workflows
+- Workflow automation beyond Phase 1: actions other than task creation
+  (e.g. sending a notification, updating a field), and
+  multi-step/branching workflows
+- Custom entities (admin-defined new record types with their own fields,
+  list/detail screens and relationships) - a separate, much larger ask
+  than generalizing fields/rules/workflows across the *existing* entities
+- A full drag-and-drop report/dashboard builder beyond the simple
+  group-by-and-aggregate report builder, and reordering Dashboard KPI tiles
 - Windows notifications for task reminders (FR-TSK-06)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
@@ -621,3 +676,48 @@ one. It isn't code-signed yet.
   and linked back to its Opportunity by name - the same task the direct
   API call had produced, now visible through the ordinary UI a user would
   actually use.
+
+**Admin flexibility phase (generalized fields/rules/workflows, phone,
+numbering, report builder, KPI picker, admin nav):**
+
+- `cargo test --workspace`: 88/88 passing - 10 new core tests
+  (`core/tests/admin_flexibility.rs`: custom fields + a business rule +
+  workflow automation all working together on Opportunity, an entity
+  outside FR-CFG/FR-RUL/FR-WFL Phase 1's original scope; a numbering
+  override changes the format without resetting the sequence, and
+  resets back to default; only an Administrator can change a number
+  format; a custom report counts records grouped by built-in status; a
+  custom report sums a numeric custom field grouped by another custom
+  field; a sum report is rejected if its target isn't an active numeric
+  custom field; an Administrator can set and reset Dashboard KPI
+  preferences; only an Administrator can change them; the workspace
+  profile stores a phone number - plus one existing workspace-branding
+  test updated for the new `phone` field; `domain::numbering` gained its
+  own test proving an override reformats without resetting the sequence).
+- `npm run build`: `tsc` + `vite build` both clean.
+- With curl (bypassing the UI entirely): created a custom field and a
+  business rule on Opportunity (previously Company/Contact only),
+  confirmed the rule's `"Lead Source is required"` rejection fires
+  correctly once status is Won; overrode Company's number format to
+  `ACC`/4 digits and confirmed the *next* company issued got
+  `ACC-0002` (continuing the sequence, not restarting it, since the
+  first company had already taken `CUS-000001` under the old format);
+  built a custom report counting Companies grouped by status and got
+  back the correct `{Active Customer: 1, Prospect: 1}`; confirmed a
+  non-Administrator gets rejected from `set_numbering_format`,
+  `create_custom_report`, and `set_dashboard_kpis` with the expected
+  "Only an Administrator" messages.
+- Built the real release `lanesra-server` binary and drove the whole
+  phase end to end with a real Chromium browser (Playwright): confirmed
+  the sidebar shows a single "Admin" item and no standalone "Users" item;
+  the Admin panel's Users tab showed the sales rep created via curl; the
+  Business profile tab showed the phone number set via curl; the
+  Numbering tab showed Company's ACC override labeled "Custom"; the
+  Business rules and Custom fields tabs, switched to the Opportunities
+  sub-tab, showed the rule and field created via curl; the Dashboard
+  KPIs tab reflected a curl-set 2-KPI preference, and the Dashboard
+  itself rendered exactly those 2 tiles (not the default 7); the
+  Opportunity form showed Lead Source as required once Status was set to
+  Won; and Reports → Custom reports ran the curl-created report and
+  displayed the correct grouped counts - the same report the direct API
+  call had produced, now visible through the ordinary UI.

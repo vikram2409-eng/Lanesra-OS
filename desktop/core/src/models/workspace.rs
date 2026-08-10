@@ -11,8 +11,13 @@ pub struct Workspace {
     pub default_tax_rate_bp: i64,
     pub operating_mode: String,
     pub business_address: Option<String>,
+    pub phone: Option<String>,
     pub logo_base64: Option<String>,
     pub logo_mime: Option<String>,
+    /// Admin-chosen ordered list of Dashboard KPI tile keys, JSON-encoded
+    /// (e.g. `["open_pipeline","won_revenue"]`); None means "show every
+    /// KPI, in the default order" - see workspace_service::set_dashboard_kpis.
+    pub dashboard_kpi_prefs: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -42,10 +47,18 @@ pub struct WorkspaceUpdate {
     pub business_name: String,
     pub legal_name: Option<String>,
     pub business_address: Option<String>,
+    pub phone: Option<String>,
     pub currency_code: String,
     pub locale: String,
     pub timezone: String,
     pub default_tax_rate_bp: i64,
+}
+
+/// FR-KPI: an Administrator's chosen Dashboard KPI tiles and order -
+/// `keys` is empty/omitted to reset to "show every KPI, default order".
+#[derive(Debug, Clone, Deserialize)]
+pub struct DashboardKpiPrefs {
+    pub keys: Vec<String>,
 }
 
 /// FR-BRD-02: only PNG/JPEG are accepted, and the payload is capped - both

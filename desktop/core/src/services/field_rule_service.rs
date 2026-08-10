@@ -12,7 +12,7 @@ use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::field_rule::{
-    FieldRule, FieldRuleInput, FieldRuleUpdate, BUILTIN_TRIGGER_FIELDS, RULE_EFFECTS, RULE_OPERATORS, TRIGGER_SOURCES,
+    builtin_trigger_field_for, FieldRule, FieldRuleInput, FieldRuleUpdate, RULE_EFFECTS, RULE_OPERATORS, TRIGGER_SOURCES,
 };
 use crate::repositories::{custom_field_repo, field_rule_repo, user_repo};
 
@@ -46,9 +46,10 @@ fn validate_shape(
     }
 
     if trigger_field_source == "builtin" {
-        if !BUILTIN_TRIGGER_FIELDS.contains(&trigger_field_key) {
+        let expected = builtin_trigger_field_for(entity_type);
+        if trigger_field_key != expected {
             return Err(AppError::Validation(format!(
-                "'{trigger_field_key}' is not a supported built-in trigger field"
+                "'{trigger_field_key}' is not a supported built-in trigger field for {entity_type} (expected '{expected}')"
             )));
         }
     } else {

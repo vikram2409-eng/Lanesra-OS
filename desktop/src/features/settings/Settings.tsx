@@ -2,9 +2,12 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { Users } from "../users/Users";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
 import { FieldRulesAdmin } from "./FieldRulesAdmin";
 import { WorkflowRulesAdmin } from "./WorkflowRulesAdmin";
+import { NumberingAdmin } from "./NumberingAdmin";
+import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -41,7 +44,29 @@ function resizeImageToPngBase64(file: File): Promise<string> {
   });
 }
 
-export function Settings() {
+type AdminTab = "users" | "profile" | "fields" | "rules" | "workflow" | "numbering" | "kpis";
+
+const ADMIN_TABS: { key: AdminTab; label: string }[] = [
+  { key: "users", label: "Users" },
+  { key: "profile", label: "Business profile" },
+  { key: "fields", label: "Custom fields" },
+  { key: "rules", label: "Business rules" },
+  { key: "workflow", label: "Workflow automation" },
+  { key: "numbering", label: "Numbering" },
+  { key: "kpis", label: "Dashboard KPIs" },
+];
+
+/**
+ * The Admin panel - every administrator-facing capability lives here
+ * under one nav item instead of scattered across the sidebar (Users used
+ * to be its own top-level entry): user accounts and roles, business
+ * profile/branding, custom fields, business rules, workflow automation,
+ * ID/number formats, and which Dashboard KPIs show. Each tab is its own
+ * previously-standalone screen, unchanged internally - this is purely a
+ * navigation regrouping.
+ */
+export function AdminPanel() {
+  const [tab, setTab] = useState<AdminTab>("users");
   const queryClient = useQueryClient();
   const workspace = useQuery({ queryKey: ["workspaceStatus"], queryFn: () => api.workspaceStatus() });
 
@@ -49,27 +74,37 @@ export function Settings() {
     queryClient.invalidateQueries({ queryKey: ["workspaceStatus"] });
   }
 
-  if (!workspace.data) return <p>Loading...</p>;
-
   return (
     <div>
-      <h2>Settings</h2>
+      <h2>Admin</h2>
       <p style={{ color: "var(--text-muted)" }}>
-        Business profile and letterhead branding shown on printed quotes, orders and invoices.
+        Users and access, business branding, and the admin-configurable layer on top of the fixed schema: custom
+        fields, business rules, workflow automation, number formats and Dashboard KPIs.
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
-        <ProfileForm workspace={workspace.data} onSaved={invalidate} />
-        <LogoCard workspace={workspace.data} onChanged={invalidate} />
+
+      <div className="tab-row">
+        {ADMIN_TABS.map((t) => (
+          <button key={t.key} className={`tab${tab === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>
+            {t.label}
+          </button>
+        ))}
       </div>
-      <div style={{ marginTop: 16 }}>
-        <CustomFieldsAdmin />
-      </div>
-      <div style={{ marginTop: 16 }}>
-        <FieldRulesAdmin />
-      </div>
-      <div style={{ marginTop: 16 }}>
-        <WorkflowRulesAdmin />
-      </div>
+
+      {tab === "users" && <Users />}
+
+      {tab === "profile" && workspace.data && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+          <ProfileForm workspace={workspace.data} onSaved={invalidate} />
+          <LogoCard workspace={workspace.data} onChanged={invalidate} />
+        </div>
+      )}
+      {tab === "profile" && !workspace.data && <p>Loading...</p>}
+
+      {tab === "fields" && <CustomFieldsAdmin />}
+      {tab === "rules" && <FieldRulesAdmin />}
+      {tab === "workflow" && <WorkflowRulesAdmin />}
+      {tab === "numbering" && <NumberingAdmin />}
+      {tab === "kpis" && <DashboardKpiAdmin />}
     </div>
   );
 }
@@ -79,6 +114,7 @@ function ProfileForm({ workspace, onSaved }: { workspace: Workspace; onSaved: ()
     business_name: workspace.business_name,
     legal_name: workspace.legal_name,
     business_address: workspace.business_address,
+    phone: workspace.phone,
     currency_code: workspace.currency_code,
     locale: workspace.locale,
     timezone: workspace.timezone,
@@ -134,6 +170,10 @@ function ProfileForm({ workspace, onSaved }: { workspace: Workspace; onSaved: ()
             value={input.business_address ?? ""}
             onChange={(e) => setInput({ ...input, business_address: e.target.value || null })}
           />
+        </div>
+        <div className="form-field full">
+          <label>Phone</label>
+          <input value={input.phone ?? ""} onChange={(e) => setInput({ ...input, phone: e.target.value || null })} />
         </div>
         <div className="form-field">
           <label>Currency</label>

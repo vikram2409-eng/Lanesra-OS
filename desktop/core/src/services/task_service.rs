@@ -8,6 +8,7 @@ use crate::repositories::{
     audit_repo, company_repo, contact_repo, contract_repo, invoice_repo, opportunity_repo,
     order_repo, quote_repo, task_repo,
 };
+use crate::services::workflow_service;
 
 fn validate_relation(conn: &Connection, input: &TaskInput) -> AppResult<()> {
     match (&input.related_type, &input.related_id) {
@@ -97,6 +98,7 @@ pub fn update(
     actor_user_id: Option<&str>,
 ) -> AppResult<Task> {
     validate(conn, input)?;
+    let before = get(conn, id)?;
     let task = task_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -107,6 +109,9 @@ pub fn update(
         Some(id),
         &format!("Updated task {} (status: {})", task.task_number, task.status),
         None,
+    )?;
+    workflow_service::fire_transition(
+        conn, workspace_id, "Task", id, &before.status, &task.status, task.owner_user_id.as_deref(), actor_user_id,
     )?;
     Ok(task)
 }

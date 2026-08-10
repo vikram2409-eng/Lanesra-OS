@@ -1,7 +1,12 @@
 //! Atomic, transaction-safe allocation of human-readable business document
 //! numbers (Appendix B). Generated numbers are immutable and never reused
-//! (BR-002); prefixes are configurable per workspace by an administrator,
-//! this module just supplies the sensible defaults.
+//! (BR-002). An Administrator can override the prefix/digit-width per
+//! entity type via the `numbering_configs` table (see numbering_service);
+//! this module supplies the defaults and consults that table directly for
+//! any override, the same way it already talks straight to
+//! `number_sequences` without going through a repository - changing the
+//! prefix never resets or renumbers the underlying sequence, since the
+//! override is purely a formatting concern layered on top of it.
 
 use chrono::Utc;
 use rusqlite::Connection;
@@ -70,6 +75,21 @@ pub const TASK: NumberingConfig = NumberingConfig {
     digits: 6,
 };
 
+/// Looks up an admin-set (prefix, digits) override for this entity type,
+/// falling back to `config`'s defaults when none exists.
+fn resolve_format(conn: &Connection, workspace_id: &str, config: &NumberingConfig) -> rusqlite::Result<(String, usize)> {
+    let row = conn.query_row(
+        "SELECT prefix, digits FROM numbering_configs WHERE workspace_id = ?1 AND entity_type = ?2",
+        (workspace_id, config.entity_type),
+        |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize)),
+    );
+    match row {
+        Ok(v) => Ok(v),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok((config.default_prefix.to_string(), config.digits)),
+        Err(e) => Err(e),
+    }
+}
+
 /// Atomically allocates and formats the next number for `config` within
 /// `workspace_id`. Must be called within the same transaction as the record
 /// insert it numbers, so a rolled-back insert does not burn a gap silently
@@ -84,6 +104,7 @@ pub fn allocate_number(
     } else {
         String::new()
     };
+    let (prefix, digits) = resolve_format(conn, workspace_id, config)?;
 
     let next_value: i64 = conn.query_row(
         "INSERT INTO number_sequences (id, workspace_id, entity_type, prefix, period_key, next_value)
@@ -95,27 +116,16 @@ pub fn allocate_number(
             new_uuid(),
             workspace_id,
             config.entity_type,
-            config.default_prefix,
+            &prefix,
             &period_key,
         ),
         |row| row.get(0),
     )?;
 
     Ok(if config.uses_year {
-        format!(
-            "{}-{}-{:0width$}",
-            config.default_prefix,
-            period_key,
-            next_value,
-            width = config.digits
-        )
+        format!("{prefix}-{period_key}-{next_value:0digits$}")
     } else {
-        format!(
-            "{}-{:0width$}",
-            config.default_prefix,
-            next_value,
-            width = config.digits
-        )
+        format!("{prefix}-{next_value:0digits$}")
     })
 }
 
@@ -166,5 +176,23 @@ mod tests {
         assert_eq!(allocate_number(&conn, "ws2", &COMPANY).unwrap(), "CUS-000001");
         assert_eq!(allocate_number(&conn, "ws1", &CONTACT).unwrap(), "CON-000001");
         assert_eq!(allocate_number(&conn, "ws1", &COMPANY).unwrap(), "CUS-000002");
+    }
+
+    #[test]
+    fn an_admin_override_changes_the_format_without_resetting_the_sequence() {
+        let conn = open_in_memory_db().unwrap();
+        seed_workspace(&conn, "ws1");
+
+        assert_eq!(allocate_number(&conn, "ws1", &COMPANY).unwrap(), "CUS-000001");
+
+        conn.execute(
+            "INSERT INTO numbering_configs (id, workspace_id, entity_type, prefix, digits, created_at, updated_at)
+             VALUES ('nc1', 'ws1', 'company', 'ACC', 4, '2026-01-01', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+
+        // The sequence continues from 2, not reset to 1, just reformatted.
+        assert_eq!(allocate_number(&conn, "ws1", &COMPANY).unwrap(), "ACC-0002");
     }
 }

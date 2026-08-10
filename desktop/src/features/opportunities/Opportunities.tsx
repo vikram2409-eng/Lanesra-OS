@@ -4,7 +4,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES, type Opportunity, type OpportunityInput } from "../../lib/types";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import {
+  OPPORTUNITY_STAGES,
+  OPPORTUNITY_STATUSES,
+  type CustomFieldValues,
+  type Opportunity,
+  type OpportunityInput,
+} from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -136,7 +143,13 @@ function OpportunityForm({
     queryFn: () => api.getOpportunity(opportunityId as string),
     enabled: !!opportunityId,
   });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", opportunityId],
+    queryFn: () => api.getCustomFieldValues(opportunityId as string),
+    enabled: !!opportunityId,
+  });
   const [input, setInput] = useState<OpportunityInput>(emptyInput(companies[0]?.id ?? "", "USD"));
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,7 +159,7 @@ function OpportunityForm({
     enabled: !!input.company_id,
   });
 
-  if (existing.data && loadedFor !== opportunityId) {
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== opportunityId) {
     const {
       company_id,
       primary_contact_id,
@@ -175,12 +188,18 @@ function OpportunityForm({
       lost_reason,
       next_step,
     });
+    setCustomValues(existingCustomFields.data);
     setLoadedFor(opportunityId);
   }
 
   const save = useMutation({
-    mutationFn: () =>
-      opportunityId ? api.updateOpportunity(opportunityId, input) : api.createOpportunity(input),
+    mutationFn: async () => {
+      const opportunity = opportunityId
+        ? await api.updateOpportunity(opportunityId, input)
+        : await api.createOpportunity(input);
+      await api.setCustomFieldValues("Opportunity", opportunity.id, customValues);
+      return opportunity;
+    },
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the opportunity"),
   });
@@ -274,6 +293,7 @@ function OpportunityForm({
             onChange={(e) => setInput({ ...input, next_step: e.target.value || null })}
           />
         </div>
+        <CustomFieldsSection entityType="Opportunity" status={input.status} values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save

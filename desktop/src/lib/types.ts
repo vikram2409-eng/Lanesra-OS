@@ -14,8 +14,10 @@ export interface Workspace {
   default_tax_rate_bp: number;
   operating_mode: string;
   business_address: string | null;
+  phone: string | null;
   logo_base64: string | null;
   logo_mime: string | null;
+  dashboard_kpi_prefs: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +42,7 @@ export interface WorkspaceUpdate {
   business_name: string;
   legal_name: string | null;
   business_address: string | null;
+  phone: string | null;
   currency_code: string;
   locale: string;
   timezone: string;
@@ -49,6 +52,11 @@ export interface WorkspaceUpdate {
 export interface WorkspaceLogo {
   logo_base64: string;
   logo_mime: string;
+}
+
+/** FR-KPI: admin-chosen Dashboard KPI tiles and order; empty resets to default. */
+export interface DashboardKpiPrefs {
+  keys: string[];
 }
 
 export interface User {
@@ -667,12 +675,38 @@ export interface SalesByOwner {
   total_cents: number;
 }
 
-// FR-CFG: custom fields on Companies and Contacts, defined by an
+// FR-CFG: custom fields on every major entity, defined by an
 // Administrator via an attribute side-table rather than a schema change.
 export const CUSTOM_FIELD_TYPES = ["text", "number", "date", "boolean", "select"] as const;
 export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
-export const CUSTOM_FIELD_ENTITY_TYPES = ["Company", "Contact"] as const;
+export const CUSTOM_FIELD_ENTITY_TYPES = [
+  "Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task", "Product",
+] as const;
 export type CustomFieldEntityType = (typeof CUSTOM_FIELD_ENTITY_TYPES)[number];
+
+/** Plural label for an entity type, used in admin screen tabs/headings. */
+export function entityTypeLabel(entityType: string): string {
+  const labels: Record<string, string> = {
+    Company: "Companies",
+    Contact: "Contacts",
+    Opportunity: "Opportunities",
+    Quote: "Quotes",
+    Order: "Orders",
+    Invoice: "Invoices",
+    Contract: "Contracts",
+    Task: "Tasks",
+    Product: "Products",
+  };
+  return labels[entityType] ?? `${entityType}s`;
+}
+
+/** The one built-in, enum-like field each entity exposes as a rule
+ * trigger - mirrors field_rule::builtin_trigger_field_for in the Rust
+ * core. "status" for every entity except Product, which only has
+ * `is_active` (compared as the strings "true"/"false"). */
+export function builtinTriggerFieldFor(entityType: string): string {
+  return entityType === "Product" ? "is_active" : "status";
+}
 
 export interface CustomFieldDefinition {
   id: string;
@@ -714,16 +748,42 @@ export type CustomFieldValues = Record<string, string>;
 
 // FR-RUL: admin-defined conditional rules over custom fields, e.g.
 // "require Lead Source when Status = Prospect". Scoped to custom fields
-// as the target (and, for the trigger, either the built-in "status"
-// field or another custom field) - see field_rule_service's doc comment
-// for why built-in fields in general are out of scope.
+// as the target (and, for the trigger, either the entity's one built-in
+// field from `builtinTriggerFieldFor` or another custom field) - see
+// field_rule_service's doc comment for why built-in fields in general are
+// out of scope.
 export const RULE_OPERATORS = ["equals", "not_equals"] as const;
 export type RuleOperator = (typeof RULE_OPERATORS)[number];
 export const RULE_EFFECTS = ["require", "hide"] as const;
 export type RuleEffect = (typeof RULE_EFFECTS)[number];
 export const TRIGGER_SOURCES = ["builtin", "custom"] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
-export const BUILTIN_TRIGGER_FIELDS = ["status"] as const;
+
+/** The valid values for an entity's built-in trigger field
+ * (`builtinTriggerFieldFor`) - its status/stage enum, or ["true","false"]
+ * for Product's is_active. Used to populate the value dropdown when
+ * building a business rule or workflow rule against that field. */
+export function statusesForEntity(entityType: string): readonly string[] {
+  switch (entityType) {
+    case "Company": return COMPANY_STATUSES;
+    case "Contact": return CONTACT_STATUSES;
+    case "Opportunity": return OPPORTUNITY_STATUSES;
+    case "Quote": return QUOTE_STATUSES;
+    case "Order": return ORDER_STATUSES;
+    case "Invoice": return INVOICE_STATUSES;
+    case "Contract": return CONTRACT_STATUSES;
+    case "Task": return TASK_STATUSES;
+    case "Product": return ["true", "false"];
+    default: return [];
+  }
+}
+
+/** Same as statusesForEntity, but for the field a *workflow* rule
+ * transitions on (`transitionFieldFor`) - only Opportunity differs, using
+ * its stage list instead of its status list. */
+export function transitionValuesForEntity(entityType: string): readonly string[] {
+  return entityType === "Opportunity" ? OPPORTUNITY_STAGES : statusesForEntity(entityType);
+}
 
 export interface FieldRule {
   id: string;
@@ -763,13 +823,24 @@ export interface FieldRuleUpdate {
   is_active: boolean;
 }
 
-// FR-WFL Phase 1: admin-defined workflow automation - "when an
-// Opportunity's stage (or an Invoice's status) transitions to X, create a
-// follow-up Task automatically." Unlike FR-RUL, every matching active rule
-// fires and creates its own task - there's no "highest wins" conflict to
-// resolve, since the effect is additive (creating a task), not a value.
-export const WORKFLOW_ENTITY_TYPES = ["Opportunity", "Invoice"] as const;
+// FR-WFL: admin-defined workflow automation - "when an Opportunity's stage
+// (or another entity's status) transitions to X, create a follow-up Task
+// automatically." Unlike FR-RUL, every matching active rule fires and
+// creates its own task - there's no "highest wins" conflict to resolve,
+// since the effect is additive (creating a task), not a value. Every
+// entity with a status-like field except Product, which only has a
+// boolean is_active and no meaningful "transition" to automate on.
+export const WORKFLOW_ENTITY_TYPES = [
+  "Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task",
+] as const;
 export type WorkflowEntityType = (typeof WORKFLOW_ENTITY_TYPES)[number];
+
+/** "stage" for Opportunity (the field that actually flows through the
+ * sales pipeline), "status" for everything else - mirrors
+ * workflow_rule::transition_field_for in the Rust core. */
+export function transitionFieldFor(entityType: string): string {
+  return entityType === "Opportunity" ? "stage" : "status";
+}
 
 export interface WorkflowRule {
   id: string;
@@ -801,4 +872,63 @@ export interface WorkflowRuleUpdate {
   due_in_days: number;
   assignee_user_id: string | null;
   is_active: boolean;
+}
+
+// Admin flexibility: configurable ID/numbering format per entity type.
+// The letters in an example like "ACC-ab0001" are just part of the
+// chosen prefix text - there is no separate alpha-segment syntax.
+export const NUMBERING_ENTITY_TYPES = [
+  "Company", "Contact", "Opportunity", "Product", "Quote", "Order", "Invoice", "Contract", "Task",
+] as const;
+export type NumberingEntityType = (typeof NUMBERING_ENTITY_TYPES)[number];
+
+export interface EffectiveNumbering {
+  entity_type: string;
+  prefix: string;
+  digits: number;
+  example: string;
+  is_custom: boolean;
+}
+
+export interface NumberingOverrideInput {
+  entity_type: NumberingEntityType;
+  prefix: string;
+  digits: number;
+}
+
+// Admin flexibility: a simple report builder - pick an entity, a
+// group-by field (built-in status/stage, or an active custom field), and
+// an aggregate (count, or sum of a numeric custom field).
+export const REPORT_AGGREGATES = ["count", "sum"] as const;
+export type ReportAggregate = (typeof REPORT_AGGREGATES)[number];
+export const REPORT_GROUP_BY_SOURCES = ["builtin", "custom"] as const;
+export type ReportGroupBySource = (typeof REPORT_GROUP_BY_SOURCES)[number];
+
+export interface CustomReport {
+  id: string;
+  workspace_id: string;
+  name: string;
+  entity_type: string;
+  group_by_source: string;
+  group_by_field: string;
+  aggregate: string;
+  sum_field_key: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomReportInput {
+  name: string;
+  entity_type: CustomFieldEntityType;
+  group_by_source: ReportGroupBySource;
+  group_by_field: string;
+  aggregate: ReportAggregate;
+  sum_field_key: string | null;
+}
+
+export type CustomReportUpdate = CustomReportInput;
+
+export interface CustomReportRow {
+  group: string;
+  value: number;
 }

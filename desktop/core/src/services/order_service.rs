@@ -8,6 +8,18 @@ use crate::domain::{AppError, AppResult};
 use crate::models::invoice::InvoiceLineInput;
 use crate::models::order::{Order, OrderInput, OrderWithLines, ORDER_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, invoice_repo, order_repo};
+use crate::services::workflow_service;
+
+/// Orders have no owner of their own, so a workflow rule assigning to "the
+/// record's owner" resolves via the Order's Company owner - the same
+/// attribution invoice_service and quote_service use.
+fn fire_workflow(conn: &Connection, order: &Order, old_status: &str, new_status: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+    let owner_user_id = company_repo::get(conn, &order.company_id)?.and_then(|c| c.owner_user_id);
+    workflow_service::fire_transition(
+        conn, &order.workspace_id, "Order", &order.id, old_status, new_status, owner_user_id.as_deref(), actor_user_id,
+    )?;
+    Ok(())
+}
 
 fn validate_relationships(conn: &Connection, input: &OrderInput) -> AppResult<String> {
     let company = company_repo::get(conn, &input.company_id)?
@@ -118,6 +130,7 @@ pub fn set_status(
         &format!("Order {} status changed to {}", existing.order.order_number, status),
         None,
     )?;
+    fire_workflow(conn, &existing.order, &existing.order.status, status, actor_user_id)?;
     load(conn, id)
 }
 

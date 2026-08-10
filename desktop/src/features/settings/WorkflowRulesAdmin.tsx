@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import {
-  INVOICE_STATUSES,
-  OPPORTUNITY_STAGES,
+  entityTypeLabel,
+  transitionFieldFor,
+  transitionValuesForEntity,
   WORKFLOW_ENTITY_TYPES,
   type WorkflowEntityType,
   type WorkflowRule,
@@ -14,7 +15,7 @@ import {
 function emptyInput(entityType: WorkflowEntityType): WorkflowRuleInput {
   return {
     entity_type: entityType,
-    trigger_status: statusesFor(entityType)[0],
+    trigger_status: transitionValuesForEntity(entityType)[0],
     task_title: "",
     task_description: null,
     due_in_days: 0,
@@ -22,32 +23,25 @@ function emptyInput(entityType: WorkflowEntityType): WorkflowRuleInput {
   };
 }
 
-function statusesFor(entityType: WorkflowEntityType): readonly string[] {
-  return entityType === "Opportunity" ? OPPORTUNITY_STAGES : INVOICE_STATUSES;
-}
-
-function triggerLabel(entityType: WorkflowEntityType): string {
-  return entityType === "Opportunity" ? "stage" : "status";
-}
-
 /** Plain-English summary, e.g. "When stage reaches Won, create task 'Send onboarding kit' (due in 3 days, assigned to owner)." */
 function describeRule(rule: WorkflowRule, nameByUserId: Map<string, string>): string {
-  const field = triggerLabel(rule.entity_type as WorkflowEntityType);
+  const field = transitionFieldFor(rule.entity_type);
   const due = rule.due_in_days === 0 ? "due immediately" : `due in ${rule.due_in_days} day${rule.due_in_days === 1 ? "" : "s"}`;
   const assignee = rule.assignee_user_id ? nameByUserId.get(rule.assignee_user_id) ?? "an unknown user" : "the record's owner";
   return `When ${field} reaches "${rule.trigger_status}", create task "${rule.task_title}" (${due}, assigned to ${assignee}).`;
 }
 
 /**
- * Admin screen for FR-WFL Phase 1 workflow automation - lets an
- * Administrator auto-create a follow-up Task when an Opportunity's stage
- * or an Invoice's status transitions to a chosen value. Enforced entirely
- * server-side at the moment of the transition (opportunity_service::update,
- * invoice_service's status transitions) - there is nothing for the client
- * to evaluate live, unlike FR-RUL's field rules.
+ * Admin screen for FR-WFL workflow automation - lets an Administrator
+ * auto-create a follow-up Task when a record's stage or status transitions
+ * to a chosen value, across every entity that has one (Company, Contact,
+ * Opportunity, Quote, Order, Invoice, Contract, Task). Enforced entirely
+ * server-side at the moment of the transition (each entity service's
+ * update/status-change functions) - there is nothing for the client to
+ * evaluate live, unlike FR-RUL's field rules.
  */
 export function WorkflowRulesAdmin() {
-  const [entityType, setEntityType] = useState<WorkflowEntityType>("Opportunity");
+  const [entityType, setEntityType] = useState<WorkflowEntityType>(WORKFLOW_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -80,9 +74,9 @@ export function WorkflowRulesAdmin() {
         </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-        Automatically create a follow-up task when an Opportunity's stage or an Invoice's status changes - e.g. a
-        task to send an onboarding kit the moment a deal is Won. Every matching active rule fires, so more than one
-        can create more than one task.
+        Automatically create a follow-up task when a record's stage or status changes - e.g. a task to send an
+        onboarding kit the moment a deal is Won. Every matching active rule fires, so more than one can create more
+        than one task.
       </p>
 
       <div className="tab-row">
@@ -96,7 +90,7 @@ export function WorkflowRulesAdmin() {
               setEditingId(null);
             }}
           >
-            {t === "Opportunity" ? "Opportunities" : "Invoices"}
+            {entityTypeLabel(t)}
           </button>
         ))}
       </div>
@@ -142,7 +136,7 @@ export function WorkflowRulesAdmin() {
 
       {rules.isLoading && <p>Loading...</p>}
       {rules.data && rules.data.length === 0 && (
-        <p className="empty-state">No workflow rules defined for {entityType}s yet.</p>
+        <p className="empty-state">No workflow rules defined for {entityTypeLabel(entityType)} yet.</p>
       )}
       {rules.data && rules.data.length > 0 && !creating && !editing && (
         <table>
@@ -231,9 +225,9 @@ function RuleForm({
         }}
       >
         <div className="form-field">
-          <label>When {triggerLabel(entityType)} reaches</label>
+          <label>When {transitionFieldFor(entityType)} reaches</label>
           <select value={triggerStatus} onChange={(e) => setTriggerStatus(e.target.value)}>
-            {statusesFor(entityType).map((s) => (
+            {transitionValuesForEntity(entityType).map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>

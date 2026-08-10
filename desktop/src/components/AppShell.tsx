@@ -12,8 +12,7 @@ export type Section =
   | "contracts"
   | "tasks"
   | "reports"
-  | "users"
-  | "settings"
+  | "admin"
   | "account";
 
 const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
@@ -28,8 +27,10 @@ const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "contracts", label: "Contracts" },
   { section: "tasks", label: "Tasks" },
   { section: "reports", label: "Reports" },
-  { section: "users", label: "Users", adminOnly: true },
-  { section: "settings", label: "Settings", adminOnly: true },
+  // Users lives inside the Admin panel now, alongside branding, custom
+  // fields, business rules, workflow automation, numbering and Dashboard
+  // KPIs - one nav item for every administrator-facing capability.
+  { section: "admin", label: "Admin", adminOnly: true },
 ];
 
 export function AppShell({

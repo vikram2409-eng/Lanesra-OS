@@ -18,17 +18,19 @@ use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues};
+use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
 use lanesra_core::models::field_rule::{FieldRuleInput, FieldRuleUpdate};
+use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workflow_rule::{WorkflowRuleInput, WorkflowRuleUpdate};
-use lanesra_core::models::workspace::{WorkspaceLogo, WorkspaceUpdate};
+use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
-    custom_field_service, dashboard_service, field_rule_service, invoice_service, opportunity_service,
-    order_service, product_service, quote_service, report_service, task_service, user_service, workflow_service,
-    workspace_service,
+    custom_field_service, custom_report_service, dashboard_service, field_rule_service, invoice_service,
+    numbering_service, opportunity_service, order_service, product_service, quote_service, report_service,
+    task_service, user_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -269,6 +271,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(workspace_service::set_logo(conn, &input, actor)?)
         }
         "clear_workspace_logo" => to_value(workspace_service::clear_logo(conn, actor)?),
+        "set_dashboard_kpis" => {
+            let prefs: DashboardKpiPrefs = arg(args, "prefs")?;
+            to_value(workspace_service::set_dashboard_kpis(conn, &prefs, actor)?)
+        }
 
         "report_revenue_by_month" => {
             let range: ReportRange = arg(args, "range")?;
@@ -356,6 +362,37 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let id: String = arg(args, "id")?;
             let input: WorkflowRuleUpdate = arg(args, "input")?;
             to_value(workflow_service::update_rule(conn, &id, &input, actor)?)
+        }
+
+        "list_numbering_formats" => to_value(numbering_service::list_effective(conn, &require_workspace_id(conn)?, actor)?),
+        "set_numbering_format" => {
+            let input: NumberingOverrideInput = arg(args, "input")?;
+            to_value(numbering_service::set_override(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "reset_numbering_format" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(numbering_service::reset_override(conn, &require_workspace_id(conn)?, &entity_type, actor)?)
+        }
+
+        "list_custom_reports" => to_value(custom_report_service::list(conn, &require_workspace_id(conn)?)?),
+        "create_custom_report" => {
+            let input: CustomReportInput = arg(args, "input")?;
+            to_value(custom_report_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_custom_report" => {
+            let id: String = arg(args, "id")?;
+            let input: CustomReportUpdate = arg(args, "input")?;
+            to_value(custom_report_service::update(conn, &id, &input, actor)?)
+        }
+        "delete_custom_report" => {
+            custom_report_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "run_custom_report" => {
+            let id: String = arg(args, "id")?;
+            let report = lanesra_core::repositories::custom_report_repo::get(conn, &id)?
+                .ok_or_else(|| AppError::NotFound("Custom report".into()))?;
+            to_value(custom_report_service::run(conn, &report)?)
         }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),

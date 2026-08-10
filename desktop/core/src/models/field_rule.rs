@@ -3,9 +3,17 @@ use serde::{Deserialize, Serialize};
 pub const RULE_OPERATORS: &[&str] = &["equals", "not_equals"];
 pub const RULE_EFFECTS: &[&str] = &["require", "hide"];
 pub const TRIGGER_SOURCES: &[&str] = &["builtin", "custom"];
-/// The only built-in field Phase 1 supports as a rule trigger - the one
-/// enum-like field every entity in scope (Company, Contact) actually has.
-pub const BUILTIN_TRIGGER_FIELDS: &[&str] = &["status"];
+
+/// The one built-in, enum-like field each entity type exposes as a rule
+/// trigger. Every entity has a `status` column except Product, which only
+/// has `is_active` (stored/compared as the strings "true"/"false", the
+/// same convention boolean custom field values already use).
+pub fn builtin_trigger_field_for(entity_type: &str) -> &'static str {
+    match entity_type {
+        "Product" => "is_active",
+        _ => "status",
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FieldRule {

@@ -14,8 +14,7 @@ import { Invoices } from "./features/invoices/Invoices";
 import { Contracts } from "./features/contracts/Contracts";
 import { Tasks } from "./features/tasks/Tasks";
 import { Reports } from "./features/reports/Reports";
-import { Users } from "./features/users/Users";
-import { Settings } from "./features/settings/Settings";
+import { AdminPanel } from "./features/settings/Settings";
 import { Account } from "./features/account/Account";
 import { api } from "./lib/api";
 import type { User, Workspace } from "./lib/types";
@@ -88,9 +87,8 @@ export function App() {
       {section === "invoices" && <Invoices />}
       {section === "contracts" && <Contracts />}
       {section === "tasks" && <Tasks currentUserId={boot.user.id} />}
-      {section === "reports" && <Reports />}
-      {section === "users" && <Users />}
-      {section === "settings" && <Settings />}
+      {section === "reports" && <Reports isAdmin={boot.user.roles.includes("Administrator")} />}
+      {section === "admin" && <AdminPanel />}
       {section === "account" && <Account user={boot.user} />}
     </AppShell>
   );

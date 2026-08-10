@@ -5,6 +5,7 @@ use crate::domain::numbering::{self, CONTRACT};
 use crate::domain::{AppError, AppResult};
 use crate::models::contract::{Contract, ContractInput, CONTRACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, contract_repo, quote_repo};
+use crate::services::workflow_service;
 
 fn validate(conn: &Connection, input: &ContractInput) -> AppResult<String> {
     if input.title.trim().is_empty() {
@@ -98,6 +99,9 @@ pub fn update(
             contract.contract_number, contract.status
         ),
         None,
+    )?;
+    workflow_service::fire_transition(
+        conn, &workspace_id, "Contract", id, &before.status, &contract.status, contract.owner_user_id.as_deref(), actor_user_id,
     )?;
     Ok(contract)
 }

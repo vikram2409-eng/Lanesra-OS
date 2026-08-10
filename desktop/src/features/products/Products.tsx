@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import { centsToInputValue, formatCents, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { PRODUCT_TYPES, type Product, type ProductInput } from "../../lib/types";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -117,19 +118,30 @@ function ProductForm({
     queryFn: () => api.getProduct(productId as string),
     enabled: !!productId,
   });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", productId],
+    queryFn: () => api.getCustomFieldValues(productId as string),
+    enabled: !!productId,
+  });
   const [input, setInput] = useState<ProductInput>(emptyInput);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
-  if (existing.data && loadedFor !== productId) {
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== productId) {
     const { sku, type, name, category, description, unit_price_cents, cost_cents, tax_rate_bp, default_quantity_milli, is_active } =
       existing.data;
     setInput({ sku, type, name, category, description, unit_price_cents, cost_cents, tax_rate_bp, default_quantity_milli, is_active });
+    setCustomValues(existingCustomFields.data);
     setLoadedFor(productId);
   }
 
   const save = useMutation({
-    mutationFn: () => (productId ? api.updateProduct(productId, input) : api.createProduct(input)),
+    mutationFn: async () => {
+      const product = productId ? await api.updateProduct(productId, input) : await api.createProduct(input);
+      await api.setCustomFieldValues("Product", product.id, customValues);
+      return product;
+    },
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the product"),
   });
@@ -198,6 +210,12 @@ function ProductForm({
             onChange={(e) => setInput({ ...input, description: e.target.value || null })}
           />
         </div>
+        <CustomFieldsSection
+          entityType="Product"
+          status={input.is_active ? "true" : "false"}
+          values={customValues}
+          onChange={setCustomValues}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save

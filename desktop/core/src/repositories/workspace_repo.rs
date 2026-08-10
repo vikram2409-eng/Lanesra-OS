@@ -14,8 +14,10 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Workspace> {
         default_tax_rate_bp: row.get("default_tax_rate_bp")?,
         operating_mode: row.get("operating_mode")?,
         business_address: row.get("business_address")?,
+        phone: row.get("phone")?,
         logo_base64: row.get("logo_base64")?,
         logo_mime: row.get("logo_mime")?,
+        dashboard_kpi_prefs: row.get("dashboard_kpi_prefs")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -56,13 +58,14 @@ pub fn create(conn: &Connection, setup: &WorkspaceSetup) -> rusqlite::Result<Wor
 
 pub fn update(conn: &Connection, id: &str, input: &WorkspaceUpdate) -> rusqlite::Result<Workspace> {
     conn.execute(
-        "UPDATE workspaces SET business_name = ?1, legal_name = ?2, business_address = ?3,
-            currency_code = ?4, locale = ?5, timezone = ?6, default_tax_rate_bp = ?7, updated_at = ?8
-         WHERE id = ?9",
+        "UPDATE workspaces SET business_name = ?1, legal_name = ?2, business_address = ?3, phone = ?4,
+            currency_code = ?5, locale = ?6, timezone = ?7, default_tax_rate_bp = ?8, updated_at = ?9
+         WHERE id = ?10",
         (
             &input.business_name,
             &input.legal_name,
             &input.business_address,
+            &input.phone,
             &input.currency_code,
             &input.locale,
             &input.timezone,
@@ -70,6 +73,14 @@ pub fn update(conn: &Connection, id: &str, input: &WorkspaceUpdate) -> rusqlite:
             now_iso(),
             id,
         ),
+    )?;
+    conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
+}
+
+pub fn set_dashboard_kpi_prefs(conn: &Connection, id: &str, prefs_json: Option<&str>) -> rusqlite::Result<Workspace> {
+    conn.execute(
+        "UPDATE workspaces SET dashboard_kpi_prefs = ?1, updated_at = ?2 WHERE id = ?3",
+        (prefs_json, now_iso(), id),
     )?;
     conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
 }

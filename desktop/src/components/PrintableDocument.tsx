@@ -68,6 +68,7 @@ export function PrintableDocument(props: PrintableDocumentProps) {
             {workspace.data?.business_address && (
               <div className="print-doc-muted">{workspace.data.business_address}</div>
             )}
+            {workspace.data?.phone && <div className="print-doc-muted">{workspace.data.phone}</div>}
           </div>
         </div>
         <div className="print-doc-heading">

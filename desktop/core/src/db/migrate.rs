@@ -11,6 +11,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (4, include_str!("migrations/0004_custom_fields.sql")),
     (5, include_str!("migrations/0005_field_rules.sql")),
     (6, include_str!("migrations/0006_workflow_rules.sql")),
+    (7, include_str!("migrations/0007_broaden_entity_types.sql")),
+    (8, include_str!("migrations/0008_workspace_phone_and_kpi_prefs.sql")),
+    (9, include_str!("migrations/0009_numbering_configs.sql")),
+    (10, include_str!("migrations/0010_custom_reports.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -74,7 +78,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 6);
+        assert_eq!(version, 10);
 
         let table_count: i64 = conn
             .query_row(

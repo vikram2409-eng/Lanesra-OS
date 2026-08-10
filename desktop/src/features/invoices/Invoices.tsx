@@ -8,7 +8,9 @@ import { LineItemsEditor } from "../../components/LineItemsEditor";
 import { PrintableDocument } from "../../components/PrintableDocument";
 import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import type { Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import type { CustomFieldValues, Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
@@ -122,6 +124,7 @@ function InvoiceForm({
   const [lines, setLines] = useState<LineInput[]>([
     { product_id: null, description: "", quantity_milli: 1000, unit_price_cents: 0, discount_bp: 0, tax_rate_bp: 0 },
   ]);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [error, setError] = useState<string | null>(null);
 
   const contacts = useQuery({
@@ -132,7 +135,7 @@ function InvoiceForm({
   const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const input: InvoiceInput = {
         company_id: companyId,
         contact_id: contactId,
@@ -143,7 +146,9 @@ function InvoiceForm({
         notes: notes || null,
         lines,
       };
-      return api.createInvoice(input);
+      const result = await api.createInvoice(input);
+      await api.setCustomFieldValues("Invoice", result.invoice.id, customValues);
+      return result;
     },
     onSuccess: (result) => onDone(result.invoice.id),
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create the invoice"),
@@ -204,6 +209,7 @@ function InvoiceForm({
             <label>Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+          <CustomFieldsSection entityType="Invoice" status="Draft" values={customValues} onChange={setCustomValues} />
         </div>
 
         <LineItemsEditor lines={lines} onChange={setLines} products={products.data ?? []} currencyCode={currencyCode} />
@@ -401,6 +407,10 @@ function InvoiceDetail({ id, onBack, onChanged }: { id: string; onBack: () => vo
             </button>
           </form>
         )}
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsCard entityType="Invoice" entityId={inv.id} status={inv.status} />
       </div>
     </div>
   );

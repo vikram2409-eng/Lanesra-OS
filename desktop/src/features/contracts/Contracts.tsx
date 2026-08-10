@@ -5,7 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { CONTRACT_STATUSES, type Contract, type ContractInput } from "../../lib/types";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CONTRACT_STATUSES, type Contract, type ContractInput, type CustomFieldValues } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -149,7 +150,13 @@ function ContractForm({
     queryFn: () => api.getContract(contractId as string),
     enabled: !!contractId,
   });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", contractId],
+    queryFn: () => api.getCustomFieldValues(contractId as string),
+    enabled: !!contractId,
+  });
   const [input, setInput] = useState<ContractInput>(emptyInput(companies[0]?.id ?? "", "USD"));
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -161,7 +168,7 @@ function ContractForm({
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const companyQuotes = (quotes.data ?? []).filter((q) => q.company_id === input.company_id);
 
-  if (existing.data && loadedFor !== contractId) {
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== contractId) {
     const {
       company_id,
       contact_id,
@@ -194,12 +201,16 @@ function ContractForm({
       status,
       notes,
     });
+    setCustomValues(existingCustomFields.data);
     setLoadedFor(contractId);
   }
 
   const save = useMutation({
-    mutationFn: () =>
-      contractId ? api.updateContract(contractId, input) : api.createContract(input),
+    mutationFn: async () => {
+      const contract = contractId ? await api.updateContract(contractId, input) : await api.createContract(input);
+      await api.setCustomFieldValues("Contract", contract.id, customValues);
+      return contract;
+    },
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the contract"),
   });
@@ -309,6 +320,7 @@ function ContractForm({
           <label>Notes</label>
           <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
         </div>
+        <CustomFieldsSection entityType="Contract" status={input.status} values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save

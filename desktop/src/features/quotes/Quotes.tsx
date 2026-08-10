@@ -8,7 +8,9 @@ import { LineItemsEditor } from "../../components/LineItemsEditor";
 import { PrintableDocument } from "../../components/PrintableDocument";
 import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { QUOTE_STATUSES, type Quote, type QuoteInput } from "../../lib/types";
+import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { QUOTE_STATUSES, type CustomFieldValues, type Quote, type QuoteInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
@@ -119,6 +121,7 @@ function QuoteForm({
   const [lines, setLines] = useState<LineInput[]>([
     { product_id: null, description: "", quantity_milli: 1000, unit_price_cents: 0, discount_bp: 0, tax_rate_bp: 0 },
   ]);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [error, setError] = useState<string | null>(null);
 
   const contacts = useQuery({
@@ -134,7 +137,7 @@ function QuoteForm({
   const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const input: QuoteInput = {
         company_id: companyId,
         contact_id: contactId,
@@ -146,7 +149,9 @@ function QuoteForm({
         terms: null,
         lines,
       };
-      return api.createQuote(input);
+      const result = await api.createQuote(input);
+      await api.setCustomFieldValues("Quote", result.quote.id, customValues);
+      return result;
     },
     onSuccess: (result) => onDone(result.quote.id),
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create the quote"),
@@ -211,6 +216,7 @@ function QuoteForm({
             <label>Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+          <CustomFieldsSection entityType="Quote" status="Draft" values={customValues} onChange={setCustomValues} />
         </div>
 
         <LineItemsEditor lines={lines} onChange={setLines} products={products.data ?? []} currencyCode={currencyCode} />
@@ -333,6 +339,10 @@ function QuoteDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
           <div>Tax: {formatCents(q.tax_cents, q.currency_code)}</div>
           <div style={{ fontWeight: 700 }}>Total: {formatCents(q.total_cents, q.currency_code)}</div>
         </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsCard entityType="Quote" entityId={q.id} status={q.status} />
       </div>
     </div>
   );

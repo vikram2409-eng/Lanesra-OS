@@ -40,10 +40,17 @@ import type {
   CustomFieldDefinitionUpdate,
   CustomFieldEntityType,
   CustomFieldValues,
+  CustomReport,
+  CustomReportInput,
+  CustomReportRow,
+  CustomReportUpdate,
+  DashboardKpiPrefs,
+  EffectiveNumbering,
   FieldRule,
   FieldRuleInput,
   FieldRuleUpdate,
   LostReasonBreakdown,
+  NumberingOverrideInput,
   ReportRange,
   RevenueByMonth,
   SalesByOwner,
@@ -107,6 +114,7 @@ export const api = {
   updateWorkspace: (input: WorkspaceUpdate) => call<Workspace>("update_workspace", { input }),
   setWorkspaceLogo: (input: WorkspaceLogo) => call<Workspace>("set_workspace_logo", { input }),
   clearWorkspaceLogo: () => call<Workspace>("clear_workspace_logo"),
+  setDashboardKpis: (prefs: DashboardKpiPrefs) => call<Workspace>("set_dashboard_kpis", { prefs }),
 
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),
@@ -225,6 +233,18 @@ export const api = {
   createWorkflowRule: (input: WorkflowRuleInput) => call<WorkflowRule>("create_workflow_rule", { input }),
   updateWorkflowRule: (id: string, input: WorkflowRuleUpdate) =>
     call<WorkflowRule>("update_workflow_rule", { id, input }),
+
+  listNumberingFormats: () => call<EffectiveNumbering[]>("list_numbering_formats"),
+  setNumberingFormat: (input: NumberingOverrideInput) => call<EffectiveNumbering>("set_numbering_format", { input }),
+  resetNumberingFormat: (entityType: string) =>
+    call<EffectiveNumbering>("reset_numbering_format", { entityType }),
+
+  listCustomReports: () => call<CustomReport[]>("list_custom_reports"),
+  createCustomReport: (input: CustomReportInput) => call<CustomReport>("create_custom_report", { input }),
+  updateCustomReport: (id: string, input: CustomReportUpdate) =>
+    call<CustomReport>("update_custom_report", { id, input }),
+  deleteCustomReport: (id: string) => call<void>("delete_custom_report", { id }),
+  runCustomReport: (id: string) => call<CustomReportRow[]>("run_custom_report", { id }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

@@ -1,0 +1,46 @@
+use rusqlite::Connection;
+
+use crate::domain::ids::{new_uuid, now_iso};
+use crate::models::numbering_override::NumberingOverride;
+
+fn map_row(row: &rusqlite::Row) -> rusqlite::Result<NumberingOverride> {
+    Ok(NumberingOverride {
+        id: row.get("id")?,
+        workspace_id: row.get("workspace_id")?,
+        entity_type: row.get("entity_type")?,
+        prefix: row.get("prefix")?,
+        digits: row.get("digits")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
+pub fn get_for_entity(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Option<NumberingOverride>> {
+    conn.query_row(
+        "SELECT * FROM numbering_configs WHERE workspace_id = ?1 AND entity_type = ?2",
+        (workspace_id, entity_type),
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+}
+
+pub fn upsert(conn: &Connection, workspace_id: &str, entity_type: &str, prefix: &str, digits: i64) -> rusqlite::Result<NumberingOverride> {
+    let now = now_iso();
+    conn.execute(
+        "INSERT INTO numbering_configs (id, workspace_id, entity_type, prefix, digits, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+         ON CONFLICT (workspace_id, entity_type)
+         DO UPDATE SET prefix = ?4, digits = ?5, updated_at = ?6",
+        (new_uuid(), workspace_id, entity_type, prefix, digits, now),
+    )?;
+    get_for_entity(conn, workspace_id, entity_type).map(|r| r.expect("just upserted"))
+}
+
+pub fn delete(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM numbering_configs WHERE workspace_id = ?1 AND entity_type = ?2",
+        (workspace_id, entity_type),
+    )?;
+    Ok(())
+}
