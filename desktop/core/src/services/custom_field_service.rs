@@ -1,15 +1,15 @@
 //! FR-CFG: admin-defined custom fields on every major entity, via an
-//! attribute side-table rather than a schema change per field. Custom
-//! entity types (letting an admin define a whole new record type, not
-//! just fields on an existing one) remains a separate, much larger ask -
-//! see "Custom entities" in the product backlog.
+//! attribute side-table rather than a schema change per field. Also backs
+//! custom fields on admin-defined custom objects (see
+//! custom_object_service) - a custom object's key is just one more
+//! entity_type string here, validated dynamically instead of against the
+//! fixed CUSTOM_FIELD_ENTITY_TYPES list.
 
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::{
-    CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues,
-    CUSTOM_FIELD_ENTITY_TYPES, CUSTOM_FIELD_TYPES,
+    CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues, CUSTOM_FIELD_TYPES,
 };
 use crate::models::field_rule::builtin_trigger_field_for;
 use crate::repositories::{
@@ -66,11 +66,21 @@ fn slugify(conn: &Connection, workspace_id: &str, entity_type: &str, label: &str
     }
 }
 
-fn validate_definition_shape(input_entity_type: &str, field_type: &str, options: &[String], label: &str) -> AppResult<()> {
+fn validate_definition_shape(
+    conn: &Connection,
+    workspace_id: &str,
+    input_entity_type: &str,
+    field_type: &str,
+    options: &[String],
+    label: &str,
+) -> AppResult<()> {
     if label.trim().is_empty() {
         return Err(AppError::Validation("Field label is required".into()));
     }
-    if !CUSTOM_FIELD_ENTITY_TYPES.contains(&input_entity_type) {
+    // Accepts the nine built-in entity types plus any active admin-defined
+    // custom object for this workspace - see custom_object_service for why
+    // a custom object's records need no special-casing here at all.
+    if !super::custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, input_entity_type)? {
         return Err(AppError::Validation(format!("Invalid entity type '{input_entity_type}'")));
     }
     if !CUSTOM_FIELD_TYPES.contains(&field_type) {
@@ -89,7 +99,7 @@ pub fn create_definition(
     actor_user_id: Option<&str>,
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
-    validate_definition_shape(&input.entity_type, &input.field_type, &input.options, &input.label)?;
+    validate_definition_shape(conn, workspace_id, &input.entity_type, &input.field_type, &input.options, &input.label)?;
     let key = slugify(conn, workspace_id, &input.entity_type, &input.label)?;
     let id = crate::domain::ids::new_uuid();
     Ok(custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?)
@@ -111,7 +121,7 @@ pub fn update_definition(
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
     let existing = custom_field_repo::get_definition(conn, id)?.ok_or_else(|| AppError::NotFound("Custom field".into()))?;
-    validate_definition_shape(&existing.entity_type, &existing.field_type, &input.options, &input.label)?;
+    validate_definition_shape(conn, &existing.workspace_id, &existing.entity_type, &existing.field_type, &input.options, &input.label)?;
     if existing.field_type == "select" && input.options.is_empty() {
         return Err(AppError::Validation("A select field needs at least one option".into()));
     }
@@ -177,7 +187,18 @@ fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &st
             let r = product_repo::get(conn, entity_id)?.ok_or_else(|| missing("Product"))?;
             Ok((r.workspace_id, if r.is_active { "true".into() } else { "false".into() }))
         }
-        other => Err(AppError::Validation(format!("Unsupported custom field entity type '{other}'"))),
+        other => {
+            // Not a built-in type - try it as a custom object record.
+            // custom_record_repo doesn't need `other` to already be known
+            // active/valid here: an orphaned or deactivated object's
+            // existing records still need their custom field values
+            // readable (just not writable to new ones, which
+            // custom_record_service::create/update already gate).
+            match crate::repositories::custom_record_repo::get(conn, entity_id)? {
+                Some(r) if r.object_key == other => Ok((r.workspace_id, r.status)),
+                _ => Err(AppError::Validation(format!("Unsupported custom field entity type '{other}'"))),
+            }
+        }
     }
 }
 

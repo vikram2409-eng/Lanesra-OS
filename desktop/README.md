@@ -362,6 +362,34 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   exposed yet - the stored preference (`Workspace.dashboard_kpi_prefs`,
   JSON) is already an ordered list, so that's addable later without a
   schema change. See `src/features/dashboard/kpis.tsx`.
+- **Custom objects (admin extensibility, spec §20.2)**: an Administrator
+  can define a whole new business object at runtime - "Vendors", "Assets",
+  "Projects" - from Admin → Custom Objects: singular/plural name, icon,
+  and a record-number prefix/digit width. The object immediately gets its
+  own sidebar section with generic list/create/edit screens
+  (`CustomObjectRecords.tsx`), and - critically - its custom fields,
+  business rules and custom reports all work through the *exact same*
+  subsystems every built-in entity already uses, unmodified: a custom
+  object's `key` (a lowercase slug) is simply one more `entity_type`
+  string those subsystems accept. The only new integration point is
+  `custom_object_service::is_valid_dynamic_entity_type`, a single shared
+  check that `custom_field_service` and `custom_report_service` call
+  instead of matching against the fixed `CUSTOM_FIELD_ENTITY_TYPES` list.
+  Records are stored generically in a `custom_records` table (one row per
+  record of any custom object, `object_key` + `display_number` +
+  `primary_name` + a fixed `Active/Inactive/Archived` status) rather than
+  a table per object type. Deleting an object definition is blocked while
+  any of its records exist (archive them, or deactivate the object
+  instead - always non-destructive); deactivating hides it from
+  navigation and new-record creation but keeps everything intact.
+  Workflow automation on custom objects is deferred to the next phase
+  (its task-creation action would need `tasks.related_type`'s CHECK
+  constraint broadened, which that phase is doing anyway for its own
+  reasons - see below). See `core/src/services/custom_object_service.rs`,
+  `custom_record_service.rs`, and `core/tests/custom_objects.rs`, whose
+  last test composes a custom field + a business rule + the report
+  builder together on a custom object, mirroring how
+  `admin_flexibility.rs` proves the same composition on a built-in entity.
 
 ## What's deferred to a later phase
 
@@ -372,9 +400,16 @@ need to change shape later, but there is no service/command/UI layer yet:
 - Workflow automation beyond Phase 1: actions other than task creation
   (e.g. sending a notification, updating a field), and
   multi-step/branching workflows
-- Custom entities (admin-defined new record types with their own fields,
-  list/detail screens and relationships) - a separate, much larger ask
-  than generalizing fields/rules/workflows across the *existing* entities
+- Custom relationships between custom objects and core objects/each other
+  (admin-defined lookups, related-list display) - custom objects
+  themselves are no longer deferred (see "What's here" above); relating
+  them to other objects with cardinality/cascade rules is the next piece
+- Workflow automation on custom objects specifically (needs the
+  `tasks.related_type` CHECK constraint broadened - a small migration
+  bundled into the next workflow-engine phase rather than done twice)
+- A no-code screen/layout designer for custom (or built-in) object forms -
+  the largest single remaining piece of the admin extensibility spec,
+  intentionally tackled last
 - A full drag-and-drop report/dashboard builder beyond the simple
   group-by-and-aggregate report builder, and reordering Dashboard KPI tiles
 - Windows notifications for task reminders (FR-TSK-06)
@@ -721,3 +756,35 @@ numbering, report builder, KPI picker, admin nav):**
   Won; and Reports → Custom reports ran the curl-created report and
   displayed the correct grouped counts - the same report the direct API
   call had produced, now visible through the ordinary UI.
+
+**Custom Objects phase (admin extensibility §20.2 - Phase A of the
+extensibility platform):**
+
+- `cargo test --workspace`: 90/90 passing - 7 new core tests
+  (`core/tests/custom_objects.rs`: an Administrator can define a custom
+  object and a non-admin cannot; two objects with the same name get
+  auto-uniquified keys ("vendor", "vendor_2"); records are numbered from
+  the object's own definition, independent of the built-in entities'
+  numbering; creating a record for an unknown or deactivated object type
+  is rejected; deleting an object definition is blocked while records
+  exist but deactivating it is always allowed and non-destructive; a
+  custom object can't be named the same as a built-in entity; and the
+  composition test, custom fields + a business rule + the custom report
+  builder all working on a genuinely new object type with zero
+  custom-object-specific code in any of those three subsystems, mirroring
+  how `admin_flexibility.rs` proves the same composition on a built-in
+  entity).
+- `npm run build`: `tsc` + `vite build` both clean.
+- Built the real release `lanesra-server` binary and drove the whole
+  phase end to end with a real Chromium browser (Playwright), through a
+  full first-run setup rather than curl-seeded data: created a "Vendor"
+  custom object (prefix `VEN`, 4 digits) from Admin → Custom Objects;
+  confirmed the sidebar immediately grew a new "Vendors" section below a
+  divider; added a "Contact Email" custom field to Vendors from the
+  *existing* Custom fields admin screen, which now lists Vendors as an
+  extra tab alongside the nine built-in entity types with no dedicated
+  UI of its own; confirmed the Business rules admin screen lists Vendors
+  as a tab too, for free; navigated to the new Vendors screen, created a
+  record with the custom field filled in, and confirmed it was numbered
+  `VEN-0001`; reopened it in edit mode and confirmed the custom field
+  value round-tripped correctly. Zero JS console errors throughout.

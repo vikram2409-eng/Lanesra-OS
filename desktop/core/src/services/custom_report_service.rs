@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
-use crate::models::custom_field::CUSTOM_FIELD_ENTITY_TYPES;
 use crate::models::custom_report::{
     CustomReport, CustomReportInput, CustomReportRow, CustomReportUpdate, REPORT_AGGREGATES, REPORT_GROUP_BY_SOURCES,
 };
@@ -42,7 +41,7 @@ fn validate_shape(
     if name.trim().is_empty() {
         return Err(AppError::Validation("Report name is required".into()));
     }
-    if !CUSTOM_FIELD_ENTITY_TYPES.contains(&entity_type) {
+    if !super::custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, entity_type)? {
         return Err(AppError::Validation(format!("Invalid entity type '{entity_type}'")));
     }
     if !REPORT_GROUP_BY_SOURCES.contains(&group_by_source) {
@@ -130,7 +129,10 @@ fn list_builtin_values(conn: &Connection, workspace_id: &str, entity_type: &str)
             .into_iter()
             .map(|r| (r.id, if r.is_active { "true".to_string() } else { "false".to_string() }))
             .collect(),
-        other => return Err(AppError::Validation(format!("Unsupported report entity type '{other}'"))),
+        other => crate::repositories::custom_record_repo::list(conn, workspace_id, other)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
     })
 }
 

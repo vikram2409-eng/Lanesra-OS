@@ -10,7 +10,6 @@ import {
   RULE_OPERATORS,
   statusesForEntity,
   TRIGGER_SOURCES,
-  type CustomFieldEntityType,
   type FieldRule,
   type FieldRuleInput,
   type RuleEffect,
@@ -18,7 +17,7 @@ import {
   type TriggerSource,
 } from "../../lib/types";
 
-function emptyInput(entityType: CustomFieldEntityType): FieldRuleInput {
+function emptyInput(entityType: string): FieldRuleInput {
   return {
     entity_type: entityType,
     trigger_field_source: "builtin",
@@ -51,10 +50,17 @@ function describeRule(rule: FieldRule, labelByKey: Map<string, string>): string 
  * mirrored client-side for live form feedback (see lib/fieldRules.ts).
  */
 export function FieldRulesAdmin() {
-  const [entityType, setEntityType] = useState<CustomFieldEntityType>(CUSTOM_FIELD_ENTITY_TYPES[0]);
+  const [entityType, setEntityType] = useState<string>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
+  const entityTabs: { key: string; label: string }[] = [
+    ...CUSTOM_FIELD_ENTITY_TYPES.map((t) => ({ key: t as string, label: entityTypeLabel(t) })),
+    ...(customObjects.data ?? []).map((o) => ({ key: o.key, label: o.plural_label })),
+  ];
+  const currentLabel = entityTabs.find((t) => t.key === entityType)?.label ?? entityType;
 
   const rules = useQuery({
     queryKey: ["fieldRules", entityType, "all"],
@@ -93,21 +99,21 @@ export function FieldRulesAdmin() {
         rules target the same field.
       </p>
       {activeDefs.length === 0 && (
-        <p className="empty-state">Add an active custom field for {entityTypeLabel(entityType)} first - rules always target a custom field.</p>
+        <p className="empty-state">Add an active custom field for {currentLabel} first - rules always target a custom field.</p>
       )}
 
       <div className="tab-row">
-        {CUSTOM_FIELD_ENTITY_TYPES.map((t) => (
+        {entityTabs.map((t) => (
           <button
-            key={t}
-            className={`tab${entityType === t ? " active" : ""}`}
+            key={t.key}
+            className={`tab${entityType === t.key ? " active" : ""}`}
             onClick={() => {
-              setEntityType(t);
+              setEntityType(t.key);
               setCreating(false);
               setEditingId(null);
             }}
           >
-            {entityTypeLabel(t)}
+            {t.label}
           </button>
         ))}
       </div>
@@ -154,7 +160,7 @@ export function FieldRulesAdmin() {
       )}
 
       {rules.isLoading && <p>Loading...</p>}
-      {rules.data && rules.data.length === 0 && <p className="empty-state">No business rules defined for {entityTypeLabel(entityType)} yet.</p>}
+      {rules.data && rules.data.length === 0 && <p className="empty-state">No business rules defined for {currentLabel} yet.</p>}
       {rules.data && rules.data.length > 0 && !creating && !editing && (
         <table>
           <thead>
@@ -197,7 +203,7 @@ function RuleForm({
   onCancel,
   showActiveToggle,
 }: {
-  entityType: CustomFieldEntityType;
+  entityType: string;
   customFields: { key: string; label: string }[];
   initial: FieldRuleInput & { is_active?: boolean };
   submitLabel: string;

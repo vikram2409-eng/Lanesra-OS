@@ -18,6 +18,8 @@ use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues};
+use lanesra_core::models::custom_object::{CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
+use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
 use lanesra_core::models::field_rule::{FieldRuleInput, FieldRuleUpdate};
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
@@ -28,9 +30,9 @@ use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, Workspac
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
-    custom_field_service, custom_report_service, dashboard_service, field_rule_service, invoice_service,
-    numbering_service, opportunity_service, order_service, product_service, quote_service, report_service,
-    task_service, user_service, workflow_service, workspace_service,
+    custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
+    field_rule_service, invoice_service, numbering_service, opportunity_service, order_service, product_service,
+    quote_service, report_service, task_service, user_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -393,6 +395,47 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let report = lanesra_core::repositories::custom_report_repo::get(conn, &id)?
                 .ok_or_else(|| AppError::NotFound("Custom report".into()))?;
             to_value(custom_report_service::run(conn, &report)?)
+        }
+
+        "list_custom_objects" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(custom_object_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_custom_object" => {
+            let input: CustomObjectDefinitionInput = arg(args, "input")?;
+            to_value(custom_object_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_custom_object" => {
+            let id: String = arg(args, "id")?;
+            let input: CustomObjectDefinitionUpdate = arg(args, "input")?;
+            to_value(custom_object_service::update(conn, &id, &input, actor)?)
+        }
+        "deactivate_custom_object" => {
+            let id: String = arg(args, "id")?;
+            to_value(custom_object_service::deactivate(conn, &id, actor)?)
+        }
+        "delete_custom_object" => {
+            custom_object_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "list_custom_records" => {
+            let object_key: String = arg(args, "objectKey")?;
+            to_value(custom_record_service::list(conn, &require_workspace_id(conn)?, &object_key)?)
+        }
+        "get_custom_record" => to_value(custom_record_service::get(conn, &arg::<String>(args, "id")?)?),
+        "create_custom_record" => {
+            let input: CustomRecordInput = arg(args, "input")?;
+            to_value(custom_record_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_custom_record" => {
+            let id: String = arg(args, "id")?;
+            let input: CustomRecordUpdate = arg(args, "input")?;
+            to_value(custom_record_service::update(conn, &id, &input, actor)?)
+        }
+        "archive_custom_record" => {
+            let id: String = arg(args, "id")?;
+            to_value(custom_record_service::archive(conn, &id, actor)?)
         }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),

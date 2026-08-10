@@ -91,6 +91,12 @@ textarea {
   color: var(--accent-contrast);
 }
 
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 4px;
+}
+
 .main {
   padding: 24px 32px;
   overflow-y: auto;

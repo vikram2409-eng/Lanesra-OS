@@ -4,6 +4,8 @@ pub mod company_commands;
 pub mod contact_commands;
 pub mod contract_commands;
 pub mod custom_field_commands;
+pub mod custom_object_commands;
+pub mod custom_record_commands;
 pub mod custom_report_commands;
 pub mod dashboard_commands;
 pub mod field_rule_commands;
