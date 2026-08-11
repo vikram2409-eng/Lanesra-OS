@@ -229,3 +229,49 @@
 .cell-link{color:#4338ca;font-weight:700;cursor:pointer}
 .cell-link:hover{text-decoration:underline}
 @media(max-width:900px){.builder-layout,.rule360-grid,.workflow-builder-layout{grid-template-columns:1fr}.builder-summary-panel{position:static}}
+
+/* v0.19 public Product Backlog page - reuses the site's own tokens
+   (var(--brand)/var(--line)/var(--muted)) rather than a separate palette,
+   so it reads as part of the same site as /roadmap and /changelog. */
+.backlog-callout{margin-top:26px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:14px;padding:22px 26px;box-shadow:0 8px 30px rgba(17,24,39,.04)}
+.backlog-callout h3{margin:0 0 10px;font-size:15px;font-family:inherit;font-weight:800;color:var(--text)}
+.backlog-callout p{margin:0 0 10px;font-size:14px;color:#374151;line-height:1.65}
+.backlog-callout p:last-child{margin-bottom:0}
+.backlog-callout code{font-family:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace;font-size:.9em;background:#f3f4f6;padding:1px 6px;border-radius:5px}
+.backlog-legend{display:flex;flex-wrap:wrap;gap:10px;margin:30px 0 22px}
+.backlog-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;letter-spacing:.02em;padding:5px 11px 5px 9px;border-radius:999px}
+.backlog-pill:before{content:"";width:6px;height:6px;border-radius:999px;background:currentColor}
+.backlog-pill.shipped{color:var(--success);background:#e6f5ee}
+.backlog-pill.planned{color:var(--warn);background:#fef3e2}
+.backlog-pill.proposed{color:#6d28d9;background:#f1ecfd}
+.backlog-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:46px}
+.backlog-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.backlog-stat .n{font-size:27px;font-weight:850;color:var(--text);font-family:ui-monospace,"SF Mono",Consolas,monospace}
+.backlog-stat .l{font-size:12.5px;color:var(--muted);margin-top:3px}
+.backlog-group{margin-bottom:50px}
+.backlog-group-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:22px;flex-wrap:wrap}
+.backlog-group-head h2{margin:0;font-size:25px}
+.backlog-group-note{font-size:12.5px;color:var(--muted)}
+.backlog-shipped-list{display:flex;flex-direction:column}
+.backlog-shipped-item{display:grid;grid-template-columns:24px 1fr;gap:14px;padding:16px 0;border-bottom:1px solid var(--line)}
+.backlog-shipped-item:last-child{border-bottom:0}
+.backlog-shipped-item .mark{color:var(--success);font-size:16px;line-height:1.7}
+.backlog-shipped-item .t{font-weight:800;font-size:15px}
+.backlog-shipped-item .d{font-size:13.5px;color:var(--muted);margin-top:4px;line-height:1.65}
+.backlog-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px 26px;margin-bottom:16px;box-shadow:0 8px 30px rgba(17,24,39,.04)}
+.backlog-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:8px;flex-wrap:wrap}
+.backlog-card-head h3{margin:0;font-size:19px;font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif}
+.backlog-card-tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.backlog-tag{font-size:11px;font-weight:700;color:var(--muted);background:#f3f4f6;border:1px solid var(--line);padding:3px 8px;border-radius:6px;white-space:nowrap}
+.backlog-tag.planned-tag{color:var(--warn);background:#fef3e2;border-color:#f3d9ad}
+.backlog-tag.proposed-tag{color:#6d28d9;background:#f1ecfd;border-color:#d9cdf7}
+.backlog-card p.ask{font-size:14.5px;margin:8px 0 16px;color:#374151;line-height:1.65}
+.backlog-solution{background:var(--accent-soft,#eef2ff);border:1px solid #c7d2fe;border-radius:10px;padding:16px 20px}
+.backlog-solution .sol-label{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--brand);margin-bottom:10px}
+.backlog-solution ul{margin:0;padding-left:18px;font-size:13.5px;color:#374151}
+.backlog-solution li{margin-bottom:8px}
+.backlog-solution li:last-child{margin-bottom:0}
+.backlog-group .timeline{margin:0}
+.backlog-group .timeline-content .rt{font-weight:700;font-size:14.5px;color:var(--text)}
+.backlog-group .timeline-content .rd{font-size:13.5px;color:var(--muted);margin-top:4px;line-height:1.6}
+@media(max-width:720px){.backlog-stats{grid-template-columns:repeat(2,1fr)}.backlog-card-head{flex-direction:column}.backlog-card-tags{justify-content:flex-start}}
