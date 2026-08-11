@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, COMPANY};
 use crate::domain::{AppError, AppResult};
 use crate::models::company::{Company, CompanyInput, COMPANY_STATUSES};
 use crate::repositories::{audit_repo, company_repo};
-use crate::services::workflow_service;
+use crate::services::{builtin_field_service, workflow_service};
 
 fn validate(input: &CompanyInput) -> AppResult<()> {
     if input.name.trim().is_empty() {
@@ -76,6 +76,7 @@ pub fn update(
 ) -> AppResult<Company> {
     validate(input)?;
     let before = get(conn, id)?;
+    let before_fields = builtin_field_service::field_values(conn, "Company", id)?;
     let company = company_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -97,6 +98,9 @@ pub fn update(
         company.owner_user_id.as_deref(),
         actor_user_id,
     )?;
+    let after_fields = builtin_field_service::field_values(conn, "Company", id)?;
+    let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
+    workflow_service::fire_field_changed(conn, &before.workspace_id, "Company", id, "builtin", &changed, company.owner_user_id.as_deref(), actor_user_id)?;
     Ok(company)
 }
 

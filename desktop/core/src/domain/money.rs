@@ -83,6 +83,55 @@ pub fn format_major(cents: Cents) -> String {
     format!("{}{}.{:02}", if negative { "-" } else { "" }, major, minor)
 }
 
+/// Inverse of `format_major` - parses a decimal string like "1234.56" or
+/// "1234" into cents. Used when a business rule/workflow action sets a
+/// money-typed built-in field (ADM-BR/ADM-WF built-in field targeting):
+/// the admin types a dollar amount, this is what turns it back into the
+/// integer minor units everything else in the app stores. `None` on
+/// anything that isn't a plain decimal number.
+pub fn parse_major(s: &str) -> Option<Cents> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let f: f64 = s.parse().ok()?;
+    if !f.is_finite() {
+        return None;
+    }
+    Some(round_half_up((f * 100.0).round() as i128, 1))
+}
+
+/// Formats a basis-point rate (10000 = 100%) as a plain percent decimal
+/// string, e.g. 2500 -> "25", 750 -> "7.5". Presentation-only, mirrors
+/// `format_major`'s role for money fields.
+pub fn format_bp_as_percent(bp: i64) -> String {
+    let negative = bp < 0;
+    let abs = bp.unsigned_abs();
+    let whole = abs / 100;
+    let frac = abs % 100;
+    if frac == 0 {
+        format!("{}{}", if negative { "-" } else { "" }, whole)
+    } else if frac % 10 == 0 {
+        format!("{}{}.{}", if negative { "-" } else { "" }, whole, frac / 10)
+    } else {
+        format!("{}{}.{:02}", if negative { "-" } else { "" }, whole, frac)
+    }
+}
+
+/// Inverse of `format_bp_as_percent` - parses "25" or "7.5" into basis
+/// points (750). `None` on anything that isn't a plain decimal number.
+pub fn parse_percent_to_bp(s: &str) -> Option<i64> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let f: f64 = s.parse().ok()?;
+    if !f.is_finite() {
+        return None;
+    }
+    Some(round_half_up((f * 100.0).round() as i128, 1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +180,24 @@ mod tests {
         assert_eq!(format_major(123456), "1234.56");
         assert_eq!(format_major(5), "0.05");
         assert_eq!(format_major(-250), "-2.50");
+    }
+
+    #[test]
+    fn parses_major_units_back_to_cents() {
+        assert_eq!(parse_major("1234.56"), Some(123456));
+        assert_eq!(parse_major("1234"), Some(123400));
+        assert_eq!(parse_major("-2.50"), Some(-250));
+        assert_eq!(parse_major(""), None);
+        assert_eq!(parse_major("not a number"), None);
+    }
+
+    #[test]
+    fn formats_and_parses_basis_points_as_percent() {
+        assert_eq!(format_bp_as_percent(2500), "25");
+        assert_eq!(format_bp_as_percent(750), "7.5");
+        assert_eq!(format_bp_as_percent(333), "3.33");
+        assert_eq!(parse_percent_to_bp("25"), Some(2500));
+        assert_eq!(parse_percent_to_bp("7.5"), Some(750));
+        assert_eq!(parse_percent_to_bp(""), None);
     }
 }

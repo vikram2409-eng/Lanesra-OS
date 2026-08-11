@@ -22,6 +22,7 @@ fn map_action(row: &rusqlite::Row) -> rusqlite::Result<BusinessRuleAction> {
         id: row.get("id")?,
         action_type: row.get("action_type")?,
         target_field_key: row.get("target_field_key")?,
+        target_field_source: row.get("target_field_source")?,
         action_value: row.get("action_value")?,
         message: row.get("message")?,
         sort_order: row.get("sort_order")?,
@@ -76,9 +77,9 @@ fn write_actions(conn: &Connection, rule_id: &str, actions: &[BusinessRuleAction
     conn.execute("DELETE FROM business_rule_actions WHERE rule_id = ?1", [rule_id])?;
     for (i, a) in actions.iter().enumerate() {
         conn.execute(
-            "INSERT INTO business_rule_actions (id, rule_id, action_type, target_field_key, action_value, message, sort_order)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            rusqlite::params![new_uuid(), rule_id, a.action_type, a.target_field_key, a.action_value, a.message, i as i64],
+            "INSERT INTO business_rule_actions (id, rule_id, action_type, target_field_key, target_field_source, action_value, message, sort_order)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![new_uuid(), rule_id, a.action_type, a.target_field_key, a.target_field_source, a.action_value, a.message, i as i64],
         )?;
     }
     Ok(())

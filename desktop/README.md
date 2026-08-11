@@ -444,6 +444,39 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   `core/src/services/workflow_service.rs`,
   `src/features/settings/WorkflowAutomationAdmin.tsx`,
   `src/components/NotificationBell.tsx`.
+- **Business rules and workflow automation on any built-in field**: both
+  engines previously only let you condition/trigger on one hardcoded
+  built-in field per entity (`status`, or `stage` for Opportunity) and
+  could only ever write to custom fields. A new
+  `core::domain::builtin_fields` registry lists every safely-targetable
+  built-in field per entity (name, tax number, addresses, opportunity
+  value/probability/close date, etc. - excludes relationship/FK fields,
+  computed columns like `*_number` and document totals, and
+  `owner_user_id`, which has its own `assign_owner` action), and a new
+  `core::services::builtin_field_service` reads/writes them by routing
+  every write back through the entity's own `*_service::update()` (so
+  existing validation, audit, and workflow-firing all still run - no
+  bypass). Conditions, workflow `field_changed` triggers, and both
+  engines' `update_field`/`set_value` actions now carry a
+  `field_source: "builtin" | "custom"` alongside the field key, so a rule
+  can require "Tax number" be set, or a workflow can watch an
+  Opportunity's `value` field changing and copy it into a related
+  record - not just watch/set the status field. Quote/Order/Invoice have
+  no actionable built-in fields, since (by original design) those
+  entities have no general-purpose `update()` - they're immutable after
+  creation aside from status/conversion methods - so their fields are
+  conditionable but not writable, same as before. Recursion (a builtin
+  field write re-triggering `field_changed`) is bounded by the same
+  pre-existing `WORKFLOW_DEPTH` guard used for every other workflow
+  recursion path. The 9 built-in entity forms don't yet show a live
+  require/hide/lock preview for builtin-targeted rule actions the way
+  `CustomFieldsSection` does for custom fields - consistent with
+  `block_save`/`set_value`, which were already server-only with no live
+  client preview; server-side enforcement is unaffected and tested. See
+  `core/src/domain/builtin_fields.rs`,
+  `core/src/services/builtin_field_service.rs`,
+  `core/src/db/migrations/0016_builtin_field_targeting.sql`,
+  `src/components/BuiltinValueInput.tsx`.
 - **Custom field validation and capability flags (spec ADM-CF-04/05)**: a
   custom field can now have optional validation - min/max for `number`
   fields, max length and a regex pattern for `text` fields - checked both

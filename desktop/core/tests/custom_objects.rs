@@ -207,6 +207,7 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),
                 target_field_key: Some(contact_email_field.key.clone()),
+                target_field_source: "custom".into(),
                 action_value: None,
                 message: None,
             }],

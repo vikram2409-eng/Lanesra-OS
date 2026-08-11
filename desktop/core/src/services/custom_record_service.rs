@@ -17,7 +17,7 @@ use crate::domain::{AppError, AppResult};
 use crate::models::custom_object::CUSTOM_RECORD_STATUSES;
 use crate::models::custom_record::{CustomRecord, CustomRecordInput, CustomRecordUpdate};
 use crate::repositories::{custom_object_repo, custom_record_repo};
-use crate::services::{relationship_service, workflow_service};
+use crate::services::{builtin_field_service, relationship_service, workflow_service};
 
 fn resolve_active_object(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<crate::models::custom_object::CustomObjectDefinition> {
     let def = custom_object_repo::get_by_key(conn, workspace_id, object_key)?
@@ -89,8 +89,12 @@ pub fn update(
     if !CUSTOM_RECORD_STATUSES.contains(&input.status.as_str()) {
         return Err(AppError::Validation(format!("Invalid status '{}'", input.status)));
     }
+    let before_fields = builtin_field_service::field_values(conn, &before.object_key, id)?;
     let record = custom_record_repo::update(conn, id, input, actor_user_id)?;
     workflow_service::fire_event(conn, &record.workspace_id, &before.object_key, id, Some(&before.status), &record.status, record.owner_user_id.as_deref(), actor_user_id)?;
+    let after_fields = builtin_field_service::field_values(conn, &before.object_key, id)?;
+    let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
+    workflow_service::fire_field_changed(conn, &record.workspace_id, &before.object_key, id, "builtin", &changed, record.owner_user_id.as_deref(), actor_user_id)?;
     Ok(record)
 }
 

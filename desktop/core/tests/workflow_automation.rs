@@ -61,7 +61,7 @@ fn create_task_action(title: &str, due_in_days: i64, assignee_user_id: Option<&s
 fn status_changed_workflow(entity_type: &str, trigger_status: &str, action: WorkflowActionInput) -> WorkflowDefinitionInput {
     WorkflowDefinitionInput {
         entity_type: entity_type.into(), name: format!("{entity_type} -> {trigger_status}"), description: None,
-        trigger_type: "status_changed".into(), trigger_status: Some(trigger_status.into()), trigger_field_key: None,
+        trigger_type: "status_changed".into(), trigger_status: Some(trigger_status.into()), trigger_field_key: None, trigger_field_source: "custom".into(),
         trigger_offset_days: 0, match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![action],
     }
 }
@@ -180,7 +180,7 @@ fn record_created_trigger_fires_on_creation_but_not_on_update() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
         entity_type: "Company".into(), name: "Welcome new company".into(), description: None,
-        trigger_type: "record_created".into(), trigger_status: None, trigger_field_key: None, trigger_offset_days: 0,
+        trigger_type: "record_created".into(), trigger_status: None, trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
         match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![create_task_action("Send welcome email", 0, None)],
     };
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
@@ -201,7 +201,7 @@ fn add_notification_action_notifies_the_records_owner() {
     let rep = user_service::create(&conn, &ws, &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
     let wf = WorkflowDefinitionInput {
         entity_type: "Company".into(), name: "Notify owner on Prospect".into(), description: None,
-        trigger_type: "status_changed".into(), trigger_status: Some("Prospect".into()), trigger_field_key: None, trigger_offset_days: 0,
+        trigger_type: "status_changed".into(), trigger_status: Some("Prospect".into()), trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
         match_type: "all".into(), priority: 0, conditions: vec![],
         actions: vec![WorkflowActionInput { action_type: "add_notification".into(), params_json: serde_json::json!({"message": "New prospect assigned", "audience": "owner"}).to_string() }],
     };
@@ -227,7 +227,7 @@ fn test_business_rules_style_recursion_guard_bounds_a_self_referential_workflow_
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
         entity_type: "Task".into(), name: "On task update, log a follow-up".into(), description: None,
-        trigger_type: "record_updated".into(), trigger_status: None, trigger_field_key: None, trigger_offset_days: 0,
+        trigger_type: "record_updated".into(), trigger_status: None, trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
         match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![create_task_action("Follow-up", 0, None)],
     };
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
@@ -248,4 +248,66 @@ fn test_business_rules_style_recursion_guard_bounds_a_self_referential_workflow_
     // listen for, so no infinite chain).
     let all_tasks = task_service::list(&conn, &ws).unwrap();
     assert_eq!(all_tasks.len(), 2);
+}
+
+// --- "Any field" targeting (built-in fields, not just status/custom) ----
+
+#[test]
+fn field_changed_trigger_fires_when_a_builtin_field_changes() {
+    let (conn, ws, admin) = setup_workspace();
+    let wf = WorkflowDefinitionInput {
+        entity_type: "Opportunity".into(), name: "Next step set".into(), description: None,
+        trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("next_step".into()),
+        trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
+        conditions: vec![], actions: vec![create_task_action("Chase next step", 1, None)],
+    };
+    workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
+    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().is_empty());
+
+    let mut input = opportunity_input(&company.id, "New", None);
+    input.next_step = Some("Send proposal".into());
+    opportunity_service::update(&conn, &opp.id, &input, Some(&admin)).unwrap();
+    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+
+    // Re-saving with the same next_step must not refire the workflow -
+    // same "no-op unless the value actually changed" guarantee the
+    // status_changed trigger already has, now for field_changed on a
+    // built-in field too.
+    opportunity_service::update(&conn, &opp.id, &input, Some(&admin)).unwrap();
+    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+}
+
+#[test]
+fn update_field_action_can_set_a_builtin_money_field() {
+    let (conn, ws, admin) = setup_workspace();
+    let action = WorkflowActionInput {
+        action_type: "update_field".into(),
+        params_json: serde_json::json!({
+            "target_field_key": "value", "target_field_source": "builtin", "value": "999.99",
+        }).to_string(),
+    };
+    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
+    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
+
+    let reloaded = opportunity_service::get(&conn, &opp.id).unwrap();
+    assert_eq!(reloaded.value_cents, 99_999);
+}
+
+#[test]
+fn field_changed_trigger_rejects_a_non_active_builtin_field() {
+    let (conn, ws, admin) = setup_workspace();
+    let wf = WorkflowDefinitionInput {
+        entity_type: "Opportunity".into(), name: "Bogus field".into(), description: None,
+        trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("not_a_real_field".into()),
+        trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
+        conditions: vec![], actions: vec![create_task_action("Chase", 1, None)],
+    };
+    let err = workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("not a built-in field"));
 }

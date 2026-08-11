@@ -1,5 +1,6 @@
 pub mod auth_service;
 pub mod backup_service;
+pub mod builtin_field_service;
 pub mod business_rule_service;
 pub mod company_service;
 pub mod contact_service;

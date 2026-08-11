@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { BuiltinValueInput } from "../../components/BuiltinValueInput";
 import {
+  builtinFieldsFor,
   builtinTriggerFieldFor,
   CONDITION_OPERATORS,
   CUSTOM_FIELD_ENTITY_TYPES,
@@ -10,7 +12,6 @@ import {
   entityTypeLabel,
   MATCH_TYPES,
   NOTIFICATION_AUDIENCES,
-  statusesForEntity,
   transitionFieldFor,
   transitionValuesForEntity,
   TRIGGER_TYPES,
@@ -60,7 +61,7 @@ function defaultParamsFor(actionType: WorkflowActionType, customFieldKey: string
   switch (actionType) {
     case "create_task": return { title: "", description: null, due_in_days: 0, assignee_user_id: null };
     case "create_reminder": return { title: "", description: null, remind_in_days: 0, assignee_user_id: null };
-    case "update_field": return { target_field_key: customFieldKey, value: "", copy_from_field_key: null };
+    case "update_field": return { target_field_key: customFieldKey, target_field_source: "custom", value: "", copy_from_field_key: null };
     case "assign_owner": return { user_id: null };
     case "create_related_record": return { object_key: "", relationship_definition_id: "", name_template: null };
     case "add_notification": return { message: "", audience: "owner" };
@@ -71,13 +72,19 @@ function emptyAction(customFieldKey: string): WorkflowActionInput {
   return { action_type: "create_task", params_json: JSON.stringify(defaultParamsFor("create_task", customFieldKey)) };
 }
 
-function describeAction(a: WorkflowActionInput, labelByKey: Map<string, string>): string {
+function describeAction(entityType: string, a: WorkflowActionInput, labelByKey: Map<string, string>): string {
   try {
     const p = JSON.parse(a.params_json) as Record<string, unknown>;
     switch (a.action_type) {
       case "create_task": return `create task "${p.title}"`;
       case "create_reminder": return `create reminder "${p.title}"`;
-      case "update_field": return `set ${labelByKey.get(String(p.target_field_key)) ?? p.target_field_key} = "${p.value ?? `{${p.copy_from_field_key}}`}"`;
+      case "update_field": {
+        const isBuiltin = p.target_field_source === "builtin";
+        const label = isBuiltin
+          ? builtinFieldsFor(entityType).find((f) => f.key === p.target_field_key)?.label ?? String(p.target_field_key)
+          : labelByKey.get(String(p.target_field_key)) ?? p.target_field_key;
+        return `set ${label} = "${p.value ?? `{${p.copy_from_field_key}}`}"`;
+      }
       case "assign_owner": return "assign owner";
       case "create_related_record": return `create related ${p.object_key}`;
       case "add_notification": return `notify ${p.audience === "all_admins" ? "all admins" : "owner"}: "${p.message}"`;
@@ -164,8 +171,8 @@ export function WorkflowAutomationAdmin() {
           relationshipDefs={relationshipDefs.data ?? []}
           initial={{
             entity_type: entityType, name: "", description: null, trigger_type: "status_changed",
-            trigger_status: transitionValuesForEntity(entityType)[0] ?? null, trigger_field_key: null, trigger_offset_days: 0,
-            match_type: "all", priority: 0, conditions: [], actions: [emptyAction(activeDefs[0]?.key ?? "")],
+            trigger_status: transitionValuesForEntity(entityType)[0] ?? null, trigger_field_key: null, trigger_field_source: "custom",
+            trigger_offset_days: 0, match_type: "all", priority: 0, conditions: [], actions: [emptyAction(activeDefs[0]?.key ?? "")],
           }}
           submitLabel="Add workflow"
           onSubmit={(input) => api.createWorkflowRule(input)}
@@ -185,8 +192,8 @@ export function WorkflowAutomationAdmin() {
           relationshipDefs={relationshipDefs.data ?? []}
           initial={{
             entity_type: entityType, name: editing.name, description: editing.description, trigger_type: editing.trigger_type,
-            trigger_status: editing.trigger_status, trigger_field_key: editing.trigger_field_key, trigger_offset_days: editing.trigger_offset_days,
-            match_type: editing.match_type, priority: editing.priority,
+            trigger_status: editing.trigger_status, trigger_field_key: editing.trigger_field_key, trigger_field_source: editing.trigger_field_source,
+            trigger_offset_days: editing.trigger_offset_days, match_type: editing.match_type, priority: editing.priority,
             conditions: editing.conditions.map((c) => ({ field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value })),
             actions: editing.actions.map((a) => ({ action_type: a.action_type, params_json: a.params_json })),
             is_active: editing.is_active,
@@ -224,7 +231,7 @@ export function WorkflowAutomationAdmin() {
                   {w.trigger_status ? ` "${w.trigger_status}"` : ""}
                   {w.trigger_field_key ? ` (${w.trigger_field_key})` : ""}
                 </td>
-                <td>{w.actions.map((a) => describeAction(a, labelByKey)).join("; ")}</td>
+                <td>{w.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</td>
                 <td>
                   <span className={`badge${w.is_active ? " badge-success" : ""}`}>{w.is_active ? "Active" : "Inactive"}</span>
                   {w.is_protected && <span className="badge" style={{ marginLeft: 4 }}>System</span>}
@@ -256,10 +263,10 @@ function ConditionRow({
   onChange: (c: WorkflowConditionInput) => void;
   onRemove: () => void;
 }) {
-  const builtinField = transitionFieldFor(entityType);
-  const statuses = transitionValuesForEntity(entityType);
+  const builtinFields = builtinFieldsFor(entityType);
   const isBuiltin = condition.field_source === "builtin";
   const needsValue = condition.operator !== "is_empty" && condition.operator !== "is_not_empty";
+  const selectedBuiltin = isBuiltin ? builtinFields.find((f) => f.key === condition.field_key) : undefined;
 
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
@@ -267,14 +274,14 @@ function ConditionRow({
         value={condition.field_source}
         onChange={(e) => {
           const source = e.target.value as TriggerSource;
-          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinField : customFields[0]?.key ?? "", value: "" });
+          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinFields[0]?.key ?? "" : customFields[0]?.key ?? "", value: "" });
         }}
       >
         {TRIGGER_SOURCES.map((s) => <option key={s} value={s}>{s === "builtin" ? "Built-in field" : "Custom field"}</option>)}
       </select>
       {isBuiltin ? (
-        <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value })}>
-          <option value={builtinField}>{builtinField}</option>
+        <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value, value: "" })}>
+          {builtinFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
         </select>
       ) : (
         <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value })}>
@@ -285,10 +292,7 @@ function ConditionRow({
         {CONDITION_OPERATORS.map((o) => <option key={o} value={o}>{OPERATOR_LABELS[o]}</option>)}
       </select>
       {needsValue && (isBuiltin ? (
-        <select value={condition.value} onChange={(e) => onChange({ ...condition, value: e.target.value })} required>
-          <option value="">— Select —</option>
-          {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <BuiltinValueInput field={selectedBuiltin} value={condition.value} onChange={(v) => onChange({ ...condition, value: v })} />
       ) : (
         <input value={condition.value} onChange={(e) => onChange({ ...condition, value: e.target.value })} required style={{ width: 140 }} />
       ))}
@@ -359,19 +363,41 @@ function ActionEditor({
         </div>
       )}
 
-      {action.action_type === "update_field" && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <select value={String(params.target_field_key ?? "")} onChange={(e) => setParams({ ...params, target_field_key: e.target.value })} required>
-            {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-          </select>
-          <input placeholder="Set to value" value={String(params.value ?? "")} onChange={(e) => setParams({ ...params, value: e.target.value, copy_from_field_key: null })} style={{ width: 160 }} />
-          <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-muted)" }}>or</span>
-          <select value={String(params.copy_from_field_key ?? "")} onChange={(e) => setParams({ ...params, copy_from_field_key: e.target.value || null, value: null })}>
-            <option value="">Copy from field...</option>
-            {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-          </select>
-        </div>
-      )}
+      {action.action_type === "update_field" && (() => {
+        const actionableBuiltinFields = builtinFieldsFor(entityType).filter((f) => f.actionable);
+        const targetSource = (params.target_field_source as TriggerSource | undefined) ?? "custom";
+        const isBuiltinTarget = targetSource === "builtin";
+        const selectedBuiltin = isBuiltinTarget ? actionableBuiltinFields.find((f) => f.key === params.target_field_key) : undefined;
+        const copyFromOptions = [...customFields, ...actionableBuiltinFields];
+        return (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <select
+              value={targetSource}
+              onChange={(e) => {
+                const source = e.target.value as TriggerSource;
+                const first = source === "builtin" ? actionableBuiltinFields[0]?.key ?? "" : customFields[0]?.key ?? "";
+                setParams({ ...params, target_field_source: source, target_field_key: first, value: "" });
+              }}
+            >
+              <option value="custom">Custom field</option>
+              <option value="builtin" disabled={actionableBuiltinFields.length === 0}>Built-in field</option>
+            </select>
+            <select value={String(params.target_field_key ?? "")} onChange={(e) => setParams({ ...params, target_field_key: e.target.value })} required>
+              {(isBuiltinTarget ? actionableBuiltinFields : customFields).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+            {isBuiltinTarget ? (
+              <BuiltinValueInput field={selectedBuiltin} value={String(params.value ?? "")} onChange={(v) => setParams({ ...params, value: v, copy_from_field_key: null })} />
+            ) : (
+              <input placeholder="Set to value" value={String(params.value ?? "")} onChange={(e) => setParams({ ...params, value: e.target.value, copy_from_field_key: null })} style={{ width: 160 }} />
+            )}
+            <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-muted)" }}>or</span>
+            <select value={String(params.copy_from_field_key ?? "")} onChange={(e) => setParams({ ...params, copy_from_field_key: e.target.value || null, value: null })}>
+              <option value="">Copy from field...</option>
+              {copyFromOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+          </div>
+        );
+      })()}
 
       {action.action_type === "assign_owner" && (
         <select value={String(params.user_id ?? "")} onChange={(e) => setParams({ ...params, user_id: e.target.value || null })}>
@@ -440,6 +466,7 @@ function WorkflowForm({
   const [triggerType, setTriggerType] = useState<TriggerType>(initial.trigger_type);
   const [triggerStatus, setTriggerStatus] = useState(initial.trigger_status ?? transitionValuesForEntity(entityType)[0] ?? "");
   const [triggerFieldKey, setTriggerFieldKey] = useState(initial.trigger_field_key ?? "");
+  const [triggerFieldSource, setTriggerFieldSource] = useState<TriggerSource>(initial.trigger_field_source ?? "custom");
   const [triggerOffsetDays, setTriggerOffsetDays] = useState(initial.trigger_offset_days);
   const [matchType, setMatchType] = useState<MatchType>(initial.match_type);
   const [priority, setPriority] = useState(initial.priority);
@@ -457,6 +484,7 @@ function WorkflowForm({
           entity_type: entityType, name, description: description || null, trigger_type: triggerType,
           trigger_status: triggerType === "status_changed" ? triggerStatus : null,
           trigger_field_key: triggerType === "field_changed" || triggerType === "date_reached" || triggerType === "due_overdue" ? triggerFieldKey : null,
+          trigger_field_source: triggerType === "field_changed" ? triggerFieldSource : "custom",
           trigger_offset_days: triggerOffsetDays, match_type: matchType, priority, conditions, actions,
         },
         isActive,
@@ -493,18 +521,38 @@ function WorkflowForm({
           <div className="form-field">
             <label>{transitionFieldFor(entityType)} reaches</label>
             <select value={triggerStatus} onChange={(e) => setTriggerStatus(e.target.value)}>
-              {statusesForEntity(entityType).map((s) => <option key={s} value={s}>{s}</option>)}
+              {transitionValuesForEntity(entityType).map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         )}
-        {triggerType === "field_changed" && (
-          <div className="form-field">
-            <label>Watch field</label>
-            <select value={triggerFieldKey} onChange={(e) => setTriggerFieldKey(e.target.value)}>
-              {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-            </select>
-          </div>
-        )}
+        {triggerType === "field_changed" && (() => {
+          const watchableBuiltinFields = builtinFieldsFor(entityType);
+          const isBuiltinWatch = triggerFieldSource === "builtin";
+          return (
+            <>
+              <div className="form-field">
+                <label>Field source</label>
+                <select
+                  value={triggerFieldSource}
+                  onChange={(e) => {
+                    const source = e.target.value as TriggerSource;
+                    setTriggerFieldSource(source);
+                    setTriggerFieldKey((source === "builtin" ? watchableBuiltinFields[0]?.key : customFields[0]?.key) ?? "");
+                  }}
+                >
+                  <option value="custom">Custom field</option>
+                  <option value="builtin">Built-in field</option>
+                </select>
+              </div>
+              <div className="form-field">
+                <label>Watch field</label>
+                <select value={triggerFieldKey} onChange={(e) => setTriggerFieldKey(e.target.value)}>
+                  {(isBuiltinWatch ? watchableBuiltinFields : customFields).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                </select>
+              </div>
+            </>
+          );
+        })()}
         {(triggerType === "date_reached" || triggerType === "due_overdue") && (
           <>
             <div className="form-field">
