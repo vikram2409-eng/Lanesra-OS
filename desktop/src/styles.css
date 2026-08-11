@@ -462,6 +462,379 @@ tr:hover td {
   font-size: 13px;
 }
 
+/* Business Rules / Workflow Automation visual redesign - shared chrome
+   both builders use: a breadcrumb+title header with action buttons, and
+   numbered sections. Kept generic (not rule- or workflow- specific) so
+   both builders share one set of classes. */
+.builder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.builder-breadcrumb {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.builder-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.builder-title-row h2 {
+  margin: 0;
+}
+
+.builder-subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 4px 0 0 0;
+  max-width: 640px;
+}
+
+.builder-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.builder-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
+  align-items: start;
+}
+
+.builder-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.builder-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.builder-row-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--bg);
+}
+
+.builder-row-remove {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.builder-row-remove:hover {
+  color: var(--danger);
+}
+
+.builder-and-divider {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: -2px 0 6px 0;
+}
+
+.builder-summary-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  position: sticky;
+  top: 0;
+}
+
+.builder-summary-panel h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+}
+
+.builder-summary-panel h4:not(:first-child) {
+  margin-top: 18px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-row:last-child {
+  border-bottom: none;
+}
+
+.summary-row .label {
+  color: var(--text-muted);
+}
+
+.summary-row .value {
+  text-align: right;
+  font-weight: 600;
+}
+
+.legend-group {
+  margin-bottom: 10px;
+}
+
+.legend-group-title {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 0;
+}
+
+.char-counter {
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Workflow Automation's visual flow canvas - a static, live rendering of
+   the trigger/conditions/actions state (editing happens in the left
+   panel's numbered sections, not by dragging nodes here). */
+.workflow-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.workflow-canvas-wrap {
+  position: relative;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: auto;
+  min-height: 480px;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.workflow-canvas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 24px;
+  transform-origin: top center;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.workflow-node {
+  width: 320px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.workflow-node-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.workflow-node-trigger .workflow-node-head {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.workflow-node-conditions .workflow-node-head {
+  background: rgba(79, 124, 255, 0.15);
+  color: var(--accent);
+}
+
+.workflow-node-actions .workflow-node-head {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+}
+
+.workflow-node-body {
+  padding: 12px;
+}
+
+.workflow-trigger-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.workflow-trigger-icon {
+  font-size: 22px;
+}
+
+.workflow-trigger-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.workflow-trigger-detail {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.workflow-condition-chip {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.workflow-condition-chip:last-child {
+  margin-bottom: 0;
+}
+
+.workflow-match-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  width: 100%;
+  margin: -2px 0 6px 0;
+}
+
+.workflow-action-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--bg);
+}
+
+.workflow-action-card:last-child {
+  margin-bottom: 0;
+}
+
+.workflow-action-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.workflow-action-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.workflow-action-subtitle {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.workflow-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 28px;
+  color: var(--text-muted);
+}
+
+.workflow-connector-line {
+  width: 2px;
+  flex: 1;
+  background: var(--border);
+}
+
+.workflow-connector-arrow {
+  font-size: 12px;
+  line-height: 1;
+  margin-top: -2px;
+}
+
+.workflow-end-node {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+}
+
+.workflow-zoom-controls {
+  position: sticky;
+  float: right;
+  bottom: 12px;
+  margin-right: 12px;
+  margin-top: -48px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: fit-content;
+}
+
+.workflow-zoom-controls .btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 @media print {
   body > *:not(#print-root) {
     display: none !important;
