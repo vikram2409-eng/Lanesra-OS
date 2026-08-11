@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import type { Prefill } from "../../components/AppShell";
 import {
   TASK_PRIORITIES,
   TASK_RELATED_TYPES,
@@ -58,10 +59,25 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function Tasks({ currentUserId }: { currentUserId: string }) {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function Tasks({
+  currentUserId,
+  prefill,
+  onPrefillConsumed,
+}: {
+  currentUserId: string;
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+}) {
+  const [view, setView] = useState<View>(() =>
+    prefill?.companyId || prefill?.contactId ? { mode: "create" } : { mode: "list" },
+  );
   const [tab, setTab] = useState<Tab>("today");
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (prefill?.companyId || prefill?.contactId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() });
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
@@ -99,6 +115,13 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
       <TaskForm
         taskId={view.mode === "edit" ? view.id : undefined}
         currentUserId={currentUserId}
+        initialRelated={
+          view.mode === "create" && prefill?.contactId
+            ? { related_type: "Contact", related_id: prefill.contactId }
+            : view.mode === "create" && prefill?.companyId
+              ? { related_type: "Company", related_id: prefill.companyId }
+              : undefined
+        }
         users={users.data ?? []}
         relatedOptions={{
           Company: (companies.data ?? []).map((c) => ({ id: c.id, label: c.name })),
@@ -215,6 +238,7 @@ export function Tasks({ currentUserId }: { currentUserId: string }) {
 function TaskForm({
   taskId,
   currentUserId,
+  initialRelated,
   users,
   relatedOptions,
   onDone,
@@ -222,6 +246,7 @@ function TaskForm({
 }: {
   taskId?: string;
   currentUserId: string;
+  initialRelated?: { related_type: TaskRelatedType; related_id: string };
   users: { id: string; display_name: string }[];
   relatedOptions: Record<TaskRelatedType, { id: string; label: string }[]>;
   onDone: () => void;
@@ -237,7 +262,10 @@ function TaskForm({
     queryFn: () => api.getCustomFieldValues(taskId as string),
     enabled: !!taskId,
   });
-  const [input, setInput] = useState<TaskInput>(emptyInput(currentUserId));
+  const [input, setInput] = useState<TaskInput>(() => ({
+    ...emptyInput(currentUserId),
+    ...(initialRelated ? { related_type: initialRelated.related_type, related_id: initialRelated.related_id } : {}),
+  }));
   const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);

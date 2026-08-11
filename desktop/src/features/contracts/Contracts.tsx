@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -7,6 +7,7 @@ import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import type { Prefill } from "../../components/AppShell";
 import { CONTRACT_STATUSES, type Contract, type ContractInput, type CustomFieldValues } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
@@ -51,11 +52,19 @@ function isRenewingSoon(renewalDate: string | null): boolean {
   return days >= 0 && days <= 90;
 }
 
-export function Contracts() {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function Contracts({
+  prefill,
+  onPrefillConsumed,
+}: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
+  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
   const queryClient = useQueryClient();
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+
+  useEffect(() => {
+    if (prefill?.companyId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["contracts"] });
@@ -66,6 +75,8 @@ export function Contracts() {
       <ContractForm
         contractId={view.mode === "edit" ? view.id : undefined}
         companies={companies.data ?? []}
+        initialCompanyId={view.mode === "create" ? prefill?.companyId : undefined}
+        initialContactId={view.mode === "create" ? prefill?.contactId : undefined}
         onDone={() => {
           invalidate();
           setView({ mode: "list" });
@@ -138,11 +149,15 @@ export function Contracts() {
 function ContractForm({
   contractId,
   companies,
+  initialCompanyId,
+  initialContactId,
   onDone,
   onCancel,
 }: {
   contractId?: string;
   companies: { id: string; name: string }[];
+  initialCompanyId?: string;
+  initialContactId?: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -156,7 +171,10 @@ function ContractForm({
     queryFn: () => api.getCustomFieldValues(contractId as string),
     enabled: !!contractId,
   });
-  const [input, setInput] = useState<ContractInput>(emptyInput(companies[0]?.id ?? "", "USD"));
+  const [input, setInput] = useState<ContractInput>(() => {
+    const base = emptyInput(initialCompanyId ?? companies[0]?.id ?? "", "USD");
+    return initialContactId ? { ...base, contact_id: initialContactId } : base;
+  });
   const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
