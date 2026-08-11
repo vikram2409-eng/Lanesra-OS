@@ -31,7 +31,7 @@ pub struct CustomObjectDefinitionInput {
 }
 
 /// Editing a definition: label/icon/prefix/digits/active can all change.
-/// `key` cannot - every custom_field_definition/field_rule/workflow_rule/
+/// `key` cannot - every custom_field_definition/business_rule/workflow_rule/
 /// custom_record row for this object is keyed by it.
 #[derive(Debug, Clone, Deserialize)]
 pub struct CustomObjectDefinitionUpdate {

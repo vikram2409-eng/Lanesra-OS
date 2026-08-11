@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
+use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
 use lanesra_core::models::custom_report::CustomReportInput;
-use lanesra_core::models::field_rule::FieldRuleInput;
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceUpdate};
 use lanesra_core::services::{
-    company_service, custom_field_service, custom_report_service, field_rule_service, numbering_service,
+    business_rule_service, company_service, custom_field_service, custom_report_service, numbering_service,
     opportunity_service, task_service, user_service, workflow_service, workspace_service,
 };
 
@@ -88,18 +88,29 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
 
     // Business rule on Opportunity (previously Company/Contact only) -
     // require Lead Source once status is Won.
-    field_rule_service::create_rule(
+    business_rule_service::create_rule(
         &conn,
         &ws,
-        &FieldRuleInput {
+        &BusinessRuleInput {
             entity_type: "Opportunity".into(),
-            trigger_field_source: "builtin".into(),
-            trigger_field_key: "status".into(),
-            operator: "equals".into(),
-            trigger_value: "Won".into(),
-            target_field_key: source_field.key.clone(),
-            effect: "require".into(),
-            sort_order: 0,
+            name: "Require Lead Source when Won".into(),
+            description: None,
+            match_type: "all".into(),
+            priority: 0,
+            effective_start_date: None,
+            effective_end_date: None,
+            conditions: vec![BusinessRuleConditionInput {
+                field_source: "builtin".into(),
+                field_key: "status".into(),
+                operator: "equals".into(),
+                value: "Won".into(),
+            }],
+            actions: vec![BusinessRuleActionInput {
+                action_type: "require".into(),
+                target_field_key: Some(source_field.key.clone()),
+                action_value: None,
+                message: None,
+            }],
         },
         Some(&admin),
     )

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
@@ -199,7 +200,8 @@ function CompanyForm({
   const save = useMutation({
     mutationFn: async () => {
       const company = companyId ? await api.updateCompany(companyId, input) : await api.createCompany(input);
-      await api.setCustomFieldValues("Company", company.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Company", company.id, customValues);
+      showRuleMessages(ruleMessages);
       return company;
     },
     onSuccess: onDone,

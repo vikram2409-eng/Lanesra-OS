@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
@@ -150,7 +151,8 @@ function QuoteForm({
         lines,
       };
       const result = await api.createQuote(input);
-      await api.setCustomFieldValues("Quote", result.quote.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Quote", result.quote.id, customValues);
+      showRuleMessages(ruleMessages);
       return result;
     },
     onSuccess: (result) => onDone(result.quote.id),

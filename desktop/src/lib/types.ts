@@ -749,18 +749,29 @@ export interface CustomFieldDefinitionUpdate {
 /** Values keyed by field key, e.g. { industry: "Retail" }. */
 export type CustomFieldValues = Record<string, string>;
 
-// FR-RUL: admin-defined conditional rules over custom fields, e.g.
-// "require Lead Source when Status = Prospect". Scoped to custom fields
-// as the target (and, for the trigger, either the entity's one built-in
-// field from `builtinTriggerFieldFor` or another custom field) - see
-// field_rule_service's doc comment for why built-in fields in general are
-// out of scope.
-export const RULE_OPERATORS = ["equals", "not_equals"] as const;
-export type RuleOperator = (typeof RULE_OPERATORS)[number];
-export const RULE_EFFECTS = ["require", "hide"] as const;
-export type RuleEffect = (typeof RULE_EFFECTS)[number];
+// Admin extensibility Phase C (spec §22/ADM-BR): a richer IF (AND/OR) /
+// THEN business rule engine - any number of conditions per rule (matched
+// as AND or OR), and actions beyond require/hide: lock (read-only), set a
+// default or forced value, block the whole save with a custom message, or
+// show a non-blocking message. Conditions/actions that target a specific
+// field are still scoped to custom fields as the target (and, for a
+// condition, either the entity's one built-in field from
+// `builtinTriggerFieldFor` or another custom field) - see
+// business_rule_service's doc comment for why built-in fields in general
+// are out of scope.
+export const MATCH_TYPES = ["all", "any"] as const;
+export type MatchType = (typeof MATCH_TYPES)[number];
+export const CONDITION_OPERATORS = [
+  "equals", "not_equals", "contains", "not_contains", "is_empty", "is_not_empty",
+  "greater_than", "less_than", "on_or_after", "on_or_before",
+] as const;
+export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 export const TRIGGER_SOURCES = ["builtin", "custom"] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
+export const ACTION_TYPES = ["require", "hide", "lock", "set_default", "set_value", "block_save", "show_message"] as const;
+export type ActionType = (typeof ACTION_TYPES)[number];
+export const FIELD_TARGETED_ACTIONS: ActionType[] = ["require", "hide", "lock", "set_default", "set_value"];
+export const MESSAGE_ACTIONS: ActionType[] = ["block_save", "show_message"];
 
 /** The valid values for an entity's built-in trigger field
  * (`builtinTriggerFieldFor`) - its status/stage enum, or ["true","false"]
@@ -790,42 +801,85 @@ export function transitionValuesForEntity(entityType: string): readonly string[]
   return entityType === "Opportunity" ? OPPORTUNITY_STAGES : statusesForEntity(entityType);
 }
 
-export interface FieldRule {
+export interface BusinessRuleCondition {
+  id: string;
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+  sort_order: number;
+}
+
+export interface BusinessRuleConditionInput {
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+}
+
+export interface BusinessRuleAction {
+  id: string;
+  action_type: ActionType;
+  target_field_key: string | null;
+  action_value: string | null;
+  message: string | null;
+  sort_order: number;
+}
+
+export interface BusinessRuleActionInput {
+  action_type: ActionType;
+  target_field_key: string | null;
+  action_value: string | null;
+  message: string | null;
+}
+
+export interface BusinessRule {
   id: string;
   workspace_id: string;
   entity_type: string;
-  trigger_field_source: string;
-  trigger_field_key: string;
-  operator: string;
-  trigger_value: string;
-  target_field_key: string;
-  effect: string;
+  name: string;
+  description: string | null;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
-  sort_order: number;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  is_protected: boolean;
   created_at: string;
   updated_at: string;
+  conditions: BusinessRuleCondition[];
+  actions: BusinessRuleAction[];
 }
 
-export interface FieldRuleInput {
+export interface BusinessRuleInput {
   entity_type: string;
-  trigger_field_source: TriggerSource;
-  trigger_field_key: string;
-  operator: RuleOperator;
-  trigger_value: string;
-  target_field_key: string;
-  effect: RuleEffect;
-  sort_order: number;
+  name: string;
+  description: string | null;
+  match_type: MatchType;
+  priority: number;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  conditions: BusinessRuleConditionInput[];
+  actions: BusinessRuleActionInput[];
 }
 
-export interface FieldRuleUpdate {
-  trigger_field_source: TriggerSource;
-  trigger_field_key: string;
-  operator: RuleOperator;
-  trigger_value: string;
-  target_field_key: string;
-  effect: RuleEffect;
-  sort_order: number;
+export interface BusinessRuleUpdate {
+  name: string;
+  description: string | null;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  conditions: BusinessRuleConditionInput[];
+  actions: BusinessRuleActionInput[];
+}
+
+export interface RuleEvaluation {
+  field_effects: Record<string, string>;
+  set_values: Record<string, string>;
+  blocked: string | null;
+  messages: string[];
 }
 
 // FR-WFL: admin-defined workflow automation - "when an Opportunity's stage

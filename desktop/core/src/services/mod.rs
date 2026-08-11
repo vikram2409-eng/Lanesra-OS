@@ -1,5 +1,6 @@
 pub mod auth_service;
 pub mod backup_service;
+pub mod business_rule_service;
 pub mod company_service;
 pub mod contact_service;
 pub mod contract_service;
@@ -8,7 +9,6 @@ pub mod custom_object_service;
 pub mod custom_record_service;
 pub mod dashboard_service;
 pub mod entity_registry;
-pub mod field_rule_service;
 pub mod invoice_service;
 pub mod numbering_service;
 pub mod opportunity_service;

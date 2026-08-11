@@ -6,7 +6,7 @@ import { Users } from "../users/Users";
 import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
 import { RelationshipsAdmin } from "./RelationshipsAdmin";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
-import { FieldRulesAdmin } from "./FieldRulesAdmin";
+import { BusinessRulesAdmin } from "./BusinessRulesAdmin";
 import { WorkflowRulesAdmin } from "./WorkflowRulesAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
@@ -108,7 +108,7 @@ export function AdminPanel() {
       {tab === "objects" && <CustomObjectsAdmin />}
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
-      {tab === "rules" && <FieldRulesAdmin />}
+      {tab === "rules" && <BusinessRulesAdmin />}
       {tab === "workflow" && <WorkflowRulesAdmin />}
       {tab === "numbering" && <NumberingAdmin />}
       {tab === "kpis" && <DashboardKpiAdmin />}

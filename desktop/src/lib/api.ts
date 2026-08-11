@@ -35,6 +35,9 @@ import type {
   User,
   UserUpdate,
   ArAgingBucket,
+  BusinessRule,
+  BusinessRuleInput,
+  BusinessRuleUpdate,
   CustomFieldDefinition,
   CustomFieldDefinitionInput,
   CustomFieldDefinitionUpdate,
@@ -51,9 +54,6 @@ import type {
   CustomReportUpdate,
   DashboardKpiPrefs,
   EffectiveNumbering,
-  FieldRule,
-  FieldRuleInput,
-  FieldRuleUpdate,
   LostReasonBreakdown,
   NumberingOverrideInput,
   RelatedRecord,
@@ -62,6 +62,7 @@ import type {
   RelationshipDefinitionUpdate,
   RelationshipInstance,
   ReportRange,
+  RuleEvaluation,
   RevenueByMonth,
   SalesByOwner,
   WinRateByOwner,
@@ -230,14 +231,18 @@ export const api = {
     call<CustomFieldDefinition>("update_custom_field_definition", { id, input }),
   deactivateCustomFieldDefinition: (id: string) =>
     call<CustomFieldDefinition>("deactivate_custom_field_definition", { id }),
+  // Returns any non-blocking `show_message` texts that fired (empty
+  // array normally) - see custom_field_service::set_entity_values.
   setCustomFieldValues: (entityType: string, entityId: string, values: CustomFieldValues) =>
-    call<void>("set_custom_field_values", { entityType, entityId, values }),
+    call<string[]>("set_custom_field_values", { entityType, entityId, values }),
   getCustomFieldValues: (entityId: string) => call<CustomFieldValues>("get_custom_field_values", { entityId }),
 
-  listFieldRules: (entityType: string, activeOnly: boolean) =>
-    call<FieldRule[]>("list_field_rules", { entityType, activeOnly }),
-  createFieldRule: (input: FieldRuleInput) => call<FieldRule>("create_field_rule", { input }),
-  updateFieldRule: (id: string, input: FieldRuleUpdate) => call<FieldRule>("update_field_rule", { id, input }),
+  listBusinessRules: (entityType: string, activeOnly: boolean) =>
+    call<BusinessRule[]>("list_business_rules", { entityType, activeOnly }),
+  createBusinessRule: (input: BusinessRuleInput) => call<BusinessRule>("create_business_rule", { input }),
+  updateBusinessRule: (id: string, input: BusinessRuleUpdate) => call<BusinessRule>("update_business_rule", { id, input }),
+  testBusinessRules: (entityType: string, context: Record<string, string>) =>
+    call<RuleEvaluation>("test_business_rules", { entityType, context }),
 
   listWorkflowRules: (entityType: WorkflowEntityType) => call<WorkflowRule[]>("list_workflow_rules", { entityType }),
   createWorkflowRule: (input: WorkflowRuleInput) => call<WorkflowRule>("create_workflow_rule", { input }),

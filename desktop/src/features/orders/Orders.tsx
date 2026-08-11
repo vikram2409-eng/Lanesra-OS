@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
@@ -143,7 +144,8 @@ function OrderForm({
         lines,
       };
       const result = await api.createOrder(input);
-      await api.setCustomFieldValues("Order", result.order.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Order", result.order.id, customValues);
+      showRuleMessages(ruleMessages);
       return result;
     },
     onSuccess: (result) => onDone(result.order.id),

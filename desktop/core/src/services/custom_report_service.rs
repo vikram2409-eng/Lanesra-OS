@@ -13,7 +13,7 @@ use crate::domain::{AppError, AppResult};
 use crate::models::custom_report::{
     CustomReport, CustomReportInput, CustomReportRow, CustomReportUpdate, REPORT_AGGREGATES, REPORT_GROUP_BY_SOURCES,
 };
-use crate::models::field_rule::builtin_trigger_field_for;
+use crate::models::business_rule::builtin_trigger_field_for;
 use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, custom_report_repo, invoice_repo, opportunity_repo,
     order_repo, product_repo, quote_repo, task_repo, user_repo,

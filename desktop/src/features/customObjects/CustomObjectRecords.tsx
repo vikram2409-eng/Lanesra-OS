@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import {
@@ -149,7 +150,8 @@ function RecordForm({
             notes: input.notes,
           })
         : await api.createCustomRecord(input);
-      await api.setCustomFieldValues(definition.key, record.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues(definition.key, record.id, customValues);
+      showRuleMessages(ruleMessages);
       return record;
     },
     onSuccess: onDone,

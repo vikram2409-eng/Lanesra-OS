@@ -21,7 +21,7 @@ use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomField
 use lanesra_core::models::custom_object::{CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
 use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
-use lanesra_core::models::field_rule::{FieldRuleInput, FieldRuleUpdate};
+use lanesra_core::models::business_rule::{BusinessRuleInput, BusinessRuleUpdate};
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
@@ -30,9 +30,9 @@ use lanesra_core::models::workflow_rule::{WorkflowRuleInput, WorkflowRuleUpdate}
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::workspace_repo;
 use lanesra_core::services::{
-    auth_service, backup_service, company_service, contact_service, contract_service,
+    auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
-    field_rule_service, invoice_service, numbering_service, opportunity_service, order_service, product_service,
+    invoice_service, numbering_service, opportunity_service, order_service, product_service,
     quote_service, relationship_service, report_service, task_service, user_service, workflow_service, workspace_service,
 };
 
@@ -331,26 +331,30 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let entity_type: String = arg(args, "entityType")?;
             let entity_id: String = arg(args, "entityId")?;
             let values: CustomFieldValues = arg(args, "values")?;
-            custom_field_service::set_entity_values(conn, &entity_type, &entity_id, &values, actor)?;
-            Ok(Value::Null)
+            to_value(custom_field_service::set_entity_values(conn, &entity_type, &entity_id, &values, actor)?)
         }
         "get_custom_field_values" => {
             to_value(custom_field_service::get_entity_values(conn, &arg::<String>(args, "entityId")?)?)
         }
 
-        "list_field_rules" => {
+        "list_business_rules" => {
             let entity_type: String = arg(args, "entityType")?;
             let active_only: bool = arg(args, "activeOnly")?;
-            to_value(field_rule_service::list_rules(conn, &require_workspace_id(conn)?, &entity_type, active_only)?)
+            to_value(business_rule_service::list_rules(conn, &require_workspace_id(conn)?, &entity_type, active_only)?)
         }
-        "create_field_rule" => {
-            let input: FieldRuleInput = arg(args, "input")?;
-            to_value(field_rule_service::create_rule(conn, &require_workspace_id(conn)?, &input, actor)?)
+        "create_business_rule" => {
+            let input: BusinessRuleInput = arg(args, "input")?;
+            to_value(business_rule_service::create_rule(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
-        "update_field_rule" => {
+        "update_business_rule" => {
             let id: String = arg(args, "id")?;
-            let input: FieldRuleUpdate = arg(args, "input")?;
-            to_value(field_rule_service::update_rule(conn, &id, &input, actor)?)
+            let input: BusinessRuleUpdate = arg(args, "input")?;
+            to_value(business_rule_service::update_rule(conn, &id, &input, actor)?)
+        }
+        "test_business_rules" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let context: CustomFieldValues = arg(args, "context")?;
+            to_value(business_rule_service::test_rules(conn, &require_workspace_id(conn)?, &entity_type, &context, actor)?)
         }
 
         "list_workflow_rules" => {

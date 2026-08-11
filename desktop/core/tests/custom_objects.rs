@@ -11,10 +11,10 @@ use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
+use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
 use lanesra_core::models::custom_report::CustomReportInput;
-use lanesra_core::models::field_rule::FieldRuleInput;
 use lanesra_core::models::user::NewUser;
-use lanesra_core::services::{custom_field_service, custom_object_service, custom_record_service, custom_report_service, field_rule_service, user_service};
+use lanesra_core::services::{business_rule_service, custom_field_service, custom_object_service, custom_record_service, custom_report_service, user_service};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -174,17 +174,28 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
     ).unwrap();
 
     // Business rule: require Contact Email once status is Inactive.
-    field_rule_service::create_rule(
+    business_rule_service::create_rule(
         &conn, &ws,
-        &FieldRuleInput {
+        &BusinessRuleInput {
             entity_type: vendor.key.clone(),
-            trigger_field_source: "builtin".into(),
-            trigger_field_key: "status".into(),
-            operator: "equals".into(),
-            trigger_value: "Inactive".into(),
-            target_field_key: contact_email_field.key.clone(),
-            effect: "require".into(),
-            sort_order: 0,
+            name: "Require Contact Email when Inactive".into(),
+            description: None,
+            match_type: "all".into(),
+            priority: 0,
+            effective_start_date: None,
+            effective_end_date: None,
+            conditions: vec![BusinessRuleConditionInput {
+                field_source: "builtin".into(),
+                field_key: "status".into(),
+                operator: "equals".into(),
+                value: "Inactive".into(),
+            }],
+            actions: vec![BusinessRuleActionInput {
+                action_type: "require".into(),
+                target_field_key: Some(contact_email_field.key.clone()),
+                action_value: None,
+                message: None,
+            }],
         },
         Some(&admin),
     ).unwrap();

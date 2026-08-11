@@ -1,5 +1,6 @@
 pub mod auth_commands;
 pub mod backup_commands;
+pub mod business_rule_commands;
 pub mod company_commands;
 pub mod contact_commands;
 pub mod contract_commands;
@@ -8,7 +9,6 @@ pub mod custom_object_commands;
 pub mod custom_record_commands;
 pub mod custom_report_commands;
 pub mod dashboard_commands;
-pub mod field_rule_commands;
 pub mod invoice_commands;
 pub mod numbering_commands;
 pub mod opportunity_commands;

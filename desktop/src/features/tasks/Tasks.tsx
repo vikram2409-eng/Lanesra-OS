@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import {
@@ -252,7 +253,8 @@ function TaskForm({
   const save = useMutation({
     mutationFn: async () => {
       const task = taskId ? await api.updateTask(taskId, input) : await api.createTask(input);
-      await api.setCustomFieldValues("Task", task.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Task", task.id, customValues);
+      showRuleMessages(ruleMessages);
       return task;
     },
     onSuccess: onDone,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { centsToInputValue, formatCents, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
@@ -139,7 +140,8 @@ function ProductForm({
   const save = useMutation({
     mutationFn: async () => {
       const product = productId ? await api.updateProduct(productId, input) : await api.createProduct(input);
-      await api.setCustomFieldValues("Product", product.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Product", product.id, customValues);
+      showRuleMessages(ruleMessages);
       return product;
     },
     onSuccess: onDone,

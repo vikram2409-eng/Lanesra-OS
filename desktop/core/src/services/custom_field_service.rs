@@ -11,11 +11,12 @@ use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::{
     CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues, CUSTOM_FIELD_TYPES,
 };
-use crate::models::field_rule::builtin_trigger_field_for;
+use crate::models::business_rule::builtin_trigger_field_for;
 use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
     product_repo, quote_repo, task_repo, user_repo,
 };
+use crate::services::business_rule_service;
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -202,36 +203,50 @@ fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &st
     }
 }
 
-/// Validates and persists custom field values for one Company/Contact
-/// record - required-field enforcement happens here, server-side, not
-/// only in the form, since this is called by the same command any client
-/// (including a direct API call) would use (FR-RUL-05 makes the same
-/// argument for business rules; the reasoning is identical here).
+/// Validates and persists custom field values for one record - required-
+/// field enforcement happens here, server-side, not only in the form,
+/// since this is called by the same command any client (including a
+/// direct API call) would use (ADM-BR makes the same argument for business
+/// rules; the reasoning is identical here). Also the one integration point
+/// business rules hook into, since every entity's save flow already calls
+/// this unconditionally, even when it has no custom field values of its
+/// own to save (see each feature screen's save mutation).
+///
+/// Returns any non-blocking `show_message` texts that fired, for the
+/// caller to display - everything else a rule can do either mutates the
+/// values being saved (`set_default`/`set_value`), rejects the save
+/// (`require`/`block_save`, as an `Err`), or is purely cosmetic and
+/// client-enforced (`hide`/`lock`, carried in `field_effects` but not
+/// consulted here).
 pub fn set_entity_values(
     conn: &Connection,
     entity_type: &str,
     entity_id: &str,
     values: &CustomFieldValues,
     actor_user_id: Option<&str>,
-) -> AppResult<()> {
+) -> AppResult<Vec<String>> {
     let (workspace_id, builtin_value) = resolve_entity_workspace(conn, entity_type, entity_id)?;
     let definitions = list_definitions(conn, &workspace_id, entity_type, true)?;
 
-    // FR-RUL-05: a field required by an active business rule is enforced
-    // here too, not only in the form - the same reasoning as the static
-    // `required` flag just above. `hide` is not enforced here: it's a
-    // purely cosmetic effect with nothing to validate, so a hidden field
-    // is simply left untouched (skipped) rather than cleared or blocked.
     let mut trigger_context: CustomFieldValues = values.clone();
     trigger_context.insert(builtin_trigger_field_for(entity_type).to_string(), builtin_value);
-    let rule_effects = crate::services::field_rule_service::effects_for(conn, &workspace_id, entity_type, &trigger_context)?;
+    let evaluation = business_rule_service::evaluate(conn, &workspace_id, entity_type, &trigger_context)?;
+
+    if let Some(reason) = &evaluation.blocked {
+        return Err(AppError::Validation(reason.clone()));
+    }
+
+    let mut effective_values = values.clone();
+    for (key, value) in &evaluation.set_values {
+        effective_values.insert(key.clone(), value.clone());
+    }
 
     for def in &definitions {
-        if rule_effects.get(&def.key).map(|e| e.as_str()) == Some("hide") {
+        if evaluation.field_effects.get(&def.key).map(|e| e.as_str()) == Some("hide") {
             continue;
         }
-        let value = values.get(&def.key).map(|s| s.trim()).unwrap_or("");
-        let required_by_rule = rule_effects.get(&def.key).map(|e| e.as_str()) == Some("require");
+        let value = effective_values.get(&def.key).map(|s| s.trim()).unwrap_or("");
+        let required_by_rule = evaluation.field_effects.get(&def.key).map(|e| e.as_str()) == Some("require");
         if (def.required || required_by_rule) && value.is_empty() {
             return Err(AppError::Validation(format!("{} is required", def.label)));
         }
@@ -250,7 +265,7 @@ pub fn set_entity_values(
     }
 
     let _ = actor_user_id; // no audit entry per value write - the parent record's own create/update audit entry covers this edit
-    Ok(())
+    Ok(evaluation.messages)
 }
 
 pub fn get_entity_values(conn: &Connection, entity_id: &str) -> AppResult<CustomFieldValues> {
