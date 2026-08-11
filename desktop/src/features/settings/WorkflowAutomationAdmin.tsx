@@ -41,9 +41,10 @@ const TRIGGER_LABELS: Record<TriggerType, string> = {
 
 const ACTION_LABELS: Record<WorkflowActionType, string> = {
   create_task: "Create task",
-  update_field: "Update a custom field",
+  update_field: "Update a field",
   assign_owner: "Assign owner",
-  create_related_record: "Create related record",
+  create_record: "Create a record",
+  update_related_record: "Update a linked record",
   add_notification: "Send notification",
   create_reminder: "Create reminder",
 };
@@ -68,7 +69,8 @@ function defaultParamsFor(actionType: WorkflowActionType, customFieldKey: string
     case "create_reminder": return { title: "", description: null, remind_in_days: 0, assignee_user_id: null };
     case "update_field": return { target_field_key: customFieldKey, target_field_source: "custom", value: "", copy_from_field_key: null };
     case "assign_owner": return { user_id: null };
-    case "create_related_record": return { object_key: "", relationship_definition_id: "", name_template: null };
+    case "create_record": return { entity_type: "", relationship_definition_id: null, name_template: null };
+    case "update_related_record": return { relationship_definition_id: "", target_field_key: "", target_field_source: "custom", value: "", copy_from_field_key: null };
     case "add_notification": return { message: "", audience: "owner" };
   }
 }
@@ -91,7 +93,8 @@ function describeAction(entityType: string, a: WorkflowActionInput, labelByKey: 
         return `set ${label} = "${p.value ?? `{${p.copy_from_field_key}}`}"`;
       }
       case "assign_owner": return "assign owner";
-      case "create_related_record": return `create related ${p.object_key}`;
+      case "create_record": return `create a new ${p.entity_type}${p.relationship_definition_id ? " and link it" : ""}`;
+      case "update_related_record": return `set ${p.target_field_key} on linked record${p.value ? ` = "${p.value}"` : p.copy_from_field_key ? ` = {${p.copy_from_field_key}}` : ""}`;
       case "add_notification": return `notify ${p.audience === "all_admins" ? "all admins" : "owner"}: "${p.message}"`;
       default: return a.action_type;
     }
@@ -110,6 +113,7 @@ export function WorkflowAutomationAdmin() {
   const [entityType, setEntityType] = useState<string>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
   const queryClient = useQueryClient();
 
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
@@ -136,20 +140,25 @@ export function WorkflowAutomationAdmin() {
     <div className="card">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Workflow automation</h3>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setCreating((v) => !v);
-            setEditingId(null);
-          }}
-        >
-          + New workflow
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={() => setTesting((v) => !v)}>
+            {testing ? "Hide test mode" : "Test workflows"}
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setCreating((v) => !v);
+              setEditingId(null);
+            }}
+          >
+            + New workflow
+          </button>
+        </div>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-        Trigger an action - create a task, update a field, assign an owner, create a related record, or send a
-        notification - when a record is created, updated, changes status, a date is reached, or on a recurring
-        schedule.
+        Trigger an action - create a task, update a field, assign an owner, create a record (optionally linked),
+        update a field on a linked record, or send a notification - when a record is created, updated, changes
+        status, a date is reached, or on a recurring schedule.
       </p>
 
       <div className="tab-row">
@@ -161,6 +170,7 @@ export function WorkflowAutomationAdmin() {
               setEntityType(t.key);
               setCreating(false);
               setEditingId(null);
+              setTesting(false);
             }}
           >
             {t.label}
@@ -168,10 +178,13 @@ export function WorkflowAutomationAdmin() {
         ))}
       </div>
 
+      {testing && <TestWorkflowPanel entityType={entityType} customFields={activeDefs} />}
+
       {creating && (
         <WorkflowForm
           entityType={entityType}
           customFields={activeDefs}
+          customObjects={customObjects.data ?? []}
           users={users.data ?? []}
           relationshipDefs={relationshipDefs.data ?? []}
           initial={{
@@ -193,6 +206,7 @@ export function WorkflowAutomationAdmin() {
         <WorkflowForm
           entityType={entityType}
           customFields={activeDefs}
+          customObjects={customObjects.data ?? []}
           users={users.data ?? []}
           relationshipDefs={relationshipDefs.data ?? []}
           initial={{
@@ -351,6 +365,7 @@ function ConditionRow({
 function ActionEditor({
   entityType,
   customFields,
+  customObjects,
   users,
   relationshipDefs,
   action,
@@ -359,6 +374,7 @@ function ActionEditor({
 }: {
   entityType: string;
   customFields: { key: string; label: string }[];
+  customObjects: { key: string; plural_label: string }[];
   users: { id: string; display_name: string; is_active: boolean }[];
   relationshipDefs: { id: string; source_entity_type: string; target_entity_type: string; forward_label: string; reverse_label: string }[];
   action: WorkflowActionInput;
@@ -373,6 +389,22 @@ function ActionEditor({
   }
   const activeUsers = users.filter((u) => u.is_active);
   const applicableRelationships = relationshipDefs.filter((r) => r.source_entity_type === entityType || r.target_entity_type === entityType);
+  // create_record can only construct Company (needs nothing but a name)
+  // or an active custom object - see workflow_service::is_creatable_entity_type.
+  const creatableEntityTypes = [{ key: "Company", label: entityTypeLabel("Company") }, ...customObjects.map((o) => ({ key: o.key, label: o.plural_label }))];
+
+  const relatedDefForUpdate = relationshipDefs.find((r) => r.id === params.relationship_definition_id);
+  const updateOtherType = relatedDefForUpdate
+    ? (relatedDefForUpdate.source_entity_type === entityType ? relatedDefForUpdate.target_entity_type : relatedDefForUpdate.source_entity_type)
+    : null;
+  const otherTypeCustomFields = useQuery({
+    queryKey: ["customFieldDefinitions", updateOtherType, "all"],
+    queryFn: () => api.listCustomFieldDefinitions(updateOtherType as string, false),
+    enabled: !!updateOtherType,
+  });
+  const otherTypeActiveCustomFields = (otherTypeCustomFields.data ?? []).filter((d) => d.is_active);
+  const otherTypeBuiltinFields = updateOtherType ? builtinFieldsFor(updateOtherType).filter((f) => f.actionable) : [];
+  const copyFromOptionsForUpdate = [...customFields, ...builtinFieldsFor(entityType).filter((f) => f.actionable)];
 
   function setParams(next: Record<string, unknown>) {
     onChange({ ...action, params_json: JSON.stringify(next) });
@@ -453,15 +485,30 @@ function ActionEditor({
         </select>
       )}
 
-      {action.action_type === "create_related_record" && (
+      {action.action_type === "create_record" && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <select value={String(params.entity_type ?? "")} onChange={(e) => setParams({ ...params, entity_type: e.target.value })} required>
+            <option value="">Create a...</option>
+            {creatableEntityTypes.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+          </select>
+          <input placeholder="Name (optional, defaults to 'Related to ...')" value={String(params.name_template ?? "")} onChange={(e) => setParams({ ...params, name_template: e.target.value || null })} style={{ minWidth: 220 }} />
+          <select
+            value={String(params.relationship_definition_id ?? "")}
+            onChange={(e) => setParams({ ...params, relationship_definition_id: e.target.value || null })}
+          >
+            <option value="">Don't link it to anything</option>
+            {applicableRelationships.map((r) => (
+              <option key={r.id} value={r.id}>Link as: {r.source_entity_type === entityType ? r.forward_label : r.reverse_label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {action.action_type === "update_related_record" && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <select
             value={String(params.relationship_definition_id ?? "")}
-            onChange={(e) => {
-              const def = applicableRelationships.find((r) => r.id === e.target.value);
-              const objectKey = def ? (def.source_entity_type === entityType ? def.target_entity_type : def.source_entity_type) : "";
-              setParams({ ...params, relationship_definition_id: e.target.value, object_key: objectKey });
-            }}
+            onChange={(e) => setParams({ ...params, relationship_definition_id: e.target.value, target_field_key: "", target_field_source: "custom", value: "", copy_from_field_key: null })}
             required
           >
             <option value="">Select relationship...</option>
@@ -469,7 +516,34 @@ function ActionEditor({
               <option key={r.id} value={r.id}>{r.source_entity_type === entityType ? r.forward_label : r.reverse_label}</option>
             ))}
           </select>
-          <input placeholder="Name (optional, defaults to 'Related to ...')" value={String(params.name_template ?? "")} onChange={(e) => setParams({ ...params, name_template: e.target.value || null })} style={{ minWidth: 220 }} />
+          {updateOtherType && (() => {
+            const targetSource = (params.target_field_source as TriggerSource | undefined) ?? "custom";
+            const isBuiltinTarget = targetSource === "builtin";
+            return (
+              <>
+                <select
+                  value={targetSource}
+                  onChange={(e) => {
+                    const source = e.target.value as TriggerSource;
+                    const first = source === "builtin" ? otherTypeBuiltinFields[0]?.key ?? "" : otherTypeActiveCustomFields[0]?.key ?? "";
+                    setParams({ ...params, target_field_source: source, target_field_key: first, value: "" });
+                  }}
+                >
+                  <option value="custom" disabled={otherTypeActiveCustomFields.length === 0}>Custom field</option>
+                  <option value="builtin" disabled={otherTypeBuiltinFields.length === 0}>Built-in field</option>
+                </select>
+                <select value={String(params.target_field_key ?? "")} onChange={(e) => setParams({ ...params, target_field_key: e.target.value })} required>
+                  {(isBuiltinTarget ? otherTypeBuiltinFields : otherTypeActiveCustomFields).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                </select>
+                <input placeholder="Set to value" value={String(params.value ?? "")} onChange={(e) => setParams({ ...params, value: e.target.value, copy_from_field_key: null })} style={{ width: 160 }} />
+                <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-muted)" }}>or copy from this record's</span>
+                <select value={String(params.copy_from_field_key ?? "")} onChange={(e) => setParams({ ...params, copy_from_field_key: e.target.value || null, value: null })}>
+                  <option value="">Select field...</option>
+                  {copyFromOptionsForUpdate.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                </select>
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -488,6 +562,7 @@ function ActionEditor({
 function WorkflowForm({
   entityType,
   customFields,
+  customObjects,
   users,
   relationshipDefs,
   initial,
@@ -499,6 +574,7 @@ function WorkflowForm({
 }: {
   entityType: string;
   customFields: { key: string; label: string }[];
+  customObjects: { key: string; plural_label: string }[];
   users: { id: string; display_name: string; is_active: boolean }[];
   relationshipDefs: { id: string; source_entity_type: string; target_entity_type: string; forward_label: string; reverse_label: string }[];
   initial: WorkflowDefinitionInput & { is_active?: boolean };
@@ -657,6 +733,7 @@ function WorkflowForm({
               key={i}
               entityType={entityType}
               customFields={customFields}
+              customObjects={customObjects}
               users={users}
               relationshipDefs={relationshipDefs}
               action={a}
@@ -686,6 +763,62 @@ function WorkflowForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/** Addendum Phase 3 (mirrors BusinessRulesAdmin's TestRulesPanel): lets an
+ * admin try a hypothetical set of field values against every active
+ * workflow for an entity type before relying on it. Unlike business
+ * rules, workflow actions are side-effecting (create a task, write a
+ * field, send a notification) so nothing here actually runs them - each
+ * matching workflow's actions are described in plain language instead. */
+function TestWorkflowPanel({ entityType, customFields }: { entityType: string; customFields: { key: string; label: string }[] }) {
+  const builtinFields = builtinFieldsFor(entityType);
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(builtinFields.filter((f) => f.field_type === "select").map((f) => [f.key, f.options?.[0] ?? ""])),
+  );
+
+  const test = useMutation({
+    mutationFn: () => api.testWorkflows(entityType, values),
+  });
+
+  return (
+    <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
+      <h4 style={{ marginTop: 0 }}>Test workflows against a hypothetical record</h4>
+      <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+        Shows what each matching active workflow's conditions and actions would do - nothing is created, changed, or
+        sent.
+      </p>
+      <div className="form-grid">
+        {builtinFields.map((f) => (
+          <div className="form-field" key={f.key}>
+            <label>{f.label}</label>
+            <BuiltinValueInput field={f} value={values[f.key] ?? ""} onChange={(v) => setValues({ ...values, [f.key]: v })} />
+          </div>
+        ))}
+        {customFields.map((f) => (
+          <div className="form-field" key={f.key}>
+            <label>{f.label}</label>
+            <input value={values[f.key] ?? ""} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
+          </div>
+        ))}
+        <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
+          <button className="btn btn-primary" type="button" onClick={() => test.mutate()} disabled={test.isPending}>
+            Run test
+          </button>
+        </div>
+      </div>
+      {test.data && (
+        <div style={{ marginTop: 8, fontSize: 13 }}>
+          {test.data.matches.length === 0 && <p className="empty-state">No active workflow matches this hypothetical record.</p>}
+          {test.data.matches.map((m) => (
+            <p key={m.workflow_id}>
+              <strong>{m.workflow_name}</strong> - {m.action_descriptions.join("; ")}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

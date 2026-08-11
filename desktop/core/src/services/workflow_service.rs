@@ -36,7 +36,7 @@ use std::collections::HashMap;
 
 use chrono::{Duration, Utc};
 use rusqlite::Connection;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::conditions::conditions_match;
 use crate::domain::ids::new_uuid;
@@ -51,7 +51,7 @@ use crate::repositories::{
     company_repo, contract_repo, custom_field_repo, custom_record_repo, notification_repo, opportunity_repo,
     relationship_repo, task_repo, user_repo, workflow_repo,
 };
-use crate::services::{builtin_field_service, custom_object_service, custom_record_service, entity_registry, task_service};
+use crate::services::{builtin_field_service, company_service, custom_object_service, custom_record_service, entity_registry, task_service};
 
 thread_local! {
     static WORKFLOW_DEPTH: Cell<u8> = const { Cell::new(0) };
@@ -542,11 +542,40 @@ struct AssignOwnerParams {
     user_id: Option<String>,
 }
 
+/// Addendum Phase 3 (§3.3 "generic create_record action"): generalizes the
+/// original custom-object-only `create_related_record` action to any
+/// entity type a workflow can safely construct with no per-type UI -
+/// see `is_creatable_entity_type`'s doc comment for exactly which ones
+/// and why. Linking is now optional (`relationship_definition_id: None`
+/// creates a standalone record with nothing to link it to), where the
+/// original action always required a relationship.
 #[derive(Debug, Deserialize)]
-struct CreateRelatedRecordParams {
-    object_key: String,
-    relationship_definition_id: String,
+struct CreateRecordParams {
+    entity_type: String,
+    #[serde(default)]
+    relationship_definition_id: Option<String>,
     name_template: Option<String>,
+}
+
+/// Addendum Phase 3 (§3.3 "generic update_related_record action"): the
+/// companion to `update_field` for reaching across a relationship - e.g.
+/// "when an Opportunity is Won, set the linked Company's status to Active
+/// Customer" - rather than only ever writing to the triggering record's
+/// own fields. Applies to every record currently linked to the trigger
+/// through the named relationship (more than one for a many_to_many
+/// relationship), matching `update_field`'s `target_field_source`/
+/// `copy_from_field_key` shape so the two actions read the same way in
+/// the UI. `copy_from_field_key`, when set, reads from the *triggering*
+/// record (the natural "roll this value up/down the relationship"
+/// reading), not from the record(s) being written to.
+#[derive(Debug, Deserialize)]
+struct UpdateRelatedRecordParams {
+    relationship_definition_id: String,
+    target_field_key: String,
+    #[serde(default = "default_field_source")]
+    target_field_source: String,
+    value: Option<String>,
+    copy_from_field_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -561,6 +590,36 @@ fn parse_params<T: for<'de> Deserialize<'de>>(action_type: &str, params_json: &s
 
 fn entity_supports_owner(entity_type: &str) -> bool {
     matches!(entity_type, "Company" | "Opportunity" | "Contract" | "Task") || !CORE_WORKFLOW_ENTITY_TYPES.contains(&entity_type)
+}
+
+/// Which entity types `create_record` can construct with nothing but a
+/// name - deliberately narrow. Every core entity besides Company has a
+/// required relational or line-item field (Contact needs `company_id`,
+/// Opportunity/Quote/Order need a company and, for Quote/Order, at least
+/// one line) that a no-code action can't safely synthesize without its
+/// own dedicated per-type UI - out of scope here. Task/Reminder already
+/// have dedicated actions for the common "auto-create a task" case. Any
+/// active custom object qualifies unconditionally, same as the original
+/// `create_related_record` action.
+fn is_creatable_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<bool> {
+    if entity_type == "Company" {
+        return Ok(true);
+    }
+    Ok(custom_object_service::get_by_key(conn, workspace_id, entity_type)?.is_some_and(|d| d.is_active))
+}
+
+/// The other side of `relationship_definition_id` from `entity_type` -
+/// shared by `create_record`'s optional link target and
+/// `update_related_record`'s required one. Errors rather than guessing
+/// when `entity_type` isn't actually one of the definition's two sides.
+fn other_side_of_relationship(def: &crate::models::relationship::RelationshipDefinition, entity_type: &str) -> AppResult<String> {
+    if def.source_entity_type == entity_type {
+        Ok(def.target_entity_type.clone())
+    } else if def.target_entity_type == entity_type {
+        Ok(def.source_entity_type.clone())
+    } else {
+        Err(AppError::Validation("Selected relationship does not connect to this record type".into()))
+    }
 }
 
 /// Validates an action's params without executing anything - used both by
@@ -602,13 +661,37 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
                 return Err(AppError::Validation(format!("{entity_type} has no owner field to assign")));
             }
         }
-        "create_related_record" => {
-            let p: CreateRelatedRecordParams = parse_params(action_type, params_json)?;
-            if custom_object_service::get_by_key(conn, workspace_id, &p.object_key)?.filter(|d| d.is_active).is_none() {
-                return Err(AppError::Validation(format!("'{}' is not an active custom object", p.object_key)));
+        "create_record" => {
+            let p: CreateRecordParams = parse_params(action_type, params_json)?;
+            if !is_creatable_entity_type(conn, workspace_id, &p.entity_type)? {
+                return Err(AppError::Validation(format!(
+                    "'{}' cannot be created by a workflow action - only Company and active custom objects are supported", p.entity_type
+                )));
             }
-            if relationship_repo::get_definition(conn, &p.relationship_definition_id)?.is_none() {
-                return Err(AppError::Validation("Selected relationship does not exist".into()));
+            if let Some(rel_id) = &p.relationship_definition_id {
+                let def = relationship_repo::get_definition(conn, rel_id)?.ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
+                let other = other_side_of_relationship(&def, entity_type)?;
+                if other != p.entity_type {
+                    return Err(AppError::Validation("Selected relationship does not connect these two record types".into()));
+                }
+            }
+        }
+        "update_related_record" => {
+            let p: UpdateRelatedRecordParams = parse_params(action_type, params_json)?;
+            let def = relationship_repo::get_definition(conn, &p.relationship_definition_id)?.ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
+            let other_type = other_side_of_relationship(&def, entity_type)?;
+            if p.target_field_source == "builtin" {
+                if !builtin_fields::is_actionable_builtin_field(&other_type, &p.target_field_key) {
+                    return Err(AppError::Validation(format!("'{}' is not an actionable built-in field on {other_type}", p.target_field_key)));
+                }
+            } else {
+                let defs = custom_field_repo::list_definitions(conn, workspace_id, &other_type)?;
+                if !defs.iter().any(|d| d.key == p.target_field_key && d.is_active) {
+                    return Err(AppError::Validation(format!("'{}' is not an active custom field on {other_type}", p.target_field_key)));
+                }
+            }
+            if p.value.is_none() && p.copy_from_field_key.is_none() {
+                return Err(AppError::Validation("Provide a value or a field to copy from".into()));
             }
         }
         "add_notification" => {
@@ -736,25 +819,77 @@ fn apply_action(
             }
             Ok("assigned owner".into())
         }
-        "create_related_record" => {
-            let p: CreateRelatedRecordParams = parse_params(action_type, params_json)?;
+        "create_record" => {
+            let p: CreateRecordParams = parse_params(action_type, params_json)?;
             let source = entity_registry::resolve(conn, entity_type, entity_id)?
                 .ok_or_else(|| AppError::Validation("Triggering record no longer exists".into()))?;
             let name = p.name_template.clone().unwrap_or_else(|| format!("Related to {}", source.display_name));
-            let record = custom_record_service::create(
-                conn, workspace_id,
-                &crate::models::custom_record::CustomRecordInput { object_key: p.object_key.clone(), primary_name: name, status: "Active".into(), owner_user_id: None, notes: None },
-                actor_user_id,
-            )?;
+            let is_custom_object = custom_object_service::get_by_key(conn, workspace_id, &p.entity_type)?.is_some_and(|d| d.is_active);
+            let new_id = if is_custom_object {
+                custom_record_service::create(
+                    conn, workspace_id,
+                    &crate::models::custom_record::CustomRecordInput { object_key: p.entity_type.clone(), primary_name: name.clone(), status: "Active".into(), owner_user_id: None, notes: None },
+                    actor_user_id,
+                )?.id
+            } else if p.entity_type == "Company" {
+                company_service::create(
+                    conn, workspace_id,
+                    &crate::models::company::CompanyInput {
+                        name: name.clone(), status: "Prospect".into(), owner_user_id: None, tax_number: None,
+                        billing_address: None, shipping_address: None, tags: None, notes: None,
+                    },
+                    actor_user_id,
+                )?.id
+            } else {
+                return Err(AppError::Validation(format!("'{}' cannot be created by a workflow action", p.entity_type)));
+            };
+            if let Some(rel_id) = &p.relationship_definition_id {
+                let def = relationship_repo::get_definition(conn, rel_id)?
+                    .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
+                let (source_type, source_id, target_type, target_id) = if def.source_entity_type == entity_type {
+                    (entity_type, entity_id.to_string(), p.entity_type.as_str(), new_id.clone())
+                } else {
+                    (p.entity_type.as_str(), new_id.clone(), entity_type, entity_id.to_string())
+                };
+                crate::services::relationship_service::link(conn, workspace_id, &def.id, source_type, &source_id, target_type, &target_id, actor_user_id)?;
+            }
+            Ok(format!("created {} '{}'", p.entity_type, name))
+        }
+        "update_related_record" => {
+            let p: UpdateRelatedRecordParams = parse_params(action_type, params_json)?;
             let def = relationship_repo::get_definition(conn, &p.relationship_definition_id)?
                 .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
-            let (source_type, source_id, target_type, target_id) = if def.source_entity_type == entity_type {
-                (entity_type, entity_id.to_string(), p.object_key.as_str(), record.id.clone())
+            let (other_type, related_ids): (String, Vec<String>) = if def.source_entity_type == entity_type {
+                (def.target_entity_type.clone(), relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?.into_iter().map(|i| i.target_id).collect())
             } else {
-                (p.object_key.as_str(), record.id.clone(), entity_type, entity_id.to_string())
+                (def.source_entity_type.clone(), relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?.into_iter().map(|i| i.source_id).collect())
             };
-            crate::services::relationship_service::link(conn, workspace_id, &def.id, source_type, &source_id, target_type, &target_id, actor_user_id)?;
-            Ok(format!("created related {} '{}'", p.object_key, record.primary_name))
+            if related_ids.is_empty() {
+                return Ok(format!("no linked {other_type} record to update"));
+            }
+            let value = if let Some(src) = &p.copy_from_field_key {
+                // Reads from the *triggering* record (not the related
+                // record being written to) - see UpdateRelatedRecordParams'
+                // doc comment for why that's the intuitive direction.
+                let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+                for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
+                    ctx.insert(k, v);
+                }
+                ctx.get(src).cloned().unwrap_or_default()
+            } else {
+                p.value.clone().unwrap_or_default()
+            };
+            for related_id in &related_ids {
+                if p.target_field_source == "builtin" {
+                    builtin_field_service::set_field(conn, workspace_id, &other_type, related_id, &p.target_field_key, &value, actor_user_id)?;
+                } else {
+                    let defs = custom_field_repo::list_definitions(conn, workspace_id, &other_type)?;
+                    let def2 = defs.iter().find(|d| d.key == p.target_field_key && d.is_active)
+                        .ok_or_else(|| AppError::Validation(format!("'{}' is not an active custom field on {other_type}", p.target_field_key)))?;
+                    custom_field_repo::set_value(conn, &def2.id, related_id, &value)?;
+                }
+            }
+            Ok(format!("set {} on {} linked {other_type} record(s)", p.target_field_key, related_ids.len()))
         }
         "add_notification" => {
             let p: AddNotificationParams = parse_params(action_type, params_json)?;
@@ -798,4 +933,107 @@ fn run_workflow(
         Some(&summaries.join("; ")), error_message.as_deref(),
     )?;
     Ok(())
+}
+
+// --- Test / simulation mode --------------------------------------------
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkflowTestMatch {
+    pub workflow_id: String,
+    pub workflow_name: String,
+    pub trigger_type: String,
+    pub action_descriptions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct WorkflowTestResult {
+    pub matches: Vec<WorkflowTestMatch>,
+}
+
+/// Addendum Phase 3 (mirrors `business_rule_service::test_rules`): lets an
+/// admin try a hypothetical field context against every active workflow
+/// for an entity type without executing anything. Like business rules'
+/// own test mode, this only simulates the *conditions* half - which
+/// real-world event (create/update/status change/etc.) actually fired is
+/// not part of the simulation, since the hypothetical context has no
+/// "before" state to diff against. Actions are described in plain
+/// language via `describe_action` rather than run through `apply_action`,
+/// so nothing is written - no task created, no field changed, no
+/// notification sent.
+pub fn test_workflows(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &HashMap<String, String>, actor_user_id: Option<&str>) -> AppResult<WorkflowTestResult> {
+    require_admin(conn, actor_user_id)?;
+    let workflows = workflow_repo::list(conn, workspace_id, entity_type)?;
+    let mut matches = Vec::new();
+    for wf in workflows.iter().filter(|w| w.is_active) {
+        if !workflow_matches(wf, ctx) {
+            continue;
+        }
+        let mut action_descriptions = Vec::new();
+        for action in &wf.actions {
+            action_descriptions.push(describe_action(conn, workspace_id, entity_type, &action.action_type, &action.params_json)?);
+        }
+        matches.push(WorkflowTestMatch { workflow_id: wf.id.clone(), workflow_name: wf.name.clone(), trigger_type: wf.trigger_type.clone(), action_descriptions });
+    }
+    Ok(WorkflowTestResult { matches })
+}
+
+/// Read-only mirror of `apply_action` for `test_workflows` - parses the
+/// same params and resolves the same labels, but never writes anything
+/// (no task/record creation, no field writes, no notifications sent, no
+/// relationship links).
+fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, action_type: &str, params_json: &str) -> AppResult<String> {
+    match action_type {
+        "create_task" => {
+            let p: CreateTaskParams = parse_params(action_type, params_json)?;
+            Ok(format!("would create task \"{}\"", p.title))
+        }
+        "create_reminder" => {
+            let p: CreateReminderParams = parse_params(action_type, params_json)?;
+            Ok(format!("would create reminder \"{}\"", p.title))
+        }
+        "update_field" => {
+            let p: UpdateFieldParams = parse_params(action_type, params_json)?;
+            let label = if p.target_field_source == "builtin" {
+                builtin_fields::find_builtin_field(entity_type, &p.target_field_key).map(|f| f.label.to_string()).unwrap_or_else(|| p.target_field_key.clone())
+            } else {
+                custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+                    .into_iter()
+                    .find(|d| d.key == p.target_field_key)
+                    .map(|d| d.label)
+                    .unwrap_or_else(|| p.target_field_key.clone())
+            };
+            match (&p.value, &p.copy_from_field_key) {
+                (Some(v), _) => Ok(format!("would set {label} = \"{v}\"")),
+                (None, Some(src)) => Ok(format!("would set {label} = value copied from '{src}'")),
+                (None, None) => Ok(format!("would set {label}")),
+            }
+        }
+        "assign_owner" => {
+            let p: AssignOwnerParams = parse_params(action_type, params_json)?;
+            match &p.user_id {
+                Some(uid) => {
+                    let name = user_repo::find_by_id(conn, uid)?.map(|u| u.display_name).unwrap_or_else(|| "that user".into());
+                    Ok(format!("would assign owner to {name}"))
+                }
+                None => Ok("would clear the owner".into()),
+            }
+        }
+        "create_record" => {
+            let p: CreateRecordParams = parse_params(action_type, params_json)?;
+            Ok(format!("would create a new {}", p.entity_type))
+        }
+        "update_related_record" => {
+            let p: UpdateRelatedRecordParams = parse_params(action_type, params_json)?;
+            let rel_label = relationship_repo::get_definition(conn, &p.relationship_definition_id)?
+                .map(|d| d.forward_label)
+                .unwrap_or_else(|| "related".into());
+            Ok(format!("would set {} on linked {rel_label} record(s)", p.target_field_key))
+        }
+        "add_notification" => {
+            let p: AddNotificationParams = parse_params(action_type, params_json)?;
+            let audience = if p.audience == "all_admins" { "all admins" } else { "the owner" };
+            Ok(format!("would notify {audience}: \"{}\"", p.message))
+        }
+        other => Err(AppError::Validation(format!("Unknown action type '{other}'"))),
+    }
 }

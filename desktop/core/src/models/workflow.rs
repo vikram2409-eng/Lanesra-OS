@@ -4,7 +4,7 @@ pub const TRIGGER_TYPES: &[&str] = &[
     "record_created", "record_updated", "status_changed", "field_changed", "date_reached", "due_overdue", "scheduled",
 ];
 pub const ACTION_TYPES: &[&str] = &[
-    "create_task", "update_field", "assign_owner", "create_related_record", "add_notification", "create_reminder",
+    "create_task", "update_field", "assign_owner", "create_record", "update_related_record", "add_notification", "create_reminder",
 ];
 pub const NOTIFICATION_AUDIENCES: &[&str] = &["owner", "all_admins"];
 

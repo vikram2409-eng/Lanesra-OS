@@ -73,6 +73,7 @@ import type {
   WorkflowDefinitionInput,
   WorkflowDefinitionUpdate,
   WorkflowRun,
+  WorkflowTestResult,
   Workspace,
   WorkspaceLogo,
   WorkspaceSetup,
@@ -258,6 +259,8 @@ export const api = {
     call<WorkflowDefinition>("update_workflow_rule", { id, input }),
   listWorkflowRuns: (workflowId: string) => call<WorkflowRun[]>("list_workflow_runs", { workflowId }),
   runScheduledWorkflows: () => call<number>("run_scheduled_workflows"),
+  testWorkflows: (entityType: string, context: Record<string, string>) =>
+    call<WorkflowTestResult>("test_workflows", { entityType, context }),
 
   listNotifications: (unreadOnly: boolean) => call<Notification[]>("list_notifications", { unreadOnly }),
   markNotificationRead: (id: string) => call<void>("mark_notification_read", { id }),

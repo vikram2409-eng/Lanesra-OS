@@ -1083,7 +1083,7 @@ export const TRIGGER_TYPES = [
 ] as const;
 export type TriggerType = (typeof TRIGGER_TYPES)[number];
 export const WORKFLOW_ACTION_TYPES = [
-  "create_task", "update_field", "assign_owner", "create_related_record", "add_notification", "create_reminder",
+  "create_task", "update_field", "assign_owner", "create_record", "update_related_record", "add_notification", "create_reminder",
 ] as const;
 export type WorkflowActionType = (typeof WORKFLOW_ACTION_TYPES)[number];
 export const NOTIFICATION_AUDIENCES = ["owner", "all_admins"] as const;
@@ -1195,6 +1195,21 @@ export interface WorkflowRun {
   outcome: "success" | "error" | "skipped";
   actions_summary: string | null;
   error_message: string | null;
+}
+
+/** Addendum Phase 3: dry-run result from `test_workflows` - mirrors
+ * `RuleEvaluation` in spirit (a hypothetical-context evaluation that writes
+ * nothing), but since workflow actions are side-effecting rather than
+ * value-computing, each match just carries plain-language descriptions of
+ * what its actions would have done. */
+export interface WorkflowTestMatch {
+  workflow_id: string;
+  workflow_name: string;
+  trigger_type: string;
+  action_descriptions: string[];
+}
+export interface WorkflowTestResult {
+  matches: WorkflowTestMatch[];
 }
 
 export interface Notification {

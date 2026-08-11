@@ -395,6 +395,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(workflow_service::list_runs(conn, &require_workspace_id(conn)?, &workflow_id, actor)?)
         }
         "run_scheduled_workflows" => to_value(workflow_service::run_scheduled(conn, &require_workspace_id(conn)?, actor)?),
+        "test_workflows" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let context: CustomFieldValues = arg(args, "context")?;
+            to_value(workflow_service::test_workflows(conn, &require_workspace_id(conn)?, &entity_type, &context, actor)?)
+        }
 
         "list_notifications" => {
             let unread_only: bool = arg(args, "unreadOnly")?;
