@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, TASK};
 use crate::domain::{AppError, AppResult};
 use crate::models::task::{Task, TaskInput, TASK_PRIORITIES, TASK_STATUSES};
 use crate::repositories::{audit_repo, task_repo};
-use crate::services::{builtin_field_service, entity_registry, workflow_service};
+use crate::services::{builtin_field_service, entity_registry, status_transition_service, workflow_service};
 
 /// A task's related record can be any built-in entity type task_links has
 /// always supported, or (Phase D, ADM-WF-06) any active custom object -
@@ -87,6 +87,9 @@ pub fn update(
 ) -> AppResult<Task> {
     validate(conn, input)?;
     let before = get(conn, id)?;
+    if before.status != input.status {
+        status_transition_service::validate_transition(conn, workspace_id, "Task", &before.status, &input.status)?;
+    }
     let before_fields = builtin_field_service::field_values(conn, "Task", id)?;
     let task = task_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(

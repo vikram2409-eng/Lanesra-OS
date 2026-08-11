@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, CONTRACT};
 use crate::domain::{AppError, AppResult};
 use crate::models::contract::{Contract, ContractInput, CONTRACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, contract_repo, quote_repo};
-use crate::services::{builtin_field_service, workflow_service};
+use crate::services::{builtin_field_service, status_transition_service, workflow_service};
 
 fn validate(conn: &Connection, input: &ContractInput) -> AppResult<String> {
     if input.title.trim().is_empty() {
@@ -86,6 +86,9 @@ pub fn update(
 ) -> AppResult<Contract> {
     let workspace_id = validate(conn, input)?;
     let before = get(conn, id)?;
+    if before.status != input.status {
+        status_transition_service::validate_transition(conn, &workspace_id, "Contract", &before.status, &input.status)?;
+    }
     let before_fields = builtin_field_service::field_values(conn, "Contract", id)?;
     let contract = contract_repo::update(conn, id, input, actor_user_id)?;
     let event_type = if before.status != contract.status { "status_change" } else { "update" };

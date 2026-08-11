@@ -1098,7 +1098,7 @@ export const TRIGGER_TYPES = [
 ] as const;
 export type TriggerType = (typeof TRIGGER_TYPES)[number];
 export const WORKFLOW_ACTION_TYPES = [
-  "create_task", "update_field", "assign_owner", "create_related_record", "add_notification", "create_reminder",
+  "create_task", "update_field", "assign_owner", "create_record", "update_related_record", "add_notification", "create_reminder",
 ] as const;
 export type WorkflowActionType = (typeof WORKFLOW_ACTION_TYPES)[number];
 export const NOTIFICATION_AUDIENCES = ["owner", "all_admins"] as const;
@@ -1210,6 +1210,21 @@ export interface WorkflowRun {
   outcome: "success" | "error" | "skipped";
   actions_summary: string | null;
   error_message: string | null;
+}
+
+/** Addendum Phase 3: dry-run result from `test_workflows` - mirrors
+ * `RuleEvaluation` in spirit (a hypothetical-context evaluation that writes
+ * nothing), but since workflow actions are side-effecting rather than
+ * value-computing, each match just carries plain-language descriptions of
+ * what its actions would have done. */
+export interface WorkflowTestMatch {
+  workflow_id: string;
+  workflow_name: string;
+  trigger_type: string;
+  action_descriptions: string[];
+}
+export interface WorkflowTestResult {
+  matches: WorkflowTestMatch[];
 }
 
 export interface Notification {
@@ -1418,4 +1433,34 @@ export interface RelatedRecord {
   display_name: string;
   status: string;
   archived: boolean;
+}
+
+// Admin Automation & Customization addendum, Phase 2 (spec §2.5): the
+// Status Transition editor - an allow-list of From -> To pairs for an
+// entity's status/stage field. With zero rules for an entity type,
+// transitions stay fully unrestricted (today's behavior). Matches
+// core::models::status_transition::TRANSITION_ENTITY_TYPES - the entities
+// whose status/stage changes through one generic, caller-supplied entry
+// point (excludes Invoice, whose status changes through several dedicated
+// methods with their own hardcoded semantics, and Product, whose
+// "status" is a boolean with no meaningful transition concept).
+export const TRANSITION_ENTITY_TYPES = ["Company", "Contact", "Opportunity", "Quote", "Order", "Contract", "Task"] as const;
+export type TransitionEntityType = (typeof TRANSITION_ENTITY_TYPES)[number];
+
+export interface StatusTransition {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  /** `null` = "from any status" (a wildcard rule). */
+  from_status: string | null;
+  to_status: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StatusTransitionInput {
+  entity_type: string;
+  from_status: string | null;
+  to_status: string;
 }
