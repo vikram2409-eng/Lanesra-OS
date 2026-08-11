@@ -5,19 +5,29 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Try the demo](https://img.shields.io/badge/try%20it-online%20demo-4f7cff)](https://lanesraos.com/demo)
 
-Modern, open-source sales and business management software for small businesses. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
+Modern, open-source sales and business management software for small businesses — with a no-code admin panel that lets you reshape the workspace itself: your own record types, relationships, business rules and automations, not just the fixed CRM fields. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
 
 **[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
 ## Features
 
+**Make it yours, no code required:**
+
+- **Custom Objects** — define an entirely new record type (Vendors, Assets, Projects, …) with its own fields, ID format and navigation section, no code change
+- **Custom Relationships** — connect any two record types (built-in or custom) with one-to-one, many-to-one or many-to-many links; a related-records list appears automatically on both sides
+- **Business Rules** — multi-condition AND/OR logic across 10 operators, driving require/hide/lock/set-value/block-save/show-message effects on any field
+- **Workflow Automation** — trigger on a status or field change, a date reached or overdue, or a schedule; create a task, assign an owner, create a related record, update a field, or post an in-app notification
+- **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
+
+**The core CRM:**
+
 - **Companies, Contacts & Sales Pipeline** — connected customer records with a Kanban/list opportunity pipeline
 - **Products & Services**, **Quotes**, **Orders**, **Invoices**, **Contracts**, **Tasks** — the full flexible sales lifecycle (Company → Opportunity → Quote → Order → Invoice), plus direct-quote/direct-order shortcuts
 - **Dashboard & global search** with clickable, filterable KPIs
-- **Reports** beyond the dashboard (revenue by month, win rate, AR aging, sales by owner), plus a simple report builder any admin can use to build their own
+- **Reports** beyond the dashboard (revenue by month, win rate, AR aging, sales by owner), plus a simple report builder — including on custom fields and Custom Objects
 - **Branding & print customization** — logo, business profile, and PDF/print output for quotes, orders and invoices
-- **Admin panel**: user accounts and roles, custom fields, conditional business rules, and workflow automation (auto-created follow-up tasks) — configurable across every major object, not hardcoded to one or two
-- **Admin-configurable ID/numbering formats** per object (e.g. `CUS-000001` → `ACC-000001`)
+- **Admin panel**: user accounts and roles, admin-configurable ID/numbering formats per object (e.g. `CUS-000001` → `ACC-000001`), dashboard KPI picker
+- Windows task reminder notifications, session inactivity auto-lock
 - CSV import/export, whole-workspace backup & restore, self-service password change
 - Runs fully offline — no cloud account, licence key, or mandatory internet connection
 
