@@ -8,6 +8,7 @@ import { RelationshipsAdmin } from "./RelationshipsAdmin";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
 import { BusinessRulesAdmin } from "./BusinessRulesAdmin";
 import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
+import { StatusTransitionsAdmin } from "./StatusTransitionsAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
@@ -46,7 +47,7 @@ function resizeImageToPngBase64(file: File): Promise<string> {
   });
 }
 
-type AdminTab = "users" | "profile" | "objects" | "relationships" | "fields" | "rules" | "workflow" | "numbering" | "kpis";
+type AdminTab = "users" | "profile" | "objects" | "relationships" | "fields" | "rules" | "workflow" | "transitions" | "numbering" | "kpis";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -56,6 +57,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "fields", label: "Custom fields" },
   { key: "rules", label: "Business rules" },
   { key: "workflow", label: "Workflow automation" },
+  { key: "transitions", label: "Status transitions" },
   { key: "numbering", label: "Numbering" },
   { key: "kpis", label: "Dashboard KPIs" },
 ];
@@ -83,8 +85,8 @@ export function AdminPanel() {
       <h2>Admin</h2>
       <p style={{ color: "var(--text-muted)" }}>
         Users and access, business branding, and the admin-configurable layer on top of the fixed schema: custom
-        objects, relationships, custom fields, business rules, workflow automation, number formats and Dashboard
-        KPIs.
+        objects, relationships, custom fields, business rules, workflow automation, status transitions, number
+        formats and Dashboard KPIs.
       </p>
 
       <div className="tab-row">
@@ -110,6 +112,7 @@ export function AdminPanel() {
       {tab === "fields" && <CustomFieldsAdmin />}
       {tab === "rules" && <BusinessRulesAdmin />}
       {tab === "workflow" && <WorkflowAutomationAdmin />}
+      {tab === "transitions" && <StatusTransitionsAdmin />}
       {tab === "numbering" && <NumberingAdmin />}
       {tab === "kpis" && <DashboardKpiAdmin />}
     </div>

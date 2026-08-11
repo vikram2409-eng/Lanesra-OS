@@ -1404,3 +1404,33 @@ export interface RelatedRecord {
   status: string;
   archived: boolean;
 }
+
+// Admin Automation & Customization addendum, Phase 2 (spec §2.5): the
+// Status Transition editor - an allow-list of From -> To pairs for an
+// entity's status/stage field. With zero rules for an entity type,
+// transitions stay fully unrestricted (today's behavior). Matches
+// core::models::status_transition::TRANSITION_ENTITY_TYPES - the entities
+// whose status/stage changes through one generic, caller-supplied entry
+// point (excludes Invoice, whose status changes through several dedicated
+// methods with their own hardcoded semantics, and Product, whose
+// "status" is a boolean with no meaningful transition concept).
+export const TRANSITION_ENTITY_TYPES = ["Company", "Contact", "Opportunity", "Quote", "Order", "Contract", "Task"] as const;
+export type TransitionEntityType = (typeof TRANSITION_ENTITY_TYPES)[number];
+
+export interface StatusTransition {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  /** `null` = "from any status" (a wildcard rule). */
+  from_status: string | null;
+  to_status: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StatusTransitionInput {
+  entity_type: string;
+  from_status: string | null;
+  to_status: string;
+}

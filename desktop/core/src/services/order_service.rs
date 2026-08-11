@@ -8,7 +8,7 @@ use crate::domain::{AppError, AppResult};
 use crate::models::invoice::InvoiceLineInput;
 use crate::models::order::{Order, OrderInput, OrderWithLines, ORDER_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, invoice_repo, order_repo};
-use crate::services::workflow_service;
+use crate::services::{status_transition_service, workflow_service};
 
 /// Orders have no owner of their own, so a workflow rule assigning to "the
 /// record's owner" resolves via the Order's Company owner - the same
@@ -121,6 +121,7 @@ pub fn set_status(
         return Err(AppError::Validation(format!("Invalid order status '{status}'")));
     }
     let existing = load(conn, id)?;
+    status_transition_service::validate_transition(conn, &existing.order.workspace_id, "Order", &existing.order.status, status)?;
     order_repo::update_status(conn, id, status, actor_user_id)?;
     audit_repo::record(
         conn,
