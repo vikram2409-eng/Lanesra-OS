@@ -25,6 +25,7 @@ use lanesra_core::models::business_rule::{BusinessRuleInput, BusinessRuleUpdate}
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
+use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
@@ -33,7 +34,8 @@ use lanesra_core::services::{
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
-    quote_service, relationship_service, report_service, task_service, user_service, workflow_service, workspace_service,
+    quote_service, relationship_service, report_service, status_transition_service, task_service, user_service,
+    workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -355,6 +357,24 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let entity_type: String = arg(args, "entityType")?;
             let context: CustomFieldValues = arg(args, "context")?;
             to_value(business_rule_service::test_rules(conn, &require_workspace_id(conn)?, &entity_type, &context, actor)?)
+        }
+
+        "list_status_transitions" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(status_transition_service::list(conn, &require_workspace_id(conn)?, &entity_type, actor)?)
+        }
+        "create_status_transition" => {
+            let input: StatusTransitionInput = arg(args, "input")?;
+            to_value(status_transition_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "set_status_transition_active" => {
+            let id: String = arg(args, "id")?;
+            let is_active: bool = arg(args, "isActive")?;
+            to_value(status_transition_service::set_active(conn, &id, is_active, actor)?)
+        }
+        "delete_status_transition" => {
+            let id: String = arg(args, "id")?;
+            to_value(status_transition_service::delete(conn, &id, actor)?)
         }
 
         "list_workflow_rules" => {

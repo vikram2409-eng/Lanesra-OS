@@ -66,6 +66,8 @@ import type {
   RuleEvaluation,
   RevenueByMonth,
   SalesByOwner,
+  StatusTransition,
+  StatusTransitionInput,
   WinRateByOwner,
   WorkflowDefinition,
   WorkflowDefinitionInput,
@@ -244,6 +246,11 @@ export const api = {
   updateBusinessRule: (id: string, input: BusinessRuleUpdate) => call<BusinessRule>("update_business_rule", { id, input }),
   testBusinessRules: (entityType: string, context: Record<string, string>) =>
     call<RuleEvaluation>("test_business_rules", { entityType, context }),
+
+  listStatusTransitions: (entityType: string) => call<StatusTransition[]>("list_status_transitions", { entityType }),
+  createStatusTransition: (input: StatusTransitionInput) => call<StatusTransition>("create_status_transition", { input }),
+  setStatusTransitionActive: (id: string, isActive: boolean) => call<void>("set_status_transition_active", { id, isActive }),
+  deleteStatusTransition: (id: string) => call<void>("delete_status_transition", { id }),
 
   listWorkflowRules: (entityType: string) => call<WorkflowDefinition[]>("list_workflow_rules", { entityType }),
   createWorkflowRule: (input: WorkflowDefinitionInput) => call<WorkflowDefinition>("create_workflow_rule", { input }),

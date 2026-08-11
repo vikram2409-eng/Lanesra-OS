@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, CONTACT};
 use crate::domain::{AppError, AppResult};
 use crate::models::contact::{Contact, ContactInput, CONTACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo};
-use crate::services::{builtin_field_service, workflow_service};
+use crate::services::{builtin_field_service, status_transition_service, workflow_service};
 
 fn validate(conn: &Connection, input: &ContactInput) -> AppResult<String> {
     if input.first_name.trim().is_empty() || input.last_name.trim().is_empty() {
@@ -81,6 +81,9 @@ pub fn update(
 ) -> AppResult<Contact> {
     let workspace_id = validate(conn, input)?;
     let before = get(conn, id)?;
+    if before.status != input.status {
+        status_transition_service::validate_transition(conn, &workspace_id, "Contact", &before.status, &input.status)?;
+    }
     let before_fields = builtin_field_service::field_values(conn, "Contact", id)?;
     let contact = contact_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(

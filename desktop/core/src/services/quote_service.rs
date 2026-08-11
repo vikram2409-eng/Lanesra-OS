@@ -6,7 +6,7 @@ use crate::domain::numbering::{self, QUOTE};
 use crate::domain::{AppError, AppResult};
 use crate::models::quote::{Quote, QuoteInput, QuoteWithLines, QUOTE_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo, quote_repo};
-use crate::services::workflow_service;
+use crate::services::{status_transition_service, workflow_service};
 
 /// Quotes have no owner of their own, so a workflow assigning to "the
 /// record's owner" resolves via the Quote's Company owner - the same
@@ -130,6 +130,9 @@ pub fn set_status(
         return Err(AppError::Validation(format!("Invalid quote status '{status}'")));
     }
     let existing = load(conn, id)?;
+    if existing.quote.status != status {
+        status_transition_service::validate_transition(conn, &existing.quote.workspace_id, "Quote", &existing.quote.status, status)?;
+    }
     quote_repo::update_status(conn, id, status, actor_user_id)?;
     audit_repo::record(
         conn,
