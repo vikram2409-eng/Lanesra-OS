@@ -203,6 +203,8 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
                 field_key: "status".into(),
                 operator: "equals".into(),
                 value: "Inactive".into(),
+                compare_field_source: None,
+                compare_field_key: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),

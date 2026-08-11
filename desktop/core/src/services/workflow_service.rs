@@ -125,6 +125,7 @@ fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type:
 
 fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str, conditions: &[crate::models::workflow::WorkflowConditionInput]) -> AppResult<()> {
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+    let active_keys: Vec<&str> = defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
     for c in conditions {
         if !crate::domain::conditions::TRIGGER_SOURCES.contains(&c.field_source.as_str()) {
             return Err(AppError::Validation(format!("Invalid condition source '{}'", c.field_source)));
@@ -132,12 +133,22 @@ fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str,
         if !crate::domain::conditions::CONDITION_OPERATORS.contains(&c.operator.as_str()) {
             return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
         }
-        if c.field_source == "builtin" {
-            if builtin_fields::find_builtin_field(entity_type, &c.field_key).is_none() {
-                return Err(AppError::Validation(format!("'{}' is not a built-in field on {entity_type}", c.field_key)));
+        if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
+            return Err(AppError::Validation(format!("'{}' is not a valid field to trigger on", c.field_key)));
+        }
+        // Addendum §3.2: field-to-field comparison, same rule as business
+        // rules' identical check - see BusinessRuleCondition's doc comment.
+        match (&c.compare_field_source, &c.compare_field_key) {
+            (Some(src), Some(key)) => {
+                if !crate::domain::conditions::TRIGGER_SOURCES.contains(&src.as_str()) {
+                    return Err(AppError::Validation(format!("Invalid comparison field source '{src}'")));
+                }
+                if !crate::domain::conditions::field_ref_is_valid(entity_type, src, key, active_keys.iter().copied()) {
+                    return Err(AppError::Validation(format!("'{key}' is not a valid field to compare against")));
+                }
             }
-        } else if !defs.iter().any(|d| d.key == c.field_key && d.is_active) {
-            return Err(AppError::Validation(format!("'{}' is not an active custom field to trigger on", c.field_key)));
+            (None, None) => {}
+            _ => return Err(AppError::Validation("A comparison field needs both a source and a key".into())),
         }
     }
     Ok(())
@@ -274,11 +285,22 @@ fn build_trigger_context(conn: &Connection, entity_type: &str, entity_id: &str, 
     Ok(ctx)
 }
 
+/// A condition's effective comparison value - see business_rule_service's
+/// identical `resolve_condition_value` for the full explanation. Kept as a
+/// separate copy (not shared) since it's typed against
+/// `WorkflowCondition`, not `BusinessRuleCondition`.
+fn resolve_condition_value<'a>(c: &'a crate::models::workflow::WorkflowCondition, ctx: &'a HashMap<String, String>) -> &'a str {
+    match &c.compare_field_key {
+        Some(key) => ctx.get(key).map(|s| s.as_str()).unwrap_or(""),
+        None => c.value.as_str(),
+    }
+}
+
 fn workflow_matches(wf: &WorkflowDefinition, ctx: &HashMap<String, String>) -> bool {
     if wf.conditions.is_empty() {
         return true; // a workflow with no extra conditions always fires on its trigger
     }
-    conditions_match(&wf.match_type, wf.conditions.iter().map(|c| (c.field_key.as_str(), c.operator.as_str(), c.value.as_str())), ctx)
+    conditions_match(&wf.match_type, wf.conditions.iter().map(|c| (c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))), ctx)
 }
 
 // --- record_created / record_updated / status_changed -------------------
