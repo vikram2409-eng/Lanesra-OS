@@ -155,32 +155,15 @@ pub struct RuleEvaluation {
     pub messages: Vec<String>,
 }
 
-fn condition_matches(cond: &crate::models::business_rule::BusinessRuleCondition, ctx: &HashMap<String, String>) -> bool {
-    let actual = ctx.get(&cond.field_key).map(|s| s.as_str()).unwrap_or("");
-    match cond.operator.as_str() {
-        "equals" => actual == cond.value,
-        "not_equals" => actual != cond.value,
-        "contains" => !cond.value.is_empty() && actual.contains(&cond.value),
-        "not_contains" => cond.value.is_empty() || !actual.contains(&cond.value),
-        "is_empty" => actual.is_empty(),
-        "is_not_empty" => !actual.is_empty(),
-        "greater_than" => matches!((actual.parse::<f64>(), cond.value.parse::<f64>()), (Ok(a), Ok(b)) if a > b),
-        "less_than" => matches!((actual.parse::<f64>(), cond.value.parse::<f64>()), (Ok(a), Ok(b)) if a < b),
-        "on_or_after" => !actual.is_empty() && actual >= cond.value.as_str(),
-        "on_or_before" => !actual.is_empty() && actual <= cond.value.as_str(),
-        _ => false,
-    }
-}
-
+/// Delegates to the shared AND/OR matcher (`domain::conditions`) also used
+/// by workflow_service, so the two engines' "IF" halves can never drift
+/// apart.
 fn rule_matches(rule: &BusinessRule, ctx: &HashMap<String, String>) -> bool {
-    if rule.conditions.is_empty() {
-        return false;
-    }
-    if rule.match_type == "any" {
-        rule.conditions.iter().any(|c| condition_matches(c, ctx))
-    } else {
-        rule.conditions.iter().all(|c| condition_matches(c, ctx))
-    }
+    crate::domain::conditions::conditions_match(
+        &rule.match_type,
+        rule.conditions.iter().map(|c| (c.field_key.as_str(), c.operator.as_str(), c.value.as_str())),
+        ctx,
+    )
 }
 
 fn is_effective_today(rule: &BusinessRule, today: &str) -> bool {

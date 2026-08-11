@@ -65,6 +65,7 @@ pub fn create(
         &format!("Created opportunity {}", opportunity.opportunity_number),
         None,
     )?;
+    workflow_service::fire_event(conn, &workspace_id, "Opportunity", &opportunity.id, None, &opportunity.stage, opportunity.owner_user_id.as_deref(), actor_user_id)?;
     Ok(opportunity)
 }
 
@@ -109,14 +110,14 @@ pub fn update(
         None,
     )?;
 
-    // FR-WFL: fire any workflow rules whose trigger stage the opportunity
-    // just moved into (e.g. auto-create a follow-up task on Won).
-    workflow_service::fire_transition(
+    // ADM-WF: fire any workflows whose trigger stage the opportunity just
+    // moved into (e.g. auto-create a follow-up task on Won).
+    workflow_service::fire_event(
         conn,
         &workspace_id,
         "Opportunity",
         id,
-        &before.stage,
+        Some(&before.stage),
         &opportunity.stage,
         opportunity.owner_user_id.as_deref(),
         actor_user_id,

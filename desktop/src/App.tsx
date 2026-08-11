@@ -98,6 +98,18 @@ function Ready({
     ? customObjects.data?.find((o) => o.key === section.slice("custom:".length))
     : undefined;
 
+  // ADM-WF-11: date_reached/due_overdue/scheduled workflows only run while
+  // Lanesra is open (no OS-level background scheduler in Personal
+  // Workspace) - once on load so anything missed while closed fires
+  // promptly, then on a 5-minute interval for the rest of the session.
+  useEffect(() => {
+    api.runScheduledWorkflows().catch(() => {});
+    const interval = setInterval(() => {
+      api.runScheduledWorkflows().catch(() => {});
+    }, 5 * 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
       {section === "dashboard" && <Dashboard onNavigate={setSection} />}

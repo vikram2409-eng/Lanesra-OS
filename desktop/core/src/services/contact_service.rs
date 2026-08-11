@@ -57,6 +57,7 @@ pub fn create(
         &format!("Created contact {}", contact.contact_number),
         None,
     )?;
+    workflow_service::fire_event(conn, &workspace_id, "Contact", &contact.id, None, &contact.status, None, actor_user_id)?;
     Ok(contact)
 }
 
@@ -91,8 +92,8 @@ pub fn update(
         &format!("Updated contact {}", contact.contact_number),
         None,
     )?;
-    workflow_service::fire_transition(
-        conn, &workspace_id, "Contact", id, &before.status, &contact.status, None, actor_user_id,
+    workflow_service::fire_event(
+        conn, &workspace_id, "Contact", id, Some(&before.status), &contact.status, None, actor_user_id,
     )?;
     Ok(contact)
 }

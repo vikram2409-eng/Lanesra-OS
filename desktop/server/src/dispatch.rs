@@ -26,9 +26,9 @@ use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
-use lanesra_core::models::workflow_rule::{WorkflowRuleInput, WorkflowRuleUpdate};
+use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
-use lanesra_core::repositories::workspace_repo;
+use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
@@ -362,13 +362,35 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(workflow_service::list_rules(conn, &require_workspace_id(conn)?, &entity_type, actor)?)
         }
         "create_workflow_rule" => {
-            let input: WorkflowRuleInput = arg(args, "input")?;
+            let input: WorkflowDefinitionInput = arg(args, "input")?;
             to_value(workflow_service::create_rule(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
         "update_workflow_rule" => {
             let id: String = arg(args, "id")?;
-            let input: WorkflowRuleUpdate = arg(args, "input")?;
+            let input: WorkflowDefinitionUpdate = arg(args, "input")?;
             to_value(workflow_service::update_rule(conn, &id, &input, actor)?)
+        }
+        "list_workflow_runs" => {
+            let workflow_id: String = arg(args, "workflowId")?;
+            to_value(workflow_service::list_runs(conn, &require_workspace_id(conn)?, &workflow_id, actor)?)
+        }
+        "run_scheduled_workflows" => to_value(workflow_service::run_scheduled(conn, &require_workspace_id(conn)?, actor)?),
+
+        "list_notifications" => {
+            let unread_only: bool = arg(args, "unreadOnly")?;
+            let workspace_id = require_workspace_id(conn)?;
+            let user_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(notification_repo::list_for_user(conn, &workspace_id, user_id, unread_only)?)
+        }
+        "mark_notification_read" => {
+            notification_repo::mark_read(conn, &arg::<String>(args, "id")?)?;
+            Ok(Value::Null)
+        }
+        "mark_all_notifications_read" => {
+            let workspace_id = require_workspace_id(conn)?;
+            let user_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            notification_repo::mark_all_read(conn, &workspace_id, user_id)?;
+            Ok(Value::Null)
         }
 
         "list_numbering_formats" => to_value(numbering_service::list_effective(conn, &require_workspace_id(conn)?, actor)?),

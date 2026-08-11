@@ -16,7 +16,7 @@ use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
     product_repo, quote_repo, task_repo, user_repo,
 };
-use crate::services::business_rule_service;
+use crate::services::{business_rule_service, workflow_service};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -227,6 +227,7 @@ pub fn set_entity_values(
 ) -> AppResult<Vec<String>> {
     let (workspace_id, builtin_value) = resolve_entity_workspace(conn, entity_type, entity_id)?;
     let definitions = list_definitions(conn, &workspace_id, entity_type, true)?;
+    let before_values = custom_field_repo::get_values(conn, entity_id)?;
 
     let mut trigger_context: CustomFieldValues = values.clone();
     trigger_context.insert(builtin_trigger_field_for(entity_type).to_string(), builtin_value);
@@ -241,6 +242,7 @@ pub fn set_entity_values(
         effective_values.insert(key.clone(), value.clone());
     }
 
+    let mut changed_keys = Vec::new();
     for def in &definitions {
         if evaluation.field_effects.get(&def.key).map(|e| e.as_str()) == Some("hide") {
             continue;
@@ -261,8 +263,16 @@ pub fn set_entity_values(
                 _ => {}
             }
         }
+        if before_values.get(&def.key).map(|s| s.as_str()).unwrap_or("") != value {
+            changed_keys.push(def.key.clone());
+        }
         custom_field_repo::set_value(conn, &def.id, entity_id, value)?;
     }
+
+    // ADM-WF: field_changed workflows fire from the same seam ADM-BR uses -
+    // the one call site every entity's save flow already goes through
+    // unconditionally, so no per-entity wiring is needed here either.
+    workflow_service::fire_field_changed(conn, &workspace_id, entity_type, entity_id, &changed_keys, None, actor_user_id)?;
 
     let _ = actor_user_id; // no audit entry per value write - the parent record's own create/update audit entry covers this edit
     Ok(evaluation.messages)

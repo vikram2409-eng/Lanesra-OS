@@ -901,36 +901,128 @@ export function transitionFieldFor(entityType: string): string {
   return entityType === "Opportunity" ? "stage" : "status";
 }
 
-export interface WorkflowRule {
+// Admin extensibility Phase D (spec §23/ADM-WF): a richer Trigger ->
+// Conditions -> Actions engine - more trigger types, AND/OR conditions
+// (the same domain::conditions matcher business rules use), and actions
+// beyond task creation.
+export const TRIGGER_TYPES = [
+  "record_created", "record_updated", "status_changed", "field_changed", "date_reached", "due_overdue", "scheduled",
+] as const;
+export type TriggerType = (typeof TRIGGER_TYPES)[number];
+export const WORKFLOW_ACTION_TYPES = [
+  "create_task", "update_field", "assign_owner", "create_related_record", "add_notification", "create_reminder",
+] as const;
+export type WorkflowActionType = (typeof WORKFLOW_ACTION_TYPES)[number];
+export const NOTIFICATION_AUDIENCES = ["owner", "all_admins"] as const;
+export type NotificationAudience = (typeof NOTIFICATION_AUDIENCES)[number];
+
+/** Built-in date fields date_reached/due_overdue can watch, per entity
+ * type - mirrors workflow::date_fields_for in the Rust core. */
+export function dateFieldsFor(entityType: string): string[] {
+  switch (entityType) {
+    case "Task": return ["due_date"];
+    case "Quote": return ["expiry_date"];
+    case "Contract": return ["end_date", "renewal_date"];
+    case "Invoice": return ["due_date"];
+    default: return [];
+  }
+}
+
+export interface WorkflowCondition {
+  id: string;
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+  sort_order: number;
+}
+export interface WorkflowConditionInput {
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+}
+export interface WorkflowAction {
+  id: string;
+  action_type: WorkflowActionType;
+  params_json: string;
+  sort_order: number;
+}
+export interface WorkflowActionInput {
+  action_type: WorkflowActionType;
+  params_json: string;
+}
+
+export interface WorkflowDefinition {
   id: string;
   workspace_id: string;
   entity_type: string;
-  trigger_status: string;
-  task_title: string;
-  task_description: string | null;
-  due_in_days: number;
-  assignee_user_id: string | null;
+  name: string;
+  description: string | null;
+  trigger_type: TriggerType;
+  trigger_status: string | null;
+  trigger_field_key: string | null;
+  trigger_offset_days: number;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
+  is_protected: boolean;
+  last_scheduled_run_at: string | null;
   created_at: string;
   updated_at: string;
+  conditions: WorkflowCondition[];
+  actions: WorkflowAction[];
 }
 
-export interface WorkflowRuleInput {
-  entity_type: WorkflowEntityType;
-  trigger_status: string;
-  task_title: string;
-  task_description: string | null;
-  due_in_days: number;
-  assignee_user_id: string | null;
+export interface WorkflowDefinitionInput {
+  entity_type: string;
+  name: string;
+  description: string | null;
+  trigger_type: TriggerType;
+  trigger_status: string | null;
+  trigger_field_key: string | null;
+  trigger_offset_days: number;
+  match_type: MatchType;
+  priority: number;
+  conditions: WorkflowConditionInput[];
+  actions: WorkflowActionInput[];
 }
 
-export interface WorkflowRuleUpdate {
-  trigger_status: string;
-  task_title: string;
-  task_description: string | null;
-  due_in_days: number;
-  assignee_user_id: string | null;
+export interface WorkflowDefinitionUpdate {
+  name: string;
+  description: string | null;
+  trigger_status: string | null;
+  trigger_field_key: string | null;
+  trigger_offset_days: number;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
+  conditions: WorkflowConditionInput[];
+  actions: WorkflowActionInput[];
+}
+
+export interface WorkflowRun {
+  id: string;
+  workspace_id: string;
+  workflow_id: string;
+  entity_type: string;
+  entity_id: string | null;
+  trigger_type: string;
+  triggered_at: string;
+  outcome: "success" | "error" | "skipped";
+  actions_summary: string | null;
+  error_message: string | null;
+}
+
+export interface Notification {
+  id: string;
+  workspace_id: string;
+  recipient_user_id: string | null;
+  message: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  created_at: string;
+  read_at: string | null;
 }
 
 // Admin flexibility: configurable ID/numbering format per entity type.

@@ -62,6 +62,7 @@ pub fn create(
         &format!("Created contract {}", contract.contract_number),
         None,
     )?;
+    workflow_service::fire_event(conn, &workspace_id, "Contract", &contract.id, None, &contract.status, contract.owner_user_id.as_deref(), actor_user_id)?;
     Ok(contract)
 }
 
@@ -100,8 +101,8 @@ pub fn update(
         ),
         None,
     )?;
-    workflow_service::fire_transition(
-        conn, &workspace_id, "Contract", id, &before.status, &contract.status, contract.owner_user_id.as_deref(), actor_user_id,
+    workflow_service::fire_event(
+        conn, &workspace_id, "Contract", id, Some(&before.status), &contract.status, contract.owner_user_id.as_deref(), actor_user_id,
     )?;
     Ok(contract)
 }

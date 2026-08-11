@@ -3,33 +3,20 @@ use rusqlite::Connection;
 use crate::domain::ids::new_uuid;
 use crate::domain::numbering::{self, TASK};
 use crate::domain::{AppError, AppResult};
-use crate::models::task::{Task, TaskInput, TASK_PRIORITIES, TASK_RELATED_TYPES, TASK_STATUSES};
-use crate::repositories::{
-    audit_repo, company_repo, contact_repo, contract_repo, invoice_repo, opportunity_repo,
-    order_repo, quote_repo, task_repo,
-};
-use crate::services::workflow_service;
+use crate::models::task::{Task, TaskInput, TASK_PRIORITIES, TASK_STATUSES};
+use crate::repositories::{audit_repo, task_repo};
+use crate::services::{entity_registry, workflow_service};
 
+/// A task's related record can be any built-in entity type task_links has
+/// always supported, or (Phase D, ADM-WF-06) any active custom object -
+/// entity_registry::exists already knows how to check both without this
+/// module needing its own custom-object lookup, and task_links.related_type
+/// has no CHECK constraint since migration 0014 for exactly this reason.
 fn validate_relation(conn: &Connection, input: &TaskInput) -> AppResult<()> {
     match (&input.related_type, &input.related_id) {
         (None, None) => Ok(()),
         (Some(related_type), Some(related_id)) => {
-            if !TASK_RELATED_TYPES.contains(&related_type.as_str()) {
-                return Err(AppError::Validation(format!(
-                    "Invalid task relationship type '{related_type}'"
-                )));
-            }
-            let exists = match related_type.as_str() {
-                "Company" => company_repo::get(conn, related_id)?.is_some(),
-                "Contact" => contact_repo::get(conn, related_id)?.is_some(),
-                "Opportunity" => opportunity_repo::get(conn, related_id)?.is_some(),
-                "Quote" => quote_repo::get(conn, related_id)?.is_some(),
-                "Order" => order_repo::get(conn, related_id)?.is_some(),
-                "Invoice" => invoice_repo::get(conn, related_id)?.is_some(),
-                "Contract" => contract_repo::get(conn, related_id)?.is_some(),
-                _ => false,
-            };
-            if !exists {
+            if !entity_registry::exists(conn, related_type, related_id)? {
                 return Err(AppError::Validation(format!(
                     "The selected {related_type} record does not exist"
                 )));
@@ -75,6 +62,7 @@ pub fn create(
         &format!("Created task {}", task.task_number),
         None,
     )?;
+    workflow_service::fire_event(conn, workspace_id, "Task", &task.id, None, &task.status, task.owner_user_id.as_deref(), actor_user_id)?;
     Ok(task)
 }
 
@@ -110,8 +98,8 @@ pub fn update(
         &format!("Updated task {} (status: {})", task.task_number, task.status),
         None,
     )?;
-    workflow_service::fire_transition(
-        conn, workspace_id, "Task", id, &before.status, &task.status, task.owner_user_id.as_deref(), actor_user_id,
+    workflow_service::fire_event(
+        conn, workspace_id, "Task", id, Some(&before.status), &task.status, task.owner_user_id.as_deref(), actor_user_id,
     )?;
     Ok(task)
 }

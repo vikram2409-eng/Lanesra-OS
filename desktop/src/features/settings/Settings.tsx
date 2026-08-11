@@ -7,7 +7,7 @@ import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
 import { RelationshipsAdmin } from "./RelationshipsAdmin";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
 import { BusinessRulesAdmin } from "./BusinessRulesAdmin";
-import { WorkflowRulesAdmin } from "./WorkflowRulesAdmin";
+import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
@@ -109,7 +109,7 @@ export function AdminPanel() {
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
       {tab === "rules" && <BusinessRulesAdmin />}
-      {tab === "workflow" && <WorkflowRulesAdmin />}
+      {tab === "workflow" && <WorkflowAutomationAdmin />}
       {tab === "numbering" && <NumberingAdmin />}
       {tab === "kpis" && <DashboardKpiAdmin />}
     </div>

@@ -122,13 +122,23 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
     workflow_service::create_rule(
         &conn,
         &ws,
-        &lanesra_core::models::workflow_rule::WorkflowRuleInput {
+        &lanesra_core::models::workflow::WorkflowDefinitionInput {
             entity_type: "Opportunity".into(),
-            trigger_status: "Won".into(),
-            task_title: "Kick off onboarding".into(),
-            task_description: None,
-            due_in_days: 2,
-            assignee_user_id: None,
+            name: "Kick off onboarding when Won".into(),
+            description: None,
+            trigger_type: "status_changed".into(),
+            trigger_status: Some("Won".into()),
+            trigger_field_key: None,
+            trigger_offset_days: 0,
+            match_type: "all".into(),
+            priority: 0,
+            conditions: vec![],
+            actions: vec![lanesra_core::models::workflow::WorkflowActionInput {
+                action_type: "create_task".into(),
+                params_json: serde_json::json!({
+                    "title": "Kick off onboarding", "description": null, "due_in_days": 2, "assignee_user_id": null,
+                }).to_string(),
+            }],
         },
         Some(&admin),
     )

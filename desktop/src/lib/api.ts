@@ -55,6 +55,7 @@ import type {
   DashboardKpiPrefs,
   EffectiveNumbering,
   LostReasonBreakdown,
+  Notification,
   NumberingOverrideInput,
   RelatedRecord,
   RelationshipDefinition,
@@ -66,10 +67,10 @@ import type {
   RevenueByMonth,
   SalesByOwner,
   WinRateByOwner,
-  WorkflowEntityType,
-  WorkflowRule,
-  WorkflowRuleInput,
-  WorkflowRuleUpdate,
+  WorkflowDefinition,
+  WorkflowDefinitionInput,
+  WorkflowDefinitionUpdate,
+  WorkflowRun,
   Workspace,
   WorkspaceLogo,
   WorkspaceSetup,
@@ -244,10 +245,16 @@ export const api = {
   testBusinessRules: (entityType: string, context: Record<string, string>) =>
     call<RuleEvaluation>("test_business_rules", { entityType, context }),
 
-  listWorkflowRules: (entityType: WorkflowEntityType) => call<WorkflowRule[]>("list_workflow_rules", { entityType }),
-  createWorkflowRule: (input: WorkflowRuleInput) => call<WorkflowRule>("create_workflow_rule", { input }),
-  updateWorkflowRule: (id: string, input: WorkflowRuleUpdate) =>
-    call<WorkflowRule>("update_workflow_rule", { id, input }),
+  listWorkflowRules: (entityType: string) => call<WorkflowDefinition[]>("list_workflow_rules", { entityType }),
+  createWorkflowRule: (input: WorkflowDefinitionInput) => call<WorkflowDefinition>("create_workflow_rule", { input }),
+  updateWorkflowRule: (id: string, input: WorkflowDefinitionUpdate) =>
+    call<WorkflowDefinition>("update_workflow_rule", { id, input }),
+  listWorkflowRuns: (workflowId: string) => call<WorkflowRun[]>("list_workflow_runs", { workflowId }),
+  runScheduledWorkflows: () => call<number>("run_scheduled_workflows"),
+
+  listNotifications: (unreadOnly: boolean) => call<Notification[]>("list_notifications", { unreadOnly }),
+  markNotificationRead: (id: string) => call<void>("mark_notification_read", { id }),
+  markAllNotificationsRead: () => call<void>("mark_all_notifications_read"),
 
   listNumberingFormats: () => call<EffectiveNumbering[]>("list_numbering_formats"),
   setNumberingFormat: (input: NumberingOverrideInput) => call<EffectiveNumbering>("set_numbering_format", { input }),

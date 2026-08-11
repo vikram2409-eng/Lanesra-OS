@@ -122,3 +122,15 @@ pub fn find_duplicates_by_name(
     let rows = stmt.query_map((workspace_id, name, exclude_id), map_row)?;
     rows.collect()
 }
+
+/// Direct owner write, bypassing the full `update()` validation/audit
+/// path - used by workflow_service's assign_owner action, which
+/// deliberately writes at the repo layer so it never re-enters
+/// company_service::update (and its own workflow firing).
+pub fn set_owner(conn: &Connection, id: &str, owner_user_id: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE companies SET owner_user_id = ?1, updated_at = ?2 WHERE id = ?3",
+        (owner_user_id, now_iso(), id),
+    )?;
+    Ok(())
+}

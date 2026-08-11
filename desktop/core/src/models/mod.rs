@@ -19,5 +19,5 @@ pub mod report;
 pub mod quote;
 pub mod task;
 pub mod user;
-pub mod workflow_rule;
+pub mod workflow;
 pub mod workspace;
