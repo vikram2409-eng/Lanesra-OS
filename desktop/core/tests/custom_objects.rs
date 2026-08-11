@@ -161,6 +161,10 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             is_searchable: false,
             is_filterable: false,
             is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
         },
         Some(&admin),
     ).unwrap();
@@ -183,6 +187,10 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             is_searchable: false,
             is_filterable: false,
             is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
         },
         Some(&admin),
     ).unwrap();

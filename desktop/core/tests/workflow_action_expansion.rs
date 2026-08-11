@@ -179,6 +179,7 @@ fn update_related_record_action_can_copy_a_value_from_the_triggering_record() {
             entity_type: "Company".into(), label: "Vendor Notes".into(), field_type: "text".into(), options: vec![],
             required: false, show_in_list: false, sort_order: 0, min_value: None, max_value: None, max_length: None,
             regex_pattern: None, is_searchable: false, is_filterable: false, is_reportable: true,
+            default_value: None, is_unique: false, help_text: None, placeholder: None,
         },
         Some(&admin),
     ).unwrap();

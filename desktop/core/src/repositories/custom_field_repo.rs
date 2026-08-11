@@ -29,6 +29,10 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomFieldDefinition> {
         is_searchable: row.get("is_searchable")?,
         is_filterable: row.get("is_filterable")?,
         is_reportable: row.get("is_reportable")?,
+        default_value: row.get("default_value")?,
+        is_unique: row.get("is_unique")?,
+        help_text: row.get("help_text")?,
+        placeholder: row.get("placeholder")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -47,13 +51,16 @@ pub fn create_definition(
     conn.execute(
         "INSERT INTO custom_field_definitions
             (id, workspace_id, entity_type, key, label, field_type, options_json, required, show_in_list, sort_order, is_active,
-             min_value, max_value, max_length, regex_pattern, is_searchable, is_filterable, is_reportable, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?18, ?19)",
+             min_value, max_value, max_length, regex_pattern, is_searchable, is_filterable, is_reportable,
+             default_value, is_unique, help_text, placeholder, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                 ?18, ?19, ?20, ?21, ?22, ?23, ?22, ?23)",
         rusqlite::params![
             id, workspace_id, input.entity_type, key, input.label, input.field_type,
             options_json, input.required, input.show_in_list, input.sort_order,
             input.min_value, input.max_value, input.max_length, input.regex_pattern,
-            input.is_searchable, input.is_filterable, input.is_reportable, now, actor_user_id,
+            input.is_searchable, input.is_filterable, input.is_reportable,
+            input.default_value, input.is_unique, input.help_text, input.placeholder, now, actor_user_id,
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just inserted"))
@@ -82,12 +89,15 @@ pub fn update_definition(conn: &Connection, id: &str, input: &CustomFieldDefinit
         "UPDATE custom_field_definitions
          SET label = ?1, options_json = ?2, required = ?3, show_in_list = ?4, sort_order = ?5, is_active = ?6,
              min_value = ?7, max_value = ?8, max_length = ?9, regex_pattern = ?10,
-             is_searchable = ?11, is_filterable = ?12, is_reportable = ?13, updated_at = ?14, updated_by = ?15
-         WHERE id = ?16",
+             is_searchable = ?11, is_filterable = ?12, is_reportable = ?13,
+             default_value = ?14, is_unique = ?15, help_text = ?16, placeholder = ?17,
+             updated_at = ?18, updated_by = ?19
+         WHERE id = ?20",
         rusqlite::params![
             input.label, options_json, input.required, input.show_in_list, input.sort_order, input.is_active,
             input.min_value, input.max_value, input.max_length, input.regex_pattern,
-            input.is_searchable, input.is_filterable, input.is_reportable, now_iso(), actor_user_id, id,
+            input.is_searchable, input.is_filterable, input.is_reportable,
+            input.default_value, input.is_unique, input.help_text, input.placeholder, now_iso(), actor_user_id, id,
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just updated"))
@@ -114,6 +124,17 @@ pub fn set_value(conn: &Connection, definition_id: &str, entity_id: &str, value:
         (crate::domain::ids::new_uuid(), definition_id, entity_id, value, now),
     )?;
     Ok(())
+}
+
+/// Addendum Phase 4: whether `value` is already stored for this
+/// definition on some entity other than `entity_id` - the check
+/// `is_unique` enforcement needs before writing.
+pub fn value_exists_elsewhere(conn: &Connection, definition_id: &str, entity_id: &str, value: &str) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM custom_field_values WHERE definition_id = ?1 AND value_text = ?2 AND entity_id != ?3)",
+        (definition_id, value, entity_id),
+        |row| row.get(0),
+    )
 }
 
 /// Values for one entity, keyed by field key (joined through the

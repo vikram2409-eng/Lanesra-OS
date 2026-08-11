@@ -854,6 +854,13 @@ export interface CustomFieldDefinition {
   is_searchable: boolean;
   is_filterable: boolean;
   is_reportable: boolean;
+  // Addendum Phase 4 (spec §4): default_value/is_unique are enforced
+  // server-side by custom_field_service::set_entity_values;
+  // help_text/placeholder are presentation-only, rendered by the form.
+  default_value: string | null;
+  is_unique: boolean;
+  help_text: string | null;
+  placeholder: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -876,6 +883,10 @@ export interface CustomFieldDefinitionInput {
   is_searchable: boolean;
   is_filterable: boolean;
   is_reportable: boolean;
+  default_value: string | null;
+  is_unique: boolean;
+  help_text: string | null;
+  placeholder: string | null;
 }
 
 export interface CustomFieldDefinitionUpdate {
@@ -892,6 +903,10 @@ export interface CustomFieldDefinitionUpdate {
   is_searchable: boolean;
   is_filterable: boolean;
   is_reportable: boolean;
+  default_value: string | null;
+  is_unique: boolean;
+  help_text: string | null;
+  placeholder: string | null;
 }
 
 /** Values keyed by field key, e.g. { industry: "Retail" }. */

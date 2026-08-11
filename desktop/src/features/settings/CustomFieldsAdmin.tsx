@@ -15,6 +15,7 @@ function emptyInput(entityType: string): CustomFieldDefinitionInput {
     entity_type: entityType, label: "", field_type: "text", options: [], required: false, show_in_list: false, sort_order: 0,
     min_value: null, max_value: null, max_length: null, regex_pattern: null,
     is_searchable: false, is_filterable: false, is_reportable: true,
+    default_value: null, is_unique: false, help_text: null, placeholder: null,
   };
 }
 
@@ -159,12 +160,20 @@ export function CustomFieldsAdmin() {
 function ValidationAndFlagFields({
   fieldType,
   minValue, maxValue, maxLength, regexPattern, isSearchable, isFilterable, isReportable,
+  defaultValue, isUnique, helpText, placeholder,
   onChange,
 }: {
   fieldType: string;
   minValue: string | null; maxValue: string | null; maxLength: number | null; regexPattern: string | null;
   isSearchable: boolean; isFilterable: boolean; isReportable: boolean;
-  onChange: (patch: Partial<{ min_value: string | null; max_value: string | null; max_length: number | null; regex_pattern: string | null; is_searchable: boolean; is_filterable: boolean; is_reportable: boolean }>) => void;
+  defaultValue: string | null; isUnique: boolean; helpText: string | null; placeholder: string | null;
+  onChange: (
+    patch: Partial<{
+      min_value: string | null; max_value: string | null; max_length: number | null; regex_pattern: string | null;
+      is_searchable: boolean; is_filterable: boolean; is_reportable: boolean;
+      default_value: string | null; is_unique: boolean; help_text: string | null; placeholder: string | null;
+    }>,
+  ) => void;
 }) {
   return (
     <>
@@ -198,6 +207,22 @@ function ValidationAndFlagFields({
           </div>
         </>
       )}
+      <div className="form-field">
+        <label>Default value (optional)</label>
+        <input
+          value={defaultValue ?? ""}
+          onChange={(e) => onChange({ default_value: e.target.value || null })}
+          placeholder="Used when a record is saved with this field left blank"
+        />
+      </div>
+      <div className="form-field">
+        <label>Placeholder text (optional)</label>
+        <input value={placeholder ?? ""} onChange={(e) => onChange({ placeholder: e.target.value || null })} placeholder="Shown inside the empty input" />
+      </div>
+      <div className="form-field full">
+        <label>Help text (optional)</label>
+        <input value={helpText ?? ""} onChange={(e) => onChange({ help_text: e.target.value || null })} placeholder="Shown under the field on the form" />
+      </div>
       <div className="form-field full" style={{ flexDirection: "row", gap: 16 }}>
         <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input type="checkbox" checked={isSearchable} onChange={(e) => onChange({ is_searchable: e.target.checked })} />
@@ -210,6 +235,15 @@ function ValidationAndFlagFields({
         <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input type="checkbox" checked={isReportable} onChange={(e) => onChange({ is_reportable: e.target.checked })} />
           Reportable
+        </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={isUnique}
+            disabled={fieldType === "boolean"}
+            onChange={(e) => onChange({ is_unique: e.target.checked })}
+          />
+          Unique
         </label>
       </div>
     </>
@@ -275,6 +309,7 @@ function DefinitionForm({
           fieldType={input.field_type}
           minValue={input.min_value} maxValue={input.max_value} maxLength={input.max_length} regexPattern={input.regex_pattern}
           isSearchable={input.is_searchable} isFilterable={input.is_filterable} isReportable={input.is_reportable}
+          defaultValue={input.default_value} isUnique={input.is_unique} helpText={input.help_text} placeholder={input.placeholder}
           onChange={(patch) => setInput({ ...input, ...patch })}
         />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
@@ -310,6 +345,10 @@ function DefinitionEditForm({
   const [isSearchable, setIsSearchable] = useState(definition.is_searchable);
   const [isFilterable, setIsFilterable] = useState(definition.is_filterable);
   const [isReportable, setIsReportable] = useState(definition.is_reportable);
+  const [defaultValue, setDefaultValue] = useState(definition.default_value);
+  const [isUnique, setIsUnique] = useState(definition.is_unique);
+  const [helpText, setHelpText] = useState(definition.help_text);
+  const [placeholder, setPlaceholder] = useState(definition.placeholder);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -328,6 +367,10 @@ function DefinitionEditForm({
         is_searchable: isSearchable,
         is_filterable: isFilterable,
         is_reportable: isReportable,
+        default_value: defaultValue,
+        is_unique: isUnique,
+        help_text: helpText,
+        placeholder: placeholder,
       }),
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this field"),
@@ -372,6 +415,7 @@ function DefinitionEditForm({
           fieldType={definition.field_type}
           minValue={minValue} maxValue={maxValue} maxLength={maxLength} regexPattern={regexPattern}
           isSearchable={isSearchable} isFilterable={isFilterable} isReportable={isReportable}
+          defaultValue={defaultValue} isUnique={isUnique} helpText={helpText} placeholder={placeholder}
           onChange={(patch) => {
             if ("min_value" in patch) setMinValue(patch.min_value ?? null);
             if ("max_value" in patch) setMaxValue(patch.max_value ?? null);
@@ -380,6 +424,10 @@ function DefinitionEditForm({
             if ("is_searchable" in patch) setIsSearchable(!!patch.is_searchable);
             if ("is_filterable" in patch) setIsFilterable(!!patch.is_filterable);
             if ("is_reportable" in patch) setIsReportable(!!patch.is_reportable);
+            if ("default_value" in patch) setDefaultValue(patch.default_value ?? null);
+            if ("is_unique" in patch) setIsUnique(!!patch.is_unique);
+            if ("help_text" in patch) setHelpText(patch.help_text ?? null);
+            if ("placeholder" in patch) setPlaceholder(patch.placeholder ?? null);
           }}
         />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>

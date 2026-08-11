@@ -96,12 +96,21 @@ fn validate_definition_shape(
 /// values against them (that happens in `set_entity_values`) - min/max
 /// only make sense for `number`, max_length/regex_pattern only for `text`,
 /// and a malformed regex is rejected here rather than at every future save.
+/// Addendum Phase 4 extends this with `is_unique` (rejected for `boolean` -
+/// only two possible values, see this fn) and `default_value` (validated
+/// against the field's own type/options/min/max/etc via
+/// `validate_typed_value`, the same check a real save's value gets).
+#[allow(clippy::too_many_arguments)]
 fn validate_definition_extras(
     field_type: &str,
+    options: &[String],
     min_value: Option<&str>,
     max_value: Option<&str>,
     max_length: Option<i64>,
     regex_pattern: Option<&str>,
+    is_unique: bool,
+    default_value: Option<&str>,
+    label: &str,
 ) -> AppResult<()> {
     if let (Some(min), Some(max)) = (min_value, max_value) {
         if field_type == "number" {
@@ -131,6 +140,64 @@ fn validate_definition_extras(
             return Err(AppError::Validation("That pattern is not a valid regular expression".into()));
         }
     }
+    if is_unique && field_type == "boolean" {
+        return Err(AppError::Validation("Uniqueness doesn't apply to a yes/no field".into()));
+    }
+    if let Some(default) = default_value.filter(|d| !d.is_empty()) {
+        validate_typed_value(field_type, options, min_value, max_value, max_length, regex_pattern, label, default)?;
+    }
+    Ok(())
+}
+
+/// The same per-type checks a real save's value gets in
+/// `set_entity_values` - factored out so a definition's own
+/// `default_value` can be validated against its field's rules at
+/// definition-save time too, instead of only surfacing a bad default the
+/// first time some record tries to fall back to it.
+fn validate_typed_value(
+    field_type: &str,
+    options: &[String],
+    min_value: Option<&str>,
+    max_value: Option<&str>,
+    max_length: Option<i64>,
+    regex_pattern: Option<&str>,
+    label: &str,
+    value: &str,
+) -> AppResult<()> {
+    match field_type {
+        "number" => match value.parse::<f64>() {
+            Err(_) => return Err(AppError::Validation(format!("{label} must be a number"))),
+            Ok(n) => {
+                if let Some(min) = min_value.and_then(|m| m.parse::<f64>().ok()) {
+                    if n < min {
+                        return Err(AppError::Validation(format!("{label} must be at least {min}")));
+                    }
+                }
+                if let Some(max) = max_value.and_then(|m| m.parse::<f64>().ok()) {
+                    if n > max {
+                        return Err(AppError::Validation(format!("{label} must be at most {max}")));
+                    }
+                }
+            }
+        },
+        "text" => {
+            if let Some(max_len) = max_length {
+                if value.chars().count() as i64 > max_len {
+                    return Err(AppError::Validation(format!("{label} must be {max_len} characters or fewer")));
+                }
+            }
+            if let Some(pattern) = regex_pattern.filter(|p| !p.is_empty()) {
+                let matches = regex::Regex::new(pattern).map(|re| re.is_match(value)).unwrap_or(true);
+                if !matches {
+                    return Err(AppError::Validation(format!("{label} does not match the required format")));
+                }
+            }
+        }
+        "select" if !options.iter().any(|o| o == value) => {
+            return Err(AppError::Validation(format!("'{value}' is not a valid option for {label}")));
+        }
+        _ => {}
+    }
     Ok(())
 }
 
@@ -142,7 +209,10 @@ pub fn create_definition(
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_definition_shape(conn, workspace_id, &input.entity_type, &input.field_type, &input.options, &input.label)?;
-    validate_definition_extras(&input.field_type, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length, input.regex_pattern.as_deref())?;
+    validate_definition_extras(
+        &input.field_type, &input.options, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length,
+        input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
+    )?;
     let key = slugify(conn, workspace_id, &input.entity_type, &input.label)?;
     let id = crate::domain::ids::new_uuid();
     Ok(custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?)
@@ -168,7 +238,10 @@ pub fn update_definition(
     if existing.field_type == "select" && input.options.is_empty() {
         return Err(AppError::Validation("A select field needs at least one option".into()));
     }
-    validate_definition_extras(&existing.field_type, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length, input.regex_pattern.as_deref())?;
+    validate_definition_extras(
+        &existing.field_type, &input.options, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length,
+        input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
+    )?;
     Ok(custom_field_repo::update_definition(conn, id, input, actor_user_id)?)
 }
 
@@ -189,6 +262,10 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
         is_searchable: existing.is_searchable,
         is_filterable: existing.is_filterable,
         is_reportable: existing.is_reportable,
+        default_value: existing.default_value,
+        is_unique: existing.is_unique,
+        help_text: existing.help_text,
+        placeholder: existing.placeholder,
     };
     Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
 }
@@ -295,6 +372,19 @@ pub fn set_entity_values(
     }
 
     let mut effective_values = values.clone();
+    // Addendum Phase 4: a definition's own default_value is the baseline,
+    // applied whenever the caller passed nothing (or blank) for this
+    // field - filled in before business rules' set_values below so a
+    // rule's own set_default/set_value (which check/overwrite the same
+    // "currently empty" condition) still has the final say if both apply.
+    for def in &definitions {
+        let currently_empty = effective_values.get(&def.key).map(|s| s.trim().is_empty()).unwrap_or(true);
+        if currently_empty {
+            if let Some(default) = def.default_value.as_deref().filter(|d| !d.is_empty()) {
+                effective_values.insert(def.key.clone(), default.to_string());
+            }
+        }
+    }
     for (key, value) in &evaluation.set_values {
         effective_values.insert(key.clone(), value.clone());
     }
@@ -310,39 +400,9 @@ pub fn set_entity_values(
             return Err(AppError::Validation(format!("{} is required", def.label)));
         }
         if !value.is_empty() {
-            match def.field_type.as_str() {
-                "number" => match value.parse::<f64>() {
-                    Err(_) => return Err(AppError::Validation(format!("{} must be a number", def.label))),
-                    Ok(n) => {
-                        if let Some(min) = def.min_value.as_deref().and_then(|m| m.parse::<f64>().ok()) {
-                            if n < min {
-                                return Err(AppError::Validation(format!("{} must be at least {min}", def.label)));
-                            }
-                        }
-                        if let Some(max) = def.max_value.as_deref().and_then(|m| m.parse::<f64>().ok()) {
-                            if n > max {
-                                return Err(AppError::Validation(format!("{} must be at most {max}", def.label)));
-                            }
-                        }
-                    }
-                },
-                "text" => {
-                    if let Some(max_len) = def.max_length {
-                        if value.chars().count() as i64 > max_len {
-                            return Err(AppError::Validation(format!("{} must be {max_len} characters or fewer", def.label)));
-                        }
-                    }
-                    if let Some(pattern) = def.regex_pattern.as_deref().filter(|p| !p.is_empty()) {
-                        let matches = regex::Regex::new(pattern).map(|re| re.is_match(value)).unwrap_or(true);
-                        if !matches {
-                            return Err(AppError::Validation(format!("{} does not match the required format", def.label)));
-                        }
-                    }
-                }
-                "select" if !def.options.iter().any(|o| o == value) => {
-                    return Err(AppError::Validation(format!("'{value}' is not a valid option for {}", def.label)));
-                }
-                _ => {}
+            validate_typed_value(&def.field_type, &def.options, def.min_value.as_deref(), def.max_value.as_deref(), def.max_length, def.regex_pattern.as_deref(), &def.label, value)?;
+            if def.is_unique && custom_field_repo::value_exists_elsewhere(conn, &def.id, entity_id, value)? {
+                return Err(AppError::Validation(format!("{} must be unique - '{value}' is already used", def.label)));
             }
         }
         if before_values.get(&def.key).map(|s| s.as_str()).unwrap_or("") != value {
