@@ -107,6 +107,7 @@ pub fn run() {
             commands::workflow_commands::update_workflow_rule,
             commands::workflow_commands::list_workflow_runs,
             commands::workflow_commands::run_scheduled_workflows,
+            commands::workflow_commands::test_workflows,
             commands::notification_commands::list_notifications,
             commands::notification_commands::mark_notification_read,
             commands::notification_commands::mark_all_notifications_read,

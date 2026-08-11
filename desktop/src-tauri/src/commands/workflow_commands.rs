@@ -3,8 +3,10 @@ use tauri::State;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::custom_field::CustomFieldValues;
 use lanesra_core::models::workflow::{WorkflowDefinition, WorkflowDefinitionInput, WorkflowDefinitionUpdate, WorkflowRun};
 use lanesra_core::services::workflow_service;
+use lanesra_core::services::workflow_service::WorkflowTestResult;
 
 #[tauri::command]
 pub fn list_workflow_rules(state: State<AppState>, entity_type: String) -> AppResult<Vec<WorkflowDefinition>> {
@@ -39,4 +41,13 @@ pub fn run_scheduled_workflows(state: State<AppState>) -> AppResult<usize> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     workflow_service::run_scheduled(&conn, &workspace_id, current_actor(&state).as_deref())
+}
+
+/// Addendum Phase 3: dry-run every active workflow for `entity_type`
+/// against a hypothetical field context, mirroring `test_business_rules`.
+#[tauri::command]
+pub fn test_workflows(state: State<AppState>, entity_type: String, context: CustomFieldValues) -> AppResult<WorkflowTestResult> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    workflow_service::test_workflows(&conn, &workspace_id, &entity_type, &context, current_actor(&state).as_deref())
 }
