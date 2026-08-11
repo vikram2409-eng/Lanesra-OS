@@ -1,6 +1,6 @@
 [package]
 name = "lanesra-core"
-version = "0.4.0"
+version = "0.5.0"
 description = "Lanesra OS domain logic, shared by the desktop app and the Team Workspace server"
 license = "MIT"
 edition = "2021"

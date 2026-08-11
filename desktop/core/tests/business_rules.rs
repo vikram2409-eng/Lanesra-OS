@@ -62,7 +62,7 @@ fn custom_condition(field_key: &str, operator: &str, value: &str) -> BusinessRul
 }
 
 fn require_action(target_key: &str) -> BusinessRuleActionInput {
-    BusinessRuleActionInput { action_type: "require".into(), target_field_key: Some(target_key.into()), action_value: None, message: None }
+    BusinessRuleActionInput { action_type: "require".into(), target_field_key: Some(target_key.into()), target_field_source: "custom".into(), action_value: None, message: None }
 }
 
 fn rule_input(entity_type: &str, priority: i64, match_type: &str, conditions: Vec<BusinessRuleConditionInput>, actions: Vec<BusinessRuleActionInput>) -> BusinessRuleInput {
@@ -183,7 +183,7 @@ fn set_default_only_fills_an_empty_value_while_set_value_always_overwrites() {
         &rule_input(
             "Company", 0, "all",
             vec![condition("status", "equals", "Prospect")],
-            vec![BusinessRuleActionInput { action_type: "set_default".into(), target_field_key: Some(def.key.clone()), action_value: Some("Unassigned".into()), message: None }],
+            vec![BusinessRuleActionInput { action_type: "set_default".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(), action_value: Some("Unassigned".into()), message: None }],
         ),
         Some(&admin),
     ).unwrap();
@@ -209,7 +209,7 @@ fn block_save_rejects_the_whole_save_with_the_rules_custom_message() {
         &rule_input(
             "Company", 0, "all",
             vec![condition("status", "equals", "Archived")],
-            vec![BusinessRuleActionInput { action_type: "block_save".into(), target_field_key: None, action_value: None, message: Some("Archived companies cannot be edited".into()) }],
+            vec![BusinessRuleActionInput { action_type: "block_save".into(), target_field_key: None, target_field_source: "custom".into(), action_value: None, message: Some("Archived companies cannot be edited".into()) }],
         ),
         Some(&admin),
     ).unwrap();
@@ -227,7 +227,7 @@ fn show_message_is_returned_but_does_not_block_the_save() {
         &rule_input(
             "Company", 0, "all",
             vec![condition("status", "equals", "Prospect")],
-            vec![BusinessRuleActionInput { action_type: "show_message".into(), target_field_key: None, action_value: None, message: Some("Remember to schedule a follow-up call".into()) }],
+            vec![BusinessRuleActionInput { action_type: "show_message".into(), target_field_key: None, target_field_source: "custom".into(), action_value: None, message: Some("Remember to schedule a follow-up call".into()) }],
         ),
         Some(&admin),
     ).unwrap();
@@ -244,7 +244,7 @@ fn higher_priority_rule_wins_on_conflicting_effects_for_the_same_target() {
 
     business_rule_service::create_rule(
         &conn, &ws,
-        &rule_input("Company", 0, "all", vec![condition("status", "equals", "Prospect")], vec![BusinessRuleActionInput { action_type: "hide".into(), target_field_key: Some(def.key.clone()), action_value: None, message: None }]),
+        &rule_input("Company", 0, "all", vec![condition("status", "equals", "Prospect")], vec![BusinessRuleActionInput { action_type: "hide".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(), action_value: None, message: None }]),
         Some(&admin),
     ).unwrap();
     business_rule_service::create_rule(
@@ -303,4 +303,83 @@ fn contains_and_numeric_operators_evaluate_correctly() {
     values.insert(notes_def.key.clone(), "This is an urgent matter".into());
     let err = custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").contains("Flag is required"));
+}
+
+// --- "Any field" targeting (built-in fields, not just status/custom) ----
+
+#[test]
+fn condition_on_a_non_status_builtin_field_matches_correctly() {
+    let (conn, ws, admin) = setup_workspace();
+    let flag_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Flag"), Some(&admin)).unwrap();
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("tax_number", "contains", "EXEMPT")],
+            vec![require_action(&flag_def.key)],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    // A company whose tax_number doesn't contain "EXEMPT" saves freely.
+    let mut taxable = company_input("Acme", "Prospect");
+    taxable.tax_number = Some("GB123456789".into());
+    let taxable = company_service::create(&conn, &ws, &taxable, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &taxable.id, &HashMap::new(), Some(&admin)).unwrap();
+
+    // A company whose tax_number contains "EXEMPT" now requires Flag.
+    let mut exempt = company_input("Globex", "Prospect");
+    exempt.tax_number = Some("TAX-EXEMPT-001".into());
+    let exempt = company_service::create(&conn, &ws, &exempt, Some(&admin)).unwrap();
+    let err = custom_field_service::set_entity_values(&conn, "Company", &exempt.id, &HashMap::new(), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("Flag is required"));
+}
+
+#[test]
+fn set_value_action_targeting_a_builtin_field_writes_through_the_entity_service() {
+    let (conn, ws, admin) = setup_workspace();
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("status", "equals", "Prospect")],
+            vec![BusinessRuleActionInput {
+                action_type: "set_value".into(), target_field_key: Some("tags".into()), target_field_source: "builtin".into(),
+                action_value: Some("needs-followup".into()), message: None,
+            }],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
+    // Business rule set_value/set_default only apply once the same save
+    // seam custom fields go through runs - see custom_field_service's
+    // set_entity_values, which every entity's create/edit form already
+    // calls unconditionally even with zero custom fields defined.
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &HashMap::new(), Some(&admin)).unwrap();
+
+    let reloaded = company_service::get(&conn, &company.id).unwrap();
+    assert_eq!(reloaded.tags.as_deref(), Some("needs-followup"));
+}
+
+#[test]
+fn a_rule_cannot_target_a_non_actionable_builtin_field() {
+    let (conn, ws, admin) = setup_workspace();
+    // "status" is conditionable (it's the entity's transition field) but
+    // not actionable - it has its own dedicated mechanism instead (see
+    // domain::builtin_fields' doc comment).
+    let err = business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("status", "equals", "Prospect")],
+            vec![BusinessRuleActionInput {
+                action_type: "require".into(), target_field_key: Some("status".into()), target_field_source: "builtin".into(),
+                action_value: None, message: None,
+            }],
+        ),
+        Some(&admin),
+    ).unwrap_err();
+    assert!(format!("{err:?}").contains("not an actionable built-in field"));
 }

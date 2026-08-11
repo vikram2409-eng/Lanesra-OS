@@ -18,14 +18,18 @@
 //! opaque `params_json` blob parsed here into one of the `*Params` structs
 //! below - see `models::workflow`'s doc comment for why.
 //!
-//! Recursion (ADM-WF-09): every action that can create or update a record
-//! writes through a plain repo function, never back through a service's
-//! own create()/update() (which is what fires events) - except
-//! `create_related_record`, which does call `custom_record_service::create`
-//! and therefore can recurse. A thread-local depth counter
-//! ([`WORKFLOW_DEPTH`]) bounds this regardless of branching factor,
-//! without threading a depth parameter through every entity service's
-//! public API.
+//! Recursion (ADM-WF-09): most actions that can create or update a record
+//! write through a plain repo function, never back through a service's own
+//! create()/update() (which is what fires events) - except
+//! `create_related_record`, which does call `custom_record_service::create`,
+//! and `update_field`/business rules' `set_value` when targeting a
+//! built-in field, which route through `builtin_field_service::set_field`
+//! (itself calling the target entity's own `*_service::update` so ordinary
+//! validation still runs - see that module's doc comment). Both can
+//! therefore recurse. A thread-local depth counter ([`WORKFLOW_DEPTH`])
+//! bounds this regardless of branching factor or which of these two paths
+//! caused it, without threading a depth parameter through every entity
+//! service's public API.
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -36,7 +40,7 @@ use serde::Deserialize;
 
 use crate::domain::conditions::conditions_match;
 use crate::domain::ids::new_uuid;
-use crate::domain::{AppError, AppResult};
+use crate::domain::{builtin_fields, AppError, AppResult};
 use crate::models::business_rule::builtin_trigger_field_for;
 use crate::models::task::TaskInput;
 use crate::models::workflow::{
@@ -47,7 +51,7 @@ use crate::repositories::{
     company_repo, contract_repo, custom_field_repo, custom_record_repo, notification_repo, opportunity_repo,
     relationship_repo, task_repo, user_repo, workflow_repo,
 };
-use crate::services::{custom_object_service, custom_record_service, entity_registry, task_service};
+use crate::services::{builtin_field_service, custom_object_service, custom_record_service, entity_registry, task_service};
 
 thread_local! {
     static WORKFLOW_DEPTH: Cell<u8> = const { Cell::new(0) };
@@ -129,9 +133,8 @@ fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str,
             return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
         }
         if c.field_source == "builtin" {
-            let expected = transition_field_for(entity_type);
-            if c.field_key != expected {
-                return Err(AppError::Validation(format!("'{}' is not a supported built-in condition field for {entity_type} (expected '{expected}')", c.field_key)));
+            if builtin_fields::find_builtin_field(entity_type, &c.field_key).is_none() {
+                return Err(AppError::Validation(format!("'{}' is not a built-in field on {entity_type}", c.field_key)));
             }
         } else if !defs.iter().any(|d| d.key == c.field_key && d.is_active) {
             return Err(AppError::Validation(format!("'{}' is not an active custom field to trigger on", c.field_key)));
@@ -181,9 +184,15 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
         }
         "field_changed" => {
             let field = input.trigger_field_key.as_deref().unwrap_or("");
-            let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-            if !defs.iter().any(|d| d.key == field && d.is_active) {
-                return Err(AppError::Validation(format!("'{field}' is not an active custom field to watch")));
+            if input.trigger_field_source == "builtin" {
+                if builtin_fields::find_builtin_field(entity_type, field).is_none() {
+                    return Err(AppError::Validation(format!("'{field}' is not a built-in field on {entity_type}")));
+                }
+            } else {
+                let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+                if !defs.iter().any(|d| d.key == field && d.is_active) {
+                    return Err(AppError::Validation(format!("'{field}' is not an active custom field to watch")));
+                }
             }
         }
         "scheduled" => {
@@ -243,7 +252,14 @@ pub fn list_runs(conn: &Connection, workspace_id: &str, workflow_id: &str, actor
 // --- Trigger context / condition matching -------------------------------
 
 fn build_trigger_context(conn: &Connection, entity_type: &str, entity_id: &str, override_status: Option<&str>) -> AppResult<HashMap<String, String>> {
-    let mut ctx = custom_field_repo::get_values(conn, entity_id)?;
+    // ADM-WF "any field" targeting: every built-in field (not just the
+    // transition field), merged with custom field values, so a condition
+    // can target either kind identically - same shape business rules'
+    // trigger context uses (custom_field_service::set_entity_values).
+    let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+    for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
+        ctx.insert(k, v);
+    }
     let builtin_key = transition_field_for(entity_type);
     let status = match override_status {
         Some(s) => s.to_string(),
@@ -302,13 +318,21 @@ pub fn fire_event(
 }
 
 /// Called by `custom_field_service::set_entity_values` after computing
-/// which custom field values actually changed - fires `field_changed`
-/// workflows watching any of them.
+/// which custom field values actually changed (`field_source: "custom"`),
+/// and by every built-in entity service's `update()` after computing which
+/// built-in fields actually changed (`field_source: "builtin"`) - fires
+/// `field_changed` workflows watching any of them and matching that source.
+/// The source distinction matters because a custom field and a built-in
+/// field can share the same key (see `RuleEvaluation`'s doc comment for the
+/// same concern on the business-rules side) - without it, a workflow
+/// watching a builtin `notes` change could wrongly fire off a same-named
+/// custom field edit, or vice versa.
 pub fn fire_field_changed(
     conn: &Connection,
     workspace_id: &str,
     entity_type: &str,
     entity_id: &str,
+    field_source: &str,
     changed_field_keys: &[String],
     fallback_owner_user_id: Option<&str>,
     actor_user_id: Option<&str>,
@@ -321,7 +345,7 @@ pub fn fire_field_changed(
     let ctx = build_trigger_context(conn, entity_type, entity_id, None)?;
     let mut fired = 0;
 
-    for wf in workflows.iter().filter(|w| w.is_active && w.trigger_type == "field_changed") {
+    for wf in workflows.iter().filter(|w| w.is_active && w.trigger_type == "field_changed" && w.trigger_field_source == field_source) {
         let watched = wf.trigger_field_key.as_deref().unwrap_or("");
         if !changed_field_keys.iter().any(|k| k == watched) || !workflow_matches(wf, &ctx) {
             continue;
@@ -330,6 +354,16 @@ pub fn fire_field_changed(
         fired += 1;
     }
     Ok(fired)
+}
+
+/// Diffs two built-in field snapshots (from `builtin_field_service::
+/// field_values`, taken before and after an entity's own `update()` ran)
+/// and returns which keys actually changed - the "did anything change"
+/// check every entity's `update()` needs before calling `fire_field_changed`
+/// with `field_source: "builtin"`, so a save that touches nothing observable
+/// doesn't spuriously fire a workflow.
+pub fn changed_builtin_keys(before: &HashMap<String, String>, after: &HashMap<String, String>) -> Vec<String> {
+    after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(v)).map(|(k, _)| k.clone()).collect()
 }
 
 // --- date_reached / due_overdue / scheduled -----------------------------
@@ -471,8 +505,14 @@ struct CreateReminderParams {
 #[derive(Debug, Deserialize)]
 struct UpdateFieldParams {
     target_field_key: String,
+    #[serde(default = "default_field_source")]
+    target_field_source: String,
     value: Option<String>,
     copy_from_field_key: Option<String>,
+}
+
+fn default_field_source() -> String {
+    "custom".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -520,9 +560,15 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
         }
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-            if !defs.iter().any(|d| d.key == p.target_field_key && d.is_active) {
-                return Err(AppError::Validation(format!("'{}' is not an active custom field to update", p.target_field_key)));
+            if p.target_field_source == "builtin" {
+                if !builtin_fields::is_actionable_builtin_field(entity_type, &p.target_field_key) {
+                    return Err(AppError::Validation(format!("'{}' is not an actionable built-in field on {entity_type}", p.target_field_key)));
+                }
+            } else {
+                let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+                if !defs.iter().any(|d| d.key == p.target_field_key && d.is_active) {
+                    return Err(AppError::Validation(format!("'{}' is not an active custom field to update", p.target_field_key)));
+                }
             }
             if p.value.is_none() && p.copy_from_field_key.is_none() {
                 return Err(AppError::Validation("Provide a value or a field to copy from".into()));
@@ -633,16 +679,29 @@ fn apply_action(
         }
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-            let def = defs.iter().find(|d| d.key == p.target_field_key && d.is_active)
-                .ok_or_else(|| AppError::Validation(format!("'{}' is not an active custom field", p.target_field_key)))?;
             let value = if let Some(src) = &p.copy_from_field_key {
-                custom_field_repo::get_values(conn, entity_id)?.get(src).cloned().unwrap_or_default()
+                // The field being copied *from* isn't source-tagged (no
+                // second field_source param to keep the action shape
+                // simple) - read both custom values and every built-in
+                // field's current value and take whichever has that key.
+                let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+                for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
+                    ctx.insert(k, v);
+                }
+                ctx.get(src).cloned().unwrap_or_default()
             } else {
                 p.value.clone().unwrap_or_default()
             };
-            custom_field_repo::set_value(conn, &def.id, entity_id, &value)?;
-            Ok(format!("set {} = \"{value}\"", def.label))
+            if p.target_field_source == "builtin" {
+                builtin_field_service::set_field(conn, workspace_id, entity_type, entity_id, &p.target_field_key, &value, actor_user_id)?;
+                Ok(format!("set {} = \"{value}\"", p.target_field_key))
+            } else {
+                let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+                let def = defs.iter().find(|d| d.key == p.target_field_key && d.is_active)
+                    .ok_or_else(|| AppError::Validation(format!("'{}' is not an active custom field", p.target_field_key)))?;
+                custom_field_repo::set_value(conn, &def.id, entity_id, &value)?;
+                Ok(format!("set {} = \"{value}\"", def.label))
+            }
         }
         "assign_owner" => {
             let p: AssignOwnerParams = parse_params(action_type, params_json)?;

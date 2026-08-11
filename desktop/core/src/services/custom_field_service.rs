@@ -11,12 +11,11 @@ use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::{
     CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues, CUSTOM_FIELD_TYPES,
 };
-use crate::models::business_rule::builtin_trigger_field_for;
 use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
     product_repo, quote_repo, task_repo, user_repo,
 };
-use crate::services::{business_rule_service, workflow_service};
+use crate::services::{builtin_field_service, business_rule_service, workflow_service};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -276,12 +275,19 @@ pub fn set_entity_values(
     values: &CustomFieldValues,
     actor_user_id: Option<&str>,
 ) -> AppResult<Vec<String>> {
-    let (workspace_id, builtin_value) = resolve_entity_workspace(conn, entity_type, entity_id)?;
+    let (workspace_id, _) = resolve_entity_workspace(conn, entity_type, entity_id)?;
     let definitions = list_definitions(conn, &workspace_id, entity_type, true)?;
     let before_values = custom_field_repo::get_values(conn, entity_id)?;
 
-    let mut trigger_context: CustomFieldValues = values.clone();
-    trigger_context.insert(builtin_trigger_field_for(entity_type).to_string(), builtin_value);
+    // ADM-BR "any field" targeting: the trigger context is every built-in
+    // field's current value (name, industry, owner, dates, ...) - not just
+    // the one status/stage field the original engine knew about - merged
+    // with the custom field values actually being saved, so a condition can
+    // target either kind of field identically (see `domain::conditions`).
+    let mut trigger_context: CustomFieldValues = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+    for (k, v) in values {
+        trigger_context.insert(k.clone(), v.clone());
+    }
     let evaluation = business_rule_service::evaluate(conn, &workspace_id, entity_type, &trigger_context)?;
 
     if let Some(reason) = &evaluation.blocked {
@@ -348,7 +354,17 @@ pub fn set_entity_values(
     // ADM-WF: field_changed workflows fire from the same seam ADM-BR uses -
     // the one call site every entity's save flow already goes through
     // unconditionally, so no per-entity wiring is needed here either.
-    workflow_service::fire_field_changed(conn, &workspace_id, entity_type, entity_id, &changed_keys, None, actor_user_id)?;
+    workflow_service::fire_field_changed(conn, &workspace_id, entity_type, entity_id, "custom", &changed_keys, None, actor_user_id)?;
+
+    // A business rule's set_default/set_value targeting a built-in field
+    // has no in-flight built-in save to merge into the way a custom-field
+    // target does (see `builtin_field_service`'s doc comment) - applied
+    // here instead, as an immediate follow-up write through the entity's
+    // own service, after everything above has confirmed nothing blocks
+    // the save.
+    for (field_key, value) in &evaluation.builtin_set_values {
+        builtin_field_service::set_field(conn, &workspace_id, entity_type, entity_id, field_key, value, actor_user_id)?;
+    }
 
     let _ = actor_user_id; // no audit entry per value write - the parent record's own create/update audit entry covers this edit
     Ok(evaluation.messages)

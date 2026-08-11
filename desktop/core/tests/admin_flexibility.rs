@@ -115,6 +115,7 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),
                 target_field_key: Some(source_field.key.clone()),
+                target_field_source: "custom".into(),
                 action_value: None,
                 message: None,
             }],
@@ -135,7 +136,7 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
             description: None,
             trigger_type: "status_changed".into(),
             trigger_status: Some("Won".into()),
-            trigger_field_key: None,
+            trigger_field_key: None, trigger_field_source: "custom".into(),
             trigger_offset_days: 0,
             match_type: "all".into(),
             priority: 0,

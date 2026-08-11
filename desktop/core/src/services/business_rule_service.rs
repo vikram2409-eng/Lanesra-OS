@@ -20,9 +20,9 @@ use chrono::Utc;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use crate::domain::{AppError, AppResult};
+use crate::domain::{builtin_fields, AppError, AppResult};
 use crate::models::business_rule::{
-    builtin_trigger_field_for, BusinessRule, BusinessRuleInput, BusinessRuleUpdate, ACTION_TYPES, CONDITION_OPERATORS,
+    BusinessRule, BusinessRuleInput, BusinessRuleUpdate, ACTION_TYPES, CONDITION_OPERATORS,
     FIELD_TARGETED_ACTIONS, MATCH_TYPES, MESSAGE_ACTIONS, TRIGGER_SOURCES,
 };
 use crate::repositories::{business_rule_repo, custom_field_repo, user_repo};
@@ -60,11 +60,8 @@ fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str,
             return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
         }
         if c.field_source == "builtin" {
-            let expected = builtin_trigger_field_for(entity_type);
-            if c.field_key != expected {
-                return Err(AppError::Validation(format!(
-                    "'{}' is not a supported built-in condition field for {entity_type} (expected '{expected}')", c.field_key
-                )));
+            if builtin_fields::find_builtin_field(entity_type, &c.field_key).is_none() {
+                return Err(AppError::Validation(format!("'{}' is not a built-in field on {entity_type}", c.field_key)));
             }
         } else if !defs.iter().any(|d| d.key == c.field_key && d.is_active) {
             return Err(AppError::Validation(format!("'{}' is not an active custom field to trigger on", c.field_key)));
@@ -84,7 +81,14 @@ fn validate_actions(conn: &Connection, workspace_id: &str, entity_type: &str, ac
         }
         if FIELD_TARGETED_ACTIONS.contains(&a.action_type.as_str()) {
             let target = a.target_field_key.as_deref().unwrap_or("");
-            if !defs.iter().any(|d| d.key == target && d.is_active) {
+            if !TRIGGER_SOURCES.contains(&a.target_field_source.as_str()) {
+                return Err(AppError::Validation(format!("Invalid target field source '{}'", a.target_field_source)));
+            }
+            if a.target_field_source == "builtin" {
+                if !builtin_fields::is_actionable_builtin_field(entity_type, target) {
+                    return Err(AppError::Validation(format!("'{target}' is not an actionable built-in field on {entity_type}")));
+                }
+            } else if !defs.iter().any(|d| d.key == target && d.is_active) {
                 return Err(AppError::Validation(format!("'{target}' is not an active custom field to target")));
             }
             if matches!(a.action_type.as_str(), "set_default" | "set_value") && a.action_value.is_none() {
@@ -145,10 +149,22 @@ pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, acto
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RuleEvaluation {
-    /// target_field_key -> "require" | "hide" | "lock"
+    /// custom target_field_key -> "require" | "hide" | "lock"
     pub field_effects: HashMap<String, String>,
-    /// target_field_key -> value to apply before validation
+    /// custom target_field_key -> value to apply before validation
     pub set_values: HashMap<String, String>,
+    /// Same as `field_effects`/`set_values` but for built-in-field targets
+    /// - kept in separate maps (rather than merged by key) so a custom
+    /// field that happens to share a key with a built-in one (e.g. an
+    /// admin-defined "Notes" custom field on an entity that already has a
+    /// built-in `notes` column) can never collide with it.
+    pub builtin_field_effects: HashMap<String, String>,
+    /// Applied immediately via `builtin_field_service::set_field` once
+    /// evaluation completes and nothing blocked the save - unlike
+    /// `set_values`, which the caller merges into the same custom-field
+    /// save that's already in flight, there is no in-flight built-in save
+    /// to merge into (see `builtin_field_service`'s doc comment).
+    pub builtin_set_values: HashMap<String, String>,
     /// Some(message) means the whole save is rejected with this message.
     pub blocked: Option<String>,
     /// Non-blocking messages to surface to the user.
@@ -197,23 +213,27 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &
             continue;
         }
         for action in &rule.actions {
+            let is_builtin = action.target_field_source == "builtin";
             match action.action_type.as_str() {
                 "require" | "hide" | "lock" => {
                     if let Some(t) = &action.target_field_key {
-                        result.field_effects.insert(t.clone(), action.action_type.clone());
+                        let map = if is_builtin { &mut result.builtin_field_effects } else { &mut result.field_effects };
+                        map.insert(t.clone(), action.action_type.clone());
                     }
                 }
                 "set_default" => {
                     if let (Some(t), Some(v)) = (&action.target_field_key, &action.action_value) {
                         let currently_empty = ctx.get(t).map(|s| s.trim().is_empty()).unwrap_or(true);
-                        if currently_empty && !result.set_values.contains_key(t) {
-                            result.set_values.insert(t.clone(), v.clone());
+                        let map = if is_builtin { &mut result.builtin_set_values } else { &mut result.set_values };
+                        if currently_empty && !map.contains_key(t) {
+                            map.insert(t.clone(), v.clone());
                         }
                     }
                 }
                 "set_value" => {
                     if let (Some(t), Some(v)) = (&action.target_field_key, &action.action_value) {
-                        result.set_values.insert(t.clone(), v.clone());
+                        let map = if is_builtin { &mut result.builtin_set_values } else { &mut result.set_values };
+                        map.insert(t.clone(), v.clone());
                     }
                 }
                 "block_save" => {

@@ -49,6 +49,11 @@ pub struct BusinessRuleAction {
     pub id: String,
     pub action_type: String,
     pub target_field_key: Option<String>,
+    /// 'builtin' | 'custom' - which registry `target_field_key` was
+    /// validated against (see `domain::builtin_fields`). Only meaningful
+    /// for `FIELD_TARGETED_ACTIONS`; `None`-target actions (block_save/
+    /// show_message) leave this at the column default ('custom') unused.
+    pub target_field_source: String,
     pub action_value: Option<String>,
     pub message: Option<String>,
     pub sort_order: i64,
@@ -58,8 +63,14 @@ pub struct BusinessRuleAction {
 pub struct BusinessRuleActionInput {
     pub action_type: String,
     pub target_field_key: Option<String>,
+    #[serde(default = "default_field_source")]
+    pub target_field_source: String,
     pub action_value: Option<String>,
     pub message: Option<String>,
+}
+
+fn default_field_source() -> String {
+    "custom".to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]

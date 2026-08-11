@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, CONTRACT};
 use crate::domain::{AppError, AppResult};
 use crate::models::contract::{Contract, ContractInput, CONTRACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, contract_repo, quote_repo};
-use crate::services::workflow_service;
+use crate::services::{builtin_field_service, workflow_service};
 
 fn validate(conn: &Connection, input: &ContractInput) -> AppResult<String> {
     if input.title.trim().is_empty() {
@@ -86,6 +86,7 @@ pub fn update(
 ) -> AppResult<Contract> {
     let workspace_id = validate(conn, input)?;
     let before = get(conn, id)?;
+    let before_fields = builtin_field_service::field_values(conn, "Contract", id)?;
     let contract = contract_repo::update(conn, id, input, actor_user_id)?;
     let event_type = if before.status != contract.status { "status_change" } else { "update" };
     audit_repo::record(
@@ -104,6 +105,9 @@ pub fn update(
     workflow_service::fire_event(
         conn, &workspace_id, "Contract", id, Some(&before.status), &contract.status, contract.owner_user_id.as_deref(), actor_user_id,
     )?;
+    let after_fields = builtin_field_service::field_values(conn, "Contract", id)?;
+    let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
+    workflow_service::fire_field_changed(conn, &workspace_id, "Contract", id, "builtin", &changed, contract.owner_user_id.as_deref(), actor_user_id)?;
     Ok(contract)
 }
 

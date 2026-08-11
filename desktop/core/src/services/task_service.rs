@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, TASK};
 use crate::domain::{AppError, AppResult};
 use crate::models::task::{Task, TaskInput, TASK_PRIORITIES, TASK_STATUSES};
 use crate::repositories::{audit_repo, task_repo};
-use crate::services::{entity_registry, workflow_service};
+use crate::services::{builtin_field_service, entity_registry, workflow_service};
 
 /// A task's related record can be any built-in entity type task_links has
 /// always supported, or (Phase D, ADM-WF-06) any active custom object -
@@ -87,6 +87,7 @@ pub fn update(
 ) -> AppResult<Task> {
     validate(conn, input)?;
     let before = get(conn, id)?;
+    let before_fields = builtin_field_service::field_values(conn, "Task", id)?;
     let task = task_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -101,6 +102,9 @@ pub fn update(
     workflow_service::fire_event(
         conn, workspace_id, "Task", id, Some(&before.status), &task.status, task.owner_user_id.as_deref(), actor_user_id,
     )?;
+    let after_fields = builtin_field_service::field_values(conn, "Task", id)?;
+    let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
+    workflow_service::fire_field_changed(conn, workspace_id, "Task", id, "builtin", &changed, task.owner_user_id.as_deref(), actor_user_id)?;
     Ok(task)
 }
 

@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { BuiltinValueInput } from "../../components/BuiltinValueInput";
 import {
   ACTION_TYPES,
+  builtinFieldsFor,
   builtinTriggerFieldFor,
   CONDITION_OPERATORS,
   CUSTOM_FIELD_ENTITY_TYPES,
@@ -11,7 +13,6 @@ import {
   FIELD_TARGETED_ACTIONS,
   MATCH_TYPES,
   MESSAGE_ACTIONS,
-  statusesForEntity,
   TRIGGER_SOURCES,
   type ActionType,
   type BusinessRuleActionInput,
@@ -37,18 +38,42 @@ function emptyCondition(entityType: string): BusinessRuleConditionInput {
   return { field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "" };
 }
 
-function emptyAction(targetKey: string): BusinessRuleActionInput {
-  return { action_type: "require", target_field_key: targetKey, action_value: null, message: null };
+/** Defaults to a custom field target when one exists (matches this admin
+ * screen's original behavior); falls back to the first actionable
+ * built-in field so "+ Add action" still works on an entity with no
+ * custom fields defined at all. */
+function emptyAction(entityType: string, customFields: { key: string; label: string }[]): BusinessRuleActionInput {
+  if (customFields.length > 0) {
+    return { action_type: "require", target_field_key: customFields[0].key, target_field_source: "custom", action_value: null, message: null };
+  }
+  const builtin = builtinFieldsFor(entityType).find((f) => f.actionable);
+  if (builtin) {
+    return { action_type: "require", target_field_key: builtin.key, target_field_source: "builtin", action_value: null, message: null };
+  }
+  // No actionable target at all (e.g. Quote/Order/Invoice with no custom
+  // fields defined) - default to a message action, the only kind that
+  // doesn't need one.
+  return { action_type: "show_message", target_field_key: null, target_field_source: "custom", action_value: null, message: "" };
 }
 
-function describeCondition(c: BusinessRuleConditionInput, labelByKey: Map<string, string>): string {
-  const label = c.field_source === "builtin" ? (c.field_key === "is_active" ? "Active" : "Status") : labelByKey.get(c.field_key) ?? c.field_key;
+/** Label for a condition/action field regardless of source - builtin
+ * fields come from the static registry (`builtinFieldsFor`), custom
+ * fields from the definitions the caller already fetched. */
+function fieldLabel(entityType: string, source: TriggerSource, key: string, labelByKey: Map<string, string>): string {
+  if (source === "builtin") {
+    return builtinFieldsFor(entityType).find((f) => f.key === key)?.label ?? key;
+  }
+  return labelByKey.get(key) ?? key;
+}
+
+function describeCondition(entityType: string, c: BusinessRuleConditionInput, labelByKey: Map<string, string>): string {
+  const label = fieldLabel(entityType, c.field_source, c.field_key, labelByKey);
   const needsValue = c.operator !== "is_empty" && c.operator !== "is_not_empty";
   return `${label} ${OPERATOR_LABELS[c.operator]}${needsValue ? ` "${c.value}"` : ""}`;
 }
 
-function describeAction(a: BusinessRuleActionInput, labelByKey: Map<string, string>): string {
-  const target = a.target_field_key ? labelByKey.get(a.target_field_key) ?? a.target_field_key : "";
+function describeAction(entityType: string, a: BusinessRuleActionInput, labelByKey: Map<string, string>): string {
+  const target = a.target_field_key ? fieldLabel(entityType, a.target_field_source, a.target_field_key, labelByKey) : "";
   switch (a.action_type) {
     case "require": return `require ${target}`;
     case "hide": return `hide ${target}`;
@@ -109,19 +134,15 @@ export function BusinessRulesAdmin() {
               setCreating((v) => !v);
               setEditingId(null);
             }}
-            disabled={activeDefs.length === 0}
           >
             + New rule
           </button>
         </div>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-        Build an IF (AND/OR conditions) / THEN (actions) rule. The higher-priority rule wins when two rules disagree
-        about the same target field.
+        Build an IF (AND/OR conditions) / THEN (actions) rule against any built-in or custom field on {currentLabel}.
+        The higher-priority rule wins when two rules disagree about the same target field.
       </p>
-      {activeDefs.length === 0 && (
-        <p className="empty-state">Add an active custom field for {currentLabel} first - rule targets are custom fields.</p>
-      )}
 
       <div className="tab-row">
         {entityTabs.map((t) => (
@@ -149,7 +170,7 @@ export function BusinessRulesAdmin() {
           initial={{
             entity_type: entityType, name: "", description: null, match_type: "all", priority: 0,
             effective_start_date: null, effective_end_date: null,
-            conditions: [emptyCondition(entityType)], actions: [emptyAction(activeDefs[0]?.key ?? "")],
+            conditions: [emptyCondition(entityType)], actions: [emptyAction(entityType, activeDefs)],
           }}
           submitLabel="Add rule"
           onSubmit={(input) => api.createBusinessRule(input)}
@@ -169,7 +190,7 @@ export function BusinessRulesAdmin() {
             entity_type: entityType, name: editing.name, description: editing.description, match_type: editing.match_type,
             priority: editing.priority, effective_start_date: editing.effective_start_date, effective_end_date: editing.effective_end_date,
             conditions: editing.conditions.map((c) => ({ field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value })),
-            actions: editing.actions.map((a) => ({ action_type: a.action_type, target_field_key: a.target_field_key, action_value: a.action_value, message: a.message })),
+            actions: editing.actions.map((a) => ({ action_type: a.action_type, target_field_key: a.target_field_key, target_field_source: a.target_field_source, action_value: a.action_value, message: a.message })),
             is_active: editing.is_active,
           }}
           submitLabel="Save"
@@ -201,8 +222,8 @@ export function BusinessRulesAdmin() {
             {rules.data.map((r) => (
               <tr key={r.id}>
                 <td>{r.name}</td>
-                <td>{r.conditions.map((c) => describeCondition(c, labelByKey)).join(r.match_type === "any" ? " OR " : " AND ")}</td>
-                <td>{r.actions.map((a) => describeAction(a, labelByKey)).join("; ")}</td>
+                <td>{r.conditions.map((c) => describeCondition(entityType, c, labelByKey)).join(r.match_type === "any" ? " OR " : " AND ")}</td>
+                <td>{r.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</td>
                 <td>{r.priority}</td>
                 <td>
                   <span className={`badge${r.is_active ? " badge-success" : ""}`}>{r.is_active ? "Active" : "Inactive"}</span>
@@ -235,10 +256,10 @@ function ConditionRow({
   onChange: (c: BusinessRuleConditionInput) => void;
   onRemove: () => void;
 }) {
-  const statuses = statusesForEntity(entityType);
-  const builtinField = builtinTriggerFieldFor(entityType);
+  const builtinFields = builtinFieldsFor(entityType);
   const isBuiltin = condition.field_source === "builtin";
   const needsValue = condition.operator !== "is_empty" && condition.operator !== "is_not_empty";
+  const selectedBuiltin = isBuiltin ? builtinFields.find((f) => f.key === condition.field_key) : undefined;
 
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
@@ -246,7 +267,7 @@ function ConditionRow({
         value={condition.field_source}
         onChange={(e) => {
           const source = e.target.value as TriggerSource;
-          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinField : customFields[0]?.key ?? "", value: "" });
+          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinFields[0]?.key ?? "" : customFields[0]?.key ?? "", value: "" });
         }}
       >
         {TRIGGER_SOURCES.map((s) => (
@@ -254,8 +275,8 @@ function ConditionRow({
         ))}
       </select>
       {isBuiltin ? (
-        <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value })}>
-          <option value={builtinField}>{builtinField === "is_active" ? "Active" : "Status"}</option>
+        <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value, value: "" })}>
+          {builtinFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
         </select>
       ) : (
         <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value })}>
@@ -266,10 +287,7 @@ function ConditionRow({
         {CONDITION_OPERATORS.map((o) => <option key={o} value={o}>{OPERATOR_LABELS[o]}</option>)}
       </select>
       {needsValue && (isBuiltin ? (
-        <select value={condition.value} onChange={(e) => onChange({ ...condition, value: e.target.value })} required>
-          <option value="">— Select —</option>
-          {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <BuiltinValueInput field={selectedBuiltin} value={condition.value} onChange={(v) => onChange({ ...condition, value: v })} />
       ) : (
         <input value={condition.value} onChange={(e) => onChange({ ...condition, value: e.target.value })} required style={{ width: 140 }} />
       ))}
@@ -279,19 +297,24 @@ function ConditionRow({
 }
 
 function ActionRow({
+  entityType,
   customFields,
   action,
   onChange,
   onRemove,
 }: {
+  entityType: string;
   customFields: { key: string; label: string }[];
   action: BusinessRuleActionInput;
   onChange: (a: BusinessRuleActionInput) => void;
   onRemove: () => void;
 }) {
+  const actionableBuiltinFields = builtinFieldsFor(entityType).filter((f) => f.actionable);
   const isFieldTargeted = FIELD_TARGETED_ACTIONS.includes(action.action_type);
   const isMessageAction = MESSAGE_ACTIONS.includes(action.action_type);
   const needsValue = action.action_type === "set_default" || action.action_type === "set_value";
+  const isBuiltinTarget = action.target_field_source === "builtin";
+  const selectedBuiltin = isBuiltinTarget ? actionableBuiltinFields.find((f) => f.key === action.target_field_key) : undefined;
 
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
@@ -302,6 +325,7 @@ function ActionRow({
           onChange({
             action_type: type,
             target_field_key: FIELD_TARGETED_ACTIONS.includes(type) ? (action.target_field_key || customFields[0]?.key || "") : null,
+            target_field_source: action.target_field_source,
             action_value: type === "set_default" || type === "set_value" ? action.action_value ?? "" : null,
             message: MESSAGE_ACTIONS.includes(type) ? action.message ?? "" : null,
           });
@@ -310,13 +334,34 @@ function ActionRow({
         {ACTION_TYPES.map((t) => <option key={t} value={t}>{ACTION_LABELS[t]}</option>)}
       </select>
       {isFieldTargeted && (
-        <select value={action.target_field_key ?? ""} onChange={(e) => onChange({ ...action, target_field_key: e.target.value })} required>
-          {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-        </select>
+        <>
+          <select
+            value={action.target_field_source}
+            onChange={(e) => {
+              const source = e.target.value as TriggerSource;
+              const first = source === "builtin" ? actionableBuiltinFields[0]?.key ?? "" : customFields[0]?.key ?? "";
+              onChange({ ...action, target_field_source: source, target_field_key: first, action_value: null });
+            }}
+          >
+            <option value="custom">Custom field</option>
+            <option value="builtin" disabled={actionableBuiltinFields.length === 0}>Built-in field</option>
+          </select>
+          {isBuiltinTarget ? (
+            <select value={action.target_field_key ?? ""} onChange={(e) => onChange({ ...action, target_field_key: e.target.value, action_value: null })} required>
+              {actionableBuiltinFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+          ) : (
+            <select value={action.target_field_key ?? ""} onChange={(e) => onChange({ ...action, target_field_key: e.target.value })} required>
+              {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+          )}
+        </>
       )}
-      {needsValue && (
+      {needsValue && (isBuiltinTarget ? (
+        <BuiltinValueInput field={selectedBuiltin} value={action.action_value ?? ""} onChange={(v) => onChange({ ...action, action_value: v })} />
+      ) : (
         <input value={action.action_value ?? ""} onChange={(e) => onChange({ ...action, action_value: e.target.value })} placeholder="Value" required style={{ width: 140 }} />
-      )}
+      ))}
       {isMessageAction && (
         <input value={action.message ?? ""} onChange={(e) => onChange({ ...action, message: e.target.value })} placeholder="Message shown to the user" required style={{ width: 260 }} />
       )}
@@ -427,13 +472,14 @@ function RuleForm({
           {actions.map((a, i) => (
             <ActionRow
               key={i}
+              entityType={entityType}
               customFields={customFields}
               action={a}
               onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
               onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
             />
           ))}
-          <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(customFields[0]?.key ?? "")])}>
+          <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(entityType, customFields)])}>
             + Add action
           </button>
         </div>
@@ -460,28 +506,36 @@ function RuleForm({
 }
 
 /** ADM-BR-09 (Should): lets an admin try a hypothetical set of field
- * values against every active rule before relying on it, without
- * persisting anything. */
+ * values - every built-in field, not just the status/stage one, plus
+ * every custom field - against every active rule before relying on it,
+ * without persisting anything. */
 function TestRulesPanel({ entityType, customFields }: { entityType: string; customFields: { key: string; label: string }[] }) {
-  const statuses = statusesForEntity(entityType);
-  const builtinField = builtinTriggerFieldFor(entityType);
-  const [status, setStatus] = useState(statuses[0] ?? "");
-  const [values, setValues] = useState<Record<string, string>>({});
+  const builtinFields = builtinFieldsFor(entityType);
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(builtinFields.filter((f) => f.field_type === "select").map((f) => [f.key, f.options?.[0] ?? ""])),
+  );
 
   const test = useMutation({
-    mutationFn: () => api.testBusinessRules(entityType, { ...values, [builtinField]: status }),
+    mutationFn: () => api.testBusinessRules(entityType, values),
   });
+
+  const builtinLabel = (key: string) => builtinFields.find((f) => f.key === key)?.label ?? key;
+  const anyEffects = test.data && (
+    test.data.blocked || test.data.messages.length > 0 ||
+    Object.keys(test.data.field_effects).length > 0 || Object.keys(test.data.set_values).length > 0 ||
+    Object.keys(test.data.builtin_field_effects).length > 0 || Object.keys(test.data.builtin_set_values).length > 0
+  );
 
   return (
     <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
       <h4 style={{ marginTop: 0 }}>Test rules against a hypothetical record</h4>
       <div className="form-grid">
-        <div className="form-field">
-          <label>{builtinField === "is_active" ? "Active" : "Status"}</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
+        {builtinFields.map((f) => (
+          <div className="form-field" key={f.key}>
+            <label>{f.label}</label>
+            <BuiltinValueInput field={f} value={values[f.key] ?? ""} onChange={(v) => setValues({ ...values, [f.key]: v })} />
+          </div>
+        ))}
         {customFields.map((f) => (
           <div className="form-field" key={f.key}>
             <label>{f.label}</label>
@@ -501,14 +555,18 @@ function TestRulesPanel({ entityType, customFields }: { entityType: string; cust
             <p>Messages: {test.data.messages.join("; ")}</p>
           )}
           {Object.keys(test.data.field_effects).length > 0 && (
-            <p>Field effects: {Object.entries(test.data.field_effects).map(([k, v]) => `${customFields.find((f) => f.key === k)?.label ?? k}: ${v}`).join(", ")}</p>
+            <p>Custom field effects: {Object.entries(test.data.field_effects).map(([k, v]) => `${customFields.find((f) => f.key === k)?.label ?? k}: ${v}`).join(", ")}</p>
+          )}
+          {Object.keys(test.data.builtin_field_effects).length > 0 && (
+            <p>Built-in field effects: {Object.entries(test.data.builtin_field_effects).map(([k, v]) => `${builtinLabel(k)}: ${v}`).join(", ")}</p>
           )}
           {Object.keys(test.data.set_values).length > 0 && (
-            <p>Values that would be set: {Object.entries(test.data.set_values).map(([k, v]) => `${customFields.find((f) => f.key === k)?.label ?? k} = "${v}"`).join(", ")}</p>
+            <p>Custom values that would be set: {Object.entries(test.data.set_values).map(([k, v]) => `${customFields.find((f) => f.key === k)?.label ?? k} = "${v}"`).join(", ")}</p>
           )}
-          {!test.data.blocked && test.data.messages.length === 0 && Object.keys(test.data.field_effects).length === 0 && Object.keys(test.data.set_values).length === 0 && (
-            <p className="empty-state">No rule matches this hypothetical record.</p>
+          {Object.keys(test.data.builtin_set_values).length > 0 && (
+            <p>Built-in values that would be set: {Object.entries(test.data.builtin_set_values).map(([k, v]) => `${builtinLabel(k)} = "${v}"`).join(", ")}</p>
           )}
+          {!anyEffects && <p className="empty-state">No rule matches this hypothetical record.</p>}
         </div>
       )}
     </div>

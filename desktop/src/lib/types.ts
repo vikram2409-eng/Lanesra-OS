@@ -708,6 +708,129 @@ export function builtinTriggerFieldFor(entityType: string): string {
   return entityType === "Product" ? "is_active" : "status";
 }
 
+/** Mirrors `domain::builtin_fields::BuiltinField` in the Rust core - see
+ * that module's doc comment for exactly what's excluded (foreign keys,
+ * generated/computed columns, owner_user_id) and why. `field_type` follows
+ * the same vocabulary custom fields use, plus "money" (a dollar amount
+ * backed by an integer-cents column) and "percent" (backed by basis
+ * points) for the couple of built-in fields that need one. */
+export interface BuiltinFieldDef {
+  key: string;
+  label: string;
+  field_type: "text" | "number" | "money" | "percent" | "date" | "boolean" | "select";
+  options?: readonly string[];
+  /** Whether require/hide/lock/set_default/set_value/update_field may
+   * target this field, not just read it in a condition/trigger - false
+   * for each entity's status-equivalent field (it has its own dedicated
+   * mechanism instead) and every Quote/Order/Invoice field (those
+   * documents have no general-purpose edit path once created - see the
+   * Rust registry's comment). */
+  actionable: boolean;
+}
+
+const CUSTOM_RECORD_BUILTIN_FIELDS: BuiltinFieldDef[] = [
+  { key: "primary_name", label: "Name", field_type: "text", actionable: true },
+  // Same fixed set as CUSTOM_RECORD_STATUSES below - inlined rather than
+  // referenced since that const is declared later in this file and a
+  // module-level const can't reference one not yet initialized.
+  { key: "status", label: "Status", field_type: "select", options: ["Active", "Inactive", "Archived"], actionable: false },
+  { key: "notes", label: "Notes", field_type: "text", actionable: true },
+];
+
+const BUILTIN_FIELDS_BY_ENTITY: Record<string, BuiltinFieldDef[]> = {
+  Company: [
+    { key: "name", label: "Company name", field_type: "text", actionable: true },
+    { key: "status", label: "Status", field_type: "select", options: COMPANY_STATUSES, actionable: false },
+    { key: "tax_number", label: "Tax number", field_type: "text", actionable: true },
+    { key: "billing_address", label: "Billing address", field_type: "text", actionable: true },
+    { key: "shipping_address", label: "Shipping address", field_type: "text", actionable: true },
+    { key: "tags", label: "Tags", field_type: "text", actionable: true },
+    { key: "notes", label: "Notes", field_type: "text", actionable: true },
+  ],
+  Contact: [
+    { key: "first_name", label: "First name", field_type: "text", actionable: true },
+    { key: "last_name", label: "Last name", field_type: "text", actionable: true },
+    { key: "job_title", label: "Job title", field_type: "text", actionable: true },
+    { key: "email", label: "Email", field_type: "text", actionable: true },
+    { key: "phone", label: "Phone", field_type: "text", actionable: true },
+    { key: "mobile", label: "Mobile", field_type: "text", actionable: true },
+    { key: "is_primary", label: "Primary contact", field_type: "boolean", actionable: true },
+    { key: "status", label: "Status", field_type: "select", options: CONTACT_STATUSES, actionable: false },
+    { key: "tags", label: "Tags", field_type: "text", actionable: true },
+    { key: "notes", label: "Notes", field_type: "text", actionable: true },
+  ],
+  Opportunity: [
+    { key: "name", label: "Opportunity name", field_type: "text", actionable: true },
+    { key: "stage", label: "Stage", field_type: "select", options: OPPORTUNITY_STAGES, actionable: false },
+    { key: "status", label: "Status", field_type: "select", options: OPPORTUNITY_STATUSES, actionable: false },
+    { key: "value", label: "Value", field_type: "money", actionable: true },
+    { key: "probability", label: "Probability", field_type: "percent", actionable: true },
+    { key: "expected_close_date", label: "Expected close date", field_type: "date", actionable: true },
+    { key: "lost_reason", label: "Lost reason", field_type: "text", actionable: true },
+    { key: "next_step", label: "Next step", field_type: "text", actionable: true },
+  ],
+  Product: [
+    { key: "name", label: "Name", field_type: "text", actionable: true },
+    { key: "sku", label: "SKU", field_type: "text", actionable: true },
+    { key: "type", label: "Type", field_type: "select", options: PRODUCT_TYPES, actionable: true },
+    { key: "category", label: "Category", field_type: "text", actionable: true },
+    { key: "description", label: "Description", field_type: "text", actionable: true },
+    { key: "unit_price", label: "Unit price", field_type: "money", actionable: true },
+    { key: "cost", label: "Cost", field_type: "money", actionable: true },
+    { key: "tax_rate", label: "Tax rate", field_type: "percent", actionable: true },
+    { key: "is_active", label: "Active", field_type: "boolean", actionable: false },
+  ],
+  // Quote/Order/Invoice: conditionable only - these documents have no
+  // general-purpose edit path once created (only status transitions and
+  // conversion), so there's no safe write path for a generic action to
+  // route through. See domain::builtin_fields' comment in the Rust core.
+  Quote: [
+    { key: "status", label: "Status", field_type: "select", options: QUOTE_STATUSES, actionable: false },
+    { key: "issue_date", label: "Issue date", field_type: "date", actionable: false },
+    { key: "expiry_date", label: "Valid until", field_type: "date", actionable: false },
+    { key: "terms", label: "Terms", field_type: "text", actionable: false },
+    { key: "notes", label: "Notes", field_type: "text", actionable: false },
+  ],
+  Order: [
+    { key: "status", label: "Status", field_type: "select", options: ORDER_STATUSES, actionable: false },
+    { key: "order_date", label: "Order date", field_type: "date", actionable: false },
+    { key: "notes", label: "Notes", field_type: "text", actionable: false },
+  ],
+  Invoice: [
+    { key: "status", label: "Status", field_type: "select", options: INVOICE_STATUSES, actionable: false },
+    { key: "issue_date", label: "Issue date", field_type: "date", actionable: false },
+    { key: "due_date", label: "Due date", field_type: "date", actionable: false },
+    { key: "payment_terms", label: "Payment terms", field_type: "text", actionable: false },
+    { key: "notes", label: "Notes", field_type: "text", actionable: false },
+  ],
+  Contract: [
+    { key: "title", label: "Title", field_type: "text", actionable: true },
+    { key: "type", label: "Type", field_type: "text", actionable: true },
+    { key: "value", label: "Value", field_type: "money", actionable: true },
+    { key: "start_date", label: "Start date", field_type: "date", actionable: true },
+    { key: "end_date", label: "End date", field_type: "date", actionable: true },
+    { key: "renewal_date", label: "Renewal date", field_type: "date", actionable: true },
+    { key: "notice_period_days", label: "Notice period (days)", field_type: "number", actionable: true },
+    { key: "status", label: "Status", field_type: "select", options: CONTRACT_STATUSES, actionable: false },
+    { key: "notes", label: "Notes", field_type: "text", actionable: true },
+  ],
+  Task: [
+    { key: "title", label: "Title", field_type: "text", actionable: true },
+    { key: "description", label: "Description", field_type: "text", actionable: true },
+    { key: "priority", label: "Priority", field_type: "select", options: TASK_PRIORITIES, actionable: true },
+    { key: "status", label: "Status", field_type: "select", options: TASK_STATUSES, actionable: false },
+    { key: "due_date", label: "Due date", field_type: "date", actionable: true },
+    { key: "reminder_at", label: "Reminder", field_type: "date", actionable: true },
+  ],
+};
+
+/** Every built-in field `entityType` exposes as a condition/trigger/action
+ * target - the 9 core entities from the table above, or (for any active
+ * custom object key) the fixed shape every custom record shares. */
+export function builtinFieldsFor(entityType: string): BuiltinFieldDef[] {
+  return BUILTIN_FIELDS_BY_ENTITY[entityType] ?? CUSTOM_RECORD_BUILTIN_FIELDS;
+}
+
 export interface CustomFieldDefinition {
   id: string;
   workspace_id: string;
@@ -778,12 +901,12 @@ export type CustomFieldValues = Record<string, string>;
 // THEN business rule engine - any number of conditions per rule (matched
 // as AND or OR), and actions beyond require/hide: lock (read-only), set a
 // default or forced value, block the whole save with a custom message, or
-// show a non-blocking message. Conditions/actions that target a specific
-// field are still scoped to custom fields as the target (and, for a
-// condition, either the entity's one built-in field from
-// `builtinTriggerFieldFor` or another custom field) - see
-// business_rule_service's doc comment for why built-in fields in general
-// are out of scope.
+// show a non-blocking message. A condition/action's field can be any
+// active custom field, or any field in `builtinFieldsFor(entityType)`
+// (`field_source`/`target_field_source: "builtin"`) - see that function's
+// doc comment for which built-in fields are excluded and why. Only
+// `actionable` built-in fields can be an action's target; every built-in
+// field can be a condition's.
 export const MATCH_TYPES = ["all", "any"] as const;
 export type MatchType = (typeof MATCH_TYPES)[number];
 export const CONDITION_OPERATORS = [
@@ -846,6 +969,7 @@ export interface BusinessRuleAction {
   id: string;
   action_type: ActionType;
   target_field_key: string | null;
+  target_field_source: TriggerSource;
   action_value: string | null;
   message: string | null;
   sort_order: number;
@@ -854,6 +978,7 @@ export interface BusinessRuleAction {
 export interface BusinessRuleActionInput {
   action_type: ActionType;
   target_field_key: string | null;
+  target_field_source: TriggerSource;
   action_value: string | null;
   message: string | null;
 }
@@ -903,6 +1028,12 @@ export interface BusinessRuleUpdate {
 export interface RuleEvaluation {
   field_effects: Record<string, string>;
   set_values: Record<string, string>;
+  /** Same shape as field_effects/set_values, but for built-in-field
+   * targets - see business_rule_service's RuleEvaluation doc comment for
+   * why they're kept separate (a custom field can share a key with a
+   * built-in one). */
+  builtin_field_effects: Record<string, string>;
+  builtin_set_values: Record<string, string>;
   blocked: string | null;
   messages: string[];
 }
@@ -987,6 +1118,10 @@ export interface WorkflowDefinition {
   trigger_type: TriggerType;
   trigger_status: string | null;
   trigger_field_key: string | null;
+  /** Only meaningful for the `field_changed` trigger - see `builtinFieldsFor`
+   * doc comment. `date_reached`/`due_overdue` always name a curated
+   * built-in date field regardless of this value. */
+  trigger_field_source: TriggerSource;
   trigger_offset_days: number;
   match_type: MatchType;
   priority: number;
@@ -1006,6 +1141,7 @@ export interface WorkflowDefinitionInput {
   trigger_type: TriggerType;
   trigger_status: string | null;
   trigger_field_key: string | null;
+  trigger_field_source: TriggerSource;
   trigger_offset_days: number;
   match_type: MatchType;
   priority: number;
@@ -1018,6 +1154,7 @@ export interface WorkflowDefinitionUpdate {
   description: string | null;
   trigger_status: string | null;
   trigger_field_key: string | null;
+  trigger_field_source: TriggerSource;
   trigger_offset_days: number;
   match_type: MatchType;
   priority: number;

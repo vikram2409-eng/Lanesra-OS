@@ -88,6 +88,10 @@ pub struct WorkflowDefinition {
     pub trigger_type: String,
     pub trigger_status: Option<String>,
     pub trigger_field_key: Option<String>,
+    /// 'builtin' | 'custom' - only meaningful for the `field_changed`
+    /// trigger (see `domain::builtin_fields`); `date_reached`/`due_overdue`
+    /// always name a curated built-in date field regardless of this value.
+    pub trigger_field_source: String,
     pub trigger_offset_days: i64,
     pub match_type: String,
     pub priority: i64,
@@ -108,6 +112,8 @@ pub struct WorkflowDefinitionInput {
     pub trigger_type: String,
     pub trigger_status: Option<String>,
     pub trigger_field_key: Option<String>,
+    #[serde(default = "default_field_source")]
+    pub trigger_field_source: String,
     pub trigger_offset_days: i64,
     pub match_type: String,
     pub priority: i64,
@@ -121,12 +127,18 @@ pub struct WorkflowDefinitionUpdate {
     pub description: Option<String>,
     pub trigger_status: Option<String>,
     pub trigger_field_key: Option<String>,
+    #[serde(default = "default_field_source")]
+    pub trigger_field_source: String,
     pub trigger_offset_days: i64,
     pub match_type: String,
     pub priority: i64,
     pub is_active: bool,
     pub conditions: Vec<WorkflowConditionInput>,
     pub actions: Vec<WorkflowActionInput>,
+}
+
+fn default_field_source() -> String {
+    "custom".to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]
