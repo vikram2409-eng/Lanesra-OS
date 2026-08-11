@@ -1891,12 +1891,13 @@ dependencies = [
 
 [[package]]
 name = "lanesra-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "argon2",
  "base64 0.22.1",
  "chrono",
  "rand_core",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
@@ -1907,7 +1908,7 @@ dependencies = [
 
 [[package]]
 name = "lanesra-os"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "lanesra-core",
  "rusqlite",
@@ -1917,7 +1918,7 @@ dependencies = [
 
 [[package]]
 name = "lanesra-server"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "axum",
  "axum-extra",

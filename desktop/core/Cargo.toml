@@ -1,6 +1,6 @@
 [package]
 name = "lanesra-core"
-version = "0.3.0"
+version = "0.4.0"
 description = "Lanesra OS domain logic, shared by the desktop app and the Team Workspace server"
 license = "MIT"
 edition = "2021"
@@ -21,3 +21,4 @@ rand_core = { version = "0.6", features = ["std"] }
 thiserror = "1"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 base64 = "0.22"
+regex = "1"

@@ -11,11 +11,12 @@ use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::{
     CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues, CUSTOM_FIELD_TYPES,
 };
-use crate::models::field_rule::builtin_trigger_field_for;
+use crate::models::business_rule::builtin_trigger_field_for;
 use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
     product_repo, quote_repo, task_repo, user_repo,
 };
+use crate::services::{business_rule_service, workflow_service};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -92,6 +93,48 @@ fn validate_definition_shape(
     Ok(())
 }
 
+/// ADM-CF-04: validates the optional validation settings themselves, not
+/// values against them (that happens in `set_entity_values`) - min/max
+/// only make sense for `number`, max_length/regex_pattern only for `text`,
+/// and a malformed regex is rejected here rather than at every future save.
+fn validate_definition_extras(
+    field_type: &str,
+    min_value: Option<&str>,
+    max_value: Option<&str>,
+    max_length: Option<i64>,
+    regex_pattern: Option<&str>,
+) -> AppResult<()> {
+    if let (Some(min), Some(max)) = (min_value, max_value) {
+        if field_type == "number" {
+            match (min.parse::<f64>(), max.parse::<f64>()) {
+                (Ok(a), Ok(b)) if a > b => return Err(AppError::Validation("Minimum cannot be greater than maximum".into())),
+                (Err(_), _) | (_, Err(_)) => return Err(AppError::Validation("Minimum/maximum must be numbers".into())),
+                _ => {}
+            }
+        }
+    }
+    if (min_value.is_some() || max_value.is_some()) && field_type != "number" {
+        return Err(AppError::Validation("Minimum/maximum only apply to number fields".into()));
+    }
+    if let Some(len) = max_length {
+        if field_type != "text" {
+            return Err(AppError::Validation("Maximum length only applies to text fields".into()));
+        }
+        if len <= 0 {
+            return Err(AppError::Validation("Maximum length must be positive".into()));
+        }
+    }
+    if let Some(pattern) = regex_pattern {
+        if field_type != "text" {
+            return Err(AppError::Validation("A pattern only applies to text fields".into()));
+        }
+        if !pattern.is_empty() && regex::Regex::new(pattern).is_err() {
+            return Err(AppError::Validation("That pattern is not a valid regular expression".into()));
+        }
+    }
+    Ok(())
+}
+
 pub fn create_definition(
     conn: &Connection,
     workspace_id: &str,
@@ -100,6 +143,7 @@ pub fn create_definition(
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_definition_shape(conn, workspace_id, &input.entity_type, &input.field_type, &input.options, &input.label)?;
+    validate_definition_extras(&input.field_type, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length, input.regex_pattern.as_deref())?;
     let key = slugify(conn, workspace_id, &input.entity_type, &input.label)?;
     let id = crate::domain::ids::new_uuid();
     Ok(custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?)
@@ -125,6 +169,7 @@ pub fn update_definition(
     if existing.field_type == "select" && input.options.is_empty() {
         return Err(AppError::Validation("A select field needs at least one option".into()));
     }
+    validate_definition_extras(&existing.field_type, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length, input.regex_pattern.as_deref())?;
     Ok(custom_field_repo::update_definition(conn, id, input, actor_user_id)?)
 }
 
@@ -138,6 +183,13 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
         show_in_list: existing.show_in_list,
         sort_order: existing.sort_order,
         is_active: false,
+        min_value: existing.min_value,
+        max_value: existing.max_value,
+        max_length: existing.max_length,
+        regex_pattern: existing.regex_pattern,
+        is_searchable: existing.is_searchable,
+        is_filterable: existing.is_filterable,
+        is_reportable: existing.is_reportable,
     };
     Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
 }
@@ -202,43 +254,84 @@ fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &st
     }
 }
 
-/// Validates and persists custom field values for one Company/Contact
-/// record - required-field enforcement happens here, server-side, not
-/// only in the form, since this is called by the same command any client
-/// (including a direct API call) would use (FR-RUL-05 makes the same
-/// argument for business rules; the reasoning is identical here).
+/// Validates and persists custom field values for one record - required-
+/// field enforcement happens here, server-side, not only in the form,
+/// since this is called by the same command any client (including a
+/// direct API call) would use (ADM-BR makes the same argument for business
+/// rules; the reasoning is identical here). Also the one integration point
+/// business rules hook into, since every entity's save flow already calls
+/// this unconditionally, even when it has no custom field values of its
+/// own to save (see each feature screen's save mutation).
+///
+/// Returns any non-blocking `show_message` texts that fired, for the
+/// caller to display - everything else a rule can do either mutates the
+/// values being saved (`set_default`/`set_value`), rejects the save
+/// (`require`/`block_save`, as an `Err`), or is purely cosmetic and
+/// client-enforced (`hide`/`lock`, carried in `field_effects` but not
+/// consulted here).
 pub fn set_entity_values(
     conn: &Connection,
     entity_type: &str,
     entity_id: &str,
     values: &CustomFieldValues,
     actor_user_id: Option<&str>,
-) -> AppResult<()> {
+) -> AppResult<Vec<String>> {
     let (workspace_id, builtin_value) = resolve_entity_workspace(conn, entity_type, entity_id)?;
     let definitions = list_definitions(conn, &workspace_id, entity_type, true)?;
+    let before_values = custom_field_repo::get_values(conn, entity_id)?;
 
-    // FR-RUL-05: a field required by an active business rule is enforced
-    // here too, not only in the form - the same reasoning as the static
-    // `required` flag just above. `hide` is not enforced here: it's a
-    // purely cosmetic effect with nothing to validate, so a hidden field
-    // is simply left untouched (skipped) rather than cleared or blocked.
     let mut trigger_context: CustomFieldValues = values.clone();
     trigger_context.insert(builtin_trigger_field_for(entity_type).to_string(), builtin_value);
-    let rule_effects = crate::services::field_rule_service::effects_for(conn, &workspace_id, entity_type, &trigger_context)?;
+    let evaluation = business_rule_service::evaluate(conn, &workspace_id, entity_type, &trigger_context)?;
 
+    if let Some(reason) = &evaluation.blocked {
+        return Err(AppError::Validation(reason.clone()));
+    }
+
+    let mut effective_values = values.clone();
+    for (key, value) in &evaluation.set_values {
+        effective_values.insert(key.clone(), value.clone());
+    }
+
+    let mut changed_keys = Vec::new();
     for def in &definitions {
-        if rule_effects.get(&def.key).map(|e| e.as_str()) == Some("hide") {
+        if evaluation.field_effects.get(&def.key).map(|e| e.as_str()) == Some("hide") {
             continue;
         }
-        let value = values.get(&def.key).map(|s| s.trim()).unwrap_or("");
-        let required_by_rule = rule_effects.get(&def.key).map(|e| e.as_str()) == Some("require");
+        let value = effective_values.get(&def.key).map(|s| s.trim()).unwrap_or("");
+        let required_by_rule = evaluation.field_effects.get(&def.key).map(|e| e.as_str()) == Some("require");
         if (def.required || required_by_rule) && value.is_empty() {
             return Err(AppError::Validation(format!("{} is required", def.label)));
         }
         if !value.is_empty() {
             match def.field_type.as_str() {
-                "number" if value.parse::<f64>().is_err() => {
-                    return Err(AppError::Validation(format!("{} must be a number", def.label)));
+                "number" => match value.parse::<f64>() {
+                    Err(_) => return Err(AppError::Validation(format!("{} must be a number", def.label))),
+                    Ok(n) => {
+                        if let Some(min) = def.min_value.as_deref().and_then(|m| m.parse::<f64>().ok()) {
+                            if n < min {
+                                return Err(AppError::Validation(format!("{} must be at least {min}", def.label)));
+                            }
+                        }
+                        if let Some(max) = def.max_value.as_deref().and_then(|m| m.parse::<f64>().ok()) {
+                            if n > max {
+                                return Err(AppError::Validation(format!("{} must be at most {max}", def.label)));
+                            }
+                        }
+                    }
+                },
+                "text" => {
+                    if let Some(max_len) = def.max_length {
+                        if value.chars().count() as i64 > max_len {
+                            return Err(AppError::Validation(format!("{} must be {max_len} characters or fewer", def.label)));
+                        }
+                    }
+                    if let Some(pattern) = def.regex_pattern.as_deref().filter(|p| !p.is_empty()) {
+                        let matches = regex::Regex::new(pattern).map(|re| re.is_match(value)).unwrap_or(true);
+                        if !matches {
+                            return Err(AppError::Validation(format!("{} does not match the required format", def.label)));
+                        }
+                    }
                 }
                 "select" if !def.options.iter().any(|o| o == value) => {
                     return Err(AppError::Validation(format!("'{value}' is not a valid option for {}", def.label)));
@@ -246,11 +339,19 @@ pub fn set_entity_values(
                 _ => {}
             }
         }
+        if before_values.get(&def.key).map(|s| s.as_str()).unwrap_or("") != value {
+            changed_keys.push(def.key.clone());
+        }
         custom_field_repo::set_value(conn, &def.id, entity_id, value)?;
     }
 
+    // ADM-WF: field_changed workflows fire from the same seam ADM-BR uses -
+    // the one call site every entity's save flow already goes through
+    // unconditionally, so no per-entity wiring is needed here either.
+    workflow_service::fire_field_changed(conn, &workspace_id, entity_type, entity_id, &changed_keys, None, actor_user_id)?;
+
     let _ = actor_user_id; // no audit entry per value write - the parent record's own create/update audit entry covers this edit
-    Ok(())
+    Ok(evaluation.messages)
 }
 
 pub fn get_entity_values(conn: &Connection, entity_id: &str) -> AppResult<CustomFieldValues> {

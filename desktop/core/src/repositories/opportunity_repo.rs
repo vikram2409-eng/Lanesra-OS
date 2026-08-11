@@ -166,3 +166,12 @@ pub fn list_products(
     let rows = stmt.query_map([opportunity_id], map_product_row)?;
     rows.collect()
 }
+
+/// See company_repo::set_owner's comment - same reasoning.
+pub fn set_owner(conn: &Connection, id: &str, owner_user_id: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE opportunities SET owner_user_id = ?1, updated_at = ?2 WHERE id = ?3",
+        (owner_user_id, now_iso(), id),
+    )?;
+    Ok(())
+}

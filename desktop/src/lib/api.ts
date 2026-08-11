@@ -35,6 +35,9 @@ import type {
   User,
   UserUpdate,
   ArAgingBucket,
+  BusinessRule,
+  BusinessRuleInput,
+  BusinessRuleUpdate,
   CustomFieldDefinition,
   CustomFieldDefinitionInput,
   CustomFieldDefinitionUpdate,
@@ -51,19 +54,23 @@ import type {
   CustomReportUpdate,
   DashboardKpiPrefs,
   EffectiveNumbering,
-  FieldRule,
-  FieldRuleInput,
-  FieldRuleUpdate,
   LostReasonBreakdown,
+  Notification,
   NumberingOverrideInput,
+  RelatedRecord,
+  RelationshipDefinition,
+  RelationshipDefinitionInput,
+  RelationshipDefinitionUpdate,
+  RelationshipInstance,
   ReportRange,
+  RuleEvaluation,
   RevenueByMonth,
   SalesByOwner,
   WinRateByOwner,
-  WorkflowEntityType,
-  WorkflowRule,
-  WorkflowRuleInput,
-  WorkflowRuleUpdate,
+  WorkflowDefinition,
+  WorkflowDefinitionInput,
+  WorkflowDefinitionUpdate,
+  WorkflowRun,
   Workspace,
   WorkspaceLogo,
   WorkspaceSetup,
@@ -225,19 +232,29 @@ export const api = {
     call<CustomFieldDefinition>("update_custom_field_definition", { id, input }),
   deactivateCustomFieldDefinition: (id: string) =>
     call<CustomFieldDefinition>("deactivate_custom_field_definition", { id }),
+  // Returns any non-blocking `show_message` texts that fired (empty
+  // array normally) - see custom_field_service::set_entity_values.
   setCustomFieldValues: (entityType: string, entityId: string, values: CustomFieldValues) =>
-    call<void>("set_custom_field_values", { entityType, entityId, values }),
+    call<string[]>("set_custom_field_values", { entityType, entityId, values }),
   getCustomFieldValues: (entityId: string) => call<CustomFieldValues>("get_custom_field_values", { entityId }),
 
-  listFieldRules: (entityType: string, activeOnly: boolean) =>
-    call<FieldRule[]>("list_field_rules", { entityType, activeOnly }),
-  createFieldRule: (input: FieldRuleInput) => call<FieldRule>("create_field_rule", { input }),
-  updateFieldRule: (id: string, input: FieldRuleUpdate) => call<FieldRule>("update_field_rule", { id, input }),
+  listBusinessRules: (entityType: string, activeOnly: boolean) =>
+    call<BusinessRule[]>("list_business_rules", { entityType, activeOnly }),
+  createBusinessRule: (input: BusinessRuleInput) => call<BusinessRule>("create_business_rule", { input }),
+  updateBusinessRule: (id: string, input: BusinessRuleUpdate) => call<BusinessRule>("update_business_rule", { id, input }),
+  testBusinessRules: (entityType: string, context: Record<string, string>) =>
+    call<RuleEvaluation>("test_business_rules", { entityType, context }),
 
-  listWorkflowRules: (entityType: WorkflowEntityType) => call<WorkflowRule[]>("list_workflow_rules", { entityType }),
-  createWorkflowRule: (input: WorkflowRuleInput) => call<WorkflowRule>("create_workflow_rule", { input }),
-  updateWorkflowRule: (id: string, input: WorkflowRuleUpdate) =>
-    call<WorkflowRule>("update_workflow_rule", { id, input }),
+  listWorkflowRules: (entityType: string) => call<WorkflowDefinition[]>("list_workflow_rules", { entityType }),
+  createWorkflowRule: (input: WorkflowDefinitionInput) => call<WorkflowDefinition>("create_workflow_rule", { input }),
+  updateWorkflowRule: (id: string, input: WorkflowDefinitionUpdate) =>
+    call<WorkflowDefinition>("update_workflow_rule", { id, input }),
+  listWorkflowRuns: (workflowId: string) => call<WorkflowRun[]>("list_workflow_runs", { workflowId }),
+  runScheduledWorkflows: () => call<number>("run_scheduled_workflows"),
+
+  listNotifications: (unreadOnly: boolean) => call<Notification[]>("list_notifications", { unreadOnly }),
+  markNotificationRead: (id: string) => call<void>("mark_notification_read", { id }),
+  markAllNotificationsRead: () => call<void>("mark_all_notifications_read"),
 
   listNumberingFormats: () => call<EffectiveNumbering[]>("list_numbering_formats"),
   setNumberingFormat: (input: NumberingOverrideInput) => call<EffectiveNumbering>("set_numbering_format", { input }),
@@ -265,6 +282,27 @@ export const api = {
   updateCustomRecord: (id: string, input: CustomRecordUpdate) =>
     call<CustomRecord>("update_custom_record", { id, input }),
   archiveCustomRecord: (id: string) => call<CustomRecord>("archive_custom_record", { id }),
+
+  listRelationshipDefinitions: (activeOnly: boolean) =>
+    call<RelationshipDefinition[]>("list_relationship_definitions", { activeOnly }),
+  createRelationshipDefinition: (input: RelationshipDefinitionInput) =>
+    call<RelationshipDefinition>("create_relationship_definition", { input }),
+  updateRelationshipDefinition: (id: string, input: RelationshipDefinitionUpdate) =>
+    call<RelationshipDefinition>("update_relationship_definition", { id, input }),
+  deleteRelationshipDefinition: (id: string) => call<void>("delete_relationship_definition", { id }),
+  linkRecords: (
+    definitionId: string,
+    sourceEntityType: string,
+    sourceId: string,
+    targetEntityType: string,
+    targetId: string,
+  ) =>
+    call<RelationshipInstance>("link_records", {
+      definitionId, sourceEntityType, sourceId, targetEntityType, targetId,
+    }),
+  unlinkRecords: (instanceId: string) => call<void>("unlink_records", { instanceId }),
+  listRelatedRecords: (entityType: string, entityId: string) =>
+    call<RelatedRecord[]>("list_related_records", { entityType, entityId }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

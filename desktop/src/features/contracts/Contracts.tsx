@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
@@ -208,7 +209,8 @@ function ContractForm({
   const save = useMutation({
     mutationFn: async () => {
       const contract = contractId ? await api.updateContract(contractId, input) : await api.createContract(input);
-      await api.setCustomFieldValues("Contract", contract.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Contract", contract.id, customValues);
+      showRuleMessages(ruleMessages);
       return contract;
     },
     onSuccess: onDone,

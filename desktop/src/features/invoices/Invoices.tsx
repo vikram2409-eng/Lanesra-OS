@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents, parseDecimalToCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LineItemsEditor } from "../../components/LineItemsEditor";
@@ -147,7 +148,8 @@ function InvoiceForm({
         lines,
       };
       const result = await api.createInvoice(input);
-      await api.setCustomFieldValues("Invoice", result.invoice.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Invoice", result.invoice.id, customValues);
+      showRuleMessages(ruleMessages);
       return result;
     },
     onSuccess: (result) => onDone(result.invoice.id),

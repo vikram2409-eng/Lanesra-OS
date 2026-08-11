@@ -13,7 +13,7 @@ use crate::domain::{AppError, AppResult};
 use crate::models::custom_report::{
     CustomReport, CustomReportInput, CustomReportRow, CustomReportUpdate, REPORT_AGGREGATES, REPORT_GROUP_BY_SOURCES,
 };
-use crate::models::field_rule::builtin_trigger_field_for;
+use crate::models::business_rule::builtin_trigger_field_for;
 use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, custom_report_repo, invoice_repo, opportunity_repo,
     order_repo, product_repo, quote_repo, task_repo, user_repo,
@@ -51,9 +51,12 @@ fn validate_shape(
         return Err(AppError::Validation(format!("Invalid aggregate '{aggregate}'")));
     }
 
+    // ADM-CF-05: a field flagged not reportable is off-limits as a group-by
+    // or sum target, the same way `is_active` already excludes archived
+    // fields from these two lookups.
     let active_defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
         .into_iter()
-        .filter(|d| d.is_active)
+        .filter(|d| d.is_active && d.is_reportable)
         .collect::<Vec<_>>();
 
     if group_by_source == "builtin" {

@@ -56,6 +56,7 @@ pub fn create(
         &format!("Created company {}", company.customer_number),
         None,
     )?;
+    workflow_service::fire_event(conn, workspace_id, "Company", &company.id, None, &company.status, company.owner_user_id.as_deref(), actor_user_id)?;
     Ok(company)
 }
 
@@ -86,12 +87,12 @@ pub fn update(
         &format!("Updated company {}", company.customer_number),
         None,
     )?;
-    workflow_service::fire_transition(
+    workflow_service::fire_event(
         conn,
         &before.workspace_id,
         "Company",
         id,
-        &before.status,
+        Some(&before.status),
         &company.status,
         company.owner_user_id.as_deref(),
         actor_user_id,

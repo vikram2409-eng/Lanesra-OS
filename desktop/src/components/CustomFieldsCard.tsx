@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { CustomFieldsSection } from "./CustomFieldsSection";
+import { showRuleMessages } from "../lib/ruleMessages";
 import type { CustomFieldEntityType, CustomFieldValues } from "../lib/types";
 
 /**
@@ -37,10 +38,11 @@ export function CustomFieldsCard({ entityType, entityId, status }: { entityType:
 
   const save = useMutation({
     mutationFn: () => api.setCustomFieldValues(entityType, entityId, values),
-    onSuccess: () => {
+    onSuccess: (messages) => {
       setError(null);
       setSuccess(true);
       queryClient.invalidateQueries({ queryKey: ["customFieldValues", entityId] });
+      showRuleMessages(messages);
     },
     onError: (err) => {
       setSuccess(false);

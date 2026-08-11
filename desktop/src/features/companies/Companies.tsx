@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { field } from "../../lib/csv";
 import { COMPANY_STATUSES, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
 
@@ -198,7 +200,8 @@ function CompanyForm({
   const save = useMutation({
     mutationFn: async () => {
       const company = companyId ? await api.updateCompany(companyId, input) : await api.createCompany(input);
-      await api.setCustomFieldValues("Company", company.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Company", company.id, customValues);
+      showRuleMessages(ruleMessages);
       return company;
     },
     onSuccess: onDone,
@@ -328,6 +331,9 @@ function CompanyDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
         <RelatedList title="Quotes" rows={relatedQuotes} render={(q) => `${q.quote_number} — ${q.status}`} />
         <RelatedList title="Orders" rows={relatedOrders} render={(o) => `${o.order_number} — ${o.status}`} />
         <RelatedList title="Invoices" rows={relatedInvoices} render={(i) => `${i.invoice_number} — ${i.status}`} />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <RelatedRecordsCard entityType="Company" entityId={id} />
       </div>
     </div>
   );

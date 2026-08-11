@@ -4,9 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import { Users } from "../users/Users";
 import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
+import { RelationshipsAdmin } from "./RelationshipsAdmin";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
-import { FieldRulesAdmin } from "./FieldRulesAdmin";
-import { WorkflowRulesAdmin } from "./WorkflowRulesAdmin";
+import { BusinessRulesAdmin } from "./BusinessRulesAdmin";
+import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
@@ -45,12 +46,13 @@ function resizeImageToPngBase64(file: File): Promise<string> {
   });
 }
 
-type AdminTab = "users" | "profile" | "objects" | "fields" | "rules" | "workflow" | "numbering" | "kpis";
+type AdminTab = "users" | "profile" | "objects" | "relationships" | "fields" | "rules" | "workflow" | "numbering" | "kpis";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
   { key: "profile", label: "Business profile" },
   { key: "objects", label: "Custom Objects" },
+  { key: "relationships", label: "Relationships" },
   { key: "fields", label: "Custom fields" },
   { key: "rules", label: "Business rules" },
   { key: "workflow", label: "Workflow automation" },
@@ -81,7 +83,8 @@ export function AdminPanel() {
       <h2>Admin</h2>
       <p style={{ color: "var(--text-muted)" }}>
         Users and access, business branding, and the admin-configurable layer on top of the fixed schema: custom
-        objects, custom fields, business rules, workflow automation, number formats and Dashboard KPIs.
+        objects, relationships, custom fields, business rules, workflow automation, number formats and Dashboard
+        KPIs.
       </p>
 
       <div className="tab-row">
@@ -103,9 +106,10 @@ export function AdminPanel() {
       {tab === "profile" && !workspace.data && <p>Loading...</p>}
 
       {tab === "objects" && <CustomObjectsAdmin />}
+      {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
-      {tab === "rules" && <FieldRulesAdmin />}
-      {tab === "workflow" && <WorkflowRulesAdmin />}
+      {tab === "rules" && <BusinessRulesAdmin />}
+      {tab === "workflow" && <WorkflowAutomationAdmin />}
       {tab === "numbering" && <NumberingAdmin />}
       {tab === "kpis" && <DashboardKpiAdmin />}
     </div>

@@ -11,7 +11,11 @@ import {
 } from "../../lib/types";
 
 function emptyInput(entityType: string): CustomFieldDefinitionInput {
-  return { entity_type: entityType, label: "", field_type: "text", options: [], required: false, show_in_list: false, sort_order: 0 };
+  return {
+    entity_type: entityType, label: "", field_type: "text", options: [], required: false, show_in_list: false, sort_order: 0,
+    min_value: null, max_value: null, max_length: null, regex_pattern: null,
+    is_searchable: false, is_filterable: false, is_reportable: true,
+  };
 }
 
 /** "Retail, Manufacturing, Services" <-> ["Retail", "Manufacturing", "Services"] */
@@ -121,6 +125,7 @@ export function CustomFieldsAdmin() {
               <th>Label</th>
               <th>Type</th>
               <th>Required</th>
+              <th>Flags</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -131,6 +136,9 @@ export function CustomFieldsAdmin() {
                 <td>{d.label}</td>
                 <td>{d.field_type}</td>
                 <td>{d.required ? "Yes" : "No"}</td>
+                <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {[d.is_searchable && "Searchable", d.is_filterable && "Filterable", d.is_reportable && "Reportable"].filter(Boolean).join(", ") || "—"}
+                </td>
                 <td>
                   <span className={`badge${d.is_active ? " badge-success" : ""}`}>{d.is_active ? "Active" : "Inactive"}</span>
                 </td>
@@ -145,6 +153,66 @@ export function CustomFieldsAdmin() {
         </table>
       )}
     </div>
+  );
+}
+
+function ValidationAndFlagFields({
+  fieldType,
+  minValue, maxValue, maxLength, regexPattern, isSearchable, isFilterable, isReportable,
+  onChange,
+}: {
+  fieldType: string;
+  minValue: string | null; maxValue: string | null; maxLength: number | null; regexPattern: string | null;
+  isSearchable: boolean; isFilterable: boolean; isReportable: boolean;
+  onChange: (patch: Partial<{ min_value: string | null; max_value: string | null; max_length: number | null; regex_pattern: string | null; is_searchable: boolean; is_filterable: boolean; is_reportable: boolean }>) => void;
+}) {
+  return (
+    <>
+      {fieldType === "number" && (
+        <>
+          <div className="form-field">
+            <label>Minimum (optional)</label>
+            <input value={minValue ?? ""} onChange={(e) => onChange({ min_value: e.target.value || null })} placeholder="No minimum" />
+          </div>
+          <div className="form-field">
+            <label>Maximum (optional)</label>
+            <input value={maxValue ?? ""} onChange={(e) => onChange({ max_value: e.target.value || null })} placeholder="No maximum" />
+          </div>
+        </>
+      )}
+      {fieldType === "text" && (
+        <>
+          <div className="form-field">
+            <label>Maximum length (optional)</label>
+            <input
+              type="number"
+              min={1}
+              value={maxLength ?? ""}
+              onChange={(e) => onChange({ max_length: e.target.value ? Number(e.target.value) : null })}
+              placeholder="No limit"
+            />
+          </div>
+          <div className="form-field">
+            <label>Pattern (regex, optional)</label>
+            <input value={regexPattern ?? ""} onChange={(e) => onChange({ regex_pattern: e.target.value || null })} placeholder="e.g. ^[A-Z]{2}-\d{3}$" />
+          </div>
+        </>
+      )}
+      <div className="form-field full" style={{ flexDirection: "row", gap: 16 }}>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={isSearchable} onChange={(e) => onChange({ is_searchable: e.target.checked })} />
+          Searchable
+        </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={isFilterable} onChange={(e) => onChange({ is_filterable: e.target.checked })} />
+          Filterable
+        </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={isReportable} onChange={(e) => onChange({ is_reportable: e.target.checked })} />
+          Reportable
+        </label>
+      </div>
+    </>
   );
 }
 
@@ -203,6 +271,12 @@ function DefinitionForm({
             <input value={optionsText} onChange={(e) => setOptionsText(e.target.value)} placeholder="Retail, Manufacturing, Services" required />
           </div>
         )}
+        <ValidationAndFlagFields
+          fieldType={input.field_type}
+          minValue={input.min_value} maxValue={input.max_value} maxLength={input.max_length} regexPattern={input.regex_pattern}
+          isSearchable={input.is_searchable} isFilterable={input.is_filterable} isReportable={input.is_reportable}
+          onChange={(patch) => setInput({ ...input, ...patch })}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={create.isPending}>
             Add field
@@ -229,6 +303,13 @@ function DefinitionEditForm({
   const [optionsText, setOptionsText] = useState(optionsToText(definition.options));
   const [required, setRequired] = useState(definition.required);
   const [isActive, setIsActive] = useState(definition.is_active);
+  const [minValue, setMinValue] = useState(definition.min_value);
+  const [maxValue, setMaxValue] = useState(definition.max_value);
+  const [maxLength, setMaxLength] = useState(definition.max_length);
+  const [regexPattern, setRegexPattern] = useState(definition.regex_pattern);
+  const [isSearchable, setIsSearchable] = useState(definition.is_searchable);
+  const [isFilterable, setIsFilterable] = useState(definition.is_filterable);
+  const [isReportable, setIsReportable] = useState(definition.is_reportable);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -240,6 +321,13 @@ function DefinitionEditForm({
         show_in_list: definition.show_in_list,
         sort_order: definition.sort_order,
         is_active: isActive,
+        min_value: minValue,
+        max_value: maxValue,
+        max_length: maxLength,
+        regex_pattern: regexPattern,
+        is_searchable: isSearchable,
+        is_filterable: isFilterable,
+        is_reportable: isReportable,
       }),
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this field"),
@@ -280,6 +368,20 @@ function DefinitionEditForm({
             Active
           </label>
         </div>
+        <ValidationAndFlagFields
+          fieldType={definition.field_type}
+          minValue={minValue} maxValue={maxValue} maxLength={maxLength} regexPattern={regexPattern}
+          isSearchable={isSearchable} isFilterable={isFilterable} isReportable={isReportable}
+          onChange={(patch) => {
+            if ("min_value" in patch) setMinValue(patch.min_value ?? null);
+            if ("max_value" in patch) setMaxValue(patch.max_value ?? null);
+            if ("max_length" in patch) setMaxLength(patch.max_length ?? null);
+            if ("regex_pattern" in patch) setRegexPattern(patch.regex_pattern ?? null);
+            if ("is_searchable" in patch) setIsSearchable(!!patch.is_searchable);
+            if ("is_filterable" in patch) setIsFilterable(!!patch.is_filterable);
+            if ("is_reportable" in patch) setIsReportable(!!patch.is_reportable);
+          }}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save

@@ -143,3 +143,12 @@ pub fn count_open_and_overdue(conn: &Connection, workspace_id: &str) -> rusqlite
         },
     )
 }
+
+/// See company_repo::set_owner's comment - same reasoning.
+pub fn set_owner(conn: &Connection, id: &str, owner_user_id: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE tasks SET owner_user_id = ?1, updated_at = ?2 WHERE id = ?3",
+        (owner_user_id, now_iso(), id),
+    )?;
+    Ok(())
+}

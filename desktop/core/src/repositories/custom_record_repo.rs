@@ -88,3 +88,12 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> rusq
     )?;
     get(conn, id).map(|d| d.expect("just archived"))
 }
+
+/// See company_repo::set_owner's comment - same reasoning.
+pub fn set_owner(conn: &Connection, id: &str, owner_user_id: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE custom_records SET owner_user_id = ?1, updated_at = ?2 WHERE id = ?3",
+        (owner_user_id, now_iso(), id),
+    )?;
+    Ok(())
+}

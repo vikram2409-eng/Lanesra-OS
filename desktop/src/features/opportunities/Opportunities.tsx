@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
@@ -197,7 +198,8 @@ function OpportunityForm({
       const opportunity = opportunityId
         ? await api.updateOpportunity(opportunityId, input)
         : await api.createOpportunity(input);
-      await api.setCustomFieldValues("Opportunity", opportunity.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Opportunity", opportunity.id, customValues);
+      showRuleMessages(ruleMessages);
       return opportunity;
     },
     onSuccess: onDone,

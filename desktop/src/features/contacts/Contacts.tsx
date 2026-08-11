@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
@@ -229,7 +230,8 @@ function ContactForm({
   const save = useMutation({
     mutationFn: async () => {
       const contact = contactId ? await api.updateContact(contactId, input) : await api.createContact(input);
-      await api.setCustomFieldValues("Contact", contact.id, customValues);
+      const ruleMessages = await api.setCustomFieldValues("Contact", contact.id, customValues);
+      showRuleMessages(ruleMessages);
       return contact;
     },
     onSuccess: onDone,

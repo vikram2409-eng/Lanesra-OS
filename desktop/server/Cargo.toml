@@ -1,6 +1,6 @@
 [package]
 name = "lanesra-server"
-version = "0.3.0"
+version = "0.4.0"
 description = "Lanesra OS Team Workspace HTTP server - one shared instance, multiple authenticated users on the local network"
 license = "MIT"
 edition = "2021"

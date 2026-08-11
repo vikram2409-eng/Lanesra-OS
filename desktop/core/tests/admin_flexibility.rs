@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
+use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
 use lanesra_core::models::custom_report::CustomReportInput;
-use lanesra_core::models::field_rule::FieldRuleInput;
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceUpdate};
 use lanesra_core::services::{
-    company_service, custom_field_service, custom_report_service, field_rule_service, numbering_service,
+    business_rule_service, company_service, custom_field_service, custom_report_service, numbering_service,
     opportunity_service, task_service, user_service, workflow_service, workspace_service,
 };
 
@@ -80,6 +80,13 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
             required: false,
             show_in_list: false,
             sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )
@@ -88,18 +95,29 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
 
     // Business rule on Opportunity (previously Company/Contact only) -
     // require Lead Source once status is Won.
-    field_rule_service::create_rule(
+    business_rule_service::create_rule(
         &conn,
         &ws,
-        &FieldRuleInput {
+        &BusinessRuleInput {
             entity_type: "Opportunity".into(),
-            trigger_field_source: "builtin".into(),
-            trigger_field_key: "status".into(),
-            operator: "equals".into(),
-            trigger_value: "Won".into(),
-            target_field_key: source_field.key.clone(),
-            effect: "require".into(),
-            sort_order: 0,
+            name: "Require Lead Source when Won".into(),
+            description: None,
+            match_type: "all".into(),
+            priority: 0,
+            effective_start_date: None,
+            effective_end_date: None,
+            conditions: vec![BusinessRuleConditionInput {
+                field_source: "builtin".into(),
+                field_key: "status".into(),
+                operator: "equals".into(),
+                value: "Won".into(),
+            }],
+            actions: vec![BusinessRuleActionInput {
+                action_type: "require".into(),
+                target_field_key: Some(source_field.key.clone()),
+                action_value: None,
+                message: None,
+            }],
         },
         Some(&admin),
     )
@@ -111,13 +129,23 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
     workflow_service::create_rule(
         &conn,
         &ws,
-        &lanesra_core::models::workflow_rule::WorkflowRuleInput {
+        &lanesra_core::models::workflow::WorkflowDefinitionInput {
             entity_type: "Opportunity".into(),
-            trigger_status: "Won".into(),
-            task_title: "Kick off onboarding".into(),
-            task_description: None,
-            due_in_days: 2,
-            assignee_user_id: None,
+            name: "Kick off onboarding when Won".into(),
+            description: None,
+            trigger_type: "status_changed".into(),
+            trigger_status: Some("Won".into()),
+            trigger_field_key: None,
+            trigger_offset_days: 0,
+            match_type: "all".into(),
+            priority: 0,
+            conditions: vec![],
+            actions: vec![lanesra_core::models::workflow::WorkflowActionInput {
+                action_type: "create_task".into(),
+                params_json: serde_json::json!({
+                    "title": "Kick off onboarding", "description": null, "due_in_days": 2, "assignee_user_id": null,
+                }).to_string(),
+            }],
         },
         Some(&admin),
     )
@@ -245,6 +273,13 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
         &CustomFieldDefinitionInput {
             entity_type: "Company".into(), label: "Region".into(), field_type: "text".into(),
             options: vec![], required: false, show_in_list: false, sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )
@@ -255,6 +290,13 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
         &CustomFieldDefinitionInput {
             entity_type: "Company".into(), label: "Headcount".into(), field_type: "number".into(),
             options: vec![], required: false, show_in_list: false, sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )
@@ -302,6 +344,13 @@ fn a_sum_report_must_target_an_active_numeric_custom_field() {
         &CustomFieldDefinitionInput {
             entity_type: "Company".into(), label: "Notes field".into(), field_type: "text".into(),
             options: vec![], required: false, show_in_list: false, sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )

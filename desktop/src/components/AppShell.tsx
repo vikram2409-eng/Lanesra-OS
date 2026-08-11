@@ -1,3 +1,4 @@
+import { NotificationBell } from "./NotificationBell";
 import type { CustomObjectDefinition, User } from "../lib/types";
 
 // Custom-object sections are dynamic (admin-defined at runtime), so their
@@ -85,6 +86,7 @@ export function AppShell({
         <div className="topbar">
           <div />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <NotificationBell />
             <button
               className="link-button"
               style={{ fontSize: 13, color: "var(--text-muted)" }}

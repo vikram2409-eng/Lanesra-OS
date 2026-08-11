@@ -720,6 +720,17 @@ export interface CustomFieldDefinition {
   show_in_list: boolean;
   sort_order: number;
   is_active: boolean;
+  // ADM-CF-04/05 (Phase E): optional validation (number min/max, text
+  // max length/regex) and searchable/filterable/reportable capability
+  // flags - see the migration's header comment for what's actually wired
+  // up (is_reportable) versus forward-looking metadata.
+  min_value: string | null;
+  max_value: string | null;
+  max_length: number | null;
+  regex_pattern: string | null;
+  is_searchable: boolean;
+  is_filterable: boolean;
+  is_reportable: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -735,6 +746,13 @@ export interface CustomFieldDefinitionInput {
   required: boolean;
   show_in_list: boolean;
   sort_order: number;
+  min_value: string | null;
+  max_value: string | null;
+  max_length: number | null;
+  regex_pattern: string | null;
+  is_searchable: boolean;
+  is_filterable: boolean;
+  is_reportable: boolean;
 }
 
 export interface CustomFieldDefinitionUpdate {
@@ -744,23 +762,41 @@ export interface CustomFieldDefinitionUpdate {
   show_in_list: boolean;
   sort_order: number;
   is_active: boolean;
+  min_value: string | null;
+  max_value: string | null;
+  max_length: number | null;
+  regex_pattern: string | null;
+  is_searchable: boolean;
+  is_filterable: boolean;
+  is_reportable: boolean;
 }
 
 /** Values keyed by field key, e.g. { industry: "Retail" }. */
 export type CustomFieldValues = Record<string, string>;
 
-// FR-RUL: admin-defined conditional rules over custom fields, e.g.
-// "require Lead Source when Status = Prospect". Scoped to custom fields
-// as the target (and, for the trigger, either the entity's one built-in
-// field from `builtinTriggerFieldFor` or another custom field) - see
-// field_rule_service's doc comment for why built-in fields in general are
-// out of scope.
-export const RULE_OPERATORS = ["equals", "not_equals"] as const;
-export type RuleOperator = (typeof RULE_OPERATORS)[number];
-export const RULE_EFFECTS = ["require", "hide"] as const;
-export type RuleEffect = (typeof RULE_EFFECTS)[number];
+// Admin extensibility Phase C (spec §22/ADM-BR): a richer IF (AND/OR) /
+// THEN business rule engine - any number of conditions per rule (matched
+// as AND or OR), and actions beyond require/hide: lock (read-only), set a
+// default or forced value, block the whole save with a custom message, or
+// show a non-blocking message. Conditions/actions that target a specific
+// field are still scoped to custom fields as the target (and, for a
+// condition, either the entity's one built-in field from
+// `builtinTriggerFieldFor` or another custom field) - see
+// business_rule_service's doc comment for why built-in fields in general
+// are out of scope.
+export const MATCH_TYPES = ["all", "any"] as const;
+export type MatchType = (typeof MATCH_TYPES)[number];
+export const CONDITION_OPERATORS = [
+  "equals", "not_equals", "contains", "not_contains", "is_empty", "is_not_empty",
+  "greater_than", "less_than", "on_or_after", "on_or_before",
+] as const;
+export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 export const TRIGGER_SOURCES = ["builtin", "custom"] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
+export const ACTION_TYPES = ["require", "hide", "lock", "set_default", "set_value", "block_save", "show_message"] as const;
+export type ActionType = (typeof ACTION_TYPES)[number];
+export const FIELD_TARGETED_ACTIONS: ActionType[] = ["require", "hide", "lock", "set_default", "set_value"];
+export const MESSAGE_ACTIONS: ActionType[] = ["block_save", "show_message"];
 
 /** The valid values for an entity's built-in trigger field
  * (`builtinTriggerFieldFor`) - its status/stage enum, or ["true","false"]
@@ -790,42 +826,85 @@ export function transitionValuesForEntity(entityType: string): readonly string[]
   return entityType === "Opportunity" ? OPPORTUNITY_STAGES : statusesForEntity(entityType);
 }
 
-export interface FieldRule {
+export interface BusinessRuleCondition {
+  id: string;
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+  sort_order: number;
+}
+
+export interface BusinessRuleConditionInput {
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+}
+
+export interface BusinessRuleAction {
+  id: string;
+  action_type: ActionType;
+  target_field_key: string | null;
+  action_value: string | null;
+  message: string | null;
+  sort_order: number;
+}
+
+export interface BusinessRuleActionInput {
+  action_type: ActionType;
+  target_field_key: string | null;
+  action_value: string | null;
+  message: string | null;
+}
+
+export interface BusinessRule {
   id: string;
   workspace_id: string;
   entity_type: string;
-  trigger_field_source: string;
-  trigger_field_key: string;
-  operator: string;
-  trigger_value: string;
-  target_field_key: string;
-  effect: string;
+  name: string;
+  description: string | null;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
-  sort_order: number;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  is_protected: boolean;
   created_at: string;
   updated_at: string;
+  conditions: BusinessRuleCondition[];
+  actions: BusinessRuleAction[];
 }
 
-export interface FieldRuleInput {
+export interface BusinessRuleInput {
   entity_type: string;
-  trigger_field_source: TriggerSource;
-  trigger_field_key: string;
-  operator: RuleOperator;
-  trigger_value: string;
-  target_field_key: string;
-  effect: RuleEffect;
-  sort_order: number;
+  name: string;
+  description: string | null;
+  match_type: MatchType;
+  priority: number;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  conditions: BusinessRuleConditionInput[];
+  actions: BusinessRuleActionInput[];
 }
 
-export interface FieldRuleUpdate {
-  trigger_field_source: TriggerSource;
-  trigger_field_key: string;
-  operator: RuleOperator;
-  trigger_value: string;
-  target_field_key: string;
-  effect: RuleEffect;
-  sort_order: number;
+export interface BusinessRuleUpdate {
+  name: string;
+  description: string | null;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  conditions: BusinessRuleConditionInput[];
+  actions: BusinessRuleActionInput[];
+}
+
+export interface RuleEvaluation {
+  field_effects: Record<string, string>;
+  set_values: Record<string, string>;
+  blocked: string | null;
+  messages: string[];
 }
 
 // FR-WFL: admin-defined workflow automation - "when an Opportunity's stage
@@ -847,36 +926,128 @@ export function transitionFieldFor(entityType: string): string {
   return entityType === "Opportunity" ? "stage" : "status";
 }
 
-export interface WorkflowRule {
+// Admin extensibility Phase D (spec §23/ADM-WF): a richer Trigger ->
+// Conditions -> Actions engine - more trigger types, AND/OR conditions
+// (the same domain::conditions matcher business rules use), and actions
+// beyond task creation.
+export const TRIGGER_TYPES = [
+  "record_created", "record_updated", "status_changed", "field_changed", "date_reached", "due_overdue", "scheduled",
+] as const;
+export type TriggerType = (typeof TRIGGER_TYPES)[number];
+export const WORKFLOW_ACTION_TYPES = [
+  "create_task", "update_field", "assign_owner", "create_related_record", "add_notification", "create_reminder",
+] as const;
+export type WorkflowActionType = (typeof WORKFLOW_ACTION_TYPES)[number];
+export const NOTIFICATION_AUDIENCES = ["owner", "all_admins"] as const;
+export type NotificationAudience = (typeof NOTIFICATION_AUDIENCES)[number];
+
+/** Built-in date fields date_reached/due_overdue can watch, per entity
+ * type - mirrors workflow::date_fields_for in the Rust core. */
+export function dateFieldsFor(entityType: string): string[] {
+  switch (entityType) {
+    case "Task": return ["due_date"];
+    case "Quote": return ["expiry_date"];
+    case "Contract": return ["end_date", "renewal_date"];
+    case "Invoice": return ["due_date"];
+    default: return [];
+  }
+}
+
+export interface WorkflowCondition {
+  id: string;
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+  sort_order: number;
+}
+export interface WorkflowConditionInput {
+  field_source: TriggerSource;
+  field_key: string;
+  operator: ConditionOperator;
+  value: string;
+}
+export interface WorkflowAction {
+  id: string;
+  action_type: WorkflowActionType;
+  params_json: string;
+  sort_order: number;
+}
+export interface WorkflowActionInput {
+  action_type: WorkflowActionType;
+  params_json: string;
+}
+
+export interface WorkflowDefinition {
   id: string;
   workspace_id: string;
   entity_type: string;
-  trigger_status: string;
-  task_title: string;
-  task_description: string | null;
-  due_in_days: number;
-  assignee_user_id: string | null;
+  name: string;
+  description: string | null;
+  trigger_type: TriggerType;
+  trigger_status: string | null;
+  trigger_field_key: string | null;
+  trigger_offset_days: number;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
+  is_protected: boolean;
+  last_scheduled_run_at: string | null;
   created_at: string;
   updated_at: string;
+  conditions: WorkflowCondition[];
+  actions: WorkflowAction[];
 }
 
-export interface WorkflowRuleInput {
-  entity_type: WorkflowEntityType;
-  trigger_status: string;
-  task_title: string;
-  task_description: string | null;
-  due_in_days: number;
-  assignee_user_id: string | null;
+export interface WorkflowDefinitionInput {
+  entity_type: string;
+  name: string;
+  description: string | null;
+  trigger_type: TriggerType;
+  trigger_status: string | null;
+  trigger_field_key: string | null;
+  trigger_offset_days: number;
+  match_type: MatchType;
+  priority: number;
+  conditions: WorkflowConditionInput[];
+  actions: WorkflowActionInput[];
 }
 
-export interface WorkflowRuleUpdate {
-  trigger_status: string;
-  task_title: string;
-  task_description: string | null;
-  due_in_days: number;
-  assignee_user_id: string | null;
+export interface WorkflowDefinitionUpdate {
+  name: string;
+  description: string | null;
+  trigger_status: string | null;
+  trigger_field_key: string | null;
+  trigger_offset_days: number;
+  match_type: MatchType;
+  priority: number;
   is_active: boolean;
+  conditions: WorkflowConditionInput[];
+  actions: WorkflowActionInput[];
+}
+
+export interface WorkflowRun {
+  id: string;
+  workspace_id: string;
+  workflow_id: string;
+  entity_type: string;
+  entity_id: string | null;
+  trigger_type: string;
+  triggered_at: string;
+  outcome: "success" | "error" | "skipped";
+  actions_summary: string | null;
+  error_message: string | null;
+}
+
+export interface Notification {
+  id: string;
+  workspace_id: string;
+  recipient_user_id: string | null;
+  message: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  created_at: string;
+  read_at: string | null;
 }
 
 // Admin flexibility: configurable ID/numbering format per entity type.
@@ -1000,4 +1171,78 @@ export interface CustomRecordUpdate {
   status: string;
   owner_user_id: string | null;
   notes: string | null;
+}
+
+// Admin extensibility Phase B (spec §20.3/§21): admin-defined relationships
+// between any two object types - built-in or custom. `entity_type` here is
+// the same free-form string custom fields/business rules/workflow already
+// key off, so a relationship can connect any built-in entity to any active
+// custom object, or two custom objects to each other.
+export const RELATIONSHIP_TYPES = ["many_to_one", "one_to_one", "many_to_many"] as const;
+export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
+export const DELETE_BEHAVIORS = ["restrict", "archive"] as const;
+export type DeleteBehavior = (typeof DELETE_BEHAVIORS)[number];
+
+export interface RelationshipDefinition {
+  id: string;
+  workspace_id: string;
+  key: string;
+  source_entity_type: string;
+  target_entity_type: string;
+  relationship_type: RelationshipType;
+  forward_label: string;
+  reverse_label: string;
+  is_required: boolean;
+  show_related_list: boolean;
+  delete_behavior: DeleteBehavior;
+  is_protected: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RelationshipDefinitionInput {
+  source_entity_type: string;
+  target_entity_type: string;
+  relationship_type: RelationshipType;
+  forward_label: string;
+  reverse_label: string;
+  is_required: boolean;
+  show_related_list: boolean;
+  delete_behavior: DeleteBehavior;
+  sort_order: number;
+}
+
+export interface RelationshipDefinitionUpdate {
+  forward_label: string;
+  reverse_label: string;
+  is_required: boolean;
+  show_related_list: boolean;
+  delete_behavior: DeleteBehavior;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface RelationshipInstance {
+  id: string;
+  workspace_id: string;
+  relationship_definition_id: string;
+  source_entity_type: string;
+  source_id: string;
+  target_entity_type: string;
+  target_id: string;
+  created_at: string;
+}
+
+export interface RelatedRecord {
+  instance_id: string;
+  relationship_definition_id: string;
+  relationship_key: string;
+  label: string;
+  entity_type: string;
+  entity_id: string;
+  display_name: string;
+  status: string;
+  archived: boolean;
 }

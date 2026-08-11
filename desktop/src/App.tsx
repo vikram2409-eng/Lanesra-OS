@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AppShell, type Section } from "./components/AppShell";
+import { SessionLock } from "./components/SessionLock";
+import { TaskReminderNotifier } from "./components/TaskReminderNotifier";
 import { FirstRun } from "./features/firstRun/FirstRun";
 import { Login } from "./features/auth/Login";
 import { Dashboard } from "./features/dashboard/Dashboard";
@@ -98,22 +100,37 @@ function Ready({
     ? customObjects.data?.find((o) => o.key === section.slice("custom:".length))
     : undefined;
 
+  // ADM-WF-11: date_reached/due_overdue/scheduled workflows only run while
+  // Lanesra is open (no OS-level background scheduler in Personal
+  // Workspace) - once on load so anything missed while closed fires
+  // promptly, then on a 5-minute interval for the rest of the session.
+  useEffect(() => {
+    api.runScheduledWorkflows().catch(() => {});
+    const interval = setInterval(() => {
+      api.runScheduledWorkflows().catch(() => {});
+    }, 5 * 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
-      {section === "dashboard" && <Dashboard onNavigate={setSection} />}
-      {section === "companies" && <Companies />}
-      {section === "contacts" && <Contacts />}
-      {section === "products" && <Products />}
-      {section === "opportunities" && <Opportunities />}
-      {section === "quotes" && <Quotes />}
-      {section === "orders" && <Orders />}
-      {section === "invoices" && <Invoices />}
-      {section === "contracts" && <Contracts />}
-      {section === "tasks" && <Tasks currentUserId={user.id} />}
-      {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
-      {section === "admin" && <AdminPanel />}
-      {section === "account" && <Account user={user} />}
-      {activeCustomObject && <CustomObjectRecords definition={activeCustomObject} />}
-    </AppShell>
+    <SessionLock user={user}>
+      <TaskReminderNotifier currentUserId={user.id} />
+      <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
+        {section === "dashboard" && <Dashboard onNavigate={setSection} />}
+        {section === "companies" && <Companies />}
+        {section === "contacts" && <Contacts />}
+        {section === "products" && <Products />}
+        {section === "opportunities" && <Opportunities />}
+        {section === "quotes" && <Quotes />}
+        {section === "orders" && <Orders />}
+        {section === "invoices" && <Invoices />}
+        {section === "contracts" && <Contracts />}
+        {section === "tasks" && <Tasks currentUserId={user.id} />}
+        {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
+        {section === "admin" && <AdminPanel />}
+        {section === "account" && <Account user={user} />}
+        {activeCustomObject && <CustomObjectRecords definition={activeCustomObject} />}
+      </AppShell>
+    </SessionLock>
   );
 }

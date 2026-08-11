@@ -146,3 +146,12 @@ pub fn count_renewing_within(conn: &Connection, workspace_id: &str, days: i64) -
         |row| row.get(0),
     )
 }
+
+/// See company_repo::set_owner's comment - same reasoning.
+pub fn set_owner(conn: &Connection, id: &str, owner_user_id: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE contracts SET owner_user_id = ?1, updated_at = ?2 WHERE id = ?3",
+        (owner_user_id, now_iso(), id),
+    )?;
+    Ok(())
+}
