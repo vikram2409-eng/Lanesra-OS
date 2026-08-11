@@ -80,6 +80,13 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
             required: false,
             show_in_list: false,
             sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )
@@ -266,6 +273,13 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
         &CustomFieldDefinitionInput {
             entity_type: "Company".into(), label: "Region".into(), field_type: "text".into(),
             options: vec![], required: false, show_in_list: false, sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )
@@ -276,6 +290,13 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
         &CustomFieldDefinitionInput {
             entity_type: "Company".into(), label: "Headcount".into(), field_type: "number".into(),
             options: vec![], required: false, show_in_list: false, sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )
@@ -323,6 +344,13 @@ fn a_sum_report_must_target_an_active_numeric_custom_field() {
         &CustomFieldDefinitionInput {
             entity_type: "Company".into(), label: "Notes field".into(), field_type: "text".into(),
             options: vec![], required: false, show_in_list: false, sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
         },
         Some(&admin),
     )

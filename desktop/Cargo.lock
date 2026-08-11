@@ -1897,6 +1897,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "rand_core",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",

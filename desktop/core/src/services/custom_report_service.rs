@@ -51,9 +51,12 @@ fn validate_shape(
         return Err(AppError::Validation(format!("Invalid aggregate '{aggregate}'")));
     }
 
+    // ADM-CF-05: a field flagged not reportable is off-limits as a group-by
+    // or sum target, the same way `is_active` already excludes archived
+    // fields from these two lookups.
     let active_defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
         .into_iter()
-        .filter(|d| d.is_active)
+        .filter(|d| d.is_active && d.is_reportable)
         .collect::<Vec<_>>();
 
     if group_by_source == "builtin" {

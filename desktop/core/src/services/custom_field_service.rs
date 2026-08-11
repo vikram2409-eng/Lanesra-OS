@@ -93,6 +93,48 @@ fn validate_definition_shape(
     Ok(())
 }
 
+/// ADM-CF-04: validates the optional validation settings themselves, not
+/// values against them (that happens in `set_entity_values`) - min/max
+/// only make sense for `number`, max_length/regex_pattern only for `text`,
+/// and a malformed regex is rejected here rather than at every future save.
+fn validate_definition_extras(
+    field_type: &str,
+    min_value: Option<&str>,
+    max_value: Option<&str>,
+    max_length: Option<i64>,
+    regex_pattern: Option<&str>,
+) -> AppResult<()> {
+    if let (Some(min), Some(max)) = (min_value, max_value) {
+        if field_type == "number" {
+            match (min.parse::<f64>(), max.parse::<f64>()) {
+                (Ok(a), Ok(b)) if a > b => return Err(AppError::Validation("Minimum cannot be greater than maximum".into())),
+                (Err(_), _) | (_, Err(_)) => return Err(AppError::Validation("Minimum/maximum must be numbers".into())),
+                _ => {}
+            }
+        }
+    }
+    if (min_value.is_some() || max_value.is_some()) && field_type != "number" {
+        return Err(AppError::Validation("Minimum/maximum only apply to number fields".into()));
+    }
+    if let Some(len) = max_length {
+        if field_type != "text" {
+            return Err(AppError::Validation("Maximum length only applies to text fields".into()));
+        }
+        if len <= 0 {
+            return Err(AppError::Validation("Maximum length must be positive".into()));
+        }
+    }
+    if let Some(pattern) = regex_pattern {
+        if field_type != "text" {
+            return Err(AppError::Validation("A pattern only applies to text fields".into()));
+        }
+        if !pattern.is_empty() && regex::Regex::new(pattern).is_err() {
+            return Err(AppError::Validation("That pattern is not a valid regular expression".into()));
+        }
+    }
+    Ok(())
+}
+
 pub fn create_definition(
     conn: &Connection,
     workspace_id: &str,
@@ -101,6 +143,7 @@ pub fn create_definition(
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_definition_shape(conn, workspace_id, &input.entity_type, &input.field_type, &input.options, &input.label)?;
+    validate_definition_extras(&input.field_type, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length, input.regex_pattern.as_deref())?;
     let key = slugify(conn, workspace_id, &input.entity_type, &input.label)?;
     let id = crate::domain::ids::new_uuid();
     Ok(custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?)
@@ -126,6 +169,7 @@ pub fn update_definition(
     if existing.field_type == "select" && input.options.is_empty() {
         return Err(AppError::Validation("A select field needs at least one option".into()));
     }
+    validate_definition_extras(&existing.field_type, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length, input.regex_pattern.as_deref())?;
     Ok(custom_field_repo::update_definition(conn, id, input, actor_user_id)?)
 }
 
@@ -139,6 +183,13 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
         show_in_list: existing.show_in_list,
         sort_order: existing.sort_order,
         is_active: false,
+        min_value: existing.min_value,
+        max_value: existing.max_value,
+        max_length: existing.max_length,
+        regex_pattern: existing.regex_pattern,
+        is_searchable: existing.is_searchable,
+        is_filterable: existing.is_filterable,
+        is_reportable: existing.is_reportable,
     };
     Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
 }
@@ -254,8 +305,33 @@ pub fn set_entity_values(
         }
         if !value.is_empty() {
             match def.field_type.as_str() {
-                "number" if value.parse::<f64>().is_err() => {
-                    return Err(AppError::Validation(format!("{} must be a number", def.label)));
+                "number" => match value.parse::<f64>() {
+                    Err(_) => return Err(AppError::Validation(format!("{} must be a number", def.label))),
+                    Ok(n) => {
+                        if let Some(min) = def.min_value.as_deref().and_then(|m| m.parse::<f64>().ok()) {
+                            if n < min {
+                                return Err(AppError::Validation(format!("{} must be at least {min}", def.label)));
+                            }
+                        }
+                        if let Some(max) = def.max_value.as_deref().and_then(|m| m.parse::<f64>().ok()) {
+                            if n > max {
+                                return Err(AppError::Validation(format!("{} must be at most {max}", def.label)));
+                            }
+                        }
+                    }
+                },
+                "text" => {
+                    if let Some(max_len) = def.max_length {
+                        if value.chars().count() as i64 > max_len {
+                            return Err(AppError::Validation(format!("{} must be {max_len} characters or fewer", def.label)));
+                        }
+                    }
+                    if let Some(pattern) = def.regex_pattern.as_deref().filter(|p| !p.is_empty()) {
+                        let matches = regex::Regex::new(pattern).map(|re| re.is_match(value)).unwrap_or(true);
+                        if !matches {
+                            return Err(AppError::Validation(format!("{} does not match the required format", def.label)));
+                        }
+                    }
                 }
                 "select" if !def.options.iter().any(|o| o == value) => {
                     return Err(AppError::Validation(format!("'{value}' is not a valid option for {}", def.label)));

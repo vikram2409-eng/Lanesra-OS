@@ -720,6 +720,17 @@ export interface CustomFieldDefinition {
   show_in_list: boolean;
   sort_order: number;
   is_active: boolean;
+  // ADM-CF-04/05 (Phase E): optional validation (number min/max, text
+  // max length/regex) and searchable/filterable/reportable capability
+  // flags - see the migration's header comment for what's actually wired
+  // up (is_reportable) versus forward-looking metadata.
+  min_value: string | null;
+  max_value: string | null;
+  max_length: number | null;
+  regex_pattern: string | null;
+  is_searchable: boolean;
+  is_filterable: boolean;
+  is_reportable: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -735,6 +746,13 @@ export interface CustomFieldDefinitionInput {
   required: boolean;
   show_in_list: boolean;
   sort_order: number;
+  min_value: string | null;
+  max_value: string | null;
+  max_length: number | null;
+  regex_pattern: string | null;
+  is_searchable: boolean;
+  is_filterable: boolean;
+  is_reportable: boolean;
 }
 
 export interface CustomFieldDefinitionUpdate {
@@ -744,6 +762,13 @@ export interface CustomFieldDefinitionUpdate {
   show_in_list: boolean;
   sort_order: number;
   is_active: boolean;
+  min_value: string | null;
+  max_value: string | null;
+  max_length: number | null;
+  regex_pattern: string | null;
+  is_searchable: boolean;
+  is_filterable: boolean;
+  is_reportable: boolean;
 }
 
 /** Values keyed by field key, e.g. { industry: "Retail" }. */

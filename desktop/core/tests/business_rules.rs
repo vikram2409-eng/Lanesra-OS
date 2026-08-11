@@ -43,6 +43,13 @@ fn text_field_input(label: &str) -> CustomFieldDefinitionInput {
     CustomFieldDefinitionInput {
         entity_type: "Company".into(), label: label.into(), field_type: "text".into(),
         options: vec![], required: false, show_in_list: false, sort_order: 0,
+        min_value: None,
+        max_value: None,
+        max_length: None,
+        regex_pattern: None,
+        is_searchable: false,
+        is_filterable: false,
+        is_reportable: true,
     }
 }
 

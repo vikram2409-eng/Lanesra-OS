@@ -22,6 +22,13 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomFieldDefinition> {
         show_in_list: row.get("show_in_list")?,
         sort_order: row.get("sort_order")?,
         is_active: row.get("is_active")?,
+        min_value: row.get("min_value")?,
+        max_value: row.get("max_value")?,
+        max_length: row.get("max_length")?,
+        regex_pattern: row.get("regex_pattern")?,
+        is_searchable: row.get("is_searchable")?,
+        is_filterable: row.get("is_filterable")?,
+        is_reportable: row.get("is_reportable")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -39,11 +46,14 @@ pub fn create_definition(
     let options_json = serde_json::to_string(&input.options).unwrap_or_else(|_| "[]".into());
     conn.execute(
         "INSERT INTO custom_field_definitions
-            (id, workspace_id, entity_type, key, label, field_type, options_json, required, show_in_list, sort_order, is_active, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11, ?12, ?11, ?12)",
+            (id, workspace_id, entity_type, key, label, field_type, options_json, required, show_in_list, sort_order, is_active,
+             min_value, max_value, max_length, regex_pattern, is_searchable, is_filterable, is_reportable, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?18, ?19)",
         rusqlite::params![
             id, workspace_id, input.entity_type, key, input.label, input.field_type,
-            options_json, input.required, input.show_in_list, input.sort_order, now, actor_user_id,
+            options_json, input.required, input.show_in_list, input.sort_order,
+            input.min_value, input.max_value, input.max_length, input.regex_pattern,
+            input.is_searchable, input.is_filterable, input.is_reportable, now, actor_user_id,
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just inserted"))
@@ -70,11 +80,14 @@ pub fn update_definition(conn: &Connection, id: &str, input: &CustomFieldDefinit
     let options_json = serde_json::to_string(&input.options).unwrap_or_else(|_| "[]".into());
     conn.execute(
         "UPDATE custom_field_definitions
-         SET label = ?1, options_json = ?2, required = ?3, show_in_list = ?4, sort_order = ?5, is_active = ?6, updated_at = ?7, updated_by = ?8
-         WHERE id = ?9",
+         SET label = ?1, options_json = ?2, required = ?3, show_in_list = ?4, sort_order = ?5, is_active = ?6,
+             min_value = ?7, max_value = ?8, max_length = ?9, regex_pattern = ?10,
+             is_searchable = ?11, is_filterable = ?12, is_reportable = ?13, updated_at = ?14, updated_by = ?15
+         WHERE id = ?16",
         rusqlite::params![
-            input.label, options_json, input.required, input.show_in_list, input.sort_order,
-            input.is_active, now_iso(), actor_user_id, id,
+            input.label, options_json, input.required, input.show_in_list, input.sort_order, input.is_active,
+            input.min_value, input.max_value, input.max_length, input.regex_pattern,
+            input.is_searchable, input.is_filterable, input.is_reportable, now_iso(), actor_user_id, id,
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just updated"))

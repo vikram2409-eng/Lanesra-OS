@@ -47,7 +47,106 @@ fn select_field_input(label: &str, required: bool) -> CustomFieldDefinitionInput
         required,
         show_in_list: false,
         sort_order: 0,
+        min_value: None,
+        max_value: None,
+        max_length: None,
+        regex_pattern: None,
+        is_searchable: false,
+        is_filterable: false,
+        is_reportable: true,
     }
+}
+
+fn number_field_input(label: &str, min: Option<&str>, max: Option<&str>) -> CustomFieldDefinitionInput {
+    CustomFieldDefinitionInput {
+        entity_type: "Company".into(), label: label.into(), field_type: "number".into(), options: vec![],
+        required: false, show_in_list: false, sort_order: 0,
+        min_value: min.map(String::from), max_value: max.map(String::from), max_length: None, regex_pattern: None,
+        is_searchable: false, is_filterable: false, is_reportable: true,
+    }
+}
+
+fn text_field_input(label: &str, max_length: Option<i64>, regex_pattern: Option<&str>) -> CustomFieldDefinitionInput {
+    CustomFieldDefinitionInput {
+        entity_type: "Company".into(), label: label.into(), field_type: "text".into(), options: vec![],
+        required: false, show_in_list: false, sort_order: 0,
+        min_value: None, max_value: None, max_length, regex_pattern: regex_pattern.map(String::from),
+        is_searchable: false, is_filterable: false, is_reportable: true,
+    }
+}
+
+#[test]
+fn number_field_enforces_min_and_max() {
+    let (conn, ws, admin) = setup_workspace();
+    let def = custom_field_service::create_definition(&conn, &ws, &number_field_input("Employee Count", Some("1"), Some("500")), Some(&admin)).unwrap();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
+
+    let mut too_low = HashMap::new();
+    too_low.insert(def.key.clone(), "0".into());
+    let err = custom_field_service::set_entity_values(&conn, "Company", &company.id, &too_low, Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("must be at least 1"));
+
+    let mut too_high = HashMap::new();
+    too_high.insert(def.key.clone(), "501".into());
+    let err = custom_field_service::set_entity_values(&conn, "Company", &company.id, &too_high, Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("must be at most 500"));
+
+    let mut ok = HashMap::new();
+    ok.insert(def.key.clone(), "250".into());
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &ok, Some(&admin)).unwrap();
+}
+
+#[test]
+fn min_cannot_exceed_max_when_defining_a_number_field() {
+    let (conn, ws, admin) = setup_workspace();
+    let err = custom_field_service::create_definition(&conn, &ws, &number_field_input("Bad Range", Some("100"), Some("1")), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("cannot be greater than"));
+}
+
+#[test]
+fn text_field_enforces_max_length_and_pattern() {
+    let (conn, ws, admin) = setup_workspace();
+    let def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Reference Code", Some(6), Some(r"^[A-Z]{2}-\d{3}$")), Some(&admin)).unwrap();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
+
+    let mut too_long = HashMap::new();
+    too_long.insert(def.key.clone(), "AB-1234".into());
+    let err = custom_field_service::set_entity_values(&conn, "Company", &company.id, &too_long, Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("6 characters or fewer"));
+
+    let mut bad_pattern = HashMap::new();
+    bad_pattern.insert(def.key.clone(), "abcdef".into());
+    let err = custom_field_service::set_entity_values(&conn, "Company", &company.id, &bad_pattern, Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("does not match"));
+
+    let mut ok = HashMap::new();
+    ok.insert(def.key.clone(), "AB-123".into());
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &ok, Some(&admin)).unwrap();
+}
+
+#[test]
+fn an_invalid_regex_pattern_is_rejected_at_definition_time() {
+    let (conn, ws, admin) = setup_workspace();
+    let err = custom_field_service::create_definition(&conn, &ws, &text_field_input("Bad Pattern", None, Some("(unclosed")), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("not a valid regular expression"));
+}
+
+#[test]
+fn a_field_flagged_not_reportable_cannot_be_used_as_a_report_group_by() {
+    let (conn, ws, admin) = setup_workspace();
+    let mut input = select_field_input("Internal Only", false);
+    input.is_reportable = false;
+    let def = custom_field_service::create_definition(&conn, &ws, &input, Some(&admin)).unwrap();
+
+    let err = lanesra_core::services::custom_report_service::create(
+        &conn, &ws,
+        &lanesra_core::models::custom_report::CustomReportInput {
+            name: "Should fail".into(), entity_type: "Company".into(), group_by_source: "custom".into(),
+            group_by_field: def.key.clone(), aggregate: "count".into(), sum_field_key: None,
+        },
+        Some(&admin),
+    ).unwrap_err();
+    assert!(format!("{err:?}").contains("not an active custom field to group by"));
 }
 
 #[test]

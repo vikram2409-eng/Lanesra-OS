@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { AppShell, type Section } from "./components/AppShell";
+import { SessionLock } from "./components/SessionLock";
+import { TaskReminderNotifier } from "./components/TaskReminderNotifier";
 import { FirstRun } from "./features/firstRun/FirstRun";
 import { Login } from "./features/auth/Login";
 import { Dashboard } from "./features/dashboard/Dashboard";
@@ -111,21 +113,24 @@ function Ready({
   }, []);
 
   return (
-    <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
-      {section === "dashboard" && <Dashboard onNavigate={setSection} />}
-      {section === "companies" && <Companies />}
-      {section === "contacts" && <Contacts />}
-      {section === "products" && <Products />}
-      {section === "opportunities" && <Opportunities />}
-      {section === "quotes" && <Quotes />}
-      {section === "orders" && <Orders />}
-      {section === "invoices" && <Invoices />}
-      {section === "contracts" && <Contracts />}
-      {section === "tasks" && <Tasks currentUserId={user.id} />}
-      {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
-      {section === "admin" && <AdminPanel />}
-      {section === "account" && <Account user={user} />}
-      {activeCustomObject && <CustomObjectRecords definition={activeCustomObject} />}
-    </AppShell>
+    <SessionLock user={user}>
+      <TaskReminderNotifier currentUserId={user.id} />
+      <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
+        {section === "dashboard" && <Dashboard onNavigate={setSection} />}
+        {section === "companies" && <Companies />}
+        {section === "contacts" && <Contacts />}
+        {section === "products" && <Products />}
+        {section === "opportunities" && <Opportunities />}
+        {section === "quotes" && <Quotes />}
+        {section === "orders" && <Orders />}
+        {section === "invoices" && <Invoices />}
+        {section === "contracts" && <Contracts />}
+        {section === "tasks" && <Tasks currentUserId={user.id} />}
+        {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
+        {section === "admin" && <AdminPanel />}
+        {section === "account" && <Account user={user} />}
+        {activeCustomObject && <CustomObjectRecords definition={activeCustomObject} />}
+      </AppShell>
+    </SessionLock>
   );
 }

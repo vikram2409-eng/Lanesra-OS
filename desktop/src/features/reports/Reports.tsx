@@ -470,7 +470,9 @@ function CustomReportForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
     queryKey: ["customFieldDefinitions", input.entity_type, "all"],
     queryFn: () => api.listCustomFieldDefinitions(input.entity_type, true),
   });
-  const activeDefs = defs.data ?? [];
+  // ADM-CF-05: a field an admin flagged not reportable is excluded here -
+  // the server would reject it as a group-by/sum target anyway.
+  const activeDefs = (defs.data ?? []).filter((d) => d.is_reportable);
   const numericDefs = activeDefs.filter((d) => d.field_type === "number");
 
   const create = useMutation({
