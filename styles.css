@@ -185,3 +185,47 @@
 .notif-item:last-child{border-bottom:0}
 .notif-item.unread{background:#eef2ff}
 .notif-item:hover{background:#f9fafb}
+
+/* v0.18 admin builder layout: Business rules / Workflow automation redesign,
+   Customer/Contact 360, and Status Transitions */
+.builder-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+.builder-breadcrumb{color:#94a3b8;font-size:12px;font-weight:700;margin-bottom:4px}
+.builder-title-row{display:flex;align-items:center;gap:10px}
+.builder-title-row h2{margin:0;font-size:24px}
+.builder-subtitle{color:#6b7280;margin:6px 0 0;font-size:13px}
+.builder-header-actions{display:flex;gap:8px;flex-shrink:0}
+.builder-layout{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start}
+.builder-section{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+.builder-section-title{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;margin-bottom:12px}
+.step-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#4f46e5;color:#fff;font-size:12px;font-weight:800;flex-shrink:0}
+.builder-summary-panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;position:sticky;top:88px}
+.builder-summary-panel h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280}
+.builder-summary-panel h4:not(:first-child){margin-top:18px}
+.summary-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
+.summary-row:last-child{border-bottom:0}
+.summary-row .label{color:#6b7280}
+.summary-row .value{font-weight:700;text-align:right}
+.workflow-canvas-wrap{background:repeating-linear-gradient(#f9fafb,#f9fafb 23px,#eef1f5 24px),repeating-linear-gradient(90deg,#f9fafb,#f9fafb 23px,#eef1f5 24px);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:0}
+.workflow-node{width:100%;max-width:340px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(17,24,39,.05)}
+.workflow-node-head{padding:8px 14px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.workflow-node-trigger .workflow-node-head{background:#ecfdf5;color:#047857}
+.workflow-node-actions .workflow-node-head{background:#fff7ed;color:#c2410c}
+.workflow-node-body{padding:14px}
+.workflow-node-body strong{display:block;font-size:14px}
+.workflow-node-body small{display:block;color:#6b7280;font-size:12px;margin-top:3px}
+.workflow-connector{display:flex;flex-direction:column;align-items:center;color:#94a3b8;height:34px;justify-content:center}
+.workflow-end-node{border:1px dashed #cbd5e1;border-radius:999px;padding:6px 18px;font-size:12px;font-weight:800;color:#64748b;background:#fff;margin-top:0}
+.rule360-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
+.rule360-header h1{margin:6px 0 4px}
+.rule360-meta{display:flex;gap:16px;flex-wrap:wrap;color:#6b7280;font-size:13px;margin-top:6px}
+.rule360-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.rule360-grid{display:grid;grid-template-columns:1.3fr .7fr;gap:18px;align-items:start}
+.rule360-related-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+.rule360-related-card h4{margin:0 0 10px}
+.rule360-related-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
+.rule360-related-row:last-child{border-bottom:0}
+.rule360-related-row a{color:#4338ca;font-weight:700;cursor:pointer}
+.workflow-builder-layout{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.cell-link{color:#4338ca;font-weight:700;cursor:pointer}
+.cell-link:hover{text-decoration:underline}
+@media(max-width:900px){.builder-layout,.rule360-grid,.workflow-builder-layout{grid-template-columns:1fr}.builder-summary-panel{position:static}}
