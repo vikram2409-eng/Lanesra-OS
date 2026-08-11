@@ -1,6 +1,6 @@
 [package]
 name = "lanesra-os"
-version = "0.7.0"
+version = "0.8.0"
 description = "Lanesra OS Desktop - local-first business management application"
 license = "MIT"
 edition = "2021"

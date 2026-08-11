@@ -49,6 +49,16 @@ const ACTION_LABELS: Record<WorkflowActionType, string> = {
   create_reminder: "Create reminder",
 };
 
+const ACTION_ICONS: Record<WorkflowActionType, string> = {
+  create_task: "📋", create_reminder: "⏰", update_field: "✏️", assign_owner: "👤",
+  create_record: "➕", update_related_record: "🔗", add_notification: "🔔",
+};
+
+const TRIGGER_ICONS: Record<TriggerType, string> = {
+  record_created: "🆕", record_updated: "🔄", status_changed: "🏆",
+  field_changed: "✏️", date_reached: "📅", due_overdue: "⏳", scheduled: "🔁",
+};
+
 const OPERATOR_LABELS: Record<ConditionOperator, string> = {
   equals: "equals", not_equals: "does not equal", contains: "contains", not_contains: "does not contain",
   starts_with: "starts with", ends_with: "ends with", in_list: "is one of", not_in_list: "is not one of",
@@ -77,6 +87,45 @@ function defaultParamsFor(actionType: WorkflowActionType, customFieldKey: string
 
 function emptyAction(customFieldKey: string): WorkflowActionInput {
   return { action_type: "create_task", params_json: JSON.stringify(defaultParamsFor("create_task", customFieldKey)) };
+}
+
+/** Label for a condition/action field regardless of source - mirrors
+ * BusinessRulesAdmin's identical helper (kept as a separate copy since
+ * it's typed against this file's own condition/action shapes). */
+function fieldLabel(entityType: string, source: TriggerSource, key: string, labelByKey: Map<string, string>): string {
+  if (source === "builtin") {
+    return builtinFieldsFor(entityType).find((f) => f.key === key)?.label ?? key;
+  }
+  return labelByKey.get(key) ?? key;
+}
+
+function describeCondition(entityType: string, c: WorkflowConditionInput, labelByKey: Map<string, string>): string {
+  const label = fieldLabel(entityType, c.field_source, c.field_key, labelByKey);
+  const needsValue = !VALUELESS_OPERATORS.includes(c.operator);
+  const comparand = c.compare_field_key && c.compare_field_source
+    ? fieldLabel(entityType, c.compare_field_source, c.compare_field_key, labelByKey)
+    : `"${c.value}"`;
+  return `${label} ${OPERATOR_LABELS[c.operator]}${needsValue ? ` ${comparand}` : ""}`;
+}
+
+/** Plain-language description of when a workflow fires - used both for
+ * the trigger canvas node and the collapsed "1 Trigger" section summary. */
+function describeTrigger(
+  entityType: string,
+  triggerType: TriggerType,
+  triggerStatus: string,
+  triggerFieldKey: string,
+  triggerOffsetDays: number,
+): string {
+  switch (triggerType) {
+    case "record_created": return `When a ${entityTypeLabel(entityType)} record is created`;
+    case "record_updated": return `When a ${entityTypeLabel(entityType)} record is updated`;
+    case "status_changed": return `When ${transitionFieldFor(entityType)} changes to "${triggerStatus}"`;
+    case "field_changed": return `When ${triggerFieldKey || "a field"} changes`;
+    case "date_reached": return `When ${triggerFieldKey || "a date field"} is reached (offset ${triggerOffsetDays} day(s))`;
+    case "due_overdue": return `When ${triggerFieldKey || "a date field"} is overdue`;
+    case "scheduled": return `Every ${triggerOffsetDays} day(s)`;
+  }
 }
 
 function describeAction(entityType: string, a: WorkflowActionInput, labelByKey: Map<string, string>): string {
@@ -113,7 +162,6 @@ export function WorkflowAutomationAdmin() {
   const [entityType, setEntityType] = useState<string>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
   const queryClient = useQueryClient();
 
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
@@ -140,20 +188,15 @@ export function WorkflowAutomationAdmin() {
     <div className="card">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Workflow automation</h3>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={() => setTesting((v) => !v)}>
-            {testing ? "Hide test mode" : "Test workflows"}
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              setCreating((v) => !v);
-              setEditingId(null);
-            }}
-          >
-            + New workflow
-          </button>
-        </div>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setCreating((v) => !v);
+            setEditingId(null);
+          }}
+        >
+          + New workflow
+        </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         Trigger an action - create a task, update a field, assign an owner, create a record (optionally linked),
@@ -170,15 +213,12 @@ export function WorkflowAutomationAdmin() {
               setEntityType(t.key);
               setCreating(false);
               setEditingId(null);
-              setTesting(false);
             }}
           >
             {t.label}
           </button>
         ))}
       </div>
-
-      {testing && <TestWorkflowPanel entityType={entityType} customFields={activeDefs} />}
 
       {creating && (
         <WorkflowForm
@@ -231,8 +271,10 @@ export function WorkflowAutomationAdmin() {
         />
       )}
 
-      {workflows.isLoading && <p>Loading...</p>}
-      {workflows.data && workflows.data.length === 0 && <p className="empty-state">No workflows defined for {currentLabel} yet.</p>}
+      {workflows.isLoading && !creating && !editing && <p>Loading...</p>}
+      {workflows.data && workflows.data.length === 0 && !creating && !editing && (
+        <p className="empty-state">No workflows defined for {currentLabel} yet.</p>
+      )}
       {workflows.data && workflows.data.length > 0 && !creating && !editing && (
         <table>
           <thead>
@@ -597,11 +639,16 @@ function WorkflowForm({
   const [actions, setActions] = useState<WorkflowActionInput[]>(initial.actions);
   const [isActive, setIsActive] = useState(initial.is_active ?? true);
   const [error, setError] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [editSection, setEditSection] = useState<"trigger" | "conditions" | "actions" | null>("trigger");
+  const [zoom, setZoom] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
 
   const dateFields = dateFieldsFor(entityType);
+  const labelByKey = new Map(customFields.map((f) => [f.key, f.label]));
 
   const save = useMutation({
-    mutationFn: () =>
+    mutationFn: (nextActive: boolean) =>
       onSubmit(
         {
           entity_type: entityType, name, description: description || null, trigger_type: triggerType,
@@ -610,157 +657,332 @@ function WorkflowForm({
           trigger_field_source: triggerType === "field_changed" ? triggerFieldSource : "custom",
           trigger_offset_days: triggerOffsetDays, match_type: matchType, priority, conditions, actions,
         },
-        isActive,
+        nextActive,
       ),
-    onSuccess: onDone,
+    onSuccess: (_, nextActive) => {
+      setIsActive(nextActive);
+      onDone();
+    },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this workflow"),
   });
 
+  const triggerSummary = describeTrigger(entityType, triggerType, triggerStatus, triggerFieldKey, triggerOffsetDays);
+
   return (
-    <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
-      {error && <div className="error-banner">{error}</div>}
-      <form
-        className="form-grid"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
-      >
-        <div className="form-field full">
-          <label>Workflow name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
-        <div className="form-field full">
-          <label>Description (optional)</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label>Trigger</label>
-          <select value={triggerType} onChange={(e) => setTriggerType(e.target.value as TriggerType)}>
-            {TRIGGER_TYPES.map((t) => <option key={t} value={t}>{TRIGGER_LABELS[t]}</option>)}
-          </select>
-        </div>
-        {triggerType === "status_changed" && (
-          <div className="form-field">
-            <label>{transitionFieldFor(entityType)} reaches</label>
-            <select value={triggerStatus} onChange={(e) => setTriggerStatus(e.target.value)}>
-              {transitionValuesForEntity(entityType).map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+    <div style={{ marginBottom: 16 }}>
+      <div className="builder-header">
+        <div>
+          <div className="builder-breadcrumb">Workflow Automation / {name || "New workflow"}</div>
+          <div className="builder-title-row">
+            <h2>{name || "New workflow"}</h2>
+            {showActiveToggle && <span className={`badge${isActive ? " badge-success" : ""}`}>{isActive ? "Active" : "Inactive"}</span>}
           </div>
-        )}
-        {triggerType === "field_changed" && (() => {
-          const watchableBuiltinFields = builtinFieldsFor(entityType);
-          const isBuiltinWatch = triggerFieldSource === "builtin";
-          return (
-            <>
-              <div className="form-field">
-                <label>Field source</label>
-                <select
-                  value={triggerFieldSource}
-                  onChange={(e) => {
-                    const source = e.target.value as TriggerSource;
-                    setTriggerFieldSource(source);
-                    setTriggerFieldKey((source === "builtin" ? watchableBuiltinFields[0]?.key : customFields[0]?.key) ?? "");
-                  }}
-                >
-                  <option value="custom">Custom field</option>
-                  <option value="builtin">Built-in field</option>
-                </select>
-              </div>
-              <div className="form-field">
-                <label>Watch field</label>
-                <select value={triggerFieldKey} onChange={(e) => setTriggerFieldKey(e.target.value)}>
-                  {(isBuiltinWatch ? watchableBuiltinFields : customFields).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-                </select>
-              </div>
-            </>
-          );
-        })()}
-        {(triggerType === "date_reached" || triggerType === "due_overdue") && (
-          <>
-            <div className="form-field">
-              <label>Watch date field</label>
-              <select value={triggerFieldKey} onChange={(e) => setTriggerFieldKey(e.target.value)}>
-                {dateFields.length === 0 && <option value="">No date field available for {entityTypeLabel(entityType)}</option>}
-                {dateFields.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </div>
-            <div className="form-field">
-              <label>Offset (days before/after)</label>
-              <input type="number" value={triggerOffsetDays} onChange={(e) => setTriggerOffsetDays(Number(e.target.value))} />
-            </div>
-          </>
-        )}
-        {triggerType === "scheduled" && (
-          <div className="form-field">
-            <label>Repeat every (days)</label>
-            <input type="number" min={1} value={triggerOffsetDays} onChange={(e) => setTriggerOffsetDays(Math.max(1, Number(e.target.value)))} />
-          </div>
-        )}
-        <div className="form-field">
-          <label>Priority (lower runs first)</label>
-          <input type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
+          <p className="builder-subtitle">{description || triggerSummary}</p>
         </div>
-
-        <div className="form-field full">
-          <label>Extra conditions (optional)</label>
-          {conditions.map((c, i) => (
-            <ConditionRow
-              key={i}
-              entityType={entityType}
-              customFields={customFields}
-              condition={c}
-              onChange={(next) => setConditions(conditions.map((x, idx) => (idx === i ? next : x)))}
-              onRemove={() => setConditions(conditions.filter((_, idx) => idx !== i))}
-            />
-          ))}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
-              + Add condition
-            </button>
-            {conditions.length > 1 && (
-              <select value={matchType} onChange={(e) => setMatchType(e.target.value as MatchType)}>
-                {MATCH_TYPES.map((m) => <option key={m} value={m}>{m === "all" ? "Match all (AND)" : "Match any (OR)"}</option>)}
-              </select>
-            )}
-          </div>
-        </div>
-
-        <div className="form-field full">
-          <label>Then</label>
-          {actions.map((a, i) => (
-            <ActionEditor
-              key={i}
-              entityType={entityType}
-              customFields={customFields}
-              customObjects={customObjects}
-              users={users}
-              relationshipDefs={relationshipDefs}
-              action={a}
-              onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
-              onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
-            />
-          ))}
-          <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(customFields[0]?.key ?? "")])}>
-            + Add action
+        <div className="builder-header-actions">
+          <button className="btn" type="button" onClick={() => setTesting((v) => !v)}>
+            {testing ? "Hide test" : "Test run"}
           </button>
-        </div>
-
-        {showActiveToggle && (
-          <div className="form-field">
-            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-              Active
-            </label>
-          </div>
-        )}
-        <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={save.isPending || actions.length === 0}>
+          {showActiveToggle && (
+            <button className="btn" type="button" disabled={save.isPending} onClick={() => save.mutate(!isActive)}>
+              {isActive ? "Deactivate" : "Activate"}
+            </button>
+          )}
+          <button
+            className="btn btn-primary"
+            type="submit"
+            form="workflow-form"
+            disabled={save.isPending || actions.length === 0}
+          >
             {submitLabel}
           </button>
-          <button className="btn" type="button" onClick={onCancel}>
-            Cancel
-          </button>
+        </div>
+      </div>
+
+      {error && <div className="error-banner">{error}</div>}
+      {testing && <TestWorkflowPanel entityType={entityType} customFields={customFields} />}
+
+      <form
+        id="workflow-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate(isActive);
+        }}
+      >
+        <div className="workflow-layout">
+          <div>
+            <div className="form-grid" style={{ marginBottom: 16 }}>
+              <div className="form-field full">
+                <label>Workflow name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
+              <div className="form-field full">
+                <label>Description (optional)</label>
+                <input value={description} onChange={(e) => setDescription(e.target.value)} />
+              </div>
+              {showActiveToggle && (
+                <div className="form-field">
+                  <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                    Active
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="builder-section">
+              <div className="builder-section-title" style={{ justifyContent: "space-between" }}>
+                <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span className="step-badge">1</span> Trigger
+                </span>
+                <button
+                  className="link-button"
+                  type="button"
+                  onClick={() => setEditSection(editSection === "trigger" ? null : "trigger")}
+                >
+                  {editSection === "trigger" ? "Done" : "Edit"}
+                </button>
+              </div>
+              {editSection !== "trigger" ? (
+                <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>{triggerSummary}</p>
+              ) : (
+                <div className="form-grid">
+                  <div className="form-field">
+                    <label>Trigger</label>
+                    <select value={triggerType} onChange={(e) => setTriggerType(e.target.value as TriggerType)}>
+                      {TRIGGER_TYPES.map((t) => <option key={t} value={t}>{TRIGGER_LABELS[t]}</option>)}
+                    </select>
+                  </div>
+                  {triggerType === "status_changed" && (
+                    <div className="form-field">
+                      <label>{transitionFieldFor(entityType)} reaches</label>
+                      <select value={triggerStatus} onChange={(e) => setTriggerStatus(e.target.value)}>
+                        {transitionValuesForEntity(entityType).map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {triggerType === "field_changed" && (() => {
+                    const watchableBuiltinFields = builtinFieldsFor(entityType);
+                    const isBuiltinWatch = triggerFieldSource === "builtin";
+                    return (
+                      <>
+                        <div className="form-field">
+                          <label>Field source</label>
+                          <select
+                            value={triggerFieldSource}
+                            onChange={(e) => {
+                              const source = e.target.value as TriggerSource;
+                              setTriggerFieldSource(source);
+                              setTriggerFieldKey((source === "builtin" ? watchableBuiltinFields[0]?.key : customFields[0]?.key) ?? "");
+                            }}
+                          >
+                            <option value="custom">Custom field</option>
+                            <option value="builtin">Built-in field</option>
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label>Watch field</label>
+                          <select value={triggerFieldKey} onChange={(e) => setTriggerFieldKey(e.target.value)}>
+                            {(isBuiltinWatch ? watchableBuiltinFields : customFields).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                          </select>
+                        </div>
+                      </>
+                    );
+                  })()}
+                  {(triggerType === "date_reached" || triggerType === "due_overdue") && (
+                    <>
+                      <div className="form-field">
+                        <label>Watch date field</label>
+                        <select value={triggerFieldKey} onChange={(e) => setTriggerFieldKey(e.target.value)}>
+                          {dateFields.length === 0 && <option value="">No date field available for {entityTypeLabel(entityType)}</option>}
+                          {dateFields.map((f) => <option key={f} value={f}>{f}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-field">
+                        <label>Offset (days before/after)</label>
+                        <input type="number" value={triggerOffsetDays} onChange={(e) => setTriggerOffsetDays(Number(e.target.value))} />
+                      </div>
+                    </>
+                  )}
+                  {triggerType === "scheduled" && (
+                    <div className="form-field">
+                      <label>Repeat every (days)</label>
+                      <input type="number" min={1} value={triggerOffsetDays} onChange={(e) => setTriggerOffsetDays(Math.max(1, Number(e.target.value)))} />
+                    </div>
+                  )}
+                  <div className="form-field">
+                    <label>Priority (lower runs first)</label>
+                    <input type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="builder-section">
+              <div className="builder-section-title" style={{ justifyContent: "space-between" }}>
+                <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span className="step-badge">2</span> Conditions
+                </span>
+                <button
+                  className="link-button"
+                  type="button"
+                  onClick={() => setEditSection(editSection === "conditions" ? null : "conditions")}
+                >
+                  {editSection === "conditions" ? "Done" : "Edit"}
+                </button>
+              </div>
+              {editSection !== "conditions" ? (
+                conditions.length === 0 ? (
+                  <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>No extra conditions - fires on every trigger.</p>
+                ) : (
+                  <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
+                    {conditions.map((c) => describeCondition(entityType, c, labelByKey)).join(matchType === "any" ? " OR " : " AND ")}
+                  </p>
+                )
+              ) : (
+                <>
+                  {conditions.map((c, i) => (
+                    <ConditionRow
+                      key={i}
+                      entityType={entityType}
+                      customFields={customFields}
+                      condition={c}
+                      onChange={(next) => setConditions(conditions.map((x, idx) => (idx === i ? next : x)))}
+                      onRemove={() => setConditions(conditions.filter((_, idx) => idx !== i))}
+                    />
+                  ))}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
+                      + Add condition
+                    </button>
+                    {conditions.length > 1 && (
+                      <select value={matchType} onChange={(e) => setMatchType(e.target.value as MatchType)}>
+                        {MATCH_TYPES.map((m) => <option key={m} value={m}>{m === "all" ? "Match all (AND)" : "Match any (OR)"}</option>)}
+                      </select>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="builder-section">
+              <div className="builder-section-title" style={{ justifyContent: "space-between" }}>
+                <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span className="step-badge">3</span> Actions
+                </span>
+                <button
+                  className="link-button"
+                  type="button"
+                  onClick={() => setEditSection(editSection === "actions" ? null : "actions")}
+                >
+                  {editSection === "actions" ? "Done" : "Edit"}
+                </button>
+              </div>
+              {editSection !== "actions" ? (
+                <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
+                  {actions.length === 0 ? "No actions yet." : actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}
+                </p>
+              ) : (
+                <>
+                  {actions.map((a, i) => (
+                    <ActionEditor
+                      key={i}
+                      entityType={entityType}
+                      customFields={customFields}
+                      customObjects={customObjects}
+                      users={users}
+                      relationshipDefs={relationshipDefs}
+                      action={a}
+                      onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
+                      onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
+                    />
+                  ))}
+                  <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(customFields[0]?.key ?? "")])}>
+                    + Add action
+                  </button>
+                </>
+              )}
+            </div>
+
+            <button className="btn" type="button" onClick={onCancel}>
+              Cancel
+            </button>
+          </div>
+
+          <div>
+            <div
+              className="workflow-canvas-wrap"
+              style={fullscreen ? { position: "fixed", inset: 12, zIndex: 1000 } : undefined}
+            >
+              <div className="workflow-canvas" style={{ transform: `scale(${zoom})` }}>
+                <div className="workflow-node workflow-node-trigger">
+                  <div className="workflow-node-head">Trigger</div>
+                  <div className="workflow-node-body workflow-trigger-body">
+                    <span className="workflow-trigger-icon">{TRIGGER_ICONS[triggerType]}</span>
+                    <div>
+                      <div className="workflow-trigger-title">{entityTypeLabel(entityType)}</div>
+                      <div className="workflow-trigger-detail">{triggerSummary}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="workflow-connector">
+                  <span className="workflow-connector-line" />
+                  <span className="workflow-connector-arrow">▼</span>
+                </div>
+
+                {conditions.length > 0 && (
+                  <>
+                    <div className="workflow-node workflow-node-conditions">
+                      <div className="workflow-node-head">Conditions</div>
+                      <div className="workflow-node-body">
+                        {conditions.map((c, i) => (
+                          <div key={i}>
+                            {i > 0 && <div className="workflow-match-chip">{matchType === "all" ? "AND" : "OR"}</div>}
+                            <div className="workflow-condition-chip">{describeCondition(entityType, c, labelByKey)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="workflow-connector">
+                      <span className="workflow-connector-line" />
+                      <span className="workflow-connector-arrow">▼</span>
+                    </div>
+                  </>
+                )}
+
+                <div className="workflow-node workflow-node-actions">
+                  <div className="workflow-node-head">Actions</div>
+                  <div className="workflow-node-body">
+                    {actions.length === 0 && <p className="empty-state" style={{ padding: 8 }}>No actions yet</p>}
+                    {actions.map((a, i) => (
+                      <div className="workflow-action-card" key={i}>
+                        <span className="workflow-action-icon">{ACTION_ICONS[a.action_type]}</span>
+                        <div>
+                          <div className="workflow-action-title">{ACTION_LABELS[a.action_type]}</div>
+                          <div className="workflow-action-subtitle">{describeAction(entityType, a, labelByKey)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="workflow-connector">
+                  <span className="workflow-connector-line" />
+                  <span className="workflow-connector-arrow">▼</span>
+                </div>
+                <div className="workflow-end-node">END</div>
+              </div>
+
+              <div className="workflow-zoom-controls">
+                <button className="btn" type="button" title="Zoom in" onClick={() => setZoom((z) => Math.min(1.5, Math.round((z + 0.1) * 10) / 10))}>+</button>
+                <button className="btn" type="button" title="Zoom out" onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}>−</button>
+                <button className="btn" type="button" title={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={() => setFullscreen((f) => !f)}>
+                  {fullscreen ? "⤡" : "⤢"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </form>
     </div>

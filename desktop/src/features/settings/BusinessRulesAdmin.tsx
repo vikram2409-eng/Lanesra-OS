@@ -36,6 +36,20 @@ const ACTION_LABELS: Record<ActionType, string> = {
   set_value: "Force value", block_save: "Block save", show_message: "Show message",
 };
 
+const ACTION_ICONS: Record<ActionType, string> = {
+  require: "✅", hide: "🙈", lock: "🔒", set_default: "🔧", set_value: "✏️", block_save: "🚫", show_message: "💬",
+};
+
+/** Effect-type legend the summary panel shows - grouped the same way the
+ * effects themselves group functionally: Validation (blocks/messages, no
+ * field target) vs Field behavior (require/hide/lock/set a value, always
+ * targets a field). Built from ACTION_TYPES/ACTION_LABELS so it can never
+ * list an effect the engine doesn't actually support. */
+const EFFECT_LEGEND: { title: string; types: ActionType[] }[] = [
+  { title: "Validation", types: ["block_save", "show_message"] },
+  { title: "Field behavior", types: ["require", "hide", "lock", "set_default", "set_value"] },
+];
+
 function emptyCondition(entityType: string): BusinessRuleConditionInput {
   return {
     field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "",
@@ -107,7 +121,6 @@ export function BusinessRulesAdmin() {
   const [entityType, setEntityType] = useState<string>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
   const queryClient = useQueryClient();
 
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
@@ -132,20 +145,15 @@ export function BusinessRulesAdmin() {
     <div className="card">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Business rules</h3>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" onClick={() => setTesting((v) => !v)}>
-            {testing ? "Hide test mode" : "Test rules"}
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              setCreating((v) => !v);
-              setEditingId(null);
-            }}
-          >
-            + New rule
-          </button>
-        </div>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setCreating((v) => !v);
+            setEditingId(null);
+          }}
+        >
+          + New rule
+        </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         Build an IF (AND/OR conditions) / THEN (actions) rule against any built-in or custom field on {currentLabel}.
@@ -161,15 +169,12 @@ export function BusinessRulesAdmin() {
               setEntityType(t.key);
               setCreating(false);
               setEditingId(null);
-              setTesting(false);
             }}
           >
             {t.label}
           </button>
         ))}
       </div>
-
-      {testing && <TestRulesPanel entityType={entityType} customFields={activeDefs} />}
 
       {creating && (
         <RuleForm
@@ -215,8 +220,10 @@ export function BusinessRulesAdmin() {
         />
       )}
 
-      {rules.isLoading && <p>Loading...</p>}
-      {rules.data && rules.data.length === 0 && <p className="empty-state">No business rules defined for {currentLabel} yet.</p>}
+      {rules.isLoading && !creating && !editing && <p>Loading...</p>}
+      {rules.data && rules.data.length === 0 && !creating && !editing && (
+        <p className="empty-state">No business rules defined for {currentLabel} yet.</p>
+      )}
       {rules.data && rules.data.length > 0 && !creating && !editing && (
         <table>
           <thead>
@@ -276,7 +283,7 @@ function ConditionRow({
   const compareFields = condition.compare_field_source === "builtin" ? builtinFields : customFields;
 
   return (
-    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+    <div className="builder-row-card">
       <select
         value={condition.field_source}
         onChange={(e) => {
@@ -341,7 +348,7 @@ function ConditionRow({
       ) : (
         <input value={condition.value} onChange={(e) => onChange({ ...condition, value: e.target.value })} required style={{ width: 140 }} />
       ))}
-      <button className="btn" type="button" onClick={onRemove}>Remove</button>
+      <button className="builder-row-remove" type="button" onClick={onRemove} title="Remove condition">✕</button>
     </div>
   );
 }
@@ -367,7 +374,8 @@ function ActionRow({
   const selectedBuiltin = isBuiltinTarget ? actionableBuiltinFields.find((f) => f.key === action.target_field_key) : undefined;
 
   return (
-    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+    <div className="builder-row-card">
+      <span style={{ fontSize: 15 }}>{ACTION_ICONS[action.action_type]}</span>
       <select
         value={action.action_type}
         onChange={(e) => {
@@ -415,7 +423,7 @@ function ActionRow({
       {isMessageAction && (
         <input value={action.message ?? ""} onChange={(e) => onChange({ ...action, message: e.target.value })} placeholder="Message shown to the user" required style={{ width: 260 }} />
       )}
-      <button className="btn" type="button" onClick={onRemove}>Remove</button>
+      <button className="builder-row-remove" type="button" onClick={onRemove} title="Remove effect">✕</button>
     </div>
   );
 }
@@ -448,104 +456,189 @@ function RuleForm({
   const [conditions, setConditions] = useState<BusinessRuleConditionInput[]>(initial.conditions);
   const [actions, setActions] = useState<BusinessRuleActionInput[]>(initial.actions);
   const [isActive, setIsActive] = useState(initial.is_active ?? true);
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
-    mutationFn: () =>
+    mutationFn: (nextActive: boolean) =>
       onSubmit(
         {
           entity_type: entityType, name, description: description || null, match_type: matchType, priority,
           effective_start_date: startDate || null, effective_end_date: endDate || null, conditions, actions,
         },
-        isActive,
+        nextActive,
       ),
-    onSuccess: onDone,
+    onSuccess: (_, nextActive) => {
+      setIsActive(nextActive);
+      onDone();
+    },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this rule"),
   });
 
+  // Rule summary panel: computed live from the form state below, not
+  // stored separately - "what will this rule actually do" at a glance.
+  const fieldLabels = Array.from(
+    new Set(
+      actions
+        .filter((a) => a.target_field_key)
+        .map((a) => fieldLabel(entityType, a.target_field_source, a.target_field_key as string, new Map(customFields.map((f) => [f.key, f.label])))),
+    ),
+  );
+  const blocksSave = actions.some((a) => a.action_type === "block_save");
+
   return (
-    <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
-      {error && <div className="error-banner">{error}</div>}
-      <form
-        className="form-grid"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
-      >
-        <div className="form-field full">
-          <label>Rule name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
-        <div className="form-field full">
-          <label>Description (optional)</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label>Match</label>
-          <select value={matchType} onChange={(e) => setMatchType(e.target.value as MatchType)}>
-            {MATCH_TYPES.map((m) => <option key={m} value={m}>{m === "all" ? "All conditions (AND)" : "Any condition (OR)"}</option>)}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Priority (lower runs first)</label>
-          <input type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
-        </div>
-        <div className="form-field">
-          <label>Effective from (optional)</label>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label>Effective until (optional)</label>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-        </div>
-
-        <div className="form-field full">
-          <label>If</label>
-          {conditions.map((c, i) => (
-            <ConditionRow
-              key={i}
-              entityType={entityType}
-              customFields={customFields}
-              condition={c}
-              onChange={(next) => setConditions(conditions.map((x, idx) => (idx === i ? next : x)))}
-              onRemove={() => setConditions(conditions.filter((_, idx) => idx !== i))}
-            />
-          ))}
-          <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
-            + Add condition
-          </button>
-        </div>
-
-        <div className="form-field full">
-          <label>Then</label>
-          {actions.map((a, i) => (
-            <ActionRow
-              key={i}
-              entityType={entityType}
-              customFields={customFields}
-              action={a}
-              onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
-              onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
-            />
-          ))}
-          <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(entityType, customFields)])}>
-            + Add action
-          </button>
-        </div>
-
-        {showActiveToggle && (
-          <div className="form-field">
-            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-              Active
-            </label>
+    <div style={{ marginBottom: 16 }}>
+      <div className="builder-header">
+        <div>
+          <div className="builder-breadcrumb">Business Rules / {name || "New rule"}</div>
+          <div className="builder-title-row">
+            <h2>{name || "New rule"}</h2>
+            {showActiveToggle && <span className={`badge${isActive ? " badge-success" : ""}`}>{isActive ? "Active" : "Inactive"}</span>}
           </div>
-        )}
-        <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={save.isPending || conditions.length === 0 || actions.length === 0}>
+          <p className="builder-subtitle">{description || `Applies to ${entityTypeLabel(entityType)}.`}</p>
+        </div>
+        <div className="builder-header-actions">
+          <button className="btn" type="button" onClick={() => setTesting((v) => !v)}>
+            {testing ? "Hide test" : "Test rule"}
+          </button>
+          {showActiveToggle && (
+            <button className="btn" type="button" disabled={save.isPending} onClick={() => save.mutate(!isActive)}>
+              {isActive ? "Deactivate" : "Activate"}
+            </button>
+          )}
+          <button
+            className="btn btn-primary"
+            type="submit"
+            form="business-rule-form"
+            disabled={save.isPending || conditions.length === 0 || actions.length === 0}
+          >
             {submitLabel}
           </button>
+        </div>
+      </div>
+
+      {error && <div className="error-banner">{error}</div>}
+      {testing && <TestRulesPanel entityType={entityType} customFields={customFields} />}
+
+      <form
+        id="business-rule-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate(isActive);
+        }}
+      >
+        <div className="builder-section">
+          <div className="builder-section-title">Details</div>
+          <div className="form-grid">
+            <div className="form-field full">
+              <label>Rule name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
+            <div className="form-field full">
+              <label>Description (optional)</label>
+              <input value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+            <div className="form-field">
+              <label>Priority (lower runs first)</label>
+              <input type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
+            </div>
+            <div className="form-field">
+              <label>Effective from (optional)</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="form-field">
+              <label>Effective until (optional)</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+            {showActiveToggle && (
+              <div className="form-field">
+                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                  Active
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="builder-layout">
+          <div>
+            <div className="builder-section">
+              <div className="builder-section-title">
+                <span className="step-badge">1</span> Conditions
+              </div>
+              <div className="form-field" style={{ maxWidth: 260, marginBottom: 10 }}>
+                <label>Match</label>
+                <select value={matchType} onChange={(e) => setMatchType(e.target.value as MatchType)}>
+                  {MATCH_TYPES.map((m) => (
+                    <option key={m} value={m}>{m === "all" ? "All conditions (AND)" : "Any condition (OR)"}</option>
+                  ))}
+                </select>
+              </div>
+              {conditions.map((c, i) => (
+                <div key={i}>
+                  {i > 0 && <div className="builder-and-divider">{matchType === "all" ? "AND" : "OR"}</div>}
+                  <ConditionRow
+                    entityType={entityType}
+                    customFields={customFields}
+                    condition={c}
+                    onChange={(next) => setConditions(conditions.map((x, idx) => (idx === i ? next : x)))}
+                    onRemove={() => setConditions(conditions.filter((_, idx) => idx !== i))}
+                  />
+                </div>
+              ))}
+              <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
+                + Add condition
+              </button>
+            </div>
+
+            <div className="builder-section">
+              <div className="builder-section-title">
+                <span className="step-badge">2</span> Effects (Actions)
+              </div>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: -4 }}>
+                Choose what should happen when the conditions above are met.
+              </p>
+              {actions.map((a, i) => (
+                <ActionRow
+                  key={i}
+                  entityType={entityType}
+                  customFields={customFields}
+                  action={a}
+                  onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
+                  onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
+                />
+              ))}
+              <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(entityType, customFields)])}>
+                + Add effect
+              </button>
+            </div>
+          </div>
+
+          <div className="builder-summary-panel">
+            <h4>Rule summary</h4>
+            <div className="summary-row"><span className="label">Applies to</span><span className="value">{entityTypeLabel(entityType)}</span></div>
+            <div className="summary-row"><span className="label">Execute on</span><span className="value">Create and edit</span></div>
+            <div className="summary-row"><span className="label">Field dependency</span><span className="value">{fieldLabels.length > 0 ? fieldLabels.join(", ") : "None"}</span></div>
+            <div className="summary-row"><span className="label">Priority</span><span className="value">{priority}</span></div>
+            <div className="summary-row"><span className="label">Stop processing</span><span className="value">{blocksSave ? "Yes (block save)" : "No"}</span></div>
+
+            <h4>Effect types you can use</h4>
+            {EFFECT_LEGEND.map((group) => (
+              <div className="legend-group" key={group.title}>
+                <div className="legend-group-title">{group.title}</div>
+                {group.types.map((t) => (
+                  <div className="legend-item" key={t}>
+                    <span>{ACTION_ICONS[t]}</span>
+                    <span>{ACTION_LABELS[t]}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
           <button className="btn" type="button" onClick={onCancel}>
             Cancel
           </button>
