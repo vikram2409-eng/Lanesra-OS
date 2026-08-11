@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -7,10 +7,14 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
+import { TabListCard } from "../../components/TabListCard";
 import { field } from "../../lib/csv";
+import type { Prefill, Section } from "../../components/AppShell";
+import { formatCents } from "../../lib/money";
 import { CONTACT_STATUSES, type Company, type Contact, type ContactInput, type CustomFieldValues } from "../../lib/types";
 
-type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
 function contactExportColumns(companyNameById: Map<string, string>) {
   return [
@@ -95,27 +99,52 @@ function emptyInput(companyId: string): ContactInput {
   };
 }
 
-export function Contacts() {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function Contacts({
+  prefill,
+  onPrefillConsumed,
+  onNavigateTo,
+}: {
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+} = {}) {
+  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
+  useEffect(() => {
+    if (prefill?.companyId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["contacts"] });
   }
 
-  if (view.mode !== "list") {
+  if (view.mode === "create" || view.mode === "edit") {
     return (
       <ContactForm
         contactId={view.mode === "edit" ? view.id : undefined}
         companies={companies.data ?? []}
+        initialCompanyId={view.mode === "create" ? prefill?.companyId : undefined}
         onDone={() => {
           invalidate();
           setView({ mode: "list" });
         }}
         onCancel={() => setView({ mode: "list" })}
+      />
+    );
+  }
+
+  if (view.mode === "detail") {
+    return (
+      <ContactDetail
+        id={view.id}
+        onEdit={() => setView({ mode: "edit", id: view.id })}
+        onBack={() => setView({ mode: "list" })}
+        onNavigateTo={onNavigateTo}
       />
     );
   }
@@ -168,7 +197,7 @@ export function Contacts() {
           </thead>
           <tbody>
             {contacts.data.map((c) => (
-              <tr key={c.id}>
+              <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
                 <td>{c.contact_number}</td>
                 <td>
                   {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
@@ -179,7 +208,13 @@ export function Contacts() {
                   <StatusBadge status={c.status} />
                 </td>
                 <td>
-                  <button className="btn" onClick={() => setView({ mode: "edit", id: c.id })}>
+                  <button
+                    className="btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setView({ mode: "edit", id: c.id });
+                    }}
+                  >
                     Edit
                   </button>
                 </td>
@@ -195,11 +230,13 @@ export function Contacts() {
 function ContactForm({
   contactId,
   companies,
+  initialCompanyId,
   onDone,
   onCancel,
 }: {
   contactId?: string;
   companies: { id: string; name: string }[];
+  initialCompanyId?: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -213,7 +250,7 @@ function ContactForm({
     queryFn: () => api.getCustomFieldValues(contactId as string),
     enabled: !!contactId,
   });
-  const [input, setInput] = useState<ContactInput>(emptyInput(companies[0]?.id ?? ""));
+  const [input, setInput] = useState<ContactInput>(emptyInput(initialCompanyId ?? companies[0]?.id ?? ""));
   const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -331,3 +368,196 @@ function ContactForm({
     </div>
   );
 }
+
+type ContactTab = "overview" | "opportunities" | "quotes" | "orders" | "invoices" | "tasks" | "activity";
+const CONTACT_TABS: { tab: ContactTab; label: string }[] = [
+  { tab: "overview", label: "Overview" },
+  { tab: "opportunities", label: "Opportunities" },
+  { tab: "quotes", label: "Quotes" },
+  { tab: "orders", label: "Orders" },
+  { tab: "invoices", label: "Invoices" },
+  { tab: "tasks", label: "Tasks" },
+  { tab: "activity", label: "Activity" },
+];
+
+/**
+ * Addendum Phase 5 (Contact 360, spec §5): a tabbed record view replacing
+ * the plain list-only Contacts screen (there was no detail view at all
+ * before this) - related opportunities/quotes/orders/invoices/tasks for
+ * this contact, a clickable KPI strip that jumps straight to the matching
+ * tab, "+ New" from each tab pre-filling the relationship via
+ * `onNavigateTo` (see Prefill's doc comment in AppShell.tsx), and a
+ * chronological Activity feed across everything below.
+ */
+function ContactDetail({
+  id,
+  onEdit,
+  onBack,
+  onNavigateTo,
+}: {
+  id: string;
+  onEdit: () => void;
+  onBack: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+}) {
+  const [tab, setTab] = useState<ContactTab>("overview");
+  const contact = useQuery({ queryKey: ["contact", id], queryFn: () => api.getContact(id) });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
+  const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
+  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
+  const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
+  const tasks = useQuery({ queryKey: ["tasksByRelated", "Contact", id], queryFn: () => api.listTasksByRelated("Contact", id) });
+
+  if (!contact.data) return <p>Loading...</p>;
+  const c = contact.data;
+  const companyName = companies.data?.find((co) => co.id === c.company_id)?.name;
+
+  const relatedOpportunities = (opportunities.data ?? []).filter((o) => o.primary_contact_id === id);
+  const relatedQuotes = (quotes.data ?? []).filter((q) => q.contact_id === id);
+  const relatedOrders = (orders.data ?? []).filter((o) => o.contact_id === id);
+  const relatedInvoices = (invoices.data ?? []).filter((i) => i.contact_id === id);
+  const relatedTasks = tasks.data ?? [];
+
+  const goNew = (section: Section) => onNavigateTo?.(section, { companyId: c.company_id, contactId: c.id });
+
+  const kpis: { tab: ContactTab; label: string; count: number }[] = [
+    { tab: "opportunities", label: "Opportunities", count: relatedOpportunities.length },
+    { tab: "quotes", label: "Quotes", count: relatedQuotes.length },
+    { tab: "orders", label: "Orders", count: relatedOrders.length },
+    { tab: "invoices", label: "Invoices", count: relatedInvoices.length },
+    { tab: "tasks", label: "Tasks", count: relatedTasks.length },
+  ];
+
+  const activity: { at: string; text: string }[] = [
+    ...relatedOpportunities.map((o) => ({ at: o.created_at, text: `Opportunity ${o.opportunity_number} "${o.name}" created (${o.stage})` })),
+    ...relatedQuotes.map((q) => ({ at: q.created_at, text: `Quote ${q.quote_number} created (${q.status})` })),
+    ...relatedOrders.map((o) => ({ at: o.created_at, text: `Order ${o.order_number} created (${o.status})` })),
+    ...relatedInvoices.map((i) => ({ at: i.created_at, text: `Invoice ${i.invoice_number} created (${i.status})` })),
+    ...relatedTasks.map((t) => ({ at: t.created_at, text: `Task "${t.title}" created (${t.status})` })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+
+  return (
+    <div>
+      <div className="toolbar">
+        <button className="btn" onClick={onBack}>
+          ← Back
+        </button>
+        <button className="btn" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+      <h2>
+        {c.first_name} {c.last_name} <StatusBadge status={c.status} />
+      </h2>
+      <p style={{ color: "var(--text-muted)" }}>
+        {c.contact_number}
+        {companyName ? ` · ${companyName}` : ""}
+        {c.job_title ? ` · ${c.job_title}` : ""}
+      </p>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {kpis.map((k) => (
+          <button
+            key={k.tab}
+            className={`badge${tab === k.tab ? " badge-success" : ""}`}
+            style={{ cursor: "pointer" }}
+            onClick={() => setTab(k.tab)}
+          >
+            {k.label}: {k.count}
+          </button>
+        ))}
+      </div>
+
+      <div className="tab-row">
+        {CONTACT_TABS.map((t) => (
+          <button key={t.tab} className={`tab${tab === t.tab ? " active" : ""}`} onClick={() => setTab(t.tab)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Details</h3>
+            <p><strong>Email:</strong> {c.email ?? "—"}</p>
+            <p><strong>Phone:</strong> {c.phone ?? "—"}</p>
+            <p><strong>Mobile:</strong> {c.mobile ?? "—"}</p>
+            <p><strong>Tags:</strong> {c.tags ?? "—"}</p>
+            <p><strong>Notes:</strong> {c.notes ?? "—"}</p>
+          </div>
+          <RelatedRecordsCard entityType="Contact" entityId={id} />
+        </div>
+      )}
+
+      {tab === "opportunities" && (
+        <TabListCard
+          title="Opportunities"
+          newLabel="+ New opportunity"
+          onNew={() => goNew("opportunities")}
+          rows={relatedOpportunities}
+          columns={["Number", "Name", "Stage", "Value"]}
+          render={(o) => [o.opportunity_number, o.name, o.stage, formatCents(o.value_cents, o.currency_code)]}
+        />
+      )}
+      {tab === "quotes" && (
+        <TabListCard
+          title="Quotes"
+          newLabel="+ New quote"
+          onNew={() => goNew("quotes")}
+          rows={relatedQuotes}
+          columns={["Number", "Status", "Total"]}
+          render={(q) => [q.quote_number, q.status, formatCents(q.total_cents, q.currency_code)]}
+        />
+      )}
+      {tab === "orders" && (
+        <TabListCard
+          title="Orders"
+          newLabel="+ New order"
+          onNew={() => goNew("orders")}
+          rows={relatedOrders}
+          columns={["Number", "Status", "Total"]}
+          render={(o) => [o.order_number, o.status, formatCents(o.total_cents, o.currency_code)]}
+        />
+      )}
+      {tab === "invoices" && (
+        <TabListCard
+          title="Invoices"
+          newLabel="+ New invoice"
+          onNew={() => goNew("invoices")}
+          rows={relatedInvoices}
+          columns={["Number", "Status", "Balance"]}
+          render={(i) => [i.invoice_number, i.status, formatCents(i.balance_cents, i.currency_code)]}
+        />
+      )}
+      {tab === "tasks" && (
+        <TabListCard
+          title="Tasks"
+          newLabel="+ New task"
+          onNew={() => onNavigateTo?.("tasks", { contactId: c.id })}
+          rows={relatedTasks}
+          columns={["Number", "Title", "Status"]}
+          render={(t) => [t.task_number, t.title, t.status]}
+        />
+      )}
+      {tab === "activity" && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Activity</h3>
+          {activity.length === 0 ? (
+            <p className="empty-state">Nothing yet</p>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
+              {activity.map((a, idx) => (
+                <li key={idx}>
+                  {a.text} <span style={{ color: "var(--text-muted)" }}>— {a.at.slice(0, 10)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+

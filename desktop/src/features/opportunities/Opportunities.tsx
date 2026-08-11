@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -6,6 +6,7 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import type { Prefill } from "../../components/AppShell";
 import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STATUSES,
@@ -47,11 +48,22 @@ function emptyInput(companyId: string, currency: string): OpportunityInput {
   };
 }
 
-export function Opportunities() {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function Opportunities({
+  prefill,
+  onPrefillConsumed,
+}: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
+  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
   const queryClient = useQueryClient();
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+
+  // One-shot: this component fully remounts on every navigation into this
+  // section, so "on mount" reliably means "just navigated here" - see
+  // Prefill's doc comment in AppShell.tsx.
+  useEffect(() => {
+    if (prefill?.companyId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["opportunities"] });
@@ -62,6 +74,8 @@ export function Opportunities() {
       <OpportunityForm
         opportunityId={view.mode === "edit" ? view.id : undefined}
         companies={companies.data ?? []}
+        initialCompanyId={view.mode === "create" ? prefill?.companyId : undefined}
+        initialContactId={view.mode === "create" ? prefill?.contactId : undefined}
         onDone={() => {
           invalidate();
           setView({ mode: "list" });
@@ -131,11 +145,15 @@ export function Opportunities() {
 function OpportunityForm({
   opportunityId,
   companies,
+  initialCompanyId,
+  initialContactId,
   onDone,
   onCancel,
 }: {
   opportunityId?: string;
   companies: { id: string; name: string; currency_code?: string }[];
+  initialCompanyId?: string;
+  initialContactId?: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -149,7 +167,10 @@ function OpportunityForm({
     queryFn: () => api.getCustomFieldValues(opportunityId as string),
     enabled: !!opportunityId,
   });
-  const [input, setInput] = useState<OpportunityInput>(emptyInput(companies[0]?.id ?? "", "USD"));
+  const [input, setInput] = useState<OpportunityInput>(() => {
+    const base = emptyInput(initialCompanyId ?? companies[0]?.id ?? "", "USD");
+    return initialContactId ? { ...base, primary_contact_id: initialContactId } : base;
+  });
   const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);

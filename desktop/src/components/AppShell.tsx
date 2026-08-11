@@ -23,6 +23,20 @@ export type Section =
 
 export const customObjectSection = (key: string): Section => `custom:${key}`;
 
+/** Addendum Phase 5 (Customer 360 / Contact 360): a "+ New X" button on a
+ * detail view's related-record tab navigates to that record type's own
+ * section and pre-fills its create form with the relationship it was
+ * launched from, instead of starting from a blank form the user has to
+ * re-select the company/contact on. One-shot: the target section reads
+ * it once on mount (it fully unmounts/remounts on every section change,
+ * so "on mount" reliably means "just navigated here") and immediately
+ * clears it via `onPrefillConsumed`, so a later plain sidebar click into
+ * the same section starts from a blank list as normal. */
+export interface Prefill {
+  companyId?: string;
+  contactId?: string;
+}
+
 const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "dashboard", label: "Dashboard" },
   { section: "companies", label: "Companies" },

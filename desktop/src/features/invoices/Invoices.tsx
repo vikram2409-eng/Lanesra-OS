@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -11,6 +11,7 @@ import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import type { Prefill } from "../../components/AppShell";
 import type { CustomFieldValues, Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
@@ -30,11 +31,19 @@ function invoiceExportColumns(companyNameById: Map<string, string>) {
   ];
 }
 
-export function Invoices() {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function Invoices({
+  prefill,
+  onPrefillConsumed,
+}: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
+  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
   const queryClient = useQueryClient();
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+
+  useEffect(() => {
+    if (prefill?.companyId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -44,6 +53,8 @@ export function Invoices() {
     return (
       <InvoiceForm
         companies={companies.data ?? []}
+        initialCompanyId={prefill?.companyId}
+        initialContactId={prefill?.contactId}
         onDone={(id) => {
           invalidate();
           setView({ mode: "detail", id });
@@ -110,15 +121,19 @@ export function Invoices() {
 
 function InvoiceForm({
   companies,
+  initialCompanyId,
+  initialContactId,
   onDone,
   onCancel,
 }: {
   companies: { id: string; name: string }[];
+  initialCompanyId?: string;
+  initialContactId?: string;
   onDone: (id: string) => void;
   onCancel: () => void;
 }) {
-  const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
-  const [contactId, setContactId] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState(initialCompanyId ?? companies[0]?.id ?? "");
+  const [contactId, setContactId] = useState<string | null>(initialContactId ?? null);
   const [currencyCode, setCurrencyCode] = useState("USD");
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");

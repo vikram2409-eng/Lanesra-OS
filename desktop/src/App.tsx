@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { AppShell, type Section } from "./components/AppShell";
+import { AppShell, type Prefill, type Section } from "./components/AppShell";
 import { SessionLock } from "./components/SessionLock";
 import { TaskReminderNotifier } from "./components/TaskReminderNotifier";
 import { FirstRun } from "./features/firstRun/FirstRun";
@@ -96,6 +96,14 @@ function Ready({
   onLogout: () => void;
 }) {
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
+  const [prefill, setPrefill] = useState<Prefill | null>(null);
+  function navigateTo(target: Section, pre: Prefill) {
+    setPrefill(pre);
+    setSection(target);
+  }
+  function clearPrefill() {
+    setPrefill(null);
+  }
   const activeCustomObject = section.startsWith("custom:")
     ? customObjects.data?.find((o) => o.key === section.slice("custom:".length))
     : undefined;
@@ -117,15 +125,19 @@ function Ready({
       <TaskReminderNotifier currentUserId={user.id} />
       <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
         {section === "dashboard" && <Dashboard onNavigate={setSection} />}
-        {section === "companies" && <Companies />}
-        {section === "contacts" && <Contacts />}
+        {section === "companies" && <Companies onNavigateTo={navigateTo} />}
+        {section === "contacts" && (
+          <Contacts prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+        )}
         {section === "products" && <Products />}
-        {section === "opportunities" && <Opportunities />}
-        {section === "quotes" && <Quotes />}
-        {section === "orders" && <Orders />}
-        {section === "invoices" && <Invoices />}
-        {section === "contracts" && <Contracts />}
-        {section === "tasks" && <Tasks currentUserId={user.id} />}
+        {section === "opportunities" && <Opportunities prefill={prefill} onPrefillConsumed={clearPrefill} />}
+        {section === "quotes" && <Quotes prefill={prefill} onPrefillConsumed={clearPrefill} />}
+        {section === "orders" && <Orders prefill={prefill} onPrefillConsumed={clearPrefill} />}
+        {section === "invoices" && <Invoices prefill={prefill} onPrefillConsumed={clearPrefill} />}
+        {section === "contracts" && <Contracts prefill={prefill} onPrefillConsumed={clearPrefill} />}
+        {section === "tasks" && (
+          <Tasks currentUserId={user.id} prefill={prefill} onPrefillConsumed={clearPrefill} />
+        )}
         {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
         {section === "admin" && <AdminPanel />}
         {section === "account" && <Account user={user} />}

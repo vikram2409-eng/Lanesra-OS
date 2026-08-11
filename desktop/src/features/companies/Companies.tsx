@@ -3,11 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
+import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
+import { TabListCard } from "../../components/TabListCard";
+import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
 import { COMPANY_STATUSES, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
 
@@ -68,7 +71,7 @@ const emptyInput: CompanyInput = {
   notes: null,
 };
 
-export function Companies() {
+export function Companies({ onNavigateTo }: { onNavigateTo?: (section: Section, prefill: Prefill) => void } = {}) {
   const [view, setView] = useState<View>({ mode: "list" });
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
@@ -97,6 +100,7 @@ export function Companies() {
         id={view.id}
         onEdit={() => setView({ mode: "edit", id: view.id })}
         onBack={() => setView({ mode: "list" })}
+        onNavigateTo={onNavigateTo}
       />
     );
   }
@@ -288,12 +292,42 @@ function CompanyForm({
   );
 }
 
-function CompanyDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void; onBack: () => void }) {
+type CompanyTab = "overview" | "contacts" | "opportunities" | "quotes" | "orders" | "invoices" | "contracts" | "tasks" | "activity";
+const COMPANY_TABS: { tab: CompanyTab; label: string }[] = [
+  { tab: "overview", label: "Overview" },
+  { tab: "contacts", label: "Contacts" },
+  { tab: "opportunities", label: "Opportunities" },
+  { tab: "quotes", label: "Quotes" },
+  { tab: "orders", label: "Orders" },
+  { tab: "invoices", label: "Invoices" },
+  { tab: "contracts", label: "Contracts" },
+  { tab: "tasks", label: "Tasks" },
+  { tab: "activity", label: "Activity" },
+];
+
+/**
+ * Addendum Phase 5 (Customer 360, spec §5): a tabbed record view
+ * replacing the old plain-grid CompanyDetail - Contracts and Tasks tabs
+ * added (previously missing entirely), a clickable KPI strip that jumps
+ * straight to the matching tab, "+ New" from each tab pre-filling the
+ * relationship via `onNavigateTo` (see Prefill's doc comment in
+ * AppShell.tsx), and a chronological Activity feed across everything
+ * below.
+ */
+function CompanyDetail({
+  id,
+  onEdit,
+  onBack,
+  onNavigateTo,
+}: {
+  id: string;
+  onEdit: () => void;
+  onBack: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+}) {
+  const [tab, setTab] = useState<CompanyTab>("overview");
   const company = useQuery({ queryKey: ["company", id], queryFn: () => api.getCompany(id) });
-  const contacts = useQuery({
-    queryKey: ["contactsByCompany", id],
-    queryFn: () => api.listContactsByCompany(id),
-  });
+  const contacts = useQuery({ queryKey: ["contactsByCompany", id], queryFn: () => api.listContactsByCompany(id) });
   const opportunities = useQuery({
     queryKey: ["opportunitiesByCompany", id],
     queryFn: () => api.listOpportunitiesByCompany(id),
@@ -301,12 +335,40 @@ function CompanyDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
+  const contracts = useQuery({ queryKey: ["contractsByCompany", id], queryFn: () => api.listContractsByCompany(id) });
+  const tasks = useQuery({ queryKey: ["tasksByRelated", "Company", id], queryFn: () => api.listTasksByRelated("Company", id) });
 
   if (!company.data) return <p>Loading...</p>;
 
+  const relatedContacts = contacts.data ?? [];
+  const relatedOpportunities = opportunities.data ?? [];
   const relatedQuotes = (quotes.data ?? []).filter((q) => q.company_id === id);
   const relatedOrders = (orders.data ?? []).filter((o) => o.company_id === id);
   const relatedInvoices = (invoices.data ?? []).filter((i) => i.company_id === id);
+  const relatedContracts = contracts.data ?? [];
+  const relatedTasks = tasks.data ?? [];
+
+  const kpis: { tab: CompanyTab; label: string; count: number }[] = [
+    { tab: "contacts", label: "Contacts", count: relatedContacts.length },
+    { tab: "opportunities", label: "Opportunities", count: relatedOpportunities.length },
+    { tab: "quotes", label: "Quotes", count: relatedQuotes.length },
+    { tab: "orders", label: "Orders", count: relatedOrders.length },
+    { tab: "invoices", label: "Invoices", count: relatedInvoices.length },
+    { tab: "contracts", label: "Contracts", count: relatedContracts.length },
+    { tab: "tasks", label: "Tasks", count: relatedTasks.length },
+  ];
+
+  const activity: { at: string; text: string }[] = [
+    ...relatedContacts.map((c) => ({ at: c.created_at, text: `Contact ${c.first_name} ${c.last_name} added` })),
+    ...relatedOpportunities.map((o) => ({ at: o.created_at, text: `Opportunity ${o.opportunity_number} "${o.name}" created (${o.stage})` })),
+    ...relatedQuotes.map((q) => ({ at: q.created_at, text: `Quote ${q.quote_number} created (${q.status})` })),
+    ...relatedOrders.map((o) => ({ at: o.created_at, text: `Order ${o.order_number} created (${o.status})` })),
+    ...relatedInvoices.map((i) => ({ at: i.created_at, text: `Invoice ${i.invoice_number} created (${i.status})` })),
+    ...relatedContracts.map((c) => ({ at: c.created_at, text: `Contract ${c.contract_number} "${c.title}" created (${c.status})` })),
+    ...relatedTasks.map((t) => ({ at: t.created_at, text: `Task "${t.title}" created (${t.status})` })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+
+  const goNew = (section: Section) => onNavigateTo?.(section, { companyId: id });
 
   return (
     <div>
@@ -325,40 +387,126 @@ function CompanyDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
       </h2>
       <p style={{ color: "var(--text-muted)" }}>{company.data.customer_number}</p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <RelatedList title="Contacts" rows={contacts.data} render={(c) => `${c.first_name} ${c.last_name}`} />
-        <RelatedList title="Opportunities" rows={opportunities.data} render={(o) => `${o.name} (${o.stage})`} />
-        <RelatedList title="Quotes" rows={relatedQuotes} render={(q) => `${q.quote_number} — ${q.status}`} />
-        <RelatedList title="Orders" rows={relatedOrders} render={(o) => `${o.order_number} — ${o.status}`} />
-        <RelatedList title="Invoices" rows={relatedInvoices} render={(i) => `${i.invoice_number} — ${i.status}`} />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {kpis.map((k) => (
+          <button
+            key={k.tab}
+            className={`badge${tab === k.tab ? " badge-success" : ""}`}
+            style={{ cursor: "pointer" }}
+            onClick={() => setTab(k.tab)}
+          >
+            {k.label}: {k.count}
+          </button>
+        ))}
       </div>
-      <div style={{ marginTop: 16 }}>
-        <RelatedRecordsCard entityType="Company" entityId={id} />
-      </div>
-    </div>
-  );
-}
 
-function RelatedList<T>({
-  title,
-  rows,
-  render,
-}: {
-  title: string;
-  rows: T[] | undefined;
-  render: (row: T) => string;
-}) {
-  return (
-    <div className="card">
-      <h3 style={{ marginTop: 0 }}>{title}</h3>
-      {!rows || rows.length === 0 ? (
-        <p className="empty-state">None yet</p>
-      ) : (
-        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
-          {rows.map((r, idx) => (
-            <li key={idx}>{render(r)}</li>
-          ))}
-        </ul>
+      <div className="tab-row">
+        {COMPANY_TABS.map((t) => (
+          <button key={t.tab} className={`tab${tab === t.tab ? " active" : ""}`} onClick={() => setTab(t.tab)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
+          <div className="card">
+            <h3 style={{ marginTop: 0 }}>Details</h3>
+            <p><strong>Tax number:</strong> {company.data.tax_number ?? "—"}</p>
+            <p><strong>Billing address:</strong> {company.data.billing_address ?? "—"}</p>
+            <p><strong>Shipping address:</strong> {company.data.shipping_address ?? "—"}</p>
+            <p><strong>Tags:</strong> {company.data.tags ?? "—"}</p>
+            <p><strong>Notes:</strong> {company.data.notes ?? "—"}</p>
+          </div>
+          <RelatedRecordsCard entityType="Company" entityId={id} />
+        </div>
+      )}
+
+      {tab === "contacts" && (
+        <TabListCard
+          title="Contacts"
+          newLabel="+ New contact"
+          onNew={() => goNew("contacts")}
+          rows={relatedContacts}
+          columns={["Number", "Name", "Email", "Status"]}
+          render={(c) => [c.contact_number, `${c.first_name} ${c.last_name}${c.is_primary ? " (Primary)" : ""}`, c.email ?? "—", c.status]}
+        />
+      )}
+      {tab === "opportunities" && (
+        <TabListCard
+          title="Opportunities"
+          newLabel="+ New opportunity"
+          onNew={() => goNew("opportunities")}
+          rows={relatedOpportunities}
+          columns={["Number", "Name", "Stage", "Value"]}
+          render={(o) => [o.opportunity_number, o.name, o.stage, formatCents(o.value_cents, o.currency_code)]}
+        />
+      )}
+      {tab === "quotes" && (
+        <TabListCard
+          title="Quotes"
+          newLabel="+ New quote"
+          onNew={() => goNew("quotes")}
+          rows={relatedQuotes}
+          columns={["Number", "Status", "Total"]}
+          render={(q) => [q.quote_number, q.status, formatCents(q.total_cents, q.currency_code)]}
+        />
+      )}
+      {tab === "orders" && (
+        <TabListCard
+          title="Orders"
+          newLabel="+ New order"
+          onNew={() => goNew("orders")}
+          rows={relatedOrders}
+          columns={["Number", "Status", "Total"]}
+          render={(o) => [o.order_number, o.status, formatCents(o.total_cents, o.currency_code)]}
+        />
+      )}
+      {tab === "invoices" && (
+        <TabListCard
+          title="Invoices"
+          newLabel="+ New invoice"
+          onNew={() => goNew("invoices")}
+          rows={relatedInvoices}
+          columns={["Number", "Status", "Balance"]}
+          render={(i) => [i.invoice_number, i.status, formatCents(i.balance_cents, i.currency_code)]}
+        />
+      )}
+      {tab === "contracts" && (
+        <TabListCard
+          title="Contracts"
+          newLabel="+ New contract"
+          onNew={() => goNew("contracts")}
+          rows={relatedContracts}
+          columns={["Number", "Title", "Status", "Renewal date"]}
+          render={(c) => [c.contract_number, c.title, c.status, c.renewal_date ?? "—"]}
+        />
+      )}
+      {tab === "tasks" && (
+        <TabListCard
+          title="Tasks"
+          newLabel="+ New task"
+          onNew={() => onNavigateTo?.("tasks", { companyId: id })}
+          rows={relatedTasks}
+          columns={["Number", "Title", "Status"]}
+          render={(t) => [t.task_number, t.title, t.status]}
+        />
+      )}
+      {tab === "activity" && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3 style={{ marginTop: 0 }}>Activity</h3>
+          {activity.length === 0 ? (
+            <p className="empty-state">Nothing yet</p>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
+              {activity.map((a, idx) => (
+                <li key={idx}>
+                  {a.text} <span style={{ color: "var(--text-muted)" }}>— {a.at.slice(0, 10)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );
