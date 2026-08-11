@@ -17,6 +17,7 @@ use crate::domain::{AppError, AppResult};
 use crate::models::custom_object::CUSTOM_RECORD_STATUSES;
 use crate::models::custom_record::{CustomRecord, CustomRecordInput, CustomRecordUpdate};
 use crate::repositories::{custom_object_repo, custom_record_repo};
+use crate::services::relationship_service;
 
 fn resolve_active_object(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<crate::models::custom_object::CustomObjectDefinition> {
     let def = custom_object_repo::get_by_key(conn, workspace_id, object_key)?
@@ -90,6 +91,10 @@ pub fn update(
 }
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomRecord> {
-    get(conn, id)?;
+    let record = get(conn, id)?;
+    // Phase B (ADM-CR-06): a `restrict` custom relationship still linking
+    // to this record blocks archiving it; an `archive` one has its link
+    // rows cleared instead of following the record into archive.
+    relationship_service::enforce_delete_behavior(conn, &record.object_key, id)?;
     Ok(custom_record_repo::archive(conn, id, actor_user_id)?)
 }

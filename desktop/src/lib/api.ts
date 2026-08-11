@@ -56,6 +56,11 @@ import type {
   FieldRuleUpdate,
   LostReasonBreakdown,
   NumberingOverrideInput,
+  RelatedRecord,
+  RelationshipDefinition,
+  RelationshipDefinitionInput,
+  RelationshipDefinitionUpdate,
+  RelationshipInstance,
   ReportRange,
   RevenueByMonth,
   SalesByOwner,
@@ -265,6 +270,27 @@ export const api = {
   updateCustomRecord: (id: string, input: CustomRecordUpdate) =>
     call<CustomRecord>("update_custom_record", { id, input }),
   archiveCustomRecord: (id: string) => call<CustomRecord>("archive_custom_record", { id }),
+
+  listRelationshipDefinitions: (activeOnly: boolean) =>
+    call<RelationshipDefinition[]>("list_relationship_definitions", { activeOnly }),
+  createRelationshipDefinition: (input: RelationshipDefinitionInput) =>
+    call<RelationshipDefinition>("create_relationship_definition", { input }),
+  updateRelationshipDefinition: (id: string, input: RelationshipDefinitionUpdate) =>
+    call<RelationshipDefinition>("update_relationship_definition", { id, input }),
+  deleteRelationshipDefinition: (id: string) => call<void>("delete_relationship_definition", { id }),
+  linkRecords: (
+    definitionId: string,
+    sourceEntityType: string,
+    sourceId: string,
+    targetEntityType: string,
+    targetId: string,
+  ) =>
+    call<RelationshipInstance>("link_records", {
+      definitionId, sourceEntityType, sourceId, targetEntityType, targetId,
+    }),
+  unlinkRecords: (instanceId: string) => call<void>("unlink_records", { instanceId }),
+  listRelatedRecords: (entityType: string, entityId: string) =>
+    call<RelatedRecord[]>("list_related_records", { entityType, entityId }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

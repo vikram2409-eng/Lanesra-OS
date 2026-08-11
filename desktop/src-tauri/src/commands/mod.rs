@@ -15,6 +15,7 @@ pub mod opportunity_commands;
 pub mod order_commands;
 pub mod product_commands;
 pub mod quote_commands;
+pub mod relationship_commands;
 pub mod report_commands;
 pub mod task_commands;
 pub mod user_commands;

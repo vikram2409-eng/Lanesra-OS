@@ -14,6 +14,7 @@ pub mod numbering_override;
 pub mod opportunity;
 pub mod order;
 pub mod product;
+pub mod relationship;
 pub mod report;
 pub mod quote;
 pub mod task;

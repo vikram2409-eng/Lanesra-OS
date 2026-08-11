@@ -23,6 +23,7 @@ use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate}
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
 use lanesra_core::models::field_rule::{FieldRuleInput, FieldRuleUpdate};
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
+use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workflow_rule::{WorkflowRuleInput, WorkflowRuleUpdate};
@@ -32,7 +33,7 @@ use lanesra_core::services::{
     auth_service, backup_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
     field_rule_service, invoice_service, numbering_service, opportunity_service, order_service, product_service,
-    quote_service, report_service, task_service, user_service, workflow_service, workspace_service,
+    quote_service, relationship_service, report_service, task_service, user_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -436,6 +437,46 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "archive_custom_record" => {
             let id: String = arg(args, "id")?;
             to_value(custom_record_service::archive(conn, &id, actor)?)
+        }
+
+        "list_relationship_definitions" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(relationship_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_relationship_definition" => {
+            let input: RelationshipDefinitionInput = arg(args, "input")?;
+            to_value(relationship_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_relationship_definition" => {
+            let id: String = arg(args, "id")?;
+            let input: RelationshipDefinitionUpdate = arg(args, "input")?;
+            to_value(relationship_service::update(conn, &id, &input, actor)?)
+        }
+        "delete_relationship_definition" => {
+            relationship_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "link_records" => {
+            let workspace_id = require_workspace_id(conn)?;
+            to_value(relationship_service::link(
+                conn, &workspace_id,
+                &arg::<String>(args, "definitionId")?,
+                &arg::<String>(args, "sourceEntityType")?,
+                &arg::<String>(args, "sourceId")?,
+                &arg::<String>(args, "targetEntityType")?,
+                &arg::<String>(args, "targetId")?,
+                actor,
+            )?)
+        }
+        "unlink_records" => {
+            relationship_service::unlink(conn, &arg::<String>(args, "instanceId")?, actor)?;
+            Ok(Value::Null)
+        }
+        "list_related_records" => {
+            let workspace_id = require_workspace_id(conn)?;
+            to_value(relationship_service::related_records_for(
+                conn, &workspace_id, &arg::<String>(args, "entityType")?, &arg::<String>(args, "entityId")?,
+            )?)
         }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),

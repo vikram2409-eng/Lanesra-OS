@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import {
   CUSTOM_RECORD_STATUSES,
   type CustomFieldValues,
@@ -210,6 +211,11 @@ function RecordForm({
           </button>
         </div>
       </form>
+      {recordId && (
+        <div style={{ marginTop: 16 }}>
+          <RelatedRecordsCard entityType={definition.key} entityId={recordId} />
+        </div>
+      )}
     </div>
   );
 }

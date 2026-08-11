@@ -1001,3 +1001,77 @@ export interface CustomRecordUpdate {
   owner_user_id: string | null;
   notes: string | null;
 }
+
+// Admin extensibility Phase B (spec §20.3/§21): admin-defined relationships
+// between any two object types - built-in or custom. `entity_type` here is
+// the same free-form string custom fields/business rules/workflow already
+// key off, so a relationship can connect any built-in entity to any active
+// custom object, or two custom objects to each other.
+export const RELATIONSHIP_TYPES = ["many_to_one", "one_to_one", "many_to_many"] as const;
+export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
+export const DELETE_BEHAVIORS = ["restrict", "archive"] as const;
+export type DeleteBehavior = (typeof DELETE_BEHAVIORS)[number];
+
+export interface RelationshipDefinition {
+  id: string;
+  workspace_id: string;
+  key: string;
+  source_entity_type: string;
+  target_entity_type: string;
+  relationship_type: RelationshipType;
+  forward_label: string;
+  reverse_label: string;
+  is_required: boolean;
+  show_related_list: boolean;
+  delete_behavior: DeleteBehavior;
+  is_protected: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RelationshipDefinitionInput {
+  source_entity_type: string;
+  target_entity_type: string;
+  relationship_type: RelationshipType;
+  forward_label: string;
+  reverse_label: string;
+  is_required: boolean;
+  show_related_list: boolean;
+  delete_behavior: DeleteBehavior;
+  sort_order: number;
+}
+
+export interface RelationshipDefinitionUpdate {
+  forward_label: string;
+  reverse_label: string;
+  is_required: boolean;
+  show_related_list: boolean;
+  delete_behavior: DeleteBehavior;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface RelationshipInstance {
+  id: string;
+  workspace_id: string;
+  relationship_definition_id: string;
+  source_entity_type: string;
+  source_id: string;
+  target_entity_type: string;
+  target_id: string;
+  created_at: string;
+}
+
+export interface RelatedRecord {
+  instance_id: string;
+  relationship_definition_id: string;
+  relationship_key: string;
+  label: string;
+  entity_type: string;
+  entity_id: string;
+  display_name: string;
+  status: string;
+  archived: boolean;
+}

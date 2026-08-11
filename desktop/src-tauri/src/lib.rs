@@ -122,6 +122,13 @@ pub fn run() {
             commands::custom_record_commands::create_custom_record,
             commands::custom_record_commands::update_custom_record,
             commands::custom_record_commands::archive_custom_record,
+            commands::relationship_commands::list_relationship_definitions,
+            commands::relationship_commands::create_relationship_definition,
+            commands::relationship_commands::update_relationship_definition,
+            commands::relationship_commands::delete_relationship_definition,
+            commands::relationship_commands::link_records,
+            commands::relationship_commands::unlink_records,
+            commands::relationship_commands::list_related_records,
             commands::backup_commands::create_backup,
             commands::backup_commands::restore_backup,
         ])
