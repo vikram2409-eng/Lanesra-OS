@@ -65,8 +65,8 @@ The root of this repo is the public product website (`lanesraos.com`), a static 
 - `/principles` — The product decisions and beliefs behind Lanesra OS
 - `/compare` — A factual market-positioning comparison
 - `/download` — Desktop platform status, what's available today, and what's still planned
-- `/roadmap` — Current, building and planned capabilities
-- `/changelog` — Release-by-release updates
+- `/roadmap` — Shipped, in-progress and proposed work, plus the recommended build sequence (formerly split across separate Roadmap and Backlog pages)
+- `/releases` — Release-by-release updates (formerly `/changelog`)
 
 ## Previewing the website locally
 
