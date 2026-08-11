@@ -87,6 +87,10 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
             is_searchable: false,
             is_filterable: false,
             is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
         },
         Some(&admin),
     )
@@ -283,6 +287,10 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
             is_searchable: false,
             is_filterable: false,
             is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
         },
         Some(&admin),
     )
@@ -300,6 +308,10 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
             is_searchable: false,
             is_filterable: false,
             is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
         },
         Some(&admin),
     )
@@ -354,6 +366,10 @@ fn a_sum_report_must_target_an_active_numeric_custom_field() {
             is_searchable: false,
             is_filterable: false,
             is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
         },
         Some(&admin),
     )

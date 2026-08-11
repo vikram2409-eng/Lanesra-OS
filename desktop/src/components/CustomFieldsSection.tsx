@@ -61,7 +61,7 @@ export function CustomFieldsSection({
               </label>
               {def.field_type === "select" && (
                 <select value={values[def.key] ?? ""} onChange={(e) => setValue(def.key, e.target.value)} required={required} disabled={locked}>
-                  <option value="">— Select —</option>
+                  <option value="">{def.placeholder || "— Select —"}</option>
                   {def.options.map((o) => (
                     <option key={o} value={o}>
                       {o}
@@ -83,7 +83,11 @@ export function CustomFieldsSection({
                   onChange={(e) => setValue(def.key, e.target.value)}
                   required={required}
                   disabled={locked}
+                  placeholder={def.placeholder ?? undefined}
                 />
+              )}
+              {def.help_text && (
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{def.help_text}</span>
               )}
             </div>
           );

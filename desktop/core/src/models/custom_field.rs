@@ -39,6 +39,22 @@ pub struct CustomFieldDefinition {
     pub is_searchable: bool,
     pub is_filterable: bool,
     pub is_reportable: bool,
+    /// Addendum Phase 4 (spec §4): applied by
+    /// `custom_field_service::set_entity_values` whenever a save omits (or
+    /// clears) this field's value - see that function's own comment for
+    /// the exact "currently empty" semantics and how it layers under a
+    /// business rule's own set_default/set_value.
+    pub default_value: Option<String>,
+    /// Addendum Phase 4: rejects a save whose value for this field already
+    /// exists on a different record of the same entity_type. Not valid for
+    /// `boolean` fields (only two possible values - see
+    /// `validate_definition_extras`).
+    pub is_unique: bool,
+    /// Addendum Phase 4: presentation-only guidance text and input
+    /// placeholder, rendered by the form but never consulted server-side
+    /// beyond definition-time storage.
+    pub help_text: Option<String>,
+    pub placeholder: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -59,6 +75,10 @@ pub struct CustomFieldDefinitionInput {
     pub is_searchable: bool,
     pub is_filterable: bool,
     pub is_reportable: bool,
+    pub default_value: Option<String>,
+    pub is_unique: bool,
+    pub help_text: Option<String>,
+    pub placeholder: Option<String>,
 }
 
 /// Editing a definition: label/options/required/show_in_list/sort_order/
@@ -80,6 +100,10 @@ pub struct CustomFieldDefinitionUpdate {
     pub is_searchable: bool,
     pub is_filterable: bool,
     pub is_reportable: bool,
+    pub default_value: Option<String>,
+    pub is_unique: bool,
+    pub help_text: Option<String>,
+    pub placeholder: Option<String>,
 }
 
 /// Values keyed by definition key (not id) - the frontend form only ever

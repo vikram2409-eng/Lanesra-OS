@@ -50,6 +50,10 @@ fn text_field_input(label: &str) -> CustomFieldDefinitionInput {
         is_searchable: false,
         is_filterable: false,
         is_reportable: true,
+        default_value: None,
+        is_unique: false,
+        help_text: None,
+        placeholder: None,
     }
 }
 
