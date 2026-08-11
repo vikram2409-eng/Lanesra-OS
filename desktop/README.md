@@ -477,6 +477,25 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   `core/src/services/builtin_field_service.rs`,
   `core/src/db/migrations/0016_builtin_field_targeting.sql`,
   `src/components/BuiltinValueInput.tsx`.
+- **Richer conditions: more operators + field-to-field comparison (Admin
+  Automation & Customization addendum, Phase 1)**: the shared condition
+  engine gained four operators - `starts_with`/`ends_with`/`in_list`/
+  `not_in_list` (the last two split on `|`, the same convention select
+  options use) - and every condition (a business rule's, a workflow's
+  `field_changed` trigger, or an "extra condition") can now compare a
+  field against another field's live value instead of only a fixed
+  literal, via a new `compare_field_source`/`compare_field_key` pair.
+  Resolution happens once, in each engine's service layer, right before
+  calling `domain::conditions::conditions_match` - the matcher itself
+  never has to know whether a value came from a literal or another
+  field. `domain::conditions::field_ref_is_valid` is now the single
+  validator for both a condition's primary field and its optional
+  compare-to field, in both business_rule_service and workflow_service.
+  Also consolidated `CONDITION_OPERATORS`, which `models::business_rule`
+  and `domain::conditions` used to each maintain as a separately
+  hand-copied list of the same 10 operators, into one re-exported source
+  of truth. See `core/src/domain/conditions.rs`,
+  `core/src/db/migrations/0017_condition_field_comparison.sql`.
 - **Custom field validation and capability flags (spec ADM-CF-04/05)**: a
   custom field can now have optional validation - min/max for `number`
   fields, max length and a regex pattern for `text` fields - checked both

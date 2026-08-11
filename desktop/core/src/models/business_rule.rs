@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 pub const MATCH_TYPES: &[&str] = &["all", "any"];
-pub const CONDITION_OPERATORS: &[&str] = &[
-    "equals", "not_equals", "contains", "not_contains", "is_empty", "is_not_empty",
-    "greater_than", "less_than", "on_or_after", "on_or_before",
-];
+/// Re-exported from `domain::conditions` rather than kept as a second,
+/// hand-copied list - this and `domain::conditions::CONDITION_OPERATORS`
+/// used to be two separately maintained lists of the same 10 operators;
+/// consolidated to one source of truth while adding the new operators
+/// below, so there's nothing left to keep in sync by hand.
+pub use crate::domain::conditions::CONDITION_OPERATORS;
 pub const TRIGGER_SOURCES: &[&str] = &["builtin", "custom"];
 /// `require`/`hide`/`lock`/`set_default`/`set_value` act on `target_field_key`
 /// (which must be an active custom field, same restriction the original
@@ -33,6 +35,14 @@ pub struct BusinessRuleCondition {
     pub field_key: String,
     pub operator: String,
     pub value: String,
+    /// Addendum §2.2 "field-to-field comparison": when both are `Some`,
+    /// the condition's effective comparison value is this field's current
+    /// value instead of the literal `value` above - resolved at evaluation
+    /// time in each engine's service layer (`domain::conditions` itself
+    /// never sees the difference). `None` for an ordinary literal-value
+    /// condition, which is still the common case.
+    pub compare_field_source: Option<String>,
+    pub compare_field_key: Option<String>,
     pub sort_order: i64,
 }
 
@@ -42,6 +52,10 @@ pub struct BusinessRuleConditionInput {
     pub field_key: String,
     pub operator: String,
     pub value: String,
+    #[serde(default)]
+    pub compare_field_source: Option<String>,
+    #[serde(default)]
+    pub compare_field_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

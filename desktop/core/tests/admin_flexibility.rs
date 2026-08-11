@@ -111,6 +111,8 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
                 field_key: "status".into(),
                 operator: "equals".into(),
                 value: "Won".into(),
+                compare_field_source: None,
+                compare_field_key: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),

@@ -52,6 +52,7 @@ fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str,
         return Err(AppError::Validation("A rule needs at least one condition".into()));
     }
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+    let active_keys: Vec<&str> = defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
     for c in conditions {
         if !TRIGGER_SOURCES.contains(&c.field_source.as_str()) {
             return Err(AppError::Validation(format!("Invalid condition source '{}'", c.field_source)));
@@ -59,12 +60,23 @@ fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str,
         if !CONDITION_OPERATORS.contains(&c.operator.as_str()) {
             return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
         }
-        if c.field_source == "builtin" {
-            if builtin_fields::find_builtin_field(entity_type, &c.field_key).is_none() {
-                return Err(AppError::Validation(format!("'{}' is not a built-in field on {entity_type}", c.field_key)));
+        if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
+            return Err(AppError::Validation(format!("'{}' is not a valid field to trigger on", c.field_key)));
+        }
+        // Addendum §2.2: field-to-field comparison - either both compare_*
+        // are set (validated the same way as the primary field) or both
+        // are absent (an ordinary literal-value condition).
+        match (&c.compare_field_source, &c.compare_field_key) {
+            (Some(src), Some(key)) => {
+                if !TRIGGER_SOURCES.contains(&src.as_str()) {
+                    return Err(AppError::Validation(format!("Invalid comparison field source '{src}'")));
+                }
+                if !crate::domain::conditions::field_ref_is_valid(entity_type, src, key, active_keys.iter().copied()) {
+                    return Err(AppError::Validation(format!("'{key}' is not a valid field to compare against")));
+                }
             }
-        } else if !defs.iter().any(|d| d.key == c.field_key && d.is_active) {
-            return Err(AppError::Validation(format!("'{}' is not an active custom field to trigger on", c.field_key)));
+            (None, None) => {}
+            _ => return Err(AppError::Validation("A comparison field needs both a source and a key".into())),
         }
     }
     Ok(())
@@ -171,13 +183,28 @@ pub struct RuleEvaluation {
     pub messages: Vec<String>,
 }
 
+/// A condition's effective comparison value: the compare-to field's
+/// current value in `ctx` when one is set (Addendum §2.2 field-to-field
+/// comparison), otherwise the condition's own literal `value`. `ctx` is a
+/// single flat map regardless of field_source (built-in and custom values
+/// share one namespace once merged - see `custom_field_service::
+/// set_entity_values`'s trigger_context), so this is the same lookup
+/// `condition_matches` already does for the primary field, just applied to
+/// the compare-to field instead of a literal.
+fn resolve_condition_value<'a>(c: &'a crate::models::business_rule::BusinessRuleCondition, ctx: &'a HashMap<String, String>) -> &'a str {
+    match &c.compare_field_key {
+        Some(key) => ctx.get(key).map(|s| s.as_str()).unwrap_or(""),
+        None => c.value.as_str(),
+    }
+}
+
 /// Delegates to the shared AND/OR matcher (`domain::conditions`) also used
 /// by workflow_service, so the two engines' "IF" halves can never drift
 /// apart.
 fn rule_matches(rule: &BusinessRule, ctx: &HashMap<String, String>) -> bool {
     crate::domain::conditions::conditions_match(
         &rule.match_type,
-        rule.conditions.iter().map(|c| (c.field_key.as_str(), c.operator.as_str(), c.value.as_str())),
+        rule.conditions.iter().map(|c| (c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
         ctx,
     )
 }

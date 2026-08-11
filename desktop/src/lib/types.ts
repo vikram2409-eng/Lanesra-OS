@@ -909,11 +909,21 @@ export type CustomFieldValues = Record<string, string>;
 // field can be a condition's.
 export const MATCH_TYPES = ["all", "any"] as const;
 export type MatchType = (typeof MATCH_TYPES)[number];
+// Admin Automation & Customization addendum, Phase 1 (spec §2.2): four new
+// operators (starts_with/ends_with/in_list/not_in_list), matching
+// core::domain::conditions::CONDITION_OPERATORS exactly.
 export const CONDITION_OPERATORS = [
-  "equals", "not_equals", "contains", "not_contains", "is_empty", "is_not_empty",
+  "equals", "not_equals", "contains", "not_contains", "starts_with", "ends_with",
+  "in_list", "not_in_list", "is_empty", "is_not_empty",
   "greater_than", "less_than", "on_or_after", "on_or_before",
 ] as const;
 export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
+/** Operators that don't compare against a value at all - matches
+ * core::domain::conditions::VALUELESS_OPERATORS. */
+export const VALUELESS_OPERATORS: ConditionOperator[] = ["is_empty", "is_not_empty"];
+/** `in_list`/`not_in_list` split on this - same convention select-field
+ * options already use ("Option A|Option B|Option C"). */
+export const LIST_SEPARATOR = "|";
 export const TRIGGER_SOURCES = ["builtin", "custom"] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
 export const ACTION_TYPES = ["require", "hide", "lock", "set_default", "set_value", "block_save", "show_message"] as const;
@@ -955,6 +965,11 @@ export interface BusinessRuleCondition {
   field_key: string;
   operator: ConditionOperator;
   value: string;
+  /** Addendum §2.2 field-to-field comparison: when both are set, the
+   * condition compares against this field's live value instead of the
+   * literal `value` above. */
+  compare_field_source: TriggerSource | null;
+  compare_field_key: string | null;
   sort_order: number;
 }
 
@@ -963,6 +978,8 @@ export interface BusinessRuleConditionInput {
   field_key: string;
   operator: ConditionOperator;
   value: string;
+  compare_field_source: TriggerSource | null;
+  compare_field_key: string | null;
 }
 
 export interface BusinessRuleAction {
@@ -1090,6 +1107,8 @@ export interface WorkflowCondition {
   field_key: string;
   operator: ConditionOperator;
   value: string;
+  compare_field_source: TriggerSource | null;
+  compare_field_key: string | null;
   sort_order: number;
 }
 export interface WorkflowConditionInput {
@@ -1097,6 +1116,8 @@ export interface WorkflowConditionInput {
   field_key: string;
   operator: ConditionOperator;
   value: string;
+  compare_field_source: TriggerSource | null;
+  compare_field_key: string | null;
 }
 export interface WorkflowAction {
   id: string;

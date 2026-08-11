@@ -21,6 +21,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (14, include_str!("migrations/0014_workflow_automation.sql")),
     (15, include_str!("migrations/0015_custom_field_validation.sql")),
     (16, include_str!("migrations/0016_builtin_field_targeting.sql")),
+    (17, include_str!("migrations/0017_condition_field_comparison.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -84,7 +85,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 16);
+        assert_eq!(version, 17);
 
         let table_count: i64 = conn
             .query_row(

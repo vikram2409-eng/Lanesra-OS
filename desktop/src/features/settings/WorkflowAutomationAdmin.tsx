@@ -16,6 +16,7 @@ import {
   transitionValuesForEntity,
   TRIGGER_TYPES,
   TRIGGER_SOURCES,
+  VALUELESS_OPERATORS,
   WORKFLOW_ACTION_TYPES,
   type ConditionOperator,
   type MatchType,
@@ -49,12 +50,16 @@ const ACTION_LABELS: Record<WorkflowActionType, string> = {
 
 const OPERATOR_LABELS: Record<ConditionOperator, string> = {
   equals: "equals", not_equals: "does not equal", contains: "contains", not_contains: "does not contain",
+  starts_with: "starts with", ends_with: "ends with", in_list: "is one of", not_in_list: "is not one of",
   is_empty: "is empty", is_not_empty: "is not empty", greater_than: "is greater than", less_than: "is less than",
   on_or_after: "is on or after", on_or_before: "is on or before",
 };
 
 function emptyCondition(entityType: string): WorkflowConditionInput {
-  return { field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "" };
+  return {
+    field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "",
+    compare_field_source: null, compare_field_key: null,
+  };
 }
 
 function defaultParamsFor(actionType: WorkflowActionType, customFieldKey: string): Record<string, unknown> {
@@ -194,7 +199,10 @@ export function WorkflowAutomationAdmin() {
             entity_type: entityType, name: editing.name, description: editing.description, trigger_type: editing.trigger_type,
             trigger_status: editing.trigger_status, trigger_field_key: editing.trigger_field_key, trigger_field_source: editing.trigger_field_source,
             trigger_offset_days: editing.trigger_offset_days, match_type: editing.match_type, priority: editing.priority,
-            conditions: editing.conditions.map((c) => ({ field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value })),
+            conditions: editing.conditions.map((c) => ({
+              field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
+              compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key,
+            })),
             actions: editing.actions.map((a) => ({ action_type: a.action_type, params_json: a.params_json })),
             is_active: editing.is_active,
           }}
@@ -265,8 +273,11 @@ function ConditionRow({
 }) {
   const builtinFields = builtinFieldsFor(entityType);
   const isBuiltin = condition.field_source === "builtin";
-  const needsValue = condition.operator !== "is_empty" && condition.operator !== "is_not_empty";
+  const needsValue = !VALUELESS_OPERATORS.includes(condition.operator);
+  const isListOp = condition.operator === "in_list" || condition.operator === "not_in_list";
+  const comparesToField = condition.compare_field_key !== null;
   const selectedBuiltin = isBuiltin ? builtinFields.find((f) => f.key === condition.field_key) : undefined;
+  const compareFields = condition.compare_field_source === "builtin" ? builtinFields : customFields;
 
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
@@ -291,7 +302,43 @@ function ConditionRow({
       <select value={condition.operator} onChange={(e) => onChange({ ...condition, operator: e.target.value as ConditionOperator })}>
         {CONDITION_OPERATORS.map((o) => <option key={o} value={o}>{OPERATOR_LABELS[o]}</option>)}
       </select>
-      {needsValue && (isBuiltin ? (
+      {needsValue && !isListOp && (
+        <select
+          value={comparesToField ? "field" : "literal"}
+          onChange={(e) => {
+            if (e.target.value === "field") {
+              onChange({ ...condition, compare_field_source: "custom", compare_field_key: customFields[0]?.key ?? builtinFields[0]?.key ?? "" });
+            } else {
+              onChange({ ...condition, compare_field_source: null, compare_field_key: null });
+            }
+          }}
+        >
+          <option value="literal">a fixed value</option>
+          <option value="field">another field</option>
+        </select>
+      )}
+      {needsValue && (comparesToField ? (
+        <>
+          <select
+            value={condition.compare_field_source ?? "custom"}
+            onChange={(e) => {
+              const source = e.target.value as TriggerSource;
+              const list = source === "builtin" ? builtinFields : customFields;
+              onChange({ ...condition, compare_field_source: source, compare_field_key: list[0]?.key ?? "" });
+            }}
+          >
+            {TRIGGER_SOURCES.map((s) => <option key={s} value={s}>{s === "builtin" ? "Built-in field" : "Custom field"}</option>)}
+          </select>
+          <select value={condition.compare_field_key ?? ""} onChange={(e) => onChange({ ...condition, compare_field_key: e.target.value })}>
+            {compareFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+          </select>
+        </>
+      ) : isListOp ? (
+        <input
+          value={condition.value} onChange={(e) => onChange({ ...condition, value: e.target.value })}
+          placeholder="Option A|Option B|Option C" required style={{ width: 200 }}
+        />
+      ) : isBuiltin ? (
         <BuiltinValueInput field={selectedBuiltin} value={condition.value} onChange={(v) => onChange({ ...condition, value: v })} />
       ) : (
         <input value={condition.value} onChange={(e) => onChange({ ...condition, value: e.target.value })} required style={{ width: 140 }} />

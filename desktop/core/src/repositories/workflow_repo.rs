@@ -13,6 +13,8 @@ fn map_condition(row: &rusqlite::Row) -> rusqlite::Result<WorkflowCondition> {
         field_key: row.get("field_key")?,
         operator: row.get("operator")?,
         value: row.get("value")?,
+        compare_field_source: row.get("compare_field_source")?,
+        compare_field_key: row.get("compare_field_key")?,
         sort_order: row.get("sort_order")?,
     })
 }
@@ -66,9 +68,12 @@ fn write_conditions(conn: &Connection, workflow_id: &str, conditions: &[Workflow
     conn.execute("DELETE FROM workflow_conditions WHERE workflow_id = ?1", [workflow_id])?;
     for (i, c) in conditions.iter().enumerate() {
         conn.execute(
-            "INSERT INTO workflow_conditions (id, workflow_id, field_source, field_key, operator, value, sort_order)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            rusqlite::params![new_uuid(), workflow_id, c.field_source, c.field_key, c.operator, c.value, i as i64],
+            "INSERT INTO workflow_conditions (id, workflow_id, field_source, field_key, operator, value, compare_field_source, compare_field_key, sort_order)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                new_uuid(), workflow_id, c.field_source, c.field_key, c.operator, c.value,
+                c.compare_field_source, c.compare_field_key, i as i64
+            ],
         )?;
     }
     Ok(())

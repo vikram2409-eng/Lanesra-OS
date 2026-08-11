@@ -54,11 +54,17 @@ fn text_field_input(label: &str) -> CustomFieldDefinitionInput {
 }
 
 fn condition(field_key: &str, operator: &str, value: &str) -> BusinessRuleConditionInput {
-    BusinessRuleConditionInput { field_source: "builtin".into(), field_key: field_key.into(), operator: operator.into(), value: value.into() }
+    BusinessRuleConditionInput {
+        field_source: "builtin".into(), field_key: field_key.into(), operator: operator.into(), value: value.into(),
+        compare_field_source: None, compare_field_key: None,
+    }
 }
 
 fn custom_condition(field_key: &str, operator: &str, value: &str) -> BusinessRuleConditionInput {
-    BusinessRuleConditionInput { field_source: "custom".into(), field_key: field_key.into(), operator: operator.into(), value: value.into() }
+    BusinessRuleConditionInput {
+        field_source: "custom".into(), field_key: field_key.into(), operator: operator.into(), value: value.into(),
+        compare_field_source: None, compare_field_key: None,
+    }
 }
 
 fn require_action(target_key: &str) -> BusinessRuleActionInput {
@@ -292,7 +298,10 @@ fn contains_and_numeric_operators_evaluate_correctly() {
         &conn, &ws,
         &rule_input(
             "Company", 0, "all",
-            vec![BusinessRuleConditionInput { field_source: "custom".into(), field_key: notes_def.key.clone(), operator: "contains".into(), value: "urgent".into() }],
+            vec![BusinessRuleConditionInput {
+                field_source: "custom".into(), field_key: notes_def.key.clone(), operator: "contains".into(), value: "urgent".into(),
+                compare_field_source: None, compare_field_key: None,
+            }],
             vec![require_action(&flag_def.key)],
         ),
         Some(&admin),
@@ -382,4 +391,102 @@ fn a_rule_cannot_target_a_non_actionable_builtin_field() {
         Some(&admin),
     ).unwrap_err();
     assert!(format!("{err:?}").contains("not an actionable built-in field"));
+}
+
+// --- Admin Automation & Customization addendum, Phase 1: new operators
+// and field-to-field comparison ------------------------------------------
+
+#[test]
+fn starts_with_and_ends_with_operators_evaluate_correctly() {
+    let (conn, ws, admin) = setup_workspace();
+    let flag_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Flag"), Some(&admin)).unwrap();
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input("Company", 0, "all", vec![condition("name", "starts_with", "Acme")], vec![require_action(&flag_def.key)]),
+        Some(&admin),
+    ).unwrap();
+
+    let matching = company_service::create(&conn, &ws, &company_input("Acme Corp", "Prospect"), Some(&admin)).unwrap();
+    let err = custom_field_service::set_entity_values(&conn, "Company", &matching.id, &HashMap::new(), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("Flag is required"));
+
+    let non_matching = company_service::create(&conn, &ws, &company_input("Globex", "Prospect"), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &non_matching.id, &HashMap::new(), Some(&admin)).unwrap();
+}
+
+#[test]
+fn in_list_and_not_in_list_operators_evaluate_correctly() {
+    let (conn, ws, admin) = setup_workspace();
+    let flag_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Flag"), Some(&admin)).unwrap();
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input("Company", 0, "all", vec![condition("status", "in_list", "Prospect|Lead")], vec![require_action(&flag_def.key)]),
+        Some(&admin),
+    ).unwrap();
+
+    let prospect = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
+    let err = custom_field_service::set_entity_values(&conn, "Company", &prospect.id, &HashMap::new(), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("Flag is required"));
+
+    let customer = company_service::create(&conn, &ws, &company_input("Globex", "Active Customer"), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &customer.id, &HashMap::new(), Some(&admin)).unwrap();
+}
+
+#[test]
+fn field_to_field_comparison_condition_matches_correctly() {
+    // "Require Flag when Notes equals Expected Notes" - both custom text
+    // fields, comparing one field's live value against another's instead
+    // of a fixed literal (spec §2.2).
+    let (conn, ws, admin) = setup_workspace();
+    let notes_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Notes"), Some(&admin)).unwrap();
+    let expected_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Expected Notes"), Some(&admin)).unwrap();
+    let flag_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Flag"), Some(&admin)).unwrap();
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![BusinessRuleConditionInput {
+                field_source: "custom".into(), field_key: notes_def.key.clone(), operator: "equals".into(), value: String::new(),
+                compare_field_source: Some("custom".into()), compare_field_key: Some(expected_def.key.clone()),
+            }],
+            vec![require_action(&flag_def.key)],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
+
+    // Notes differs from Expected Notes - condition doesn't match, Flag
+    // isn't required.
+    let mut differing = HashMap::new();
+    differing.insert(notes_def.key.clone(), "hello".into());
+    differing.insert(expected_def.key.clone(), "world".into());
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &differing, Some(&admin)).unwrap();
+
+    // Notes now matches Expected Notes - condition matches, Flag required.
+    let mut matching = HashMap::new();
+    matching.insert(notes_def.key.clone(), "same value".into());
+    matching.insert(expected_def.key.clone(), "same value".into());
+    let err = custom_field_service::set_entity_values(&conn, "Company", &company.id, &matching, Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("Flag is required"));
+}
+
+#[test]
+fn a_condition_with_only_a_compare_field_source_or_only_a_key_is_rejected() {
+    let (conn, ws, admin) = setup_workspace();
+    let flag_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Flag"), Some(&admin)).unwrap();
+    let err = business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![BusinessRuleConditionInput {
+                field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
+                compare_field_source: Some("custom".into()), compare_field_key: None,
+            }],
+            vec![require_action(&flag_def.key)],
+        ),
+        Some(&admin),
+    ).unwrap_err();
+    assert!(format!("{err:?}").contains("needs both a source and a key"));
 }

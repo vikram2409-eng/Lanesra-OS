@@ -8,7 +8,7 @@ use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::invoice::{InvoiceInput, InvoiceLineInput};
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
-use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowDefinitionInput};
+use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowConditionInput, WorkflowDefinitionInput};
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::repositories::notification_repo;
 use lanesra_core::services::{
@@ -310,4 +310,69 @@ fn field_changed_trigger_rejects_a_non_active_builtin_field() {
     };
     let err = workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").contains("not a built-in field"));
+}
+
+// --- Admin Automation & Customization addendum, Phase 1: new operators
+// and field-to-field comparison on a workflow's extra conditions ---------
+
+#[test]
+fn workflow_extra_condition_supports_the_starts_with_operator() {
+    let (conn, ws, admin) = setup_workspace();
+    let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Follow up", 0, None));
+    wf.conditions = vec![WorkflowConditionInput {
+        field_source: "builtin".into(), field_key: "next_step".into(), operator: "starts_with".into(), value: "Send".into(),
+        compare_field_source: None, compare_field_key: None,
+    }];
+    workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+
+    let mut matching = opportunity_input(&company.id, "New", None);
+    matching.next_step = Some("Send proposal".into());
+    let opp = opportunity_service::create(&conn, &matching, Some(&admin)).unwrap();
+    matching.stage = "Won".into();
+    matching.status = "Won".into();
+    opportunity_service::update(&conn, &opp.id, &matching, Some(&admin)).unwrap();
+    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+
+    let mut non_matching = opportunity_input(&company.id, "New", None);
+    non_matching.next_step = Some("Call client".into());
+    let opp2 = opportunity_service::create(&conn, &non_matching, Some(&admin)).unwrap();
+    non_matching.stage = "Won".into();
+    non_matching.status = "Won".into();
+    opportunity_service::update(&conn, &opp2.id, &non_matching, Some(&admin)).unwrap();
+    assert!(task_service::list_by_related(&conn, "Opportunity", &opp2.id).unwrap().is_empty());
+}
+
+#[test]
+fn workflow_extra_condition_supports_field_to_field_comparison() {
+    let (conn, ws, admin) = setup_workspace();
+    let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Review", 0, None));
+    wf.conditions = vec![WorkflowConditionInput {
+        field_source: "builtin".into(), field_key: "next_step".into(), operator: "equals".into(), value: String::new(),
+        compare_field_source: Some("builtin".into()), compare_field_key: Some("lost_reason".into()),
+    }];
+    workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+
+    // Both empty (equal) - condition matches, task fires.
+    let mut matching = opportunity_input(&company.id, "New", None);
+    matching.next_step = None;
+    matching.lost_reason = None;
+    let opp = opportunity_service::create(&conn, &matching, Some(&admin)).unwrap();
+    matching.stage = "Won".into();
+    matching.status = "Won".into();
+    opportunity_service::update(&conn, &opp.id, &matching, Some(&admin)).unwrap();
+    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+
+    // Different values - condition doesn't match, no task.
+    let mut differing = opportunity_input(&company.id, "New", None);
+    differing.next_step = Some("Send invoice".into());
+    differing.lost_reason = None;
+    let opp2 = opportunity_service::create(&conn, &differing, Some(&admin)).unwrap();
+    differing.stage = "Won".into();
+    differing.status = "Won".into();
+    opportunity_service::update(&conn, &opp2.id, &differing, Some(&admin)).unwrap();
+    assert!(task_service::list_by_related(&conn, "Opportunity", &opp2.id).unwrap().is_empty());
 }

@@ -47,6 +47,12 @@ pub struct WorkflowCondition {
     pub field_key: String,
     pub operator: String,
     pub value: String,
+    /// Addendum §3.2 "field-to-field comparison" - see
+    /// `BusinessRuleCondition::compare_field_source`'s doc comment for the
+    /// full explanation; identical mechanism, shared resolution point in
+    /// `domain::conditions`.
+    pub compare_field_source: Option<String>,
+    pub compare_field_key: Option<String>,
     pub sort_order: i64,
 }
 
@@ -56,6 +62,10 @@ pub struct WorkflowConditionInput {
     pub field_key: String,
     pub operator: String,
     pub value: String,
+    #[serde(default)]
+    pub compare_field_source: Option<String>,
+    #[serde(default)]
+    pub compare_field_key: Option<String>,
 }
 
 /// `params_json` is a JSON-encoded object whose shape depends on
