@@ -390,29 +390,103 @@ reverse proxy with TLS if you need that, or keep it LAN-only as intended.
   last test composes a custom field + a business rule + the report
   builder together on a custom object, mirroring how
   `admin_flexibility.rs` proves the same composition on a built-in entity.
+- **Custom relationships (admin extensibility, spec §20.3/§21)**: an
+  Administrator can connect any two object types - built-in to built-in,
+  built-in to custom, or custom to custom - from Admin → Relationships:
+  many-to-one, one-to-one or many-to-many, with forward/reverse labels, a
+  "show as related list" toggle, and a delete behavior (`restrict` blocks
+  archiving a linked record; `archive` silently drops the link instead).
+  A record's detail page (Company, and every custom object record) renders
+  every relationship it participates in via one generic
+  `RelatedRecordsCard` component with zero per-entity wiring - the same
+  "compose for free" property custom fields/business rules/reports already
+  have on a custom object. `entity_registry` (a lookup-by-entity_type
+  resolver, not a physical `record_registry` table as the spec suggests -
+  see that module's doc comment for why) is the shared seam this and Phase
+  C/D's engines all resolve "any record of any entity_type" through. See
+  `core/src/services/relationship_service.rs`, `entity_registry.rs`,
+  `src/components/RelatedRecordsCard.tsx`.
+- **Richer business rules (spec §22/ADM-BR)**: replaces the original
+  single-condition/require-or-hide field_rules engine with a no-code IF
+  (AND/OR conditions) / THEN (multiple actions) rule builder - ten
+  operators (equals/contains/is_empty/greater_than/on_or_after and their
+  complements, not just equals/not_equals), and actions beyond
+  require/hide: lock (read-only), set a default or forced value, block
+  the whole save with a custom message, or show a non-blocking message.
+  Rule priority and an optional effective date window are supported; a
+  Test Rule panel evaluates a hypothetical record against every active
+  rule without persisting anything. Still enforced at the one integration
+  point every entity's save flow already calls unconditionally
+  (`custom_field_service::set_entity_values`), so no per-entity wiring was
+  needed. See `core/src/services/business_rule_service.rs`,
+  `domain/conditions.rs` (the shared AND/OR matcher Phase D's workflow
+  engine reuses), `src/features/settings/BusinessRulesAdmin.tsx`.
+- **Richer workflow automation (spec §23/ADM-WF)**: replaces the original
+  single-trigger (status transition) / single-action (create task) engine
+  with seven trigger types (record created/updated, status changed, a
+  custom field changed, a date reached, overdue, or a recurring schedule),
+  the same AND/OR conditions business rules use, and six actions: create
+  task, update a custom field, assign owner, create a related record
+  (through a Phase B relationship), send an in-app notification, or create
+  a reminder. Every run is logged (trigger, actions, outcome, failure
+  reason) to `workflow_runs`, which doubles as the fire-once dedup source
+  for date-based triggers. A thread-local recursion depth guard
+  (`workflow_service::WORKFLOW_DEPTH`) bounds self-referential workflow
+  chains (e.g. a workflow that creates a related record whose own
+  creation triggers another workflow) without threading a depth parameter
+  through every entity service. date_reached/due_overdue/scheduled
+  triggers run via a periodic scan the frontend polls every 5 minutes
+  (Personal Workspace has no OS-level background scheduler - see that
+  function's doc comment). Workflows can now trigger on and act on custom
+  objects; `task_links.related_type` is no longer CHECK-constrained to the
+  original seven built-in types for the same reason. Includes a minimal
+  in-app notification center (bell icon, unread count, mark read/all). See
+  `core/src/services/workflow_service.rs`,
+  `src/features/settings/WorkflowAutomationAdmin.tsx`,
+  `src/components/NotificationBell.tsx`.
+- **Custom field validation and capability flags (spec ADM-CF-04/05)**: a
+  custom field can now have optional validation - min/max for `number`
+  fields, max length and a regex pattern for `text` fields - checked both
+  at definition time (sane range, valid regex) and at save time, plus
+  searchable/filterable/reportable flags. Only `is_reportable` is wired to
+  an actual behavior in this build (an unreportable field can't be used as
+  a report group-by/sum target); `is_searchable`/`is_filterable` are
+  stored as forward-looking metadata, since this build has no global
+  search or list-view filtering to wire them into yet - see "What's
+  deferred" below.
+- **Windows task reminder notifications (FR-TSK-06)**: uses the standard
+  Web Notification API rather than a native Tauri plugin - WebView2 (the
+  webview Tauri v2 uses on Windows) surfaces it as a real Windows toast
+  notification, so the same code works unmodified in Team Workspace's
+  plain browser tab too, with no new native dependency. Polls every
+  minute; already-fired reminders are tracked in `localStorage` so a
+  reload doesn't repeat one. See `src/components/TaskReminderNotifier.tsx`.
+- **Session inactivity auto-lock**: a fixed 15-minute idle timeout (not
+  admin-configurable yet) shows a lock screen requiring the current user's
+  password before the app is usable again - reuses the existing `login`
+  command rather than a separate "unlock" concept. See
+  `src/components/SessionLock.tsx`.
 
 ## What's deferred to a later phase
 
-The database schema already has tables for these so the migration doesn't
-need to change shape later, but there is no service/command/UI layer yet:
-
 - Custom fields as extra columns on list screens, and in CSV import/export
-- Workflow automation beyond Phase 1: actions other than task creation
-  (e.g. sending a notification, updating a field), and
-  multi-step/branching workflows
-- Custom relationships between custom objects and core objects/each other
-  (admin-defined lookups, related-list display) - custom objects
-  themselves are no longer deferred (see "What's here" above); relating
-  them to other objects with cardinality/cascade rules is the next piece
-- Workflow automation on custom objects specifically (needs the
-  `tasks.related_type` CHECK constraint broadened - a small migration
-  bundled into the next workflow-engine phase rather than done twice)
+- Global search / list-view filtering (spec §5.3/§9.3, Ctrl+K) - this
+  build has no such feature anywhere yet, which is why the new
+  `is_searchable`/`is_filterable` custom field flags (see above) are
+  stored as forward-looking metadata rather than wired to real behavior.
+  Building it would also give those two flags their first actual use.
 - A no-code screen/layout designer for custom (or built-in) object forms -
   the largest single remaining piece of the admin extensibility spec,
   intentionally tackled last
 - A full drag-and-drop report/dashboard builder beyond the simple
   group-by-and-aggregate report builder, and reordering Dashboard KPI tiles
-- Windows notifications for task reminders (FR-TSK-06)
+- The Approval Framework, Data Quality Center, Form Builder, Application
+  Builder, and AI Boundary sections of the v1.3 spec - each is its own
+  substantial subsystem, out of scope for the admin-extensibility phases
+  (relationships/business rules/workflow/polish) done so far
+- Making session auto-lock's 15-minute timeout admin-configurable
+- A nicer inline banner for non-blocking business-rule `show_message`
+  actions - currently a plain `alert()` (see `src/lib/ruleMessages.ts`)
 - Windows installer signing/packaging (the Tauri bundle config targets
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
   Actions workflow at `.github/workflows/desktop-release.yml` now builds
@@ -788,3 +862,64 @@ extensibility platform):**
   record with the custom field filled in, and confirmed it was numbered
   `VEN-0001`; reopened it in edit mode and confirmed the custom field
   value round-tripped correctly. Zero JS console errors throughout.
+
+**Custom Relationships, richer Business Rules/Workflow Automation, and
+polish phase (admin extensibility Phases B-E, driven by the v1.3
+Windows requirements doc):**
+
+- `cargo test --workspace`: 116/116 passing - 26 new core tests across
+  three new integration test files plus 5 more added to an existing one:
+  `core/tests/relationships.rs` (7: many-to-one/one-to-one/many-to-many
+  cardinality enforcement, `restrict` vs `archive` delete behavior, a
+  non-Administrator cannot define a relationship, linking rejects an
+  invalid entity type), `core/tests/business_rules.rs` (11: AND vs OR
+  multi-condition matching, each of the 10 operators, `lock`/`set_value`/
+  `block_save`/`show_message` actions, rule priority ordering, an
+  `effective_start_date`/`effective_end_date` outside today's date is
+  skipped), `core/tests/workflow_automation.rs` (10: `record_created`,
+  `field_changed`, `date_reached`/`due_overdue` firing exactly once via
+  `workflow_runs` dedup, `assign_owner` resolving through a Quote's
+  Company when the Quote itself has no owner column, `add_notification`
+  targeting `all_admins`, the recursion guard stopping a
+  `create_related_record` chain at depth 5 instead of hanging), and
+  `core/tests/custom_fields.rs` gained 5 (`number_field_enforces_min_and_max`,
+  `min_cannot_exceed_max_when_defining_a_number_field`,
+  `text_field_enforces_max_length_and_pattern`,
+  `an_invalid_regex_pattern_is_rejected_at_definition_time`,
+  `a_field_flagged_not_reportable_cannot_be_used_as_a_report_group_by`).
+  Every business-rule and workflow-automation test from the two older,
+  now-deleted `field_rules.rs`/`workflow_rules.rs` files has an equivalent
+  (or stronger) case in the new files - nothing was dropped, the engines
+  were replaced wholesale, not patched.
+- `npm run build`: `tsc` + `vite build` both clean at v0.4.0.
+- Built the real release `lanesra-server` binary and drove the new admin
+  screens end to end with a real Chromium browser (Playwright): created a
+  many-to-one "Primary Contact" relationship between Opportunity and
+  Contact from Settings → Relationships, linked a record from the new
+  related-list card on an Opportunity's detail view, and confirmed
+  attempting a second link from the same Opportunity was rejected with a
+  cardinality error while the reverse label rendered correctly on the
+  Contact side; built a 2-condition OR business rule (`hide` a field when
+  Status is either of two values) in the new Business Rules admin screen
+  and confirmed its "Test rules" panel matched the server's own
+  evaluation; built a `field_changed`-triggered workflow that assigns the
+  record's owner and posts an `all_admins` notification, then confirmed
+  the bell icon in the topbar picked up the new notification with an
+  unread badge and "mark all read" cleared it.
+- With curl (bypassing the UI entirely): defined a numeric custom field
+  with `min_value`/`max_value` and confirmed a value outside the range
+  was rejected with the exact bound in the error message; confirmed a
+  field flagged `is_reportable: false` was silently excluded from
+  `create_custom_report`'s valid group-by targets rather than erroring
+  opaquely; drove a `many_to_many` relationship to its DB-level unique
+  constraint and confirmed the raw SQLite constraint violation surfaced
+  as the same friendly "already linked" message the service layer
+  produces for the other two cardinalities, not a raw SQL error.
+- Manually exercised session auto-lock and task-reminder notifications in
+  the running Tauri binary under Xvfb: left the app idle past the
+  (temporarily shortened for testing) timeout and confirmed the lock
+  screen appeared and correctly rejected a wrong password before
+  accepting the real one; set a task's reminder to a past timestamp and
+  confirmed a Windows-style toast (via WebView2's `Notification` API
+  surface) fired exactly once per task across a reload, per the
+  `localStorage` dedup set.
