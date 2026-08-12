@@ -114,9 +114,18 @@ const numberRules={
 };
 ensureNumbers(); // backfills any seed/imported record missing its auto-generated ID
 function effectiveRule(key){
- const base=numberRules[key]; if(!base)return null;
- const o=(data.numberingOverrides||{})[key];
- return o?{prefix:o.prefix,width:o.width||base.width,field:base.field,custom:true}:{...base,custom:false};
+ const base=numberRules[key];
+ if(base){
+  const o=(data.numberingOverrides||{})[key];
+  return o?{prefix:o.prefix,width:o.width||base.width,field:base.field,custom:true}:{...base,custom:false};
+ }
+ // Custom objects aren't in numberRules (their prefix/digits live on the
+ // object definition itself, edited from the Custom Objects admin tab, not
+ // through the built-ins-only Numbering-override screen) - but they still
+ // get real auto-numbering through this same function.
+ const co=customObjectByKey(key);
+ if(!co)return null;
+ return {prefix:co.prefix,width:co.digits,field:'number',year:false,custom:false};
 }
 function nextNumber(key){
  const r=effectiveRule(key); if(!r)return '';
@@ -140,13 +149,126 @@ function ensureAdminData(){
  if(!data.numberingOverrides)data.numberingOverrides={};
  if(!data.kpiPrefs)data.kpiPrefs=[];
  if(!data.notifications)data.notifications=[];
+ if(!data.customObjects)data.customObjects=[];
+ (data.customObjects||[]).forEach(o=>{if(o.active===undefined)o.active=true;if(!data[o.key])data[o.key]=[]});
+ if(!data.relationshipDefinitions)data.relationshipDefinitions=[];
+ if(!data.relationshipInstances)data.relationshipInstances=[];
+ (data.relationshipDefinitions||[]).forEach(d=>{if(d.active===undefined)d.active=true;if(d.showRelatedList===undefined)d.showRelatedList=true;if(d.required===undefined)d.required=false});
+ if(!data.customReports)data.customReports=[];
+ if(!data.uiLayouts)data.uiLayouts={};
+ if(!data.integrationJobs)data.integrationJobs=[];
+ if(!data.apiEndpoints)data.apiEndpoints=[];
+ if(!data.externalConnections)data.externalConnections=[];
+ (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
+ (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
+ (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
  (data.fieldRules||[]).forEach(r=>{if(!r.operator)r.operator='equals';if(!r.triggerField)r.triggerField=transitionFieldFor(r.entity);if(r.active===undefined)r.active=true});
  (data.workflowRules||[]).forEach(r=>{if(!r.operator)r.operator='equals';if(!r.triggerField)r.triggerField=transitionFieldFor(r.entity);if(!r.actionType)r.actionType='create_task';if(r.active===undefined)r.active=true});
  (data.customFields||[]).forEach(f=>{if(f.defaultValue===undefined)f.defaultValue='';if(f.unique===undefined)f.unique=false;if(f.helpText===undefined)f.helpText='';if(f.placeholder===undefined)f.placeholder='';if(f.required===undefined)f.required=false;if(f.maxLength===undefined)f.maxLength=null;if(f.pattern===undefined)f.pattern='';if(f.minValue===undefined)f.minValue='';if(f.maxValue===undefined)f.maxValue='';if(f.searchable===undefined)f.searchable=false;if(f.filterable===undefined)f.filterable=false;if(f.reportable===undefined)f.reportable=true});
  save();
 }
-const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓'};
-const labels={dashboard:'Dashboard',companies:'Companies',contacts:'Contacts',pipeline:'Sales Pipeline',products:'Products',quotes:'Quotes',orders:'Orders',invoices:'Invoices',contracts:'Contracts',tasks:'Tasks'};
+const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓',reports:'▥'};
+const labels={dashboard:'Dashboard',companies:'Companies',contacts:'Contacts',pipeline:'Sales Pipeline',products:'Products',quotes:'Quotes',orders:'Orders',invoices:'Invoices',contracts:'Contracts',tasks:'Tasks',reports:'Reports'};
+// Admin extensibility: an admin-defined Custom Object (data.customObjects)
+// gets its own sidebar entry, list/create/edit screens and record array
+// (data[key]) exactly like a built-in entity - all it needs is an entry in
+// labels/icons and an array at data[key]. syncCustomObjectRegistry keeps
+// those in sync with data.customObjects and is called once at load, after
+// any Custom Objects admin action, and after "Reset demo". The reserved
+// set is captured from labels' built-in keys before any custom object can
+// be added, so it never accidentally grows.
+const RESERVED_ENTITY_KEYS=[...Object.keys(labels),'admin'];
+function customObjectByKey(key){return (data.customObjects||[]).find(o=>o.key===key)}
+function activeCustomObjects(){return (data.customObjects||[]).filter(o=>o.active)}
+function activeCustomObjectKeys(){return activeCustomObjects().map(o=>o.key)}
+function syncCustomObjectRegistry(){
+ const activeKeys=activeCustomObjectKeys();
+ activeCustomObjects().forEach(o=>{labels[o.key]=o.labelPlural;icons[o.key]=o.icon;if(!data[o.key])data[o.key]=[]});
+ // Drop stale labels/icons for objects that were deactivated or deleted
+ // since the last sync, so the sidebar never shows a ghost entry.
+ Object.keys(labels).forEach(k=>{if(!RESERVED_ENTITY_KEYS.includes(k)&&!activeKeys.includes(k)){delete labels[k];delete icons[k]}});
+}
+syncCustomObjectRegistry();
+// ---- Custom Relationships (admin extensibility, Phase B) ------------------
+// Mirrors desktop's relationship_service exactly: an Administrator connects
+// any two object types - built-in or custom - with a cardinality and a
+// delete-behavior; any user can then link/unlink actual records through it
+// from that record's edit form. "source" is the owning/"many" side (e.g.
+// Contact -> Company already works this way via companyId); one_to_many
+// and many_to_one are the same physical shape read from either direction,
+// which is why forward/reverse labels exist instead of a 4th type value.
+const RELATIONSHIP_TYPES=['many_to_one','one_to_one','many_to_many'];
+const RELATIONSHIP_TYPE_LABELS={many_to_one:'Many-to-one (many source records, one target each)',one_to_one:'One-to-one',many_to_many:'Many-to-many'};
+const DELETE_BEHAVIORS=['restrict','archive'];
+const DELETE_BEHAVIOR_LABELS={restrict:'Restrict — block deleting a linked record',archive:'Archive — drop the link, keep both records'};
+// Every entity type a relationship (or its record pickers) can reference -
+// the same "built-in or any active custom object" vocabulary customFieldsFor
+// etc. already use.
+function allEntityTypeKeys(){return [...Object.keys(numberRules),...activeCustomObjectKeys()]}
+// A record's natural display name, regardless of entity type - custom
+// objects always have .name (see customObjectFields), built-ins each have
+// their own primary field.
+function recordDisplayName(entityType,r){
+ if(!r)return '—';
+ if(customObjectByKey(entityType))return r.name||r.number||'—';
+ return r.name||r.title||r.number||'—';
+}
+function relationshipDefsFor(entityType){return (data.relationshipDefinitions||[]).filter(d=>d.active&&d.showRelatedList&&(d.sourceEntity===entityType||d.targetEntity===entityType))}
+// Every related record for one record, across every active relationship it
+// participates in from either direction - mirrors
+// relationship_service::related_records_for. A relationship's forward
+// label is shown from the source side, reverse label from the target side.
+function relatedRecordsFor(entityType,entityId){
+ const out=[];
+ relationshipDefsFor(entityType).forEach(def=>{
+  if(def.sourceEntity===entityType){
+   (data.relationshipInstances||[]).filter(i=>i.definitionId===def.id&&i.sourceEntity===entityType&&i.sourceId===entityId).forEach(inst=>{
+    const rec=byId(inst.targetEntity,inst.targetId); if(!rec)return;
+    out.push({instanceId:inst.id,defKey:def.key,groupLabel:def.forwardLabel,entityType:inst.targetEntity,entityId:inst.targetId,displayName:recordDisplayName(inst.targetEntity,rec),status:rec.status||''});
+   });
+  }
+  if(def.targetEntity===entityType){
+   (data.relationshipInstances||[]).filter(i=>i.definitionId===def.id&&i.targetEntity===entityType&&i.targetId===entityId).forEach(inst=>{
+    const rec=byId(inst.sourceEntity,inst.sourceId); if(!rec)return;
+    out.push({instanceId:inst.id,defKey:def.key,groupLabel:def.reverseLabel,entityType:inst.sourceEntity,entityId:inst.sourceId,displayName:recordDisplayName(inst.sourceEntity,rec),status:rec.status||''});
+   });
+  }
+ });
+ return out;
+}
+function relationshipInstancesForRecord(entityType,entityId){
+ return (data.relationshipInstances||[]).filter(i=>(i.sourceEntity===entityType&&i.sourceId===entityId)||(i.targetEntity===entityType&&i.targetId===entityId));
+}
+// Checked before a record is deleted: any 'restrict' relationship still
+// linking to it blocks the delete (return a message); an 'archive'
+// relationship just has its link rows silently cleared instead - the
+// linked *other* record is never touched, only the link (matches
+// relationship_service::enforce_delete_behavior / ADM-CR-06).
+function relationshipDeleteCheck(entityType,entityId){
+ for(const inst of relationshipInstancesForRecord(entityType,entityId)){
+  const def=(data.relationshipDefinitions||[]).find(d=>d.id===inst.definitionId);
+  const restrict=def?def.deleteBehavior==='restrict':true;
+  if(restrict)return `This record is still linked to other records through a custom relationship${def?` (${def.forwardLabel} / ${def.reverseLabel})`:''} — unlink it first, or change the relationship's delete behavior to Archive.`;
+ }
+ return null;
+}
+function clearArchivableRelationshipInstances(entityType,entityId){
+ const ids=relationshipInstancesForRecord(entityType,entityId).map(i=>i.id);
+ if(ids.length)data.relationshipInstances=(data.relationshipInstances||[]).filter(i=>!ids.includes(i.id));
+}
+// Cardinality enforcement on link - mirrors relationship_service::link's
+// match on relationship_type. many_to_many has no extra constraint beyond
+// "not already linked", which the final check below always applies.
+function relationshipLinkError(def,sourceId,targetId){
+ const instances=data.relationshipInstances||[];
+ if(def.relType==='many_to_one'&&instances.some(i=>i.definitionId===def.id&&i.sourceId===sourceId))
+  return `This record is already linked as ${def.forwardLabel} — unlink it first to relink.`;
+ if(def.relType==='one_to_one'&&instances.some(i=>i.definitionId===def.id&&(i.sourceId===sourceId||i.targetId===targetId)))
+  return 'One or both records are already linked through this one-to-one relationship.';
+ if(instances.some(i=>i.definitionId===def.id&&i.sourceId===sourceId&&i.targetId===targetId))
+  return 'These two records are already linked.';
+ return null;
+}
 // Admin panel: entities that support custom fields & business rules are every object with numbering.
 // Workflow automation is limited to the entities Tasks can relate to (see relatedTypeFor).
 let adminTab='profile';
@@ -219,12 +341,25 @@ function transitionOptionsFor(entityKey){
  const field=fn().find(f=>f[0]===transitionFieldFor(entityKey));
  return field&&field[3]?field[3].split('|'):[];
 }
-function fieldsFnFor(key){return {companies:companyFields,contacts:contactFields,opportunities:opportunityFields,products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[key]}
+function fieldsFnFor(key){
+ const fn={companies:companyFields,contacts:contactFields,opportunities:opportunityFields,products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[key];
+ return fn||(customObjectByKey(key)?customObjectFields:undefined);
+}
+// A custom object's records all share this one fixed shape (matches the
+// desktop edition's custom_records table exactly: auto number, name,
+// status, owner, notes) - everything object-specific comes from custom
+// fields, the same system every built-in entity already uses.
+function customObjectFields(){return [['number','Record ID','auto'],['name','Name'],['status','Status','select','Active|Inactive|Archived'],['owner','Owner'],['notes','Notes']]}
 function slugify(label){
  const parts=String(label).trim().split(/[^a-zA-Z0-9]+/).filter(Boolean);
  if(!parts.length)return 'field'+uid();
  return parts[0].toLowerCase()+parts.slice(1).map(w=>w[0].toUpperCase()+w.slice(1).toLowerCase()).join('');
 }
+// Custom object keys use the desktop edition's lowercase_underscore
+// convention (distinct from slugify()'s camelCase, which is for field
+// keys) since a custom object's key is a visible, permanent identifier
+// shown in the admin UI - "vendor", not "vendorObject" or similar.
+function slugifyObjectKey(label){return String(label).trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')}
 // Tuple shape is [key,label,type,opts,extra] - extra (index 4) carries the
 // Phase 4 extensibility settings (default value/unique/help text/
 // placeholder) that only custom fields have; built-in field tuples simply
@@ -360,9 +495,9 @@ function landing(){
 
 function appShell(){
  document.title='Lanesra OS Demo';
- $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav">${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button></nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.18.1</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/backlog">Backlog</a><a href="/changelog">Changelog</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
+ $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav" id="sideNav">${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button></nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.23.1</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
  document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;renderView()});
- $('#resetDemo').onclick=()=>{data=structuredClone(seed);save();toast('Demo data restored');refreshNotifBadge();renderView()};
+ $('#resetDemo').onclick=()=>{data=structuredClone(seed);ensureAdminData();syncCustomObjectRegistry();renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored');refreshNotifBadge();renderView()};
  const searchInput=$('#globalSearch'), searchBox=$('#searchResults');
  const searchable=[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['products','Product / Service'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']];
  function closeSearch(){searchBox.hidden=true;searchBox.innerHTML=''}
@@ -383,7 +518,7 @@ function appShell(){
  searchInput.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSearch();searchInput.blur()}});
  document.addEventListener('click',e=>{if(!e.target.closest('.search'))closeSearch()});
  document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();searchInput.focus();runSearch()}});
- $('#helpButton').onclick=()=>modal('Help & product links',`<div class="help-list"><a href="/principles">Product principles</a><a href="/compare">Compare Lanesra</a><a href="/roadmap">Roadmap</a><a href="/changelog">Changelog</a><a href="/">Product website</a><button class="btn btn-secondary" onclick="document.getElementById('modal').remove()">Close</button></div>`);
+ $('#helpButton').onclick=()=>modal('Help & product links',`<div class="help-list"><a href="/principles">Product principles</a><a href="/compare">Compare Lanesra</a><a href="/roadmap">Roadmap & backlog</a><a href="/releases">Releases</a><a href="/">Product website</a><button class="btn btn-secondary" onclick="document.getElementById('modal').remove()">Close</button></div>`);
  const notifBtn=$('#notifButton'), notifPanel=$('#notifPanel');
  notifBtn.onclick=e=>{e.stopPropagation();notifPanel.hidden=!notifPanel.hidden;if(!notifPanel.hidden)renderNotifPanel()};
  document.addEventListener('click',e=>{if(!e.target.closest('.notif-wrap'))notifPanel.hidden=true});
@@ -415,12 +550,28 @@ const relatedLabel=t=>({Company:companyName,Contact:contactName,Opportunity:oppo
 function options(list,value,labelFn=x=>x.name){return `<option value="">Select…</option>`+list.map(x=>`<option value="${x.id}" ${x.id===value?'selected':''}>${labelFn(x)}</option>`).join('')}
 function optionalOptions(list,value,emptyLabel='None',labelFn=x=>x.name){return `<option value="">${emptyLabel}</option>`+list.map(x=>`<option value="${x.id}" ${x.id===value?'selected':''}>${labelFn(x)}</option>`).join('')}
 function selectHtml(name,label,items,value,required=true){return `<div class="field"><label>${label}</label><select name="${name}" ${required?'required':''}>${options(items,value)}</select></div>`}
+// The sidebar's <nav> is only built once, inside appShell()'s initial
+// innerHTML - unlike #view/#adminBody it's never re-rendered by
+// renderView()/renderAdminTab(), so a Custom Objects create/edit/delete
+// (or Reset demo) needs to explicitly rebuild it or its entry would never
+// appear/disappear from navigation.
+function renderSidebarNav(){
+ const nav=$('#sideNav'); if(!nav)return;
+ nav.innerHTML=`${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button>`;
+ document.querySelectorAll('[data-nav]').forEach(b=>{b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;renderView()};b.classList.toggle('active',b.dataset.nav===current)});
+}
 function renderView(){
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
  if(current==='dashboard') return dashboard();
  if(current==='pipeline') return pipeline();
+ if(current==='reports') return reportsPage();
  if(current==='admin') return adminPage();
  if(detailRecord&&detailRecord.type===current)return detailRecord.type==='companies'?companyDetail(detailRecord.id):contactDetail(detailRecord.id);
+ // Admin-defined Custom Objects reuse the exact same generic tablePage +
+ // recordModal flow every built-in entity uses - only the columns/fields
+ // are built from the object's definition instead of being hardcoded.
+ const co=customObjectByKey(current);
+ if(co)return tablePage(current,{cols:[['number','ID'],['name','Name'],['status','Status'],['owner','Owner']],fields:()=>fieldsFor(current,customObjectFields)});
  const configs={
  companies:{cols:[['customerNumber','Customer ID'],['name','Company','companyLink'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status']],fields:()=>fieldsFor('companies',companyFields)},
  contacts:{cols:[['contactNumber','Contact ID'],['name','Contact','contactLink'],['companyId','Company','company'],['role','Role'],['email','Email'],['status','Status']],fields:()=>fieldsFor('contacts',contactFields)},
@@ -443,7 +594,7 @@ function dashboard(){
 }
 function companyFields(){return [['customerNumber','Customer ID','auto'],['name','Company name'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status','select','Lead|Prospect|Customer|Inactive']]}
 function contactFields(){return [['contactNumber','Contact ID','auto'],['name','Full name'],['companyId','Company','relation','companies'],['role','Role'],['email','Email'],['phone','Phone'],['status','Status','select','Active|Inactive']]}
-function opportunityFields(){return [['opportunityNumber','Opportunity ID','auto'],['title','Opportunity title'],['companyId','Customer','relation','companies'],['contactId','Primary contact (optional)','filteredContact'],['value','Value','number'],['stage','Stage','select','Lead|Qualified|Discovery|Proposal|Negotiation|Won|Lost'],['probability','Probability %','number'],['close','Expected close','date'],['owner','Owner'],['status','Status','select','Open|On Hold|Won|Lost']]}
+function opportunityFields(){return [['opportunityNumber','Opportunity ID','auto'],['title','Opportunity title'],['companyId','Customer','relation','companies'],['contactId','Primary contact (optional)','filteredContact'],['value','Value','number'],['stage','Stage','select','Lead|Qualified|Discovery|Proposal|Negotiation|Won|Lost'],['probability','Probability %','number'],['close','Expected close','date'],['owner','Owner'],['status','Status','select','Open|On Hold|Won|Lost'],['lostReason','Lost reason (optional)']]}
 function productFields(){return [['productNumber','Product ID','auto'],['name','Name'],['sku','SKU'],['type','Type','select','Product|Service'],['category','Category'],['price','Unit price','number'],['tax','Tax %','number'],['status','Status','select','Active|Inactive']]}
 function quoteFields(){return [['number','Quote number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['opportunityId','Opportunity (optional)','filteredOpportunity'],['status','Status','select','Draft|Sent|Accepted|Rejected|Expired'],['date','Quote date','date'],['valid','Valid until','date']]}
 function orderFields(){return [['number','Order number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['quoteId','Source quote (optional)','filteredQuote'],['status','Status','select','Draft|Confirmed|In Progress|Completed|Cancelled'],['date','Order date','date']]}
@@ -458,6 +609,202 @@ function pipeline(){
  $('#addDeal').onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields));
  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields),byId('opportunities',b.dataset.edit)));
  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('opportunities',b.dataset.del));
+}
+// ---- Reports (Phase 3 demo parity) -----------------------------------------
+// Mirrors desktop's fixed report gallery (report_service.rs: Revenue by
+// month, Win rate by owner, Lost reasons, AR aging, Sales by owner) plus its
+// generic custom report builder (custom_report_service.rs: pick any object -
+// built-in or custom - group by its status/stage or an active+reportable
+// custom field, count or sum). Two schema gaps this demo's simpler data
+// model has that desktop doesn't: invoices only carry a due date (no
+// separate issue date) and don't track a running balance apart from the
+// full document total. Rather than fake either, both reports below say so
+// in a subtitle and use the closest real field (due date / full total).
+let reportsTab='revenue';
+let reportsFrom='';
+let reportsTo='';
+let reportsAsOf='';
+let selectedCustomReportId=null;
+function inRange(dateStr){if(!dateStr)return false;if(reportsFrom&&dateStr<reportsFrom)return false;if(reportsTo&&dateStr>reportsTo)return false;return true}
+function reportBarHtml(value,max){const pct=max>0?Math.max(2,Math.round(value/max*100)):0;return `<div style="background:#eef2ff;border-radius:5px;width:130px;height:9px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--brand)"></div></div>`}
+function downloadCsv(filename,headers,rows){
+ const esc=v=>{const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+ const csv=[headers.map(esc).join(','),...rows.map(r=>r.map(esc).join(','))].join('\n');
+ const blob=new Blob([csv],{type:'text/csv'});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+ URL.revokeObjectURL(url);
+}
+function reportRevenueByMonth(){
+ const rows=data.invoices.filter(i=>!['Draft','Cancelled'].includes(i.status)&&inRange(i.due));
+ const byMonth={};const order=[];
+ rows.forEach(i=>{const m=(i.due||'').slice(0,7);if(!m)return;if(!byMonth[m]){byMonth[m]={month:m,count:0,total:0};order.push(m)}byMonth[m].count++;byMonth[m].total+=docTotal(i)});
+ return order.sort().map(m=>byMonth[m]);
+}
+function reportWinRateByOwner(){
+ const rows=data.opportunities.filter(o=>['Won','Lost'].includes(o.status)&&inRange(o.close));
+ const byOwner={};const order=[];
+ rows.forEach(o=>{const owner=o.owner||'Unassigned';if(!byOwner[owner]){byOwner[owner]={owner,won:0,lost:0,wonValue:0};order.push(owner)}if(o.status==='Won'){byOwner[owner].won++;byOwner[owner].wonValue+=Number(o.value||0)}else byOwner[owner].lost++});
+ return order.map(o=>byOwner[o]).sort((a,b)=>b.wonValue-a.wonValue);
+}
+function reportLostReasons(){
+ const rows=data.opportunities.filter(o=>o.status==='Lost'&&inRange(o.close));
+ const byReason={};const order=[];
+ rows.forEach(o=>{const reason=(o.lostReason||'').trim()||'No reason given';if(!byReason[reason]){byReason[reason]={reason,count:0,value:0};order.push(reason)}byReason[reason].count++;byReason[reason].value+=Number(o.value||0)});
+ return order.map(r=>byReason[r]).sort((a,b)=>b.count-a.count);
+}
+function reportArAging(asOf){
+ const cutoff=asOf||new Date().toISOString().slice(0,10);
+ // No balance_cents field in this demo - stand in with each invoice's full
+ // total, and treat Paid the same as "no balance left" since there's no
+ // partial-payment tracking to check instead.
+ const rows=data.invoices.filter(i=>!['Draft','Cancelled','Paid'].includes(i.status));
+ const order=['Not yet due','1-30 days overdue','31-60 days overdue','61-90 days overdue','90+ days overdue','No due date'];
+ const buckets=Object.fromEntries(order.map(b=>[b,{bucket:b,count:0,balance:0}]));
+ rows.forEach(i=>{
+  const bal=docTotal(i);
+  let key;
+  if(!i.due)key='No due date';
+  else{
+   const days=Math.floor((new Date(cutoff)-new Date(i.due))/86400000);
+   key=days<=0?'Not yet due':days<=30?'1-30 days overdue':days<=60?'31-60 days overdue':days<=90?'61-90 days overdue':'90+ days overdue';
+  }
+  buckets[key].count++;buckets[key].balance+=bal;
+ });
+ return order.map(b=>buckets[b]).filter(b=>b.count>0);
+}
+function reportSalesByOwner(){
+ const rows=data.invoices.filter(i=>!['Draft','Cancelled'].includes(i.status)&&inRange(i.due));
+ const byOwner={};const order=[];
+ rows.forEach(i=>{const c=byId('companies',i.companyId);const owner=c?.owner||'Unassigned';if(!byOwner[owner]){byOwner[owner]={owner,count:0,total:0};order.push(owner)}byOwner[owner].count++;byOwner[owner].total+=docTotal(i)});
+ return order.map(o=>byOwner[o]).sort((a,b)=>b.total-a.total);
+}
+// Fields an admin flagged reportable, mirroring ADM-CF-05 - a field marked
+// "not reportable" is off-limits as a group-by or sum target here too.
+function reportableCustomFields(entityKey){return customFieldsFor(entityKey).filter(f=>f[4]&&f[4].reportable)}
+function reportableNumericCustomFields(entityKey){return reportableCustomFields(entityKey).filter(f=>f[2]==='number')}
+function runCustomReport(report){
+ const arr=data[report.entityKey]||[];
+ const groups={};const order=[];
+ arr.forEach(r=>{
+  const group=report.groupBySource==='builtin'
+   ? (r[transitionFieldFor(report.entityKey)]||'(none)')
+   : ((r[report.groupByField]===undefined||r[report.groupByField]===null||r[report.groupByField]==='')?'(none)':String(r[report.groupByField]));
+  if(!(group in groups)){groups[group]=0;order.push(group)}
+  groups[group]+=report.aggregate==='sum'?Number(r[report.sumFieldKey]||0):1;
+ });
+ return order.map(g=>({group:g,value:groups[g]}));
+}
+function reportsPage(){
+ document.title='Reports — Lanesra OS Demo';
+ if(!reportsTo)reportsTo=new Date().toISOString().slice(0,10);
+ if(!reportsAsOf)reportsAsOf=new Date().toISOString().slice(0,10);
+ const tabs=[['revenue','Revenue by month'],['winRate','Win rate by owner'],['lostReasons','Lost reasons'],['arAging','AR aging'],['salesByOwner','Sales by owner'],['custom','Custom reports']];
+ $('#view').innerHTML=`<div class="page-head"><div><h1>Reports</h1><p class="muted">Beyond the dashboard's KPI tiles — revenue, pipeline outcomes, aging receivables, sales by owner, and admin-built custom reports.</p></div></div><div class="tabs">${tabs.map(t=>`<button class="tab ${reportsTab===t[0]?'active':''}" data-report-tab="${t[0]}">${t[1]}</button>`).join('')}</div><div id="reportsBody"></div>`;
+ document.querySelectorAll('[data-report-tab]').forEach(b=>b.onclick=()=>{reportsTab=b.dataset.reportTab;renderReportsTab()});
+ renderReportsTab();
+}
+function renderReportsTab(){
+ document.querySelectorAll('[data-report-tab]').forEach(b=>b.classList.toggle('active',b.dataset.reportTab===reportsTab));
+ const body=$('#reportsBody');
+ ({revenue:revenueReportTab,winRate:winRateReportTab,lostReasons:lostReasonsReportTab,arAging:arAgingReportTab,salesByOwner:salesByOwnerReportTab,custom:customReportsTab}[reportsTab])(body);
+}
+function rangeControlsHtml(){return `<div class="form-grid" style="grid-template-columns:repeat(3,max-content);align-items:end;margin-bottom:16px"><div class="field"><label>From</label><input type="date" id="reportsFromInput" value="${reportsFrom}"></div><div class="field"><label>To</label><input type="date" id="reportsToInput" value="${reportsTo}"></div><div class="field"><button class="btn btn-secondary" type="button" id="reportsClearRange">Clear range</button></div></div>`}
+function wireRangeControls(rerender){
+ $('#reportsFromInput').onchange=e=>{reportsFrom=e.target.value;rerender()};
+ $('#reportsToInput').onchange=e=>{reportsTo=e.target.value;rerender()};
+ $('#reportsClearRange').onclick=()=>{reportsFrom='';reportsTo='';rerender()};
+}
+function revenueReportTab(body){
+ const rows=reportRevenueByMonth();
+ const max=Math.max(0,...rows.map(r=>r.total));
+ body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Revenue by month</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Grouped by each invoice's due date — this demo doesn't track a separate issue date.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Month</th><th>Invoices</th><th></th><th>Revenue</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.month}</td><td>${r.count}</td><td>${reportBarHtml(r.total,max)}</td><td>${money(r.total)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No invoices in this range.</div>'}</div>`;
+ wireRangeControls(()=>revenueReportTab(body));
+ $('#exportReport').onclick=()=>downloadCsv('revenue-by-month.csv',['Month','Invoices','Revenue'],rows.map(r=>[r.month,r.count,r.total.toFixed(2)]));
+}
+function winRateReportTab(body){
+ const rows=reportWinRateByOwner();
+ body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Win rate by owner</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Uses each opportunity's expected close date — this demo doesn't track a separate closed-date timestamp.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Owner</th><th>Won</th><th>Lost</th><th>Win rate</th><th>Won value</th></tr></thead><tbody>${rows.map(r=>{const total=r.won+r.lost;const rate=total>0?Math.round(r.won/total*100)+'%':'—';return `<tr><td>${r.owner}</td><td>${r.won}</td><td>${r.lost}</td><td>${rate}</td><td>${money(r.wonValue)}</td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No won or lost opportunities in this range.</div>'}</div>`;
+ wireRangeControls(()=>winRateReportTab(body));
+ $('#exportReport').onclick=()=>downloadCsv('win-rate-by-owner.csv',['Owner','Won','Lost','Win rate','Won value'],rows.map(r=>{const total=r.won+r.lost;return [r.owner,r.won,r.lost,total>0?Math.round(r.won/total*100)+'%':'—',r.wonValue.toFixed(2)]}));
+}
+function lostReasonsReportTab(body){
+ const rows=reportLostReasons();
+ const max=Math.max(0,...rows.map(r=>r.count));
+ body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Lost reasons</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Uses each opportunity's expected close date — this demo doesn't track a separate closed-date timestamp.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Reason</th><th>Count</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.reason}</td><td>${r.count}</td><td>${reportBarHtml(r.count,max)}</td><td>${money(r.value)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No lost opportunities in this range.</div>'}</div>`;
+ wireRangeControls(()=>lostReasonsReportTab(body));
+ $('#exportReport').onclick=()=>downloadCsv('lost-reasons.csv',['Reason','Count','Value'],rows.map(r=>[r.reason,r.count,r.value.toFixed(2)]));
+}
+function arAgingReportTab(body){
+ const rows=reportArAging(reportsAsOf);
+ const max=Math.max(0,...rows.map(r=>r.balance));
+ body.innerHTML=`<div class="form-grid" style="grid-template-columns:max-content;align-items:end;margin-bottom:16px"><div class="field"><label>As of</label><input type="date" id="reportsAsOfInput" value="${reportsAsOf}"></div></div><div class="panel"><div class="panel-head"><h3>AR aging</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Uses each invoice's full amount as its balance — this demo doesn't track partial payments separately.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Bucket</th><th>Invoices</th><th></th><th>Balance</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.bucket}</td><td>${r.count}</td><td>${reportBarHtml(r.balance,max)}</td><td>${money(r.balance)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No outstanding balances.</div>'}</div>`;
+ $('#reportsAsOfInput').onchange=e=>{reportsAsOf=e.target.value;arAgingReportTab(body)};
+ $('#exportReport').onclick=()=>downloadCsv('ar-aging.csv',['Bucket','Invoices','Balance'],rows.map(r=>[r.bucket,r.count,r.balance.toFixed(2)]));
+}
+function salesByOwnerReportTab(body){
+ const rows=reportSalesByOwner();
+ const max=Math.max(0,...rows.map(r=>r.total));
+ body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Sales by owner</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Attributed via each invoice's Company owner — invoices have no owner of their own. Grouped by due date, since this demo doesn't track a separate issue date.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Owner</th><th>Invoices</th><th></th><th>Revenue</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.owner}</td><td>${r.count}</td><td>${reportBarHtml(r.total,max)}</td><td>${money(r.total)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No invoices in this range.</div>'}</div>`;
+ wireRangeControls(()=>salesByOwnerReportTab(body));
+ $('#exportReport').onclick=()=>downloadCsv('sales-by-owner.csv',['Owner','Invoices','Revenue'],rows.map(r=>[r.owner,r.count,r.total.toFixed(2)]));
+}
+function customReportsTab(body){
+ const list=data.customReports||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Custom reports</h3><button class="btn btn-primary" id="addCustomReport">+ New report</button></div><p class="muted" style="font-size:13px">Pick an entity, a field to group by, and an aggregate — a small alternative to the fixed reports above for questions those don't answer.</p>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Entity</th><th>Group by</th><th>Aggregate</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td><a class="cell-link" data-run-report="${r.id}">${r.name}</a></td><td>${entityLabel(r.entityKey)}</td><td>${r.groupBySource==='builtin'?(transitionFieldFor(r.entityKey)==='stage'?'Stage':'Status'):r.groupByField}</td><td>${r.aggregate==='sum'?'Sum of '+r.sumFieldKey:'Count'}</td><td><div class="actions"><button class="icon-btn" data-del-report="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No custom reports yet.</div>'}</div><div id="customReportResults"></div>`;
+ $('#addCustomReport').onclick=()=>customReportModal();
+ body.querySelectorAll('[data-run-report]').forEach(a=>a.onclick=()=>{selectedCustomReportId=a.dataset.runReport;renderCustomReportResults()});
+ body.querySelectorAll('[data-del-report]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this report?'))return;data.customReports=data.customReports.filter(r=>r.id!==b.dataset.delReport);if(selectedCustomReportId===b.dataset.delReport)selectedCustomReportId=null;save();customReportsTab(body)});
+ renderCustomReportResults();
+}
+function renderCustomReportResults(){
+ const box=$('#customReportResults'); if(!box)return;
+ const report=(data.customReports||[]).find(r=>r.id===selectedCustomReportId);
+ if(!report){box.innerHTML='';return}
+ const rows=runCustomReport(report);
+ const max=Math.max(0,...rows.map(r=>r.value));
+ box.innerHTML=`<div class="panel" style="margin-top:16px"><div class="panel-head"><h3>${report.name}</h3><button class="btn btn-secondary" id="exportCustomReport">Export CSV</button></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</div>`;
+ $('#exportCustomReport').onclick=()=>downloadCsv(`${report.name.toLowerCase().replace(/\s+/g,'-')}.csv`,['Group','Value'],rows.map(r=>[r.group,r.value]));
+}
+function customReportModal(){
+ const keys=allEntityTypeKeys();
+ const body=`<form id="customReportForm" class="form-grid">
+ <div class="field full"><label>Report name</label><input name="name" required></div>
+ <div class="field"><label>Entity</label><select name="entityKey" id="crEntitySelect">${keys.map(k=>`<option value="${k}">${entityLabel(k)}</option>`).join('')}</select></div>
+ <div class="field"><label>Group by</label><select name="groupBy" id="crGroupBySelect"></select></div>
+ <div class="field"><label>Aggregate</label><select name="aggregate" id="crAggregateSelect"><option value="count">Count of records</option><option value="sum">Sum of a numeric field</option></select></div>
+ <div class="field" id="crSumFieldWrap" hidden><label>Sum field</label><select name="sumFieldKey" id="crSumFieldSelect"></select></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Create report</button></div>
+ </form>`;
+ modal('New custom report',body);
+ function refreshGroupBy(){
+  const entityKey=$('#crEntitySelect').value;
+  const statusLabel=transitionFieldFor(entityKey)==='stage'?'Stage':'Status';
+  const fields=reportableCustomFields(entityKey);
+  $('#crGroupBySelect').innerHTML=`<option value="__builtin__">${statusLabel}</option>${fields.map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('')}`;
+  refreshSumField();
+ }
+ function refreshSumField(){
+  const entityKey=$('#crEntitySelect').value;
+  const numeric=reportableNumericCustomFields(entityKey);
+  $('#crSumFieldSelect').innerHTML=numeric.length?numeric.map(f=>`<option value="${f[0]}">${f[1]}</option>`).join(''):'<option value="">— none available —</option>';
+ }
+ refreshGroupBy();
+ $('#crEntitySelect').onchange=refreshGroupBy;
+ $('#crAggregateSelect').onchange=e=>{$('#crSumFieldWrap').hidden=e.target.value!=='sum'};
+ $('[data-close]').onclick=closeModal;
+ $('#customReportForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(fd.aggregate==='sum'&&!fd.sumFieldKey)return alert('Pick a numeric field to sum, or choose Count of records instead.');
+  const report={id:uid(),name:fd.name,entityKey:fd.entityKey,groupBySource:fd.groupBy==='__builtin__'?'builtin':'custom',groupByField:fd.groupBy==='__builtin__'?transitionFieldFor(fd.entityKey):fd.groupBy,aggregate:fd.aggregate,sumFieldKey:fd.aggregate==='sum'?fd.sumFieldKey:''};
+  data.customReports.push(report);
+  save();closeModal();
+  selectedCustomReportId=report.id;
+  toast('Custom report created');
+  customReportsTab($('#reportsBody'));
+ };
 }
 // Phase 5 Customer/Contact 360: a company/contact reference anywhere in a
 // list becomes a clickable link into its 360 page, not just plain text.
@@ -569,11 +916,22 @@ function contactDetail(id){
 }
 function recordModal(key,fields,record={}){
  const isDoc=['quotes','orders','invoices'].includes(key);
- if(!record.id&&numberRules[key])record={...record,[numberRules[key].field]:nextNumber(key)};
- const form=`<form id="recordForm"><div class="form-grid">${fields.map(f=>fieldHtml(f,record)).join('')}${isDoc?lineItemsHtml(record.items||[]):''}</div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>`;
+ if(!record.id){const r0=effectiveRule(key);if(r0)record={...record,[r0.field]:nextNumber(key)}}
+ // Phase 4 no-code layout designer: a published layout (Admin -> Screen
+ // layouts) groups these same fields into admin-drag-ordered sections; with
+ // no published layout the fields render in their plain default order,
+ // exactly as before this feature existed.
+ const fieldsHtml=orderedFieldGroupsFor(key,fields).map(g=>(g.title?`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>`:'')+g.fields.map(f=>fieldHtml(f,record)).join('')).join('');
+ const form=`<form id="recordForm"><div class="form-grid">${fieldsHtml}${isDoc?lineItemsHtml(record.items||[]):''}</div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
  modal(record.id?'Edit record':'Create record',form); $('[data-close]').onclick=closeModal;
  wireRelations(record); if(isDoc)wireLines();
  applyFieldRules(key,$('#recordForm'));
+ // Custom Relationships (admin extensibility, Phase B): a record being
+ // edited shows every linked record across every applicable relationship,
+ // with inline link/unlink - the same place desktop puts RelatedRecordsCard
+ // (below the edit form), since this demo has no separate detail page for
+ // most entities.
+ if(record.id){relLinkingKey=null;renderRelatedRecordsPanel(key,record.id)}
  $('#recordForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());
  const relationError=validateRelationships(key,obj);if(relationError)return alert(relationError);
  // Phase 4 custom field extensibility: a save that leaves a custom field
@@ -597,8 +955,13 @@ function recordModal(key,fields,record={}){
     return alert(`"${fromVal||'—'} → ${toVal}" is not an allowed ${fieldLabelFor(key,tf)} transition. Configure allowed transitions in Admin → Status transitions.`);
   }
  }
- if(wasEdit)Object.assign(byId(key,record.id),obj);else{const rule=numberRules[key];if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);data[key].unshift({id:uid(),...obj})}
- if(wasEdit&&relatedTypeFor[key]&&before){
+ if(wasEdit)Object.assign(byId(key,record.id),obj);else{const rule=effectiveRule(key);if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);data[key].unshift({id:uid(),...obj})}
+ // Workflow execution isn't limited to relatedTypeFor's built-ins anymore -
+ // create_record/update_related_record/update_field don't need a Task
+ // relatedType at all, and create_task itself already falls back to
+ // 'General' for anything relatedTypeFor doesn't cover (see
+ // executeWorkflowAction below), so custom objects fire workflows too.
+ if(wasEdit&&before){
   // Each workflow rule watches its own field (not just status/stage) - fire
   // only when that field actually changed, the rule is active, and the
   // rule's operator matches.
@@ -663,6 +1026,51 @@ function wireRelations(record){
  const type=form.elements.relatedType, rel=form.querySelector('[data-dynamic-related]');
  function refreshRelated(){if(!type||!rel)return;const t=type.value;const map={Company:['companies',x=>x.name],Contact:['contacts',x=>`${x.name} · ${companyName(x.companyId)}`],Opportunity:['opportunities',x=>x.title],Quote:['quotes',x=>x.number],Order:['orders',x=>x.number],Invoice:['invoices',x=>x.number],Contract:['contracts',x=>x.number]};if(!map[t]){rel.innerHTML='<option value="">General</option>';rel.disabled=true;return}rel.disabled=false;const [arr,label]=map[t];rel.innerHTML=options(data[arr],record.relatedId,label)}if(type){type.addEventListener('change',refreshRelated);refreshRelated()}
 }
+// Which relationship group (by definition key) currently has its inline
+// link picker open in the record modal - reset to null every time the
+// modal opens (see recordModal), scoped to whichever modal is on screen.
+let relLinkingKey=null;
+function linkPickerHtml(g){
+ const optionsHtml=(data[g.otherType]||[]).map(r=>`<option value="${r.id}">${recordDisplayName(g.otherType,r)}</option>`).join('');
+ return `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><select data-link-select><option value="">Select a record…</option>${optionsHtml}</select><button type="button" class="btn btn-primary" data-link-submit>Link</button><button type="button" class="btn btn-secondary" data-link-cancel>Cancel</button></div>`;
+}
+// Renders every related record for entityType/entityId across every
+// applicable relationship, with inline link/unlink - mirrors desktop's
+// RelatedRecordsCard, just re-rendering itself in place on every change
+// instead of a query-client refetch.
+function renderRelatedRecordsPanel(entityType,entityId){
+ const panel=$('#relatedRecordsPanel'); if(!panel)return;
+ const defs=relationshipDefsFor(entityType);
+ if(!defs.length){panel.innerHTML='';return}
+ const related=relatedRecordsFor(entityType,entityId);
+ const groups=defs.map(def=>{
+  const isSource=def.sourceEntity===entityType;
+  return {def,label:isSource?def.forwardLabel:def.reverseLabel,otherType:isSource?def.targetEntity:def.sourceEntity,isSource,rows:related.filter(r=>r.defKey===def.key)};
+ });
+ panel.innerHTML=`<div class="panel" style="margin-top:16px"><h3 style="margin-top:0">Related records</h3>${groups.map(g=>`<div style="margin-bottom:14px"><div class="panel-head" style="margin-bottom:4px"><strong>${g.label}</strong><button type="button" class="btn btn-secondary" data-link-group="${g.def.key}">+ Link</button></div>${g.rows.length?g.rows.map(r=>`<div class="deal" style="display:flex;justify-content:space-between;align-items:center"><span>${r.displayName} ${badgeMaybe(r.status)}</span><button type="button" class="icon-btn" data-unlink="${r.instanceId}">Unlink</button></div>`).join(''):'<div class="empty">None linked</div>'}${relLinkingKey===g.def.key?linkPickerHtml(g):''}</div>`).join('')}</div>`;
+ groups.forEach(g=>{
+  const btn=panel.querySelector(`[data-link-group="${g.def.key}"]`);
+  if(btn)btn.onclick=()=>{relLinkingKey=relLinkingKey===g.def.key?null:g.def.key;renderRelatedRecordsPanel(entityType,entityId)};
+ });
+ panel.querySelectorAll('[data-unlink]').forEach(b=>b.onclick=()=>{
+  data.relationshipInstances=(data.relationshipInstances||[]).filter(i=>i.id!==b.dataset.unlink);
+  save();toast('Unlinked');renderRelatedRecordsPanel(entityType,entityId);
+ });
+ const linkGroup=groups.find(g=>g.def.key===relLinkingKey);
+ if(linkGroup){
+  const select=panel.querySelector('[data-link-select]'), linkBtn=panel.querySelector('[data-link-submit]'), cancelBtn=panel.querySelector('[data-link-cancel]');
+  if(cancelBtn)cancelBtn.onclick=()=>{relLinkingKey=null;renderRelatedRecordsPanel(entityType,entityId)};
+  if(linkBtn)linkBtn.onclick=()=>{
+   const otherId=select.value; if(!otherId)return;
+   const sourceEntity=linkGroup.isSource?entityType:linkGroup.otherType, sourceId=linkGroup.isSource?entityId:otherId;
+   const targetEntity=linkGroup.isSource?linkGroup.otherType:entityType, targetId=linkGroup.isSource?otherId:entityId;
+   const err=relationshipLinkError(linkGroup.def,sourceId,targetId);
+   if(err)return alert(err);
+   data.relationshipInstances.push({id:uid(),definitionId:linkGroup.def.id,sourceEntity,sourceId,targetEntity,targetId});
+   save();toast('Linked');relLinkingKey=null;renderRelatedRecordsPanel(entityType,entityId);
+  };
+ }
+}
 
 function validateRelationships(key,obj){
  const cid=obj.companyId||'';
@@ -680,7 +1088,11 @@ function replaceLineItems(items){
 }
 function wireLines(){const rows=$('#lineRows');function recalc(){let total=0;rows.querySelectorAll('.line-row').forEach(r=>{const p=byId('products',$('.line-product',r).value);if(p&&Number($('.line-price',r).value)===0)$('.line-price',r).value=p.price;const sub=Number($('.line-qty',r).value||0)*Number($('.line-price',r).value||0);$('.line-subtotal',r).textContent=money(sub);total+=sub});$('#docTotal').textContent=money(total)}function bind(r){$('.line-product',r).onchange=()=>{const p=byId('products',$('.line-product',r).value);if(p){$('.line-price',r).value=p.price;if(p.type==='Service'&&!$('.line-qty',r).value)$('.line-qty',r).value=1}recalc()};$('.line-qty',r).oninput=recalc;$('.line-price',r).oninput=recalc;$('.line-remove',r).onclick=()=>{r.remove();recalc()}}rows.querySelectorAll('.line-row').forEach(bind);$('#addLine').onclick=()=>{rows.insertAdjacentHTML('beforeend',lineRow());bind(rows.lastElementChild);recalc()};recalc()}
 function dependencies(key,id){const refs=[];if(key==='companies'){['contacts','opportunities','quotes','orders','invoices','contracts'].forEach(k=>{const n=data[k].filter(x=>x.companyId===id).length;if(n)refs.push(`${n} ${labels[k]||k}`)})}if(key==='contacts'){const maps=[['opportunities','contactId'],['quotes','contactId'],['orders','contactId'],['contracts','contactId']];maps.forEach(([k,f])=>{const n=data[k].filter(x=>x[f]===id).length;if(n)refs.push(`${n} ${labels[k]||k}`)});const n=data.tasks.filter(x=>x.relatedType==='Contact'&&x.relatedId===id).length;if(n)refs.push(`${n} tasks`)}if(key==='opportunities'){const n=data.quotes.filter(x=>x.opportunityId===id).length;if(n)refs.push(`${n} quotes`);const t=data.tasks.filter(x=>x.relatedType==='Opportunity'&&x.relatedId===id).length;if(t)refs.push(`${t} tasks`)}if(key==='products'){['quotes','orders','invoices'].forEach(k=>{const n=data[k].filter(x=>(x.items||[]).some(i=>i.productId===id)).length;if(n)refs.push(`${n} ${labels[k]}`)})}if(key==='quotes'){const n=data.orders.filter(x=>x.quoteId===id).length;if(n)refs.push(`${n} orders`)}if(key==='orders'){const n=data.invoices.filter(x=>x.orderId===id).length;if(n)refs.push(`${n} invoices`)}return refs}
-function remove(key,id){const refs=dependencies(key,id);if(refs.length)return alert(`This record is connected to ${refs.join(', ')}. Update or delete those records first.`);if(confirm('Delete this record?')){data[key]=data[key].filter(x=>x.id!==id);save();toast('Record deleted');renderView()}}
+function remove(key,id){
+ const refs=dependencies(key,id);if(refs.length)return alert(`This record is connected to ${refs.join(', ')}. Update or delete those records first.`);
+ const relBlock=relationshipDeleteCheck(key,id);if(relBlock)return alert(relBlock);
+ if(confirm('Delete this record?')){clearArchivableRelationshipInstances(key,id);data[key]=data[key].filter(x=>x.id!==id);save();toast('Record deleted');renderView()}
+}
 function modal(title,body){document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-head"><h2>${title}</h2><button class="icon-btn" onclick="document.getElementById('modal').remove()">✕</button></div>${body}</div></div>`)}
 function closeModal(){document.getElementById('modal')?.remove()}
 function toast(msg){document.body.insertAdjacentHTML('beforeend',`<div class="toast">${msg}</div>`);setTimeout(()=>$('.toast')?.remove(),2200)}
@@ -690,7 +1102,7 @@ function entityLabel(key){return key==='opportunities'?labels.pipeline:labels[ke
 function entityPills(keys,active){return `<div class="entity-tabs">${keys.map(k=>`<button class="pill-tab ${k===active?'active':''}" data-entity="${k}">${entityLabel(k)}</button>`).join('')}</div>`}
 function adminPage(){
  document.title='Admin — Lanesra OS Demo';
- const tabs=[['profile','Business profile'],['users','Users & roles'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['numbering','Numbering'],['kpis','Dashboard KPIs']];
+ const tabs=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs']];
  $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>Admin</span></div><h1>Admin panel</h1><p class="muted">Configure your workspace, users and automation. Changes save immediately in this browser.</p></div></div><div class="tabs">${tabs.map(t=>`<button class="tab ${adminTab===t[0]?'active':''}" data-admin-tab="${t[0]}">${t[1]}</button>`).join('')}</div><div id="adminBody" class="admin-body"></div>`;
  $('[data-clear-filter]').onclick=()=>{current='dashboard';viewFilter=null;renderView()};
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminTab;renderAdminTab()});
@@ -699,7 +1111,7 @@ function adminPage(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,numbering:numberingTab,kpis:kpisTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -721,6 +1133,432 @@ function usersTab(body){
  body.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('users',userFields(),byId('users',b.dataset.edit)));
  body.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('users',b.dataset.del));
 }
+// ---- Custom Objects (admin extensibility) ---------------------------------
+// Lets an Administrator define a whole new business object at runtime -
+// Vendors, Assets, Projects - with no code change. Mirrors the desktop
+// edition's custom_object_service exactly: a stable lowercase_underscore
+// key, a fixed record-number prefix/digit width, and once created it's a
+// full citizen of custom fields, business rules and status transitions -
+// see fieldsFnFor/effectiveRule/syncCustomObjectRegistry above.
+const OBJECT_ICON_CHOICES=['◆','🏭','📦','🚗','🏢','🔧','📋','🗂️','💼','🏗️'];
+function objectsTab(body){
+ const arr=data.customObjects||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Custom Objects</h3><button class="btn btn-primary" id="addObject">+ New object</button></div><p class="muted">Add a whole new business object — Vendors, Assets, Projects — without a code change. Once created it gets its own place in the sidebar and works with custom fields, business rules, status transitions and workflow automation exactly like a built-in object.</p><div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Key</th><th>Numbering</th><th>Records</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(o=>`<tr><td>${o.icon}</td><td>${o.labelPlural}</td><td><code>${o.key}</code></td><td><code>${o.prefix}-${'0'.repeat(o.digits)}</code></td><td>${(data[o.key]||[]).length}</td><td>${badgeMaybe(o.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-object="${o.id}">Edit</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No custom objects yet</div>'}</div></div>`;
+ $('#addObject').onclick=()=>customObjectModal();
+ body.querySelectorAll('[data-edit-object]').forEach(b=>b.onclick=()=>customObjectModal(arr.find(o=>o.id===b.dataset.editObject)));
+}
+function customObjectModal(obj){
+ const isEdit=!!obj;
+ const body=`<form id="objForm" class="form-grid">
+ <div class="field"><label>Singular name</label><input name="singular" value="${obj?.label||''}" placeholder="Vendor" required></div>
+ <div class="field"><label>Plural name</label><input name="plural" value="${obj?.labelPlural||''}" placeholder="Vendors" required></div>
+ <div class="field"><label>Icon</label><select name="icon">${OBJECT_ICON_CHOICES.map(i=>`<option value="${i}" ${obj?.icon===i?'selected':''}>${i}</option>`).join('')}</select></div>
+ <div class="field"><label>Record-number prefix</label><input name="prefix" value="${obj?.prefix||''}" placeholder="VEN" maxlength="20" required></div>
+ <div class="field"><label>Digit width</label><input name="digits" type="number" min="1" max="10" value="${obj?.digits??6}"></div>
+ ${isEdit?`<div class="field"><label>Active</label><select name="active"><option value="true" ${obj.active?'selected':''}>Active</option><option value="false" ${!obj.active?'selected':''}>Inactive</option></select></div><div class="field full"><small class="field-help">Key: <code>${obj.key}</code> (fixed — every custom field, business rule and record keys off this)</small></div>`:''}
+ <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-object>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save object':'Create object'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${obj.labelPlural}`:'New custom object',body);
+ $('[data-close]').onclick=closeModal;
+ $('#objForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.singular.trim()||!fd.plural.trim())return alert('Singular and plural names are required.');
+  const prefix=fd.prefix.trim();
+  if(!prefix||prefix.length>20)return alert('Record-number prefix must be 1-20 characters.');
+  const digits=Math.min(10,Math.max(1,Number(fd.digits)||1));
+  if(isEdit){
+   Object.assign(obj,{label:fd.singular,labelPlural:fd.plural,icon:fd.icon,prefix,digits,active:fd.active==='true'});
+  }else{
+   const rawKey=slugifyObjectKey(fd.singular);
+   if(!rawKey)return alert('Object name must contain at least one letter or number.');
+   // A custom object literally named e.g. "Company" would slug-collide in
+   // spirit with a built-in entity - block it outright, same as desktop.
+   if(RESERVED_ENTITY_KEYS.includes(rawKey))return alert(`"${fd.singular}" is too close to a built-in object name — choose another.`);
+   let key=rawKey,suffix=2;
+   while((data.customObjects||[]).some(o=>o.key===key))key=`${rawKey}_${suffix++}`;
+   data.customObjects.push({id:uid(),key,label:fd.singular,labelPlural:fd.plural,icon:fd.icon,prefix,digits,active:true});
+   data[key]=[];
+  }
+  syncCustomObjectRegistry();
+  renderSidebarNav();
+  save();closeModal();toast(isEdit?'Custom object saved':'Custom object created');renderAdminTab();
+ };
+ if(isEdit){
+  // Hard-delete is blocked while any record exists (matches desktop's
+  // custom_object_service::delete) - deactivating is always safe instead,
+  // since it just hides the object from nav/creation without touching data.
+  $('[data-delete-object]').onclick=()=>{
+   const count=(data[obj.key]||[]).length;
+   if(count)return alert(`Cannot delete '${obj.labelPlural}' — ${count} record(s) still exist. Delete or archive them first, or deactivate the object instead.`);
+   if(!confirm(`Delete '${obj.labelPlural}'? This only works because it has no records.`))return;
+   data.customObjects=data.customObjects.filter(o=>o.id!==obj.id);
+   delete data[obj.key];
+   syncCustomObjectRegistry();
+   renderSidebarNav();
+   if(current===obj.key){current='dashboard';detailRecord=null}
+   save();closeModal();toast('Custom object deleted');renderAdminTab();
+  };
+ }
+}
+// ---- Custom Relationships (admin extensibility, Phase B) ------------------
+function relationshipsTab(body){
+ const arr=data.relationshipDefinitions||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Relationships</h3><button class="btn btn-primary" id="addRelationship">+ New relationship</button></div><p class="muted">Connect any two object types — built-in or custom. Once created, both sides automatically show a related list on that record's edit form, and link/unlink from there.</p><div class="table-wrap"><table class="table"><thead><tr><th>Connects</th><th>Type</th><th>Labels</th><th>On delete</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(d=>`<tr><td>${entityLabel(d.sourceEntity)} → ${entityLabel(d.targetEntity)}</td><td>${RELATIONSHIP_TYPE_LABELS[d.relType]}</td><td><span title="Forward label, shown on the source record">${d.forwardLabel}</span> / <span title="Reverse label, shown on the target record">${d.reverseLabel}</span></td><td>${DELETE_BEHAVIOR_LABELS[d.deleteBehavior]}</td><td>${badgeMaybe(d.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-rel="${d.id}">Edit</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No relationships defined yet</div>'}</div></div>`;
+ $('#addRelationship').onclick=()=>relationshipModal();
+ body.querySelectorAll('[data-edit-rel]').forEach(b=>b.onclick=()=>relationshipModal(arr.find(d=>d.id===b.dataset.editRel)));
+}
+function relationshipModal(def){
+ const isEdit=!!def;
+ const keys=allEntityTypeKeys();
+ const source=def?.sourceEntity||keys[0], target=def?.targetEntity||keys[1]||keys[0];
+ const body=`<form id="relForm" class="form-grid">
+ <div class="field"><label>Source (the "many"/owning side)</label><select name="source" ${isEdit?'disabled':''}>${keys.map(k=>`<option value="${k}" ${k===source?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
+ <div class="field"><label>Target</label><select name="target" ${isEdit?'disabled':''}>${keys.map(k=>`<option value="${k}" ${k===target?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
+ <div class="field"><label>Relationship type</label><select name="relType" ${isEdit?'disabled':''}>${RELATIONSHIP_TYPES.map(t=>`<option value="${t}" ${def?.relType===t?'selected':''}>${RELATIONSHIP_TYPE_LABELS[t]}</option>`).join('')}</select></div>
+ <div class="field"><label>On delete</label><select name="deleteBehavior">${DELETE_BEHAVIORS.map(b=>`<option value="${b}" ${(def?.deleteBehavior||'restrict')===b?'selected':''}>${DELETE_BEHAVIOR_LABELS[b]}</option>`).join('')}</select></div>
+ <div class="field"><label>Forward label (shown on the source record)</label><input name="forwardLabel" value="${def?.forwardLabel||''}" placeholder="${entityLabel(target)}" required></div>
+ <div class="field"><label>Reverse label (shown on the target record)</label><input name="reverseLabel" value="${def?.reverseLabel||''}" placeholder="${entityLabel(source)}" required></div>
+ <div class="field full"><label class="checkbox-row" style="padding:0"><input type="checkbox" name="showRelatedList" value="true" ${def?.showRelatedList!==false?'checked':''}> Show as a related list on both records</label></div>
+ <div class="field full"><label class="checkbox-row" style="padding:0"><input type="checkbox" name="required" value="true" ${def?.required?'checked':''}> Source record should have a target linked</label></div>
+ ${isEdit?`<div class="field"><label>Active</label><select name="active"><option value="true" ${def.active?'selected':''}>Active</option><option value="false" ${!def.active?'selected':''}>Inactive</option></select></div>`:''}
+ <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-rel>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save relationship':'Create relationship'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${entityLabel(source)} → ${entityLabel(target)}`:'New relationship',body);
+ $('[data-close]').onclick=closeModal;
+ $('#relForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.forwardLabel.trim()||!fd.reverseLabel.trim())return alert('Both direction labels are required.');
+  if(isEdit){
+   Object.assign(def,{forwardLabel:fd.forwardLabel,reverseLabel:fd.reverseLabel,deleteBehavior:fd.deleteBehavior,showRelatedList:fd.showRelatedList==='true',required:fd.required==='true',active:fd.active==='true'});
+  }else{
+   if(fd.source===fd.target)return alert('A relationship must connect two different object types.');
+   const base=`${fd.source}_${fd.target}`;
+   let key=base,suffix=2;
+   while((data.relationshipDefinitions||[]).some(d=>d.key===key))key=`${base}_${suffix++}`;
+   data.relationshipDefinitions.push({id:uid(),key,sourceEntity:fd.source,targetEntity:fd.target,relType:fd.relType,forwardLabel:fd.forwardLabel,reverseLabel:fd.reverseLabel,deleteBehavior:fd.deleteBehavior,showRelatedList:fd.showRelatedList==='true',required:fd.required==='true',active:true,protected:false});
+  }
+  save();closeModal();toast(isEdit?'Relationship saved':'Relationship created');renderAdminTab();
+ };
+ if(isEdit){
+  // Hard-delete is blocked while any link exists (matches
+  // relationship_service::delete) - deactivating is always safe instead.
+  $('[data-delete-rel]').onclick=()=>{
+   const count=(data.relationshipInstances||[]).filter(i=>i.definitionId===def.id).length;
+   if(count)return alert(`Cannot delete this relationship — ${count} record(s) are still linked through it. Unlink them first, or deactivate the relationship instead.`);
+   if(!confirm('Delete this relationship? This only works if no records are linked through it.'))return;
+   data.relationshipDefinitions=data.relationshipDefinitions.filter(d=>d.id!==def.id);
+   save();closeModal();toast('Relationship deleted');renderAdminTab();
+  };
+ }
+}
+// ---- Screen layouts (Phase 4: no-code UI layout designer) -----------------
+// A new capability, not a desktop port (desktop has no layout designer
+// either): an admin arranges any object's create/edit fields into
+// drag-ordered sections. Editing only ever touches the *draft* - the live
+// record form keeps using the plain field order until Publish copies the
+// draft to publishedSections, and Unpublish clears it back to that default.
+// A published layout never hides a field it doesn't know about: any field
+// missing from the layout (new custom field added after publishing, a
+// stale key from a deleted one) is filtered out or auto-appended to a
+// trailing "Other fields" group, so a layout change can never silently
+// drop something off the live form.
+let layoutsEntityKey=null;
+function allFieldsFor(entityKey){return fieldsFor(entityKey,fieldsFnFor(entityKey))}
+function ensureLayoutDraft(entityKey){
+ if(!data.uiLayouts[entityKey]){
+  data.uiLayouts[entityKey]={draftSections:[{id:uid(),title:'Details',fields:allFieldsFor(entityKey).map(f=>f[0])}],publishedSections:null,updatedAt:null};
+  save();
+ }
+ return data.uiLayouts[entityKey];
+}
+function orderedFieldGroupsFor(entityKey,fields){
+ const layout=data.uiLayouts&&data.uiLayouts[entityKey];
+ if(!layout||!layout.publishedSections)return [{title:null,fields}];
+ const byKey=Object.fromEntries(fields.map(f=>[f[0],f]));
+ const used=new Set();
+ const groups=layout.publishedSections.map(s=>{
+  const secFields=s.fields.map(k=>byKey[k]).filter(Boolean);
+  secFields.forEach(f=>used.add(f[0]));
+  return {title:s.title,fields:secFields};
+ }).filter(g=>g.fields.length);
+ const rest=fields.filter(f=>!used.has(f[0]));
+ if(rest.length)groups.push({title:groups.length?'Other fields':null,fields:rest});
+ return groups.length?groups:[{title:null,fields}];
+}
+function layoutsTab(body){
+ const keys=allEntityTypeKeys();
+ if(!layoutsEntityKey||!keys.includes(layoutsEntityKey))layoutsEntityKey=keys[0];
+ const entityKey=layoutsEntityKey;
+ const layout=ensureLayoutDraft(entityKey);
+ const isPublished=!!layout.publishedSections;
+ const hasDraftChanges=JSON.stringify(layout.draftSections)!==JSON.stringify(layout.publishedSections);
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>Screen layouts</h3><select id="layoutsEntitySelect">${keys.map(k=>`<option value="${k}" ${k===entityKey?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
+ <p class="muted" style="font-size:13px">Drag fields to reorder them or move them between sections on ${entityLabel(entityKey)}'s create/edit form. Editing here only changes the draft — the live form keeps its default order until you Publish.</p>
+ <div style="margin-bottom:14px"><span class="badge">${isPublished?(hasDraftChanges?'Published — unpublished draft changes':'Published'):'Not published — using default field order'}</span></div>
+ <div id="layoutSections"></div>
+ <div class="actions" style="margin-top:16px;flex-wrap:wrap">
+  <button class="btn btn-secondary" id="addSection" type="button">+ Add section</button>
+  <button class="btn btn-secondary" id="previewLayout" type="button">Preview draft</button>
+  <button class="btn btn-secondary" id="revertLayout" type="button" ${isPublished?'':'disabled'}>Revert draft to published</button>
+  <button class="btn btn-primary" id="publishLayout" type="button">Publish</button>
+  ${isPublished?'<button class="btn btn-secondary" id="unpublishLayout" type="button">Unpublish</button>':''}
+ </div>
+ </div>`;
+ $('#layoutsEntitySelect').onchange=e=>{layoutsEntityKey=e.target.value;layoutsTab(body)};
+ renderLayoutSections(entityKey);
+ $('#addSection').onclick=()=>{layout.draftSections.push({id:uid(),title:'New section',fields:[]});save();renderLayoutSections(entityKey)};
+ $('#previewLayout').onclick=()=>layoutPreviewModal(entityKey);
+ $('#publishLayout').onclick=()=>{layout.publishedSections=structuredClone(layout.draftSections);layout.updatedAt=new Date().toISOString();save();toast('Layout published');layoutsTab(body)};
+ $('#revertLayout').onclick=()=>{if(!layout.publishedSections)return;layout.draftSections=structuredClone(layout.publishedSections);save();toast('Draft reverted to the published layout');layoutsTab(body)};
+ const unpub=$('#unpublishLayout'); if(unpub)unpub.onclick=()=>{if(!confirm('Unpublish this layout? The live form goes back to the default field order until you publish again.'))return;layout.publishedSections=null;save();toast('Layout unpublished');layoutsTab(body)};
+}
+function renderLayoutSections(entityKey){
+ const layout=data.uiLayouts[entityKey];
+ const allFields=allFieldsFor(entityKey);
+ const fieldLabel=k=>{const f=allFields.find(x=>x[0]===k);return f?f[1]:k};
+ const placedKeys=new Set(layout.draftSections.flatMap(s=>s.fields));
+ const unplaced=allFields.map(f=>f[0]).filter(k=>!placedKeys.has(k));
+ const chip=(k,idx)=>`<span class="layout-field-chip" draggable="true" data-field-key="${k}" data-section-idx="${idx}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:${idx>=0?'#f9fafb':'#fff'};cursor:grab;font-size:13px;display:inline-block">⠿ ${fieldLabel(k)}</span>`;
+ const listHtml=(fieldsArr,idx)=>`<div class="layout-field-list" data-section-idx="${idx}" style="display:flex;flex-wrap:wrap;gap:8px;min-height:34px">${fieldsArr.map(k=>chip(k,idx)).join('')||'<span class="muted" style="font-size:12px">Drag fields here</span>'}</div>`;
+ const box=$('#layoutSections'); if(!box)return;
+ box.innerHTML=`${layout.draftSections.map((s,idx)=>`<div class="layout-section" style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+   <input class="layout-section-title" data-section-idx="${idx}" value="${s.title}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-weight:700;flex:1">
+   <button class="icon-btn" data-remove-section="${idx}" type="button" ${layout.draftSections.length<=1?'disabled':''}>Delete section</button>
+  </div>
+  ${listHtml(s.fields,idx)}
+ </div>`).join('')}
+ <div class="layout-section" style="border:1px dashed var(--line);border-radius:12px;padding:12px">
+  <div class="muted" style="font-weight:700;margin-bottom:8px">Unplaced fields — not shown on the form</div>
+  ${listHtml(unplaced,-1)}
+ </div>`;
+ box.querySelectorAll('.layout-section-title').forEach(inp=>inp.onchange=e=>{const idx=Number(e.target.dataset.sectionIdx);layout.draftSections[idx].title=e.target.value.trim()||'Section';save()});
+ box.querySelectorAll('[data-remove-section]').forEach(b=>b.onclick=()=>{const idx=Number(b.dataset.removeSection);if(layout.draftSections.length<=1)return;layout.draftSections.splice(idx,1);save();renderLayoutSections(entityKey)});
+ wireLayoutDragDrop(entityKey);
+}
+function wireLayoutDragDrop(entityKey){
+ const layout=data.uiLayouts[entityKey];
+ let dragKey=null,dragFromIdx=null;
+ function moveField(toIdx,beforeKey){
+  if(dragKey===null)return;
+  if(dragFromIdx>=0)layout.draftSections[dragFromIdx].fields=layout.draftSections[dragFromIdx].fields.filter(k=>k!==dragKey);
+  if(toIdx>=0){
+   const s=layout.draftSections[toIdx];
+   s.fields=s.fields.filter(k=>k!==dragKey);
+   const insertAt=beforeKey?s.fields.indexOf(beforeKey):-1;
+   s.fields.splice(insertAt<0?s.fields.length:insertAt,0,dragKey);
+  }
+  save();dragKey=null;dragFromIdx=null;
+  renderLayoutSections(entityKey);
+ }
+ document.querySelectorAll('.layout-field-chip').forEach(el=>{
+  el.ondragstart=e=>{dragKey=el.dataset.fieldKey;dragFromIdx=Number(el.dataset.sectionIdx);e.dataTransfer.effectAllowed='move'};
+  el.ondragover=e=>{e.preventDefault();e.stopPropagation()};
+  el.ondrop=e=>{e.preventDefault();e.stopPropagation();moveField(Number(el.dataset.sectionIdx),el.dataset.fieldKey)};
+ });
+ document.querySelectorAll('.layout-field-list').forEach(list=>{
+  list.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect='move'};
+  list.ondrop=e=>{e.preventDefault();moveField(Number(list.dataset.sectionIdx),null)};
+ });
+}
+function layoutPreviewModal(entityKey){
+ const fields=allFieldsFor(entityKey);
+ const layout=data.uiLayouts[entityKey];
+ const byKey=Object.fromEntries(fields.map(f=>[f[0],f]));
+ const used=new Set();
+ const groups=layout.draftSections.map(s=>{const fs=s.fields.map(k=>byKey[k]).filter(Boolean);fs.forEach(f=>used.add(f[0]));return {title:s.title,fields:fs}}).filter(g=>g.fields.length);
+ const rest=fields.filter(f=>!used.has(f[0]));
+ if(rest.length)groups.push({title:'Other fields (not placed in a section)',fields:rest});
+ const sample={};
+ const body=`<div class="form-grid">${groups.map(g=>`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>${g.fields.map(f=>fieldHtml(f,sample)).join('')}`).join('')}</div><p class="muted" style="font-size:12px;margin-top:12px">Preview of the draft layout only — nothing here is saved, and the live form is unaffected until you Publish.</p><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal(`Preview: ${entityLabel(entityKey)} form`,body);
+ $('[data-close]').onclick=closeModal;
+}
+// ---- Integrations (Phase 5: UI-only simulation) ---------------------------
+// New to the demo (and not on desktop either): scheduled data jobs, exposed
+// API endpoints, and configured external API connections. The static demo
+// has no server, so nothing here makes a real network call or runs on a
+// real schedule - every "run"/"test" is a local simulation against this
+// browser's own demo data, saved to localStorage like everything else,
+// matching the honesty level the rest of this demo already holds to.
+let integrationsSubTab='jobs';
+const JOB_TYPES=['export','import','sync'];
+const JOB_TYPE_LABELS={export:'Export data out',import:'Import data in',sync:'Two-way sync'};
+const SCHEDULE_OPTIONS=['manual','hourly','daily','weekly'];
+const SCHEDULE_LABELS={manual:'Manual only',hourly:'Every hour',daily:'Once a day',weekly:'Once a week'};
+const FORMAT_OPTIONS=['csv','json'];
+const EXTERNAL_AUTH_TYPES=['none','apiKey','bearer'];
+const EXTERNAL_AUTH_LABELS={none:'None',apiKey:'API key',bearer:'Bearer token'};
+function integrationsTab(body){
+ const subTabs=[['jobs','Scheduled jobs'],['endpoints','API endpoints'],['external','Consume external APIs']];
+ body.innerHTML=`<div class="panel">
+ <h3 style="margin-top:0">Integrations</h3>
+ <p class="muted" style="font-size:13px">Schedule data import/export jobs, expose API endpoints for other systems to call, and configure external APIs this workspace would consume. This is a UI-only simulation: everything is saved to this browser and "runs"/"test calls" produce a realistic result against your demo data, but no real network request or scheduled job ever actually fires — there's no server behind the online demo to run one.</p>
+ <div class="tabs">${subTabs.map(t=>`<button class="tab ${integrationsSubTab===t[0]?'active':''}" data-integrations-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
+ <div id="integrationsBody"></div>
+ </div>`;
+ document.querySelectorAll('[data-integrations-tab]').forEach(b=>b.onclick=()=>{integrationsSubTab=b.dataset.integrationsTab;renderIntegrationsSubTab()});
+ renderIntegrationsSubTab();
+}
+function renderIntegrationsSubTab(){
+ document.querySelectorAll('[data-integrations-tab]').forEach(b=>b.classList.toggle('active',b.dataset.integrationsTab===integrationsSubTab));
+ const body=$('#integrationsBody');
+ ({jobs:jobsSubTab,endpoints:endpointsSubTab,external:externalSubTab}[integrationsSubTab])(body);
+}
+function jobsSubTab(body){
+ const list=data.integrationJobs||[];
+ body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">Scheduled jobs</h3><button class="btn btn-primary" id="addJob">+ New job</button></div>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Entity</th><th>Schedule</th><th>Format</th><th>Status</th><th>Last run</th><th>Actions</th></tr></thead><tbody>${list.map(j=>`<tr><td>${j.name}</td><td>${JOB_TYPE_LABELS[j.type]}</td><td>${entityLabel(j.entityKey)}</td><td>${SCHEDULE_LABELS[j.schedule]}</td><td>${j.format.toUpperCase()}</td><td>${badgeMaybe(j.active?'Active':'Inactive')}</td><td>${j.lastRun?new Date(j.lastRun).toLocaleString():'Never run'}</td><td><div class="actions"><button class="icon-btn" data-run-job="${j.id}">Run now</button><button class="icon-btn" data-history-job="${j.id}">History</button><button class="icon-btn" data-edit-job="${j.id}">Edit</button><button class="icon-btn" data-del-job="${j.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No scheduled jobs yet.</div>'}`;
+ $('#addJob').onclick=()=>jobModal();
+ body.querySelectorAll('[data-run-job]').forEach(b=>b.onclick=()=>runIntegrationJob(b.dataset.runJob));
+ body.querySelectorAll('[data-history-job]').forEach(b=>b.onclick=()=>jobHistoryModal(b.dataset.historyJob));
+ body.querySelectorAll('[data-edit-job]').forEach(b=>b.onclick=()=>jobModal(list.find(j=>j.id===b.dataset.editJob)));
+ body.querySelectorAll('[data-del-job]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this job? Its run history goes with it - this does not affect any real data.'))return;data.integrationJobs=data.integrationJobs.filter(j=>j.id!==b.dataset.delJob);save();jobsSubTab(body)});
+}
+function jobModal(job){
+ const isEdit=!!job;
+ const keys=allEntityTypeKeys();
+ const defaultKey=job?.entityKey||keys[0];
+ const body=`<form id="jobForm" class="form-grid">
+ <div class="field full"><label>Job name</label><input name="name" value="${job?.name||''}" required></div>
+ <div class="field"><label>Type</label><select name="type">${JOB_TYPES.map(t=>`<option value="${t}" ${(job?.type||'export')===t?'selected':''}>${JOB_TYPE_LABELS[t]}</option>`).join('')}</select></div>
+ <div class="field"><label>Entity</label><select name="entityKey">${keys.map(k=>`<option value="${k}" ${defaultKey===k?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
+ <div class="field"><label>Schedule</label><select name="schedule">${SCHEDULE_OPTIONS.map(s=>`<option value="${s}" ${(job?.schedule||'manual')===s?'selected':''}>${SCHEDULE_LABELS[s]}</option>`).join('')}</select></div>
+ <div class="field"><label>Format</label><select name="format">${FORMAT_OPTIONS.map(f=>`<option value="${f}" ${(job?.format||'csv')===f?'selected':''}>${f.toUpperCase()}</option>`).join('')}</select></div>
+ ${isEdit?`<div class="field"><label>Status</label><select name="active"><option value="true" ${job.active?'selected':''}>Active</option><option value="false" ${!job.active?'selected':''}>Inactive</option></select></div>`:''}
+ <div class="modal-actions">${isEdit?'<button type="button" class="btn btn-secondary" data-delete-job>Delete</button>':''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save job':'Create job'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit job: ${job.name}`:'New scheduled job',body);
+ $('[data-close]').onclick=closeModal;
+ $('#jobForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(isEdit){Object.assign(job,{name:fd.name,type:fd.type,entityKey:fd.entityKey,schedule:fd.schedule,format:fd.format,active:fd.active==='true'})}
+  else{data.integrationJobs.push({id:uid(),name:fd.name,type:fd.type,entityKey:fd.entityKey,schedule:fd.schedule,format:fd.format,active:true,lastRun:null,runs:[]})}
+  save();closeModal();toast(isEdit?'Job saved':'Job created');renderAdminTab();
+ };
+ if(isEdit){$('[data-delete-job]').onclick=()=>{if(!confirm('Delete this job? This does not affect any real data - only the job definition is removed.'))return;data.integrationJobs=data.integrationJobs.filter(j=>j.id!==job.id);save();closeModal();toast('Job deleted');renderAdminTab()}}
+}
+// Simulated run: for export/sync, the "record count" is the entity's real
+// current count in this demo's data (so it feels grounded, not random); for
+// import there's nothing to count yet, so a plausible small batch size
+// stands in for it. Always simulates success - there's no real failure mode
+// to reproduce honestly here, so this doesn't invent one.
+function runIntegrationJob(id){
+ const job=(data.integrationJobs||[]).find(j=>j.id===id); if(!job)return;
+ const count=job.type==='import'?Math.floor(Math.random()*30)+3:(data[job.entityKey]||[]).length;
+ const startedAt=new Date().toISOString();
+ const verb=job.type==='import'?'would be imported':job.type==='export'?'exported':'synced';
+ const run={id:uid(),startedAt,status:'success',recordCount:count,message:`${JOB_TYPE_LABELS[job.type]} completed — ${count} ${entityLabel(job.entityKey).toLowerCase()} record${count===1?'':'s'} ${verb} as ${job.format.toUpperCase()}. Simulated — no real file or network call was made.`};
+ job.runs.unshift(run); if(job.runs.length>10)job.runs.length=10;
+ job.lastRun=startedAt;
+ save();toast('Job run simulated');renderAdminTab();
+}
+function jobHistoryModal(id){
+ const job=(data.integrationJobs||[]).find(j=>j.id===id); if(!job)return;
+ const body=`${job.runs.length?`<div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Status</th><th>Records</th><th>Details</th></tr></thead><tbody>${job.runs.map(r=>`<tr><td>${new Date(r.startedAt).toLocaleString()}</td><td>${badgeMaybe('Completed')}</td><td>${r.recordCount}</td><td style="font-size:12px" class="muted">${r.message}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No runs yet — click Run now to simulate one.</div>'}<div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal(`Run history: ${job.name}`,body);
+ $('[data-close]').onclick=closeModal;
+}
+function endpointsSubTab(body){
+ const list=data.apiEndpoints||[];
+ body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">API endpoints</h3><button class="btn btn-primary" id="addEndpoint">+ New endpoint</button></div><p class="muted" style="font-size:13px">Expose a read/write endpoint backed by a built-in or custom object. Test call simulates the request/response locally against your demo data — nothing actually leaves your browser.</p>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Method</th><th>Path</th><th>Entity</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead><tbody>${list.map(e=>`<tr><td>${e.name}</td><td><code>${e.method}</code></td><td><code>${e.path}</code></td><td>${entityLabel(e.entityKey)}</td><td>${e.authType==='apiKey'?'API key':'None'}</td><td>${badgeMaybe(e.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-test-endpoint="${e.id}">Test call</button><button class="icon-btn" data-edit-endpoint="${e.id}">Edit</button><button class="icon-btn" data-del-endpoint="${e.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No API endpoints yet.</div>'}`;
+ $('#addEndpoint').onclick=()=>endpointModal();
+ body.querySelectorAll('[data-test-endpoint]').forEach(b=>b.onclick=()=>testEndpointModal(list.find(e=>e.id===b.dataset.testEndpoint)));
+ body.querySelectorAll('[data-edit-endpoint]').forEach(b=>b.onclick=()=>endpointModal(list.find(e=>e.id===b.dataset.editEndpoint)));
+ body.querySelectorAll('[data-del-endpoint]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this endpoint?'))return;data.apiEndpoints=data.apiEndpoints.filter(x=>x.id!==b.dataset.delEndpoint);save();endpointsSubTab(body)});
+}
+function endpointModal(endpoint){
+ const isEdit=!!endpoint;
+ const keys=allEntityTypeKeys();
+ const defaultKey=endpoint?.entityKey||keys[0];
+ const body=`<form id="endpointForm" class="form-grid">
+ <div class="field full"><label>Endpoint name</label><input name="name" value="${endpoint?.name||''}" required></div>
+ <div class="field"><label>Method</label><select name="method"><option value="GET" ${(endpoint?.method||'GET')==='GET'?'selected':''}>GET (read records)</option><option value="POST" ${endpoint?.method==='POST'?'selected':''}>POST (create a record)</option></select></div>
+ <div class="field"><label>Entity</label><select name="entityKey" id="endpointEntitySelect">${keys.map(k=>`<option value="${k}" ${defaultKey===k?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
+ <div class="field full"><label>Path</label><input name="path" id="endpointPathInput" value="${endpoint?.path||'/api/v1/'+defaultKey}" required></div>
+ <div class="field"><label>Auth</label><select name="authType"><option value="apiKey" ${(endpoint?.authType||'apiKey')==='apiKey'?'selected':''}>API key</option><option value="none" ${endpoint?.authType==='none'?'selected':''}>None (public)</option></select></div>
+ ${isEdit?`<div class="field"><label>Status</label><select name="active"><option value="true" ${endpoint.active?'selected':''}>Active</option><option value="false" ${!endpoint.active?'selected':''}>Inactive</option></select></div>`:''}
+ <div class="modal-actions">${isEdit?'<button type="button" class="btn btn-secondary" data-delete-endpoint>Delete</button>':''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save endpoint':'Create endpoint'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit endpoint: ${endpoint.name}`:'New API endpoint',body);
+ $('[data-close]').onclick=closeModal;
+ if(!isEdit)$('#endpointEntitySelect').onchange=e=>{$('#endpointPathInput').value='/api/v1/'+e.target.value};
+ $('#endpointForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.path.trim().startsWith('/'))return alert('Path must start with /, e.g. /api/v1/companies');
+  if(isEdit){Object.assign(endpoint,{name:fd.name,method:fd.method,entityKey:fd.entityKey,path:fd.path,authType:fd.authType,active:fd.active==='true'})}
+  else{data.apiEndpoints.push({id:uid(),name:fd.name,method:fd.method,entityKey:fd.entityKey,path:fd.path,authType:fd.authType,apiKey:'demo_'+uid()+uid(),active:true})}
+  save();closeModal();toast(isEdit?'Endpoint saved':'Endpoint created');renderAdminTab();
+ };
+ if(isEdit){$('[data-delete-endpoint]').onclick=()=>{if(!confirm('Delete this endpoint?'))return;data.apiEndpoints=data.apiEndpoints.filter(x=>x.id!==endpoint.id);save();closeModal();toast('Endpoint deleted');renderAdminTab()}}
+}
+function testEndpointModal(endpoint){
+ if(!endpoint)return;
+ const records=(data[endpoint.entityKey]||[]).slice(0,3);
+ const respBody=endpoint.method==='GET'?{data:records,count:(data[endpoint.entityKey]||[]).length}:{created:{...(records[0]||{}),id:'sim_'+uid()},note:'Simulated — no record was actually created.'};
+ const headerLines=[`${endpoint.method} ${endpoint.path} HTTP/1.1`,'Host: demo.lanesraos.com',endpoint.authType==='apiKey'?`Authorization: Bearer ${endpoint.apiKey}`:null].filter(Boolean).join('\n');
+ const body=`<p class="muted" style="font-size:13px">Simulated locally — this is what calling this endpoint would return against your current demo data. No real HTTP request was made.</p>
+ <div><strong>Request</strong><pre style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;overflow:auto;font-size:12px">${headerLines}</pre></div>
+ <div style="margin-top:12px"><strong>Response</strong> <span class="badge">200 OK</span><pre style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;overflow:auto;font-size:12px;max-height:280px">${JSON.stringify(respBody,null,2)}</pre></div>
+ <div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal(`Test call: ${endpoint.name}`,body);
+ $('[data-close]').onclick=closeModal;
+}
+function externalSubTab(body){
+ const list=data.externalConnections||[];
+ body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">Consume external APIs</h3><button class="btn btn-primary" id="addConnection">+ New connection</button></div><p class="muted" style="font-size:13px">Configure an external API this workspace would call. Test request simulates a response shape locally — the online demo can't make outbound network calls, so nothing is actually sent.</p>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Method</th><th>Base URL</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead><tbody>${list.map(c=>`<tr><td>${c.name}</td><td><code>${c.method}</code></td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><code>${c.baseUrl}</code></td><td>${EXTERNAL_AUTH_LABELS[c.authType]}</td><td>${badgeMaybe(c.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-test-conn="${c.id}">Test request</button><button class="icon-btn" data-history-conn="${c.id}">History</button><button class="icon-btn" data-edit-conn="${c.id}">Edit</button><button class="icon-btn" data-del-conn="${c.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No external connections yet.</div>'}`;
+ $('#addConnection').onclick=()=>connectionModal();
+ body.querySelectorAll('[data-test-conn]').forEach(b=>b.onclick=()=>testConnection(b.dataset.testConn));
+ body.querySelectorAll('[data-history-conn]').forEach(b=>b.onclick=()=>connectionHistoryModal(b.dataset.historyConn));
+ body.querySelectorAll('[data-edit-conn]').forEach(b=>b.onclick=()=>connectionModal(list.find(c=>c.id===b.dataset.editConn)));
+ body.querySelectorAll('[data-del-conn]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this connection?'))return;data.externalConnections=data.externalConnections.filter(x=>x.id!==b.dataset.delConn);save();externalSubTab(body)});
+}
+function connectionModal(conn){
+ const isEdit=!!conn;
+ const authType=conn?.authType||'none';
+ const body=`<form id="connectionForm" class="form-grid">
+ <div class="field full"><label>Connection name</label><input name="name" value="${conn?.name||''}" required></div>
+ <div class="field full"><label>Base URL</label><input name="baseUrl" type="url" value="${conn?.baseUrl||''}" placeholder="https://api.example.com/v1/orders" required></div>
+ <div class="field"><label>Method</label><select name="method"><option value="GET" ${(conn?.method||'GET')==='GET'?'selected':''}>GET</option><option value="POST" ${conn?.method==='POST'?'selected':''}>POST</option></select></div>
+ <div class="field"><label>Auth</label><select name="authType" id="connAuthSelect">${EXTERNAL_AUTH_TYPES.map(a=>`<option value="${a}" ${authType===a?'selected':''}>${EXTERNAL_AUTH_LABELS[a]}</option>`).join('')}</select></div>
+ <div class="field full" id="connAuthValueWrap" ${authType==='none'?'hidden':''}><label id="connAuthValueLabel">${authType==='bearer'?'Bearer token':'API key'}</label><input name="authValue" value="${conn?.authValue||''}" placeholder="Stored in this browser only"></div>
+ ${isEdit?`<div class="field"><label>Status</label><select name="active"><option value="true" ${conn.active?'selected':''}>Active</option><option value="false" ${!conn.active?'selected':''}>Inactive</option></select></div>`:''}
+ <div class="modal-actions">${isEdit?'<button type="button" class="btn btn-secondary" data-delete-conn>Delete</button>':''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save connection':'Create connection'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit connection: ${conn.name}`:'New external connection',body);
+ $('[data-close]').onclick=closeModal;
+ $('#connAuthSelect').onchange=e=>{const wrap=$('#connAuthValueWrap');wrap.hidden=e.target.value==='none';$('#connAuthValueLabel').textContent=e.target.value==='bearer'?'Bearer token':'API key'};
+ $('#connectionForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(isEdit){Object.assign(conn,{name:fd.name,baseUrl:fd.baseUrl,method:fd.method,authType:fd.authType,authValue:fd.authValue||'',active:fd.active==='true'})}
+  else{data.externalConnections.push({id:uid(),name:fd.name,baseUrl:fd.baseUrl,method:fd.method,authType:fd.authType,authValue:fd.authValue||'',active:true,calls:[]})}
+  save();closeModal();toast(isEdit?'Connection saved':'Connection created');renderAdminTab();
+ };
+ if(isEdit){$('[data-delete-conn]').onclick=()=>{if(!confirm('Delete this connection?'))return;data.externalConnections=data.externalConnections.filter(x=>x.id!==conn.id);save();closeModal();toast('Connection deleted');renderAdminTab()}}
+}
+function testConnection(id){
+ const conn=(data.externalConnections||[]).find(c=>c.id===id); if(!conn)return;
+ const calledAt=new Date().toISOString();
+ const respPreview={simulated:true,status:200,note:'This is a simulated response — the online demo has no backend to make real outbound HTTP requests. Configuring a real integration works the same way; this preview just confirms the request shape.',request:{method:conn.method,url:conn.baseUrl,auth:conn.authType==='none'?'none':(conn.authType==='bearer'?'Bearer ***':'API key ***')}};
+ conn.calls.unshift({id:uid(),calledAt,status:'success',responsePreview:respPreview});
+ if(conn.calls.length>10)conn.calls.length=10;
+ save();
+ const authLine=conn.authType!=='none'?`\n${conn.authType==='bearer'?'Authorization: Bearer ***':'X-Api-Key: ***'}`:'';
+ const body=`<div><strong>Request</strong><pre style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;overflow:auto;font-size:12px">${conn.method} ${conn.baseUrl}${authLine}</pre></div><div style="margin-top:12px"><strong>Simulated response</strong> <span class="badge">200 OK</span><pre style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;overflow:auto;font-size:12px;max-height:280px">${JSON.stringify(respPreview,null,2)}</pre></div><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal(`Test request: ${conn.name}`,body);
+ $('[data-close]').onclick=closeModal;
+}
+function connectionHistoryModal(id){
+ const conn=(data.externalConnections||[]).find(c=>c.id===id); if(!conn)return;
+ const body=`${conn.calls.length?`<div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Status</th><th>Details</th></tr></thead><tbody>${conn.calls.map(c=>`<tr><td>${new Date(c.calledAt).toLocaleString()}</td><td>${badgeMaybe('Completed')}</td><td style="font-size:12px" class="muted">${c.responsePreview.note}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No test requests yet — click Test request to simulate one.</div>'}<div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal(`Request history: ${conn.name}`,body);
+ $('[data-close]').onclick=closeModal;
+}
 // A field's Phase 4 extras, summarized as small comma-separated notes for
 // the list table - empty when none of default/unique/placeholder/help
 // text are set, so a plain field still reads as just "—".
@@ -741,7 +1579,7 @@ function fieldExtrasSummary(f){
  return notes.length?notes.join(', '):'—';
 }
 function fieldsTab(body){
- const keys=Object.keys(numberRules);
+ const keys=[...Object.keys(numberRules),...activeCustomObjectKeys()];
  const list=(data.customFields||[]).filter(f=>f.entity===cfEntity);
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Custom fields</h3><p class="muted">Add fields to any object. They appear automatically on that object's create/edit form, with an optional default value, uniqueness check, placeholder and help text.</p>
  ${entityPills(keys,cfEntity)}
@@ -846,7 +1684,7 @@ function wireWorkflowTestPanel(entityKey){
 }
 function rulesTab(body){
  if(ruleBuilderMode){renderRuleBuilder(body);return}
- const keys=Object.keys(numberRules);
+ const keys=[...Object.keys(numberRules),...activeCustomObjectKeys()];
  const actionFields=actionableFieldsFor(ruleEntity);
  const list=(data.fieldRules||[]).filter(r=>r.entity===ruleEntity);
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Business rules</h3><p class="muted">Require or hide a field - built-in or custom - based on any other field's value, with a real comparison operator, not just the status/stage field.</p>
@@ -988,9 +1826,14 @@ function wireConditionPicker(form,fieldSelect,dynamicWrap,condFields,valueFieldN
 // types - create a task (the original behavior), create a new record of
 // a safely-constructible type, or update a field on a record related to
 // the trigger via the demo's fixed foreign-key graph (REVERSE_RELATIONS).
-function describeWorkflowAction(r){
+function describeWorkflowAction(r,entityKeyFallback){
  if(r.actionType==='create_record')return UNNAMED_RECORD_TYPES.includes(r.recordTargetEntity)?`create a new ${ENTITY_SINGULAR[r.recordTargetEntity]||r.recordTargetEntity}`:`create ${ENTITY_SINGULAR[r.recordTargetEntity]||r.recordTargetEntity} "${r.recordNameTemplate||''}"`;
  if(r.actionType==='update_related_record')return `set ${fieldLabelFor(r.relTargetEntity,r.relTargetField)} = "${r.relValue||''}" on related ${entityLabel(r.relTargetEntity)}`;
+ if(r.actionType==='update_field'){
+  const ek=r.entity||entityKeyFallback;
+  if(!r.updateFieldKey)return 'set a field on this record';
+  return r.updateCopyFrom?`set ${fieldLabelFor(ek,r.updateFieldKey)} = value copied from ${fieldLabelFor(ek,r.updateCopyFrom)}`:`set ${fieldLabelFor(ek,r.updateFieldKey)} = "${r.updateValue||''}" on this record`;
+ }
  return `create task "${r.taskTitle||''}" (${r.daysOffset?`due ${r.daysOffset} day(s) later`:'due same day'})`;
 }
 function relTargetsFor(entityKey){return [...new Set((RELATIONS[entityKey]||[]).map(x=>x.target))]}
@@ -1067,15 +1910,31 @@ function executeWorkflowAction(r,key,record){
   linked.forEach(x=>{x[r.relTargetField]=r.relValue});
   return `set ${fieldLabelFor(targetEntity,r.relTargetField)} = "${r.relValue}" on ${linked.length} related ${entityLabel(targetEntity).toLowerCase()}`;
  }
+ // update_field: the companion to update_related_record for the common
+ // case of "when this record's status changes, also update another field
+ // on this same record" (e.g. Company status -> Customer also sets
+ // Industry). record is the same object reference already mutated onto
+ // data[key] by the caller, so writing to it here updates the live record
+ // directly - same pattern update_related_record already uses for its
+ // linked records.
+ if(r.actionType==='update_field'){
+  if(!r.updateFieldKey)return null;
+  const value=r.updateCopyFrom?(record[r.updateCopyFrom]??''):(r.updateValue??'');
+  record[r.updateFieldKey]=value;
+  return `set ${fieldLabelFor(key,r.updateFieldKey)} = "${value}" on this record`;
+ }
  // create_task (default, and the only action type older saved data has)
  if(!r.taskTitle)return null;
  const due=new Date();due.setDate(due.getDate()+Number(r.daysOffset||0));
- data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:r.taskTitle,relatedType:relatedTypeFor[key],relatedId:record.id,owner:record.owner||'Unassigned',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open'});
+ // Custom objects aren't in relatedTypeFor (Tasks' relatedType dropdown is
+ // a fixed built-ins-only list, matching desktop) - fall back to 'General'
+ // rather than writing an unrecognized relatedType onto the created task.
+ data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:r.taskTitle,relatedType:relatedTypeFor[key]||'General',relatedId:relatedTypeFor[key]?record.id:'',owner:record.owner||'Unassigned',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open'});
  return `created task "${r.taskTitle}"`;
 }
 function workflowTab(body){
  if(wfBuilderMode){renderWorkflowBuilder(body);return}
- const keys=Object.keys(relatedTypeFor);
+ const keys=[...Object.keys(relatedTypeFor),...activeCustomObjectKeys()];
  const list=(data.workflowRules||[]).filter(r=>r.entity===wfEntity);
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Workflow automation</h3><p class="muted">Trigger an action - create a task, create a new record, or update a related record - when any built-in or custom field changes and matches a comparison you choose, and optionally notify admins.</p>
  ${entityPills(keys,wfEntity)}
@@ -1087,7 +1946,7 @@ function workflowTab(body){
  body.querySelectorAll('[data-edit-wf]').forEach(b=>b.onclick=()=>{wfBuilderMode=b.dataset.editWf;renderAdminTab()});
  body.querySelectorAll('[data-del-wf]').forEach(b=>b.onclick=()=>{data.workflowRules=data.workflowRules.filter(r=>r.id!==b.dataset.delWf);save();toast('Workflow rule deleted');renderAdminTab()});
 }
-const WORKFLOW_ACTION_TITLES={create_task:'Create task',create_record:'Create record',update_related_record:'Update related record'};
+const WORKFLOW_ACTION_TITLES={create_task:'Create task',create_record:'Create record',update_related_record:'Update related record',update_field:'Update this record'};
 // Workflow-builder page: a Trigger/Action left column paired with a live
 // visual canvas on the right (Trigger -> Action -> End), matching the
 // desktop redesign's visual-flow language at the scale this demo's
@@ -1134,6 +1993,7 @@ function renderWorkflowBuilder(body){
       <option value="create_task" ${actionType==='create_task'?'selected':''}>Create a task</option>
       <option value="create_record" ${actionType==='create_record'?'selected':''}>Create a new record</option>
       ${relTargets.length?`<option value="update_related_record" ${actionType==='update_related_record'?'selected':''}>Update a related record</option>`:''}
+      <option value="update_field" ${actionType==='update_field'?'selected':''}>Update this record</option>
      </select></div>
      <div id="actionCreateTask" style="display:contents">
       <div class="field full"><label>Task title</label><input name="taskTitle" value="${existing?.taskTitle||''}" placeholder="e.g. Kick off onboarding"></div>
@@ -1147,6 +2007,12 @@ function renderWorkflowBuilder(body){
       <div class="field"><label>Related record type</label><select name="relTargetEntity" id="wfRelEntity">${relTargets.map(t=>`<option value="${t}" ${t===existing?.relTargetEntity?'selected':''}>${entityLabel(t)}</option>`).join('')}</select></div>
       <div class="field"><label>Field to set</label><select name="relTargetField" id="wfRelField"></select></div>
       <div class="field"><label>New value</label><input name="relValue" value="${existing?.relValue||''}" placeholder="New value to write"></div>
+     </div>
+     <div id="actionUpdateField" style="display:none">
+      <div class="field"><label>Field to set</label><select name="updateFieldKey" id="wfUpdateFieldKey">${actionableFieldsFor(entityKey).map(f=>`<option value="${f[0]}" ${f[0]===existing?.updateFieldKey?'selected':''}>${f[1]}</option>`).join('')}</select></div>
+      <div class="field"><label>New value from</label><select name="updateValueSource" id="wfUpdateValueSource"><option value="fixed" ${!existing?.updateCopyFrom?'selected':''}>A fixed value</option><option value="copy" ${existing?.updateCopyFrom?'selected':''}>Another field on this record</option></select></div>
+      <div class="field full" id="wfUpdateValueWrap"><label>Value</label><input name="updateValue" id="wfUpdateValue" value="${existing?.updateValue||''}" placeholder="New value to write"></div>
+      <div class="field full" id="wfUpdateCopyWrap" style="display:none"><label>Copy from</label><select name="updateCopyFrom" id="wfUpdateCopyFrom">${actionableFieldsFor(entityKey).map(f=>`<option value="${f[0]}" ${f[0]===existing?.updateCopyFrom?'selected':''}>${f[1]}</option>`).join('')}</select></div>
      </div>
      <div class="field"><label>Also notify admins?</label><select name="notify"><option value="false" ${!existing?.notify?'selected':''}>No</option><option value="true" ${existing?.notify?'selected':''}>Yes</option></select></div>
     </div>
@@ -1170,7 +2036,16 @@ function renderWorkflowBuilder(body){
   $('#actionCreateTask',form).style.display=v==='create_task'?'contents':'none';
   $('#actionCreateRecord',form).style.display=v==='create_record'?'contents':'none';
   $('#actionUpdateRelated',form).style.display=v==='update_related_record'?'contents':'none';
+  $('#actionUpdateField',form).style.display=v==='update_field'?'contents':'none';
  }
+ const updateValueSourceSelect=$('#wfUpdateValueSource',form);
+ function updateValueSourceVisibility(){
+  if(!updateValueSourceSelect)return;
+  const isCopy=updateValueSourceSelect.value==='copy';
+  $('#wfUpdateValueWrap',form).style.display=isCopy?'none':'';
+  $('#wfUpdateCopyWrap',form).style.display=isCopy?'':'none';
+ }
+ if(updateValueSourceSelect){updateValueSourceVisibility();updateValueSourceSelect.onchange=()=>{updateValueSourceVisibility();updateCanvas()}}
  const relEntitySelect=form.elements.relTargetEntity;
  function populateRelField(){if(!relEntitySelect)return;const fields=actionableFieldsFor(relEntitySelect.value);$('#wfRelField',form).innerHTML=fields.map(f=>`<option value="${f[0]}" ${f[0]===existing?.relTargetField?'selected':''}>${f[1]}</option>`).join('')}
  // Quotes/orders/invoices have no name/title field to fill in from a
@@ -1189,7 +2064,8 @@ function renderWorkflowBuilder(body){
   $('#canvasTrigger').textContent=`When ${fieldLabelFor(entityKey,tf)} ${OPERATOR_LABELS[op]||'is'}${needsValue?' '+(val||'…'):''}`;
   const fd=Object.fromEntries(new FormData(form).entries());
   fd.daysOffset=Number(fd.daysOffset||0); // FormData gives strings - "0" is truthy, so coerce before describeWorkflowAction's truthy check
-  $('#canvasAction').innerHTML=`<strong>${WORKFLOW_ACTION_TITLES[fd.actionType]||'Action'}</strong><small>${describeWorkflowAction(fd)}</small>`;
+  if(fd.updateValueSource!=='copy')fd.updateCopyFrom=''; // the copy-from select still has a value while hidden - only treat it as "copy" when that source is actually chosen
+  $('#canvasAction').innerHTML=`<strong>${WORKFLOW_ACTION_TITLES[fd.actionType]||'Action'}</strong><small>${describeWorkflowAction(fd,entityKey)}</small>`;
  }
  actionSelect.onchange=()=>{updateActionVisibility();updateCanvas()};
  updateActionVisibility();
@@ -1205,12 +2081,15 @@ function renderWorkflowBuilder(body){
   if(fd.actionType==='create_task'&&!fd.taskTitle)return alert('Enter a task title.');
   if(fd.actionType==='create_record'&&!UNNAMED_RECORD_TYPES.includes(fd.recordTargetEntity)&&!fd.recordNameTemplate)return alert('Enter a name/title for the new record.');
   if(fd.actionType==='update_related_record'&&!fd.relValue)return alert('Enter the value to write.');
+  const updatingByCopy=fd.actionType==='update_field'&&fd.updateValueSource==='copy';
+  if(fd.actionType==='update_field'&&!updatingByCopy&&!fd.updateValue)return alert('Enter the value to write, or switch "New value from" to another field.');
   const payload={
    entity:entityKey,triggerField:fd.triggerField,operator:fd.operator,toValue:fd.toValue||'',
    compareField:fd.compareField||null,notify:fd.notify==='true',actionType:fd.actionType,
    taskTitle:fd.taskTitle||'',daysOffset:Number(fd.daysOffset||0),
    recordTargetEntity:fd.recordTargetEntity||'',recordNameTemplate:fd.recordNameTemplate||'',
    relTargetEntity:fd.relTargetEntity||'',relTargetField:fd.relTargetField||'',relValue:fd.relValue||'',
+   updateFieldKey:fd.updateFieldKey||'',updateValue:updatingByCopy?'':(fd.updateValue||''),updateCopyFrom:updatingByCopy?(fd.updateCopyFrom||''):'',
   };
   if(isEdit){Object.assign(existing,payload)}else{data.workflowRules.push({id:uid(),active:true,...payload})}
   save();toast(isEdit?'Workflow rule saved':'Workflow rule added');wfBuilderMode=null;testingWorkflow=false;renderView()};
@@ -1218,7 +2097,7 @@ function renderWorkflowBuilder(body){
 
 // ---- Status Transition Editor (Phase 2) -----------------------------------
 function transitionsTab(body){
- const keys=Object.keys(numberRules);
+ const keys=[...Object.keys(numberRules),...activeCustomObjectKeys()];
  const list=(data.statusTransitionRules||[]).filter(r=>r.entity===trEntity);
  const tf=transitionFieldFor(trEntity);
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Status transitions</h3><p class="muted">Restrict which ${fieldLabelFor(trEntity,tf).toLowerCase()} changes are allowed on ${entityLabel(trEntity)}. With no active rules the field stays fully unrestricted; once at least one is active, only the listed moves are allowed.</p>
@@ -1281,12 +2160,10 @@ function kpisTab(body){
  $('#showAllKpis').onclick=()=>{data.kpiPrefs=[];save();toast('Dashboard now shows every KPI');renderAdminTab()};
 }
 
-function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links"><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div class="nav-actions"><a class="btn btn-primary mobile-try" href="/demo">Try Online →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a><hr><a href="/roadmap">Roadmap</a><a href="/backlog">Backlog</a><a href="/changelog">Changelog</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
-function publicFooter(){return `<footer class="footer"><div class="container footer-grid"><div><a class="brand footer-brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><span class="muted">Modern, open-source business software for small businesses.</span></div><div><strong>Product</strong><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a></div><div><strong>Development</strong><a href="/roadmap">Roadmap</a><a href="/backlog">Backlog</a><a href="/changelog">Changelog</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div><strong>Creator</strong><a href="https://vikramgrover.com">VikramGrover.com</a></div></div><div class="container footer-bottom"><span>© 2026 Lanesra OS</span><span>Created by Vikram Grover</span></div></footer>`}
-function roadmapPage(){document.title='Roadmap — Lanesra OS';$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Built in public</div><h1>Product roadmap</h1><p>What is available now, what is being built next, and where Lanesra OS is heading.</p><div class="status-row"><span class="status-chip">Early Access v0.18.1</span><span class="muted">Last updated August 2026</span></div></div></section><section class="section roadmap-board"><div class="container roadmap-columns"><div><h2>Available now</h2>${['Companies and contacts','Sales pipeline','Products and services','Quotes, orders and invoices','Contracts and tasks','Interactive dashboards','Connected record relationships','Configurable numbering — admin-controlled prefix and digit width per object','Windows desktop installer (Early Access, unsigned)','Team Workspace mode for small teams (Docker)','Backup and restore','Self-service password change','PDF generation and printing','CSV import and export','Branding and print customization (logo, editable business profile with phone)','Reports beyond the dashboard, plus a simple custom report builder','Custom fields on every major object, not just Companies and Contacts','Conditional business rules on every object with custom fields','Workflow automation across Companies, Contacts, Opportunities, Quotes, Orders, Invoices and Contracts','Admin panel: user roles, dashboard KPI picker, and every configuration screen in one place','Admin-defined Custom Objects — build entirely new record types with their own fields, numbering and screens, no code required','Custom relationships between any two record types, with cardinality (one-to-one, many-to-one, many-to-many) and delete-behavior rules','Richer conditional business rules — multiple AND/OR conditions, 10 comparison operators, and lock/set-value/block-save/show-message actions','Richer workflow automation — triggers for field changes and due dates, actions to assign the record\'s owner or create a related record, plus an in-app notification center','Business rules and workflow triggers on any built-in field, not just status/stage — with a comparison operator chosen per field','Field-to-field comparison — a condition can match against another field\'s value instead of only a fixed one','A Status Transition Editor — restrict which status/stage changes are allowed on any object, with a wildcard "from any status" option and a per-rule active toggle','Workflow automation actions to create a new record or update a related record, on top of creating a task','A Test rule / Test workflow dry-run mode — check what active rules and workflows would do against hypothetical field values without touching real data','Redesigned Business Rules and Workflow Automation builders — numbered condition/effect sections, a live rule summary, and a visual trigger → action canvas','Custom field extensibility — an optional default value, a uniqueness check, placeholder text and help text on any custom field','Customer 360 and Contact 360 — a dedicated detail page for every company and contact showing every linked record in one place','Windows task reminder notifications','Session inactivity auto-lock'].map(x=>`<p class="roadmap-row done">✓ ${x}</p>`).join('')}</div><div id="desktop"><h2>Building now</h2>${['Code-signed installer'].map(x=>`<p class="roadmap-row active">↻ ${x}</p>`).join('')}<p class="muted"><strong>Windows desktop edition: full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode, backup/restore, PDF printing, CSV import/export, admin-defined Custom Objects and relationships, and an admin-configurable layer (branding, reports, custom fields, business rules, workflow automation, notifications) all working.</strong> An unsigned installer is available now. <a href="https://github.com/vikram2409-eng/Lanesra-OS/releases" target="_blank" rel="noopener">Download it →</a> · <a href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View desktop source →</a></p></div><div><h2>Planned</h2>${['Global search and list-view filtering','No-code screen/layout designer','Full drag-and-drop report/dashboard builder','Projects and milestones','Inventory and suppliers','Recurring invoices','Customer portal','Plugin architecture'].map(x=>`<p class="roadmap-row">○ ${x}</p>`).join('')}</div></div></section></main>${publicFooter()}`;bindPublicNav()}
-function changelogPage(){document.title='Changelog — Lanesra OS';const releases=[['v0.18.1','August 2026','Online demo parity fixes',['Workflow "Create a new record" now offers all 9 built-in record types in the online demo (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks), not just 3 - matching the desktop edition\'s full creatable set, with company-dependent types offered only when the trigger record actually carries a company','Workflow "Update a related record" now walks the demo\'s foreign-key graph in both directions, not just downward: a Contact can update its own parent Company the same way a Company can update its Contacts, and every entity gets its linked Tasks (and vice versa) through the existing relatedType/relatedId link','Custom fields in the online demo gained the validation and capability settings the desktop edition already had: Required, Max length and Pattern/regex (text fields), Min/Max value (number fields), and Searchable/Filterable/Reportable flags - enforced with native HTML5 form validation and shown in the custom fields list']],['v0.18.0','August 2026','Status transitions, richer workflow actions, test mode, a rule-builder redesign, and Customer 360',['Added a Status Transition Editor: restrict which status/stage changes are allowed on any object with a fixed-schema field (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks) - each rule is one from → to move, with a wildcard "any status" starting point and its own active toggle; with no active rules a field stays fully unrestricted, and resaving the same status is never blocked','Workflow automation actions expanded beyond "create a task": a workflow can now create a new record (a company, opportunity or task) or update a field on a record related to the trigger through the demo\'s existing company/contact/opportunity/quote/order relationships','Added a Test rule / Test workflow dry-run mode to both Business Rules and Workflow Automation: fill in hypothetical values for an object and see exactly which active rules or workflows would match and what they would do, without creating, changing or sending anything','Redesigned the Business Rules and Workflow Automation builders to match the desktop edition\'s rule-builder layout: numbered Condition/Effect (or Trigger/Action) sections, a live-updating rule summary panel, and - for workflows - a visual Trigger → Action → End canvas that mirrors the form as you edit it; both builders gained full editing (not just create) and header-level Test/Activate-Deactivate/Save controls','Custom fields gained four more settings: an optional default value applied whenever a save leaves the field empty, a "require a unique value" check (rejected at definition time for yes/no fields, since they only have two possible values), placeholder text, and help text shown under the field on every record form','Added Customer 360 and Contact 360: clicking a company or contact name anywhere in the app now opens a dedicated detail page with its full field overview and every linked record - contacts, opportunities, quotes, orders, invoices, contracts and tasks - each one click away, replacing edit-modal-only access','Fixed a pre-existing bug surfaced while building the above: the admin panel\'s tab row no longer freezes on whichever tab was open first - switching tabs now correctly highlights the one you\'re on']],['v0.17.0','August 2026','More operators & field-to-field comparison',['Business rules and workflows gained four more comparison operators - starts with, ends with, is one of, is not one of - on top of is/is not/contains/is empty/is not empty/greater than/less than','A condition can now compare a field against another field\'s live value instead of only a fixed value - e.g. "require Flag when Notes equals Expected Notes" - with the same live-updating preview on the record form that a fixed-value condition already had','Windows desktop edition: the shared condition engine gained the same operators and field-to-field comparison, for both business rule conditions and workflow triggers']],['v0.16.0','August 2026','Business rules & workflows now work on any field, not just status',['Business rules can now condition on any built-in field - name, industry, value, close date, whatever the object has - not only the status/stage field, with a real comparison operator (is/is not, contains, is empty, greater than, less than) chosen per field, and their require/hide action can now target a built-in field too, not just a custom one','Workflow automation\'s field-changed trigger can now watch any built-in field the same way, so "when Industry changes to X" or "when Due date is set" can create a task and notify admins, not only "when status/stage reaches a value"','Windows desktop edition: the underlying business rules and workflow engines gained the same any-built-in-field support for both conditions/triggers and actions (require, hide, lock, set default, force value, and the workflow update-field action), writing through each entity\'s own validation so nothing bypasses existing rules']],['v0.15.0','August 2026','Custom relationships, richer business rules & workflow automation',['Added admin-defined custom relationships between any two record types (companies, contacts, custom objects, and more), with one-to-one/many-to-one/many-to-many cardinality and a choice of what happens to linked records on delete','Added a related-records view on record detail pages showing every linked record through those relationships','Replaced the business rules engine: rules can now combine multiple conditions with AND/OR, use 10 comparison operators (not just equals), and lock a field, set a default or exact value, block saving entirely, or show a message — not just require or hide','Replaced the workflow automation engine: triggers now include field changes and dates reached/overdue in addition to status changes, and actions include assigning the record\'s owner, creating a related record, and posting an in-app notification, on top of creating a task','Added an in-app notification center (bell icon with unread count) for workflow-triggered notifications','Added optional validation for custom fields — a min/max range for number fields, a max length and regex pattern for text fields — plus searchable/filterable/reportable capability flags','Added Windows task reminder notifications (native toast notifications via the desktop app\'s webview)','Added a session inactivity auto-lock (15 minutes idle) requiring the current user\'s password to resume','Updated the online demo: business rules now support an "is / is not" operator, and workflow rules can optionally post an admin notification, shown in a new notification bell']],['v0.14.0','August 2026','Admin-defined Custom Objects',['Added Custom Objects: an Administrator can define an entirely new record type (its own label, fields and ID/numbering format) without any code changes','Custom Objects automatically get their own navigation section, and are full citizens of the existing custom fields, business rules and custom report builder — no per-object code was needed for any of the three','A custom object can\'t be named the same as a built-in entity, and deleting its definition is blocked while records exist (deactivating it is always safe and non-destructive)']],['v0.13.0','August 2026','Admin panel: users, roles & flexible configuration everywhere',['Added an Admin panel with user & role management, moved out of the main navigation into one dedicated section','Added an editable business profile (name, phone, address, city, logo) shown across the workspace','Generalized custom fields from Companies/Contacts to every major object: Opportunities, Quotes, Orders, Invoices, Contracts, Products and Tasks','Generalized conditional business rules and workflow automation the same way, so any object with custom fields can use them','Added admin-configurable numbering: choose the prefix and digit width used for each object\'s auto-generated ID (e.g. "ACC-000001" or "ACC-ab0001")','Added a simple custom report builder: pick an object, group by any field including custom fields, and count or sum','Added a dashboard KPI picker so admins choose which tiles show, in what selection, for the whole workspace','Updated the online demo with a full working Admin panel — mirrors every feature above in the browser']],['v0.12.0','August 2026','Branding, reports, custom fields, business rules & workflow automation',['Added business branding (logo, editable business profile) shown on the print letterhead for quotes, orders and invoices','Added reports beyond the dashboard: revenue by month, win rate by owner, lost reasons, AR aging and sales by owner','Added admin-defined custom fields on Companies and Contacts (text, number, date, yes/no, select), enforced both client- and server-side','Added conditional business rules that require or hide a custom field based on a record\'s status','Added Phase 1 workflow automation: auto-create a follow-up task when an Opportunity\'s stage or an Invoice\'s status changes']],['v0.11.0','August 2026','PDF printing & CSV import/export',['Added a browser-native "Print / Save as PDF" preview for quotes, orders and invoices, with business letterhead, line items and totals','Added CSV export on every list screen','Added CSV import for Companies and Contacts, validated row by row through the same rules as the manual forms']],['v0.10.0','August 2026','Team Workspace, backup & restore',['Added Team Workspace mode — a small team shares one server over the local network from browser tabs, with per-user sessions','Added whole-workspace backup and restore as a single file, safe to run against a live database','Added self-service password change from a "My account" screen']],['v0.9.0','August 2026','Desktop edition foundation published',['Published the Windows desktop edition source: Tauri v2 + Rust + SQLite','Implemented the full sales lifecycle on desktop — Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices','Added quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication','No packaged installer yet — desktop is available to build and run from source']],['v0.8.0','August 2026','Interactive navigation & public pages',['Made dashboard KPIs clickable with filtered drill-downs','Added a global Quick Create menu','Added mobile navigation while keeping Try Online prominent','Replaced Journey with Principles and added Compare and Download pages','Marked desktop downloads as Coming Soon','Fixed desktop sidebar navigation']],['v0.7.0','August 2026','Trust & product transparency',['Added Roadmap, Changelog and creator attribution','Added Person JSON-LD and updated discovery files']],['v0.6.0','August 2026','Record numbering & search',['Added automatically generated identifiers','Rebuilt global search as one stable result panel','Added keyboard shortcuts and wider search coverage']],['v0.5.0','July 2026','Lanesra OS rebrand',['Renamed BusinessOS to Lanesra OS','Updated product branding, metadata and documentation']],['v0.4.0','July 2026','Relationship integrity',['Added opportunity-to-contact relationship','Removed opportunity-to-contract relationship','Added company-filtered relationship dropdowns']],['v0.3.0','July 2026','Flexible sales flow',['Made opportunities optional for quotes','Made quotes optional for orders','Added products, services and line-item quantities']],['v0.2.0','June 2026','Connected sales MVP',['Added quotes, orders, invoices, contracts and dashboards','Connected core entities using clean relationships']],['v0.1.0','May 2026','First working prototype',['Launched the first browser-based MVP with sample data']]];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Release history</div><h1>Changelog</h1><p>Every meaningful improvement to Lanesra OS, documented publicly.</p><div class="status-row"><span class="status-chip">Latest: v0.18.1</span><span class="muted">Early Access</span></div></div></section><section class="section"><div class="container changelog-list">${releases.map(r=>`<article class="release" id="${r[0].replaceAll('.','-')}"><div class="release-meta"><span class="status-chip">${r[0]}</span><span>${r[1]}</span></div><div><h2>${r[2]}</h2><ul>${r[3].map(x=>`<li>${x}</li>`).join('')}</ul></div></article>`).join('')}</div></section></main>${publicFooter()}`;bindPublicNav()}
-function backlogPage(){
- document.title='Product Backlog — Lanesra OS';
+function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links"><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div class="nav-actions"><a class="btn btn-primary mobile-try" href="/demo">Try Online →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a><hr><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
+function publicFooter(){return `<footer class="footer"><div class="container footer-grid"><div><a class="brand footer-brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><span class="muted">Modern, open-source business software for small businesses.</span></div><div><strong>Product</strong><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/download">Download</a></div><div><strong>Development</strong><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div><strong>Creator</strong><a href="https://vikramgrover.com">VikramGrover.com</a></div></div><div class="container footer-bottom"><span>© 2026 Lanesra OS</span><span>Created by Vikram Grover</span></div></footer>`}
+function roadmapPage(){
+ document.title='Roadmap & Backlog — Lanesra OS';
  const shipped=[
   ['Core CRM & sales lifecycle','Companies, Contacts, Products, Opportunities, Quotes, Orders, Invoices, Contracts, Tasks — full CRUD, the flexible Company → Opportunity → Quote → Order → Invoice path plus direct-entry shortcuts, gap-free document numbering, integer-cent money math, duplicate-name/email warnings, and dashboard KPIs.'],
   ['Team Workspace (multi-user over LAN)','An axum HTTP server sharing the same business logic as the desktop app, cookie sessions, Docker packaging — a small team runs one server, everyone else uses a browser tab.'],
@@ -1305,6 +2182,13 @@ function backlogPage(){
   ['Customer 360 / Contact 360','A dedicated detail page for every company and contact — full field overview plus every linked record (contacts, opportunities, quotes, orders, invoices, contracts, tasks) one click away, replacing edit-modal-only access.'],
   ['Business Rules & Workflow Automation redesign','Both builders rebuilt as a numbered Condition/Effect (or Trigger/Action) layout with a live rule-summary panel; Workflow Automation gained a connected visual canvas (Trigger → Conditions → Actions → End) with zoom. Test and Activate/Deactivate moved into the builder header, alongside full editing, not just create.'],
   ['Online demo: full interactive parity','The browser demo at /demo mirrors everything above as real interactive features, not just changelog copy — its own Status Transitions tab, expanded workflow actions, Test rule/Test workflow panels, the redesigned rule-builder layout with a visual canvas, custom field extensibility, and Customer 360/Contact 360 detail pages.'],
+  ['Online demo: workflow-action & custom-field parity','Workflow "Create a new record" now offers all 9 built-in entities, not just 3, and "Update a related record" walks the relationship graph in both directions so every trigger entity gets its actual related-record options. Custom fields in the demo gained the same Required/Max length/Pattern/Min/Max/Searchable/Filterable/Reportable settings the desktop edition already had.'],
+  ['Online demo: Custom Objects','An Administrator can define a whole new business object at runtime from Admin → Custom Objects - its own icon, sidebar entry and ID format, no code change - and it works through the demo\'s existing Custom Fields, Business Rules, Status Transitions and Workflow Automation tabs exactly like a built-in entity. Delete is blocked while records exist; deactivate is always safe and reversible.'],
+  ['Online demo: Custom Relationships','An Administrator can connect any two object types - built-in or custom - from Admin → Relationships, with a cardinality (many-to-one/one-to-one/many-to-many), forward/reverse labels, and a delete behavior (Restrict or Archive). Every record\'s edit form gets a "Related records" panel showing every link from either direction, with inline Link/Unlink.'],
+  ['Online demo: Reports','A new Reports section in the browser demo with the desktop edition\'s full fixed report gallery (Revenue by month, Win rate by owner, Lost reasons, AR aging, Sales by owner) plus a Custom Reports builder that can group any built-in or custom object by its status/stage or a reportable custom field, count or sum, with CSV export on every report - closing the online demo\'s last desktop-parity gap.'],
+  ['Online demo: Screen layouts (no-code UI designer)','A new capability that doesn\'t exist on desktop either: from Admin → Screen layouts, an admin drag-orders any built-in or custom object\'s create/edit fields into named sections. Editing only ever touches a draft - the live form keeps its default order until Publish, and Preview shows the draft rendered before that. A scoped, demo-first version of the "No-code Screen/UI Designer" item still proposed below for the full desktop admin extensibility spec (which also covers detail-page and tab/column layouts).'],
+  ['Online demo: Integrations (UI-only simulation)','A new Admin → Integrations section, also new to the product rather than a desktop port: scheduled data Export/Import/Sync jobs against any object with a Run now simulation and per-job history, defined-and-exposed API endpoints with a Test call that returns real demo data as JSON, and configured external API connections with a Test request and call history. Everything is a local simulation against this browser\'s data - the static demo has no server, so it\'s built and labeled that way rather than faking a real backend.'],
+  ['Online demo: workflow self-updates + custom-object workflow fix','Workflow automation gained the desktop edition\'s update_field action - set another field on the same record a workflow just triggered on (e.g. Company status becomes Customer, so Industry gets set to Active), with the new value either fixed or copied live from another field. Also fixed a bug where workflow rules on admin-defined Custom Objects were creatable but silently never fired.'],
  ];
  const planned=[
   ['Admin UX polish','Duplicate/copy for a rule or workflow, version history, and a dependency warning before deactivating something another rule or field relies on — the last scoped item in the Admin Automation & Customization addendum.','spec §10','S'],
@@ -1315,25 +2199,30 @@ function backlogPage(){
   ['Full drag-and-drop report builder','The shipped report builder covers pick-an-object → group-by-field (including custom fields) → count or sum. A richer builder — multiple group-bys, filters, joins across objects, a visual canvas — was scoped down to that simpler version by explicit choice.','Worth revisiting once real usage shows the count/sum + single group-by shape is genuinely too narrow.',null,'M–L'],
   ['Code-signed Windows installer','The published installer is unsigned, so Windows SmartScreen flags it as an unknown publisher.','Mostly not a coding task: buy a certificate, add a signtool step to the release workflow. The real cost is procurement — identity verification lead time, a recurring fee — an ops/budget decision, not an engineering one.',null,'S (code) / ops-heavy'],
  ];
+ const futureIdeas=['Projects and milestones','Inventory and suppliers','Recurring invoices','Customer portal','Plugin architecture'];
  const sequence=[
   ['1 · Admin UX polish','The last scoped item in the Admin Automation & Customization addendum — small and well-defined, a clean next build.',true],
   ['2 · Global search & list-view filtering','Gives the existing is_searchable/is_filterable flags their first real use.',false],
   ['3 · Decide: Screen Designer, richer report builder, code signing','Three independent scope/budget calls, worth a deliberate conversation each rather than defaulting into months of work.',false],
  ];
- $('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Built from the working codebase</div><h1>Product backlog.</h1><p>Where Lanesra OS stands, and what's next — compiled from the actual code (core/server/src-tauri/frontend) plus the online demo, not a wishlist. Every "Shipped" line below is running code with tests.</p><div class="status-row"><span class="status-chip">Updated August 2026</span><span class="muted">Desktop edition v0.8.0 (code-complete on main)</span></div>
- <div class="backlog-callout"><h3>Release status</h3><p><b>desktop-v0.4.0 is the latest tagged release</b> (installers attached, Early Access/prerelease as intended). Everything below through the Business Rules & Workflow Automation redesign and the online demo's full-parity update is merged to <code>main</code> — a newer <code>desktop-v0.x.0</code> tag/release just hasn't been cut yet to package it into an installer.</p><p class="muted">Repo hygiene: a real MIT <code>LICENSE</code>, <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, <code>SECURITY.md</code>, issue/PR templates, and a root README written for someone landing on the repo, not a deploy runbook.</p></div>
+ $('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Built from the working codebase</div><h1>Roadmap & backlog.</h1><p>Where Lanesra OS stands today, what's being built next, and everything queued up after that — compiled from the actual code (core/server/src-tauri/frontend) plus the online demo, not a wishlist. Every "Shipped" line below is running code with tests.</p><div class="status-row"><span class="status-chip">Early Access v0.23.1</span><span class="muted">Last updated August 2026</span></div>
+ <div class="backlog-callout" id="desktop"><h3>Release status</h3><p><b>desktop-v0.10.0 is the latest tagged release</b> (installers attached, Early Access/prerelease as intended). Everything below is merged to <code>main</code>. Full desktop feature list → <a href="/download">/download</a>.</p><p class="muted">Repo hygiene: a real MIT <code>LICENSE</code>, <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, <code>SECURITY.md</code>, issue/PR templates, and a root README written for someone landing on the repo, not a deploy runbook.</p></div>
  </div></section>
  <section class="section"><div class="container narrow">
 
  <div class="backlog-legend"><span class="backlog-pill shipped">shipped</span><span class="backlog-pill planned">planned — scoped, ready to build</span><span class="backlog-pill proposed">proposed — needs a decision</span></div>
 
- <div class="backlog-stats"><div class="backlog-stat"><div class="n">${shipped.length}</div><div class="l">shipped epics</div></div><div class="backlog-stat"><div class="n">${planned.length}</div><div class="l">planned, scoped items</div></div><div class="backlog-stat"><div class="n">${proposed.length}</div><div class="l">proposed, awaiting a decision</div></div><div class="backlog-stat"><div class="n">0</div><div class="l">currently building</div></div></div>
+ <div class="backlog-stats"><div class="backlog-stat"><div class="n">${shipped.length}</div><div class="l">shipped epics</div></div><div class="backlog-stat"><div class="n">${planned.length}</div><div class="l">planned, scoped items</div></div><div class="backlog-stat"><div class="n">${proposed.length}</div><div class="l">proposed, awaiting a decision</div></div><div class="backlog-stat"><div class="n">1</div><div class="l">up next</div></div></div>
 
  <section class="backlog-group"><div class="backlog-group-head"><h2>Shipped</h2><span class="backlog-group-note">running code, tested — all merged to main</span></div><div class="backlog-shipped-list">${shipped.map(s=>`<div class="backlog-shipped-item"><div class="mark">✓</div><div><div class="t">${s[0]}</div><div class="d">${s[1]}</div></div></div>`).join('')}</div></section>
+
+ <section class="backlog-group"><div class="backlog-group-head"><h2>Up next</h2><span class="backlog-group-note">actively next in line, per the recommended sequencing below</span></div><p class="roadmap-row active">↻ Admin UX polish — ${planned[0][1]}</p></section>
 
  <section class="backlog-group"><div class="backlog-group-head"><h2>Near-term backlog</h2><span class="backlog-group-note">scoped, not yet started</span></div>${planned.map(p=>`<div class="backlog-card"><div class="backlog-card-head"><h3>${p[0]}</h3><div class="backlog-card-tags"><span class="backlog-tag planned-tag">planned</span><span class="backlog-tag">${p[2]}</span><span class="backlog-tag">size: ${p[3]}</span></div></div><p class="ask">${p[1]}</p></div>`).join('')}</section>
 
  <section class="backlog-group"><div class="backlog-group-head"><h2>Proposed — awaiting a decision</h2><span class="backlog-group-note">explicitly deferred, not forgotten</span></div>${proposed.map(p=>`<div class="backlog-card"><div class="backlog-card-head"><h3>${p[0]}</h3><div class="backlog-card-tags"><span class="backlog-tag proposed-tag">proposed</span>${p[3]?`<span class="backlog-tag">${p[3]}</span>`:''}<span class="backlog-tag">size: ${p[4]}</span></div></div><p class="ask">${p[1]}</p><div class="backlog-solution"><div class="sol-label">Why it's still just proposed</div><ul><li>${p[2]}</li></ul></div></div>`).join('')}</section>
+
+ <section class="backlog-group"><div class="backlog-group-head"><h2>Future ideas</h2><span class="backlog-group-note">not yet scoped — added once there's real signal they're needed</span></div>${futureIdeas.map(x=>`<p class="roadmap-row">○ ${x}</p>`).join('')}</section>
 
  <section class="backlog-group"><div class="backlog-group-head"><h2>Recommended sequencing</h2><span class="backlog-group-note">one reasonable order, not the only one</span></div><div class="timeline">${sequence.map(s=>`<div class="timeline-item ${s[2]?'current':''}"><div class="timeline-date">${s[0].split(' · ')[0]}</div><div class="timeline-dot"></div><div class="timeline-content" style="padding:16px 20px"><div class="rt">${s[0].split(' · ')[1]}</div><div class="rd">${s[1]}</div></div></div>`).join('')}</div></section>
 
@@ -1341,8 +2230,17 @@ function backlogPage(){
  </main>${publicFooter()}`;
  bindPublicNav();
 }
-function principlesPage(){document.title='Principles — Lanesra OS';const principles=[['Own your data','Your customer and sales information should remain under your control—not trapped behind a subscription or vendor lock-in.'],['Offline first','Core work should continue even when the internet does not. The Windows desktop edition runs entirely on local SQLite storage, with no server or account required.'],['Relationships over spreadsheets','Customers, contacts, opportunities, quotes, orders and invoices stay linked so data remains clean and useful — and that same connected model extends to any custom record type you define.'],['Simple before powerful','Every feature must reduce effort. Complexity is added only when it clearly improves the work.'],['Configurable, not hardcoded','A business shouldn\'t need a developer to add a field, a record type, a rule or an automation. Admins reshape Lanesra from a settings screen — the software adapts to the business, not the other way around.'],['Open by default','The product roadmap, changelog and source code are public so users can inspect how Lanesra evolves.'],['Business software deserves good design','Small businesses should not have to accept dated interfaces or confusing navigation to access serious capabilities.']];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">How Lanesra is designed</div><h1>Principles before features.</h1><p>The decisions behind Lanesra OS are guided by a small set of practical beliefs about ownership, simplicity and product quality.</p></div></section><section class="section"><div class="container principles-page-grid">${principles.map((p,i)=>`<article class="principle-card"><span>0${i+1}</span><h2>${p[0]}</h2><p>${p[1]}</p></article>`).join('')}</div></section><section class="section maintenance"><div class="container narrow"><div class="eyebrow">The business flow</div><h2>Connected by design.</h2><div class="flow-map"><strong>Customer</strong><span>→</span><div>Contacts<br>Opportunities <em>optional</em><br>Quotes <em>optional</em><br>Orders<br>Invoices<br>Contracts<br>Tasks</div></div><p class="muted" style="margin-top:18px">That same connected model isn't fixed to these nine record types — admins can add their own (Vendors, Assets, Projects…) and link them into this graph with custom relationships, so the "no dangling free text" principle holds for whatever your business actually looks like.</p></div></section></main>${publicFooter()}`;bindPublicNav()}
+function releasesPage(){document.title='Releases — Lanesra OS';const releases=[['v0.23.1','August 2026','Online demo parity fix: workflow self-updates and custom-object workflows',['Workflow automation gained the desktop edition\'s update_field action (the companion to update_related_record) - "when this record\'s field changes, also set another field on this same record" - e.g. "when Status becomes Customer, set Industry to Active." The new value can be a fixed value or copied live from another field on the same record','Fixed a bug where a workflow rule defined on an admin-defined Custom Object could be created in Admin → Workflow Automation but would silently never fire - execution was gated on a built-ins-only lookup table left over from before Custom Objects existed as a workflow-eligible entity; workflows on custom objects now run exactly like on any built-in entity','Both fixes verified against the exact reported scenario (Company status change auto-updating a second field on the same Company) and against a custom object end to end']],['v0.23.0','August 2026','Integrations admin section in the online demo',['A new Admin → Integrations section - another capability that doesn\'t exist on the desktop edition, built for the demo first, as a UI-only simulation: the static demo has no server, so nothing here makes a real network call or runs on a real schedule','Scheduled jobs: define a data Export/Import/Sync job against any built-in or custom object with a schedule (manual, hourly, daily, weekly) and format (CSV/JSON); Run now simulates it immediately, with a per-job history log of simulated runs and record counts','API endpoints: define and "expose" a GET or POST endpoint backed by any object, with API-key or public auth; Test call shows the exact request and a realistic JSON response built from your own current demo data, entirely local','External API connections: configure an outbound connection (base URL, method, none/API-key/bearer auth) this workspace would call; Test request logs a simulated response with a call history, clearly labeled as simulated since the demo can\'t make real outbound requests','With this, the online demo has closed every gap identified in this round of parity work: Custom Objects, Custom Relationships, Reports, a no-code Screen layouts designer, and now Integrations - all four built for the demo, two catching up to desktop and two (layouts, integrations) new to the product entirely']],['v0.22.0','August 2026','No-code Screen layouts in the online demo',['A new Admin → Screen layouts tab lets an admin drag-order any built-in or custom object\'s create/edit fields into named sections - a capability that doesn\'t exist on the desktop edition either, built for the demo first','A layout has a draft and a published copy: dragging fields between/within sections, renaming a section, or adding one only ever edits the draft - the live create/edit form keeps using the plain default field order until Publish copies the draft over, and Unpublish clears it straight back to that default','A Preview button renders the draft exactly as the live form would show it, without saving anything or touching the live workspace','A published layout never drops a field it doesn\'t recognize - any field missing from the layout (a new custom field added after publishing, or a stale key) is automatically appended to a trailing "Other fields" section so nothing can go missing from a form because of a layout edit','With this, the online demo\'s only remaining gap against the desktop edition\'s admin extensibility spec is the Integrations admin section - up next, also a demo-first UI-only build']],['v0.21.0','August 2026','Reports in the online demo',['The online demo has a new top-level Reports section with the same fixed report gallery the desktop edition ships: Revenue by month, Win rate by owner, Lost reasons, AR aging and Sales by owner, each with a date-range (or "as of") filter and a bar-chart table matching desktop\'s layout','Added a Custom Reports builder to the demo, mirroring desktop\'s admin report builder: pick any object - built-in or a Custom Object - group by its status/stage or an active, reportable custom field, and count records or sum a numeric custom field; only fields an admin flagged Reportable are offered, same as desktop','Added CSV export to every report in the demo (a new capability for the demo generally, self-contained via a Blob download - no server involved)','Two disclosed substitutions where this demo\'s simpler data model doesn\'t match desktop\'s: Revenue by month/Sales by owner group by each invoice\'s due date since the demo has no separate issue date, and AR aging uses each invoice\'s full total as its balance since the demo doesn\'t track partial payments - both called out in the report\'s own subtitle rather than silently faked','Added a Lost reason field to Opportunities so the Lost Reasons report has something real to report on','With this, the online demo\'s only remaining gaps against the desktop edition are two capabilities that don\'t exist on desktop either: a no-code UI layout designer and a UI-only Integrations admin section - both underway next']],['v0.20.0','August 2026','Custom Relationships in the online demo',['An Administrator can now connect any two object types - built-in or custom - from Admin → Relationships: a cardinality (many-to-one, one-to-one or many-to-many), a forward/reverse label pair, and a choice of what happens to a link when a linked record is deleted (Restrict blocks the delete, Archive drops the link and keeps both records)','Every record\'s edit form now shows a "Related records" panel listing every linked record across every applicable relationship, from either direction, with inline Link/Unlink - the same place desktop puts its related-records card, since most objects in this demo have an edit form but no separate detail page','Cardinality is enforced on link (a many-to-one or one-to-one side can\'t be linked twice), and a relationship can\'t connect an object type to itself - both match the desktop edition\'s validation exactly','Reports beyond the dashboard remain the one desktop-only capability left in the online demo\'s parity work']],['v0.19.0','August 2026','Custom Objects in the online demo',['The online demo caught up with one of the desktop edition\'s biggest capabilities: an Administrator can now define a whole new business object at runtime - Vendors, Assets, Projects - from Admin → Custom Objects, with its own icon, sidebar entry and record-number prefix/digit width, no code change','A custom object is a full citizen of the demo\'s admin subsystems exactly like a built-in entity: it gets its own tab in Custom Fields, Business Rules, Status Transitions and Workflow Automation, and its records go through the same create/edit/list screens, auto-numbering and delete-dependency checks as Companies or Contacts','A custom object can\'t be named the same as a built-in entity (rejected at creation, matching desktop); deleting its definition is blocked while any record still exists, while deactivating is always safe and reversible since it only hides the object from navigation and new-record creation','Reports beyond the dashboard and Custom Relationships between record types remain desktop-only for now - next up in the online demo\'s parity work']],['v0.18.1','August 2026','Online demo parity fixes',['Workflow "Create a new record" now offers all 9 built-in record types in the online demo (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks), not just 3 - matching the desktop edition\'s full creatable set, with company-dependent types offered only when the trigger record actually carries a company','Workflow "Update a related record" now walks the demo\'s foreign-key graph in both directions, not just downward: a Contact can update its own parent Company the same way a Company can update its Contacts, and every entity gets its linked Tasks (and vice versa) through the existing relatedType/relatedId link','Custom fields in the online demo gained the validation and capability settings the desktop edition already had: Required, Max length and Pattern/regex (text fields), Min/Max value (number fields), and Searchable/Filterable/Reportable flags - enforced with native HTML5 form validation and shown in the custom fields list']],['v0.18.0','August 2026','Status transitions, richer workflow actions, test mode, a rule-builder redesign, and Customer 360',['Added a Status Transition Editor: restrict which status/stage changes are allowed on any object with a fixed-schema field (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks) - each rule is one from → to move, with a wildcard "any status" starting point and its own active toggle; with no active rules a field stays fully unrestricted, and resaving the same status is never blocked','Workflow automation actions expanded beyond "create a task": a workflow can now create a new record (a company, opportunity or task) or update a field on a record related to the trigger through the demo\'s existing company/contact/opportunity/quote/order relationships','Added a Test rule / Test workflow dry-run mode to both Business Rules and Workflow Automation: fill in hypothetical values for an object and see exactly which active rules or workflows would match and what they would do, without creating, changing or sending anything','Redesigned the Business Rules and Workflow Automation builders to match the desktop edition\'s rule-builder layout: numbered Condition/Effect (or Trigger/Action) sections, a live-updating rule summary panel, and - for workflows - a visual Trigger → Action → End canvas that mirrors the form as you edit it; both builders gained full editing (not just create) and header-level Test/Activate-Deactivate/Save controls','Custom fields gained four more settings: an optional default value applied whenever a save leaves the field empty, a "require a unique value" check (rejected at definition time for yes/no fields, since they only have two possible values), placeholder text, and help text shown under the field on every record form','Added Customer 360 and Contact 360: clicking a company or contact name anywhere in the app now opens a dedicated detail page with its full field overview and every linked record - contacts, opportunities, quotes, orders, invoices, contracts and tasks - each one click away, replacing edit-modal-only access','Fixed a pre-existing bug surfaced while building the above: the admin panel\'s tab row no longer freezes on whichever tab was open first - switching tabs now correctly highlights the one you\'re on']],['v0.17.0','August 2026','More operators & field-to-field comparison',['Business rules and workflows gained four more comparison operators - starts with, ends with, is one of, is not one of - on top of is/is not/contains/is empty/is not empty/greater than/less than','A condition can now compare a field against another field\'s live value instead of only a fixed value - e.g. "require Flag when Notes equals Expected Notes" - with the same live-updating preview on the record form that a fixed-value condition already had','Windows desktop edition: the shared condition engine gained the same operators and field-to-field comparison, for both business rule conditions and workflow triggers']],['v0.16.0','August 2026','Business rules & workflows now work on any field, not just status',['Business rules can now condition on any built-in field - name, industry, value, close date, whatever the object has - not only the status/stage field, with a real comparison operator (is/is not, contains, is empty, greater than, less than) chosen per field, and their require/hide action can now target a built-in field too, not just a custom one','Workflow automation\'s field-changed trigger can now watch any built-in field the same way, so "when Industry changes to X" or "when Due date is set" can create a task and notify admins, not only "when status/stage reaches a value"','Windows desktop edition: the underlying business rules and workflow engines gained the same any-built-in-field support for both conditions/triggers and actions (require, hide, lock, set default, force value, and the workflow update-field action), writing through each entity\'s own validation so nothing bypasses existing rules']],['v0.15.0','August 2026','Custom relationships, richer business rules & workflow automation',['Added admin-defined custom relationships between any two record types (companies, contacts, custom objects, and more), with one-to-one/many-to-one/many-to-many cardinality and a choice of what happens to linked records on delete','Added a related-records view on record detail pages showing every linked record through those relationships','Replaced the business rules engine: rules can now combine multiple conditions with AND/OR, use 10 comparison operators (not just equals), and lock a field, set a default or exact value, block saving entirely, or show a message — not just require or hide','Replaced the workflow automation engine: triggers now include field changes and dates reached/overdue in addition to status changes, and actions include assigning the record\'s owner, creating a related record, and posting an in-app notification, on top of creating a task','Added an in-app notification center (bell icon with unread count) for workflow-triggered notifications','Added optional validation for custom fields — a min/max range for number fields, a max length and regex pattern for text fields — plus searchable/filterable/reportable capability flags','Added Windows task reminder notifications (native toast notifications via the desktop app\'s webview)','Added a session inactivity auto-lock (15 minutes idle) requiring the current user\'s password to resume','Updated the online demo: business rules now support an "is / is not" operator, and workflow rules can optionally post an admin notification, shown in a new notification bell']],['v0.14.0','August 2026','Admin-defined Custom Objects',['Added Custom Objects: an Administrator can define an entirely new record type (its own label, fields and ID/numbering format) without any code changes','Custom Objects automatically get their own navigation section, and are full citizens of the existing custom fields, business rules and custom report builder — no per-object code was needed for any of the three','A custom object can\'t be named the same as a built-in entity, and deleting its definition is blocked while records exist (deactivating it is always safe and non-destructive)']],['v0.13.0','August 2026','Admin panel: users, roles & flexible configuration everywhere',['Added an Admin panel with user & role management, moved out of the main navigation into one dedicated section','Added an editable business profile (name, phone, address, city, logo) shown across the workspace','Generalized custom fields from Companies/Contacts to every major object: Opportunities, Quotes, Orders, Invoices, Contracts, Products and Tasks','Generalized conditional business rules and workflow automation the same way, so any object with custom fields can use them','Added admin-configurable numbering: choose the prefix and digit width used for each object\'s auto-generated ID (e.g. "ACC-000001" or "ACC-ab0001")','Added a simple custom report builder: pick an object, group by any field including custom fields, and count or sum','Added a dashboard KPI picker so admins choose which tiles show, in what selection, for the whole workspace','Updated the online demo with a full working Admin panel — mirrors every feature above in the browser']],['v0.12.0','August 2026','Branding, reports, custom fields, business rules & workflow automation',['Added business branding (logo, editable business profile) shown on the print letterhead for quotes, orders and invoices','Added reports beyond the dashboard: revenue by month, win rate by owner, lost reasons, AR aging and sales by owner','Added admin-defined custom fields on Companies and Contacts (text, number, date, yes/no, select), enforced both client- and server-side','Added conditional business rules that require or hide a custom field based on a record\'s status','Added Phase 1 workflow automation: auto-create a follow-up task when an Opportunity\'s stage or an Invoice\'s status changes']],['v0.11.0','August 2026','PDF printing & CSV import/export',['Added a browser-native "Print / Save as PDF" preview for quotes, orders and invoices, with business letterhead, line items and totals','Added CSV export on every list screen','Added CSV import for Companies and Contacts, validated row by row through the same rules as the manual forms']],['v0.10.0','August 2026','Team Workspace, backup & restore',['Added Team Workspace mode — a small team shares one server over the local network from browser tabs, with per-user sessions','Added whole-workspace backup and restore as a single file, safe to run against a live database','Added self-service password change from a "My account" screen']],['v0.9.0','August 2026','Desktop edition foundation published',['Published the Windows desktop edition source: Tauri v2 + Rust + SQLite','Implemented the full sales lifecycle on desktop — Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices','Added quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication','No packaged installer yet — desktop is available to build and run from source']],['v0.8.0','August 2026','Interactive navigation & public pages',['Made dashboard KPIs clickable with filtered drill-downs','Added a global Quick Create menu','Added mobile navigation while keeping Try Online prominent','Replaced Journey with Principles and added Compare and Download pages','Marked desktop downloads as Coming Soon','Fixed desktop sidebar navigation']],['v0.7.0','August 2026','Trust & product transparency',['Added Roadmap, Changelog and creator attribution','Added Person JSON-LD and updated discovery files']],['v0.6.0','August 2026','Record numbering & search',['Added automatically generated identifiers','Rebuilt global search as one stable result panel','Added keyboard shortcuts and wider search coverage']],['v0.5.0','July 2026','Lanesra OS rebrand',['Renamed BusinessOS to Lanesra OS','Updated product branding, metadata and documentation']],['v0.4.0','July 2026','Relationship integrity',['Added opportunity-to-contact relationship','Removed opportunity-to-contract relationship','Added company-filtered relationship dropdowns']],['v0.3.0','July 2026','Flexible sales flow',['Made opportunities optional for quotes','Made quotes optional for orders','Added products, services and line-item quantities']],['v0.2.0','June 2026','Connected sales MVP',['Added quotes, orders, invoices, contracts and dashboards','Connected core entities using clean relationships']],['v0.1.0','May 2026','First working prototype',['Launched the first browser-based MVP with sample data']]];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Release history</div><h1>Releases</h1><p>Every meaningful improvement to Lanesra OS, with detailed per-version release notes — documented publicly.</p><div class="status-row"><span class="status-chip">Latest: v0.23.1</span><span class="muted">Early Access</span></div></div></section><section class="section"><div class="container changelog-list">${releases.map(r=>`<article class="release" id="${r[0].replaceAll('.','-')}"><div class="release-meta"><span class="status-chip">${r[0]}</span><span>${r[1]}</span></div><div><h2>${r[2]}</h2><ul>${r[3].map(x=>`<li>${x}</li>`).join('')}</ul></div></article>`).join('')}</div></section></main>${publicFooter()}`;bindPublicNav()}
+function principlesPage(){document.title='Principles — Lanesra OS';const principles=[['Own your data','Your customer and sales information should remain under your control—not trapped behind a subscription or vendor lock-in.'],['Offline first','Core work should continue even when the internet does not. The Windows desktop edition runs entirely on local SQLite storage, with no server or account required.'],['Relationships over spreadsheets','Customers, contacts, opportunities, quotes, orders and invoices stay linked so data remains clean and useful — and that same connected model extends to any custom record type you define.'],['Simple before powerful','Every feature must reduce effort. Complexity is added only when it clearly improves the work.'],['Configurable, not hardcoded','A business shouldn\'t need a developer to add a field, a record type, a rule or an automation. Admins reshape Lanesra from a settings screen — the software adapts to the business, not the other way around.'],['Open by default','The product roadmap, backlog, release notes and source code are all public so users can inspect how Lanesra evolves.'],['Business software deserves good design','Small businesses should not have to accept dated interfaces or confusing navigation to access serious capabilities.']];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">How Lanesra is designed</div><h1>Principles before features.</h1><p>The decisions behind Lanesra OS are guided by a small set of practical beliefs about ownership, simplicity and product quality.</p></div></section><section class="section"><div class="container principles-page-grid">${principles.map((p,i)=>`<article class="principle-card"><span>0${i+1}</span><h2>${p[0]}</h2><p>${p[1]}</p></article>`).join('')}</div></section><section class="section maintenance"><div class="container narrow"><div class="eyebrow">The business flow</div><h2>Connected by design.</h2><div class="flow-map"><strong>Customer</strong><span>→</span><div>Contacts<br>Opportunities <em>optional</em><br>Quotes <em>optional</em><br>Orders<br>Invoices<br>Contracts<br>Tasks</div></div><p class="muted" style="margin-top:18px">That same connected model isn't fixed to these nine record types — admins can add their own (Vendors, Assets, Projects…) and link them into this graph with custom relationships, so the "no dangling free text" principle holds for whatever your business actually looks like.</p></div></section></main>${publicFooter()}`;bindPublicNav()}
 function comparePage(){document.title='Compare — Lanesra OS';const rows=[['Runs without internet','Partial','No','No','Yes'],['Open source','No','No','No','Yes'],['Local database','No','No','No','Yes (desktop)'],['Mandatory subscription','No','Yes','Yes','No'],['Connected sales workflow','Manual','Limited','Advanced','Yes'],['Custom record types, no code','No','Limited, paid tiers','Yes, complex/paid','Yes, built in'],['Custom business rules & workflow automation','No','Paid tiers','Yes, needs admin training','Yes, built in'],['Designed for small business','General','Yes','Enterprise','Yes'],['Self-owned business data','File-based','Cloud-hosted','Cloud-hosted','Yes']];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Choose with context</div><h1>Where Lanesra fits.</h1><p>A factual comparison for small businesses deciding between spreadsheets, cloud CRMs and a local-first open-source system.</p></div></section><section class="section"><div class="container compare-wrap"><table class="compare-table"><thead><tr><th>Capability</th><th>Excel</th><th>HubSpot</th><th>Salesforce</th><th class="lanesra-col">Lanesra OS</th></tr></thead><tbody>${rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${i===4?'lanesra-col':''}">${x}</td>`).join('')}</tr>`).join('')}</tbody></table><p class="compare-note">Comparisons are intentionally high-level. Product capabilities and commercial terms can change; review each vendor's current documentation before making a purchase decision.</p></div></section></main>${publicFooter()}`;bindPublicNav()}
 function downloadPage(){document.title='Download — Lanesra OS';$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Local-first desktop edition</div><h1>Download Lanesra OS.</h1><p>The independent desktop edition runs locally with no cloud account or mandatory internet connection. It is in active early development, with an Early Access Windows installer now available.</p></div></section><section class="section"><div class="container download-grid"><article class="download-card featured"><span class="status-chip">Early access — installer available</span><h2>Windows</h2><p>Tauri + Rust + SQLite desktop app with the full sales lifecycle, Contracts, Tasks and user management working: Companies, Contacts, Products, Opportunities, Quotes, Orders, Invoices, Contracts and Tasks — plus Team Workspace mode for small teams, backup and restore, PDF printing, CSV import/export, admin-defined Custom Objects and relationships between any record types, and an Admin panel covering branding, user roles, custom fields, richer conditional business rules, richer workflow automation with in-app notifications, configurable ID formats and a dashboard KPI picker. Unsigned .exe and .msi installers are on GitHub Releases (Windows will warn on first run since they aren't code-signed yet).</p><a class="btn btn-primary" href="https://github.com/vikram2409-eng/Lanesra-OS/releases" target="_blank" rel="noopener">Download for Windows</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View desktop source on GitHub</a></article><article class="download-card"><span class="status-chip">Planned</span><h2>macOS</h2><p>Apple silicon and Intel packaging will follow the Windows early-access release.</p><button class="btn btn-secondary" disabled>Planned</button></article><article class="download-card"><span class="status-chip">Planned</span><h2>Linux</h2><p>AppImage or Debian packaging is planned after the initial desktop release stabilizes.</p><button class="btn btn-secondary" disabled>Planned</button></article></div></section><section class="section maintenance"><div class="container narrow"><h2>What the desktop edition includes today</h2><div class="download-checks"><span>✓ No licence key</span><span>✓ No cloud account</span><span>✓ Standard SQLite database</span><span>✓ Offline from first launch</span><span>✓ Full sales lifecycle (quotes → orders → invoices)</span><span>✓ Contracts and tasks</span><span>✓ User management</span><span>✓ Team Workspace mode for small teams (Docker)</span><span>✓ Windows installer (unsigned, Early Access)</span><span>✓ Backup and restore</span><span>✓ Self-service password change</span><span>✓ PDF generation and printing</span><span>✓ CSV import and export</span><span>✓ Branding and print customization</span><span>✓ Reports, plus a custom report builder</span><span>✓ Custom fields & business rules on every object</span><span>✓ Workflow automation with in-app notifications</span><span>✓ Admin-defined Custom Objects</span><span>✓ Custom relationships between record types</span><span>✓ Windows task reminder notifications</span><span>✓ Session inactivity auto-lock</span><span>✓ Admin panel: user roles & configurable numbering</span><span>✓ Open-source code</span><span>○ Code-signed installer — planned</span></div><div class="hero-actions"><a class="btn btn-secondary" href="/roadmap#desktop">View desktop roadmap</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View source on GitHub</a></div></div></section></main>${publicFooter()}`;bindPublicNav()}
 function bindPublicNav(){document.querySelectorAll('.menu-toggle').forEach(btn=>{btn.onclick=()=>{const nav=btn.closest('.landing-nav');const drawer=nav.querySelector('.mobile-drawer');const open=drawer.hasAttribute('hidden');if(open)drawer.removeAttribute('hidden');else drawer.setAttribute('hidden','');btn.setAttribute('aria-expanded',String(open));btn.textContent=open?'×':'☰'}});document.querySelectorAll('.mobile-drawer a').forEach(a=>a.addEventListener('click',()=>{const drawer=a.closest('.mobile-drawer');drawer.setAttribute('hidden','');const btn=drawer.closest('.landing-nav').querySelector('.menu-toggle');btn.textContent='☰';btn.setAttribute('aria-expanded','false')}))}
-const path=location.pathname.replace(/\/$/,'')||'/'; if(path==='/demo')appShell();else if(path==='/roadmap')roadmapPage();else if(path==='/backlog')backlogPage();else if(path==='/changelog')changelogPage();else if(path==='/principles'||path==='/journey'||path==='/our-story'||path==='/about')principlesPage();else if(path==='/compare')comparePage();else if(path==='/download')downloadPage();else landing();
+const path=location.pathname.replace(/\/$/,'')||'/';
+// /backlog and /changelog are retired URLs - Roadmap absorbed the backlog
+// content and Changelog was renamed Releases. Netlify 301s these at the
+// edge (see _redirects/netlify.toml); this is a client-side fallback for
+// anyone who lands on the SPA directly (e.g. a stale bookmark hitting a
+// preview deploy without the redirect rules), so old links still work.
+if(path==='/backlog'){history.replaceState(null,'','/roadmap');roadmapPage()}
+else if(path==='/changelog'){history.replaceState(null,'','/releases');releasesPage()}
+else if(path==='/demo')appShell();else if(path==='/roadmap')roadmapPage();else if(path==='/releases')releasesPage();else if(path==='/principles'||path==='/journey'||path==='/our-story'||path==='/about')principlesPage();else if(path==='/compare')comparePage();else if(path==='/download')downloadPage();else landing();

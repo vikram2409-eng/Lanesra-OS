@@ -2,6 +2,16 @@
   publish = "."
 
 [[redirects]]
+  from = "/backlog"
+  to = "/roadmap"
+  status = 301
+
+[[redirects]]
+  from = "/changelog"
+  to = "/releases"
+  status = 301
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
