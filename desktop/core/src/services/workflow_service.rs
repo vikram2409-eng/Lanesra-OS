@@ -924,6 +924,7 @@ fn apply_action(
                     &crate::models::company::CompanyInput {
                         name: name.clone(), status: "Prospect".into(), owner_user_id: None, tax_number: None,
                         billing_address: None, shipping_address: None, tags: None, notes: None,
+                        ..Default::default()
                     },
                     actor_user_id,
                 )?.id

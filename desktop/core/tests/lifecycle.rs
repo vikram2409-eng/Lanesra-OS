@@ -232,6 +232,7 @@ fn company_input(name: &str) -> CompanyInput {
         shipping_address: None,
         tags: None,
         notes: None,
+        ..Default::default()
     }
 }
 
@@ -248,5 +249,6 @@ fn contact_input(company_id: &str) -> ContactInput {
         status: "Active".into(),
         tags: None,
         notes: None,
+        ..Default::default()
     }
 }

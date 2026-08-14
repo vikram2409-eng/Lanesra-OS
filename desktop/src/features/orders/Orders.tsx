@@ -11,7 +11,8 @@ import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
-import type { Prefill } from "../../components/AppShell";
+import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
+import type { Prefill, Section } from "../../components/AppShell";
 import { ORDER_STATUSES, type CustomFieldValues, type Order, type OrderInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
@@ -35,14 +36,21 @@ function orderExportColumns(companyNameById: Map<string, string>) {
 export function Orders({
   prefill,
   onPrefillConsumed,
-}: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
-  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
+  onNavigateTo,
+}: {
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+} = {}) {
+  const [view, setView] = useState<View>(() =>
+    prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
+  );
   const queryClient = useQueryClient();
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
-    if (prefill?.companyId) onPrefillConsumed?.();
+    if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -66,7 +74,14 @@ export function Orders({
   }
 
   if (view.mode === "detail") {
-    return <OrderDetail id={view.id} onBack={() => setView({ mode: "list" })} onChanged={invalidate} />;
+    return (
+      <OrderDetail
+        id={view.id}
+        onBack={() => setView({ mode: "list" })}
+        onChanged={invalidate}
+        onNavigateTo={onNavigateTo}
+      />
+    );
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
@@ -102,7 +117,7 @@ export function Orders({
           <tbody>
             {orders.data.map((o) => (
               <tr key={o.id} onClick={() => setView({ mode: "detail", id: o.id })} style={{ cursor: "pointer" }}>
-                <td>{o.order_number}</td>
+                <td><span className="id-link">{o.order_number}</span></td>
                 <td>{companyNameById.get(o.company_id) ?? "—"}</td>
                 <td>
                   <StatusBadge status={o.status} />
@@ -236,9 +251,23 @@ function OrderForm({
   );
 }
 
-function OrderDetail({ id, onBack, onChanged }: { id: string; onBack: () => void; onChanged: () => void }) {
+function OrderDetail({
+  id,
+  onBack,
+  onChanged,
+  onNavigateTo,
+}: {
+  id: string;
+  onBack: () => void;
+  onChanged: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+}) {
   const queryClient = useQueryClient();
   const order = useQuery({ queryKey: ["order", id], queryFn: () => api.getOrder(id) });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
+  const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
+  const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
 
@@ -274,6 +303,32 @@ function OrderDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
         {o.order_number} <StatusBadge status={o.status} />
       </h2>
       {error && <div className="error-banner">{error}</div>}
+
+      <RelatedRecordSummary
+        companyId={o.company_id}
+        contactId={o.contact_id}
+        companies={companies.data}
+        contacts={contacts.data}
+        onNavigateTo={onNavigateTo}
+        relatedLists={[
+          o.source_quote_id
+            ? {
+                title: "Source quote",
+                rows: [quotes.data?.find((q) => q.id === o.source_quote_id)].filter(
+                  (q): q is NonNullable<typeof q> => !!q,
+                ),
+                render: (q) => q.quote_number,
+                onOpen: (q) => onNavigateTo?.("quotes", { openId: q.id }),
+              }
+            : null,
+          {
+            title: "Invoices created from this order",
+            rows: (invoices.data ?? []).filter((i) => i.source_order_id === id),
+            render: (i) => `${i.invoice_number} · ${i.status}`,
+            onOpen: (i) => onNavigateTo?.("invoices", { openId: i.id }),
+          },
+        ]}
+      />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {ORDER_STATUSES.filter((s) => s !== o.status).map((s) => (

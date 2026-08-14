@@ -11,7 +11,8 @@ import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
-import type { Prefill } from "../../components/AppShell";
+import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
+import type { Prefill, Section } from "../../components/AppShell";
 import type { CustomFieldValues, Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
@@ -34,14 +35,21 @@ function invoiceExportColumns(companyNameById: Map<string, string>) {
 export function Invoices({
   prefill,
   onPrefillConsumed,
-}: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
-  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
+  onNavigateTo,
+}: {
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+} = {}) {
+  const [view, setView] = useState<View>(() =>
+    prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
+  );
   const queryClient = useQueryClient();
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
-    if (prefill?.companyId) onPrefillConsumed?.();
+    if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -65,7 +73,14 @@ export function Invoices({
   }
 
   if (view.mode === "detail") {
-    return <InvoiceDetail id={view.id} onBack={() => setView({ mode: "list" })} onChanged={invalidate} />;
+    return (
+      <InvoiceDetail
+        id={view.id}
+        onBack={() => setView({ mode: "list" })}
+        onChanged={invalidate}
+        onNavigateTo={onNavigateTo}
+      />
+    );
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
@@ -102,7 +117,7 @@ export function Invoices({
           <tbody>
             {invoices.data.map((inv) => (
               <tr key={inv.id} onClick={() => setView({ mode: "detail", id: inv.id })} style={{ cursor: "pointer" }}>
-                <td>{inv.invoice_number}</td>
+                <td><span className="id-link">{inv.invoice_number}</span></td>
                 <td>{companyNameById.get(inv.company_id) ?? "—"}</td>
                 <td>
                   <StatusBadge status={inv.status} />
@@ -244,9 +259,22 @@ function InvoiceForm({
   );
 }
 
-function InvoiceDetail({ id, onBack, onChanged }: { id: string; onBack: () => void; onChanged: () => void }) {
+function InvoiceDetail({
+  id,
+  onBack,
+  onChanged,
+  onNavigateTo,
+}: {
+  id: string;
+  onBack: () => void;
+  onChanged: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+}) {
   const queryClient = useQueryClient();
   const invoice = useQuery({ queryKey: ["invoice", id], queryFn: () => api.getInvoice(id) });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
+  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const [error, setError] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("0.00");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -293,6 +321,26 @@ function InvoiceDetail({ id, onBack, onChanged }: { id: string; onBack: () => vo
         {inv.invoice_number} <StatusBadge status={inv.status} />
       </h2>
       {error && <div className="error-banner">{error}</div>}
+
+      <RelatedRecordSummary
+        companyId={inv.company_id}
+        contactId={inv.contact_id}
+        companies={companies.data}
+        contacts={contacts.data}
+        onNavigateTo={onNavigateTo}
+        relatedLists={[
+          inv.source_order_id
+            ? {
+                title: "Source order",
+                rows: [orders.data?.find((o) => o.id === inv.source_order_id)].filter(
+                  (o): o is NonNullable<typeof o> => !!o,
+                ),
+                render: (o) => o.order_number,
+                onOpen: (o) => onNavigateTo?.("orders", { openId: o.id }),
+              }
+            : null,
+        ]}
+      />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {inv.status === "Draft" && (

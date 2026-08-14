@@ -34,6 +34,7 @@ fn company_input(name: &str, status: &str) -> CompanyInput {
     CompanyInput {
         name: name.into(), status: status.into(), owner_user_id: None, tax_number: None,
         billing_address: None, shipping_address: None, tags: None, notes: None,
+        ..Default::default()
     }
 }
 

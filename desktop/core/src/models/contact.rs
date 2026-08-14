@@ -16,6 +16,9 @@ pub struct Contact {
     pub status: String,
     pub tags: Option<String>,
     pub notes: Option<String>,
+    pub department: Option<String>,
+    pub preferred_contact_method: Option<String>,
+    pub linkedin_url: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -23,7 +26,12 @@ pub struct Contact {
     pub archived_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+// See CompanyInput's identical derive for why: lets the three fields added
+// this round (department/preferred_contact_method/linkedin_url) default to
+// None for every existing caller instead of requiring a mechanical touch
+// of every struct literal/JSON payload across the codebase.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct ContactInput {
     pub company_id: String,
     pub first_name: String,
@@ -36,6 +44,9 @@ pub struct ContactInput {
     pub status: String,
     pub tags: Option<String>,
     pub notes: Option<String>,
+    pub department: Option<String>,
+    pub preferred_contact_method: Option<String>,
+    pub linkedin_url: Option<String>,
 }
 
 pub const CONTACT_STATUSES: &[&str] = &["Active", "Inactive", "Archived"];

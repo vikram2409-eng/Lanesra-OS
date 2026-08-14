@@ -31,10 +31,19 @@ export const customObjectSection = (key: string): Section => `custom:${key}`;
  * it once on mount (it fully unmounts/remounts on every section change,
  * so "on mount" reliably means "just navigated here") and immediately
  * clears it via `onPrefillConsumed`, so a later plain sidebar click into
- * the same section starts from a blank list as normal. */
+ * the same section starts from a blank list as normal.
+ *
+ * Record-detail-page round: `openId` reuses this exact one-shot mechanism
+ * for the opposite direction - a related-record link on a detail page
+ * (e.g. a Quote's "Company" link, an Order's "Source quote" link) jumps to
+ * that record's own section and opens its detail view directly instead of
+ * landing on a plain list the user has to search. The target section reads
+ * it once on mount to seed its initial view as `{mode:"detail", id:
+ * openId}`, then clears it the same way companyId/contactId already do. */
 export interface Prefill {
   companyId?: string;
   contactId?: string;
+  openId?: string;
 }
 
 const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [

@@ -42,6 +42,7 @@ fn company_input(name: &str, status: &str) -> CompanyInput {
         shipping_address: None,
         tags: None,
         notes: None,
+        ..Default::default()
     }
 }
 

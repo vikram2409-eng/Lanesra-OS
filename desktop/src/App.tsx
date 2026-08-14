@@ -125,18 +125,35 @@ function Ready({
       <TaskReminderNotifier currentUserId={user.id} />
       <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
         {section === "dashboard" && <Dashboard onNavigate={setSection} />}
-        {section === "companies" && <Companies onNavigateTo={navigateTo} />}
+        {section === "companies" && (
+          <Companies prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+        )}
         {section === "contacts" && (
           <Contacts prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
         )}
-        {section === "products" && <Products />}
+        {section === "products" && (
+          <Products prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+        )}
         {section === "opportunities" && <Opportunities prefill={prefill} onPrefillConsumed={clearPrefill} />}
-        {section === "quotes" && <Quotes prefill={prefill} onPrefillConsumed={clearPrefill} />}
-        {section === "orders" && <Orders prefill={prefill} onPrefillConsumed={clearPrefill} />}
-        {section === "invoices" && <Invoices prefill={prefill} onPrefillConsumed={clearPrefill} />}
-        {section === "contracts" && <Contracts prefill={prefill} onPrefillConsumed={clearPrefill} />}
+        {section === "quotes" && (
+          <Quotes prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+        )}
+        {section === "orders" && (
+          <Orders prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+        )}
+        {section === "invoices" && (
+          <Invoices prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+        )}
+        {section === "contracts" && (
+          <Contracts prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+        )}
         {section === "tasks" && (
-          <Tasks currentUserId={user.id} prefill={prefill} onPrefillConsumed={clearPrefill} />
+          <Tasks
+            currentUserId={user.id}
+            prefill={prefill}
+            onPrefillConsumed={clearPrefill}
+            onNavigateTo={navigateTo}
+          />
         )}
         {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
         {section === "admin" && <AdminPanel />}

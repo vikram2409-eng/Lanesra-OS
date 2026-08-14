@@ -37,6 +37,7 @@ fn company_input(name: &str, owner_user_id: Option<&str>) -> CompanyInput {
     CompanyInput {
         name: name.into(), status: "Active Customer".into(), owner_user_id: owner_user_id.map(String::from),
         tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None,
+        ..Default::default()
     }
 }
 

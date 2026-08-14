@@ -116,6 +116,8 @@ export interface BackupPackage {
 export const COMPANY_STATUSES = ["Prospect", "Active Customer", "Inactive", "Archived"] as const;
 export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
 
+export const PREFERRED_CONTACT_METHODS = ["Email", "Phone", "Text"] as const;
+
 export interface Company {
   id: string;
   workspace_id: string;
@@ -128,6 +130,12 @@ export interface Company {
   shipping_address: string | null;
   tags: string | null;
   notes: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  annual_revenue_cents: number | null;
+  employee_count: number | null;
+  preferred_contact_method: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -144,6 +152,12 @@ export interface CompanyInput {
   shipping_address: string | null;
   tags: string | null;
   notes: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  annual_revenue_cents: number | null;
+  employee_count: number | null;
+  preferred_contact_method: string | null;
 }
 
 export const CONTACT_STATUSES = ["Active", "Inactive", "Archived"] as const;
@@ -163,6 +177,9 @@ export interface Contact {
   status: string;
   tags: string | null;
   notes: string | null;
+  department: string | null;
+  preferred_contact_method: string | null;
+  linkedin_url: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -182,6 +199,9 @@ export interface ContactInput {
   status: string;
   tags: string | null;
   notes: string | null;
+  department: string | null;
+  preferred_contact_method: string | null;
+  linkedin_url: string | null;
 }
 
 export const PRODUCT_TYPES = ["Product", "Service"] as const;

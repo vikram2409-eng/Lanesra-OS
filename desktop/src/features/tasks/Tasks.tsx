@@ -5,7 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
-import type { Prefill } from "../../components/AppShell";
+import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import type { Prefill, Section } from "../../components/AppShell";
 import {
   TASK_PRIORITIES,
   TASK_RELATED_TYPES,
@@ -17,7 +18,19 @@ import {
 } from "../../lib/types";
 
 type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
-type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
+
+// Which top-level nav section a task's related record type opens, for the
+// ones that have their own detail page - Opportunity doesn't (kanban
+// pipeline only), so a task related to one stays plain text.
+const RELATED_TYPE_SECTION: Partial<Record<TaskRelatedType, Section>> = {
+  Company: "companies",
+  Contact: "contacts",
+  Quote: "quotes",
+  Order: "orders",
+  Invoice: "invoices",
+  Contract: "contracts",
+};
 
 function taskExportColumns(ownerName: (id: string | null) => string) {
   return [
@@ -63,19 +76,25 @@ export function Tasks({
   currentUserId,
   prefill,
   onPrefillConsumed,
+  onNavigateTo,
 }: {
   currentUserId: string;
   prefill?: Prefill | null;
   onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
 }) {
   const [view, setView] = useState<View>(() =>
-    prefill?.companyId || prefill?.contactId ? { mode: "create" } : { mode: "list" },
+    prefill?.openId
+      ? { mode: "detail", id: prefill.openId }
+      : prefill?.companyId || prefill?.contactId
+        ? { mode: "create" }
+        : { mode: "list" },
   );
   const [tab, setTab] = useState<Tab>("today");
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (prefill?.companyId || prefill?.contactId) onPrefillConsumed?.();
+    if (prefill?.companyId || prefill?.contactId || prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -110,7 +129,18 @@ export function Tasks({
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
   }
 
-  if (view.mode !== "list") {
+  if (view.mode === "detail") {
+    return (
+      <TaskDetail
+        id={view.id}
+        onEdit={() => setView({ mode: "edit", id: view.id })}
+        onBack={() => setView({ mode: "list" })}
+        onNavigateTo={onNavigateTo}
+      />
+    );
+  }
+
+  if (view.mode === "create" || view.mode === "edit") {
     return (
       <TaskForm
         taskId={view.mode === "edit" ? view.id : undefined}
@@ -211,8 +241,8 @@ export function Tasks({
                 </thead>
                 <tbody>
                   {group.rows.map((t) => (
-                    <tr key={t.id}>
-                      <td>{t.task_number}</td>
+                    <tr key={t.id} onClick={() => setView({ mode: "detail", id: t.id })} style={{ cursor: "pointer" }}>
+                      <td><span className="id-link">{t.task_number}</span></td>
                       <td>{t.title}</td>
                       <td>{t.priority}</td>
                       <td>{t.status}</td>
@@ -220,7 +250,13 @@ export function Tasks({
                       {!showGroupLabels && <td>{ownerName(t.owner_user_id)}</td>}
                       <td>{relatedLabel(t) ?? "General"}</td>
                       <td>
-                        <button className="btn" onClick={() => setView({ mode: "edit", id: t.id })}>
+                        <button
+                          className="btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setView({ mode: "edit", id: t.id });
+                          }}
+                        >
                           Edit
                         </button>
                       </td>
@@ -404,6 +440,99 @@ function TaskForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/** Record-detail-page round: Tasks previously had no detail view - list
+ * row click and menu went straight to Edit. Self-contained (own queries
+ * for owner name + related-record label/link) rather than threaded down
+ * from the list, since the list's own `ownerName`/`relatedLabel` helpers
+ * are declared after the early-return this component is reached from. */
+function TaskDetail({
+  id,
+  onEdit,
+  onBack,
+  onNavigateTo,
+}: {
+  id: string;
+  onEdit: () => void;
+  onBack: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+}) {
+  const task = useQuery({ queryKey: ["task", id], queryFn: () => api.getTask(id) });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
+  const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
+  const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
+  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
+  const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
+  const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
+
+  if (!task.data) return <p>Loading...</p>;
+  const t = task.data;
+  const ownerName = t.owner_user_id ? users.data?.find((u) => u.id === t.owner_user_id)?.display_name ?? "Unknown user" : "Unassigned";
+
+  const relatedLabelByType: Partial<Record<TaskRelatedType, Map<string, string>>> = {
+    Company: new Map((companies.data ?? []).map((c) => [c.id, c.name])),
+    Contact: new Map((contacts.data ?? []).map((c) => [c.id, `${c.first_name} ${c.last_name}`])),
+    Opportunity: new Map((opportunities.data ?? []).map((o) => [o.id, o.name])),
+    Quote: new Map((quotes.data ?? []).map((q) => [q.id, q.quote_number])),
+    Order: new Map((orders.data ?? []).map((o) => [o.id, o.order_number])),
+    Invoice: new Map((invoices.data ?? []).map((i) => [i.id, i.invoice_number])),
+    Contract: new Map((contracts.data ?? []).map((c) => [c.id, c.contract_number])),
+  };
+  const relatedType = t.related_type as TaskRelatedType | null;
+  const relatedName = relatedType && t.related_id ? relatedLabelByType[relatedType]?.get(t.related_id) ?? t.related_id : null;
+  const relatedSection = relatedType ? RELATED_TYPE_SECTION[relatedType] : undefined;
+
+  return (
+    <div>
+      <div className="toolbar">
+        <button className="btn" onClick={onBack}>
+          ← Back
+        </button>
+        <button className="btn" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+      <h2>
+        {t.title} <span className="badge">{t.status}</span>
+      </h2>
+      <p style={{ color: "var(--text-muted)" }}>
+        {t.task_number} · {t.priority} priority
+      </p>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Details</h3>
+        <p><strong>Owner:</strong> {ownerName}</p>
+        <p><strong>Due date:</strong> {t.due_date ?? "—"}</p>
+        <p><strong>Reminder:</strong> {t.reminder_at ?? "—"}</p>
+        <p>
+          <strong>Related to:</strong>{" "}
+          {relatedType && relatedName ? (
+            relatedSection ? (
+              <button
+                className="link-button"
+                style={{ color: "var(--accent)", fontWeight: 600 }}
+                onClick={() => onNavigateTo?.(relatedSection, { openId: t.related_id as string })}
+              >
+                {relatedType}: {relatedName}
+              </button>
+            ) : (
+              `${relatedType}: ${relatedName}`
+            )
+          ) : (
+            "General"
+          )}
+        </p>
+        <p><strong>Description:</strong> {t.description ?? "—"}</p>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsCard entityType="Task" entityId={t.id} status={t.status} />
+      </div>
     </div>
   );
 }

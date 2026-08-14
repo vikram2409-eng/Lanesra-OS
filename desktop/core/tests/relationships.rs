@@ -91,8 +91,8 @@ fn many_to_one_limits_the_source_to_one_link_but_allows_many_sources_per_target(
         Some(&admin),
     ).unwrap();
 
-    let company_a = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None }, Some(&admin)).unwrap();
-    let company_b = company_service::create(&conn, &ws, &CompanyInput { name: "Beta".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None }, Some(&admin)).unwrap();
+    let company_a = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, ..Default::default() }, Some(&admin)).unwrap();
+    let company_b = company_service::create(&conn, &ws, &CompanyInput { name: "Beta".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, ..Default::default() }, Some(&admin)).unwrap();
     let vendor_1 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Vendor One".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
     let vendor_2 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Vendor Two".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
 
@@ -130,7 +130,7 @@ fn one_to_one_limits_both_sides_to_a_single_link() {
         Some(&admin),
     ).unwrap();
 
-    let company_a = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None }, Some(&admin)).unwrap();
+    let company_a = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, ..Default::default() }, Some(&admin)).unwrap();
     let vendor_1 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Vendor One".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
     let vendor_2 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Vendor Two".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
 
@@ -184,7 +184,7 @@ fn restrict_blocks_archive_while_archive_behavior_clears_the_link_silently() {
         },
         Some(&admin),
     ).unwrap();
-    let company = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None }, Some(&admin)).unwrap();
+    let company = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, ..Default::default() }, Some(&admin)).unwrap();
     let vendor_1 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Vendor One".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
     relationship_service::link(&conn, &ws, &restrict_def.id, &vendor.key, &vendor_1.id, "Company", &company.id, Some(&admin)).unwrap();
 
@@ -226,7 +226,7 @@ fn deleting_a_relationship_definition_is_blocked_while_links_exist() {
         },
         Some(&admin),
     ).unwrap();
-    let company = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None }, Some(&admin)).unwrap();
+    let company = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, ..Default::default() }, Some(&admin)).unwrap();
     let vendor_1 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Vendor One".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
     relationship_service::link(&conn, &ws, &def.id, &vendor.key, &vendor_1.id, "Company", &company.id, Some(&admin)).unwrap();
 
