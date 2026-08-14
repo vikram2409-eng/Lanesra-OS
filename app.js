@@ -642,7 +642,7 @@ function evaluateFieldRulesForSave(entityKey,obj){
 const KPI_DEFS=[
  {key:'openPipeline',label:'Open pipeline',nav:'pipeline',filter:'open',value:()=>money(data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).reduce((s,o)=>s+Number(o.value||0),0))},
  {key:'wonRevenue',label:'Won revenue',nav:'pipeline',filter:'won',value:()=>money(data.opportunities.filter(o=>o.stage==='Won').reduce((s,o)=>s+Number(o.value||0),0))},
- {key:'outstandingInvoices',label:'Outstanding invoices',nav:'invoices',filter:'outstanding',value:()=>money(data.invoices.filter(i=>!['Paid','Cancelled'].includes(i.status)).reduce((s,i)=>s+docTotal(i),0))},
+ {key:'outstandingInvoices',label:'Outstanding invoices',nav:'invoices',filter:'outstanding',value:()=>money(data.invoices.filter(i=>!['Paid','Cancelled'].includes(i.status)).reduce((s,i)=>s+docBalance(i),0))},
  {key:'openTasks',label:'Open tasks',nav:'tasks',filter:'open',value:()=>String(data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).length)}
 ];
 function visibleKpis(){const prefs=data.kpiPrefs||[]; return prefs.length?KPI_DEFS.filter(k=>prefs.includes(k.key)):KPI_DEFS}
@@ -716,7 +716,15 @@ const productName=id=>byId('products',id)?.name||'—';
 const quoteName=id=>byId('quotes',id)?.number||'—';
 const orderName=id=>byId('orders',id)?.number||'—';
 const lineTotal=i=>Number(i.quantity||0)*Number(i.unitPrice||0);
-const docTotal=r=>(r.items||[]).reduce((s,i)=>s+lineTotal(i),0);
+// Discount % (new quote/order/invoice field) now actually reduces the
+// document total, matching the desktop edition's discount_cents feeding
+// into total_cents - previously a document's total was line items only.
+const docTotal=r=>{const raw=(r.items||[]).reduce((s,i)=>s+lineTotal(i),0);return raw-raw*(Number(r.discount||0)/100)};
+// Outstanding balance on an invoice - total minus whatever's been recorded
+// against the new "Amount paid" field, floored at zero. Closes the demo's
+// long-standing "no balance_cents field... stand in with the full total"
+// gap (see the AR aging report) now that partial payment is trackable.
+const docBalance=r=>Math.max(0,docTotal(r)-Number(r.amountPaid||0));
 const relatedLabel=t=>({Company:companyName,Contact:contactName,Opportunity:opportunityName,Quote:quoteName,Order:orderName,Invoice:id=>byId('invoices',id)?.number||'—',Contract:id=>byId('contracts',id)?.number||'—',General:()=> 'General'}[t.relatedType]?.(t.relatedId)||'General');
 function options(list,value,labelFn=x=>x.name){return `<option value="">Select…</option>`+list.map(x=>`<option value="${x.id}" ${x.id===value?'selected':''}>${labelFn(x)}</option>`).join('')}
 function optionalOptions(list,value,emptyLabel='None',labelFn=x=>x.name){return `<option value="">${emptyLabel}</option>`+list.map(x=>`<option value="${x.id}" ${x.id===value?'selected':''}>${labelFn(x)}</option>`).join('')}
@@ -737,21 +745,24 @@ function renderView(){
  if(current==='pipeline') return pipeline();
  if(current==='reports') return reportsPage();
  if(current==='admin') return adminPage();
- if(detailRecord&&detailRecord.type===current)return detailRecord.type==='companies'?companyDetail(detailRecord.id):contactDetail(detailRecord.id);
+ if(detailRecord&&detailRecord.type===current)return detailRecord.type==='companies'?companyDetail(detailRecord.id):detailRecord.type==='contacts'?contactDetail(detailRecord.id):genericRecordDetail(detailRecord.type,detailRecord.id);
  // Admin-defined Custom Objects reuse the exact same generic tablePage +
  // recordModal flow every built-in entity uses - only the columns/fields
  // are built from the object's definition instead of being hardcoded.
  const co=customObjectByKey(current);
  if(co)return tablePage(current,{cols:[['number','ID'],['name','Name'],['status','Status'],['owner','Owner']],fields:()=>fieldsFor(current,customObjectFields)});
+ // Every ID column below is 'idLink' - v0.25 round, so every list can
+ // click straight into that record's own detail page, not just
+ // Companies/Contacts' Name column as before (see cellValue/openRecordDetail).
  const configs={
- companies:{cols:[['customerNumber','Customer ID'],['name','Company','companyLink'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status']],fields:()=>fieldsFor('companies',companyFields)},
- contacts:{cols:[['contactNumber','Contact ID'],['name','Contact','contactLink'],['companyId','Company','company'],['role','Role'],['email','Email'],['status','Status']],fields:()=>fieldsFor('contacts',contactFields)},
- products:{cols:[['productNumber','Product ID'],['name','Product / Service'],['type','Type'],['sku','SKU'],['price','Price','money'],['status','Status']],fields:()=>fieldsFor('products',productFields)},
- quotes:{cols:[['number','Quote'],['companyId','Customer','company'],['opportunityId','Opportunity','opportunity'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('quotes',quoteFields),document:true},
- orders:{cols:[['number','Order'],['companyId','Customer','company'],['quoteId','Quote','quote'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('orders',orderFields),document:true},
- invoices:{cols:[['number','Invoice'],['companyId','Customer','company'],['orderId','Order','order'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('invoices',invoiceFields),document:true},
- contracts:{cols:[['number','Contract'],['companyId','Customer','company'],['title','Title'],['value','Value','money'],['status','Status'],['end','End date']],fields:()=>fieldsFor('contracts',contractFields)},
- tasks:{cols:[['title','Task'],['relatedId','Related to','related'],['owner','Owner'],['due','Due'],['priority','Priority'],['status','Status']],fields:()=>fieldsFor('tasks',taskFields)}
+ companies:{cols:[['customerNumber','Customer ID','idLink'],['name','Company','companyLink'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status']],fields:()=>fieldsFor('companies',companyFields)},
+ contacts:{cols:[['contactNumber','Contact ID','idLink'],['name','Contact','contactLink'],['companyId','Company','company'],['role','Role'],['email','Email'],['status','Status']],fields:()=>fieldsFor('contacts',contactFields)},
+ products:{cols:[['productNumber','Product ID','idLink'],['name','Product / Service'],['type','Type'],['sku','SKU'],['price','Price','money'],['status','Status']],fields:()=>fieldsFor('products',productFields)},
+ quotes:{cols:[['number','Quote','idLink'],['companyId','Customer','company'],['opportunityId','Opportunity','opportunity'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('quotes',quoteFields),document:true},
+ orders:{cols:[['number','Order','idLink'],['companyId','Customer','company'],['quoteId','Quote','quote'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('orders',orderFields),document:true},
+ invoices:{cols:[['number','Invoice','idLink'],['companyId','Customer','company'],['orderId','Order','order'],['amount','Amount','docmoney'],['status','Status']],fields:()=>fieldsFor('invoices',invoiceFields),document:true},
+ contracts:{cols:[['number','Contract','idLink'],['companyId','Customer','company'],['title','Title'],['value','Value','money'],['status','Status'],['end','End date']],fields:()=>fieldsFor('contracts',contractFields)},
+ tasks:{cols:[['taskNumber','Task ID','idLink'],['title','Task'],['relatedId','Related to','related'],['owner','Owner'],['due','Due'],['priority','Priority'],['status','Status']],fields:()=>fieldsFor('tasks',taskFields)}
  };
  tablePage(current,configs[current]);
 }
@@ -763,15 +774,23 @@ function dashboard(){
  menu.querySelectorAll('[data-create]').forEach(b=>b.onclick=()=>{const k=b.dataset.create;menu.hidden=true;if(k==='opportunities')recordModal('opportunities',fieldsFor('opportunities',opportunityFields));else{const fn={companies:companyFields,contacts:contactFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[k];recordModal(k,fieldsFor(k,fn))}});
  document.addEventListener('click',()=>{if(menu)menu.hidden=true},{once:true});
 }
-function companyFields(){return [['customerNumber','Customer ID','auto'],['name','Company name'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status','select','Lead|Prospect|Customer|Inactive']]}
-function contactFields(){return [['contactNumber','Contact ID','auto'],['name','Full name'],['companyId','Company','relation','companies'],['role','Role'],['email','Email'],['phone','Phone'],['status','Status','select','Active|Inactive']]}
-function opportunityFields(){return [['opportunityNumber','Opportunity ID','auto'],['title','Opportunity title'],['companyId','Customer','relation','companies'],['contactId','Primary contact (optional)','filteredContact'],['value','Value','number'],['stage','Stage','select','Lead|Qualified|Discovery|Proposal|Negotiation|Won|Lost'],['probability','Probability %','number'],['close','Expected close','date'],['owner','Owner'],['status','Status','select','Open|On Hold|Won|Lost'],['lostReason','Lost reason (optional)']]}
-function productFields(){return [['productNumber','Product ID','auto'],['name','Name'],['sku','SKU'],['type','Type','select','Product|Service'],['category','Category'],['price','Unit price','number'],['tax','Tax %','number'],['status','Status','select','Active|Inactive']]}
-function quoteFields(){return [['number','Quote number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['opportunityId','Opportunity (optional)','filteredOpportunity'],['status','Status','select','Draft|Sent|Accepted|Rejected|Expired'],['date','Quote date','date'],['valid','Valid until','date']]}
-function orderFields(){return [['number','Order number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['quoteId','Source quote (optional)','filteredQuote'],['status','Status','select','Draft|Confirmed|In Progress|Completed|Cancelled'],['date','Order date','date']]}
-function invoiceFields(){return [['number','Invoice number','auto'],['companyId','Customer','relation','companies'],['orderId','Source order (optional)','filteredOrder'],['status','Status','select','Draft|Sent|Partially Paid|Paid|Overdue|Cancelled'],['due','Due date','date']]}
-function contractFields(){return [['number','Contract number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['title','Title'],['value','Value','number'],['status','Status','select','Draft|Active|Renewal Due|Expired|Terminated'],['start','Start','date'],['end','End','date']]}
-function taskFields(){return [['taskNumber','Task ID','auto'],['title','Task title'],['relatedType','Related record type','select','General|Company|Contact|Opportunity|Quote|Order|Invoice|Contract'],['relatedId','Related record','dynamicRelation'],['owner','Owner'],['due','Due date','date'],['priority','Priority','select','Low|Medium|High|Urgent'],['status','Status','select','Open|In Progress|Completed|Cancelled']]}
+// v0.25 record-detail-page round: a handful of built-in fields added to
+// every core entity, matching what the desktop edition's Rust models
+// already carry (job_title/mobile/next_step/description/discount_cents/
+// terms/payment_terms/owner_user_id/type/renewal_date/... - see
+// core/src/models/*.rs) so the demo's field set catches up to desktop's
+// instead of drifting further apart. Optional and additive - every new
+// field is undefined on existing seed/localStorage records, which
+// fieldHtml already renders as blank, so nothing migrates.
+function companyFields(){return [['customerNumber','Customer ID','auto'],['name','Company name'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status','select','Lead|Prospect|Customer|Inactive'],['phone','Phone'],['email','Email'],['website','Website'],['annualRevenue','Annual revenue','number'],['employeeCount','Employees','number'],['preferredContactMethod','Preferred contact method','select','Email|Phone|Text']]}
+function contactFields(){return [['contactNumber','Contact ID','auto'],['name','Full name'],['companyId','Company','relation','companies'],['role','Role'],['email','Email'],['phone','Phone'],['status','Status','select','Active|Inactive'],['mobile','Mobile'],['department','Department'],['preferredContactMethod','Preferred contact method','select','Email|Phone|Text'],['linkedin','LinkedIn (optional)']]}
+function opportunityFields(){return [['opportunityNumber','Opportunity ID','auto'],['title','Opportunity title'],['companyId','Customer','relation','companies'],['contactId','Primary contact (optional)','filteredContact'],['value','Value','number'],['stage','Stage','select','Lead|Qualified|Discovery|Proposal|Negotiation|Won|Lost'],['probability','Probability %','number'],['close','Expected close','date'],['owner','Owner'],['status','Status','select','Open|On Hold|Won|Lost'],['lostReason','Lost reason (optional)'],['nextStep','Next step (optional)']]}
+function productFields(){return [['productNumber','Product ID','auto'],['name','Name'],['sku','SKU'],['type','Type','select','Product|Service'],['category','Category'],['price','Unit price','number'],['tax','Tax %','number'],['status','Status','select','Active|Inactive'],['description','Description (optional)']]}
+function quoteFields(){return [['number','Quote number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['opportunityId','Opportunity (optional)','filteredOpportunity'],['status','Status','select','Draft|Sent|Accepted|Rejected|Expired'],['date','Quote date','date'],['valid','Valid until','date'],['discount','Discount %','number'],['terms','Terms (optional)']]}
+function orderFields(){return [['number','Order number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['quoteId','Source quote (optional)','filteredQuote'],['status','Status','select','Draft|Confirmed|In Progress|Completed|Cancelled'],['date','Order date','date'],['discount','Discount %','number']]}
+function invoiceFields(){return [['number','Invoice number','auto'],['companyId','Customer','relation','companies'],['orderId','Source order (optional)','filteredOrder'],['status','Status','select','Draft|Sent|Partially Paid|Paid|Overdue|Cancelled'],['due','Due date','date'],['discount','Discount %','number'],['paymentTerms','Payment terms (optional)'],['amountPaid','Amount paid','number']]}
+function contractFields(){return [['number','Contract number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['title','Title'],['value','Value','number'],['status','Status','select','Draft|Active|Renewal Due|Expired|Terminated'],['start','Start','date'],['end','End','date'],['owner','Owner'],['type','Contract type','select','Service Agreement|Support|License|NDA|Other'],['renewalDate','Renewal date (optional)','date'],['noticePeriodDays','Notice period (days)','number']]}
+function taskFields(){return [['taskNumber','Task ID','auto'],['title','Task title'],['relatedType','Related record type','select','General|Company|Contact|Opportunity|Quote|Order|Invoice|Contract'],['relatedId','Related record','dynamicRelation'],['owner','Owner'],['due','Due date','date'],['priority','Priority','select','Low|Medium|High|Urgent'],['status','Status','select','Open|In Progress|Completed|Cancelled'],['description','Description (optional)']]}
 function pipeline(){
  let stages=['Lead','Qualified','Discovery','Proposal','Negotiation','Won','Lost'];
  if(viewFilter==='open')stages=['Lead','Qualified','Discovery','Proposal','Negotiation'];
@@ -827,14 +846,14 @@ function reportLostReasons(){
 }
 function reportArAging(asOf){
  const cutoff=asOf||new Date().toISOString().slice(0,10);
- // No balance_cents field in this demo - stand in with each invoice's full
- // total, and treat Paid the same as "no balance left" since there's no
- // partial-payment tracking to check instead.
+ // Now backed by the "Amount paid" field (new this round) via docBalance -
+ // still treats Paid the same as "no balance left" (its balance is 0 or
+ // close to it either way once amountPaid catches up to the total).
  const rows=data.invoices.filter(i=>!['Draft','Cancelled','Paid'].includes(i.status));
  const order=['Not yet due','1-30 days overdue','31-60 days overdue','61-90 days overdue','90+ days overdue','No due date'];
  const buckets=Object.fromEntries(order.map(b=>[b,{bucket:b,count:0,balance:0}]));
  rows.forEach(i=>{
-  const bal=docTotal(i);
+  const bal=docBalance(i);
   let key;
   if(!i.due)key='No due date';
   else{
@@ -977,18 +996,24 @@ function customReportModal(){
   customReportsTab($('#reportsBody'));
  };
 }
-// Phase 5 Customer/Contact 360: a company/contact reference anywhere in a
-// list becomes a clickable link into its 360 page, not just plain text.
-function cellValue(r,c){const [key,,type]=c;if(type==='money')return money(r[key]);if(type==='docmoney')return money(docTotal(r));if(type==='company')return r[key]?`<a class="cell-link" data-open-company="${r[key]}">${companyName(r[key])}</a>`:'—';if(type==='companyLink')return `<a class="cell-link" data-open-company="${r.id}">${r[key]}</a>`;if(type==='contactLink')return `<a class="cell-link" data-open-contact="${r.id}">${r[key]}</a>`;if(type==='opportunity')return opportunityName(r[key]);if(type==='quote')return quoteName(r[key]);if(type==='order')return orderName(r[key]);if(type==='related')return relatedLabel(r);return badgeMaybe(r[key])}
+// Phase 5 Customer/Contact 360, generalized in the v0.25 round: a
+// company/contact reference anywhere in a list becomes a clickable link
+// into its 360 page, and - new this round - every list's own ID column
+// does too via the 'idLink' column type (data-open-record="entityKey:id",
+// handled by openRecordDetail, the same generic router genericRecordDetail
+// uses). `entityKey` is the list's own entity (tablePage's `key`), not a
+// column value, since the ID column always points at its own row.
+function cellValue(r,c,entityKey){const [colKey,,type]=c;if(type==='money')return money(r[colKey]);if(type==='docmoney')return money(docTotal(r));if(type==='company')return r[colKey]?`<a class="cell-link" data-open-company="${r[colKey]}">${companyName(r[colKey])}</a>`:'—';if(type==='companyLink')return `<a class="cell-link" data-open-company="${r.id}">${r[colKey]}</a>`;if(type==='contactLink')return `<a class="cell-link" data-open-contact="${r.id}">${r[colKey]}</a>`;if(type==='idLink')return `<a class="cell-link" data-open-record="${entityKey}:${r.id}">${r[colKey]}</a>`;if(type==='opportunity')return opportunityName(r[colKey]);if(type==='quote')return quoteName(r[colKey]);if(type==='order')return orderName(r[colKey]);if(type==='related')return relatedLabel(r);return badgeMaybe(r[colKey])}
 function wireCellLinks(scope){
  scope.querySelectorAll('[data-open-company]').forEach(a=>a.onclick=(e)=>{e.stopPropagation();openCompanyDetail(a.dataset.openCompany)});
  scope.querySelectorAll('[data-open-contact]').forEach(a=>a.onclick=(e)=>{e.stopPropagation();openContactDetail(a.dataset.openContact)});
+ scope.querySelectorAll('[data-open-record]').forEach(a=>a.onclick=(e)=>{e.stopPropagation();const [k,id]=a.dataset.openRecord.split(':');openRecordDetail(k,id)});
 }
 function tablePage(key,cfg){
  let arr=data[key];
  if(key==='tasks'&&viewFilter==='open')arr=arr.filter(x=>!['Completed','Cancelled'].includes(x.status));
  if(key==='invoices'&&viewFilter==='outstanding')arr=arr.filter(x=>!['Paid','Cancelled'].includes(x.status));
- $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>${viewFilter?viewFilter.charAt(0).toUpperCase()+viewFilter.slice(1):labels[key]}</span></div><h1>${viewFilter==='open'&&key==='tasks'?'Open Tasks':viewFilter==='outstanding'?'Outstanding Invoices':labels[key]}</h1><p class="muted">${arr.length} connected records in the sample workspace</p></div><button class="btn btn-primary" id="addRecord">+ New ${labels[key].replace(/s$/,'')}</button></div><div class="table-wrap"><table class="table"><thead><tr>${cfg.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th>Actions</th></tr></thead><tbody>${arr.map(r=>`<tr>${cfg.cols.map(c=>`<td>${cellValue(r,c)}</td>`).join('')}<td><div class="actions"><button class="icon-btn" data-edit="${r.id}">Edit</button><button class="icon-btn" data-del="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No records yet</div>'}</div>`;
+ $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>${viewFilter?viewFilter.charAt(0).toUpperCase()+viewFilter.slice(1):labels[key]}</span></div><h1>${viewFilter==='open'&&key==='tasks'?'Open Tasks':viewFilter==='outstanding'?'Outstanding Invoices':labels[key]}</h1><p class="muted">${arr.length} connected records in the sample workspace</p></div><button class="btn btn-primary" id="addRecord">+ New ${labels[key].replace(/s$/,'')}</button></div><div class="table-wrap"><table class="table"><thead><tr>${cfg.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th>Actions</th></tr></thead><tbody>${arr.map(r=>`<tr>${cfg.cols.map(c=>`<td>${cellValue(r,c,key)}</td>`).join('')}<td><div class="actions"><button class="icon-btn" data-edit="${r.id}">Edit</button><button class="icon-btn" data-del="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No records yet</div>'}</div>`;
  document.querySelector('[data-clear-filter]')?.addEventListener('click',()=>{current='dashboard';viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  $('#addRecord').onclick=()=>recordModal(key,cfg.fields());
@@ -1007,9 +1032,21 @@ function fieldHtml(f,record){const [name,label,type,opts]=f;const extra=f[4];con
  return `<div class="field ${name==='title'?'full':''}"><label>${label}</label><input name="${name}" type="${type||'text'}" value="${val}" placeholder="${extra?.placeholder||''}" ${req} ${extraAttrs}>${help}</div>`}
 function lineItemsHtml(items=[]){const rows=(items.length?items:[{productId:'',quantity:1,unitPrice:0}]).map(lineRow).join('');return `<div class="full line-items"><div class="line-head"><h3>Products & services</h3><button type="button" class="btn btn-secondary" id="addLine">+ Add line</button></div><div id="lineRows">${rows}</div><div class="line-total">Total <strong id="docTotal">${money(items.reduce((s,i)=>s+lineTotal(i),0))}</strong></div></div>`}
 function lineRow(i={productId:'',quantity:1,unitPrice:0}){return `<div class="line-row"><div class="field"><label>Product / service</label><select class="line-product">${options(data.products.filter(p=>p.status==='Active'),i.productId)}</select></div><div class="field"><label>Quantity</label><input class="line-qty" type="number" min="0.01" step="0.01" value="${i.quantity??1}"></div><div class="field"><label>Unit price</label><input class="line-price" type="number" min="0" step="0.01" value="${i.unitPrice??0}"></div><div class="line-subtotal">${money(lineTotal(i))}</div><button type="button" class="icon-btn line-remove">Remove</button></div>`}
-// ---- Customer 360 / Contact 360 (Phase 5) ---------------------------------
+// ---- Customer 360 / Contact 360 (Phase 5), generalized in the v0.25
+// round to every entity that now has a detail page. ------------------------
 function openCompanyDetail(id){current='companies';detailRecord={type:'companies',id};renderView()}
 function openContactDetail(id){current='contacts';detailRecord={type:'contacts',id};renderView()}
+// The generic entry point every ID-column link and every related-record row
+// (data-open-record / data-nav-related) goes through - opportunities have
+// no detail page (kanban pipeline only), so that one still lands on its
+// list instead.
+const DETAIL_PAGE_ENTITIES=new Set(['companies','contacts','products','quotes','orders','invoices','contracts','tasks']);
+function openRecordDetail(key,id){
+ if(!DETAIL_PAGE_ENTITIES.has(key)){current=key==='opportunities'?'pipeline':key;viewFilter=null;detailRecord=null;renderView();return}
+ if(key==='companies')return openCompanyDetail(id);
+ if(key==='contacts')return openContactDetail(id);
+ current=key;detailRecord={type:key,id};renderView();
+}
 // A card of related records for the 360 page's right column - each row
 // navigates to that record's own list (or its own 360 page, for another
 // company/contact), the same click-through pattern as a cell-link.
@@ -1019,9 +1056,7 @@ function relatedCardHtml(title,items,navKey,labelFn,metaFn){
 function wireRelatedRows(scope){
  scope.querySelectorAll('[data-nav-related]').forEach(a=>a.onclick=()=>{
   const [navKey,id]=a.dataset.navRelated.split(':');
-  if(navKey==='companies')return openCompanyDetail(id);
-  if(navKey==='contacts')return openContactDetail(id);
-  current=navKey==='opportunities'?'pipeline':navKey; viewFilter=null; detailRecord=null; renderView();
+  openRecordDetail(navKey,id);
  });
 }
 function detail360Header(breadcrumbLabel,title,eyebrow,metaHtml){
@@ -1084,6 +1119,85 @@ function contactDetail(id){
   </div>
  </div>`;
  wireDetail360Nav(()=>recordModal('contacts',fieldsFor('contacts',contactFields),c));
+}
+// ---- Generic record detail pages for Products/Quotes/Orders/Invoices/
+// Contracts/Tasks (v0.25 round) - Companies/Contacts keep their existing
+// bespoke companyDetail/contactDetail above (entity-specific enough
+// already); everything else shares one config-driven renderer, the same
+// "config once, one generic function" pattern tablePage's `configs`
+// already uses for list columns.
+const DETAIL_FIELDS_FN={products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields};
+const DETAIL_BREADCRUMB={products:'Products',quotes:'Quotes',orders:'Orders',invoices:'Invoices',contracts:'Contracts',tasks:'Tasks'};
+const DETAIL_TITLE_FIELD={products:'name',quotes:'number',orders:'number',invoices:'number',contracts:'title',tasks:'title'};
+const DETAIL_EYEBROW=(key,r)=>key==='products'?r.productNumber:key==='tasks'?r.taskNumber:key==='contracts'?r.number:(ENTITY_SINGULAR[key]||'').replace(/^./,c=>c.toUpperCase());
+// The badges/links row under the H1 - status plus whatever this record
+// points at (company/contact/source document), each a live link into
+// that record's own detail page via data-nav-related.
+function recordEyebrowMeta(key,r){
+ const relLink=(navKey,id,label)=>id?`<a class="cell-link" data-nav-related="${navKey}:${id}">${label}</a>`:'';
+ switch(key){
+  case 'products':return `${badgeMaybe(r.status)}<span>${r.type||''}</span>`;
+  case 'quotes':return `${badgeMaybe(r.status)}${relLink('companies',r.companyId,companyName(r.companyId))}${relLink('contacts',r.contactId,contactName(r.contactId))}${relLink('opportunities',r.opportunityId,opportunityName(r.opportunityId))}`;
+  case 'orders':return `${badgeMaybe(r.status)}${relLink('companies',r.companyId,companyName(r.companyId))}${relLink('contacts',r.contactId,contactName(r.contactId))}${relLink('quotes',r.quoteId,r.quoteId?`from ${quoteName(r.quoteId)}`:'')}`;
+  case 'invoices':return `${badgeMaybe(r.status)}${relLink('companies',r.companyId,companyName(r.companyId))}${relLink('orders',r.orderId,r.orderId?`from ${orderName(r.orderId)}`:'')}`;
+  case 'contracts':return `${badgeMaybe(r.status)}${relLink('companies',r.companyId,companyName(r.companyId))}${relLink('contacts',r.contactId,contactName(r.contactId))}`;
+  case 'tasks':{
+   const navKey={Company:'companies',Contact:'contacts',Opportunity:'opportunities',Quote:'quotes',Order:'orders',Invoice:'invoices',Contract:'contracts'}[r.relatedType];
+   return `${badgeMaybe(r.status)}<span>${r.priority||''}</span>${navKey?relLink(navKey,r.relatedId,relatedLabel(r)):'<span>General</span>'}`;
+  }
+  default:return '';
+ }
+}
+// Which related-record cards to show, per entity - built from data
+// already loaded client-side (no new query needed), same filter-in-JS
+// approach companyDetail/contactDetail already use.
+function recordRelatedDefs(key,r){
+ switch(key){
+  case 'products':return [
+   ['Quotes',data.quotes.filter(q=>(q.items||[]).some(i=>i.productId===r.id)),'quotes',x=>x.number,x=>x.status],
+   ['Orders',data.orders.filter(o=>(o.items||[]).some(i=>i.productId===r.id)),'orders',x=>x.number,x=>x.status],
+   ['Invoices',data.invoices.filter(i=>(i.items||[]).some(li=>li.productId===r.id)),'invoices',x=>x.number,x=>x.status],
+  ];
+  case 'quotes':return [
+   ['Orders created from this quote',data.orders.filter(o=>o.quoteId===r.id),'orders',x=>x.number,x=>x.status],
+   ['Tasks',data.tasks.filter(t=>t.relatedType==='Quote'&&t.relatedId===r.id),'tasks',x=>x.title,x=>x.status],
+  ];
+  case 'orders':return [
+   ['Invoices created from this order',data.invoices.filter(i=>i.orderId===r.id),'invoices',x=>x.number,x=>x.status],
+   ['Tasks',data.tasks.filter(t=>t.relatedType==='Order'&&t.relatedId===r.id),'tasks',x=>x.title,x=>x.status],
+  ];
+  case 'invoices':return [['Tasks',data.tasks.filter(t=>t.relatedType==='Invoice'&&t.relatedId===r.id),'tasks',x=>x.title,x=>x.status]];
+  case 'contracts':return [['Tasks',data.tasks.filter(t=>t.relatedType==='Contract'&&t.relatedId===r.id),'tasks',x=>x.title,x=>x.status]];
+  default:return [];
+ }
+}
+// Overview panels are built generically from each entity's field tuples,
+// which don't carry a distinct "money" type the way tablePage's column
+// configs do (a form input for a dollar amount is just type "number") - so
+// money-valued fields are called out explicitly here to render through
+// money() instead of the plain badgeMaybe() every other field gets.
+const MONEY_OVERVIEW_FIELDS={companies:['annualRevenue'],contracts:['value'],invoices:['amountPaid']};
+function overviewValueHtml(key,f,r){
+ if((MONEY_OVERVIEW_FIELDS[key]||[]).includes(f[0])&&r[f[0]]!==undefined&&r[f[0]]!=='')return money(r[f[0]]);
+ return badgeMaybe(r[f[0]]);
+}
+function genericRecordDetail(key,id){
+ const r=byId(key,id);
+ if(!r){current=key;detailRecord=null;return renderView()}
+ const fieldsFn=DETAIL_FIELDS_FN[key];
+ const relationTypes=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation'];
+ const overviewFields=fieldsFor(key,fieldsFn).filter(f=>!relationTypes.includes(f[2])&&f[0]!==DETAIL_TITLE_FIELD[key]);
+ const isDoc=['quotes','orders','invoices'].includes(key);
+ const linesHtml=isDoc?`<div class="panel" style="margin-bottom:16px"><h3 style="margin-top:0">Products & services</h3><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table><div class="line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="muted" style="font-size:13px;font-weight:400">· Balance ${money(docBalance(r))}</span>`:''}</div></div>`:'';
+ $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],r[DETAIL_TITLE_FIELD[key]]||'—',DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r))}
+ <div class="rule360-grid">
+  <div>
+   ${linesHtml}
+   <div class="panel"><h3 style="margin-top:0">Overview</h3><div class="form-grid" style="margin-top:0">${overviewFields.map(f=>`<div class="field"><label>${f[1]}</label><div>${overviewValueHtml(key,f,r)}</div></div>`).join('')}</div></div>
+  </div>
+  <div>${recordRelatedDefs(key,r).map(([title,items,navKey,labelFn,metaFn])=>relatedCardHtml(title,items,navKey,labelFn,metaFn)).join('')}</div>
+ </div>`;
+ wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r));
 }
 function recordModal(key,fields,record={}){
  const isDoc=['quotes','orders','invoices'].includes(key);
