@@ -159,20 +159,34 @@ function migrateFieldRule(r){
  r.matchType='all';
  r.actions=[{type:r.effect==='hide'?'hide':'require',targetField:r.fieldKey,value:'',message:''}];
 }
-// Workflows keep their single trigger (triggerField/operator/toValue/
-// compareField) unchanged - it's still the one thing that must have JUST
-// changed for the rule to fire at all, same as the desktop edition's
-// trigger_type/trigger_field_key. `conditions` is new: optional *extra*
-// AND/OR filters evaluated only once the trigger itself already fired -
-// empty by default, meaning "fires on every trigger", exactly the
-// pre-existing behavior. `actions` replaces the single top-level
-// actionType/taskTitle/etc. fields with an array.
+// v0.25 bug-report round: the separate "Trigger" (triggerField/operator/
+// toValue/compareField) and "Extra conditions" sections were confusing -
+// two places to define what amounts to one thing, unlike Salesforce/
+// Dynamics' single unified entry-criteria list. They're now folded into
+// one `conditions[]` (+ `matchType`), one-time and idempotent (guarded by
+// `conditionsMerged`, so a rule already saved under the new unified
+// builder is left untouched). The old trigger becomes the first,
+// ungrouped condition (always AND'd in) so it's still mandatory; if the
+// old extra conditions used matchType 'any' with more than one condition,
+// they're bundled into a single OR-group so "trigger AND (extra1 OR
+// extra2)" keeps meaning exactly what it did before - see
+// groupConditionUnits/conditionsMatch for how a group is evaluated as one
+// unit. `actions` replaces the single top-level actionType/taskTitle/etc.
+// fields with an array, same as before.
 function migrateWorkflowRule(r){
  if(r.active===undefined)r.active=true;
- if(!r.operator)r.operator='equals';
- if(!r.triggerField)r.triggerField=transitionFieldFor(r.entity);
  if(!r.conditions)r.conditions=[];
  if(!r.matchType)r.matchType='all';
+ if(!r.conditionsMerged){
+  if(!r.operator)r.operator='equals';
+  if(!r.triggerField)r.triggerField=transitionFieldFor(r.entity);
+  const trigger={fieldKey:r.triggerField,operator:r.operator,value:r.toValue||'',compareField:r.compareField||null,groupId:null};
+  const extras=r.conditions.map(c=>({...c}));
+  if(extras.length>1&&r.matchType==='any'){const gid=newGroupId();extras.forEach(c=>c.groupId=gid)}
+  r.conditions=[trigger,...extras];
+  r.matchType='all';
+  r.conditionsMerged=true;
+ }
  if(r.actions)return;
  const actionType=r.actionType||'create_task';
  const action={type:actionType};
@@ -1126,25 +1140,27 @@ function recordModal(key,fields,record={}){
  // 'General' for anything relatedTypeFor doesn't cover (see
  // executeWorkflowAction below), so custom objects fire workflows too.
  if(wasEdit&&before){
-  // Each workflow rule watches its own field (not just status/stage) - fire
-  // only when that field actually changed, the rule is active, and the
-  // rule's operator matches.
+  // v0.25: one unified Conditions list per rule (see migrateWorkflowRule) -
+  // fires only when at least one field the conditions actually reference
+  // changed on this save (create has no "before" snapshot, so only edits
+  // can fire, same as the old single-trigger-field check) AND the full
+  // condition set matches the just-saved record. This is the standard
+  // Salesforce/Dynamics "entry criteria" pattern: one list of conditions,
+  // re-evaluated on save, instead of a separate mandatory trigger plus
+  // optional extra filters.
   (data.workflowRules||[]).filter(r=>r.entity===key&&r.active).forEach(r=>{
-   const wf=r.triggerField||transitionFieldFor(key);
-   if(obj[wf]===undefined||obj[wf]===before[wf])return;
-   // Field-to-field comparison: compare against the other field's value
-   // on the just-saved record instead of the rule's fixed toValue.
-   const compareValue=r.compareField?(obj[r.compareField]??''):r.toValue;
-   if(!operatorMatch(r.operator||'equals',obj[wf],compareValue))return;
-   // Extra AND/OR conditions (optional, second addendum round) - evaluated
-   // against the just-saved record once the trigger itself already fired;
-   // an empty list always passes, matching desktop's workflow_matches.
-   if(r.conditions&&r.conditions.length&&!conditionsMatch(r.matchType||'all',r.conditions,obj))return;
+   const conditions=r.conditions||[];
+   if(!conditions.length)return;
+   const watchedFields=new Set();
+   conditions.forEach(c=>{watchedFields.add(c.fieldKey);if(c.compareField)watchedFields.add(c.compareField)});
+   const anyChanged=[...watchedFields].some(f=>obj[f]!==undefined&&obj[f]!==before[f]);
+   if(!anyChanged)return;
+   if(!conditionsMatch(r.matchType||'all',conditions,obj))return;
    const descriptions=(r.actions||[]).map(a=>executeWorkflowAction(a,key,record)).filter(Boolean);
    if(!descriptions.length)return; // e.g. update_related_record with nothing linked yet - a silent no-op, same as desktop
    if(r.notify){
     const label=obj.name||obj.title||obj.number||entityLabel(key);
-    data.notifications.unshift({id:uid(),message:`${entityLabel(key).replace(/s$/,'')} "${label}" — ${fieldLabelFor(key,wf)} ${OPERATOR_LABELS[r.operator||'equals']}${operatorNeedsValue(r.operator||'equals')?` ${describeComparand(key,r.compareField,r.toValue)}`:''} — ${descriptions.join('; ')}`,createdAt:new Date().toISOString(),read:false});
+    data.notifications.unshift({id:uid(),message:`${entityLabel(key).replace(/s$/,'')} "${label}" — ${describeConditions(key,conditions,r.matchType||'all')} — ${descriptions.join('; ')}`,createdAt:new Date().toISOString(),read:false});
    }
   });
  }
@@ -1844,12 +1860,7 @@ function wireRuleTestPanel(entityKey){
 function wireWorkflowTestPanel(entityKey){
  const form=$('#testForm'); if(!form)return;
  form.onsubmit=e=>{e.preventDefault();const hyp=Object.fromEntries(new FormData(form).entries());
-  const matches=(data.workflowRules||[]).filter(r=>r.entity===entityKey&&r.active).filter(r=>{
-   const tf=r.triggerField||transitionFieldFor(entityKey);
-   const compareValue=r.compareField?(hyp[r.compareField]??''):r.toValue;
-   if(!operatorMatch(r.operator||'equals',hyp[tf],compareValue))return false;
-   return !(r.conditions&&r.conditions.length)||conditionsMatch(r.matchType||'all',r.conditions,hyp);
-  });
+  const matches=(data.workflowRules||[]).filter(r=>r.entity===entityKey&&r.active).filter(r=>r.conditions&&r.conditions.length&&conditionsMatch(r.matchType||'all',r.conditions,hyp));
   $('#testResults').innerHTML=matches.length?`<strong>${matches.length} matching workflow(s):</strong>${matches.map(r=>`<div class="deal" style="margin-top:8px">Would ${(r.actions||[]).map(a=>describeWorkflowAction(a,entityKey)).join('; ')}${r.notify?' and notify admins':''}</div>`).join('')}`:'<div class="empty">No active workflow matches these values.</div>';
  };
 }
@@ -1913,16 +1924,45 @@ function renderRuleBuilder(body){
    <h4>Rule summary</h4>
    <div class="summary-row"><span class="label">Applies to</span><span class="value">${entityLabel(entityKey)}</span></div>
    <div class="summary-row"><span class="label">Execute on</span><span class="value">Create and edit</span></div>
+   <div class="summary-row"><span class="label">Conditions</span><span class="value" id="summaryConditions"></span></div>
+   <div class="summary-row"><span class="label">Field dependency</span><span class="value" id="summaryFieldDep"></span></div>
+   <div class="summary-row"><span class="label">Stop processing</span><span class="value" id="summaryStop"></span></div>
   </div>
  </div>
- <div style="margin-top:4px"><button type="button" class="btn btn-secondary" id="ruleBuilderCancel">Cancel</button></div>
+ <div style="margin-top:4px;display:flex;gap:8px">
+  <button type="button" class="btn btn-secondary" id="ruleBuilderCancel">Cancel</button>
+  ${isEdit?`<button type="button" class="btn btn-secondary" id="ruleBuilderToggleActive2">${existing.active?'Deactivate':'Activate'}</button>`:''}
+  <button class="btn btn-primary" type="submit" form="ruleBuilderForm">${isEdit?'Save':'Add rule'}</button>
+ </div>
  </form>`;
  const form=$('#ruleBuilderForm');
  const condEditor=mountConditionsEditor($('#rbConditions',form),condFields,initialConditions,existing?.matchType||'all');
  const actEditor=mountActionsEditor($('#rbActions',form),actionFields,initialActions,actionFields[0]?.[0]||'');
+ // Live-updating summary panel, mirroring the desktop edition's - re-derived
+ // from the editors' own state (not the form's raw FormData, since row
+ // count changes dynamically) on every change/input inside the form.
+ function updateSummary(){
+  const conditions=condEditor.getConditions(), matchType=condEditor.getMatchType(), actions=actEditor.getActions();
+  const targets=[...new Set(actions.map(a=>a.targetField).filter(Boolean))].map(f=>fieldLabelFor(entityKey,f));
+  $('#summaryConditions').innerHTML=describeConditions(entityKey,conditions,matchType);
+  $('#summaryFieldDep').textContent=targets.length?targets.join(', '):'—';
+  $('#summaryStop').textContent=actions.some(a=>a.type==='block_save')?'Yes':'No';
+ }
+ form.addEventListener('change',updateSummary);
+ form.addEventListener('input',updateSummary);
+ // Adding/removing a condition or action row re-renders its container via
+ // innerHTML - a structural change, not a form 'change'/'input' event - so
+ // a MutationObserver is what actually catches it (this is exactly the
+ // kind of edit that left the old summary panel stale).
+ const summaryObserver=new MutationObserver(updateSummary);
+ summaryObserver.observe($('#rbConditions',form),{childList:true,subtree:true});
+ summaryObserver.observe($('#rbActions',form),{childList:true,subtree:true});
+ updateSummary();
  $('#ruleBuilderTest').onclick=()=>{testingRules=!testingRules;renderAdminTab()};
  if(testingRules)wireRuleTestPanel(entityKey);
- $('#ruleBuilderToggleActive')?.addEventListener('click',()=>{existing.active=!existing.active;save();toast(existing.active?'Rule activated':'Rule deactivated');renderAdminTab()});
+ const toggleActive=()=>{existing.active=!existing.active;save();toast(existing.active?'Rule activated':'Rule deactivated');renderAdminTab()};
+ $('#ruleBuilderToggleActive')?.addEventListener('click',toggleActive);
+ $('#ruleBuilderToggleActive2')?.addEventListener('click',toggleActive);
  $('#ruleBuilderCancel').onclick=()=>{ruleBuilderMode=null;testingRules=false;renderAdminTab()};
  form.onsubmit=e=>{e.preventDefault();
   const conditions=condEditor.getConditions(), matchType=condEditor.getMatchType(), actions=actEditor.getActions();
@@ -2309,9 +2349,9 @@ function workflowTab(body){
  if(wfBuilderMode){renderWorkflowBuilder(body);return}
  const keys=[...Object.keys(relatedTypeFor),...activeCustomObjectKeys()];
  const list=(data.workflowRules||[]).filter(r=>r.entity===wfEntity);
- body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Workflow automation</h3><p class="muted">Trigger any number of actions - create a task, create a new record, update a related record, or update/default/clear a field on this record - when a field changes and matches a comparison, with optional extra AND/OR conditions.</p>
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Workflow automation</h3><p class="muted">Trigger any number of actions - create a task, create a new record, update a related record, or update/default/clear a field on this record - when a saved record's changed fields match a set of AND/OR conditions (with one level of OR-groups).</p>
  ${entityPills(keys,wfEntity)}
- <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Then</th><th>Notifies admins</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${fieldLabelFor(r.entity,r.triggerField||transitionFieldFor(r.entity))} ${OPERATOR_LABELS[r.operator||'equals']}${operatorNeedsValue(r.operator||'equals')?' '+describeComparand(r.entity,r.compareField,r.toValue):''}${r.conditions&&r.conditions.length?` AND ${describeConditions(r.entity,r.conditions,r.matchType||'all')}`:''}</td><td>${(r.actions||[]).map(a=>describeWorkflowAction(a,r.entity)).join('; ')}</td><td>${r.notify?'Yes':'No'}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-wf="${r.id}">Edit</button><button class="icon-btn" data-del-wf="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No workflow rules on '+entityLabel(wfEntity)+' yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Then</th><th>Notifies admins</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${describeConditions(r.entity,r.conditions,r.matchType||'all')}</td><td>${(r.actions||[]).map(a=>describeWorkflowAction(a,r.entity)).join('; ')}</td><td>${r.notify?'Yes':'No'}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-wf="${r.id}">Edit</button><button class="icon-btn" data-del-wf="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No workflow rules on '+entityLabel(wfEntity)+' yet</div>'}</div>
  <button class="btn btn-secondary" id="addWf" style="margin-top:14px">+ New workflow rule</button>
  </div>`;
  body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{wfEntity=b.dataset.entity;renderAdminTab()});
@@ -2400,21 +2440,23 @@ function mountWorkflowActionsEditor(container,entityKey,initialActions){
  render();
  return {getActions:()=>{syncFromDom();return actions}};
 }
-// Workflow-builder page: a Trigger/Conditions/Actions left column paired
-// with a live visual canvas on the right (Trigger -> [Conditions] ->
-// Actions -> End), extended in the second Admin Automation & Customization
-// addendum round with an optional extra-conditions section (AND/OR, one
-// level of OR-groups - empty by default, meaning "fires on every trigger")
-// and a multi-action editor, replacing the single-action-only version.
+// Workflow-builder page: a Conditions/Actions left column paired with a
+// live visual canvas on the right (Trigger -> Conditions -> Actions ->
+// End). v0.25 bug-report round: the old separate "Trigger" (one mandatory
+// field/operator/value) and "Extra conditions" (optional AND/OR) sections
+// are merged into one unified Conditions section - the Salesforce/Dynamics
+// "entry criteria" pattern - reusing mountConditionsEditor exactly as the
+// business rule builder does, instead of a bespoke single-condition widget
+// plus a second multi-condition editor bolted on next to it.
 function renderWorkflowBuilder(body){
  const isEdit=wfBuilderMode!=='create';
  const existing=isEdit?data.workflowRules.find(r=>r.id===wfBuilderMode):null;
  if(isEdit&&!existing){wfBuilderMode=null;renderAdminTab();return}
  const entityKey=existing?existing.entity:wfEntity;
  const condFields=conditionFieldsFor(entityKey);
- const defaultField=existing?.triggerField||transitionFieldFor(entityKey);
  const recordTargets=createRecordTargetsFor(entityKey);
  const relTargets=relTargetsFor(entityKey);
+ const initialConditions=existing?.conditions?.length?existing.conditions:[{fieldKey:transitionFieldFor(entityKey),operator:'equals',value:'',compareField:null,groupId:null}];
  const initialActions=existing?.actions?.length?existing.actions:[emptyWorkflowAction('create_task',entityKey,recordTargets,relTargets)];
  body.innerHTML=`<div class="builder-header">
   <div>
@@ -2433,57 +2475,68 @@ function renderWorkflowBuilder(body){
  <div class="workflow-builder-layout">
   <div>
    <div class="builder-section">
-    <div class="builder-section-title"><span class="step-badge">1</span> Trigger</div>
-    <div class="form-grid">
-     <div class="field"><label>Watch field</label><select name="triggerField" id="wfField">${condFields.map(f=>`<option value="${f[0]}" ${f[0]===defaultField?'selected':''}>${f[1]}</option>`).join('')}</select></div>
-     <div id="wfDynamic" style="display:contents">${conditionDynamicHtml(condFields,defaultField,existing?.operator||'equals',existing?.toValue||'',existing?.compareField||null).replaceAll('name="triggerValue"','name="toValue"')}</div>
-    </div>
-   </div>
-   <div class="builder-section">
-    <div class="builder-section-title"><span class="step-badge">2</span> Extra conditions (optional)</div>
-    <p class="muted" style="margin-top:-4px">Fires on every trigger match by default - add conditions to narrow it further.</p>
+    <div class="builder-section-title"><span class="step-badge">1</span> Conditions</div>
+    <p class="muted" style="margin-top:-4px">Runs whenever a saved ${entityLabel(entityKey).toLowerCase().replace(/s$/,'')} matches the conditions below - add more (AND/OR, with one level of OR-groups) to narrow it down.</p>
     <div id="wfConditions"></div>
    </div>
    <div class="builder-section">
-    <div class="builder-section-title"><span class="step-badge">3</span> Actions</div>
+    <div class="builder-section-title"><span class="step-badge">2</span> Actions</div>
     <div id="wfActions"></div>
     <div class="field" style="max-width:220px;margin-top:10px"><label>Also notify admins?</label><select name="notify"><option value="false" ${!existing?.notify?'selected':''}>No</option><option value="true" ${existing?.notify?'selected':''}>Yes</option></select></div>
    </div>
   </div>
   <div class="workflow-canvas-wrap">
-   <div class="workflow-node workflow-node-trigger"><div class="workflow-node-head">Trigger</div><div class="workflow-node-body"><strong>${entityLabel(entityKey)}</strong><small id="canvasTrigger"></small></div></div>
+   <div class="workflow-node workflow-node-trigger"><div class="workflow-node-head">Trigger</div><div class="workflow-node-body"><strong>${entityLabel(entityKey)}</strong><small>Record created or edited</small></div></div>
+   <div class="workflow-connector">▼</div>
+   <div class="workflow-node workflow-node-conditions"><div class="workflow-node-head">Conditions</div><div class="workflow-node-body" id="canvasConditions"></div></div>
    <div class="workflow-connector">▼</div>
    <div class="workflow-node workflow-node-actions"><div class="workflow-node-head">Actions</div><div class="workflow-node-body" id="canvasAction"></div></div>
    <div class="workflow-connector">▼</div>
    <div class="workflow-end-node">END</div>
   </div>
  </div>
- <div style="margin-top:4px"><button type="button" class="btn btn-secondary" id="wfBuilderCancel">Cancel</button></div>
+ <div style="margin-top:4px;display:flex;gap:8px">
+  <button type="button" class="btn btn-secondary" id="wfBuilderCancel">Cancel</button>
+  ${isEdit?`<button type="button" class="btn btn-secondary" id="wfBuilderToggleActive2">${existing.active?'Deactivate':'Activate'}</button>`:''}
+  <button class="btn btn-primary" type="submit" form="wfBuilderForm">${isEdit?'Save':'Add rule'}</button>
+ </div>
  </form>`;
  const form=$('#wfBuilderForm');
- wireConditionPicker(form,form.elements.triggerField,$('#wfDynamic',form),condFields,'toValue');
- const condEditor=mountConditionsEditor($('#wfConditions',form),condFields,existing?.conditions||[],existing?.matchType||'all');
+ const condEditor=mountConditionsEditor($('#wfConditions',form),condFields,initialConditions,existing?.matchType||'all');
  const actEditor=mountWorkflowActionsEditor($('#wfActions',form),entityKey,initialActions);
  // The live canvas mirrors whatever the form currently says - re-derived
- // from the form's own values on every change, the same "what will
- // actually happen" summary the desktop canvas gives at a glance.
+ // from the editors' own state on every change, the same "what will
+ // actually happen" summary the desktop canvas gives at a glance. The
+ // Conditions node honors OR-groups exactly like the builder rows above it.
  function updateCanvas(){
-  const tf=form.elements.triggerField.value, op=form.elements.operator?.value||'equals';
-  const needsValue=operatorNeedsValue(op);
-  const val=form.elements.toValue?.value||(form.elements.compareField?fieldLabelFor(entityKey,form.elements.compareField.value):'');
-  $('#canvasTrigger').textContent=`When ${fieldLabelFor(entityKey,tf)} ${OPERATOR_LABELS[op]||'is'}${needsValue?' '+(val||'…'):''}`;
+  const conditions=condEditor.getConditions(), matchType=condEditor.getMatchType();
+  const units=groupConditionUnits(conditions);
+  $('#canvasConditions').innerHTML=units.length?units.map((u,ui)=>{
+   const divider=ui>0?`<span class="workflow-match-chip">${matchType==='all'?'AND':'OR'}</span>`:'';
+   if(u.kind==='single')return divider+`<span class="workflow-condition-chip">${describeCondition(entityKey,conditions[u.index])}</span>`;
+   const rows=u.indices.map((idx,mi)=>(mi>0?'<span class="workflow-match-chip">OR</span>':'')+`<span class="workflow-condition-chip">${describeCondition(entityKey,conditions[idx])}</span>`).join('');
+   return divider+`<div class="workflow-or-group"><div class="workflow-or-group-label">OR group</div>${rows}</div>`;
+  }).join(''):'<p class="empty" style="padding:8px">No conditions yet</p>';
   const actions=actEditor.getActions();
   $('#canvasAction').innerHTML=actions.length?actions.map(a=>`<div><strong>${WORKFLOW_ACTION_LABELS[a.type]||'Action'}</strong><small>${describeWorkflowAction(a,entityKey)}</small></div>`).join(''):'<p class="empty" style="padding:8px">No actions yet</p>';
  }
  form.addEventListener('change',updateCanvas);
  form.addEventListener('input',updateCanvas);
+ // Same MutationObserver fallback as the rule builder's summary panel - a
+ // pure add/remove-row re-render doesn't fire 'change'/'input' on the form.
+ const canvasObserver=new MutationObserver(updateCanvas);
+ canvasObserver.observe($('#wfConditions',form),{childList:true,subtree:true});
+ canvasObserver.observe($('#wfActions',form),{childList:true,subtree:true});
  updateCanvas();
  $('#wfBuilderTest').onclick=()=>{testingWorkflow=!testingWorkflow;renderAdminTab()};
  if(testingWorkflow)wireWorkflowTestPanel(entityKey);
- $('#wfBuilderToggleActive')?.addEventListener('click',()=>{existing.active=!existing.active;save();toast(existing.active?'Rule activated':'Rule deactivated');renderAdminTab()});
+ const toggleActive=()=>{existing.active=!existing.active;save();toast(existing.active?'Rule activated':'Rule deactivated');renderAdminTab()};
+ $('#wfBuilderToggleActive')?.addEventListener('click',toggleActive);
+ $('#wfBuilderToggleActive2')?.addEventListener('click',toggleActive);
  $('#wfBuilderCancel').onclick=()=>{wfBuilderMode=null;testingWorkflow=false;renderAdminTab()};
  form.onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(form).entries());
-  const actions=actEditor.getActions();
+  const conditions=condEditor.getConditions(), matchType=condEditor.getMatchType(), actions=actEditor.getActions();
+  if(!conditions.length)return alert('Add at least one condition.');
   if(!actions.length)return alert('Add at least one action.');
   for(const a of actions){
    if(a.type==='create_task'&&!a.taskTitle)return alert('Enter a task title.');
@@ -2491,12 +2544,7 @@ function renderWorkflowBuilder(body){
    if(a.type==='update_related_record'&&!a.relValue)return alert('Enter the value to write on the related record.');
    if((a.type==='update_field'||a.type==='set_default_field')&&!a.updateCopyFrom&&!a.updateValue)return alert('Enter a value to write, or a field to copy from.');
   }
-  const payload={
-   entity:entityKey,triggerField:fd.triggerField,operator:fd.operator,toValue:fd.toValue||'',
-   compareField:fd.compareField||null,notify:fd.notify==='true',
-   conditions:condEditor.getConditions(),matchType:condEditor.getMatchType(),
-   actions,
-  };
+  const payload={entity:entityKey,notify:fd.notify==='true',conditions,matchType,actions,conditionsMerged:true};
   if(isEdit){Object.assign(existing,payload)}else{data.workflowRules.push({id:uid(),active:true,...payload})}
   save();toast(isEdit?'Workflow rule saved':'Workflow rule added');wfBuilderMode=null;testingWorkflow=false;renderView()};
 }
