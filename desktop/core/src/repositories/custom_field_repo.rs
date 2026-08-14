@@ -33,6 +33,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomFieldDefinition> {
         is_unique: row.get("is_unique")?,
         help_text: row.get("help_text")?,
         placeholder: row.get("placeholder")?,
+        is_hidden_by_default: row.get("is_hidden_by_default")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -52,15 +53,15 @@ pub fn create_definition(
         "INSERT INTO custom_field_definitions
             (id, workspace_id, entity_type, key, label, field_type, options_json, required, show_in_list, sort_order, is_active,
              min_value, max_value, max_length, regex_pattern, is_searchable, is_filterable, is_reportable,
-             default_value, is_unique, help_text, placeholder, created_at, created_by, updated_at, updated_by)
+             default_value, is_unique, help_text, placeholder, is_hidden_by_default, created_at, created_by, updated_at, updated_by)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                 ?18, ?19, ?20, ?21, ?22, ?23, ?22, ?23)",
+                 ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?23, ?24)",
         rusqlite::params![
             id, workspace_id, input.entity_type, key, input.label, input.field_type,
             options_json, input.required, input.show_in_list, input.sort_order,
             input.min_value, input.max_value, input.max_length, input.regex_pattern,
             input.is_searchable, input.is_filterable, input.is_reportable,
-            input.default_value, input.is_unique, input.help_text, input.placeholder, now, actor_user_id,
+            input.default_value, input.is_unique, input.help_text, input.placeholder, input.is_hidden_by_default, now, actor_user_id,
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just inserted"))
@@ -90,14 +91,15 @@ pub fn update_definition(conn: &Connection, id: &str, input: &CustomFieldDefinit
          SET label = ?1, options_json = ?2, required = ?3, show_in_list = ?4, sort_order = ?5, is_active = ?6,
              min_value = ?7, max_value = ?8, max_length = ?9, regex_pattern = ?10,
              is_searchable = ?11, is_filterable = ?12, is_reportable = ?13,
-             default_value = ?14, is_unique = ?15, help_text = ?16, placeholder = ?17,
-             updated_at = ?18, updated_by = ?19
-         WHERE id = ?20",
+             default_value = ?14, is_unique = ?15, help_text = ?16, placeholder = ?17, is_hidden_by_default = ?18,
+             updated_at = ?19, updated_by = ?20
+         WHERE id = ?21",
         rusqlite::params![
             input.label, options_json, input.required, input.show_in_list, input.sort_order, input.is_active,
             input.min_value, input.max_value, input.max_length, input.regex_pattern,
             input.is_searchable, input.is_filterable, input.is_reportable,
-            input.default_value, input.is_unique, input.help_text, input.placeholder, now_iso(), actor_user_id, id,
+            input.default_value, input.is_unique, input.help_text, input.placeholder, input.is_hidden_by_default,
+            now_iso(), actor_user_id, id,
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just updated"))

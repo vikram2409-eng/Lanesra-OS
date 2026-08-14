@@ -300,6 +300,71 @@ fn update_field_action_can_set_a_builtin_money_field() {
 }
 
 #[test]
+fn set_default_field_action_only_fills_the_target_when_it_is_currently_empty() {
+    let (conn, ws, admin) = setup_workspace();
+    let action = WorkflowActionInput {
+        action_type: "set_default_field".into(),
+        params_json: serde_json::json!({
+            "target_field_key": "next_step", "target_field_source": "builtin", "value": "Follow up",
+        }).to_string(),
+    };
+    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
+    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
+
+    let reloaded = opportunity_service::get(&conn, &opp.id).unwrap();
+    assert_eq!(reloaded.next_step.as_deref(), Some("Follow up"));
+}
+
+#[test]
+fn set_default_field_action_leaves_an_existing_value_untouched() {
+    let (conn, ws, admin) = setup_workspace();
+    let action = WorkflowActionInput {
+        action_type: "set_default_field".into(),
+        params_json: serde_json::json!({
+            "target_field_key": "next_step", "target_field_source": "builtin", "value": "Follow up",
+        }).to_string(),
+    };
+    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let mut input = opportunity_input(&company.id, "New", None);
+    input.next_step = Some("Already set".into());
+    let opp = opportunity_service::create(&conn, &input, Some(&admin)).unwrap();
+    let mut won = opportunity_input(&company.id, "Won", None);
+    won.next_step = Some("Already set".into());
+    opportunity_service::update(&conn, &opp.id, &won, Some(&admin)).unwrap();
+
+    let reloaded = opportunity_service::get(&conn, &opp.id).unwrap();
+    assert_eq!(reloaded.next_step.as_deref(), Some("Already set"));
+}
+
+#[test]
+fn clear_field_action_always_writes_empty_even_when_a_value_exists() {
+    let (conn, ws, admin) = setup_workspace();
+    let action = WorkflowActionInput {
+        action_type: "clear_field".into(),
+        params_json: serde_json::json!({
+            "target_field_key": "next_step", "target_field_source": "builtin",
+        }).to_string(),
+    };
+    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let mut input = opportunity_input(&company.id, "New", None);
+    input.next_step = Some("Old note".into());
+    let opp = opportunity_service::create(&conn, &input, Some(&admin)).unwrap();
+    let mut won = opportunity_input(&company.id, "Won", None);
+    won.next_step = Some("Old note".into());
+    opportunity_service::update(&conn, &opp.id, &won, Some(&admin)).unwrap();
+
+    let reloaded = opportunity_service::get(&conn, &opp.id).unwrap();
+    assert!(reloaded.next_step.as_deref().unwrap_or("").is_empty());
+}
+
+#[test]
 fn field_changed_trigger_rejects_a_non_active_builtin_field() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
@@ -321,7 +386,7 @@ fn workflow_extra_condition_supports_the_starts_with_operator() {
     let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Follow up", 0, None));
     wf.conditions = vec![WorkflowConditionInput {
         field_source: "builtin".into(), field_key: "next_step".into(), operator: "starts_with".into(), value: "Send".into(),
-        compare_field_source: None, compare_field_key: None,
+        compare_field_source: None, compare_field_key: None, group_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
@@ -350,7 +415,7 @@ fn workflow_extra_condition_supports_field_to_field_comparison() {
     let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Review", 0, None));
     wf.conditions = vec![WorkflowConditionInput {
         field_source: "builtin".into(), field_key: "next_step".into(), operator: "equals".into(), value: String::new(),
-        compare_field_source: Some("builtin".into()), compare_field_key: Some("lost_reason".into()),
+        compare_field_source: Some("builtin".into()), compare_field_key: Some("lost_reason".into()), group_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 

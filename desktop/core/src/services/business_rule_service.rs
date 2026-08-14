@@ -103,8 +103,18 @@ fn validate_actions(conn: &Connection, workspace_id: &str, entity_type: &str, ac
             } else if !defs.iter().any(|d| d.key == target && d.is_active) {
                 return Err(AppError::Validation(format!("'{target}' is not an active custom field to target")));
             }
-            if matches!(a.action_type.as_str(), "set_default" | "set_value") && a.action_value.is_none() {
+            if crate::models::business_rule::VALUE_REQUIRED_ACTIONS.contains(&a.action_type.as_str()) && a.action_value.is_none() {
                 return Err(AppError::Validation("A value is required for this action".into()));
+            }
+            if a.action_type == "restrict_choices" {
+                let is_select = if a.target_field_source == "builtin" {
+                    builtin_fields::find_builtin_field(entity_type, target).is_some_and(|f| f.field_type == "select")
+                } else {
+                    defs.iter().any(|d| d.key == target && d.field_type == "select")
+                };
+                if !is_select {
+                    return Err(AppError::Validation(format!("'{target}' is not a select field with a fixed set of options")));
+                }
             }
         }
         if MESSAGE_ACTIONS.contains(&a.action_type.as_str()) && a.message.as_deref().unwrap_or("").trim().is_empty() {
@@ -161,9 +171,15 @@ pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, acto
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RuleEvaluation {
-    /// custom target_field_key -> "require" | "hide" | "lock"
+    /// custom target_field_key -> "require" | "hide" | "show" | "lock" | "editable"
+    /// - "last matching rule wins" per target field (a later `show`
+    /// correctly overrides an earlier `hide` on the same field, same for
+    /// `editable` over `lock`), same map-insert-overwrite semantics the
+    /// original require/hide/lock pair already had.
     pub field_effects: HashMap<String, String>,
     /// custom target_field_key -> value to apply before validation
+    /// (set_default/set_value/clear_value all land here - clear_value just
+    /// writes an empty string, unconditionally like set_value).
     pub set_values: HashMap<String, String>,
     /// Same as `field_effects`/`set_values` but for built-in-field targets
     /// - kept in separate maps (rather than merged by key) so a custom
@@ -177,10 +193,19 @@ pub struct RuleEvaluation {
     /// save that's already in flight, there is no in-flight built-in save
     /// to merge into (see `builtin_field_service`'s doc comment).
     pub builtin_set_values: HashMap<String, String>,
+    /// custom or built-in target_field_key -> pipe-delimited subset of a
+    /// select field's options that stays selectable while the rule
+    /// matches - same map for both sources since a select field is never
+    /// ambiguous between them the way a plain string key could be.
+    pub restricted_choices: HashMap<String, String>,
     /// Some(message) means the whole save is rejected with this message.
     pub blocked: Option<String>,
-    /// Non-blocking messages to surface to the user.
-    pub messages: Vec<String>,
+    /// Non-blocking, higher-severity messages from `show_error` actions.
+    pub errors: Vec<String>,
+    /// Non-blocking messages from `show_warning` actions - legacy
+    /// `show_message` rows (saved before the second addendum round) also
+    /// land here, since a plain message reads closest to a warning.
+    pub warnings: Vec<String>,
 }
 
 /// A condition's effective comparison value: the compare-to field's
@@ -204,7 +229,7 @@ fn resolve_condition_value<'a>(c: &'a crate::models::business_rule::BusinessRule
 fn rule_matches(rule: &BusinessRule, ctx: &HashMap<String, String>) -> bool {
     crate::domain::conditions::conditions_match(
         &rule.match_type,
-        rule.conditions.iter().map(|c| (c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
+        rule.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
         ctx,
     )
 }
@@ -242,7 +267,11 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &
         for action in &rule.actions {
             let is_builtin = action.target_field_source == "builtin";
             match action.action_type.as_str() {
-                "require" | "hide" | "lock" => {
+                // "show"/"editable" are the explicit counterparts to
+                // "hide"/"lock" - same map, same last-matching-rule-wins
+                // overwrite, so a later show/editable correctly beats an
+                // earlier hide/lock on the same field.
+                "require" | "hide" | "show" | "lock" | "editable" => {
                     if let Some(t) = &action.target_field_key {
                         let map = if is_builtin { &mut result.builtin_field_effects } else { &mut result.field_effects };
                         map.insert(t.clone(), action.action_type.clone());
@@ -263,14 +292,32 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &
                         map.insert(t.clone(), v.clone());
                     }
                 }
+                // Same map as set_value, always writing empty - "clear"
+                // needs no action_value at all.
+                "clear_value" => {
+                    if let Some(t) = &action.target_field_key {
+                        let map = if is_builtin { &mut result.builtin_set_values } else { &mut result.set_values };
+                        map.insert(t.clone(), String::new());
+                    }
+                }
+                "restrict_choices" => {
+                    if let (Some(t), Some(v)) = (&action.target_field_key, &action.action_value) {
+                        result.restricted_choices.insert(t.clone(), v.clone());
+                    }
+                }
                 "block_save" => {
                     if result.blocked.is_none() {
                         result.blocked = Some(action.message.clone().unwrap_or_else(|| format!("'{}' blocks saving this record", rule.name)));
                     }
                 }
-                "show_message" => {
+                "show_error" => {
                     if let Some(m) = &action.message {
-                        result.messages.push(m.clone());
+                        result.errors.push(m.clone());
+                    }
+                }
+                "show_warning" | "show_message" => {
+                    if let Some(m) = &action.message {
+                        result.warnings.push(m.clone());
                     }
                 }
                 _ => {}

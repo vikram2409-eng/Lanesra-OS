@@ -5,7 +5,7 @@ use lanesra_core::domain::AppResult;
 use lanesra_core::models::custom_field::{
     CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues,
 };
-use lanesra_core::services::custom_field_service;
+use lanesra_core::services::custom_field_service::{self, SaveNotices};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -50,7 +50,7 @@ pub fn set_custom_field_values(
     entity_type: String,
     entity_id: String,
     values: CustomFieldValues,
-) -> AppResult<Vec<String>> {
+) -> AppResult<SaveNotices> {
     let conn = state.conn.lock().unwrap();
     custom_field_service::set_entity_values(&conn, &entity_type, &entity_id, &values, current_actor(&state).as_deref())
 }

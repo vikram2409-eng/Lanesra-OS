@@ -5,6 +5,14 @@ pub const TRIGGER_TYPES: &[&str] = &[
 ];
 pub const ACTION_TYPES: &[&str] = &[
     "create_task", "update_field", "assign_owner", "create_record", "update_related_record", "add_notification", "create_reminder",
+    // Second addendum round: the trigger-time subset of business rules'
+    // field-effect vocabulary that actually fits a "fires once when the
+    // workflow triggers" model. `update_field` already covers "set field
+    // value"; these two round it out. The continuous, live-form-governance
+    // effects (require/hide/show/lock/editable/restrict_choices/block_save/
+    // show_error/show_warning) stay business-rule-only - a workflow has no
+    // "re-evaluate against the open form" moment for them to apply to.
+    "set_default_field", "clear_field",
 ];
 pub const NOTIFICATION_AUDIENCES: &[&str] = &["owner", "all_admins"];
 
@@ -53,6 +61,9 @@ pub struct WorkflowCondition {
     /// `domain::conditions`.
     pub compare_field_source: Option<String>,
     pub compare_field_key: Option<String>,
+    /// See `BusinessRuleCondition::group_id`'s doc comment - identical
+    /// one-level OR-group mechanism, shared matcher.
+    pub group_id: Option<String>,
     pub sort_order: i64,
 }
 
@@ -66,6 +77,8 @@ pub struct WorkflowConditionInput {
     pub compare_field_source: Option<String>,
     #[serde(default)]
     pub compare_field_key: Option<String>,
+    #[serde(default)]
+    pub group_id: Option<String>,
 }
 
 /// `params_json` is a JSON-encoded object whose shape depends on

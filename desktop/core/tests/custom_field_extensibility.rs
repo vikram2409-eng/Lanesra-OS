@@ -45,7 +45,7 @@ fn text_field(label: &str, default_value: Option<&str>, is_unique: bool) -> Cust
         required: false, show_in_list: false, sort_order: 0,
         min_value: None, max_value: None, max_length: None, regex_pattern: None,
         is_searchable: false, is_filterable: false, is_reportable: true,
-        default_value: default_value.map(String::from), is_unique, help_text: None, placeholder: None,
+        default_value: default_value.map(String::from), is_unique, help_text: None, placeholder: None, is_hidden_by_default: false,
     }
 }
 
@@ -84,7 +84,7 @@ fn a_business_rules_set_default_still_wins_over_the_fields_own_default_value() {
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {
                 field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-                compare_field_source: None, compare_field_key: None,
+                compare_field_source: None, compare_field_key: None, group_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "set_default".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(),
@@ -141,7 +141,7 @@ fn is_unique_is_rejected_at_definition_time_for_a_boolean_field() {
         required: false, show_in_list: false, sort_order: 0,
         min_value: None, max_value: None, max_length: None, regex_pattern: None,
         is_searchable: false, is_filterable: false, is_reportable: true,
-        default_value: None, is_unique: true, help_text: None, placeholder: None,
+        default_value: None, is_unique: true, help_text: None, placeholder: None, is_hidden_by_default: false,
     };
     let err = custom_field_service::create_definition(&conn, &ws, &input, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").contains("doesn't apply to a yes/no field"));
@@ -155,7 +155,7 @@ fn default_value_is_validated_against_the_fields_own_type_at_definition_time() {
         required: false, show_in_list: false, sort_order: 0,
         min_value: Some("1".into()), max_value: Some("500".into()), max_length: None, regex_pattern: None,
         is_searchable: false, is_filterable: false, is_reportable: true,
-        default_value: Some("not-a-number".into()), is_unique: false, help_text: None, placeholder: None,
+        default_value: Some("not-a-number".into()), is_unique: false, help_text: None, placeholder: None, is_hidden_by_default: false,
     };
     let err = custom_field_service::create_definition(&conn, &ws, &input, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").contains("must be a number"));
@@ -178,9 +178,54 @@ fn help_text_and_placeholder_round_trip_through_create_and_update() {
         is_filterable: def.is_filterable, is_reportable: def.is_reportable,
         default_value: Some("Default note".into()), is_unique: false,
         help_text: Some("Updated help".into()), placeholder: Some("Updated placeholder".into()),
+        is_hidden_by_default: false,
     };
     let updated = custom_field_service::update_definition(&conn, &def.id, &update, Some(&admin)).unwrap();
     assert_eq!(updated.default_value.as_deref(), Some("Default note"));
     assert_eq!(updated.help_text.as_deref(), Some("Updated help"));
     assert_eq!(updated.placeholder.as_deref(), Some("Updated placeholder"));
+}
+
+// --- Admin Automation & Customization, second addendum: a field hidden by
+// default is skipped even when required, unless a business rule's "show"
+// action currently targets it --------------------------------------------
+
+#[test]
+fn a_field_hidden_by_default_is_skipped_unless_a_rule_shows_it() {
+    let (conn, ws, admin) = setup_workspace();
+    let input = CustomFieldDefinitionInput {
+        entity_type: "Company".into(), label: "VIP Tier".into(), field_type: "text".into(), options: vec![],
+        required: true, show_in_list: false, sort_order: 0,
+        min_value: None, max_value: None, max_length: None, regex_pattern: None,
+        is_searchable: false, is_filterable: false, is_reportable: true,
+        default_value: None, is_unique: false, help_text: None, placeholder: None,
+        is_hidden_by_default: true,
+    };
+    let def = custom_field_service::create_definition(&conn, &ws, &input, Some(&admin)).unwrap();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
+
+    // Hidden by default overrides required - an empty save still succeeds.
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &HashMap::new(), Some(&admin)).unwrap();
+
+    // A business rule's "show" action un-hides the field - now required
+    // actually applies, and the same empty save is rejected.
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &BusinessRuleInput {
+            entity_type: "Company".into(), name: "Reveal VIP tier".into(), description: None, match_type: "all".into(),
+            priority: 0, effective_start_date: None, effective_end_date: None,
+            conditions: vec![BusinessRuleConditionInput {
+                field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
+                compare_field_source: None, compare_field_key: None, group_id: None,
+            }],
+            actions: vec![BusinessRuleActionInput {
+                action_type: "show".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(),
+                action_value: None, message: None,
+            }],
+        },
+        Some(&admin),
+    ).unwrap();
+
+    let err = custom_field_service::set_entity_values(&conn, "Company", &company.id, &HashMap::new(), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("VIP Tier is required"));
 }

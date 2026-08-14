@@ -54,20 +54,21 @@ fn text_field_input(label: &str) -> CustomFieldDefinitionInput {
         is_unique: false,
         help_text: None,
         placeholder: None,
+        is_hidden_by_default: false,
     }
 }
 
 fn condition(field_key: &str, operator: &str, value: &str) -> BusinessRuleConditionInput {
     BusinessRuleConditionInput {
         field_source: "builtin".into(), field_key: field_key.into(), operator: operator.into(), value: value.into(),
-        compare_field_source: None, compare_field_key: None,
+        compare_field_source: None, compare_field_key: None, group_id: None,
     }
 }
 
 fn custom_condition(field_key: &str, operator: &str, value: &str) -> BusinessRuleConditionInput {
     BusinessRuleConditionInput {
         field_source: "custom".into(), field_key: field_key.into(), operator: operator.into(), value: value.into(),
-        compare_field_source: None, compare_field_key: None,
+        compare_field_source: None, compare_field_key: None, group_id: None,
     }
 }
 
@@ -243,8 +244,9 @@ fn show_message_is_returned_but_does_not_block_the_save() {
     ).unwrap();
 
     let prospect = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
-    let messages = custom_field_service::set_entity_values(&conn, "Company", &prospect.id, &HashMap::new(), Some(&admin)).unwrap();
-    assert_eq!(messages, vec!["Remember to schedule a follow-up call".to_string()]);
+    let notices = custom_field_service::set_entity_values(&conn, "Company", &prospect.id, &HashMap::new(), Some(&admin)).unwrap();
+    assert_eq!(notices.warnings, vec!["Remember to schedule a follow-up call".to_string()]);
+    assert!(notices.errors.is_empty());
 }
 
 #[test]
@@ -304,7 +306,7 @@ fn contains_and_numeric_operators_evaluate_correctly() {
             "Company", 0, "all",
             vec![BusinessRuleConditionInput {
                 field_source: "custom".into(), field_key: notes_def.key.clone(), operator: "contains".into(), value: "urgent".into(),
-                compare_field_source: None, compare_field_key: None,
+                compare_field_source: None, compare_field_key: None, group_id: None,
             }],
             vec![require_action(&flag_def.key)],
         ),
@@ -452,7 +454,7 @@ fn field_to_field_comparison_condition_matches_correctly() {
             "Company", 0, "all",
             vec![BusinessRuleConditionInput {
                 field_source: "custom".into(), field_key: notes_def.key.clone(), operator: "equals".into(), value: String::new(),
-                compare_field_source: Some("custom".into()), compare_field_key: Some(expected_def.key.clone()),
+                compare_field_source: Some("custom".into()), compare_field_key: Some(expected_def.key.clone()), group_id: None,
             }],
             vec![require_action(&flag_def.key)],
         ),
@@ -476,6 +478,184 @@ fn field_to_field_comparison_condition_matches_correctly() {
     assert!(format!("{err:?}").contains("Flag is required"));
 }
 
+// --- Admin Automation & Customization, second addendum: OR-groups, the
+// wider field-effect palette (show/editable/clear_value/restrict_choices),
+// and severity-tagged messages (show_error/show_warning) ------------------
+
+fn select_field_input(label: &str, options: Vec<&str>) -> CustomFieldDefinitionInput {
+    CustomFieldDefinitionInput {
+        entity_type: "Company".into(), label: label.into(), field_type: "select".into(),
+        options: options.into_iter().map(String::from).collect(),
+        required: false, show_in_list: false, sort_order: 0,
+        min_value: None,
+        max_value: None,
+        max_length: None,
+        regex_pattern: None,
+        is_searchable: false,
+        is_filterable: false,
+        is_reportable: true,
+        default_value: None,
+        is_unique: false,
+        help_text: None,
+        placeholder: None,
+        is_hidden_by_default: false,
+    }
+}
+
+#[test]
+fn an_or_group_condition_matches_when_any_member_of_the_group_matches() {
+    let (conn, ws, admin) = setup_workspace();
+    let flag_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Flag"), Some(&admin)).unwrap();
+
+    // Match: status = Prospect AND (tax_number = A OR tax_number = B)
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![
+                condition("status", "equals", "Prospect"),
+                BusinessRuleConditionInput {
+                    field_source: "builtin".into(), field_key: "tax_number".into(), operator: "equals".into(), value: "A".into(),
+                    compare_field_source: None, compare_field_key: None, group_id: Some("g1".into()),
+                },
+                BusinessRuleConditionInput {
+                    field_source: "builtin".into(), field_key: "tax_number".into(), operator: "equals".into(), value: "B".into(),
+                    compare_field_source: None, compare_field_key: None, group_id: Some("g1".into()),
+                },
+            ],
+            vec![require_action(&flag_def.key)],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    // tax_number = "A" satisfies the OR group - Flag is required.
+    let mut matches_a = company_input("Acme", "Prospect");
+    matches_a.tax_number = Some("A".into());
+    let matches_a = company_service::create(&conn, &ws, &matches_a, Some(&admin)).unwrap();
+    let err = custom_field_service::set_entity_values(&conn, "Company", &matches_a.id, &HashMap::new(), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("Flag is required"));
+
+    // tax_number = "C" satisfies neither member of the OR group - saves freely.
+    let mut matches_neither = company_input("Globex", "Prospect");
+    matches_neither.tax_number = Some("C".into());
+    let matches_neither = company_service::create(&conn, &ws, &matches_neither, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &matches_neither.id, &HashMap::new(), Some(&admin)).unwrap();
+}
+
+#[test]
+fn show_error_and_show_warning_actions_are_both_returned_as_non_blocking_notices() {
+    let (conn, ws, admin) = setup_workspace();
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("status", "equals", "Prospect")],
+            vec![
+                BusinessRuleActionInput { action_type: "show_error".into(), target_field_key: None, target_field_source: "custom".into(), action_value: None, message: Some("Missing compliance docs".into()) },
+                BusinessRuleActionInput { action_type: "show_warning".into(), target_field_key: None, target_field_source: "custom".into(), action_value: None, message: Some("Consider a follow-up call".into()) },
+            ],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    let prospect = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
+    let notices = custom_field_service::set_entity_values(&conn, "Company", &prospect.id, &HashMap::new(), Some(&admin)).unwrap();
+    assert_eq!(notices.errors, vec!["Missing compliance docs".to_string()]);
+    assert_eq!(notices.warnings, vec!["Consider a follow-up call".to_string()]);
+}
+
+#[test]
+fn show_and_editable_actions_override_an_earlier_hide_and_lock_within_the_same_rule() {
+    let (conn, ws, admin) = setup_workspace();
+    let flag_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Flag"), Some(&admin)).unwrap();
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("status", "equals", "Prospect")],
+            vec![
+                BusinessRuleActionInput { action_type: "hide".into(), target_field_key: Some(flag_def.key.clone()), target_field_source: "custom".into(), action_value: None, message: None },
+                BusinessRuleActionInput { action_type: "lock".into(), target_field_key: Some(flag_def.key.clone()), target_field_source: "custom".into(), action_value: None, message: None },
+                BusinessRuleActionInput { action_type: "show".into(), target_field_key: Some(flag_def.key.clone()), target_field_source: "custom".into(), action_value: None, message: None },
+                BusinessRuleActionInput { action_type: "editable".into(), target_field_key: Some(flag_def.key.clone()), target_field_source: "custom".into(), action_value: None, message: None },
+            ],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    let mut ctx = HashMap::new();
+    ctx.insert("status".to_string(), "Prospect".to_string());
+    let evaluation = business_rule_service::test_rules(&conn, &ws, "Company", &ctx, Some(&admin)).unwrap();
+    // Actions apply in order - the later show/editable wins over the
+    // earlier hide/lock on the same target field.
+    assert_eq!(evaluation.field_effects.get(&flag_def.key).map(String::as_str), Some("editable"));
+}
+
+#[test]
+fn clear_value_action_writes_an_empty_value_unconditionally() {
+    let (conn, ws, admin) = setup_workspace();
+    let def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Region"), Some(&admin)).unwrap();
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("status", "equals", "Archived")],
+            vec![BusinessRuleActionInput { action_type: "clear_value".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(), action_value: None, message: None }],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    let company = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert(def.key.clone(), "West".into());
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin)).unwrap();
+    let stored = custom_field_service::get_entity_values(&conn, &company.id).unwrap();
+    assert_eq!(stored.get(&def.key).map(String::as_str), Some("West"));
+
+    // Archiving the company fires clear_value, wiping the field out entirely.
+    company_service::update(&conn, &company.id, &company_input("Acme", "Archived"), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &HashMap::new(), Some(&admin)).unwrap();
+    let stored = custom_field_service::get_entity_values(&conn, &company.id).unwrap();
+    assert_eq!(stored.get(&def.key), None);
+}
+
+#[test]
+fn restrict_choices_action_requires_a_select_field_and_is_exposed_on_evaluation() {
+    let (conn, ws, admin) = setup_workspace();
+    let text_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Notes"), Some(&admin)).unwrap();
+
+    // Targeting a non-select field is rejected up front.
+    let err = business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("status", "equals", "Prospect")],
+            vec![BusinessRuleActionInput { action_type: "restrict_choices".into(), target_field_key: Some(text_def.key.clone()), target_field_source: "custom".into(), action_value: Some("A|B".into()), message: None }],
+        ),
+        Some(&admin),
+    ).unwrap_err();
+    assert!(format!("{err:?}").contains("not a select field"));
+
+    // Targeting a select field is accepted and shows up on evaluation.
+    let select_def = custom_field_service::create_definition(&conn, &ws, &select_field_input("Region", vec!["North", "South", "East", "West"]), Some(&admin)).unwrap();
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input(
+            "Company", 0, "all",
+            vec![condition("status", "equals", "Prospect")],
+            vec![BusinessRuleActionInput { action_type: "restrict_choices".into(), target_field_key: Some(select_def.key.clone()), target_field_source: "custom".into(), action_value: Some("North|South".into()), message: None }],
+        ),
+        Some(&admin),
+    ).unwrap();
+
+    let mut ctx = HashMap::new();
+    ctx.insert("status".to_string(), "Prospect".to_string());
+    let evaluation = business_rule_service::test_rules(&conn, &ws, "Company", &ctx, Some(&admin)).unwrap();
+    assert_eq!(evaluation.restricted_choices.get(&select_def.key).map(String::as_str), Some("North|South"));
+}
+
 #[test]
 fn a_condition_with_only_a_compare_field_source_or_only_a_key_is_rejected() {
     let (conn, ws, admin) = setup_workspace();
@@ -486,7 +666,7 @@ fn a_condition_with_only_a_compare_field_source_or_only_a_key_is_rejected() {
             "Company", 0, "all",
             vec![BusinessRuleConditionInput {
                 field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-                compare_field_source: Some("custom".into()), compare_field_key: None,
+                compare_field_source: Some("custom".into()), compare_field_key: None, group_id: None,
             }],
             vec![require_action(&flag_def.key)],
         ),
