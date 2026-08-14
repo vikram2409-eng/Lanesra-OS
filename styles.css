@@ -215,6 +215,25 @@
 .workflow-node-body small{display:block;color:#6b7280;font-size:12px;margin-top:3px}
 .workflow-connector{display:flex;flex-direction:column;align-items:center;color:#94a3b8;height:34px;justify-content:center}
 .workflow-end-node{border:1px dashed #cbd5e1;border-radius:999px;padding:6px 18px;font-size:12px;font-weight:800;color:#64748b;background:#fff;margin-top:0}
+
+/* v0.24 multi-condition/multi-action rule & workflow builders: a
+   bordered "row card" per condition/action, an AND/OR divider between
+   top-level units, and a dashed "OR group" box around conditions that
+   share a group_id - one level of nested OR-grouping, same mechanism the
+   desktop edition uses (mountConditionsEditor/mountActionsEditor). */
+.builder-row-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff}
+.builder-row-remove{margin-left:auto;background:none;border:none;color:#94a3b8;font-size:16px;line-height:1;padding:4px;cursor:pointer}
+.builder-row-remove:hover{color:#dc2626}
+.builder-and-divider{text-align:center;color:#94a3b8;font-size:11px;font-weight:800;letter-spacing:.05em;margin:-2px 0 6px}
+.builder-or-group{border:1px dashed #4f46e5;border-radius:10px;padding:10px 12px 4px;margin-bottom:8px;background:#f8f7ff}
+.builder-or-group-label{color:#4f46e5;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.builder-or-group .builder-row-card{background:#fff}
+.workflow-condition-chip{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;margin-bottom:6px;background:#fff}
+.workflow-condition-chip:last-child{margin-bottom:0}
+.workflow-match-chip{display:inline-block;font-size:10px;font-weight:800;color:#94a3b8;text-align:center;width:100%;margin:-2px 0 6px}
+.workflow-or-group{border:1px dashed #4f46e5;border-radius:8px;padding:6px 6px 0;margin-bottom:6px;background:#f8f7ff}
+.workflow-or-group-label{color:#4f46e5;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+
 .rule360-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
 .rule360-header h1{margin:6px 0 4px}
 .rule360-meta{display:flex;gap:16px;flex-wrap:wrap;color:#6b7280;font-size:13px;margin-top:6px}
