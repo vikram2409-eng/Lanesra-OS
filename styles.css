@@ -223,6 +223,15 @@
    share a group_id - one level of nested OR-grouping, same mechanism the
    desktop edition uses (mountConditionsEditor/mountActionsEditor). */
 .builder-row-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fff}
+/* Every select/input directly in a row card (the field picker, action
+   type/target, restrict-choices target, message box, ...) isn't wrapped in
+   a .field div the way the Operator/Compare-against/Value trio is (that
+   trio gets its border from the shared ".field select/input" rule above) -
+   without this, those bare controls fall back to the browser's native
+   select/input chrome, a visibly different border color from everything
+   else in the same row. Matches ".field input,.field select,.field
+   textarea" exactly so a row reads as one consistent set of controls. */
+.builder-row-card select,.builder-row-card input:not([type=checkbox]){border:1px solid var(--line);border-radius:10px;padding:11px;background:#fff}
 .builder-row-remove{margin-left:auto;background:none;border:none;color:#94a3b8;font-size:16px;line-height:1;padding:4px;cursor:pointer}
 .builder-row-remove:hover{color:#dc2626}
 .builder-and-divider{text-align:center;color:#94a3b8;font-size:11px;font-weight:800;letter-spacing:.05em;margin:-2px 0 6px}
