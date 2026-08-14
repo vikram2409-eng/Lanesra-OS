@@ -1,8 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
-import { fieldEffectsFor } from "../lib/businessRules";
-import type { CustomFieldValues } from "../lib/types";
+import { fieldEffectsFor, restrictedChoicesFor } from "../lib/businessRules";
+import type { CustomFieldDefinition, CustomFieldValues } from "../lib/types";
+
+const LIST_SEPARATOR = "|";
+
+/** Mirrors custom_field_service::field_is_hidden: a field flagged
+ * is_hidden_by_default is left off the form unless a matching rule's
+ * "show" action currently targets it; an ordinary field can still be
+ * hidden by a matching "hide" action. */
+function fieldIsHidden(def: CustomFieldDefinition, effect: string | undefined): boolean {
+  if (effect === "hide") return true;
+  if (effect === "show") return false;
+  return def.is_hidden_by_default;
+}
 
 /**
  * Renders the active custom fields for an entity type inside whatever
@@ -12,10 +24,12 @@ import type { CustomFieldValues } from "../lib/types";
  *
  * `status` is the entity's current built-in status value, used as the
  * trigger context for any conditional business rules (ADM-BR) - a rule
- * can hide/require/lock a field based on it. This mirrors the server's own
- * evaluation in `custom_field_service::set_entity_values`, but is UX-only:
- * the server re-validates `require` independently on save (`hide`/`lock`
- * have nothing for the server to validate - see that function's comment).
+ * can require/hide/show/lock/editable/restrict_choices a field based on
+ * it. This mirrors the server's own evaluation in
+ * `custom_field_service::set_entity_values`, but is UX-only: the server
+ * re-validates `require` and the is_hidden_by_default skip independently
+ * on save (the other cosmetic effects have nothing for the server to
+ * validate - see that function's comment).
  */
 export function CustomFieldsSection({
   entityType,
@@ -39,7 +53,9 @@ export function CustomFieldsSection({
 
   if (!defs.data || defs.data.length === 0) return null;
 
-  const effects = fieldEffectsFor(rules.data ?? [], { ...values, status });
+  const context = { ...values, status };
+  const effects = fieldEffectsFor(rules.data ?? [], context);
+  const restrictedChoices = restrictedChoicesFor(rules.data ?? [], context);
 
   function setValue(key: string, value: string) {
     onChange({ ...values, [key]: value });
@@ -48,10 +64,13 @@ export function CustomFieldsSection({
   return (
     <>
       {defs.data
-        .filter((def) => effects[def.key] !== "hide")
+        .filter((def) => !fieldIsHidden(def, effects[def.key]))
         .map((def) => {
           const required = def.required || effects[def.key] === "require";
           const locked = effects[def.key] === "lock";
+          const allowedOptions = restrictedChoices[def.key]
+            ? def.options.filter((o) => restrictedChoices[def.key].split(LIST_SEPARATOR).includes(o))
+            : def.options;
           return (
             <div className="form-field" key={def.id}>
               <label>
@@ -62,7 +81,7 @@ export function CustomFieldsSection({
               {def.field_type === "select" && (
                 <select value={values[def.key] ?? ""} onChange={(e) => setValue(def.key, e.target.value)} required={required} disabled={locked}>
                   <option value="">{def.placeholder || "— Select —"}</option>
-                  {def.options.map((o) => (
+                  {allowedOptions.map((o) => (
                     <option key={o} value={o}>
                       {o}
                     </option>

@@ -16,6 +16,7 @@ function emptyInput(entityType: string): CustomFieldDefinitionInput {
     min_value: null, max_value: null, max_length: null, regex_pattern: null,
     is_searchable: false, is_filterable: false, is_reportable: true,
     default_value: null, is_unique: false, help_text: null, placeholder: null,
+    is_hidden_by_default: false,
   };
 }
 
@@ -138,7 +139,7 @@ export function CustomFieldsAdmin() {
                 <td>{d.field_type}</td>
                 <td>{d.required ? "Yes" : "No"}</td>
                 <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {[d.is_searchable && "Searchable", d.is_filterable && "Filterable", d.is_reportable && "Reportable"].filter(Boolean).join(", ") || "—"}
+                  {[d.is_searchable && "Searchable", d.is_filterable && "Filterable", d.is_reportable && "Reportable", d.is_hidden_by_default && "Hidden by default"].filter(Boolean).join(", ") || "—"}
                 </td>
                 <td>
                   <span className={`badge${d.is_active ? " badge-success" : ""}`}>{d.is_active ? "Active" : "Inactive"}</span>
@@ -160,18 +161,20 @@ export function CustomFieldsAdmin() {
 function ValidationAndFlagFields({
   fieldType,
   minValue, maxValue, maxLength, regexPattern, isSearchable, isFilterable, isReportable,
-  defaultValue, isUnique, helpText, placeholder,
+  defaultValue, isUnique, helpText, placeholder, isHiddenByDefault,
   onChange,
 }: {
   fieldType: string;
   minValue: string | null; maxValue: string | null; maxLength: number | null; regexPattern: string | null;
   isSearchable: boolean; isFilterable: boolean; isReportable: boolean;
   defaultValue: string | null; isUnique: boolean; helpText: string | null; placeholder: string | null;
+  isHiddenByDefault: boolean;
   onChange: (
     patch: Partial<{
       min_value: string | null; max_value: string | null; max_length: number | null; regex_pattern: string | null;
       is_searchable: boolean; is_filterable: boolean; is_reportable: boolean;
       default_value: string | null; is_unique: boolean; help_text: string | null; placeholder: string | null;
+      is_hidden_by_default: boolean;
     }>,
   ) => void;
 }) {
@@ -245,6 +248,10 @@ function ValidationAndFlagFields({
           />
           Unique
         </label>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }} title="Left off every create/edit form unless a business rule's Show action targets it">
+          <input type="checkbox" checked={isHiddenByDefault} onChange={(e) => onChange({ is_hidden_by_default: e.target.checked })} />
+          Hide by default
+        </label>
       </div>
     </>
   );
@@ -310,6 +317,7 @@ function DefinitionForm({
           minValue={input.min_value} maxValue={input.max_value} maxLength={input.max_length} regexPattern={input.regex_pattern}
           isSearchable={input.is_searchable} isFilterable={input.is_filterable} isReportable={input.is_reportable}
           defaultValue={input.default_value} isUnique={input.is_unique} helpText={input.help_text} placeholder={input.placeholder}
+          isHiddenByDefault={input.is_hidden_by_default}
           onChange={(patch) => setInput({ ...input, ...patch })}
         />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
@@ -349,6 +357,7 @@ function DefinitionEditForm({
   const [isUnique, setIsUnique] = useState(definition.is_unique);
   const [helpText, setHelpText] = useState(definition.help_text);
   const [placeholder, setPlaceholder] = useState(definition.placeholder);
+  const [isHiddenByDefault, setIsHiddenByDefault] = useState(definition.is_hidden_by_default);
   const [error, setError] = useState<string | null>(null);
 
   const save = useMutation({
@@ -371,6 +380,7 @@ function DefinitionEditForm({
         is_unique: isUnique,
         help_text: helpText,
         placeholder: placeholder,
+        is_hidden_by_default: isHiddenByDefault,
       }),
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this field"),
@@ -416,6 +426,7 @@ function DefinitionEditForm({
           minValue={minValue} maxValue={maxValue} maxLength={maxLength} regexPattern={regexPattern}
           isSearchable={isSearchable} isFilterable={isFilterable} isReportable={isReportable}
           defaultValue={defaultValue} isUnique={isUnique} helpText={helpText} placeholder={placeholder}
+          isHiddenByDefault={isHiddenByDefault}
           onChange={(patch) => {
             if ("min_value" in patch) setMinValue(patch.min_value ?? null);
             if ("max_value" in patch) setMaxValue(patch.max_value ?? null);
@@ -428,6 +439,7 @@ function DefinitionEditForm({
             if ("is_unique" in patch) setIsUnique(!!patch.is_unique);
             if ("help_text" in patch) setHelpText(patch.help_text ?? null);
             if ("placeholder" in patch) setPlaceholder(patch.placeholder ?? null);
+            if ("is_hidden_by_default" in patch) setIsHiddenByDefault(!!patch.is_hidden_by_default);
           }}
         />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>

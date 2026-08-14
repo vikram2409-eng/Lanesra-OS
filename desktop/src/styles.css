@@ -576,6 +576,30 @@ tr:hover td {
   margin: -2px 0 6px 0;
 }
 
+/* One level of nested OR-grouping (migration 0020) - a dashed box around
+   the conditions that get OR'd together into one sub-unit before that
+   unit participates in the rule/workflow's top-level match_type. */
+.builder-or-group {
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px 4px 12px;
+  margin-bottom: 8px;
+  background: var(--bg-elevated);
+}
+
+.builder-or-group-label {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.builder-or-group .builder-row-card {
+  background: var(--bg);
+}
+
 .builder-summary-panel {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -752,6 +776,24 @@ tr:hover td {
   text-align: center;
   width: 100%;
   margin: -2px 0 6px 0;
+}
+
+/* Canvas-node counterpart to .builder-or-group - the same one level of
+   nested OR-grouping, drawn small inside the Conditions node. */
+.workflow-or-group {
+  border: 1px dashed var(--accent);
+  border-radius: 6px;
+  padding: 6px 6px 0 6px;
+  margin-bottom: 6px;
+}
+
+.workflow-or-group-label {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
 }
 
 .workflow-action-card {

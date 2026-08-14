@@ -66,6 +66,7 @@ import type {
   RuleEvaluation,
   RevenueByMonth,
   SalesByOwner,
+  SaveNotices,
   StatusTransition,
   StatusTransitionInput,
   WinRateByOwner,
@@ -235,10 +236,10 @@ export const api = {
     call<CustomFieldDefinition>("update_custom_field_definition", { id, input }),
   deactivateCustomFieldDefinition: (id: string) =>
     call<CustomFieldDefinition>("deactivate_custom_field_definition", { id }),
-  // Returns any non-blocking `show_message` texts that fired (empty
-  // array normally) - see custom_field_service::set_entity_values.
+  // Returns any non-blocking show_error/show_warning notices that fired
+  // (both empty normally) - see custom_field_service::set_entity_values.
   setCustomFieldValues: (entityType: string, entityId: string, values: CustomFieldValues) =>
-    call<string[]>("set_custom_field_values", { entityType, entityId, values }),
+    call<SaveNotices>("set_custom_field_values", { entityType, entityId, values }),
   getCustomFieldValues: (entityId: string) => call<CustomFieldValues>("get_custom_field_values", { entityId }),
 
   listBusinessRules: (entityType: string, activeOnly: boolean) =>
