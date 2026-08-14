@@ -7,10 +7,13 @@ import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
-import type { Prefill } from "../../components/AppShell";
+import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
+import { TabListCard } from "../../components/TabListCard";
+import type { Prefill, Section } from "../../components/AppShell";
 import { CONTRACT_STATUSES, type Contract, type ContractInput, type CustomFieldValues } from "../../lib/types";
 
-type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
 function contractExportColumns(companyNameById: Map<string, string>) {
   return [
@@ -55,14 +58,21 @@ function isRenewingSoon(renewalDate: string | null): boolean {
 export function Contracts({
   prefill,
   onPrefillConsumed,
-}: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
-  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
+  onNavigateTo,
+}: {
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+} = {}) {
+  const [view, setView] = useState<View>(() =>
+    prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
+  );
   const queryClient = useQueryClient();
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
-    if (prefill?.companyId) onPrefillConsumed?.();
+    if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -70,7 +80,7 @@ export function Contracts({
     queryClient.invalidateQueries({ queryKey: ["contracts"] });
   }
 
-  if (view.mode !== "list") {
+  if (view.mode === "create" || view.mode === "edit") {
     return (
       <ContractForm
         contractId={view.mode === "edit" ? view.id : undefined}
@@ -82,6 +92,17 @@ export function Contracts({
           setView({ mode: "list" });
         }}
         onCancel={() => setView({ mode: "list" })}
+      />
+    );
+  }
+
+  if (view.mode === "detail") {
+    return (
+      <ContractDetail
+        id={view.id}
+        onEdit={() => setView({ mode: "edit", id: view.id })}
+        onBack={() => setView({ mode: "list" })}
+        onNavigateTo={onNavigateTo}
       />
     );
   }
@@ -120,8 +141,8 @@ export function Contracts({
           </thead>
           <tbody>
             {contracts.data.map((c) => (
-              <tr key={c.id}>
-                <td>{c.contract_number}</td>
+              <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
+                <td><span className="id-link">{c.contract_number}</span></td>
                 <td>{c.title}</td>
                 <td>{companyNameById.get(c.company_id) ?? "—"}</td>
                 <td>
@@ -133,7 +154,13 @@ export function Contracts({
                   {isRenewingSoon(c.renewal_date) && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Renewing soon</span>}
                 </td>
                 <td>
-                  <button className="btn" onClick={() => setView({ mode: "edit", id: c.id })}>
+                  <button
+                    className="btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setView({ mode: "edit", id: c.id });
+                    }}
+                  >
                     Edit
                   </button>
                 </td>
@@ -350,6 +377,95 @@ function ContractForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/** Record-detail-page round: Contracts previously had no detail view -
+ * list row click and menu went straight to Edit, and there was no link
+ * back to the Company/Contact/source quote it belongs to. */
+function ContractDetail({
+  id,
+  onEdit,
+  onBack,
+  onNavigateTo,
+}: {
+  id: string;
+  onEdit: () => void;
+  onBack: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+}) {
+  const contract = useQuery({ queryKey: ["contract", id], queryFn: () => api.getContract(id) });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
+  const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
+  const tasks = useQuery({ queryKey: ["tasksByRelated", "Contract", id], queryFn: () => api.listTasksByRelated("Contract", id) });
+
+  if (!contract.data) return <p>Loading...</p>;
+  const c = contract.data;
+
+  return (
+    <div>
+      <div className="toolbar">
+        <button className="btn" onClick={onBack}>
+          ← Back
+        </button>
+        <button className="btn" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+      <h2>
+        {c.title} <StatusBadge status={c.status} />
+        {isRenewingSoon(c.renewal_date) && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Renewing soon</span>}
+      </h2>
+      <p style={{ color: "var(--text-muted)" }}>{c.contract_number}</p>
+
+      <RelatedRecordSummary
+        companyId={c.company_id}
+        contactId={c.contact_id}
+        companies={companies.data}
+        contacts={contacts.data}
+        onNavigateTo={onNavigateTo}
+        relatedLists={[
+          c.source_quote_id
+            ? {
+                title: "Source quote",
+                rows: [quotes.data?.find((q) => q.id === c.source_quote_id)].filter(
+                  (q): q is NonNullable<typeof q> => !!q,
+                ),
+                render: (q) => q.quote_number,
+                onOpen: (q) => onNavigateTo?.("quotes", { openId: q.id }),
+              }
+            : null,
+        ]}
+      />
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Details</h3>
+        <p><strong>Type:</strong> {c.type ?? "—"}</p>
+        <p><strong>Value:</strong> {formatCents(c.value_cents, c.currency_code)}</p>
+        <p><strong>Start date:</strong> {c.start_date ?? "—"}</p>
+        <p><strong>End date:</strong> {c.end_date ?? "—"}</p>
+        <p><strong>Renewal date:</strong> {c.renewal_date ?? "—"}</p>
+        <p><strong>Notice period:</strong> {c.notice_period_days !== null ? `${c.notice_period_days} days` : "—"}</p>
+        <p><strong>Notes:</strong> {c.notes ?? "—"}</p>
+      </div>
+
+      {/* No "+ New task" here (unlike Company/Contact's Tasks tabs) - Tasks'
+          create-form prefill only knows how to relate a new task to a
+          Company or Contact today, and pointing it at either instead of
+          this Contract would create a misleadingly-related task. */}
+      <TabListCard
+        title="Tasks"
+        newLabel="+ New task"
+        rows={tasks.data ?? []}
+        columns={["Number", "Title", "Status"]}
+        render={(t) => [t.task_number, t.title, t.status]}
+      />
+
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsCard entityType="Contract" entityId={c.id} status={c.status} />
+      </div>
     </div>
   );
 }

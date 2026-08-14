@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
-import { formatCents } from "../../lib/money";
+import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
@@ -12,7 +12,7 @@ import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
-import { COMPANY_STATUSES, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
+import { COMPANY_STATUSES, PREFERRED_CONTACT_METHODS, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -25,6 +25,12 @@ const COMPANY_EXPORT_COLUMNS = [
   { label: "Shipping address", get: (c: Company) => c.shipping_address ?? "" },
   { label: "Tags", get: (c: Company) => c.tags ?? "" },
   { label: "Notes", get: (c: Company) => c.notes ?? "" },
+  { label: "Phone", get: (c: Company) => c.phone ?? "" },
+  { label: "Email", get: (c: Company) => c.email ?? "" },
+  { label: "Website", get: (c: Company) => c.website ?? "" },
+  { label: "Annual revenue", get: (c: Company) => (c.annual_revenue_cents === null ? "" : (c.annual_revenue_cents / 100).toFixed(2)) },
+  { label: "Employees", get: (c: Company) => (c.employee_count === null ? "" : String(c.employee_count)) },
+  { label: "Preferred contact method", get: (c: Company) => c.preferred_contact_method ?? "" },
 ];
 
 const COMPANY_IMPORT_COLUMNS = [
@@ -35,6 +41,9 @@ const COMPANY_IMPORT_COLUMNS = [
   { label: "Shipping address" },
   { label: "Tags" },
   { label: "Notes" },
+  { label: "Phone" },
+  { label: "Email" },
+  { label: "Website" },
 ];
 
 function parseCompanyRow(record: Record<string, string>): ParsedCsvRow<CompanyInput> {
@@ -56,6 +65,12 @@ function parseCompanyRow(record: Record<string, string>): ParsedCsvRow<CompanyIn
       shipping_address: field(record, "Shipping address") || null,
       tags: field(record, "Tags") || null,
       notes: field(record, "Notes") || null,
+      phone: field(record, "Phone") || null,
+      email: field(record, "Email") || null,
+      website: field(record, "Website") || null,
+      annual_revenue_cents: null,
+      employee_count: null,
+      preferred_contact_method: null,
     },
   };
 }
@@ -69,13 +84,32 @@ const emptyInput: CompanyInput = {
   shipping_address: null,
   tags: null,
   notes: null,
+  phone: null,
+  email: null,
+  website: null,
+  annual_revenue_cents: null,
+  employee_count: null,
+  preferred_contact_method: null,
 };
 
-export function Companies({ onNavigateTo }: { onNavigateTo?: (section: Section, prefill: Prefill) => void } = {}) {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function Companies({
+  prefill,
+  onPrefillConsumed,
+  onNavigateTo,
+}: {
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+} = {}) {
+  const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+
+  useEffect(() => {
+    if (prefill?.openId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["companies"] });
@@ -146,7 +180,7 @@ export function Companies({ onNavigateTo }: { onNavigateTo?: (section: Section, 
           <tbody>
             {companies.data.map((c) => (
               <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
-                <td>{c.customer_number}</td>
+                <td><span className="id-link">{c.customer_number}</span></td>
                 <td>{c.name}</td>
                 <td>
                   <StatusBadge status={c.status} />
@@ -196,6 +230,12 @@ function CompanyForm({
       shipping_address: existing.data.shipping_address,
       tags: existing.data.tags,
       notes: existing.data.notes,
+      phone: existing.data.phone,
+      email: existing.data.email,
+      website: existing.data.website,
+      annual_revenue_cents: existing.data.annual_revenue_cents,
+      employee_count: existing.data.employee_count,
+      preferred_contact_method: existing.data.preferred_contact_method,
     });
     setCustomValues(existingCustomFields.data);
     setLoadedFor(companyId);
@@ -263,6 +303,64 @@ function CompanyForm({
             value={input.tax_number ?? ""}
             onChange={(e) => setInput({ ...input, tax_number: e.target.value || null })}
           />
+        </div>
+        <div className="form-field">
+          <label>Phone</label>
+          <input
+            value={input.phone ?? ""}
+            onChange={(e) => setInput({ ...input, phone: e.target.value || null })}
+          />
+        </div>
+        <div className="form-field">
+          <label>Email</label>
+          <input
+            type="email"
+            value={input.email ?? ""}
+            onChange={(e) => setInput({ ...input, email: e.target.value || null })}
+          />
+        </div>
+        <div className="form-field">
+          <label>Website</label>
+          <input
+            value={input.website ?? ""}
+            onChange={(e) => setInput({ ...input, website: e.target.value || null })}
+          />
+        </div>
+        <div className="form-field">
+          <label>Annual revenue</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={input.annual_revenue_cents === null ? "" : centsToInputValue(input.annual_revenue_cents)}
+            onChange={(e) =>
+              setInput({ ...input, annual_revenue_cents: e.target.value === "" ? null : parseDecimalToCents(e.target.value) })
+            }
+          />
+        </div>
+        <div className="form-field">
+          <label>Employees</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={input.employee_count ?? ""}
+            onChange={(e) => setInput({ ...input, employee_count: e.target.value === "" ? null : Number(e.target.value) })}
+          />
+        </div>
+        <div className="form-field">
+          <label>Preferred contact method</label>
+          <select
+            value={input.preferred_contact_method ?? ""}
+            onChange={(e) => setInput({ ...input, preferred_contact_method: e.target.value || null })}
+          >
+            <option value="">— Unspecified —</option>
+            {PREFERRED_CONTACT_METHODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-field full">
           <label>Billing address</label>
@@ -412,6 +510,12 @@ function CompanyDetail({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Details</h3>
+            <p><strong>Phone:</strong> {company.data.phone ?? "—"}</p>
+            <p><strong>Email:</strong> {company.data.email ?? "—"}</p>
+            <p><strong>Website:</strong> {company.data.website ?? "—"}</p>
+            <p><strong>Annual revenue:</strong> {company.data.annual_revenue_cents === null ? "—" : formatCents(company.data.annual_revenue_cents)}</p>
+            <p><strong>Employees:</strong> {company.data.employee_count ?? "—"}</p>
+            <p><strong>Preferred contact method:</strong> {company.data.preferred_contact_method ?? "—"}</p>
             <p><strong>Tax number:</strong> {company.data.tax_number ?? "—"}</p>
             <p><strong>Billing address:</strong> {company.data.billing_address ?? "—"}</p>
             <p><strong>Shipping address:</strong> {company.data.shipping_address ?? "—"}</p>

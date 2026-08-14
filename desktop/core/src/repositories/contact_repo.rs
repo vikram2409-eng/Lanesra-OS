@@ -19,6 +19,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Contact> {
         status: row.get("status")?,
         tags: row.get("tags")?,
         notes: row.get("notes")?,
+        department: row.get("department")?,
+        preferred_contact_method: row.get("preferred_contact_method")?,
+        linkedin_url: row.get("linkedin_url")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -37,9 +40,10 @@ pub fn create(
 ) -> rusqlite::Result<Contact> {
     let now = now_iso();
     conn.execute(
-        "INSERT INTO contacts (id, workspace_id, contact_number, company_id, first_name, last_name, job_title, email, phone, mobile, is_primary, status, tags, notes, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?15, ?16)",
-        (
+        "INSERT INTO contacts (id, workspace_id, contact_number, company_id, first_name, last_name, job_title, email, phone, mobile, is_primary, status, tags, notes, department, preferred_contact_method, linkedin_url, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?18, ?19)",
+        // 19 params - past the raw-tuple Params impl's 16-item limit.
+        rusqlite::params![
             id,
             workspace_id,
             contact_number,
@@ -54,9 +58,12 @@ pub fn create(
             &input.status,
             &input.tags,
             &input.notes,
+            &input.department,
+            &input.preferred_contact_method,
+            &input.linkedin_url,
             &now,
             actor_user_id,
-        ),
+        ],
     )?;
     get(conn, id)?.ok_or(rusqlite::Error::QueryReturnedNoRows)
 }
@@ -92,9 +99,11 @@ pub fn update(
     conn.execute(
         "UPDATE contacts SET company_id = ?1, first_name = ?2, last_name = ?3, job_title = ?4,
             email = ?5, phone = ?6, mobile = ?7, is_primary = ?8, status = ?9, tags = ?10, notes = ?11,
-            updated_at = ?12, updated_by = ?13
-         WHERE id = ?14",
-        (
+            department = ?12, preferred_contact_method = ?13, linkedin_url = ?14,
+            updated_at = ?15, updated_by = ?16
+         WHERE id = ?17",
+        // 17 params - past the raw-tuple Params impl's 16-item limit.
+        rusqlite::params![
             &input.company_id,
             &input.first_name,
             &input.last_name,
@@ -106,10 +115,13 @@ pub fn update(
             &input.status,
             &input.tags,
             &input.notes,
+            &input.department,
+            &input.preferred_contact_method,
+            &input.linkedin_url,
             &now,
             actor_user_id,
             id,
-        ),
+        ],
     )?;
     get(conn, id)?.ok_or(rusqlite::Error::QueryReturnedNoRows)
 }

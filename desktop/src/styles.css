@@ -136,6 +136,19 @@ textarea {
   text-decoration: underline;
 }
 
+/* Record-detail-page round: every list's ID column is a visible hyperlink
+   into that record's detail page, not just an invisible whole-row click
+   target - the same "click the ID to open the record" affordance every
+   list already gave you for the row itself, made explicit. */
+.id-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.id-link:hover {
+  text-decoration: underline;
+}
+
 .btn-danger {
   border-color: var(--danger);
   color: var(--danger);

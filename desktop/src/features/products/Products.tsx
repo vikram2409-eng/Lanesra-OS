@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -6,9 +6,11 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { centsToInputValue, formatCents, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
 
-type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
 const PRODUCT_EXPORT_COLUMNS = [
   { label: "Number", get: (p: Product) => p.product_number },
@@ -36,16 +38,28 @@ const emptyInput: ProductInput = {
   is_active: true,
 };
 
-export function Products() {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function Products({
+  prefill,
+  onPrefillConsumed,
+}: {
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+} = {}) {
+  const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
   const queryClient = useQueryClient();
   const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
+
+  useEffect(() => {
+    if (prefill?.openId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["products"] });
   }
 
-  if (view.mode !== "list") {
+  if (view.mode === "create" || view.mode === "edit") {
     return (
       <ProductForm
         productId={view.mode === "edit" ? view.id : undefined}
@@ -54,6 +68,16 @@ export function Products() {
           setView({ mode: "list" });
         }}
         onCancel={() => setView({ mode: "list" })}
+      />
+    );
+  }
+
+  if (view.mode === "detail") {
+    return (
+      <ProductDetail
+        id={view.id}
+        onEdit={() => setView({ mode: "edit", id: view.id })}
+        onBack={() => setView({ mode: "list" })}
       />
     );
   }
@@ -85,14 +109,20 @@ export function Products() {
           </thead>
           <tbody>
             {products.data.map((p) => (
-              <tr key={p.id}>
-                <td>{p.product_number}</td>
+              <tr key={p.id} onClick={() => setView({ mode: "detail", id: p.id })} style={{ cursor: "pointer" }}>
+                <td><span className="id-link">{p.product_number}</span></td>
                 <td>{p.name}</td>
                 <td>{p.type}</td>
                 <td>{formatCents(p.unit_price_cents)}</td>
                 <td>{p.is_active ? "Yes" : "No"}</td>
                 <td>
-                  <button className="btn" onClick={() => setView({ mode: "edit", id: p.id })}>
+                  <button
+                    className="btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setView({ mode: "edit", id: p.id });
+                    }}
+                  >
                     Edit
                   </button>
                 </td>
@@ -227,6 +257,54 @@ function ProductForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Record-detail-page round: Products previously had no detail view at all -
+ * list row click and menu went straight to Edit. No related-records list
+ * here (unlike Company/Contact/Quote/Order/Invoice/Contract/Task) - which
+ * quotes/orders/invoices reference this product lives in each document's
+ * own line items, not a query this screen can cheaply run client-side, so
+ * this stays a focused field overview instead of guessing at one.
+ */
+function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void; onBack: () => void }) {
+  const product = useQuery({ queryKey: ["product", id], queryFn: () => api.getProduct(id) });
+
+  if (!product.data) return <p>Loading...</p>;
+  const p = product.data;
+
+  return (
+    <div>
+      <div className="toolbar">
+        <button className="btn" onClick={onBack}>
+          ← Back
+        </button>
+        <button className="btn" onClick={onEdit}>
+          Edit
+        </button>
+      </div>
+      <h2>
+        {p.name} <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>
+      </h2>
+      <p style={{ color: "var(--text-muted)" }}>
+        {p.product_number} · {p.type}
+      </p>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Details</h3>
+        <p><strong>SKU:</strong> {p.sku ?? "—"}</p>
+        <p><strong>Category:</strong> {p.category ?? "—"}</p>
+        <p><strong>Unit price:</strong> {formatCents(p.unit_price_cents)}</p>
+        <p><strong>Cost:</strong> {formatCents(p.cost_cents)}</p>
+        <p><strong>Tax rate:</strong> {(p.tax_rate_bp / 100).toFixed(2)}%</p>
+        <p><strong>Description:</strong> {p.description ?? "—"}</p>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsCard entityType="Product" entityId={p.id} status={p.is_active ? "true" : "false"} />
+      </div>
     </div>
   );
 }

@@ -176,6 +176,8 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
             let mut input = CompanyInput {
                 name: r.name, status: r.status, owner_user_id: r.owner_user_id, tax_number: r.tax_number,
                 billing_address: r.billing_address, shipping_address: r.shipping_address, tags: r.tags, notes: r.notes,
+                phone: r.phone, email: r.email, website: r.website, annual_revenue_cents: r.annual_revenue_cents,
+                employee_count: r.employee_count, preferred_contact_method: r.preferred_contact_method,
             };
             match field_key {
                 "name" => input.name = value.to_string(),
@@ -193,7 +195,8 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
             let mut input = ContactInput {
                 company_id: r.company_id, first_name: r.first_name, last_name: r.last_name, job_title: r.job_title,
                 email: r.email, phone: r.phone, mobile: r.mobile, is_primary: r.is_primary, status: r.status,
-                tags: r.tags, notes: r.notes,
+                tags: r.tags, notes: r.notes, department: r.department,
+                preferred_contact_method: r.preferred_contact_method, linkedin_url: r.linkedin_url,
             };
             match field_key {
                 "first_name" => input.first_name = value.to_string(),

@@ -12,7 +12,14 @@ import { TabListCard } from "../../components/TabListCard";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { formatCents } from "../../lib/money";
-import { CONTACT_STATUSES, type Company, type Contact, type ContactInput, type CustomFieldValues } from "../../lib/types";
+import {
+  CONTACT_STATUSES,
+  PREFERRED_CONTACT_METHODS,
+  type Company,
+  type Contact,
+  type ContactInput,
+  type CustomFieldValues,
+} from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -30,6 +37,9 @@ function contactExportColumns(companyNameById: Map<string, string>) {
     { label: "Status", get: (c: Contact) => c.status },
     { label: "Tags", get: (c: Contact) => c.tags ?? "" },
     { label: "Notes", get: (c: Contact) => c.notes ?? "" },
+    { label: "Department", get: (c: Contact) => c.department ?? "" },
+    { label: "Preferred contact method", get: (c: Contact) => c.preferred_contact_method ?? "" },
+    { label: "LinkedIn", get: (c: Contact) => c.linkedin_url ?? "" },
   ];
 }
 
@@ -45,6 +55,8 @@ const CONTACT_IMPORT_COLUMNS = [
   { label: "Status" },
   { label: "Tags" },
   { label: "Notes" },
+  { label: "Department" },
+  { label: "LinkedIn" },
 ];
 
 function parseContactRow(record: Record<string, string>, companies: Company[]): ParsedCsvRow<ContactInput> {
@@ -79,6 +91,9 @@ function parseContactRow(record: Record<string, string>, companies: Company[]): 
       status,
       tags: field(record, "Tags") || null,
       notes: field(record, "Notes") || null,
+      department: field(record, "Department") || null,
+      preferred_contact_method: null,
+      linkedin_url: field(record, "LinkedIn") || null,
     },
   };
 }
@@ -96,6 +111,9 @@ function emptyInput(companyId: string): ContactInput {
     status: "Active",
     tags: null,
     notes: null,
+    department: null,
+    preferred_contact_method: null,
+    linkedin_url: null,
   };
 }
 
@@ -108,14 +126,16 @@ export function Contacts({
   onPrefillConsumed?: () => void;
   onNavigateTo?: (section: Section, prefill: Prefill) => void;
 } = {}) {
-  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
+  const [view, setView] = useState<View>(() =>
+    prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
+  );
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
-    if (prefill?.companyId) onPrefillConsumed?.();
+    if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -198,7 +218,7 @@ export function Contacts({
           <tbody>
             {contacts.data.map((c) => (
               <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
-                <td>{c.contact_number}</td>
+                <td><span className="id-link">{c.contact_number}</span></td>
                 <td>
                   {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
                 </td>
@@ -257,9 +277,38 @@ function ContactForm({
   const [duplicateWarning, setDuplicateWarning] = useState<Contact[] | null>(null);
 
   if (existing.data && existingCustomFields.data !== undefined && loadedFor !== contactId) {
-    const { first_name, last_name, job_title, email, phone, mobile, is_primary, status, tags, notes, company_id } =
-      existing.data;
-    setInput({ company_id, first_name, last_name, job_title, email, phone, mobile, is_primary, status, tags, notes });
+    const {
+      first_name,
+      last_name,
+      job_title,
+      email,
+      phone,
+      mobile,
+      is_primary,
+      status,
+      tags,
+      notes,
+      company_id,
+      department,
+      preferred_contact_method,
+      linkedin_url,
+    } = existing.data;
+    setInput({
+      company_id,
+      first_name,
+      last_name,
+      job_title,
+      email,
+      phone,
+      mobile,
+      is_primary,
+      status,
+      tags,
+      notes,
+      department,
+      preferred_contact_method,
+      linkedin_url,
+    });
     setCustomValues(existingCustomFields.data);
     setLoadedFor(contactId);
   }
@@ -354,6 +403,34 @@ function ContactForm({
             />
             Primary contact
           </label>
+        </div>
+        <div className="form-field">
+          <label>Department</label>
+          <input
+            value={input.department ?? ""}
+            onChange={(e) => setInput({ ...input, department: e.target.value || null })}
+          />
+        </div>
+        <div className="form-field">
+          <label>Preferred contact method</label>
+          <select
+            value={input.preferred_contact_method ?? ""}
+            onChange={(e) => setInput({ ...input, preferred_contact_method: e.target.value || null })}
+          >
+            <option value="">— Unspecified —</option>
+            {PREFERRED_CONTACT_METHODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>LinkedIn (optional)</label>
+          <input
+            value={input.linkedin_url ?? ""}
+            onChange={(e) => setInput({ ...input, linkedin_url: e.target.value || null })}
+          />
         </div>
         <CustomFieldsSection entityType="Contact" status={input.status} values={customValues} onChange={setCustomValues} />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
@@ -484,6 +561,9 @@ function ContactDetail({
             <p><strong>Email:</strong> {c.email ?? "—"}</p>
             <p><strong>Phone:</strong> {c.phone ?? "—"}</p>
             <p><strong>Mobile:</strong> {c.mobile ?? "—"}</p>
+            <p><strong>Department:</strong> {c.department ?? "—"}</p>
+            <p><strong>Preferred contact method:</strong> {c.preferred_contact_method ?? "—"}</p>
+            <p><strong>LinkedIn:</strong> {c.linkedin_url ?? "—"}</p>
             <p><strong>Tags:</strong> {c.tags ?? "—"}</p>
             <p><strong>Notes:</strong> {c.notes ?? "—"}</p>
           </div>

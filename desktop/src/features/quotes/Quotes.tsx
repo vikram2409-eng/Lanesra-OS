@@ -11,7 +11,8 @@ import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
-import type { Prefill } from "../../components/AppShell";
+import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
+import type { Prefill, Section } from "../../components/AppShell";
 import { QUOTE_STATUSES, type CustomFieldValues, type Quote, type QuoteInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 
@@ -35,14 +36,21 @@ function quoteExportColumns(companyNameById: Map<string, string>) {
 export function Quotes({
   prefill,
   onPrefillConsumed,
-}: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
-  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
+  onNavigateTo,
+}: {
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+} = {}) {
+  const [view, setView] = useState<View>(() =>
+    prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
+  );
   const queryClient = useQueryClient();
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
-    if (prefill?.companyId) onPrefillConsumed?.();
+    if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -66,7 +74,14 @@ export function Quotes({
   }
 
   if (view.mode === "detail") {
-    return <QuoteDetail id={view.id} onBack={() => setView({ mode: "list" })} onChanged={invalidate} />;
+    return (
+      <QuoteDetail
+        id={view.id}
+        onBack={() => setView({ mode: "list" })}
+        onChanged={invalidate}
+        onNavigateTo={onNavigateTo}
+      />
+    );
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
@@ -101,7 +116,7 @@ export function Quotes({
           <tbody>
             {quotes.data.map((q) => (
               <tr key={q.id} onClick={() => setView({ mode: "detail", id: q.id })} style={{ cursor: "pointer" }}>
-                <td>{q.quote_number}</td>
+                <td><span className="id-link">{q.quote_number}</span></td>
                 <td>{companyNameById.get(q.company_id) ?? "—"}</td>
                 <td>
                   <StatusBadge status={q.status} />
@@ -251,9 +266,23 @@ function QuoteForm({
   );
 }
 
-function QuoteDetail({ id, onBack, onChanged }: { id: string; onBack: () => void; onChanged: () => void }) {
+function QuoteDetail({
+  id,
+  onBack,
+  onChanged,
+  onNavigateTo,
+}: {
+  id: string;
+  onBack: () => void;
+  onChanged: () => void;
+  onNavigateTo?: (section: Section, prefill: Prefill) => void;
+}) {
   const queryClient = useQueryClient();
   const quote = useQuery({ queryKey: ["quote", id], queryFn: () => api.getQuote(id) });
+  const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
+  const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
+  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
 
@@ -289,6 +318,27 @@ function QuoteDetail({ id, onBack, onChanged }: { id: string; onBack: () => void
         {q.quote_number} <StatusBadge status={q.status} />
       </h2>
       {error && <div className="error-banner">{error}</div>}
+
+      <RelatedRecordSummary
+        companyId={q.company_id}
+        contactId={q.contact_id}
+        companies={companies.data}
+        contacts={contacts.data}
+        onNavigateTo={onNavigateTo}
+        extra={[
+          q.opportunity_id
+            ? { label: "Opportunity", text: opportunities.data?.find((o) => o.id === q.opportunity_id)?.name ?? "—" }
+            : null,
+        ]}
+        relatedLists={[
+          {
+            title: "Orders created from this quote",
+            rows: (orders.data ?? []).filter((o) => o.source_quote_id === id),
+            render: (o) => `${o.order_number} · ${o.status}`,
+            onOpen: (o) => onNavigateTo?.("orders", { openId: o.id }),
+          },
+        ]}
+      />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {QUOTE_STATUSES.filter((s) => s !== q.status).map((s) => (
