@@ -65,11 +65,15 @@ const seed = {
   {id:'cf2',entity:'companies',key:'externalId',label:'External ID',type:'text',options:'',active:true,defaultValue:'',unique:true,helpText:'Must match the ID used in your accounting system.',placeholder:'e.g. ACCT-10432'}
  ],
  fieldRules:[
-  {id:'fr1',entity:'opportunities',triggerField:'stage',fieldKey:'leadSource',triggerValue:'Won',effect:'require',operator:'equals',active:true}
+  {id:'fr1',entity:'opportunities',matchType:'all',
+   conditions:[{fieldKey:'stage',operator:'equals',value:'Won',compareField:null,groupId:null}],
+   actions:[{type:'require',targetField:'leadSource',value:'',message:''}],active:true}
  ],
  workflowRules:[
-  {id:'wf1',entity:'opportunities',triggerField:'stage',toValue:'Won',taskTitle:'Kick off onboarding',daysOffset:2,notify:true,operator:'equals',actionType:'create_task',active:true},
-  {id:'wf2',entity:'invoices',triggerField:'status',toValue:'Overdue',taskTitle:'Follow up on overdue invoice',daysOffset:0,notify:false,operator:'equals',actionType:'create_task',active:true}
+  {id:'wf1',entity:'opportunities',triggerField:'stage',toValue:'Won',operator:'equals',conditions:[],matchType:'all',
+   actions:[{type:'create_task',taskTitle:'Kick off onboarding',daysOffset:2}],notify:true,active:true},
+  {id:'wf2',entity:'invoices',triggerField:'status',toValue:'Overdue',operator:'equals',conditions:[],matchType:'all',
+   actions:[{type:'create_task',taskTitle:'Follow up on overdue invoice',daysOffset:0}],notify:false,active:true}
  ],
  // Each row restricts exactly one from -> to move (from:'' means "from any
  // status") and carries its own active toggle - the same granularity as
@@ -139,6 +143,45 @@ function ensureNumbers(){
  });
  save();
 }
+// Second Admin Automation & Customization addendum round: business rules
+// and workflows both moved from a single condition/single effect shape to
+// conditions[]/actions[] arrays (with one level of OR-grouping via
+// group_id - see conditionsMatch). These migrations upgrade any rule saved
+// before this round in place, idempotently (a rule that already has
+// `conditions` is left untouched) - so existing localStorage data and the
+// seed both keep evaluating exactly as they always did until an admin
+// edits the rule through the new builder.
+function migrateFieldRule(r){
+ if(r.active===undefined)r.active=true;
+ if(r.conditions)return;
+ const fieldKey=r.triggerField||transitionFieldFor(r.entity);
+ r.conditions=[{fieldKey,operator:r.operator||'equals',value:r.triggerValue||'',compareField:r.compareField||null,groupId:null}];
+ r.matchType='all';
+ r.actions=[{type:r.effect==='hide'?'hide':'require',targetField:r.fieldKey,value:'',message:''}];
+}
+// Workflows keep their single trigger (triggerField/operator/toValue/
+// compareField) unchanged - it's still the one thing that must have JUST
+// changed for the rule to fire at all, same as the desktop edition's
+// trigger_type/trigger_field_key. `conditions` is new: optional *extra*
+// AND/OR filters evaluated only once the trigger itself already fired -
+// empty by default, meaning "fires on every trigger", exactly the
+// pre-existing behavior. `actions` replaces the single top-level
+// actionType/taskTitle/etc. fields with an array.
+function migrateWorkflowRule(r){
+ if(r.active===undefined)r.active=true;
+ if(!r.operator)r.operator='equals';
+ if(!r.triggerField)r.triggerField=transitionFieldFor(r.entity);
+ if(!r.conditions)r.conditions=[];
+ if(!r.matchType)r.matchType='all';
+ if(r.actions)return;
+ const actionType=r.actionType||'create_task';
+ const action={type:actionType};
+ if(actionType==='create_task'){action.taskTitle=r.taskTitle||'';action.daysOffset=Number(r.daysOffset||0)}
+ else if(actionType==='create_record'){action.recordTargetEntity=r.recordTargetEntity||'';action.recordNameTemplate=r.recordNameTemplate||''}
+ else if(actionType==='update_related_record'){action.relTargetEntity=r.relTargetEntity||'';action.relTargetField=r.relTargetField||'';action.relValue=r.relValue||''}
+ else if(actionType==='update_field'){action.updateFieldKey=r.updateFieldKey||'';action.updateValue=r.updateValue||'';action.updateCopyFrom=r.updateCopyFrom||''}
+ r.actions=[action];
+}
 function ensureAdminData(){
  if(!data.workspace)data.workspace={name:'Northstar Digital Solutions',address:'120 Bay Street, Suite 400',city:'Toronto, ON',phone:'416-555-0142',logo:''};
  if(!data.users)data.users=[{id:'u1',name:'Maya Chen',email:'maya@northstar.example',role:'Administrator',status:'Active'}];
@@ -162,9 +205,9 @@ function ensureAdminData(){
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
  (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
  (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
- (data.fieldRules||[]).forEach(r=>{if(!r.operator)r.operator='equals';if(!r.triggerField)r.triggerField=transitionFieldFor(r.entity);if(r.active===undefined)r.active=true});
- (data.workflowRules||[]).forEach(r=>{if(!r.operator)r.operator='equals';if(!r.triggerField)r.triggerField=transitionFieldFor(r.entity);if(!r.actionType)r.actionType='create_task';if(r.active===undefined)r.active=true});
- (data.customFields||[]).forEach(f=>{if(f.defaultValue===undefined)f.defaultValue='';if(f.unique===undefined)f.unique=false;if(f.helpText===undefined)f.helpText='';if(f.placeholder===undefined)f.placeholder='';if(f.required===undefined)f.required=false;if(f.maxLength===undefined)f.maxLength=null;if(f.pattern===undefined)f.pattern='';if(f.minValue===undefined)f.minValue='';if(f.maxValue===undefined)f.maxValue='';if(f.searchable===undefined)f.searchable=false;if(f.filterable===undefined)f.filterable=false;if(f.reportable===undefined)f.reportable=true});
+ (data.fieldRules||[]).forEach(migrateFieldRule);
+ (data.workflowRules||[]).forEach(migrateWorkflowRule);
+ (data.customFields||[]).forEach(f=>{if(f.defaultValue===undefined)f.defaultValue='';if(f.unique===undefined)f.unique=false;if(f.helpText===undefined)f.helpText='';if(f.placeholder===undefined)f.placeholder='';if(f.required===undefined)f.required=false;if(f.maxLength===undefined)f.maxLength=null;if(f.pattern===undefined)f.pattern='';if(f.minValue===undefined)f.minValue='';if(f.maxValue===undefined)f.maxValue='';if(f.searchable===undefined)f.searchable=false;if(f.filterable===undefined)f.filterable=false;if(f.reportable===undefined)f.reportable=true;if(f.hiddenByDefault===undefined)f.hiddenByDefault=false});
  save();
 }
 const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓',reports:'▥'};
@@ -370,6 +413,7 @@ function customFieldsFor(entityKey){
    defaultValue:f.defaultValue||'',unique:!!f.unique,helpText:f.helpText||'',placeholder:f.placeholder||'',
    required:!!f.required,maxLength:f.maxLength||null,pattern:f.pattern||'',minValue:f.minValue??'',maxValue:f.maxValue??'',
    searchable:!!f.searchable,filterable:!!f.filterable,reportable:f.reportable!==false,
+   hiddenByDefault:!!f.hiddenByDefault,
   };
   if(f.type==='boolean')return [f.key,f.label,'select','Yes|No',extra];
   if(f.type==='select')return [f.key,f.label,'select',f.options||'',extra];
@@ -402,6 +446,7 @@ function fieldLabelFor(entityKey,key){return (conditionFieldsFor(entityKey).find
 // it's a field-to-field comparison, otherwise the literal value as a badge.
 function describeComparand(entityKey,compareField,literalValue){return compareField?fieldLabelFor(entityKey,compareField):badgeMaybe(literalValue)}
 const OPERATOR_LABELS={equals:'is',not_equals:'is not',contains:'contains',not_contains:'does not contain',starts_with:'starts with',ends_with:'ends with',in_list:'is one of',not_in_list:'is not one of',is_empty:'is empty',is_not_empty:'is not empty',greater_than:'is greater than',less_than:'is less than'};
+const MATCH_TYPES=['all','any'];
 // `in_list`/`not_in_list` split their value on this - the same convention
 // select-field options already use ("Option A|Option B|Option C").
 const LIST_SEPARATOR='|';
@@ -441,32 +486,144 @@ function fieldValueHtml(name,field,value=''){
  if(type==='date')return `<input name="${name}" type="date" value="${value}">`;
  return `<input name="${name}" type="text" value="${value}">`;
 }
+// ---- Condition groups (Admin Automation & Customization, second addendum
+// round) - shared by business rules and workflow automation, mirroring
+// desktop's core::domain::conditions::conditions_match exactly. A
+// condition with no groupId participates directly in the rule's top-level
+// matchType; conditions sharing a groupId are OR'd together into one
+// sub-unit first, and that sub-unit's result then participates in the
+// top-level matchType alongside the ungrouped conditions - one level of
+// nested OR-grouping ("+ Add condition" vs "+ OR group" in the builders).
+function conditionsMatch(matchType,conditions,ctx){
+ if(!conditions||!conditions.length)return false;
+ const units=[]; const groups=new Map(); const groupOrder=[];
+ conditions.forEach(c=>{
+  const compareValue=c.compareField?(ctx[c.compareField]??''):(c.value??'');
+  const matched=operatorMatch(c.operator,ctx[c.fieldKey],compareValue);
+  if(c.groupId){
+   if(!groups.has(c.groupId))groupOrder.push(c.groupId);
+   groups.set(c.groupId,(groups.get(c.groupId)||false)||matched);
+  }else units.push(matched);
+ });
+ groupOrder.forEach(g=>units.push(groups.get(g)));
+ return matchType==='any'?units.some(Boolean):units.every(Boolean);
+}
+// Groups a flat conditions array into top-level units, in first-occurrence
+// order - used to render an OR-group as one bordered box in the builders
+// and to parenthesize a read-only summary correctly.
+function groupConditionUnits(conditions){
+ const units=[]; const byGroup=new Map();
+ conditions.forEach((c,i)=>{
+  if(c.groupId){
+   let g=byGroup.get(c.groupId);
+   if(!g){g={kind:'group',groupId:c.groupId,indices:[]};byGroup.set(c.groupId,g);units.push(g)}
+   g.indices.push(i);
+  }else units.push({kind:'single',index:i});
+ });
+ return units;
+}
+function describeCondition(entityKey,c){
+ return `${fieldLabelFor(entityKey,c.fieldKey)} ${OPERATOR_LABELS[c.operator]||'is'}${operatorNeedsValue(c.operator)?' '+describeComparand(entityKey,c.compareField,c.value):''}`;
+}
+// Plain-language description of a whole conditions list, honoring
+// OR-groups - "(a OR b) AND c" rather than the flat "a OR b AND c" a naive
+// join would produce.
+function describeConditions(entityKey,conditions,matchType){
+ if(!conditions||!conditions.length)return 'no conditions';
+ const units=groupConditionUnits(conditions);
+ const parts=units.map(u=>u.kind==='single'?describeCondition(entityKey,conditions[u.index]):`(${u.indices.map(i=>describeCondition(entityKey,conditions[i])).join(' OR ')})`);
+ return parts.join(matchType==='any'?' OR ':' AND ');
+}
+function newGroupId(){return 'g'+Math.random().toString(36).slice(2,9)}
+
+// ---- Business rules (fieldRules) - condition/action evaluation ------------
+// Field-behavior action types (continuous, live-evaluated against the open
+// form) vs. save-time-only actions (set_default/set_value/clear_value/
+// restrict_choices' value/block_save/show_error/show_warning) - mirrors
+// desktop's business_rule_service::evaluate split exactly.
+const FIELD_EFFECT_ACTIONS=['require','hide','show','lock','editable'];
+// Client-side, cosmetic-only mirror of the field-effect actions - re-run on
+// every change to any condition/compare field, exactly like desktop's
+// lib/businessRules.ts. Later (later in the array) matching rule's action
+// wins on a shared target field - "last matching rule wins" map-insert-
+// overwrite semantics, same as the original single-effect version.
+function fieldEffectsFor(rules,ctx){
+ const effects={};
+ rules.forEach(r=>{
+  if(!conditionsMatch(r.matchType||'all',r.conditions,ctx))return;
+  (r.actions||[]).forEach(a=>{if(FIELD_EFFECT_ACTIONS.includes(a.type)&&a.targetField)effects[a.targetField]=a.type});
+ });
+ return effects;
+}
+function restrictedChoicesFor(rules,ctx){
+ const choices={};
+ rules.forEach(r=>{
+  if(!conditionsMatch(r.matchType||'all',r.conditions,ctx))return;
+  (r.actions||[]).forEach(a=>{if(a.type==='restrict_choices'&&a.targetField&&a.value)choices[a.targetField]=a.value});
+ });
+ return choices;
+}
+// Live form wiring: require/hide/show/lock/editable + restrict_choices +
+// a custom field's own is_hidden_by_default flag, re-evaluated on every
+// change to a watched condition/compare field. set_default/set_value/
+// clear_value/block_save/show_error/show_warning are save-time-only (see
+// evaluateFieldRulesForSave, called from the record save handler) since
+// they mutate or reject the save itself rather than just how the form
+// looks - same split the desktop edition's businessRules.ts documents.
 function applyFieldRules(entityKey,form){
  const rules=(data.fieldRules||[]).filter(r=>r.entity===entityKey&&r.active);
- if(!rules.length)return;
+ const allFields=actionableFieldsFor(entityKey);
+ function ctxFromForm(){
+  const ctx={};
+  conditionFieldsFor(entityKey).forEach(f=>{const el=form.elements[f[0]];if(el)ctx[f[0]]=el.value});
+  return ctx;
+ }
  function apply(){
-  rules.forEach(r=>{
-   const triggerField=r.triggerField||transitionFieldFor(entityKey);
-   const trigger=form.elements[triggerField]; const input=form.elements[r.fieldKey];
-   if(!trigger||!input)return;
+  const ctx=ctxFromForm();
+  const effects=fieldEffectsFor(rules,ctx);
+  const choices=restrictedChoicesFor(rules,ctx);
+  allFields.forEach(f=>{
+   const [key,,,,extra]=f;
+   const input=form.elements[key]; if(!input)return;
    const wrap=input.closest('.field'); const label=wrap?.querySelector('label');
-   // Field-to-field comparison: compare against the other field's live
-   // value on this same form instead of the rule's fixed triggerValue.
-   const compareValue=r.compareField?(form.elements[r.compareField]?.value??''):r.triggerValue;
-   const match=operatorMatch(r.operator,trigger.value,compareValue);
-   if(r.effect==='hide'){
-    if(wrap)wrap.style.display=match?'none':'';
-    input.required=false;
-   }else if(r.effect==='require'){
-    if(wrap)wrap.style.display='';
-    input.required=match;
-    if(label){const base=label.textContent.replace(/\s*\*$/,'');label.textContent=match?base+' *':base}
+   const effect=effects[key];
+   const baseRequired=!!extra?.required||['name','title','number'].includes(key);
+   const hiddenByDefault=!!extra?.hiddenByDefault;
+   const hidden=effect==='hide'||(effect!=='show'&&hiddenByDefault);
+   if(wrap)wrap.style.display=hidden?'none':'';
+   input.disabled=effect==='lock';
+   const required=!hidden&&(baseRequired||effect==='require');
+   input.required=required;
+   if(label){const base=label.textContent.replace(/\s*\*$/,'');label.textContent=required?base+' *':base}
+   if(input.tagName==='SELECT'){
+    const allowed=choices[key]?choices[key].split(LIST_SEPARATOR):null;
+    [...input.options].forEach(o=>{if(o.value)o.hidden=allowed?!allowed.includes(o.value):false});
    }
   });
  }
- const watchFields=[...new Set(rules.flatMap(r=>[r.triggerField||transitionFieldFor(entityKey),r.compareField].filter(Boolean)))];
+ const watchFields=[...new Set(rules.flatMap(r=>(r.conditions||[]).flatMap(c=>[c.fieldKey,c.compareField].filter(Boolean))))];
  watchFields.forEach(fk=>{const el=form.elements[fk]; if(el){el.addEventListener('change',apply);el.addEventListener('input',apply)}});
  apply();
+}
+// Save-time-only business rule actions - mirrors
+// custom_field_service::set_entity_values / business_rule_service::evaluate.
+// Applied once, right before a record save's own default-value/uniqueness
+// pass, on the same `obj` about to be written.
+function evaluateFieldRulesForSave(entityKey,obj){
+ const rules=(data.fieldRules||[]).filter(r=>r.entity===entityKey&&r.active);
+ const result={blocked:null,setValues:{},errors:[],warnings:[]};
+ rules.forEach(r=>{
+  if(!conditionsMatch(r.matchType||'all',r.conditions,obj))return;
+  (r.actions||[]).forEach(a=>{
+   if(a.type==='set_default'){if(a.targetField&&!obj[a.targetField])result.setValues[a.targetField]=a.value??''}
+   else if(a.type==='set_value'){if(a.targetField)result.setValues[a.targetField]=a.value??''}
+   else if(a.type==='clear_value'){if(a.targetField)result.setValues[a.targetField]=''}
+   else if(a.type==='block_save'){result.blocked=a.message||'This save is blocked by a business rule.'}
+   else if(a.type==='show_error'){if(a.message)result.errors.push(a.message)}
+   else if(a.type==='show_warning'){if(a.message)result.warnings.push(a.message)}
+  });
+ });
+ return result;
 }
 const KPI_DEFS=[
  {key:'openPipeline',label:'Open pipeline',nav:'pipeline',filter:'open',value:()=>money(data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).reduce((s,o)=>s+Number(o.value||0),0))},
@@ -485,7 +642,7 @@ function landing(){
  <section id="features" class="section"><div class="container"><div class="section-head"><div class="eyebrow">Complete sales journey</div><h2>Everything connected from first conversation to invoice.</h2><p class="muted">No maze of modules. No enterprise setup project. Just the essentials your team uses every day.</p></div><div class="feature-grid">${[
  ['◎','Companies & Contacts','Keep customer profiles, people, notes and activities together.'],['⌁','Sales Pipeline','Move opportunities visually from lead to won.'],['◇','Products & Services','Maintain reusable pricing, categories and tax settings.'],['▤','Quotes','Create professional commercial proposals and track acceptance.'],['▣','Orders','Convert approved quotes into trackable sales orders.'],['$','Invoices','Issue invoices and monitor paid, open and overdue balances.'],['▧','Contracts','Track agreement values, dates, files and renewals.'],['✓','Tasks & Activities','Manage calls, meetings, follow-ups and priorities.'],['▦','Sales Dashboard','See pipeline, revenue, customers and next actions instantly.']].map(x=>`<article class="feature-card"><div class="feature-icon">${x[0]}</div><h3>${x[1]}</h3><p class="muted">${x[2]}</p></article>`).join('')}</div></div></section>
  <section id="extensibility" class="section" style="background:var(--surface-alt,#f7f8fc)"><div class="container"><div class="section-head"><div class="eyebrow">Make it yours — no code required</div><h2>Every business outgrows a fixed data model. Lanesra doesn't have one.</h2><p class="muted">An Administrator can reshape the workspace itself from a settings screen — not a developer, not a support ticket.</p></div><div class="feature-grid">${[
- ['⬡','Custom Objects','Define an entirely new record type — Vendors, Assets, Projects, anything — with its own fields, ID format and navigation section.'],['⇄','Custom Relationships','Connect any two record types with one-to-one, many-to-one or many-to-many links, and a related-records list that appears automatically.'],['◈','Business Rules','Require, hide, lock or set a field\'s value with multi-condition AND/OR logic and 10 comparison operators — or block a save entirely with a custom message.'],['⚙','Workflow Automation','Trigger on a status/field change, a due date, or a schedule; create a task, assign an owner, create a related record, or post a notification.'],['▥','Custom Reports & Fields','Add validated custom fields to any object, then build reports that group and sum on them — no separate reporting tool.'],['🔔','Notifications & Admin Panel','An in-app notification center, user roles, branding, numbering formats and dashboard KPIs — one place to configure the whole workspace.']].map(x=>`<article class="feature-card"><div class="feature-icon">${x[0]}</div><h3>${x[1]}</h3><p class="muted">${x[2]}</p></article>`).join('')}</div></div></section>
+ ['⬡','Custom Objects','Define an entirely new record type — Vendors, Assets, Projects, anything — with its own fields, ID format and navigation section.'],['⇄','Custom Relationships','Connect any two record types with one-to-one, many-to-one or many-to-many links, and a related-records list that appears automatically.'],['◈','Business Rules','Require, show, hide, lock, unlock, set or clear a field\'s value with multi-condition AND/OR logic (plus nested OR-groups) and 10 comparison operators — restrict a select field\'s choices, or block a save with an error or warning message.'],['⚙','Workflow Automation','Trigger on a status/field change, a due date, or a schedule; create a task, assign an owner, create a related record, or post a notification.'],['▥','Custom Reports & Fields','Add validated custom fields to any object, then build reports that group and sum on them — no separate reporting tool.'],['🔔','Notifications & Admin Panel','An in-app notification center, user roles, branding, numbering formats and dashboard KPIs — one place to configure the whole workspace.']].map(x=>`<article class="feature-card"><div class="feature-icon">${x[0]}</div><h3>${x[1]}</h3><p class="muted">${x[2]}</p></article>`).join('')}</div></div></section>
  <section id="desktop" class="section"><div class="container split"><div class="choice-card"><div class="eyebrow">Try online</div><h2>Explore a working business</h2><p class="muted">Open the live demo with realistic sample customers, opportunities, quotes, invoices and contracts. No registration required.</p><ul><li>Sample company included</li><li>Create and edit records</li><li>Reset demo anytime</li></ul><a class="btn btn-primary" href="/demo">Open live demo</a></div><div class="choice-card dark"><div class="eyebrow" style="color:#a5b4fc">Desktop edition</div><h2>Your software. Your computer. Your data.</h2><p style="color:#cbd5e1">A private desktop edition is available now for Windows (Early Access, unsigned installer), with macOS and Linux to follow. The source is public on GitHub today.</p><ul><li>No cloud account required</li><li>Works without internet</li><li>No activation or subscription</li></ul><a class="btn btn-secondary" href="/download">Desktop status — Windows installer available</a></div></div></section>
  <section id="open-source" class="section"><div class="container cta"><div class="eyebrow" style="color:#a5b4fc">Open source by design</div><h2>Inspect it. Run it. Improve it.</h2><p style="color:#cbd5e1;max-width:700px;margin:0 auto 24px">Lanesra OS is designed to be transparent, community-driven and free from licence keys or mandatory telemetry.</p><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank" rel="noopener">View GitHub repository</a></div></section>
  </main>${publicFooter()}`;
@@ -495,7 +652,7 @@ function landing(){
 
 function appShell(){
  document.title='Lanesra OS Demo';
- $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav" id="sideNav">${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button></nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.23.1</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
+ $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav" id="sideNav">${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button></nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.24.0</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
  document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;renderView()});
  $('#resetDemo').onclick=()=>{data=structuredClone(seed);ensureAdminData();syncCustomObjectRegistry();renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored');refreshNotifBadge();renderView()};
  const searchInput=$('#globalSearch'), searchBox=$('#searchResults');
@@ -940,6 +1097,13 @@ function recordModal(key,fields,record={}){
  // has that value - mirrors custom_field_service::set_entity_values.
  fields.forEach(f=>{const extra=f[4];if(extra?.defaultValue&&!obj[f[0]])obj[f[0]]=extra.defaultValue});
  for(const f of fields){const extra=f[4];if(extra?.unique&&obj[f[0]]){const dup=data[key].some(x=>x.id!==record.id&&String(x[f[0]]||'')===String(obj[f[0]]));if(dup)return alert(`${f[1]} must be unique — "${obj[f[0]]}" is already used by another record.`)}}
+ // Business rule save-time actions (block_save/set_default/set_value/
+ // clear_value/show_error/show_warning) - require/hide/show/lock/editable/
+ // restrict_choices are already reflected live by applyFieldRules; this is
+ // the save-time-only subset, mirrors custom_field_service::set_entity_values.
+ const ruleOutcome=evaluateFieldRulesForSave(key,obj);
+ if(ruleOutcome.blocked)return alert(ruleOutcome.blocked);
+ Object.assign(obj,ruleOutcome.setValues);
  fields.filter(f=>f[2]==='number').forEach(f=>obj[f[0]]=Number(obj[f[0]]||0));if(isDoc){obj.items=[...document.querySelectorAll('.line-row')].map(r=>({productId:$('.line-product',r).value,quantity:Number($('.line-qty',r).value||1),unitPrice:Number($('.line-price',r).value||0)})).filter(i=>i.productId);if(!obj.items.length)return alert('Add at least one product or service.')}
  const wasEdit=!!record.id, before=wasEdit?{...record}:null;
  // Status Transition Editor (Phase 2): if this entity has any active
@@ -972,15 +1136,23 @@ function recordModal(key,fields,record={}){
    // on the just-saved record instead of the rule's fixed toValue.
    const compareValue=r.compareField?(obj[r.compareField]??''):r.toValue;
    if(!operatorMatch(r.operator||'equals',obj[wf],compareValue))return;
-   const actionDescription=executeWorkflowAction(r,key,record);
-   if(!actionDescription)return; // e.g. update_related_record with nothing linked yet - a silent no-op, same as desktop
+   // Extra AND/OR conditions (optional, second addendum round) - evaluated
+   // against the just-saved record once the trigger itself already fired;
+   // an empty list always passes, matching desktop's workflow_matches.
+   if(r.conditions&&r.conditions.length&&!conditionsMatch(r.matchType||'all',r.conditions,obj))return;
+   const descriptions=(r.actions||[]).map(a=>executeWorkflowAction(a,key,record)).filter(Boolean);
+   if(!descriptions.length)return; // e.g. update_related_record with nothing linked yet - a silent no-op, same as desktop
    if(r.notify){
     const label=obj.name||obj.title||obj.number||entityLabel(key);
-    data.notifications.unshift({id:uid(),message:`${entityLabel(key).replace(/s$/,'')} "${label}" — ${fieldLabelFor(key,wf)} ${OPERATOR_LABELS[r.operator||'equals']}${operatorNeedsValue(r.operator||'equals')?` ${describeComparand(key,r.compareField,r.toValue)}`:''} — ${actionDescription}`,createdAt:new Date().toISOString(),read:false});
+    data.notifications.unshift({id:uid(),message:`${entityLabel(key).replace(/s$/,'')} "${label}" — ${fieldLabelFor(key,wf)} ${OPERATOR_LABELS[r.operator||'equals']}${operatorNeedsValue(r.operator||'equals')?` ${describeComparand(key,r.compareField,r.toValue)}`:''} — ${descriptions.join('; ')}`,createdAt:new Date().toISOString(),read:false});
    }
   });
  }
- save();closeModal();toast('Record saved');refreshNotifBadge();renderView()};
+ save();closeModal();toast('Record saved');refreshNotifBadge();renderView();
+ // show_error/show_warning notices (non-blocking - the save already
+ // succeeded) - mirrors the desktop edition's showRuleMessages.
+ const notices=[...ruleOutcome.errors.map(m=>`⚠ ${m}`),...ruleOutcome.warnings];
+ if(notices.length)alert(notices.join('\n'))};
 }
 function wireRelations(record){
  const form=$('#recordForm');
@@ -1593,7 +1765,7 @@ function fieldsTab(body){
 }
 function customFieldModal(field){
  const isEdit=!!field;
- const f=field||{entity:cfEntity,label:'',type:'text',options:'',active:true,defaultValue:'',unique:false,helpText:'',placeholder:'',required:false,maxLength:'',pattern:'',minValue:'',maxValue:'',searchable:false,filterable:false,reportable:true};
+ const f=field||{entity:cfEntity,label:'',type:'text',options:'',active:true,defaultValue:'',unique:false,helpText:'',placeholder:'',required:false,maxLength:'',pattern:'',minValue:'',maxValue:'',searchable:false,filterable:false,reportable:true,hiddenByDefault:false};
  const isText=f.type==='text', isNum=f.type==='number';
  const body=`<form id="cfForm" class="form-grid">
  <div class="field"><label>Field label</label><input name="label" value="${f.label}" required></div>
@@ -1613,6 +1785,7 @@ function customFieldModal(field){
   <label class="checkbox-row" style="padding:0"><input type="checkbox" name="searchable" value="true" ${f.searchable?'checked':''}> Searchable</label>
   <label class="checkbox-row" style="padding:0"><input type="checkbox" name="filterable" value="true" ${f.filterable?'checked':''}> Filterable</label>
   <label class="checkbox-row" style="padding:0"><input type="checkbox" name="reportable" value="true" ${f.reportable!==false?'checked':''}> Reportable</label>
+  <label class="checkbox-row" style="padding:0" title="Left off every create/edit form unless a business rule's Show action targets it"><input type="checkbox" name="hiddenByDefault" value="true" ${f.hiddenByDefault?'checked':''}> Hide by default</label>
  </div>
  <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save field':'Add field'}</button></div>
  </form>`;
@@ -1645,6 +1818,7 @@ function customFieldModal(field){
    minValue:fd.type==='number'&&fd.minValue!==''?Number(fd.minValue):'',
    maxValue:fd.type==='number'&&fd.maxValue!==''?Number(fd.maxValue):'',
    searchable:fd.searchable==='true',filterable:fd.filterable==='true',reportable:fd.reportable==='true',
+   hiddenByDefault:fd.hiddenByDefault==='true',
   };
   if(isEdit){Object.assign(field,shared)}
   else{data.customFields.push({id:uid(),entity:cfEntity,key:slugify(fd.label),...shared})}
@@ -1663,12 +1837,8 @@ function testPanelHtml(entityKey,title){
 function wireRuleTestPanel(entityKey){
  const form=$('#testForm'); if(!form)return;
  form.onsubmit=e=>{e.preventDefault();const hyp=Object.fromEntries(new FormData(form).entries());
-  const matches=(data.fieldRules||[]).filter(r=>r.entity===entityKey&&r.active).filter(r=>{
-   const tf=r.triggerField||transitionFieldFor(entityKey);
-   const compareValue=r.compareField?(hyp[r.compareField]??''):r.triggerValue;
-   return operatorMatch(r.operator||'equals',hyp[tf],compareValue);
-  });
-  $('#testResults').innerHTML=matches.length?`<strong>${matches.length} matching rule(s):</strong>${matches.map(r=>`<div class="deal" style="margin-top:8px">${r.effect==='require'?'Require':'Hide'} ${fieldLabelFor(entityKey,r.fieldKey)}</div>`).join('')}`:'<div class="empty">No active rule matches these values.</div>';
+  const matches=(data.fieldRules||[]).filter(r=>r.entity===entityKey&&r.active).filter(r=>conditionsMatch(r.matchType||'all',r.conditions,hyp));
+  $('#testResults').innerHTML=matches.length?`<strong>${matches.length} matching rule(s):</strong>${matches.map(r=>`<div class="deal" style="margin-top:8px">${(r.actions||[]).map(a=>describeRuleAction(entityKey,a)).join('; ')}</div>`).join('')}`:'<div class="empty">No active rule matches these values.</div>';
  };
 }
 function wireWorkflowTestPanel(entityKey){
@@ -1677,9 +1847,10 @@ function wireWorkflowTestPanel(entityKey){
   const matches=(data.workflowRules||[]).filter(r=>r.entity===entityKey&&r.active).filter(r=>{
    const tf=r.triggerField||transitionFieldFor(entityKey);
    const compareValue=r.compareField?(hyp[r.compareField]??''):r.toValue;
-   return operatorMatch(r.operator||'equals',hyp[tf],compareValue);
+   if(!operatorMatch(r.operator||'equals',hyp[tf],compareValue))return false;
+   return !(r.conditions&&r.conditions.length)||conditionsMatch(r.matchType||'all',r.conditions,hyp);
   });
-  $('#testResults').innerHTML=matches.length?`<strong>${matches.length} matching workflow(s):</strong>${matches.map(r=>`<div class="deal" style="margin-top:8px">Would ${describeWorkflowAction(r)}${r.notify?' and notify admins':''}</div>`).join('')}`:'<div class="empty">No active workflow matches these values.</div>';
+  $('#testResults').innerHTML=matches.length?`<strong>${matches.length} matching workflow(s):</strong>${matches.map(r=>`<div class="deal" style="margin-top:8px">Would ${(r.actions||[]).map(a=>describeWorkflowAction(a,entityKey)).join('; ')}${r.notify?' and notify admins':''}</div>`).join('')}`:'<div class="empty">No active workflow matches these values.</div>';
  };
 }
 function rulesTab(body){
@@ -1687,10 +1858,9 @@ function rulesTab(body){
  const keys=[...Object.keys(numberRules),...activeCustomObjectKeys()];
  const actionFields=actionableFieldsFor(ruleEntity);
  const list=(data.fieldRules||[]).filter(r=>r.entity===ruleEntity);
- body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Business rules</h3><p class="muted">Require or hide a field - built-in or custom - based on any other field's value, with a real comparison operator, not just the status/stage field.</p>
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Business rules</h3><p class="muted">Build an IF (AND/OR conditions, with one level of OR-groups) / THEN (any number of actions) rule against any built-in or custom field.</p>
  ${entityPills(keys,ruleEntity)}
- ${actionFields.length?`<div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Then</th><th>Field</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${fieldLabelFor(r.entity,r.triggerField||transitionFieldFor(r.entity))} ${OPERATOR_LABELS[r.operator]||'is'}${operatorNeedsValue(r.operator)?' '+describeComparand(r.entity,r.compareField,r.triggerValue):''}</td><td>${r.effect==='require'?'Require':'Hide'}</td><td>${fieldLabelFor(r.entity,r.fieldKey)}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-rule="${r.id}">Edit</button><button class="icon-btn" data-del-rule="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No business rules on '+entityLabel(ruleEntity)+' yet</div>'}</div><button class="btn btn-secondary" id="addRule" style="margin-top:14px">+ New rule</button>`:`<div class="empty">${entityLabel(ruleEntity)} has no field a rule can require/hide yet.</div>`}
- <p class="muted" style="margin-top:14px">This demo shows the core require/hide rule. The Windows desktop edition also supports multi-condition AND/OR rules and lock/set-value/block-save/show-message actions — see the <a href="/roadmap">roadmap</a>.</p>
+ ${actionFields.length?`<div class="table-wrap"><table class="table"><thead><tr><th>If</th><th>Then</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${describeConditions(r.entity,r.conditions,r.matchType||'all')}</td><td>${(r.actions||[]).map(a=>describeRuleAction(r.entity,a)).join('; ')}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-rule="${r.id}">Edit</button><button class="icon-btn" data-del-rule="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No business rules on '+entityLabel(ruleEntity)+' yet</div>'}</div><button class="btn btn-secondary" id="addRule" style="margin-top:14px">+ New rule</button>`:`<div class="empty">${entityLabel(ruleEntity)} has no field a rule can act on yet.</div>`}
  </div>`;
  body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{ruleEntity=b.dataset.entity;renderAdminTab()});
  $('#addRule')?.addEventListener('click',()=>{ruleBuilderMode='create';renderAdminTab()});
@@ -1698,10 +1868,12 @@ function rulesTab(body){
  body.querySelectorAll('[data-del-rule]').forEach(b=>b.onclick=()=>{data.fieldRules=data.fieldRules.filter(r=>r.id!==b.dataset.delRule);save();toast('Rule deleted');renderAdminTab()});
 }
 // Rule-builder page (Phase-3-and-visual-redesign parity with the desktop
-// edition's RuleForm): a numbered Condition/Effect layout with a live
-// summary panel, replacing the old create-only modal - now also supports
-// editing an existing rule, with Test rule and Activate/Deactivate moved
-// into the header the same way the desktop redesign moved them.
+// edition's RuleForm, extended by the second Admin Automation &
+// Customization addendum round): a numbered Conditions/Actions layout with
+// a live summary panel - any number of conditions (AND/OR, plus one level
+// of nested OR-groups via mountConditionsEditor) and any number of actions
+// (the full action palette via mountActionsEditor), with Test rule and
+// Activate/Deactivate in the header.
 function renderRuleBuilder(body){
  const isEdit=ruleBuilderMode!=='create';
  const existing=isEdit?data.fieldRules.find(r=>r.id===ruleBuilderMode):null;
@@ -1709,7 +1881,8 @@ function renderRuleBuilder(body){
  const entityKey=existing?existing.entity:ruleEntity;
  const condFields=conditionFieldsFor(entityKey);
  const actionFields=actionableFieldsFor(entityKey);
- const defaultField=existing?.triggerField||transitionFieldFor(entityKey);
+ const initialConditions=existing?.conditions?.length?existing.conditions:[{fieldKey:transitionFieldFor(entityKey),operator:'equals',value:'',compareField:null,groupId:null}];
+ const initialActions=existing?.actions?.length?existing.actions:[{type:'require',targetField:actionFields[0]?.[0]||'',value:'',message:''}];
  body.innerHTML=`<div class="builder-header">
   <div>
    <div class="builder-breadcrumb">Business Rules / ${isEdit?'Edit rule':'New rule'}</div>
@@ -1727,44 +1900,35 @@ function renderRuleBuilder(body){
  <div class="builder-layout">
   <div>
    <div class="builder-section">
-    <div class="builder-section-title"><span class="step-badge">1</span> Condition</div>
-    <div class="form-grid">
-     <div class="field"><label>Field</label><select name="triggerField" id="condField">${condFields.map(f=>`<option value="${f[0]}" ${f[0]===defaultField?'selected':''}>${f[1]}</option>`).join('')}</select></div>
-     <div id="condDynamic" style="display:contents">${conditionDynamicHtml(condFields,defaultField,existing?.operator||'equals',existing?.triggerValue||'',existing?.compareField||null)}</div>
-    </div>
+    <div class="builder-section-title"><span class="step-badge">1</span> Conditions</div>
+    <div id="rbConditions"></div>
    </div>
    <div class="builder-section">
-    <div class="builder-section-title"><span class="step-badge">2</span> Effect</div>
-    <div class="form-grid">
-     <div class="field"><label>Then</label><select name="targetField" id="ruleTargetField">${actionFields.map(f=>`<option value="${f[0]}" ${f[0]===existing?.fieldKey?'selected':''}>${f[1]}</option>`).join('')}</select></div>
-     <div class="field"><label>Effect</label><select name="effect" id="ruleEffect"><option value="require" ${existing&&existing.effect==='hide'?'':'selected'}>Require the field</option><option value="hide" ${existing?.effect==='hide'?'selected':''}>Hide the field</option></select></div>
-    </div>
+    <div class="builder-section-title"><span class="step-badge">2</span> Actions</div>
+    <p class="muted" style="margin-top:-4px">Choose what should happen when the conditions above are met - one rule can have several actions.</p>
+    <div id="rbActions"></div>
    </div>
   </div>
   <div class="builder-summary-panel">
    <h4>Rule summary</h4>
    <div class="summary-row"><span class="label">Applies to</span><span class="value">${entityLabel(entityKey)}</span></div>
-   <div class="summary-row"><span class="label">Watches</span><span class="value" id="summaryWatch">${fieldLabelFor(entityKey,defaultField)}</span></div>
-   <div class="summary-row"><span class="label">Effect</span><span class="value" id="summaryEffect">${existing?.effect==='hide'?'Hide':'Require'}</span></div>
-   <div class="summary-row"><span class="label">Field</span><span class="value" id="summaryField">${fieldLabelFor(entityKey,existing?.fieldKey||actionFields[0]?.[0]||'')}</span></div>
+   <div class="summary-row"><span class="label">Execute on</span><span class="value">Create and edit</span></div>
   </div>
  </div>
  <div style="margin-top:4px"><button type="button" class="btn btn-secondary" id="ruleBuilderCancel">Cancel</button></div>
  </form>`;
  const form=$('#ruleBuilderForm');
- wireConditionPicker(form,form.elements.triggerField,$('#condDynamic',form),condFields,'triggerValue');
- function updateSummary(){
-  $('#summaryWatch').textContent=fieldLabelFor(entityKey,form.elements.triggerField.value);
-  $('#summaryEffect').textContent=form.elements.effect.value==='hide'?'Hide':'Require';
-  $('#summaryField').textContent=fieldLabelFor(entityKey,form.elements.targetField.value);
- }
- form.addEventListener('change',updateSummary);
+ const condEditor=mountConditionsEditor($('#rbConditions',form),condFields,initialConditions,existing?.matchType||'all');
+ const actEditor=mountActionsEditor($('#rbActions',form),actionFields,initialActions,actionFields[0]?.[0]||'');
  $('#ruleBuilderTest').onclick=()=>{testingRules=!testingRules;renderAdminTab()};
  if(testingRules)wireRuleTestPanel(entityKey);
  $('#ruleBuilderToggleActive')?.addEventListener('click',()=>{existing.active=!existing.active;save();toast(existing.active?'Rule activated':'Rule deactivated');renderAdminTab()});
  $('#ruleBuilderCancel').onclick=()=>{ruleBuilderMode=null;testingRules=false;renderAdminTab()};
- form.onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(form).entries());
-  const payload={entity:entityKey,triggerField:fd.triggerField,operator:fd.operator,triggerValue:fd.triggerValue||'',compareField:fd.compareField||null,fieldKey:fd.targetField,effect:fd.effect};
+ form.onsubmit=e=>{e.preventDefault();
+  const conditions=condEditor.getConditions(), matchType=condEditor.getMatchType(), actions=actEditor.getActions();
+  if(!conditions.length)return alert('Add at least one condition.');
+  if(!actions.length)return alert('Add at least one action.');
+  const payload={entity:entityKey,matchType,conditions,actions};
   if(isEdit){Object.assign(existing,payload)}else{data.fieldRules.push({id:uid(),active:true,...payload})}
   save();toast(isEdit?'Business rule saved':'Business rule added');ruleBuilderMode=null;testingRules=false;renderView()};
 }
@@ -1822,29 +1986,230 @@ function wireConditionPicker(form,fieldSelect,dynamicWrap,condFields,valueFieldN
   }
  });
 }
-// Phase 3 action expansion: a workflow's "Then" is one of three action
-// types - create a task (the original behavior), create a new record of
-// a safely-constructible type, or update a field on a record related to
-// the trigger via the demo's fixed foreign-key graph (REVERSE_RELATIONS).
-function describeWorkflowAction(r,entityKeyFallback){
- if(r.actionType==='create_record')return UNNAMED_RECORD_TYPES.includes(r.recordTargetEntity)?`create a new ${ENTITY_SINGULAR[r.recordTargetEntity]||r.recordTargetEntity}`:`create ${ENTITY_SINGULAR[r.recordTargetEntity]||r.recordTargetEntity} "${r.recordNameTemplate||''}"`;
- if(r.actionType==='update_related_record')return `set ${fieldLabelFor(r.relTargetEntity,r.relTargetField)} = "${r.relValue||''}" on related ${entityLabel(r.relTargetEntity)}`;
- if(r.actionType==='update_field'){
-  const ek=r.entity||entityKeyFallback;
-  if(!r.updateFieldKey)return 'set a field on this record';
-  return r.updateCopyFrom?`set ${fieldLabelFor(ek,r.updateFieldKey)} = value copied from ${fieldLabelFor(ek,r.updateCopyFrom)}`:`set ${fieldLabelFor(ek,r.updateFieldKey)} = "${r.updateValue||''}" on this record`;
+
+// ---- Multi-condition (+ OR group) editor, shared by the Business Rules
+// and Workflow Automation builders (second Admin Automation & Customization
+// addendum round). Mounted into a container element already inside a
+// <form>; reads/writes plain JS state, only touching the DOM to re-render
+// its own container - the rest of the enclosing form is untouched. Field
+// names are index-prefixed ("cond0_field", "cond1_field", ...) reusing
+// conditionDynamicHtml/wireConditionPicker's single-row rendering, the
+// same name-swap trick wireConditionPicker already uses for the workflow
+// trigger's "toValue".
+function indexedConditionHtml(condFields,c,idx){
+ let dyn=conditionDynamicHtml(condFields,c.fieldKey,c.operator,c.value,c.compareField);
+ dyn=dyn.replaceAll('name="operator"',`name="cond${idx}_operator"`)
+        .replaceAll('name="compareMode"',`name="cond${idx}_compareMode"`)
+        .replaceAll('name="triggerValue"',`name="cond${idx}_value"`)
+        .replaceAll('name="compareField"',`name="cond${idx}_compareField"`);
+ return `<div class="builder-row-card">
+  <select name="cond${idx}_field" data-cond-field="${idx}">${condFields.map(f=>`<option value="${f[0]}" ${f[0]===c.fieldKey?'selected':''}>${f[1]}</option>`).join('')}</select>
+  <span data-cond-dynamic="${idx}" style="display:contents">${dyn}</span>
+  <button type="button" class="builder-row-remove" data-cond-remove="${idx}" title="Remove condition">✕</button>
+ </div>`;
+}
+function wireIndexedConditionPicker(form,idx,condFields){
+ const fieldSelect=form.elements[`cond${idx}_field`];
+ const dynamicWrap=form.querySelector(`[data-cond-dynamic="${idx}"]`);
+ if(!fieldSelect||!dynamicWrap)return;
+ function render(fieldKey,operator,value,compareField){
+  let html=conditionDynamicHtml(condFields,fieldKey,operator,value,compareField);
+  html=html.replaceAll('name="operator"',`name="cond${idx}_operator"`)
+           .replaceAll('name="compareMode"',`name="cond${idx}_compareMode"`)
+           .replaceAll('name="triggerValue"',`name="cond${idx}_value"`)
+           .replaceAll('name="compareField"',`name="cond${idx}_compareField"`);
+  dynamicWrap.innerHTML=html;
+  wireDynamic();
  }
- return `create task "${r.taskTitle||''}" (${r.daysOffset?`due ${r.daysOffset} day(s) later`:'due same day'})`;
+ function wireDynamic(){
+  dynamicWrap.querySelector(`[name="cond${idx}_operator"]`)?.addEventListener('change',e=>render(fieldSelect.value,e.target.value,'',null));
+  dynamicWrap.querySelector(`[name="cond${idx}_compareMode"]`)?.addEventListener('change',e=>{
+   const operator=dynamicWrap.querySelector(`[name="cond${idx}_operator"]`).value;
+   render(fieldSelect.value,operator,'',e.target.value==='field'?(condFields[0]?.[0]??''):null);
+  });
+ }
+ fieldSelect.onchange=()=>render(fieldSelect.value,'equals','',null);
+ wireDynamic();
+}
+/** Mounts a self-contained conditions editor (add/remove condition, "+ OR
+ * group") into `container`, which must already be inside a <form>. Returns
+ * `{getConditions,getMatchType}` for the enclosing form's submit handler to
+ * read live state - conditions/matchType aren't otherwise part of the
+ * form's own FormData, since row count changes dynamically. */
+function mountConditionsEditor(container,condFields,initialConditions,initialMatchType){
+ let conditions=(initialConditions||[]).map(c=>({...c}));
+ let matchType=initialMatchType||'all';
+ function syncFromDom(){
+  const form=container.closest('form');
+  conditions=conditions.map((c,idx)=>{
+   const fieldEl=form.elements[`cond${idx}_field`]; if(!fieldEl)return c;
+   return {
+    fieldKey:fieldEl.value,
+    operator:form.elements[`cond${idx}_operator`]?.value||'equals',
+    value:form.elements[`cond${idx}_value`]?.value||'',
+    compareField:form.elements[`cond${idx}_compareField`]?.value||null,
+    groupId:c.groupId||null,
+   };
+  });
+  const mt=form.elements['condMatchType']; if(mt)matchType=mt.value;
+ }
+ function emptyCondition(groupId){return {fieldKey:condFields[0]?.[0]||'',operator:'equals',value:'',compareField:null,groupId:groupId||null}}
+ function render(){
+  const units=groupConditionUnits(conditions);
+  const rowsHtml=units.map((u,ui)=>{
+   const divider=ui>0?`<div class="builder-and-divider">${matchType==='all'?'AND':'OR'}</div>`:'';
+   if(u.kind==='single')return divider+indexedConditionHtml(condFields,conditions[u.index],u.index);
+   const rows=u.indices.map((idx,mi)=>(mi>0?'<div class="builder-and-divider">OR</div>':'')+indexedConditionHtml(condFields,conditions[idx],idx)).join('');
+   return divider+`<div class="builder-or-group"><div class="builder-or-group-label">OR group - any one condition below satisfies this unit</div>${rows}<button type="button" class="btn" data-add-to-group="${u.groupId}" style="margin-bottom:8px">+ Add to OR group</button></div>`;
+  }).join('');
+  container.innerHTML=`<div class="field" style="max-width:260px;margin-bottom:10px"><label>Match</label><select name="condMatchType">${MATCH_TYPES.map(m=>`<option value="${m}" ${m===matchType?'selected':''}>${m==='all'?'All conditions (AND)':'Any condition (OR)'}</option>`).join('')}</select></div>
+   ${conditions.length?rowsHtml:'<p class="muted">No conditions yet.</p>'}
+   <div style="display:flex;gap:8px;align-items:center">
+    <button type="button" class="btn" data-cond-add>+ Add condition</button>
+    <button type="button" class="btn" data-cond-add-group title="Add two conditions that are OR'd together into one unit before Match applies">+ OR group</button>
+   </div>`;
+  wire();
+ }
+ function wire(){
+  const form=container.closest('form');
+  conditions.forEach((c,idx)=>wireIndexedConditionPicker(form,idx,condFields));
+  form.elements['condMatchType'].onchange=()=>{syncFromDom();render()};
+  container.querySelector('[data-cond-add]').onclick=()=>{syncFromDom();conditions.push(emptyCondition());render()};
+  container.querySelector('[data-cond-add-group]').onclick=()=>{syncFromDom();const gid=newGroupId();conditions.push(emptyCondition(gid));conditions.push(emptyCondition(gid));render()};
+  container.querySelectorAll('[data-cond-remove]').forEach(b=>b.onclick=()=>{
+   syncFromDom();
+   const idx=Number(b.dataset.condRemove), groupId=conditions[idx].groupId;
+   conditions.splice(idx,1);
+   if(groupId&&conditions.filter(c=>c.groupId===groupId).length===1)conditions.forEach(c=>{if(c.groupId===groupId)c.groupId=null});
+   render();
+  });
+  container.querySelectorAll('[data-add-to-group]').forEach(b=>b.onclick=()=>{syncFromDom();conditions.push(emptyCondition(b.dataset.addToGroup));render()});
+ }
+ render();
+ return {getConditions:()=>{syncFromDom();return conditions},getMatchType:()=>matchType};
+}
+
+// ---- Multi-action editor for business rules (second addendum round) -
+// the full action palette from the design mockup, minus Trigger approval
+// (deferred). Same index-prefixed-FormData-name pattern as the conditions
+// editor above.
+const RULE_ACTION_TYPES=['require','hide','show','lock','editable','set_default','set_value','clear_value','restrict_choices','block_save','show_error','show_warning'];
+const RULE_ACTION_LABELS={require:'Require field',hide:'Hide field',show:'Show field',lock:'Make read-only',editable:'Make editable',set_default:'Set default value',set_value:'Set field value',clear_value:'Clear field value',restrict_choices:'Restrict choices',block_save:'Block save',show_error:'Show error',show_warning:'Show warning'};
+const RULE_ACTION_ICONS={require:'✅',hide:'🙈',show:'👁️',lock:'🔒',editable:'🔓',set_default:'🔧',set_value:'✏️',clear_value:'🧹',restrict_choices:'🎯',block_save:'🚫',show_error:'❗',show_warning:'⚠️'};
+const FIELD_TARGETED_RULE_ACTIONS=['require','hide','show','lock','editable','set_default','set_value','clear_value','restrict_choices'];
+const VALUE_REQUIRED_RULE_ACTIONS=['set_default','set_value'];
+const MESSAGE_RULE_ACTIONS=['block_save','show_error','show_warning'];
+function describeRuleAction(entityKey,a){
+ const target=a.targetField?fieldLabelFor(entityKey,a.targetField):'';
+ switch(a.type){
+  case 'require':return `require ${target}`;
+  case 'hide':return `hide ${target}`;
+  case 'show':return `show ${target}`;
+  case 'lock':return `lock ${target}`;
+  case 'editable':return `unlock ${target}`;
+  case 'set_default':return `default ${target} to "${a.value||''}"`;
+  case 'set_value':return `set ${target} to "${a.value||''}"`;
+  case 'clear_value':return `clear ${target}`;
+  case 'restrict_choices':return `restrict ${target} to ${(a.value||'').split(LIST_SEPARATOR).filter(Boolean).join(', ')||'no options'}`;
+  case 'block_save':return `block save: "${a.message||''}"`;
+  case 'show_error':return `show error: "${a.message||''}"`;
+  case 'show_warning':return `show warning: "${a.message||''}"`;
+  default:return a.type;
+ }
+}
+function actionRowHtml(actionFields,a,idx){
+ const isRestrict=a.type==='restrict_choices';
+ const targetChoices=isRestrict?actionFields.filter(f=>f[2]==='select'):actionFields;
+ const isFieldTargeted=FIELD_TARGETED_RULE_ACTIONS.includes(a.type);
+ const needsValue=VALUE_REQUIRED_RULE_ACTIONS.includes(a.type);
+ const isMessage=MESSAGE_RULE_ACTIONS.includes(a.type);
+ const targetField=targetChoices.find(f=>f[0]===a.targetField)||targetChoices[0];
+ let restrictHtml='';
+ if(isRestrict){
+  const opts=targetField&&targetField[3]?targetField[3].split('|').filter(Boolean):[];
+  const chosen=(a.value||'').split(LIST_SEPARATOR).filter(Boolean);
+  restrictHtml=opts.length?`<span style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">${opts.map(o=>`<label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" name="act${idx}_choice_${o}" ${chosen.includes(o)?'checked':''}> ${o}</label>`).join('')}</span>`:'<span class="muted" style="font-size:12px">Pick a select field first</span>';
+ }
+ return `<div class="builder-row-card">
+  <span style="font-size:15px">${RULE_ACTION_ICONS[a.type]||''}</span>
+  <select name="act${idx}_type" data-act-type="${idx}">${RULE_ACTION_TYPES.map(t=>`<option value="${t}" ${t===a.type?'selected':''}>${RULE_ACTION_LABELS[t]}</option>`).join('')}</select>
+  ${isFieldTargeted?`<select name="act${idx}_target" data-act-target="${idx}">${targetChoices.map(f=>`<option value="${f[0]}" ${f[0]===targetField?.[0]?'selected':''}>${f[1]}</option>`).join('')}</select>`:''}
+  ${needsValue?`<input name="act${idx}_value" value="${a.value||''}" placeholder="Value" style="width:140px">`:''}
+  ${isRestrict?restrictHtml:''}
+  ${isMessage?`<input name="act${idx}_message" value="${a.message||''}" placeholder="Message shown to the user" style="width:260px">`:''}
+  <button type="button" class="builder-row-remove" data-act-remove="${idx}" title="Remove action">✕</button>
+ </div>`;
+}
+function mountActionsEditor(container,actionFields,initialActions,defaultTargetKey){
+ let actions=(initialActions&&initialActions.length?initialActions:[{type:'require',targetField:defaultTargetKey,value:'',message:''}]).map(a=>({...a}));
+ function syncFromDom(){
+  const form=container.closest('form');
+  actions=actions.map((a,idx)=>{
+   const typeEl=form.elements[`act${idx}_type`]; if(!typeEl)return a;
+   const type=typeEl.value;
+   const targetEl=form.elements[`act${idx}_target`];
+   const targetKey=targetEl?.value??a.targetField;
+   let value=a.value||'';
+   if(type==='restrict_choices'){
+    const tf=actionFields.find(f=>f[0]===targetKey);
+    const opts=tf&&tf[3]?tf[3].split('|').filter(Boolean):[];
+    value=opts.filter(o=>form.elements[`act${idx}_choice_${o}`]?.checked).join(LIST_SEPARATOR);
+   }else{
+    value=form.elements[`act${idx}_value`]?.value??'';
+   }
+   return {type,targetField:FIELD_TARGETED_RULE_ACTIONS.includes(type)?targetKey:null,value,message:form.elements[`act${idx}_message`]?.value??''};
+  });
+ }
+ function render(){
+  container.innerHTML=actions.map((a,idx)=>actionRowHtml(actionFields,a,idx)).join('')+`<button type="button" class="btn" data-act-add>+ Add action</button>`;
+  wire();
+ }
+ function wire(){
+  const form=container.closest('form');
+  actions.forEach((a,idx)=>{
+   form.elements[`act${idx}_type`].onchange=()=>{
+    syncFromDom();
+    const t=form.elements[`act${idx}_type`].value;
+    actions[idx]={type:t,targetField:FIELD_TARGETED_RULE_ACTIONS.includes(t)?(actions[idx].targetField||defaultTargetKey):null,value:'',message:''};
+    render();
+   };
+   form.elements[`act${idx}_target`]?.addEventListener('change',()=>{syncFromDom();render()});
+  });
+  container.querySelector('[data-act-add]').onclick=()=>{syncFromDom();actions.push({type:'require',targetField:defaultTargetKey,value:'',message:''});render()};
+  container.querySelectorAll('[data-act-remove]').forEach(b=>b.onclick=()=>{syncFromDom();actions.splice(Number(b.dataset.actRemove),1);render()});
+ }
+ render();
+ return {getActions:()=>{syncFromDom();return actions}};
+}
+// Phase 3 action expansion, extended by the second Admin Automation &
+// Customization addendum round: a workflow's "Then" is one or more
+// actions, each one of create a task, create a new record, update a
+// field on a record related to the trigger via the demo's fixed
+// foreign-key graph (REVERSE_RELATIONS), update a field on this record,
+// set a default value on this record (only if currently empty), or clear
+// a field on this record.
+function describeWorkflowAction(a,entityKey){
+ if(a.type==='create_record')return UNNAMED_RECORD_TYPES.includes(a.recordTargetEntity)?`create a new ${ENTITY_SINGULAR[a.recordTargetEntity]||a.recordTargetEntity}`:`create ${ENTITY_SINGULAR[a.recordTargetEntity]||a.recordTargetEntity} "${a.recordNameTemplate||''}"`;
+ if(a.type==='update_related_record')return `set ${fieldLabelFor(a.relTargetEntity,a.relTargetField)} = "${a.relValue||''}" on related ${entityLabel(a.relTargetEntity)}`;
+ if(a.type==='update_field'||a.type==='set_default_field'||a.type==='clear_field'){
+  if(!a.updateFieldKey)return 'set a field on this record';
+  if(a.type==='clear_field')return `clear ${fieldLabelFor(entityKey,a.updateFieldKey)}`;
+  const prefix=a.type==='set_default_field'?'default ':'set ';
+  const suffix=a.type==='set_default_field'?' (only if currently empty)':'';
+  return a.updateCopyFrom?`${prefix}${fieldLabelFor(entityKey,a.updateFieldKey)} = value copied from ${fieldLabelFor(entityKey,a.updateCopyFrom)}${suffix}`:`${prefix}${fieldLabelFor(entityKey,a.updateFieldKey)} = "${a.updateValue||''}"${suffix}`;
+ }
+ return `create task "${a.taskTitle||''}" (${a.daysOffset?`due ${a.daysOffset} day(s) later`:'due same day'})`;
 }
 function relTargetsFor(entityKey){return [...new Set((RELATIONS[entityKey]||[]).map(x=>x.target))]}
-// Executes a workflow rule's action against the record that just triggered
-// it. Returns a short human description of what happened, for the
+// Executes one workflow action against the record that just triggered its
+// rule. Returns a short human description of what happened, for the
 // notification message - or null when the action is a legitimate no-op
-// (e.g. update_related_record with nothing linked yet, same as the
-// desktop edition's "no-op when nothing is linked yet" semantics).
-function executeWorkflowAction(r,key,record){
- if(r.actionType==='create_record'){
-  const target=r.recordTargetEntity, name=r.recordNameTemplate;
+// (e.g. update_related_record with nothing linked yet, or set_default_field
+// on a field that already has a value - same "left unchanged" semantics
+// the desktop edition's apply_action has).
+function executeWorkflowAction(a,key,record){
+ if(a.type==='create_record'){
+  const target=a.recordTargetEntity, name=a.recordNameTemplate;
   if(!UNNAMED_RECORD_TYPES.includes(target)&&!name)return null;
   const companyId=key==='companies'?record.id:record.companyId;
   if(COMPANY_DEPENDENT_TYPES.includes(target)&&!companyId)return null;
@@ -1887,9 +2252,9 @@ function executeWorkflowAction(r,key,record){
   }
   return null;
  }
- if(r.actionType==='update_related_record'){
-  const rel=(RELATIONS[key]||[]).find(x=>x.target===r.relTargetEntity);
-  if(!rel||!r.relTargetField)return null;
+ if(a.type==='update_related_record'){
+  const rel=(RELATIONS[key]||[]).find(x=>x.target===a.relTargetEntity);
+  if(!rel||!a.relTargetField)return null;
   const {target:targetEntity,fk,direction}=rel;
   let linked;
   if(direction==='down'){
@@ -1907,38 +2272,46 @@ function executeWorkflowAction(r,key,record){
    else{const parent=byId(targetEntity,record.relatedId);linked=parent?[parent]:[]}
   }
   if(!linked.length)return null;
-  linked.forEach(x=>{x[r.relTargetField]=r.relValue});
-  return `set ${fieldLabelFor(targetEntity,r.relTargetField)} = "${r.relValue}" on ${linked.length} related ${entityLabel(targetEntity).toLowerCase()}`;
+  linked.forEach(x=>{x[a.relTargetField]=a.relValue});
+  return `set ${fieldLabelFor(targetEntity,a.relTargetField)} = "${a.relValue}" on ${linked.length} related ${entityLabel(targetEntity).toLowerCase()}`;
  }
- // update_field: the companion to update_related_record for the common
- // case of "when this record's status changes, also update another field
- // on this same record" (e.g. Company status -> Customer also sets
- // Industry). record is the same object reference already mutated onto
- // data[key] by the caller, so writing to it here updates the live record
- // directly - same pattern update_related_record already uses for its
- // linked records.
- if(r.actionType==='update_field'){
-  if(!r.updateFieldKey)return null;
-  const value=r.updateCopyFrom?(record[r.updateCopyFrom]??''):(r.updateValue??'');
-  record[r.updateFieldKey]=value;
-  return `set ${fieldLabelFor(key,r.updateFieldKey)} = "${value}" on this record`;
+ // update_field/set_default_field/clear_field: the companion to
+ // update_related_record for the common case of "when this record's
+ // status changes, also update another field on this same record" (e.g.
+ // Company status -> Customer also sets Industry). set_default_field only
+ // writes when the target is currently empty; clear_field always writes
+ // empty, ignoring updateValue/updateCopyFrom - same split as the desktop
+ // edition's update_field/set_default_field/clear_field workflow actions.
+ // record is the same object reference already mutated onto data[key] by
+ // the caller, so writing to it here updates the live record directly -
+ // same pattern update_related_record already uses for its linked records.
+ if(a.type==='update_field'||a.type==='set_default_field'||a.type==='clear_field'){
+  if(!a.updateFieldKey)return null;
+  if(a.type==='clear_field'){
+   record[a.updateFieldKey]='';
+   return `cleared ${fieldLabelFor(key,a.updateFieldKey)}`;
+  }
+  if(a.type==='set_default_field'&&record[a.updateFieldKey])return null; // already has a value - left unchanged
+  const value=a.updateCopyFrom?(record[a.updateCopyFrom]??''):(a.updateValue??'');
+  record[a.updateFieldKey]=value;
+  return a.type==='set_default_field'?`set default ${fieldLabelFor(key,a.updateFieldKey)} = "${value}"`:`set ${fieldLabelFor(key,a.updateFieldKey)} = "${value}" on this record`;
  }
  // create_task (default, and the only action type older saved data has)
- if(!r.taskTitle)return null;
- const due=new Date();due.setDate(due.getDate()+Number(r.daysOffset||0));
+ if(!a.taskTitle)return null;
+ const due=new Date();due.setDate(due.getDate()+Number(a.daysOffset||0));
  // Custom objects aren't in relatedTypeFor (Tasks' relatedType dropdown is
  // a fixed built-ins-only list, matching desktop) - fall back to 'General'
  // rather than writing an unrecognized relatedType onto the created task.
- data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:r.taskTitle,relatedType:relatedTypeFor[key]||'General',relatedId:relatedTypeFor[key]?record.id:'',owner:record.owner||'Unassigned',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open'});
- return `created task "${r.taskTitle}"`;
+ data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:a.taskTitle,relatedType:relatedTypeFor[key]||'General',relatedId:relatedTypeFor[key]?record.id:'',owner:record.owner||'Unassigned',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open'});
+ return `created task "${a.taskTitle}"`;
 }
 function workflowTab(body){
  if(wfBuilderMode){renderWorkflowBuilder(body);return}
  const keys=[...Object.keys(relatedTypeFor),...activeCustomObjectKeys()];
  const list=(data.workflowRules||[]).filter(r=>r.entity===wfEntity);
- body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Workflow automation</h3><p class="muted">Trigger an action - create a task, create a new record, or update a related record - when any built-in or custom field changes and matches a comparison you choose, and optionally notify admins.</p>
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Workflow automation</h3><p class="muted">Trigger any number of actions - create a task, create a new record, update a related record, or update/default/clear a field on this record - when a field changes and matches a comparison, with optional extra AND/OR conditions.</p>
  ${entityPills(keys,wfEntity)}
- <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Then</th><th>Notifies admins</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${fieldLabelFor(r.entity,r.triggerField||transitionFieldFor(r.entity))} ${OPERATOR_LABELS[r.operator||'equals']}${operatorNeedsValue(r.operator||'equals')?' '+describeComparand(r.entity,r.compareField,r.toValue):''}</td><td>${describeWorkflowAction(r)}</td><td>${r.notify?'Yes':'No'}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-wf="${r.id}">Edit</button><button class="icon-btn" data-del-wf="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No workflow rules on '+entityLabel(wfEntity)+' yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Then</th><th>Notifies admins</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${fieldLabelFor(r.entity,r.triggerField||transitionFieldFor(r.entity))} ${OPERATOR_LABELS[r.operator||'equals']}${operatorNeedsValue(r.operator||'equals')?' '+describeComparand(r.entity,r.compareField,r.toValue):''}${r.conditions&&r.conditions.length?` AND ${describeConditions(r.entity,r.conditions,r.matchType||'all')}`:''}</td><td>${(r.actions||[]).map(a=>describeWorkflowAction(a,r.entity)).join('; ')}</td><td>${r.notify?'Yes':'No'}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-wf="${r.id}">Edit</button><button class="icon-btn" data-del-wf="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No workflow rules on '+entityLabel(wfEntity)+' yet</div>'}</div>
  <button class="btn btn-secondary" id="addWf" style="margin-top:14px">+ New workflow rule</button>
  </div>`;
  body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{wfEntity=b.dataset.entity;renderAdminTab()});
@@ -1946,13 +2319,93 @@ function workflowTab(body){
  body.querySelectorAll('[data-edit-wf]').forEach(b=>b.onclick=()=>{wfBuilderMode=b.dataset.editWf;renderAdminTab()});
  body.querySelectorAll('[data-del-wf]').forEach(b=>b.onclick=()=>{data.workflowRules=data.workflowRules.filter(r=>r.id!==b.dataset.delWf);save();toast('Workflow rule deleted');renderAdminTab()});
 }
-const WORKFLOW_ACTION_TITLES={create_task:'Create task',create_record:'Create record',update_related_record:'Update related record',update_field:'Update this record'};
-// Workflow-builder page: a Trigger/Action left column paired with a live
-// visual canvas on the right (Trigger -> Action -> End), matching the
-// desktop redesign's visual-flow language at the scale this demo's
-// single-trigger/single-action model actually supports. Replaces the old
-// create-only modal and adds editing, Test workflow and Activate/Deactivate
-// in the header, same as the rule builder above.
+const WORKFLOW_ACTION_TYPES=['create_task','create_record','update_related_record','update_field','set_default_field','clear_field'];
+const WORKFLOW_ACTION_LABELS={create_task:'Create a task',create_record:'Create a new record',update_related_record:'Update a related record',update_field:'Update this record',set_default_field:'Set default value',clear_field:'Clear a field'};
+const WORKFLOW_ACTION_ICONS={create_task:'📋',create_record:'➕',update_related_record:'🔗',update_field:'✏️',set_default_field:'🔧',clear_field:'🧹'};
+// One workflow action row - create_task/create_record/update_related_record
+// are unchanged from Phase 3's action expansion; update_field/
+// set_default_field/clear_field (the last two new in the second addendum
+// round) share this same target-field-plus-value sub-form, since all three
+// write to a field on the triggering record itself (see
+// executeWorkflowAction's shared branch).
+function workflowActionRowHtml(entityKey,a,idx,recordTargets,relTargets){
+ const actionableFields=actionableFieldsFor(entityKey);
+ const type=WORKFLOW_ACTION_TYPES.includes(a.type)?a.type:'create_task';
+ let bodyHtml='';
+ if(type==='create_task'){
+  bodyHtml=`<input name="wact${idx}_taskTitle" value="${a.taskTitle||''}" placeholder="e.g. Kick off onboarding" style="min-width:180px">
+   <input name="wact${idx}_daysOffset" type="number" min="0" value="${a.daysOffset??0}" style="width:130px" placeholder="Due in days">`;
+ }else if(type==='create_record'){
+  bodyHtml=`<select name="wact${idx}_recordTargetEntity">${recordTargets.map(t=>`<option value="${t}" ${t===a.recordTargetEntity?'selected':''}>${entityLabel(t)}</option>`).join('')}</select>
+   ${UNNAMED_RECORD_TYPES.includes(a.recordTargetEntity)?'':`<input name="wact${idx}_recordNameTemplate" value="${a.recordNameTemplate||''}" placeholder="Name/title" style="min-width:200px">`}`;
+ }else if(type==='update_related_record'){
+  const relOtherFields=a.relTargetEntity?actionableFieldsFor(a.relTargetEntity):[];
+  bodyHtml=`<select name="wact${idx}_relTargetEntity">${relTargets.map(t=>`<option value="${t}" ${t===a.relTargetEntity?'selected':''}>${entityLabel(t)}</option>`).join('')}</select>
+   <select name="wact${idx}_relTargetField">${relOtherFields.map(f=>`<option value="${f[0]}" ${f[0]===a.relTargetField?'selected':''}>${f[1]}</option>`).join('')}</select>
+   <input name="wact${idx}_relValue" value="${a.relValue||''}" placeholder="New value" style="width:160px">`;
+ }else{ // update_field / set_default_field / clear_field
+  const isClear=type==='clear_field';
+  bodyHtml=`<select name="wact${idx}_updateFieldKey">${actionableFields.map(f=>`<option value="${f[0]}" ${f[0]===a.updateFieldKey?'selected':''}>${f[1]}</option>`).join('')}</select>
+   ${isClear?'':`<input name="wact${idx}_updateValue" value="${a.updateCopyFrom?'':(a.updateValue||'')}" placeholder="Set to value" style="width:160px" ${a.updateCopyFrom?'disabled':''}>
+   <span class="muted" style="font-size:12px">or copy from</span>
+   <select name="wact${idx}_updateCopyFrom"><option value="">— none —</option>${actionableFields.map(f=>`<option value="${f[0]}" ${f[0]===a.updateCopyFrom?'selected':''}>${f[1]}</option>`).join('')}</select>`}
+   ${type==='set_default_field'?'<span class="muted" style="font-size:11px">Only fills the field if it\'s currently empty</span>':''}`;
+ }
+ return `<div class="builder-row-card" style="align-items:flex-start">
+  <span style="font-size:15px">${WORKFLOW_ACTION_ICONS[type]||''}</span>
+  <select name="wact${idx}_type" data-wact-type="${idx}">${WORKFLOW_ACTION_TYPES.filter(t=>t!=='update_related_record'||relTargets.length).map(t=>`<option value="${t}" ${t===type?'selected':''}>${WORKFLOW_ACTION_LABELS[t]}</option>`).join('')}</select>
+  <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${bodyHtml}</span>
+  <button type="button" class="builder-row-remove" data-wact-remove="${idx}" title="Remove action">✕</button>
+ </div>`;
+}
+function emptyWorkflowAction(type,entityKey,recordTargets,relTargets){
+ if(type==='create_record')return {type,recordTargetEntity:recordTargets[0]||'',recordNameTemplate:''};
+ if(type==='update_related_record')return {type,relTargetEntity:relTargets[0]||'',relTargetField:'',relValue:''};
+ if(type==='update_field'||type==='set_default_field'||type==='clear_field')return {type,updateFieldKey:actionableFieldsFor(entityKey)[0]?.[0]||'',updateValue:'',updateCopyFrom:''};
+ return {type:'create_task',taskTitle:'',daysOffset:0};
+}
+/** Mounts a self-contained multi-action editor into `container` (must
+ * already be inside a <form>) - "+ Add action" plus per-row type/remove,
+ * mirroring mountActionsEditor's pattern for business rules. */
+function mountWorkflowActionsEditor(container,entityKey,initialActions){
+ const recordTargets=createRecordTargetsFor(entityKey), relTargets=relTargetsFor(entityKey);
+ let actions=(initialActions&&initialActions.length?initialActions:[emptyWorkflowAction('create_task',entityKey,recordTargets,relTargets)]).map(a=>({...a}));
+ function syncFromDom(){
+  const form=container.closest('form');
+  actions=actions.map((a,idx)=>{
+   const typeEl=form.elements[`wact${idx}_type`]; if(!typeEl)return a;
+   const type=typeEl.value, g=name=>form.elements[`wact${idx}_${name}`]?.value;
+   if(type==='create_task')return {type,taskTitle:g('taskTitle')||'',daysOffset:Number(g('daysOffset')||0)};
+   if(type==='create_record')return {type,recordTargetEntity:g('recordTargetEntity')||'',recordNameTemplate:g('recordNameTemplate')||''};
+   if(type==='update_related_record')return {type,relTargetEntity:g('relTargetEntity')||'',relTargetField:g('relTargetField')||'',relValue:g('relValue')||''};
+   const copyFrom=g('updateCopyFrom')||'';
+   return {type,updateFieldKey:g('updateFieldKey')||'',updateValue:copyFrom?'':(g('updateValue')||''),updateCopyFrom:copyFrom};
+  });
+ }
+ function render(){
+  container.innerHTML=actions.map((a,idx)=>workflowActionRowHtml(entityKey,a,idx,recordTargets,relTargets)).join('')+`<button type="button" class="btn" data-wact-add>+ Add action</button>`;
+  wire();
+ }
+ function wire(){
+  const form=container.closest('form');
+  actions.forEach((a,idx)=>{
+   form.elements[`wact${idx}_type`].onchange=()=>{syncFromDom();actions[idx]=emptyWorkflowAction(form.elements[`wact${idx}_type`].value,entityKey,recordTargets,relTargets);render()};
+   form.elements[`wact${idx}_recordTargetEntity`]?.addEventListener('change',()=>{syncFromDom();render()});
+   form.elements[`wact${idx}_relTargetEntity`]?.addEventListener('change',()=>{syncFromDom();actions[idx].relTargetField='';render()});
+   form.elements[`wact${idx}_updateCopyFrom`]?.addEventListener('change',()=>{syncFromDom();render()});
+  });
+  container.querySelector('[data-wact-add]').onclick=()=>{syncFromDom();actions.push(emptyWorkflowAction('create_task',entityKey,recordTargets,relTargets));render()};
+  container.querySelectorAll('[data-wact-remove]').forEach(b=>b.onclick=()=>{syncFromDom();actions.splice(Number(b.dataset.wactRemove),1);render()});
+ }
+ render();
+ return {getActions:()=>{syncFromDom();return actions}};
+}
+// Workflow-builder page: a Trigger/Conditions/Actions left column paired
+// with a live visual canvas on the right (Trigger -> [Conditions] ->
+// Actions -> End), extended in the second Admin Automation & Customization
+// addendum round with an optional extra-conditions section (AND/OR, one
+// level of OR-groups - empty by default, meaning "fires on every trigger")
+// and a multi-action editor, replacing the single-action-only version.
 function renderWorkflowBuilder(body){
  const isEdit=wfBuilderMode!=='create';
  const existing=isEdit?data.workflowRules.find(r=>r.id===wfBuilderMode):null;
@@ -1962,7 +2415,7 @@ function renderWorkflowBuilder(body){
  const defaultField=existing?.triggerField||transitionFieldFor(entityKey);
  const recordTargets=createRecordTargetsFor(entityKey);
  const relTargets=relTargetsFor(entityKey);
- const actionType=existing?.actionType||'create_task';
+ const initialActions=existing?.actions?.length?existing.actions:[emptyWorkflowAction('create_task',entityKey,recordTargets,relTargets)];
  body.innerHTML=`<div class="builder-header">
   <div>
    <div class="builder-breadcrumb">Workflow Automation / ${isEdit?'Edit workflow':'New workflow'}</div>
@@ -1987,41 +2440,20 @@ function renderWorkflowBuilder(body){
     </div>
    </div>
    <div class="builder-section">
-    <div class="builder-section-title"><span class="step-badge">2</span> Action</div>
-    <div class="form-grid">
-     <div class="field full"><label>Action</label><select name="actionType" id="wfActionType">
-      <option value="create_task" ${actionType==='create_task'?'selected':''}>Create a task</option>
-      <option value="create_record" ${actionType==='create_record'?'selected':''}>Create a new record</option>
-      ${relTargets.length?`<option value="update_related_record" ${actionType==='update_related_record'?'selected':''}>Update a related record</option>`:''}
-      <option value="update_field" ${actionType==='update_field'?'selected':''}>Update this record</option>
-     </select></div>
-     <div id="actionCreateTask" style="display:contents">
-      <div class="field full"><label>Task title</label><input name="taskTitle" value="${existing?.taskTitle||''}" placeholder="e.g. Kick off onboarding"></div>
-      <div class="field"><label>Due (days after change)</label><input name="daysOffset" type="number" min="0" value="${existing?.daysOffset??0}"></div>
-     </div>
-     <div id="actionCreateRecord" style="display:none">
-      <div class="field"><label>Record type</label><select name="recordTargetEntity" id="wfRecordTargetEntity">${recordTargets.map(t=>`<option value="${t}" ${t===existing?.recordTargetEntity?'selected':''}>${entityLabel(t)}</option>`).join('')}</select></div>
-      <div class="field full" id="wfRecordNameWrap"><label>Name / title</label><input name="recordNameTemplate" value="${existing?.recordNameTemplate||''}" placeholder="e.g. Renewal follow-up"></div>
-     </div>
-     <div id="actionUpdateRelated" style="display:none">
-      <div class="field"><label>Related record type</label><select name="relTargetEntity" id="wfRelEntity">${relTargets.map(t=>`<option value="${t}" ${t===existing?.relTargetEntity?'selected':''}>${entityLabel(t)}</option>`).join('')}</select></div>
-      <div class="field"><label>Field to set</label><select name="relTargetField" id="wfRelField"></select></div>
-      <div class="field"><label>New value</label><input name="relValue" value="${existing?.relValue||''}" placeholder="New value to write"></div>
-     </div>
-     <div id="actionUpdateField" style="display:none">
-      <div class="field"><label>Field to set</label><select name="updateFieldKey" id="wfUpdateFieldKey">${actionableFieldsFor(entityKey).map(f=>`<option value="${f[0]}" ${f[0]===existing?.updateFieldKey?'selected':''}>${f[1]}</option>`).join('')}</select></div>
-      <div class="field"><label>New value from</label><select name="updateValueSource" id="wfUpdateValueSource"><option value="fixed" ${!existing?.updateCopyFrom?'selected':''}>A fixed value</option><option value="copy" ${existing?.updateCopyFrom?'selected':''}>Another field on this record</option></select></div>
-      <div class="field full" id="wfUpdateValueWrap"><label>Value</label><input name="updateValue" id="wfUpdateValue" value="${existing?.updateValue||''}" placeholder="New value to write"></div>
-      <div class="field full" id="wfUpdateCopyWrap" style="display:none"><label>Copy from</label><select name="updateCopyFrom" id="wfUpdateCopyFrom">${actionableFieldsFor(entityKey).map(f=>`<option value="${f[0]}" ${f[0]===existing?.updateCopyFrom?'selected':''}>${f[1]}</option>`).join('')}</select></div>
-     </div>
-     <div class="field"><label>Also notify admins?</label><select name="notify"><option value="false" ${!existing?.notify?'selected':''}>No</option><option value="true" ${existing?.notify?'selected':''}>Yes</option></select></div>
-    </div>
+    <div class="builder-section-title"><span class="step-badge">2</span> Extra conditions (optional)</div>
+    <p class="muted" style="margin-top:-4px">Fires on every trigger match by default - add conditions to narrow it further.</p>
+    <div id="wfConditions"></div>
+   </div>
+   <div class="builder-section">
+    <div class="builder-section-title"><span class="step-badge">3</span> Actions</div>
+    <div id="wfActions"></div>
+    <div class="field" style="max-width:220px;margin-top:10px"><label>Also notify admins?</label><select name="notify"><option value="false" ${!existing?.notify?'selected':''}>No</option><option value="true" ${existing?.notify?'selected':''}>Yes</option></select></div>
    </div>
   </div>
   <div class="workflow-canvas-wrap">
    <div class="workflow-node workflow-node-trigger"><div class="workflow-node-head">Trigger</div><div class="workflow-node-body"><strong>${entityLabel(entityKey)}</strong><small id="canvasTrigger"></small></div></div>
    <div class="workflow-connector">▼</div>
-   <div class="workflow-node workflow-node-actions"><div class="workflow-node-head">Action</div><div class="workflow-node-body" id="canvasAction"></div></div>
+   <div class="workflow-node workflow-node-actions"><div class="workflow-node-head">Actions</div><div class="workflow-node-body" id="canvasAction"></div></div>
    <div class="workflow-connector">▼</div>
    <div class="workflow-end-node">END</div>
   </div>
@@ -2030,30 +2462,8 @@ function renderWorkflowBuilder(body){
  </form>`;
  const form=$('#wfBuilderForm');
  wireConditionPicker(form,form.elements.triggerField,$('#wfDynamic',form),condFields,'toValue');
- const actionSelect=$('#wfActionType',form);
- function updateActionVisibility(){
-  const v=actionSelect.value;
-  $('#actionCreateTask',form).style.display=v==='create_task'?'contents':'none';
-  $('#actionCreateRecord',form).style.display=v==='create_record'?'contents':'none';
-  $('#actionUpdateRelated',form).style.display=v==='update_related_record'?'contents':'none';
-  $('#actionUpdateField',form).style.display=v==='update_field'?'contents':'none';
- }
- const updateValueSourceSelect=$('#wfUpdateValueSource',form);
- function updateValueSourceVisibility(){
-  if(!updateValueSourceSelect)return;
-  const isCopy=updateValueSourceSelect.value==='copy';
-  $('#wfUpdateValueWrap',form).style.display=isCopy?'none':'';
-  $('#wfUpdateCopyWrap',form).style.display=isCopy?'':'none';
- }
- if(updateValueSourceSelect){updateValueSourceVisibility();updateValueSourceSelect.onchange=()=>{updateValueSourceVisibility();updateCanvas()}}
- const relEntitySelect=form.elements.relTargetEntity;
- function populateRelField(){if(!relEntitySelect)return;const fields=actionableFieldsFor(relEntitySelect.value);$('#wfRelField',form).innerHTML=fields.map(f=>`<option value="${f[0]}" ${f[0]===existing?.relTargetField?'selected':''}>${f[1]}</option>`).join('')}
- // Quotes/orders/invoices have no name/title field to fill in from a
- // template (see UNNAMED_RECORD_TYPES) - hide that input for them so the
- // builder never asks for something the created record can't store.
- const recordTargetSelect=$('#wfRecordTargetEntity',form), recordNameWrap=$('#wfRecordNameWrap',form);
- function updateRecordNameVisibility(){if(!recordTargetSelect)return;recordNameWrap.style.display=UNNAMED_RECORD_TYPES.includes(recordTargetSelect.value)?'none':''}
- if(recordTargetSelect){updateRecordNameVisibility();recordTargetSelect.onchange=()=>{updateRecordNameVisibility();updateCanvas()}}
+ const condEditor=mountConditionsEditor($('#wfConditions',form),condFields,existing?.conditions||[],existing?.matchType||'all');
+ const actEditor=mountWorkflowActionsEditor($('#wfActions',form),entityKey,initialActions);
  // The live canvas mirrors whatever the form currently says - re-derived
  // from the form's own values on every change, the same "what will
  // actually happen" summary the desktop canvas gives at a glance.
@@ -2062,14 +2472,9 @@ function renderWorkflowBuilder(body){
   const needsValue=operatorNeedsValue(op);
   const val=form.elements.toValue?.value||(form.elements.compareField?fieldLabelFor(entityKey,form.elements.compareField.value):'');
   $('#canvasTrigger').textContent=`When ${fieldLabelFor(entityKey,tf)} ${OPERATOR_LABELS[op]||'is'}${needsValue?' '+(val||'…'):''}`;
-  const fd=Object.fromEntries(new FormData(form).entries());
-  fd.daysOffset=Number(fd.daysOffset||0); // FormData gives strings - "0" is truthy, so coerce before describeWorkflowAction's truthy check
-  if(fd.updateValueSource!=='copy')fd.updateCopyFrom=''; // the copy-from select still has a value while hidden - only treat it as "copy" when that source is actually chosen
-  $('#canvasAction').innerHTML=`<strong>${WORKFLOW_ACTION_TITLES[fd.actionType]||'Action'}</strong><small>${describeWorkflowAction(fd,entityKey)}</small>`;
+  const actions=actEditor.getActions();
+  $('#canvasAction').innerHTML=actions.length?actions.map(a=>`<div><strong>${WORKFLOW_ACTION_LABELS[a.type]||'Action'}</strong><small>${describeWorkflowAction(a,entityKey)}</small></div>`).join(''):'<p class="empty" style="padding:8px">No actions yet</p>';
  }
- actionSelect.onchange=()=>{updateActionVisibility();updateCanvas()};
- updateActionVisibility();
- if(relEntitySelect){populateRelField();relEntitySelect.onchange=()=>{populateRelField();updateCanvas()}}
  form.addEventListener('change',updateCanvas);
  form.addEventListener('input',updateCanvas);
  updateCanvas();
@@ -2078,18 +2483,19 @@ function renderWorkflowBuilder(body){
  $('#wfBuilderToggleActive')?.addEventListener('click',()=>{existing.active=!existing.active;save();toast(existing.active?'Rule activated':'Rule deactivated');renderAdminTab()});
  $('#wfBuilderCancel').onclick=()=>{wfBuilderMode=null;testingWorkflow=false;renderAdminTab()};
  form.onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(form).entries());
-  if(fd.actionType==='create_task'&&!fd.taskTitle)return alert('Enter a task title.');
-  if(fd.actionType==='create_record'&&!UNNAMED_RECORD_TYPES.includes(fd.recordTargetEntity)&&!fd.recordNameTemplate)return alert('Enter a name/title for the new record.');
-  if(fd.actionType==='update_related_record'&&!fd.relValue)return alert('Enter the value to write.');
-  const updatingByCopy=fd.actionType==='update_field'&&fd.updateValueSource==='copy';
-  if(fd.actionType==='update_field'&&!updatingByCopy&&!fd.updateValue)return alert('Enter the value to write, or switch "New value from" to another field.');
+  const actions=actEditor.getActions();
+  if(!actions.length)return alert('Add at least one action.');
+  for(const a of actions){
+   if(a.type==='create_task'&&!a.taskTitle)return alert('Enter a task title.');
+   if(a.type==='create_record'&&!UNNAMED_RECORD_TYPES.includes(a.recordTargetEntity)&&!a.recordNameTemplate)return alert('Enter a name/title for the new record.');
+   if(a.type==='update_related_record'&&!a.relValue)return alert('Enter the value to write on the related record.');
+   if((a.type==='update_field'||a.type==='set_default_field')&&!a.updateCopyFrom&&!a.updateValue)return alert('Enter a value to write, or a field to copy from.');
+  }
   const payload={
    entity:entityKey,triggerField:fd.triggerField,operator:fd.operator,toValue:fd.toValue||'',
-   compareField:fd.compareField||null,notify:fd.notify==='true',actionType:fd.actionType,
-   taskTitle:fd.taskTitle||'',daysOffset:Number(fd.daysOffset||0),
-   recordTargetEntity:fd.recordTargetEntity||'',recordNameTemplate:fd.recordNameTemplate||'',
-   relTargetEntity:fd.relTargetEntity||'',relTargetField:fd.relTargetField||'',relValue:fd.relValue||'',
-   updateFieldKey:fd.updateFieldKey||'',updateValue:updatingByCopy?'':(fd.updateValue||''),updateCopyFrom:updatingByCopy?(fd.updateCopyFrom||''):'',
+   compareField:fd.compareField||null,notify:fd.notify==='true',
+   conditions:condEditor.getConditions(),matchType:condEditor.getMatchType(),
+   actions,
   };
   if(isEdit){Object.assign(existing,payload)}else{data.workflowRules.push({id:uid(),active:true,...payload})}
   save();toast(isEdit?'Workflow rule saved':'Workflow rule added');wfBuilderMode=null;testingWorkflow=false;renderView()};
@@ -2172,8 +2578,8 @@ function roadmapPage(){
   ['Admin panel & configurability','Branding & print customization; reports beyond the dashboard plus a simple custom report builder; custom fields, conditional business rules and workflow automation, generalized from Companies/Contacts to every major object; admin-configurable numbering per object; a dashboard KPI picker.'],
   ['Custom Objects — extensibility platform, Phase A','An Administrator defines a whole new business object at runtime with its own icon and ID format, no code change — and it works through the exact same custom fields, business rules and report builder every built-in entity uses.'],
   ['Custom Relationships — Phase B','Admins define relationships between any two record types (built-in or custom) — one-to-one / many-to-one / many-to-many cardinality, a restrict-or-archive delete policy, and a related-records list on record detail pages.'],
-  ['Richer Business Rules engine — Phase C','Multi-condition AND/OR matching, 10 comparison operators, and 7 action types (require, hide, lock, set default, set exact value, block save, show a message), plus rule priority and optional effective-date windows.'],
-  ['Richer Workflow Automation engine — Phase D','7 trigger types (created/updated, status/field changed, date reached, due/overdue, scheduled) and 6 action types (create task, update field, assign owner, create related record, add notification, create reminder), plus an in-app notification center.'],
+  ['Richer Business Rules engine — Phase C, extended','Multi-condition AND/OR matching with one level of nested OR-groups, 10 comparison operators, and 12 action types (require, show, hide, lock, make editable, set default, set/clear value, restrict choices, block save, show error, show warning), plus rule priority, optional effective-date windows, and a "hide by default" flag on custom fields.'],
+  ['Richer Workflow Automation engine — Phase D, extended','7 trigger types (created/updated, status/field changed, date reached, due/overdue, scheduled), optional extra AND/OR conditions with OR-groups, and 8 action types (create task, update/default/clear a field, assign owner, create related record, add notification, create reminder), plus an in-app notification center.'],
   ['Field validation, task reminders, session lock — Phase E','Custom field validation (min/max, max length, regex) at both definition and save time; Windows task reminder toasts through the standard Web Notification API; a 15-minute session inactivity auto-lock.'],
   ['Condition engine v2','Four more comparison operators — starts with, ends with, is one of, is not one of — plus field-to-field comparison, so a condition can match against another field\'s live value instead of only a fixed one. Shared by business rules and workflow triggers, on desktop and in the online demo.'],
   ['Status Transition Editor','Restrict which status/stage changes are allowed on any object, with a wildcard "from any status" starting point and a per-rule active toggle. No active rules leaves the field fully unrestricted; resaving the same status is never blocked.'],
@@ -2205,7 +2611,7 @@ function roadmapPage(){
   ['2 · Global search & list-view filtering','Gives the existing is_searchable/is_filterable flags their first real use.',false],
   ['3 · Decide: Screen Designer, richer report builder, code signing','Three independent scope/budget calls, worth a deliberate conversation each rather than defaulting into months of work.',false],
  ];
- $('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Built from the working codebase</div><h1>Roadmap & backlog.</h1><p>Where Lanesra OS stands today, what's being built next, and everything queued up after that — compiled from the actual code (core/server/src-tauri/frontend) plus the online demo, not a wishlist. Every "Shipped" line below is running code with tests.</p><div class="status-row"><span class="status-chip">Early Access v0.23.1</span><span class="muted">Last updated August 2026</span></div>
+ $('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Built from the working codebase</div><h1>Roadmap & backlog.</h1><p>Where Lanesra OS stands today, what's being built next, and everything queued up after that — compiled from the actual code (core/server/src-tauri/frontend) plus the online demo, not a wishlist. Every "Shipped" line below is running code with tests.</p><div class="status-row"><span class="status-chip">Early Access v0.24.0</span><span class="muted">Last updated August 2026</span></div>
  <div class="backlog-callout" id="desktop"><h3>Release status</h3><p><b>desktop-v0.10.0 is the latest tagged release</b> (installers attached, Early Access/prerelease as intended). Everything below is merged to <code>main</code>. Full desktop feature list → <a href="/download">/download</a>.</p><p class="muted">Repo hygiene: a real MIT <code>LICENSE</code>, <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, <code>SECURITY.md</code>, issue/PR templates, and a root README written for someone landing on the repo, not a deploy runbook.</p></div>
  </div></section>
  <section class="section"><div class="container narrow">
@@ -2230,7 +2636,7 @@ function roadmapPage(){
  </main>${publicFooter()}`;
  bindPublicNav();
 }
-function releasesPage(){document.title='Releases — Lanesra OS';const releases=[['v0.23.1','August 2026','Online demo parity fix: workflow self-updates and custom-object workflows',['Workflow automation gained the desktop edition\'s update_field action (the companion to update_related_record) - "when this record\'s field changes, also set another field on this same record" - e.g. "when Status becomes Customer, set Industry to Active." The new value can be a fixed value or copied live from another field on the same record','Fixed a bug where a workflow rule defined on an admin-defined Custom Object could be created in Admin → Workflow Automation but would silently never fire - execution was gated on a built-ins-only lookup table left over from before Custom Objects existed as a workflow-eligible entity; workflows on custom objects now run exactly like on any built-in entity','Both fixes verified against the exact reported scenario (Company status change auto-updating a second field on the same Company) and against a custom object end to end']],['v0.23.0','August 2026','Integrations admin section in the online demo',['A new Admin → Integrations section - another capability that doesn\'t exist on the desktop edition, built for the demo first, as a UI-only simulation: the static demo has no server, so nothing here makes a real network call or runs on a real schedule','Scheduled jobs: define a data Export/Import/Sync job against any built-in or custom object with a schedule (manual, hourly, daily, weekly) and format (CSV/JSON); Run now simulates it immediately, with a per-job history log of simulated runs and record counts','API endpoints: define and "expose" a GET or POST endpoint backed by any object, with API-key or public auth; Test call shows the exact request and a realistic JSON response built from your own current demo data, entirely local','External API connections: configure an outbound connection (base URL, method, none/API-key/bearer auth) this workspace would call; Test request logs a simulated response with a call history, clearly labeled as simulated since the demo can\'t make real outbound requests','With this, the online demo has closed every gap identified in this round of parity work: Custom Objects, Custom Relationships, Reports, a no-code Screen layouts designer, and now Integrations - all four built for the demo, two catching up to desktop and two (layouts, integrations) new to the product entirely']],['v0.22.0','August 2026','No-code Screen layouts in the online demo',['A new Admin → Screen layouts tab lets an admin drag-order any built-in or custom object\'s create/edit fields into named sections - a capability that doesn\'t exist on the desktop edition either, built for the demo first','A layout has a draft and a published copy: dragging fields between/within sections, renaming a section, or adding one only ever edits the draft - the live create/edit form keeps using the plain default field order until Publish copies the draft over, and Unpublish clears it straight back to that default','A Preview button renders the draft exactly as the live form would show it, without saving anything or touching the live workspace','A published layout never drops a field it doesn\'t recognize - any field missing from the layout (a new custom field added after publishing, or a stale key) is automatically appended to a trailing "Other fields" section so nothing can go missing from a form because of a layout edit','With this, the online demo\'s only remaining gap against the desktop edition\'s admin extensibility spec is the Integrations admin section - up next, also a demo-first UI-only build']],['v0.21.0','August 2026','Reports in the online demo',['The online demo has a new top-level Reports section with the same fixed report gallery the desktop edition ships: Revenue by month, Win rate by owner, Lost reasons, AR aging and Sales by owner, each with a date-range (or "as of") filter and a bar-chart table matching desktop\'s layout','Added a Custom Reports builder to the demo, mirroring desktop\'s admin report builder: pick any object - built-in or a Custom Object - group by its status/stage or an active, reportable custom field, and count records or sum a numeric custom field; only fields an admin flagged Reportable are offered, same as desktop','Added CSV export to every report in the demo (a new capability for the demo generally, self-contained via a Blob download - no server involved)','Two disclosed substitutions where this demo\'s simpler data model doesn\'t match desktop\'s: Revenue by month/Sales by owner group by each invoice\'s due date since the demo has no separate issue date, and AR aging uses each invoice\'s full total as its balance since the demo doesn\'t track partial payments - both called out in the report\'s own subtitle rather than silently faked','Added a Lost reason field to Opportunities so the Lost Reasons report has something real to report on','With this, the online demo\'s only remaining gaps against the desktop edition are two capabilities that don\'t exist on desktop either: a no-code UI layout designer and a UI-only Integrations admin section - both underway next']],['v0.20.0','August 2026','Custom Relationships in the online demo',['An Administrator can now connect any two object types - built-in or custom - from Admin → Relationships: a cardinality (many-to-one, one-to-one or many-to-many), a forward/reverse label pair, and a choice of what happens to a link when a linked record is deleted (Restrict blocks the delete, Archive drops the link and keeps both records)','Every record\'s edit form now shows a "Related records" panel listing every linked record across every applicable relationship, from either direction, with inline Link/Unlink - the same place desktop puts its related-records card, since most objects in this demo have an edit form but no separate detail page','Cardinality is enforced on link (a many-to-one or one-to-one side can\'t be linked twice), and a relationship can\'t connect an object type to itself - both match the desktop edition\'s validation exactly','Reports beyond the dashboard remain the one desktop-only capability left in the online demo\'s parity work']],['v0.19.0','August 2026','Custom Objects in the online demo',['The online demo caught up with one of the desktop edition\'s biggest capabilities: an Administrator can now define a whole new business object at runtime - Vendors, Assets, Projects - from Admin → Custom Objects, with its own icon, sidebar entry and record-number prefix/digit width, no code change','A custom object is a full citizen of the demo\'s admin subsystems exactly like a built-in entity: it gets its own tab in Custom Fields, Business Rules, Status Transitions and Workflow Automation, and its records go through the same create/edit/list screens, auto-numbering and delete-dependency checks as Companies or Contacts','A custom object can\'t be named the same as a built-in entity (rejected at creation, matching desktop); deleting its definition is blocked while any record still exists, while deactivating is always safe and reversible since it only hides the object from navigation and new-record creation','Reports beyond the dashboard and Custom Relationships between record types remain desktop-only for now - next up in the online demo\'s parity work']],['v0.18.1','August 2026','Online demo parity fixes',['Workflow "Create a new record" now offers all 9 built-in record types in the online demo (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks), not just 3 - matching the desktop edition\'s full creatable set, with company-dependent types offered only when the trigger record actually carries a company','Workflow "Update a related record" now walks the demo\'s foreign-key graph in both directions, not just downward: a Contact can update its own parent Company the same way a Company can update its Contacts, and every entity gets its linked Tasks (and vice versa) through the existing relatedType/relatedId link','Custom fields in the online demo gained the validation and capability settings the desktop edition already had: Required, Max length and Pattern/regex (text fields), Min/Max value (number fields), and Searchable/Filterable/Reportable flags - enforced with native HTML5 form validation and shown in the custom fields list']],['v0.18.0','August 2026','Status transitions, richer workflow actions, test mode, a rule-builder redesign, and Customer 360',['Added a Status Transition Editor: restrict which status/stage changes are allowed on any object with a fixed-schema field (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks) - each rule is one from → to move, with a wildcard "any status" starting point and its own active toggle; with no active rules a field stays fully unrestricted, and resaving the same status is never blocked','Workflow automation actions expanded beyond "create a task": a workflow can now create a new record (a company, opportunity or task) or update a field on a record related to the trigger through the demo\'s existing company/contact/opportunity/quote/order relationships','Added a Test rule / Test workflow dry-run mode to both Business Rules and Workflow Automation: fill in hypothetical values for an object and see exactly which active rules or workflows would match and what they would do, without creating, changing or sending anything','Redesigned the Business Rules and Workflow Automation builders to match the desktop edition\'s rule-builder layout: numbered Condition/Effect (or Trigger/Action) sections, a live-updating rule summary panel, and - for workflows - a visual Trigger → Action → End canvas that mirrors the form as you edit it; both builders gained full editing (not just create) and header-level Test/Activate-Deactivate/Save controls','Custom fields gained four more settings: an optional default value applied whenever a save leaves the field empty, a "require a unique value" check (rejected at definition time for yes/no fields, since they only have two possible values), placeholder text, and help text shown under the field on every record form','Added Customer 360 and Contact 360: clicking a company or contact name anywhere in the app now opens a dedicated detail page with its full field overview and every linked record - contacts, opportunities, quotes, orders, invoices, contracts and tasks - each one click away, replacing edit-modal-only access','Fixed a pre-existing bug surfaced while building the above: the admin panel\'s tab row no longer freezes on whichever tab was open first - switching tabs now correctly highlights the one you\'re on']],['v0.17.0','August 2026','More operators & field-to-field comparison',['Business rules and workflows gained four more comparison operators - starts with, ends with, is one of, is not one of - on top of is/is not/contains/is empty/is not empty/greater than/less than','A condition can now compare a field against another field\'s live value instead of only a fixed value - e.g. "require Flag when Notes equals Expected Notes" - with the same live-updating preview on the record form that a fixed-value condition already had','Windows desktop edition: the shared condition engine gained the same operators and field-to-field comparison, for both business rule conditions and workflow triggers']],['v0.16.0','August 2026','Business rules & workflows now work on any field, not just status',['Business rules can now condition on any built-in field - name, industry, value, close date, whatever the object has - not only the status/stage field, with a real comparison operator (is/is not, contains, is empty, greater than, less than) chosen per field, and their require/hide action can now target a built-in field too, not just a custom one','Workflow automation\'s field-changed trigger can now watch any built-in field the same way, so "when Industry changes to X" or "when Due date is set" can create a task and notify admins, not only "when status/stage reaches a value"','Windows desktop edition: the underlying business rules and workflow engines gained the same any-built-in-field support for both conditions/triggers and actions (require, hide, lock, set default, force value, and the workflow update-field action), writing through each entity\'s own validation so nothing bypasses existing rules']],['v0.15.0','August 2026','Custom relationships, richer business rules & workflow automation',['Added admin-defined custom relationships between any two record types (companies, contacts, custom objects, and more), with one-to-one/many-to-one/many-to-many cardinality and a choice of what happens to linked records on delete','Added a related-records view on record detail pages showing every linked record through those relationships','Replaced the business rules engine: rules can now combine multiple conditions with AND/OR, use 10 comparison operators (not just equals), and lock a field, set a default or exact value, block saving entirely, or show a message — not just require or hide','Replaced the workflow automation engine: triggers now include field changes and dates reached/overdue in addition to status changes, and actions include assigning the record\'s owner, creating a related record, and posting an in-app notification, on top of creating a task','Added an in-app notification center (bell icon with unread count) for workflow-triggered notifications','Added optional validation for custom fields — a min/max range for number fields, a max length and regex pattern for text fields — plus searchable/filterable/reportable capability flags','Added Windows task reminder notifications (native toast notifications via the desktop app\'s webview)','Added a session inactivity auto-lock (15 minutes idle) requiring the current user\'s password to resume','Updated the online demo: business rules now support an "is / is not" operator, and workflow rules can optionally post an admin notification, shown in a new notification bell']],['v0.14.0','August 2026','Admin-defined Custom Objects',['Added Custom Objects: an Administrator can define an entirely new record type (its own label, fields and ID/numbering format) without any code changes','Custom Objects automatically get their own navigation section, and are full citizens of the existing custom fields, business rules and custom report builder — no per-object code was needed for any of the three','A custom object can\'t be named the same as a built-in entity, and deleting its definition is blocked while records exist (deactivating it is always safe and non-destructive)']],['v0.13.0','August 2026','Admin panel: users, roles & flexible configuration everywhere',['Added an Admin panel with user & role management, moved out of the main navigation into one dedicated section','Added an editable business profile (name, phone, address, city, logo) shown across the workspace','Generalized custom fields from Companies/Contacts to every major object: Opportunities, Quotes, Orders, Invoices, Contracts, Products and Tasks','Generalized conditional business rules and workflow automation the same way, so any object with custom fields can use them','Added admin-configurable numbering: choose the prefix and digit width used for each object\'s auto-generated ID (e.g. "ACC-000001" or "ACC-ab0001")','Added a simple custom report builder: pick an object, group by any field including custom fields, and count or sum','Added a dashboard KPI picker so admins choose which tiles show, in what selection, for the whole workspace','Updated the online demo with a full working Admin panel — mirrors every feature above in the browser']],['v0.12.0','August 2026','Branding, reports, custom fields, business rules & workflow automation',['Added business branding (logo, editable business profile) shown on the print letterhead for quotes, orders and invoices','Added reports beyond the dashboard: revenue by month, win rate by owner, lost reasons, AR aging and sales by owner','Added admin-defined custom fields on Companies and Contacts (text, number, date, yes/no, select), enforced both client- and server-side','Added conditional business rules that require or hide a custom field based on a record\'s status','Added Phase 1 workflow automation: auto-create a follow-up task when an Opportunity\'s stage or an Invoice\'s status changes']],['v0.11.0','August 2026','PDF printing & CSV import/export',['Added a browser-native "Print / Save as PDF" preview for quotes, orders and invoices, with business letterhead, line items and totals','Added CSV export on every list screen','Added CSV import for Companies and Contacts, validated row by row through the same rules as the manual forms']],['v0.10.0','August 2026','Team Workspace, backup & restore',['Added Team Workspace mode — a small team shares one server over the local network from browser tabs, with per-user sessions','Added whole-workspace backup and restore as a single file, safe to run against a live database','Added self-service password change from a "My account" screen']],['v0.9.0','August 2026','Desktop edition foundation published',['Published the Windows desktop edition source: Tauri v2 + Rust + SQLite','Implemented the full sales lifecycle on desktop — Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices','Added quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication','No packaged installer yet — desktop is available to build and run from source']],['v0.8.0','August 2026','Interactive navigation & public pages',['Made dashboard KPIs clickable with filtered drill-downs','Added a global Quick Create menu','Added mobile navigation while keeping Try Online prominent','Replaced Journey with Principles and added Compare and Download pages','Marked desktop downloads as Coming Soon','Fixed desktop sidebar navigation']],['v0.7.0','August 2026','Trust & product transparency',['Added Roadmap, Changelog and creator attribution','Added Person JSON-LD and updated discovery files']],['v0.6.0','August 2026','Record numbering & search',['Added automatically generated identifiers','Rebuilt global search as one stable result panel','Added keyboard shortcuts and wider search coverage']],['v0.5.0','July 2026','Lanesra OS rebrand',['Renamed BusinessOS to Lanesra OS','Updated product branding, metadata and documentation']],['v0.4.0','July 2026','Relationship integrity',['Added opportunity-to-contact relationship','Removed opportunity-to-contract relationship','Added company-filtered relationship dropdowns']],['v0.3.0','July 2026','Flexible sales flow',['Made opportunities optional for quotes','Made quotes optional for orders','Added products, services and line-item quantities']],['v0.2.0','June 2026','Connected sales MVP',['Added quotes, orders, invoices, contracts and dashboards','Connected core entities using clean relationships']],['v0.1.0','May 2026','First working prototype',['Launched the first browser-based MVP with sample data']]];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Release history</div><h1>Releases</h1><p>Every meaningful improvement to Lanesra OS, with detailed per-version release notes — documented publicly.</p><div class="status-row"><span class="status-chip">Latest: v0.23.1</span><span class="muted">Early Access</span></div></div></section><section class="section"><div class="container changelog-list">${releases.map(r=>`<article class="release" id="${r[0].replaceAll('.','-')}"><div class="release-meta"><span class="status-chip">${r[0]}</span><span>${r[1]}</span></div><div><h2>${r[2]}</h2><ul>${r[3].map(x=>`<li>${x}</li>`).join('')}</ul></div></article>`).join('')}</div></section></main>${publicFooter()}`;bindPublicNav()}
+function releasesPage(){document.title='Releases — Lanesra OS';const releases=[['v0.24.0','August 2026','Multi-condition OR-groups and a full action palette for Business Rules & Workflow Automation, on desktop and in the online demo',['Both engines\' conditions gained one level of nested OR-grouping on top of the existing AND/OR: a rule can now express "A AND (B OR C)", not just a flat AND or a flat OR - the builders show a dashed "OR group" box with a "+ OR group" control alongside "+ Add condition"','Business rule actions expanded from require/hide/lock/set-default/set-value/block-save/show-message to the full palette: Show and Make editable (explicit counterparts to Hide/Lock, most useful together with a new "Hide by default" flag on a custom field), Clear field value, Restrict choices (narrows a select field\'s options while the rule matches), and a severity split of the old generic message into Show error/Show warning - "Effects" is renamed "Action" throughout both builders','A custom field can now be flagged "Hide by default" - left off every create/edit form unless a business rule\'s Show action currently targets it, enforced server-side on desktop (a hidden-by-default+required field can never block a save) and mirrored client-side in the demo','Workflow automation gained two new field-behavior actions - Set default value (only fills a field if currently empty) and Clear a field - and, in the online demo specifically, an optional "extra conditions" section (AND/OR, same OR-groups) evaluated once the trigger itself already fired, plus true multi-action workflows (previously one action per rule)','"Trigger approval" from the design mockup is deliberately not included in this round','Desktop: Rust core (migration 0020), 8 new tests, full workspace suite green; React admin screens for both builders rebuilt to match. Online demo: business rules and workflow automation rebuilt from single-condition/single-action to fully array-based, with an in-place upgrade of any rule saved before this release - existing rules keep evaluating exactly as before until edited through the new builder']],['v0.23.1','August 2026','Online demo parity fix: workflow self-updates and custom-object workflows',['Workflow automation gained the desktop edition\'s update_field action (the companion to update_related_record) - "when this record\'s field changes, also set another field on this same record" - e.g. "when Status becomes Customer, set Industry to Active." The new value can be a fixed value or copied live from another field on the same record','Fixed a bug where a workflow rule defined on an admin-defined Custom Object could be created in Admin → Workflow Automation but would silently never fire - execution was gated on a built-ins-only lookup table left over from before Custom Objects existed as a workflow-eligible entity; workflows on custom objects now run exactly like on any built-in entity','Both fixes verified against the exact reported scenario (Company status change auto-updating a second field on the same Company) and against a custom object end to end']],['v0.23.0','August 2026','Integrations admin section in the online demo',['A new Admin → Integrations section - another capability that doesn\'t exist on the desktop edition, built for the demo first, as a UI-only simulation: the static demo has no server, so nothing here makes a real network call or runs on a real schedule','Scheduled jobs: define a data Export/Import/Sync job against any built-in or custom object with a schedule (manual, hourly, daily, weekly) and format (CSV/JSON); Run now simulates it immediately, with a per-job history log of simulated runs and record counts','API endpoints: define and "expose" a GET or POST endpoint backed by any object, with API-key or public auth; Test call shows the exact request and a realistic JSON response built from your own current demo data, entirely local','External API connections: configure an outbound connection (base URL, method, none/API-key/bearer auth) this workspace would call; Test request logs a simulated response with a call history, clearly labeled as simulated since the demo can\'t make real outbound requests','With this, the online demo has closed every gap identified in this round of parity work: Custom Objects, Custom Relationships, Reports, a no-code Screen layouts designer, and now Integrations - all four built for the demo, two catching up to desktop and two (layouts, integrations) new to the product entirely']],['v0.22.0','August 2026','No-code Screen layouts in the online demo',['A new Admin → Screen layouts tab lets an admin drag-order any built-in or custom object\'s create/edit fields into named sections - a capability that doesn\'t exist on the desktop edition either, built for the demo first','A layout has a draft and a published copy: dragging fields between/within sections, renaming a section, or adding one only ever edits the draft - the live create/edit form keeps using the plain default field order until Publish copies the draft over, and Unpublish clears it straight back to that default','A Preview button renders the draft exactly as the live form would show it, without saving anything or touching the live workspace','A published layout never drops a field it doesn\'t recognize - any field missing from the layout (a new custom field added after publishing, or a stale key) is automatically appended to a trailing "Other fields" section so nothing can go missing from a form because of a layout edit','With this, the online demo\'s only remaining gap against the desktop edition\'s admin extensibility spec is the Integrations admin section - up next, also a demo-first UI-only build']],['v0.21.0','August 2026','Reports in the online demo',['The online demo has a new top-level Reports section with the same fixed report gallery the desktop edition ships: Revenue by month, Win rate by owner, Lost reasons, AR aging and Sales by owner, each with a date-range (or "as of") filter and a bar-chart table matching desktop\'s layout','Added a Custom Reports builder to the demo, mirroring desktop\'s admin report builder: pick any object - built-in or a Custom Object - group by its status/stage or an active, reportable custom field, and count records or sum a numeric custom field; only fields an admin flagged Reportable are offered, same as desktop','Added CSV export to every report in the demo (a new capability for the demo generally, self-contained via a Blob download - no server involved)','Two disclosed substitutions where this demo\'s simpler data model doesn\'t match desktop\'s: Revenue by month/Sales by owner group by each invoice\'s due date since the demo has no separate issue date, and AR aging uses each invoice\'s full total as its balance since the demo doesn\'t track partial payments - both called out in the report\'s own subtitle rather than silently faked','Added a Lost reason field to Opportunities so the Lost Reasons report has something real to report on','With this, the online demo\'s only remaining gaps against the desktop edition are two capabilities that don\'t exist on desktop either: a no-code UI layout designer and a UI-only Integrations admin section - both underway next']],['v0.20.0','August 2026','Custom Relationships in the online demo',['An Administrator can now connect any two object types - built-in or custom - from Admin → Relationships: a cardinality (many-to-one, one-to-one or many-to-many), a forward/reverse label pair, and a choice of what happens to a link when a linked record is deleted (Restrict blocks the delete, Archive drops the link and keeps both records)','Every record\'s edit form now shows a "Related records" panel listing every linked record across every applicable relationship, from either direction, with inline Link/Unlink - the same place desktop puts its related-records card, since most objects in this demo have an edit form but no separate detail page','Cardinality is enforced on link (a many-to-one or one-to-one side can\'t be linked twice), and a relationship can\'t connect an object type to itself - both match the desktop edition\'s validation exactly','Reports beyond the dashboard remain the one desktop-only capability left in the online demo\'s parity work']],['v0.19.0','August 2026','Custom Objects in the online demo',['The online demo caught up with one of the desktop edition\'s biggest capabilities: an Administrator can now define a whole new business object at runtime - Vendors, Assets, Projects - from Admin → Custom Objects, with its own icon, sidebar entry and record-number prefix/digit width, no code change','A custom object is a full citizen of the demo\'s admin subsystems exactly like a built-in entity: it gets its own tab in Custom Fields, Business Rules, Status Transitions and Workflow Automation, and its records go through the same create/edit/list screens, auto-numbering and delete-dependency checks as Companies or Contacts','A custom object can\'t be named the same as a built-in entity (rejected at creation, matching desktop); deleting its definition is blocked while any record still exists, while deactivating is always safe and reversible since it only hides the object from navigation and new-record creation','Reports beyond the dashboard and Custom Relationships between record types remain desktop-only for now - next up in the online demo\'s parity work']],['v0.18.1','August 2026','Online demo parity fixes',['Workflow "Create a new record" now offers all 9 built-in record types in the online demo (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks), not just 3 - matching the desktop edition\'s full creatable set, with company-dependent types offered only when the trigger record actually carries a company','Workflow "Update a related record" now walks the demo\'s foreign-key graph in both directions, not just downward: a Contact can update its own parent Company the same way a Company can update its Contacts, and every entity gets its linked Tasks (and vice versa) through the existing relatedType/relatedId link','Custom fields in the online demo gained the validation and capability settings the desktop edition already had: Required, Max length and Pattern/regex (text fields), Min/Max value (number fields), and Searchable/Filterable/Reportable flags - enforced with native HTML5 form validation and shown in the custom fields list']],['v0.18.0','August 2026','Status transitions, richer workflow actions, test mode, a rule-builder redesign, and Customer 360',['Added a Status Transition Editor: restrict which status/stage changes are allowed on any object with a fixed-schema field (companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks) - each rule is one from → to move, with a wildcard "any status" starting point and its own active toggle; with no active rules a field stays fully unrestricted, and resaving the same status is never blocked','Workflow automation actions expanded beyond "create a task": a workflow can now create a new record (a company, opportunity or task) or update a field on a record related to the trigger through the demo\'s existing company/contact/opportunity/quote/order relationships','Added a Test rule / Test workflow dry-run mode to both Business Rules and Workflow Automation: fill in hypothetical values for an object and see exactly which active rules or workflows would match and what they would do, without creating, changing or sending anything','Redesigned the Business Rules and Workflow Automation builders to match the desktop edition\'s rule-builder layout: numbered Condition/Effect (or Trigger/Action) sections, a live-updating rule summary panel, and - for workflows - a visual Trigger → Action → End canvas that mirrors the form as you edit it; both builders gained full editing (not just create) and header-level Test/Activate-Deactivate/Save controls','Custom fields gained four more settings: an optional default value applied whenever a save leaves the field empty, a "require a unique value" check (rejected at definition time for yes/no fields, since they only have two possible values), placeholder text, and help text shown under the field on every record form','Added Customer 360 and Contact 360: clicking a company or contact name anywhere in the app now opens a dedicated detail page with its full field overview and every linked record - contacts, opportunities, quotes, orders, invoices, contracts and tasks - each one click away, replacing edit-modal-only access','Fixed a pre-existing bug surfaced while building the above: the admin panel\'s tab row no longer freezes on whichever tab was open first - switching tabs now correctly highlights the one you\'re on']],['v0.17.0','August 2026','More operators & field-to-field comparison',['Business rules and workflows gained four more comparison operators - starts with, ends with, is one of, is not one of - on top of is/is not/contains/is empty/is not empty/greater than/less than','A condition can now compare a field against another field\'s live value instead of only a fixed value - e.g. "require Flag when Notes equals Expected Notes" - with the same live-updating preview on the record form that a fixed-value condition already had','Windows desktop edition: the shared condition engine gained the same operators and field-to-field comparison, for both business rule conditions and workflow triggers']],['v0.16.0','August 2026','Business rules & workflows now work on any field, not just status',['Business rules can now condition on any built-in field - name, industry, value, close date, whatever the object has - not only the status/stage field, with a real comparison operator (is/is not, contains, is empty, greater than, less than) chosen per field, and their require/hide action can now target a built-in field too, not just a custom one','Workflow automation\'s field-changed trigger can now watch any built-in field the same way, so "when Industry changes to X" or "when Due date is set" can create a task and notify admins, not only "when status/stage reaches a value"','Windows desktop edition: the underlying business rules and workflow engines gained the same any-built-in-field support for both conditions/triggers and actions (require, hide, lock, set default, force value, and the workflow update-field action), writing through each entity\'s own validation so nothing bypasses existing rules']],['v0.15.0','August 2026','Custom relationships, richer business rules & workflow automation',['Added admin-defined custom relationships between any two record types (companies, contacts, custom objects, and more), with one-to-one/many-to-one/many-to-many cardinality and a choice of what happens to linked records on delete','Added a related-records view on record detail pages showing every linked record through those relationships','Replaced the business rules engine: rules can now combine multiple conditions with AND/OR, use 10 comparison operators (not just equals), and lock a field, set a default or exact value, block saving entirely, or show a message — not just require or hide','Replaced the workflow automation engine: triggers now include field changes and dates reached/overdue in addition to status changes, and actions include assigning the record\'s owner, creating a related record, and posting an in-app notification, on top of creating a task','Added an in-app notification center (bell icon with unread count) for workflow-triggered notifications','Added optional validation for custom fields — a min/max range for number fields, a max length and regex pattern for text fields — plus searchable/filterable/reportable capability flags','Added Windows task reminder notifications (native toast notifications via the desktop app\'s webview)','Added a session inactivity auto-lock (15 minutes idle) requiring the current user\'s password to resume','Updated the online demo: business rules now support an "is / is not" operator, and workflow rules can optionally post an admin notification, shown in a new notification bell']],['v0.14.0','August 2026','Admin-defined Custom Objects',['Added Custom Objects: an Administrator can define an entirely new record type (its own label, fields and ID/numbering format) without any code changes','Custom Objects automatically get their own navigation section, and are full citizens of the existing custom fields, business rules and custom report builder — no per-object code was needed for any of the three','A custom object can\'t be named the same as a built-in entity, and deleting its definition is blocked while records exist (deactivating it is always safe and non-destructive)']],['v0.13.0','August 2026','Admin panel: users, roles & flexible configuration everywhere',['Added an Admin panel with user & role management, moved out of the main navigation into one dedicated section','Added an editable business profile (name, phone, address, city, logo) shown across the workspace','Generalized custom fields from Companies/Contacts to every major object: Opportunities, Quotes, Orders, Invoices, Contracts, Products and Tasks','Generalized conditional business rules and workflow automation the same way, so any object with custom fields can use them','Added admin-configurable numbering: choose the prefix and digit width used for each object\'s auto-generated ID (e.g. "ACC-000001" or "ACC-ab0001")','Added a simple custom report builder: pick an object, group by any field including custom fields, and count or sum','Added a dashboard KPI picker so admins choose which tiles show, in what selection, for the whole workspace','Updated the online demo with a full working Admin panel — mirrors every feature above in the browser']],['v0.12.0','August 2026','Branding, reports, custom fields, business rules & workflow automation',['Added business branding (logo, editable business profile) shown on the print letterhead for quotes, orders and invoices','Added reports beyond the dashboard: revenue by month, win rate by owner, lost reasons, AR aging and sales by owner','Added admin-defined custom fields on Companies and Contacts (text, number, date, yes/no, select), enforced both client- and server-side','Added conditional business rules that require or hide a custom field based on a record\'s status','Added Phase 1 workflow automation: auto-create a follow-up task when an Opportunity\'s stage or an Invoice\'s status changes']],['v0.11.0','August 2026','PDF printing & CSV import/export',['Added a browser-native "Print / Save as PDF" preview for quotes, orders and invoices, with business letterhead, line items and totals','Added CSV export on every list screen','Added CSV import for Companies and Contacts, validated row by row through the same rules as the manual forms']],['v0.10.0','August 2026','Team Workspace, backup & restore',['Added Team Workspace mode — a small team shares one server over the local network from browser tabs, with per-user sessions','Added whole-workspace backup and restore as a single file, safe to run against a live database','Added self-service password change from a "My account" screen']],['v0.9.0','August 2026','Desktop edition foundation published',['Published the Windows desktop edition source: Tauri v2 + Rust + SQLite','Implemented the full sales lifecycle on desktop — Companies, Contacts, Products, Opportunities, Quotes, Orders and Invoices','Added quote-to-order and order-to-invoice conversion, atomic document numbering and local user authentication','No packaged installer yet — desktop is available to build and run from source']],['v0.8.0','August 2026','Interactive navigation & public pages',['Made dashboard KPIs clickable with filtered drill-downs','Added a global Quick Create menu','Added mobile navigation while keeping Try Online prominent','Replaced Journey with Principles and added Compare and Download pages','Marked desktop downloads as Coming Soon','Fixed desktop sidebar navigation']],['v0.7.0','August 2026','Trust & product transparency',['Added Roadmap, Changelog and creator attribution','Added Person JSON-LD and updated discovery files']],['v0.6.0','August 2026','Record numbering & search',['Added automatically generated identifiers','Rebuilt global search as one stable result panel','Added keyboard shortcuts and wider search coverage']],['v0.5.0','July 2026','Lanesra OS rebrand',['Renamed BusinessOS to Lanesra OS','Updated product branding, metadata and documentation']],['v0.4.0','July 2026','Relationship integrity',['Added opportunity-to-contact relationship','Removed opportunity-to-contract relationship','Added company-filtered relationship dropdowns']],['v0.3.0','July 2026','Flexible sales flow',['Made opportunities optional for quotes','Made quotes optional for orders','Added products, services and line-item quantities']],['v0.2.0','June 2026','Connected sales MVP',['Added quotes, orders, invoices, contracts and dashboards','Connected core entities using clean relationships']],['v0.1.0','May 2026','First working prototype',['Launched the first browser-based MVP with sample data']]];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Release history</div><h1>Releases</h1><p>Every meaningful improvement to Lanesra OS, with detailed per-version release notes — documented publicly.</p><div class="status-row"><span class="status-chip">Latest: v0.24.0</span><span class="muted">Early Access</span></div></div></section><section class="section"><div class="container changelog-list">${releases.map(r=>`<article class="release" id="${r[0].replaceAll('.','-')}"><div class="release-meta"><span class="status-chip">${r[0]}</span><span>${r[1]}</span></div><div><h2>${r[2]}</h2><ul>${r[3].map(x=>`<li>${x}</li>`).join('')}</ul></div></article>`).join('')}</div></section></main>${publicFooter()}`;bindPublicNav()}
 function principlesPage(){document.title='Principles — Lanesra OS';const principles=[['Own your data','Your customer and sales information should remain under your control—not trapped behind a subscription or vendor lock-in.'],['Offline first','Core work should continue even when the internet does not. The Windows desktop edition runs entirely on local SQLite storage, with no server or account required.'],['Relationships over spreadsheets','Customers, contacts, opportunities, quotes, orders and invoices stay linked so data remains clean and useful — and that same connected model extends to any custom record type you define.'],['Simple before powerful','Every feature must reduce effort. Complexity is added only when it clearly improves the work.'],['Configurable, not hardcoded','A business shouldn\'t need a developer to add a field, a record type, a rule or an automation. Admins reshape Lanesra from a settings screen — the software adapts to the business, not the other way around.'],['Open by default','The product roadmap, backlog, release notes and source code are all public so users can inspect how Lanesra evolves.'],['Business software deserves good design','Small businesses should not have to accept dated interfaces or confusing navigation to access serious capabilities.']];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">How Lanesra is designed</div><h1>Principles before features.</h1><p>The decisions behind Lanesra OS are guided by a small set of practical beliefs about ownership, simplicity and product quality.</p></div></section><section class="section"><div class="container principles-page-grid">${principles.map((p,i)=>`<article class="principle-card"><span>0${i+1}</span><h2>${p[0]}</h2><p>${p[1]}</p></article>`).join('')}</div></section><section class="section maintenance"><div class="container narrow"><div class="eyebrow">The business flow</div><h2>Connected by design.</h2><div class="flow-map"><strong>Customer</strong><span>→</span><div>Contacts<br>Opportunities <em>optional</em><br>Quotes <em>optional</em><br>Orders<br>Invoices<br>Contracts<br>Tasks</div></div><p class="muted" style="margin-top:18px">That same connected model isn't fixed to these nine record types — admins can add their own (Vendors, Assets, Projects…) and link them into this graph with custom relationships, so the "no dangling free text" principle holds for whatever your business actually looks like.</p></div></section></main>${publicFooter()}`;bindPublicNav()}
 function comparePage(){document.title='Compare — Lanesra OS';const rows=[['Runs without internet','Partial','No','No','Yes'],['Open source','No','No','No','Yes'],['Local database','No','No','No','Yes (desktop)'],['Mandatory subscription','No','Yes','Yes','No'],['Connected sales workflow','Manual','Limited','Advanced','Yes'],['Custom record types, no code','No','Limited, paid tiers','Yes, complex/paid','Yes, built in'],['Custom business rules & workflow automation','No','Paid tiers','Yes, needs admin training','Yes, built in'],['Designed for small business','General','Yes','Enterprise','Yes'],['Self-owned business data','File-based','Cloud-hosted','Cloud-hosted','Yes']];$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Choose with context</div><h1>Where Lanesra fits.</h1><p>A factual comparison for small businesses deciding between spreadsheets, cloud CRMs and a local-first open-source system.</p></div></section><section class="section"><div class="container compare-wrap"><table class="compare-table"><thead><tr><th>Capability</th><th>Excel</th><th>HubSpot</th><th>Salesforce</th><th class="lanesra-col">Lanesra OS</th></tr></thead><tbody>${rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${i===4?'lanesra-col':''}">${x}</td>`).join('')}</tr>`).join('')}</tbody></table><p class="compare-note">Comparisons are intentionally high-level. Product capabilities and commercial terms can change; review each vendor's current documentation before making a purchase decision.</p></div></section></main>${publicFooter()}`;bindPublicNav()}
 function downloadPage(){document.title='Download — Lanesra OS';$('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Local-first desktop edition</div><h1>Download Lanesra OS.</h1><p>The independent desktop edition runs locally with no cloud account or mandatory internet connection. It is in active early development, with an Early Access Windows installer now available.</p></div></section><section class="section"><div class="container download-grid"><article class="download-card featured"><span class="status-chip">Early access — installer available</span><h2>Windows</h2><p>Tauri + Rust + SQLite desktop app with the full sales lifecycle, Contracts, Tasks and user management working: Companies, Contacts, Products, Opportunities, Quotes, Orders, Invoices, Contracts and Tasks — plus Team Workspace mode for small teams, backup and restore, PDF printing, CSV import/export, admin-defined Custom Objects and relationships between any record types, and an Admin panel covering branding, user roles, custom fields, richer conditional business rules, richer workflow automation with in-app notifications, configurable ID formats and a dashboard KPI picker. Unsigned .exe and .msi installers are on GitHub Releases (Windows will warn on first run since they aren't code-signed yet).</p><a class="btn btn-primary" href="https://github.com/vikram2409-eng/Lanesra-OS/releases" target="_blank" rel="noopener">Download for Windows</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View desktop source on GitHub</a></article><article class="download-card"><span class="status-chip">Planned</span><h2>macOS</h2><p>Apple silicon and Intel packaging will follow the Windows early-access release.</p><button class="btn btn-secondary" disabled>Planned</button></article><article class="download-card"><span class="status-chip">Planned</span><h2>Linux</h2><p>AppImage or Debian packaging is planned after the initial desktop release stabilizes.</p><button class="btn btn-secondary" disabled>Planned</button></article></div></section><section class="section maintenance"><div class="container narrow"><h2>What the desktop edition includes today</h2><div class="download-checks"><span>✓ No licence key</span><span>✓ No cloud account</span><span>✓ Standard SQLite database</span><span>✓ Offline from first launch</span><span>✓ Full sales lifecycle (quotes → orders → invoices)</span><span>✓ Contracts and tasks</span><span>✓ User management</span><span>✓ Team Workspace mode for small teams (Docker)</span><span>✓ Windows installer (unsigned, Early Access)</span><span>✓ Backup and restore</span><span>✓ Self-service password change</span><span>✓ PDF generation and printing</span><span>✓ CSV import and export</span><span>✓ Branding and print customization</span><span>✓ Reports, plus a custom report builder</span><span>✓ Custom fields & business rules on every object</span><span>✓ Workflow automation with in-app notifications</span><span>✓ Admin-defined Custom Objects</span><span>✓ Custom relationships between record types</span><span>✓ Windows task reminder notifications</span><span>✓ Session inactivity auto-lock</span><span>✓ Admin panel: user roles & configurable numbering</span><span>✓ Open-source code</span><span>○ Code-signed installer — planned</span></div><div class="hero-actions"><a class="btn btn-secondary" href="/roadmap#desktop">View desktop roadmap</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop" target="_blank" rel="noopener">View source on GitHub</a></div></div></section></main>${publicFooter()}`;bindPublicNav()}

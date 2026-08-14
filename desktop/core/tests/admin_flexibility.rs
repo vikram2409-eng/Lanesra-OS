@@ -91,6 +91,7 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
             is_unique: false,
             help_text: None,
             placeholder: None,
+            is_hidden_by_default: false,
         },
         Some(&admin),
     )
@@ -117,6 +118,7 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
                 value: "Won".into(),
                 compare_field_source: None,
                 compare_field_key: None,
+                group_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),
@@ -291,6 +293,7 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
             is_unique: false,
             help_text: None,
             placeholder: None,
+            is_hidden_by_default: false,
         },
         Some(&admin),
     )
@@ -312,6 +315,7 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
             is_unique: false,
             help_text: None,
             placeholder: None,
+            is_hidden_by_default: false,
         },
         Some(&admin),
     )
@@ -370,6 +374,7 @@ fn a_sum_report_must_target_an_active_numeric_custom_field() {
             is_unique: false,
             help_text: None,
             placeholder: None,
+            is_hidden_by_default: false,
         },
         Some(&admin),
     )

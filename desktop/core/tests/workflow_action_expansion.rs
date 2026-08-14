@@ -179,7 +179,7 @@ fn update_related_record_action_can_copy_a_value_from_the_triggering_record() {
             entity_type: "Company".into(), label: "Vendor Notes".into(), field_type: "text".into(), options: vec![],
             required: false, show_in_list: false, sort_order: 0, min_value: None, max_value: None, max_length: None,
             regex_pattern: None, is_searchable: false, is_filterable: false, is_reportable: true,
-            default_value: None, is_unique: false, help_text: None, placeholder: None,
+            default_value: None, is_unique: false, help_text: None, placeholder: None, is_hidden_by_default: false,
         },
         Some(&admin),
     ).unwrap();
@@ -317,7 +317,7 @@ fn test_workflows_omits_workflows_whose_conditions_do_not_match_the_hypothetical
     // the "ctx doesn't satisfy it" path test_workflows is meant to prove.
     wf.conditions = vec![lanesra_core::models::workflow::WorkflowConditionInput {
         field_source: "builtin".into(), field_key: "tax_number".into(), operator: "equals".into(), value: "VIP".into(),
-        compare_field_source: None, compare_field_key: None,
+        compare_field_source: None, compare_field_key: None, group_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 

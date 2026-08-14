@@ -3,26 +3,35 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { BuiltinValueInput } from "../../components/BuiltinValueInput";
+import { describeGroupedConditions, groupConditionIndices, newGroupId } from "../../lib/conditionGroups";
 import {
-  ACTION_TYPES,
   builtinFieldsFor,
   builtinTriggerFieldFor,
   CONDITION_OPERATORS,
+  CURRENT_ACTION_TYPES,
   CUSTOM_FIELD_ENTITY_TYPES,
   entityTypeLabel,
   FIELD_TARGETED_ACTIONS,
+  LIST_SEPARATOR,
   MATCH_TYPES,
   MESSAGE_ACTIONS,
   TRIGGER_SOURCES,
+  VALUE_REQUIRED_ACTIONS,
   VALUELESS_OPERATORS,
   type ActionType,
   type BusinessRuleActionInput,
   type BusinessRuleConditionInput,
   type BusinessRuleInput,
   type ConditionOperator,
+  type CustomFieldDefinition,
   type MatchType,
   type TriggerSource,
 } from "../../lib/types";
+
+/** Only key/label/field_type/options are used here - every caller passes a
+ * full CustomFieldDefinition (or CustomFieldDefinition[]), this just names
+ * the slice this file actually reads. */
+type CustomFieldLite = Pick<CustomFieldDefinition, "key" | "label" | "field_type" | "options">;
 
 const OPERATOR_LABELS: Record<ConditionOperator, string> = {
   equals: "equals", not_equals: "does not equal", contains: "contains", not_contains: "does not contain",
@@ -32,28 +41,36 @@ const OPERATOR_LABELS: Record<ConditionOperator, string> = {
 };
 
 const ACTION_LABELS: Record<ActionType, string> = {
-  require: "Require", hide: "Hide", lock: "Lock (read-only)", set_default: "Set default value",
-  set_value: "Force value", block_save: "Block save", show_message: "Show message",
+  require: "Require field", hide: "Hide field", show: "Show field", lock: "Make read-only", editable: "Make editable",
+  set_default: "Set default value", set_value: "Set field value", clear_value: "Clear field value",
+  restrict_choices: "Restrict choices", block_save: "Block save", show_error: "Show error", show_warning: "Show warning",
+  show_message: "Show message (legacy)",
 };
 
 const ACTION_ICONS: Record<ActionType, string> = {
-  require: "✅", hide: "🙈", lock: "🔒", set_default: "🔧", set_value: "✏️", block_save: "🚫", show_message: "💬",
+  require: "✅", hide: "🙈", show: "👁️", lock: "🔒", editable: "🔓",
+  set_default: "🔧", set_value: "✏️", clear_value: "🧹", restrict_choices: "🎯",
+  block_save: "🚫", show_error: "❗", show_warning: "⚠️", show_message: "💬",
 };
 
-/** Effect-type legend the summary panel shows - grouped the same way the
- * effects themselves group functionally: Validation (blocks/messages, no
- * field target) vs Field behavior (require/hide/lock/set a value, always
- * targets a field). Built from ACTION_TYPES/ACTION_LABELS so it can never
- * list an effect the engine doesn't actually support. */
-const EFFECT_LEGEND: { title: string; types: ActionType[] }[] = [
-  { title: "Validation", types: ["block_save", "show_message"] },
-  { title: "Field behavior", types: ["require", "hide", "lock", "set_default", "set_value"] },
+/** Action-type legend the summary panel shows - grouped exactly like the
+ * "Effect types you can use" design mockup: Validation (require/block/
+ * error/warning - govern whether the save proceeds), Field behavior
+ * (show/hide/lock/editable/set/clear a value - govern how a field
+ * renders), Other (restrict_choices). "Trigger approval" from the mockup
+ * is deliberately not offered yet. Built from CURRENT_ACTION_TYPES/
+ * ACTION_LABELS so it can never list an action the engine doesn't
+ * actually support. */
+const ACTION_LEGEND: { title: string; types: ActionType[] }[] = [
+  { title: "Validation", types: ["require", "block_save", "show_error", "show_warning"] },
+  { title: "Field behavior", types: ["show", "hide", "lock", "editable", "set_value", "clear_value", "set_default"] },
+  { title: "Other", types: ["restrict_choices"] },
 ];
 
 function emptyCondition(entityType: string): BusinessRuleConditionInput {
   return {
     field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "",
-    compare_field_source: null, compare_field_key: null,
+    compare_field_source: null, compare_field_key: null, group_id: null,
   };
 }
 
@@ -61,7 +78,7 @@ function emptyCondition(entityType: string): BusinessRuleConditionInput {
  * screen's original behavior); falls back to the first actionable
  * built-in field so "+ Add action" still works on an entity with no
  * custom fields defined at all. */
-function emptyAction(entityType: string, customFields: { key: string; label: string }[]): BusinessRuleActionInput {
+function emptyAction(entityType: string, customFields: CustomFieldLite[]): BusinessRuleActionInput {
   if (customFields.length > 0) {
     return { action_type: "require", target_field_key: customFields[0].key, target_field_source: "custom", action_value: null, message: null };
   }
@@ -70,9 +87,9 @@ function emptyAction(entityType: string, customFields: { key: string; label: str
     return { action_type: "require", target_field_key: builtin.key, target_field_source: "builtin", action_value: null, message: null };
   }
   // No actionable target at all (e.g. Quote/Order/Invoice with no custom
-  // fields defined) - default to a message action, the only kind that
+  // fields defined) - default to a warning action, the only kind that
   // doesn't need one.
-  return { action_type: "show_message", target_field_key: null, target_field_source: "custom", action_value: null, message: "" };
+  return { action_type: "show_warning", target_field_key: null, target_field_source: "custom", action_value: null, message: "" };
 }
 
 /** Label for a condition/action field regardless of source - builtin
@@ -99,22 +116,30 @@ function describeAction(entityType: string, a: BusinessRuleActionInput, labelByK
   switch (a.action_type) {
     case "require": return `require ${target}`;
     case "hide": return `hide ${target}`;
+    case "show": return `show ${target}`;
     case "lock": return `lock ${target}`;
+    case "editable": return `unlock ${target}`;
     case "set_default": return `default ${target} to "${a.action_value ?? ""}"`;
     case "set_value": return `force ${target} to "${a.action_value ?? ""}"`;
+    case "clear_value": return `clear ${target}`;
+    case "restrict_choices": return `restrict ${target} to ${(a.action_value ?? "").split(LIST_SEPARATOR).filter(Boolean).join(", ") || "no options"}`;
     case "block_save": return `block save: "${a.message ?? ""}"`;
+    case "show_error": return `show error: "${a.message ?? ""}"`;
+    case "show_warning": return `show warning: "${a.message ?? ""}"`;
     case "show_message": return `show message: "${a.message ?? ""}"`;
     default: return a.action_type;
   }
 }
 
 /**
- * Admin extensibility Phase C (spec §22/ADM-BR): a no-code IF (AND/OR) /
- * THEN rule builder - any number of conditions, and actions beyond
- * require/hide (lock, set a default/forced value, block the save with a
- * custom message, or show a non-blocking message). Enforced server-side
+ * Admin extensibility Phase C (spec §22/ADM-BR), extended by the second
+ * Admin Automation & Customization addendum round: a no-code IF (AND/OR,
+ * plus one level of nested OR-groups) / THEN (any number of actions) rule
+ * builder - require/hide/show/lock/editable a field, set/clear its value,
+ * restrict a select field's choices, block the save with a custom
+ * message, or show a non-blocking error/warning. Enforced server-side
  * (custom_field_service::set_entity_values) and mirrored client-side for
- * live form feedback for the three cosmetic effects (see
+ * live form feedback for the cosmetic field-behavior actions (see
  * lib/businessRules.ts).
  */
 export function BusinessRulesAdmin() {
@@ -204,7 +229,7 @@ export function BusinessRulesAdmin() {
             priority: editing.priority, effective_start_date: editing.effective_start_date, effective_end_date: editing.effective_end_date,
             conditions: editing.conditions.map((c) => ({
               field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
-              compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key,
+              compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
             })),
             actions: editing.actions.map((a) => ({ action_type: a.action_type, target_field_key: a.target_field_key, target_field_source: a.target_field_source, action_value: a.action_value, message: a.message })),
             is_active: editing.is_active,
@@ -240,7 +265,7 @@ export function BusinessRulesAdmin() {
             {rules.data.map((r) => (
               <tr key={r.id}>
                 <td>{r.name}</td>
-                <td>{r.conditions.map((c) => describeCondition(entityType, c, labelByKey)).join(r.match_type === "any" ? " OR " : " AND ")}</td>
+                <td>{describeGroupedConditions(r.conditions, r.match_type, (c) => describeCondition(entityType, c, labelByKey))}</td>
                 <td>{r.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</td>
                 <td>{r.priority}</td>
                 <td>
@@ -269,7 +294,7 @@ function ConditionRow({
   onRemove,
 }: {
   entityType: string;
-  customFields: { key: string; label: string }[];
+  customFields: CustomFieldLite[];
   condition: BusinessRuleConditionInput;
   onChange: (c: BusinessRuleConditionInput) => void;
   onRemove: () => void;
@@ -361,17 +386,29 @@ function ActionRow({
   onRemove,
 }: {
   entityType: string;
-  customFields: { key: string; label: string }[];
+  customFields: CustomFieldLite[];
   action: BusinessRuleActionInput;
   onChange: (a: BusinessRuleActionInput) => void;
   onRemove: () => void;
 }) {
-  const actionableBuiltinFields = builtinFieldsFor(entityType).filter((f) => f.actionable);
+  const isRestrictChoices = action.action_type === "restrict_choices";
+  // restrict_choices only makes sense on a select-typed field - narrow
+  // both target pickers to those when it's the chosen action, same
+  // constraint business_rule_service::validate_actions enforces.
+  const actionableBuiltinFields = builtinFieldsFor(entityType).filter((f) => f.actionable && (!isRestrictChoices || f.field_type === "select"));
+  const targetableCustomFields = customFields.filter((f) => !isRestrictChoices || f.field_type === "select");
   const isFieldTargeted = FIELD_TARGETED_ACTIONS.includes(action.action_type);
   const isMessageAction = MESSAGE_ACTIONS.includes(action.action_type);
-  const needsValue = action.action_type === "set_default" || action.action_type === "set_value";
+  const needsValue = VALUE_REQUIRED_ACTIONS.includes(action.action_type) && !isRestrictChoices;
   const isBuiltinTarget = action.target_field_source === "builtin";
   const selectedBuiltin = isBuiltinTarget ? actionableBuiltinFields.find((f) => f.key === action.target_field_key) : undefined;
+  const selectedCustom = !isBuiltinTarget ? targetableCustomFields.find((f) => f.key === action.target_field_key) : undefined;
+  const restrictableOptions = isBuiltinTarget ? selectedBuiltin?.options ?? [] : selectedCustom?.options ?? [];
+  const selectedChoices = (action.action_value ?? "").split(LIST_SEPARATOR).filter(Boolean);
+  // The dropdown only offers CURRENT_ACTION_TYPES for a *new* pick, but
+  // must still be able to display a legacy show_message action loaded
+  // from an existing rule without silently changing its value.
+  const dropdownOptions = CURRENT_ACTION_TYPES.includes(action.action_type) ? CURRENT_ACTION_TYPES : [...CURRENT_ACTION_TYPES, action.action_type];
 
   return (
     <div className="builder-row-card">
@@ -380,16 +417,24 @@ function ActionRow({
         value={action.action_type}
         onChange={(e) => {
           const type = e.target.value as ActionType;
+          const nowRestrict = type === "restrict_choices";
+          const fields = nowRestrict
+            ? builtinFieldsFor(entityType).filter((f) => f.actionable && f.field_type === "select")
+            : builtinFieldsFor(entityType).filter((f) => f.actionable);
+          const customChoices = nowRestrict ? customFields.filter((f) => f.field_type === "select") : customFields;
+          const stillValid = FIELD_TARGETED_ACTIONS.includes(type) && action.target_field_key &&
+            (action.target_field_source === "builtin" ? fields : customChoices).some((f) => f.key === action.target_field_key);
+          const fallback = customChoices[0]?.key ?? fields[0]?.key ?? "";
           onChange({
             action_type: type,
-            target_field_key: FIELD_TARGETED_ACTIONS.includes(type) ? (action.target_field_key || customFields[0]?.key || "") : null,
+            target_field_key: FIELD_TARGETED_ACTIONS.includes(type) ? (stillValid ? action.target_field_key : fallback) : null,
             target_field_source: action.target_field_source,
-            action_value: type === "set_default" || type === "set_value" ? action.action_value ?? "" : null,
+            action_value: VALUE_REQUIRED_ACTIONS.includes(type) ? (nowRestrict ? "" : action.action_value ?? "") : null,
             message: MESSAGE_ACTIONS.includes(type) ? action.message ?? "" : null,
           });
         }}
       >
-        {ACTION_TYPES.map((t) => <option key={t} value={t}>{ACTION_LABELS[t]}</option>)}
+        {dropdownOptions.map((t) => <option key={t} value={t}>{ACTION_LABELS[t]}</option>)}
       </select>
       {isFieldTargeted && (
         <>
@@ -397,20 +442,20 @@ function ActionRow({
             value={action.target_field_source}
             onChange={(e) => {
               const source = e.target.value as TriggerSource;
-              const first = source === "builtin" ? actionableBuiltinFields[0]?.key ?? "" : customFields[0]?.key ?? "";
-              onChange({ ...action, target_field_source: source, target_field_key: first, action_value: null });
+              const first = source === "builtin" ? actionableBuiltinFields[0]?.key ?? "" : targetableCustomFields[0]?.key ?? "";
+              onChange({ ...action, target_field_source: source, target_field_key: first, action_value: isRestrictChoices ? "" : null });
             }}
           >
-            <option value="custom">Custom field</option>
+            <option value="custom" disabled={targetableCustomFields.length === 0}>Custom field</option>
             <option value="builtin" disabled={actionableBuiltinFields.length === 0}>Built-in field</option>
           </select>
           {isBuiltinTarget ? (
-            <select value={action.target_field_key ?? ""} onChange={(e) => onChange({ ...action, target_field_key: e.target.value, action_value: null })} required>
+            <select value={action.target_field_key ?? ""} onChange={(e) => onChange({ ...action, target_field_key: e.target.value, action_value: isRestrictChoices ? "" : null })} required>
               {actionableBuiltinFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
             </select>
           ) : (
-            <select value={action.target_field_key ?? ""} onChange={(e) => onChange({ ...action, target_field_key: e.target.value })} required>
-              {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            <select value={action.target_field_key ?? ""} onChange={(e) => onChange({ ...action, target_field_key: e.target.value, action_value: isRestrictChoices ? "" : action.action_value })} required>
+              {targetableCustomFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
             </select>
           )}
         </>
@@ -420,10 +465,28 @@ function ActionRow({
       ) : (
         <input value={action.action_value ?? ""} onChange={(e) => onChange({ ...action, action_value: e.target.value })} placeholder="Value" required style={{ width: 140 }} />
       ))}
+      {isRestrictChoices && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {restrictableOptions.length === 0 && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Pick a select field first</span>}
+          {restrictableOptions.map((o) => (
+            <label key={o} style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={selectedChoices.includes(o)}
+                onChange={(e) => {
+                  const next = e.target.checked ? [...selectedChoices, o] : selectedChoices.filter((c) => c !== o);
+                  onChange({ ...action, action_value: next.join(LIST_SEPARATOR) });
+                }}
+              />
+              {o}
+            </label>
+          ))}
+        </div>
+      )}
       {isMessageAction && (
         <input value={action.message ?? ""} onChange={(e) => onChange({ ...action, message: e.target.value })} placeholder="Message shown to the user" required style={{ width: 260 }} />
       )}
-      <button className="builder-row-remove" type="button" onClick={onRemove} title="Remove effect">✕</button>
+      <button className="builder-row-remove" type="button" onClick={onRemove} title="Remove action">✕</button>
     </div>
   );
 }
@@ -439,7 +502,7 @@ function RuleForm({
   showActiveToggle,
 }: {
   entityType: string;
-  customFields: { key: string; label: string }[];
+  customFields: CustomFieldLite[];
   initial: BusinessRuleInput & { is_active?: boolean };
   submitLabel: string;
   onSubmit: (input: BusinessRuleInput, isActive: boolean) => Promise<unknown>;
@@ -474,6 +537,23 @@ function RuleForm({
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this rule"),
   });
+
+  function updateConditionAt(i: number, next: BusinessRuleConditionInput) {
+    setConditions(conditions.map((c, idx) => (idx === i ? next : c)));
+  }
+  /** Removing a condition that's the last remaining member of its OR
+   * group auto-ungroups it - a one-member "group" is meaningless, and
+   * this keeps the array from accumulating orphaned group_ids. */
+  function removeConditionAt(i: number) {
+    const groupId = conditions[i].group_id;
+    const remaining = conditions.filter((_, idx) => idx !== i);
+    if (groupId && remaining.filter((c) => c.group_id === groupId).length === 1) {
+      setConditions(remaining.map((c) => (c.group_id === groupId ? { ...c, group_id: null } : c)));
+    } else {
+      setConditions(remaining);
+    }
+  }
+  const conditionUnits = groupConditionIndices(conditions);
 
   // Rule summary panel: computed live from the form state below, not
   // stored separately - "what will this rule actually do" at a glance.
@@ -575,29 +655,68 @@ function RuleForm({
                   ))}
                 </select>
               </div>
-              {conditions.map((c, i) => (
-                <div key={i}>
-                  {i > 0 && <div className="builder-and-divider">{matchType === "all" ? "AND" : "OR"}</div>}
-                  <ConditionRow
-                    entityType={entityType}
-                    customFields={customFields}
-                    condition={c}
-                    onChange={(next) => setConditions(conditions.map((x, idx) => (idx === i ? next : x)))}
-                    onRemove={() => setConditions(conditions.filter((_, idx) => idx !== i))}
-                  />
+              {conditionUnits.map((u, ui) => (
+                <div key={u.kind === "single" ? `s${u.index}` : `g${u.groupId}`}>
+                  {ui > 0 && <div className="builder-and-divider">{matchType === "all" ? "AND" : "OR"}</div>}
+                  {u.kind === "single" ? (
+                    <ConditionRow
+                      entityType={entityType}
+                      customFields={customFields}
+                      condition={conditions[u.index]}
+                      onChange={(next) => updateConditionAt(u.index, next)}
+                      onRemove={() => removeConditionAt(u.index)}
+                    />
+                  ) : (
+                    <div className="builder-or-group">
+                      <div className="builder-or-group-label">OR group - any one condition below satisfies this unit</div>
+                      {u.indices.map((idx, mi) => (
+                        <div key={idx}>
+                          {mi > 0 && <div className="builder-and-divider">OR</div>}
+                          <ConditionRow
+                            entityType={entityType}
+                            customFields={customFields}
+                            condition={conditions[idx]}
+                            onChange={(next) => updateConditionAt(idx, next)}
+                            onRemove={() => removeConditionAt(idx)}
+                          />
+                        </div>
+                      ))}
+                      <button
+                        className="btn"
+                        type="button"
+                        style={{ marginBottom: 8 }}
+                        onClick={() => setConditions([...conditions, { ...emptyCondition(entityType), group_id: u.groupId }])}
+                      >
+                        + Add to OR group
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
-              <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
-                + Add condition
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
+                  + Add condition
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  title="Add two conditions that are OR'd together into one unit before the Match setting above applies"
+                  onClick={() => {
+                    const gid = newGroupId();
+                    setConditions([...conditions, { ...emptyCondition(entityType), group_id: gid }, { ...emptyCondition(entityType), group_id: gid }]);
+                  }}
+                >
+                  + OR group
+                </button>
+              </div>
             </div>
 
             <div className="builder-section">
               <div className="builder-section-title">
-                <span className="step-badge">2</span> Effects (Actions)
+                <span className="step-badge">2</span> Actions
               </div>
               <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: -4 }}>
-                Choose what should happen when the conditions above are met.
+                Choose what should happen when the conditions above are met - one rule can have several actions.
               </p>
               {actions.map((a, i) => (
                 <ActionRow
@@ -610,7 +729,7 @@ function RuleForm({
                 />
               ))}
               <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(entityType, customFields)])}>
-                + Add effect
+                + Add action
               </button>
             </div>
           </div>
@@ -623,8 +742,8 @@ function RuleForm({
             <div className="summary-row"><span className="label">Priority</span><span className="value">{priority}</span></div>
             <div className="summary-row"><span className="label">Stop processing</span><span className="value">{blocksSave ? "Yes (block save)" : "No"}</span></div>
 
-            <h4>Effect types you can use</h4>
-            {EFFECT_LEGEND.map((group) => (
+            <h4>Action types you can use</h4>
+            {ACTION_LEGEND.map((group) => (
               <div className="legend-group" key={group.title}>
                 <div className="legend-group-title">{group.title}</div>
                 {group.types.map((t) => (
@@ -652,7 +771,7 @@ function RuleForm({
  * values - every built-in field, not just the status/stage one, plus
  * every custom field - against every active rule before relying on it,
  * without persisting anything. */
-function TestRulesPanel({ entityType, customFields }: { entityType: string; customFields: { key: string; label: string }[] }) {
+function TestRulesPanel({ entityType, customFields }: { entityType: string; customFields: CustomFieldLite[] }) {
   const builtinFields = builtinFieldsFor(entityType);
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(builtinFields.filter((f) => f.field_type === "select").map((f) => [f.key, f.options?.[0] ?? ""])),
@@ -664,9 +783,10 @@ function TestRulesPanel({ entityType, customFields }: { entityType: string; cust
 
   const builtinLabel = (key: string) => builtinFields.find((f) => f.key === key)?.label ?? key;
   const anyEffects = test.data && (
-    test.data.blocked || test.data.messages.length > 0 ||
+    test.data.blocked || test.data.errors.length > 0 || test.data.warnings.length > 0 ||
     Object.keys(test.data.field_effects).length > 0 || Object.keys(test.data.set_values).length > 0 ||
-    Object.keys(test.data.builtin_field_effects).length > 0 || Object.keys(test.data.builtin_set_values).length > 0
+    Object.keys(test.data.builtin_field_effects).length > 0 || Object.keys(test.data.builtin_set_values).length > 0 ||
+    Object.keys(test.data.restricted_choices).length > 0
   );
 
   return (
@@ -694,8 +814,11 @@ function TestRulesPanel({ entityType, customFields }: { entityType: string; cust
       {test.data && (
         <div style={{ marginTop: 8, fontSize: 13 }}>
           {test.data.blocked && <div className="error-banner">Save would be blocked: {test.data.blocked}</div>}
-          {test.data.messages.length > 0 && (
-            <p>Messages: {test.data.messages.join("; ")}</p>
+          {test.data.errors.length > 0 && (
+            <p>Errors: {test.data.errors.join("; ")}</p>
+          )}
+          {test.data.warnings.length > 0 && (
+            <p>Warnings: {test.data.warnings.join("; ")}</p>
           )}
           {Object.keys(test.data.field_effects).length > 0 && (
             <p>Custom field effects: {Object.entries(test.data.field_effects).map(([k, v]) => `${customFields.find((f) => f.key === k)?.label ?? k}: ${v}`).join(", ")}</p>
@@ -708,6 +831,9 @@ function TestRulesPanel({ entityType, customFields }: { entityType: string; cust
           )}
           {Object.keys(test.data.builtin_set_values).length > 0 && (
             <p>Built-in values that would be set: {Object.entries(test.data.builtin_set_values).map(([k, v]) => `${builtinLabel(k)} = "${v}"`).join(", ")}</p>
+          )}
+          {Object.keys(test.data.restricted_choices).length > 0 && (
+            <p>Restricted choices: {Object.entries(test.data.restricted_choices).map(([k, v]) => `${customFields.find((f) => f.key === k)?.label ?? builtinLabel(k)}: ${v.split(LIST_SEPARATOR).join(", ")}`).join(", ")}</p>
           )}
           {!anyEffects && <p className="empty-state">No rule matches this hypothetical record.</p>}
         </div>

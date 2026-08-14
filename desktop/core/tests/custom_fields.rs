@@ -58,6 +58,7 @@ fn select_field_input(label: &str, required: bool) -> CustomFieldDefinitionInput
         is_unique: false,
         help_text: None,
         placeholder: None,
+        is_hidden_by_default: false,
     }
 }
 
@@ -67,7 +68,7 @@ fn number_field_input(label: &str, min: Option<&str>, max: Option<&str>) -> Cust
         required: false, show_in_list: false, sort_order: 0,
         min_value: min.map(String::from), max_value: max.map(String::from), max_length: None, regex_pattern: None,
         is_searchable: false, is_filterable: false, is_reportable: true,
-        default_value: None, is_unique: false, help_text: None, placeholder: None,
+        default_value: None, is_unique: false, help_text: None, placeholder: None, is_hidden_by_default: false,
     }
 }
 
@@ -77,7 +78,7 @@ fn text_field_input(label: &str, max_length: Option<i64>, regex_pattern: Option<
         required: false, show_in_list: false, sort_order: 0,
         min_value: None, max_value: None, max_length, regex_pattern: regex_pattern.map(String::from),
         is_searchable: false, is_filterable: false, is_reportable: true,
-        default_value: None, is_unique: false, help_text: None, placeholder: None,
+        default_value: None, is_unique: false, help_text: None, placeholder: None, is_hidden_by_default: false,
     }
 }
 

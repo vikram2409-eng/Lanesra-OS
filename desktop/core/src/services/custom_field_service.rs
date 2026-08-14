@@ -6,6 +6,7 @@
 //! fixed CUSTOM_FIELD_ENTITY_TYPES list.
 
 use rusqlite::Connection;
+use serde::Serialize;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::{
@@ -16,6 +17,28 @@ use crate::repositories::{
     product_repo, quote_repo, task_repo, user_repo,
 };
 use crate::services::{builtin_field_service, business_rule_service, workflow_service};
+
+/// Non-blocking notices from `set_entity_values` - a rule's blocking
+/// effects (`require`/`block_save`) are always an `Err`; these are the two
+/// non-blocking severities from `show_error`/`show_warning` (plus legacy
+/// `show_message`, folded into `warnings` - see `RuleEvaluation`'s doc
+/// comment) for the caller to display.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct SaveNotices {
+    pub errors: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+/// Whether a field is effectively hidden on the form right now - either a
+/// rule explicitly hides it, or it's flagged `is_hidden_by_default` and no
+/// active rule's `show` action currently overrides that.
+fn field_is_hidden(def: &CustomFieldDefinition, effect: Option<&str>) -> bool {
+    match effect {
+        Some("hide") => true,
+        Some("show") => false,
+        _ => def.is_hidden_by_default,
+    }
+}
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -266,6 +289,7 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
         is_unique: existing.is_unique,
         help_text: existing.help_text,
         placeholder: existing.placeholder,
+        is_hidden_by_default: existing.is_hidden_by_default,
     };
     Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
 }
@@ -339,19 +363,23 @@ fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &st
 /// this unconditionally, even when it has no custom field values of its
 /// own to save (see each feature screen's save mutation).
 ///
-/// Returns any non-blocking `show_message` texts that fired, for the
-/// caller to display - everything else a rule can do either mutates the
-/// values being saved (`set_default`/`set_value`), rejects the save
-/// (`require`/`block_save`, as an `Err`), or is purely cosmetic and
-/// client-enforced (`hide`/`lock`, carried in `field_effects` but not
-/// consulted here).
+/// Returns any non-blocking `show_error`/`show_warning` texts that fired
+/// (see `SaveNotices`), for the caller to display - everything else a rule
+/// can do either mutates the values being saved (`set_default`/`set_value`/
+/// `clear_value`), rejects the save (`require`/`block_save`, as an `Err`),
+/// or is purely cosmetic and client-enforced (`hide`/`show`/`lock`/
+/// `editable`/`restrict_choices`, carried in `field_effects`/
+/// `restricted_choices` but not consulted here) - except `hide` combined
+/// with a field's own `is_hidden_by_default`, which this function does
+/// enforce server-side (see `field_is_hidden`) since a hidden field must
+/// never be required or validated.
 pub fn set_entity_values(
     conn: &Connection,
     entity_type: &str,
     entity_id: &str,
     values: &CustomFieldValues,
     actor_user_id: Option<&str>,
-) -> AppResult<Vec<String>> {
+) -> AppResult<SaveNotices> {
     let (workspace_id, _) = resolve_entity_workspace(conn, entity_type, entity_id)?;
     let definitions = list_definitions(conn, &workspace_id, entity_type, true)?;
     let before_values = custom_field_repo::get_values(conn, entity_id)?;
@@ -391,11 +419,12 @@ pub fn set_entity_values(
 
     let mut changed_keys = Vec::new();
     for def in &definitions {
-        if evaluation.field_effects.get(&def.key).map(|e| e.as_str()) == Some("hide") {
+        let effect = evaluation.field_effects.get(&def.key).map(|e| e.as_str());
+        if field_is_hidden(def, effect) {
             continue;
         }
         let value = effective_values.get(&def.key).map(|s| s.trim()).unwrap_or("");
-        let required_by_rule = evaluation.field_effects.get(&def.key).map(|e| e.as_str()) == Some("require");
+        let required_by_rule = effect == Some("require");
         if (def.required || required_by_rule) && value.is_empty() {
             return Err(AppError::Validation(format!("{} is required", def.label)));
         }
@@ -427,7 +456,7 @@ pub fn set_entity_values(
     }
 
     let _ = actor_user_id; // no audit entry per value write - the parent record's own create/update audit entry covers this edit
-    Ok(evaluation.messages)
+    Ok(SaveNotices { errors: evaluation.errors, warnings: evaluation.warnings })
 }
 
 pub fn get_entity_values(conn: &Connection, entity_id: &str) -> AppResult<CustomFieldValues> {

@@ -67,31 +67,51 @@ pub fn field_ref_is_valid<'a>(entity_type: &str, source: &str, key: &str, active
     }
 }
 
-/// True when `conditions` (as AND when `match_type == "all"`, OR when
-/// `"any"`) match `ctx`. Empty `conditions` never match - both engines
+/// True when `conditions` match `ctx`, honoring one level of OR-group
+/// nesting (Admin Automation & Customization, second addendum round):
+/// `group_id` is `None` for a condition that stands on its own and
+/// participates directly in the top-level `match_type` (AND when `"all"`,
+/// OR when `"any"`); conditions sharing the same `Some(group_id)` are
+/// first OR'd together into one sub-unit, and that sub-unit's result then
+/// participates in the top-level `match_type` alongside the ungrouped
+/// conditions - the "+ Add condition" (top-level) vs. "+ OR group" (nested
+/// OR cluster) split the rule builder exposes. Every pre-existing condition
+/// has `group_id = None`, so this is exactly the old flat AND/OR behavior
+/// when no group is used. Empty `conditions` never match - both engines
 /// require at least one condition at creation time, so this is a defensive
 /// default rather than an expected path.
 pub fn conditions_match<'a>(
     match_type: &str,
-    conditions: impl Iterator<Item = (&'a str, &'a str, &'a str)>,
+    conditions: impl Iterator<Item = (Option<&'a str>, &'a str, &'a str, &'a str)>,
     ctx: &HashMap<String, String>,
 ) -> bool {
     let mut any_seen = false;
-    let mut all_match = true;
-    let mut any_match = false;
-    for (field_key, operator, value) in conditions {
+    let mut units: Vec<bool> = Vec::new();
+    let mut groups: HashMap<&str, bool> = HashMap::new();
+    let mut group_order: Vec<&str> = Vec::new();
+    for (group_id, field_key, operator, value) in conditions {
         any_seen = true;
         let matched = condition_matches(field_key, operator, value, ctx);
-        all_match &= matched;
-        any_match |= matched;
+        match group_id {
+            Some(g) => {
+                groups.entry(g).and_modify(|m| *m |= matched).or_insert_with(|| {
+                    group_order.push(g);
+                    matched
+                });
+            }
+            None => units.push(matched),
+        }
     }
     if !any_seen {
         return false;
     }
+    for g in &group_order {
+        units.push(groups[g]);
+    }
     if match_type == "any" {
-        any_match
+        units.iter().any(|&b| b)
     } else {
-        all_match
+        units.iter().all(|&b| b)
     }
 }
 

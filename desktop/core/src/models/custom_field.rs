@@ -55,6 +55,11 @@ pub struct CustomFieldDefinition {
     /// beyond definition-time storage.
     pub help_text: Option<String>,
     pub placeholder: Option<String>,
+    /// Second addendum round: a field flagged this way is left off every
+    /// create/edit form unless a business rule's "show" action targets it
+    /// and its condition currently matches - see migration 0020 and
+    /// `business_rule_service::RuleEvaluation::field_effects`.
+    pub is_hidden_by_default: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -79,6 +84,8 @@ pub struct CustomFieldDefinitionInput {
     pub is_unique: bool,
     pub help_text: Option<String>,
     pub placeholder: Option<String>,
+    #[serde(default)]
+    pub is_hidden_by_default: bool,
 }
 
 /// Editing a definition: label/options/required/show_in_list/sort_order/
@@ -104,6 +111,8 @@ pub struct CustomFieldDefinitionUpdate {
     pub is_unique: bool,
     pub help_text: Option<String>,
     pub placeholder: Option<String>,
+    #[serde(default)]
+    pub is_hidden_by_default: bool,
 }
 
 /// Values keyed by definition key (not id) - the frontend form only ever

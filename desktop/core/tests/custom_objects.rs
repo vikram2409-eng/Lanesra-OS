@@ -165,6 +165,7 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             is_unique: false,
             help_text: None,
             placeholder: None,
+            is_hidden_by_default: false,
         },
         Some(&admin),
     ).unwrap();
@@ -191,6 +192,7 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             is_unique: false,
             help_text: None,
             placeholder: None,
+            is_hidden_by_default: false,
         },
         Some(&admin),
     ).unwrap();
@@ -213,6 +215,7 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
                 value: "Inactive".into(),
                 compare_field_source: None,
                 compare_field_key: None,
+                group_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),

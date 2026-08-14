@@ -8,14 +8,42 @@ pub const MATCH_TYPES: &[&str] = &["all", "any"];
 /// below, so there's nothing left to keep in sync by hand.
 pub use crate::domain::conditions::CONDITION_OPERATORS;
 pub const TRIGGER_SOURCES: &[&str] = &["builtin", "custom"];
-/// `require`/`hide`/`lock`/`set_default`/`set_value` act on `target_field_key`
-/// (which must be an active custom field, same restriction the original
-/// field_rules engine had - see the migration's header comment for why).
-/// `block_save`/`show_message` act on the whole record and use `message`
-/// instead.
-pub const ACTION_TYPES: &[&str] = &["require", "hide", "lock", "set_default", "set_value", "block_save", "show_message"];
-pub const FIELD_TARGETED_ACTIONS: &[&str] = &["require", "hide", "lock", "set_default", "set_value"];
-pub const MESSAGE_ACTIONS: &[&str] = &["block_save", "show_message"];
+/// `require`/`hide`/`show`/`lock`/`editable`/`set_default`/`set_value`/
+/// `clear_value`/`restrict_choices` act on `target_field_key` (which must
+/// be an actionable built-in field or an active custom field). `block_save`/
+/// `show_error`/`show_warning` act on the whole record and use `message`
+/// instead. `show_message` is kept only so a rule saved before the second
+/// addendum round keeps evaluating exactly as it always did - the builder
+/// no longer offers it for new rules, in favor of the two severities.
+///
+/// `show`/`editable` are the explicit counterparts to `hide`/`lock`: most
+/// useful on a field flagged `is_hidden_by_default` on its definition (see
+/// migration 0020), which otherwise never renders, or to override a
+/// lower-priority rule's `hide`/`lock` - "last matching rule wins" per
+/// target field, same as the original pair, so a later `show` correctly
+/// beats an earlier `hide` on the same field. `clear_value` is `set_value`
+/// with an empty value written unconditionally (unlike `set_default`,
+/// which only fills a field that's currently empty). `restrict_choices`
+/// only makes sense on a select-typed field; `action_value` holds the
+/// pipe-delimited subset of its options that stays selectable while the
+/// rule matches - same `LIST_SEPARATOR` convention `in_list`/`not_in_list`
+/// condition values already use.
+pub const ACTION_TYPES: &[&str] = &[
+    "require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value",
+    "restrict_choices", "block_save", "show_error", "show_warning", "show_message",
+];
+pub const FIELD_TARGETED_ACTIONS: &[&str] =
+    &["require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value", "restrict_choices"];
+pub const MESSAGE_ACTIONS: &[&str] = &["block_save", "show_error", "show_warning", "show_message"];
+/// Actions a rule builder should still let an admin pick when creating a
+/// *new* rule - `show_message` is excluded (legacy-only, see above).
+pub const CURRENT_ACTION_TYPES: &[&str] = &[
+    "require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value",
+    "restrict_choices", "block_save", "show_error", "show_warning",
+];
+/// `set_value`, `set_default`, `restrict_choices` require a value; `clear_value`
+/// deliberately doesn't (the whole point is writing empty).
+pub const VALUE_REQUIRED_ACTIONS: &[&str] = &["set_default", "set_value", "restrict_choices"];
 
 /// The one built-in, enum-like field each entity type exposes as a rule
 /// trigger. Every entity has a `status` column except Product, which only
@@ -43,6 +71,10 @@ pub struct BusinessRuleCondition {
     /// condition, which is still the common case.
     pub compare_field_source: Option<String>,
     pub compare_field_key: Option<String>,
+    /// See migration 0020 / `domain::conditions::conditions_match` - `None`
+    /// for an ungrouped, top-level condition; `Some(group_id)` for one that
+    /// belongs to an OR-group, sharing the id with its group siblings.
+    pub group_id: Option<String>,
     pub sort_order: i64,
 }
 
@@ -56,6 +88,8 @@ pub struct BusinessRuleConditionInput {
     pub compare_field_source: Option<String>,
     #[serde(default)]
     pub compare_field_key: Option<String>,
+    #[serde(default)]
+    pub group_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

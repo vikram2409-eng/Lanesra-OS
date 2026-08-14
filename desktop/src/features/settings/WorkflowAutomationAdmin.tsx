@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { BuiltinValueInput } from "../../components/BuiltinValueInput";
+import { describeGroupedConditions, groupConditionIndices, newGroupId } from "../../lib/conditionGroups";
 import {
   builtinFieldsFor,
   builtinTriggerFieldFor,
@@ -47,11 +48,14 @@ const ACTION_LABELS: Record<WorkflowActionType, string> = {
   update_related_record: "Update a linked record",
   add_notification: "Send notification",
   create_reminder: "Create reminder",
+  set_default_field: "Set default value",
+  clear_field: "Clear a field",
 };
 
 const ACTION_ICONS: Record<WorkflowActionType, string> = {
   create_task: "📋", create_reminder: "⏰", update_field: "✏️", assign_owner: "👤",
   create_record: "➕", update_related_record: "🔗", add_notification: "🔔",
+  set_default_field: "🔧", clear_field: "🧹",
 };
 
 const TRIGGER_ICONS: Record<TriggerType, string> = {
@@ -69,7 +73,7 @@ const OPERATOR_LABELS: Record<ConditionOperator, string> = {
 function emptyCondition(entityType: string): WorkflowConditionInput {
   return {
     field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "",
-    compare_field_source: null, compare_field_key: null,
+    compare_field_source: null, compare_field_key: null, group_id: null,
   };
 }
 
@@ -82,6 +86,10 @@ function defaultParamsFor(actionType: WorkflowActionType, customFieldKey: string
     case "create_record": return { entity_type: "", relationship_definition_id: null, name_template: null };
     case "update_related_record": return { relationship_definition_id: "", target_field_key: "", target_field_source: "custom", value: "", copy_from_field_key: null };
     case "add_notification": return { message: "", audience: "owner" };
+    // Only fills a field currently empty - see workflow_service::apply_action.
+    case "set_default_field": return { target_field_key: customFieldKey, target_field_source: "custom", value: "", copy_from_field_key: null };
+    // No value needed - clear_field always writes empty.
+    case "clear_field": return { target_field_key: customFieldKey, target_field_source: "custom" };
   }
 }
 
@@ -128,19 +136,22 @@ function describeTrigger(
   }
 }
 
+function targetFieldLabel(entityType: string, p: Record<string, unknown>, labelByKey: Map<string, string>): string {
+  const isBuiltin = p.target_field_source === "builtin";
+  return isBuiltin
+    ? builtinFieldsFor(entityType).find((f) => f.key === p.target_field_key)?.label ?? String(p.target_field_key)
+    : labelByKey.get(String(p.target_field_key)) ?? String(p.target_field_key);
+}
+
 function describeAction(entityType: string, a: WorkflowActionInput, labelByKey: Map<string, string>): string {
   try {
     const p = JSON.parse(a.params_json) as Record<string, unknown>;
     switch (a.action_type) {
       case "create_task": return `create task "${p.title}"`;
       case "create_reminder": return `create reminder "${p.title}"`;
-      case "update_field": {
-        const isBuiltin = p.target_field_source === "builtin";
-        const label = isBuiltin
-          ? builtinFieldsFor(entityType).find((f) => f.key === p.target_field_key)?.label ?? String(p.target_field_key)
-          : labelByKey.get(String(p.target_field_key)) ?? p.target_field_key;
-        return `set ${label} = "${p.value ?? `{${p.copy_from_field_key}}`}"`;
-      }
+      case "update_field": return `set ${targetFieldLabel(entityType, p, labelByKey)} = "${p.value ?? `{${p.copy_from_field_key}}`}"`;
+      case "set_default_field": return `default ${targetFieldLabel(entityType, p, labelByKey)} to "${p.value ?? `{${p.copy_from_field_key}}`}" (only if empty)`;
+      case "clear_field": return `clear ${targetFieldLabel(entityType, p, labelByKey)}`;
       case "assign_owner": return "assign owner";
       case "create_record": return `create a new ${p.entity_type}${p.relationship_definition_id ? " and link it" : ""}`;
       case "update_related_record": return `set ${p.target_field_key} on linked record${p.value ? ` = "${p.value}"` : p.copy_from_field_key ? ` = {${p.copy_from_field_key}}` : ""}`;
@@ -255,7 +266,7 @@ export function WorkflowAutomationAdmin() {
             trigger_offset_days: editing.trigger_offset_days, match_type: editing.match_type, priority: editing.priority,
             conditions: editing.conditions.map((c) => ({
               field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
-              compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key,
+              compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
             })),
             actions: editing.actions.map((a) => ({ action_type: a.action_type, params_json: a.params_json })),
             is_active: editing.is_active,
@@ -484,7 +495,7 @@ function ActionEditor({
         </div>
       )}
 
-      {action.action_type === "update_field" && (() => {
+      {(action.action_type === "update_field" || action.action_type === "set_default_field") && (() => {
         const actionableBuiltinFields = builtinFieldsFor(entityType).filter((f) => f.actionable);
         const targetSource = (params.target_field_source as TriggerSource | undefined) ?? "custom";
         const isBuiltinTarget = targetSource === "builtin";
@@ -492,6 +503,9 @@ function ActionEditor({
         const copyFromOptions = [...customFields, ...actionableBuiltinFields];
         return (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {action.action_type === "set_default_field" && (
+              <span style={{ alignSelf: "center", fontSize: 12, color: "var(--text-muted)" }}>Only fills the field if it's currently empty:</span>
+            )}
             <select
               value={targetSource}
               onChange={(e) => {
@@ -515,6 +529,30 @@ function ActionEditor({
             <select value={String(params.copy_from_field_key ?? "")} onChange={(e) => setParams({ ...params, copy_from_field_key: e.target.value || null, value: null })}>
               <option value="">Copy from field...</option>
               {copyFromOptions.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+          </div>
+        );
+      })()}
+
+      {action.action_type === "clear_field" && (() => {
+        const actionableBuiltinFields = builtinFieldsFor(entityType).filter((f) => f.actionable);
+        const targetSource = (params.target_field_source as TriggerSource | undefined) ?? "custom";
+        const isBuiltinTarget = targetSource === "builtin";
+        return (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <select
+              value={targetSource}
+              onChange={(e) => {
+                const source = e.target.value as TriggerSource;
+                const first = source === "builtin" ? actionableBuiltinFields[0]?.key ?? "" : customFields[0]?.key ?? "";
+                setParams({ ...params, target_field_source: source, target_field_key: first });
+              }}
+            >
+              <option value="custom">Custom field</option>
+              <option value="builtin" disabled={actionableBuiltinFields.length === 0}>Built-in field</option>
+            </select>
+            <select value={String(params.target_field_key ?? "")} onChange={(e) => setParams({ ...params, target_field_key: e.target.value })} required>
+              {(isBuiltinTarget ? actionableBuiltinFields : customFields).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
             </select>
           </div>
         );
@@ -646,6 +684,22 @@ function WorkflowForm({
 
   const dateFields = dateFieldsFor(entityType);
   const labelByKey = new Map(customFields.map((f) => [f.key, f.label]));
+
+  function updateConditionAt(i: number, next: WorkflowConditionInput) {
+    setConditions(conditions.map((c, idx) => (idx === i ? next : c)));
+  }
+  /** Removing a condition that's the last remaining member of its OR
+   * group auto-ungroups it - see BusinessRulesAdmin's identical helper. */
+  function removeConditionAt(i: number) {
+    const groupId = conditions[i].group_id;
+    const remaining = conditions.filter((_, idx) => idx !== i);
+    if (groupId && remaining.filter((c) => c.group_id === groupId).length === 1) {
+      setConditions(remaining.map((c) => (c.group_id === groupId ? { ...c, group_id: null } : c)));
+    } else {
+      setConditions(remaining);
+    }
+  }
+  const conditionUnits = groupConditionIndices(conditions);
 
   const save = useMutation({
     mutationFn: (nextActive: boolean) =>
@@ -836,24 +890,63 @@ function WorkflowForm({
                   <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>No extra conditions - fires on every trigger.</p>
                 ) : (
                   <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
-                    {conditions.map((c) => describeCondition(entityType, c, labelByKey)).join(matchType === "any" ? " OR " : " AND ")}
+                    {describeGroupedConditions(conditions, matchType, (c) => describeCondition(entityType, c, labelByKey))}
                   </p>
                 )
               ) : (
                 <>
-                  {conditions.map((c, i) => (
-                    <ConditionRow
-                      key={i}
-                      entityType={entityType}
-                      customFields={customFields}
-                      condition={c}
-                      onChange={(next) => setConditions(conditions.map((x, idx) => (idx === i ? next : x)))}
-                      onRemove={() => setConditions(conditions.filter((_, idx) => idx !== i))}
-                    />
+                  {conditionUnits.map((u, ui) => (
+                    <div key={u.kind === "single" ? `s${u.index}` : `g${u.groupId}`}>
+                      {ui > 0 && <div className="builder-and-divider">{matchType === "all" ? "AND" : "OR"}</div>}
+                      {u.kind === "single" ? (
+                        <ConditionRow
+                          entityType={entityType}
+                          customFields={customFields}
+                          condition={conditions[u.index]}
+                          onChange={(next) => updateConditionAt(u.index, next)}
+                          onRemove={() => removeConditionAt(u.index)}
+                        />
+                      ) : (
+                        <div className="builder-or-group">
+                          <div className="builder-or-group-label">OR group - any one condition below satisfies this unit</div>
+                          {u.indices.map((idx, mi) => (
+                            <div key={idx}>
+                              {mi > 0 && <div className="builder-and-divider">OR</div>}
+                              <ConditionRow
+                                entityType={entityType}
+                                customFields={customFields}
+                                condition={conditions[idx]}
+                                onChange={(next) => updateConditionAt(idx, next)}
+                                onRemove={() => removeConditionAt(idx)}
+                              />
+                            </div>
+                          ))}
+                          <button
+                            className="btn"
+                            type="button"
+                            style={{ marginBottom: 8 }}
+                            onClick={() => setConditions([...conditions, { ...emptyCondition(entityType), group_id: u.groupId }])}
+                          >
+                            + Add to OR group
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
                       + Add condition
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      title="Add two conditions that are OR'd together into one unit before the Match setting applies"
+                      onClick={() => {
+                        const gid = newGroupId();
+                        setConditions([...conditions, { ...emptyCondition(entityType), group_id: gid }, { ...emptyCondition(entityType), group_id: gid }]);
+                      }}
+                    >
+                      + OR group
                     </button>
                     {conditions.length > 1 && (
                       <select value={matchType} onChange={(e) => setMatchType(e.target.value as MatchType)}>
@@ -936,10 +1029,22 @@ function WorkflowForm({
                     <div className="workflow-node workflow-node-conditions">
                       <div className="workflow-node-head">Conditions</div>
                       <div className="workflow-node-body">
-                        {conditions.map((c, i) => (
-                          <div key={i}>
-                            {i > 0 && <div className="workflow-match-chip">{matchType === "all" ? "AND" : "OR"}</div>}
-                            <div className="workflow-condition-chip">{describeCondition(entityType, c, labelByKey)}</div>
+                        {conditionUnits.map((u, ui) => (
+                          <div key={u.kind === "single" ? `s${u.index}` : `g${u.groupId}`}>
+                            {ui > 0 && <div className="workflow-match-chip">{matchType === "all" ? "AND" : "OR"}</div>}
+                            {u.kind === "single" ? (
+                              <div className="workflow-condition-chip">{describeCondition(entityType, conditions[u.index], labelByKey)}</div>
+                            ) : (
+                              <div className="workflow-or-group">
+                                <div className="workflow-or-group-label">OR group</div>
+                                {u.indices.map((idx, mi) => (
+                                  <div key={idx}>
+                                    {mi > 0 && <div className="workflow-match-chip">OR</div>}
+                                    <div className="workflow-condition-chip">{describeCondition(entityType, conditions[idx], labelByKey)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

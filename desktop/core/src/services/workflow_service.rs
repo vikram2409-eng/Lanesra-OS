@@ -300,7 +300,11 @@ fn workflow_matches(wf: &WorkflowDefinition, ctx: &HashMap<String, String>) -> b
     if wf.conditions.is_empty() {
         return true; // a workflow with no extra conditions always fires on its trigger
     }
-    conditions_match(&wf.match_type, wf.conditions.iter().map(|c| (c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))), ctx)
+    conditions_match(
+        &wf.match_type,
+        wf.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
+        ctx,
+    )
 }
 
 // --- record_created / record_updated / status_changed -------------------
@@ -533,6 +537,38 @@ struct UpdateFieldParams {
     copy_from_field_key: Option<String>,
 }
 
+/// A target field's display label, for describe_action's test-mode
+/// preview - falls back to the raw key if the field can't be resolved
+/// (e.g. a stale key left behind by a deactivated custom field).
+fn describe_field_label(conn: &Connection, workspace_id: &str, entity_type: &str, target_field_source: &str, target_field_key: &str) -> AppResult<String> {
+    if target_field_source == "builtin" {
+        Ok(builtin_fields::find_builtin_field(entity_type, target_field_key).map(|f| f.label.to_string()).unwrap_or_else(|| target_field_key.to_string()))
+    } else {
+        Ok(custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+            .into_iter()
+            .find(|d| d.key == target_field_key)
+            .map(|d| d.label)
+            .unwrap_or_else(|| target_field_key.to_string()))
+    }
+}
+
+/// Shared by update_field/set_default_field/clear_field - all three target
+/// a field on the trigger's own record the same way, differing only in
+/// when/what they write at execution time.
+fn validate_update_field_target(conn: &Connection, workspace_id: &str, entity_type: &str, target_field_source: &str, target_field_key: &str) -> AppResult<()> {
+    if target_field_source == "builtin" {
+        if !builtin_fields::is_actionable_builtin_field(entity_type, target_field_key) {
+            return Err(AppError::Validation(format!("'{target_field_key}' is not an actionable built-in field on {entity_type}")));
+        }
+    } else {
+        let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+        if !defs.iter().any(|d| d.key == target_field_key && d.is_active) {
+            return Err(AppError::Validation(format!("'{target_field_key}' is not an active custom field to update")));
+        }
+    }
+    Ok(())
+}
+
 fn default_field_source() -> String {
     "custom".to_string()
 }
@@ -641,19 +677,26 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
         }
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            if p.target_field_source == "builtin" {
-                if !builtin_fields::is_actionable_builtin_field(entity_type, &p.target_field_key) {
-                    return Err(AppError::Validation(format!("'{}' is not an actionable built-in field on {entity_type}", p.target_field_key)));
-                }
-            } else {
-                let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-                if !defs.iter().any(|d| d.key == p.target_field_key && d.is_active) {
-                    return Err(AppError::Validation(format!("'{}' is not an active custom field to update", p.target_field_key)));
-                }
-            }
+            validate_update_field_target(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
             if p.value.is_none() && p.copy_from_field_key.is_none() {
                 return Err(AppError::Validation("Provide a value or a field to copy from".into()));
             }
+        }
+        // Second addendum round: the trigger-time counterparts to
+        // update_field - "only if currently empty" (mirrors business
+        // rules' set_default) and "always write empty" respectively. Same
+        // params shape as update_field; a value/copy-from field is
+        // meaningless for clear_field, so that check is skipped there.
+        "set_default_field" => {
+            let p: UpdateFieldParams = parse_params(action_type, params_json)?;
+            validate_update_field_target(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            if p.value.is_none() && p.copy_from_field_key.is_none() {
+                return Err(AppError::Validation("Provide a value or a field to copy from".into()));
+            }
+        }
+        "clear_field" => {
+            let p: UpdateFieldParams = parse_params(action_type, params_json)?;
+            validate_update_field_target(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
         }
         "assign_owner" => {
             let _p: AssignOwnerParams = parse_params(action_type, params_json)?;
@@ -740,6 +783,46 @@ fn admin_user_ids(conn: &Connection, workspace_id: &str) -> AppResult<Vec<String
         .collect())
 }
 
+/// The effective value an update_field/set_default_field action would
+/// write: a fixed value, or the current value of another field on this
+/// same record when copy_from_field_key is set. The field being copied
+/// *from* isn't source-tagged (no second field_source param, to keep the
+/// action shape simple) - read both custom values and every built-in
+/// field's current value and take whichever has that key.
+fn resolve_update_field_value(conn: &Connection, entity_type: &str, entity_id: &str, p: &UpdateFieldParams) -> AppResult<String> {
+    if let Some(src) = &p.copy_from_field_key {
+        let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+        for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
+            ctx.insert(k, v);
+        }
+        Ok(ctx.get(src).cloned().unwrap_or_default())
+    } else {
+        Ok(p.value.clone().unwrap_or_default())
+    }
+}
+
+/// Writes `value` to the target field (built-in or custom) and returns its
+/// display label, for the run summary. Shared by update_field/
+/// set_default_field/clear_field - they differ only in whether/when they
+/// call this, not in how the write itself happens.
+fn write_update_field_value(
+    conn: &Connection, workspace_id: &str, entity_type: &str, entity_id: &str,
+    target_field_source: &str, target_field_key: &str, value: &str, actor_user_id: Option<&str>,
+) -> AppResult<String> {
+    if target_field_source == "builtin" {
+        builtin_field_service::set_field(conn, workspace_id, entity_type, entity_id, target_field_key, value, actor_user_id)?;
+        Ok(target_field_key.to_string())
+    } else {
+        let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+        let def = defs
+            .iter()
+            .find(|d| d.key == target_field_key && d.is_active)
+            .ok_or_else(|| AppError::Validation(format!("'{target_field_key}' is not an active custom field")))?;
+        custom_field_repo::set_value(conn, &def.id, entity_id, value)?;
+        Ok(def.label.clone())
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn apply_action(
     conn: &Connection,
@@ -784,29 +867,33 @@ fn apply_action(
         }
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let value = if let Some(src) = &p.copy_from_field_key {
-                // The field being copied *from* isn't source-tagged (no
-                // second field_source param to keep the action shape
-                // simple) - read both custom values and every built-in
-                // field's current value and take whichever has that key.
-                let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
-                for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
-                    ctx.insert(k, v);
-                }
-                ctx.get(src).cloned().unwrap_or_default()
-            } else {
-                p.value.clone().unwrap_or_default()
-            };
-            if p.target_field_source == "builtin" {
-                builtin_field_service::set_field(conn, workspace_id, entity_type, entity_id, &p.target_field_key, &value, actor_user_id)?;
-                Ok(format!("set {} = \"{value}\"", p.target_field_key))
-            } else {
-                let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-                let def = defs.iter().find(|d| d.key == p.target_field_key && d.is_active)
-                    .ok_or_else(|| AppError::Validation(format!("'{}' is not an active custom field", p.target_field_key)))?;
-                custom_field_repo::set_value(conn, &def.id, entity_id, &value)?;
-                Ok(format!("set {} = \"{value}\"", def.label))
+            let value = resolve_update_field_value(conn, entity_type, entity_id, &p)?;
+            let label = write_update_field_value(conn, workspace_id, entity_type, entity_id, &p.target_field_source, &p.target_field_key, &value, actor_user_id)?;
+            Ok(format!("set {label} = \"{value}\""))
+        }
+        // Second addendum round: "only if currently empty" - mirrors
+        // business rules' set_default action, just applied at workflow
+        // trigger time to a field on the record that just triggered it.
+        "set_default_field" => {
+            let p: UpdateFieldParams = parse_params(action_type, params_json)?;
+            let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+            for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
+                ctx.insert(k, v);
             }
+            let currently_empty = ctx.get(&p.target_field_key).map(|s| s.trim().is_empty()).unwrap_or(true);
+            if !currently_empty {
+                return Ok(format!("{} already has a value - left unchanged", p.target_field_key));
+            }
+            let value = resolve_update_field_value(conn, entity_type, entity_id, &p)?;
+            let label = write_update_field_value(conn, workspace_id, entity_type, entity_id, &p.target_field_source, &p.target_field_key, &value, actor_user_id)?;
+            Ok(format!("set default {label} = \"{value}\""))
+        }
+        // Always writes empty, unconditionally - the trigger-time
+        // counterpart to business rules' clear_value action.
+        "clear_field" => {
+            let p: UpdateFieldParams = parse_params(action_type, params_json)?;
+            let label = write_update_field_value(conn, workspace_id, entity_type, entity_id, &p.target_field_source, &p.target_field_key, "", actor_user_id)?;
+            Ok(format!("cleared {label}"))
         }
         "assign_owner" => {
             let p: AssignOwnerParams = parse_params(action_type, params_json)?;
@@ -993,20 +1080,22 @@ fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, act
         }
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let label = if p.target_field_source == "builtin" {
-                builtin_fields::find_builtin_field(entity_type, &p.target_field_key).map(|f| f.label.to_string()).unwrap_or_else(|| p.target_field_key.clone())
-            } else {
-                custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
-                    .into_iter()
-                    .find(|d| d.key == p.target_field_key)
-                    .map(|d| d.label)
-                    .unwrap_or_else(|| p.target_field_key.clone())
-            };
+            let label = describe_field_label(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
             match (&p.value, &p.copy_from_field_key) {
                 (Some(v), _) => Ok(format!("would set {label} = \"{v}\"")),
                 (None, Some(src)) => Ok(format!("would set {label} = value copied from '{src}'")),
                 (None, None) => Ok(format!("would set {label}")),
             }
+        }
+        "set_default_field" => {
+            let p: UpdateFieldParams = parse_params(action_type, params_json)?;
+            let label = describe_field_label(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            Ok(format!("would set default {label} (only if currently empty)"))
+        }
+        "clear_field" => {
+            let p: UpdateFieldParams = parse_params(action_type, params_json)?;
+            let label = describe_field_label(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            Ok(format!("would clear {label}"))
         }
         "assign_owner" => {
             let p: AssignOwnerParams = parse_params(action_type, params_json)?;

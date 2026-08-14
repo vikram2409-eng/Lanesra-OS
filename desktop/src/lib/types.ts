@@ -861,6 +861,11 @@ export interface CustomFieldDefinition {
   is_unique: boolean;
   help_text: string | null;
   placeholder: string | null;
+  // Second addendum round (migration 0020): omitted from every create/edit
+  // form unless a business rule's "show" action currently targets it -
+  // enforced server-side in custom_field_service::set_entity_values, so a
+  // hidden-by-default+required field can never block a save on its own.
+  is_hidden_by_default: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -887,6 +892,7 @@ export interface CustomFieldDefinitionInput {
   is_unique: boolean;
   help_text: string | null;
   placeholder: string | null;
+  is_hidden_by_default: boolean;
 }
 
 export interface CustomFieldDefinitionUpdate {
@@ -907,10 +913,20 @@ export interface CustomFieldDefinitionUpdate {
   is_unique: boolean;
   help_text: string | null;
   placeholder: string | null;
+  is_hidden_by_default: boolean;
 }
 
 /** Values keyed by field key, e.g. { industry: "Retail" }. */
 export type CustomFieldValues = Record<string, string>;
+
+/** Return shape of `set_custom_field_values` - non-blocking notices from
+ * any business rule that matched the save (show_error/show_warning, plus
+ * legacy show_message folded into warnings). Save already succeeded by
+ * the time these are returned; see custom_field_service::set_entity_values. */
+export interface SaveNotices {
+  errors: string[];
+  warnings: string[];
+}
 
 // Admin extensibility Phase C (spec §22/ADM-BR): a richer IF (AND/OR) /
 // THEN business rule engine - any number of conditions per rule (matched
@@ -941,10 +957,33 @@ export const VALUELESS_OPERATORS: ConditionOperator[] = ["is_empty", "is_not_emp
 export const LIST_SEPARATOR = "|";
 export const TRIGGER_SOURCES = ["builtin", "custom"] as const;
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
-export const ACTION_TYPES = ["require", "hide", "lock", "set_default", "set_value", "block_save", "show_message"] as const;
+// Second addendum round: the full action palette, mirroring
+// core::models::business_rule::ACTION_TYPES exactly. `show`/`editable` are
+// the explicit counterparts to `hide`/`lock` - most useful on a field
+// flagged is_hidden_by_default, which otherwise never renders, or to
+// override a lower-priority rule's hide/lock ("last matching rule wins"
+// per target field). `clear_value` is `set_value` with an empty value
+// written unconditionally. `restrict_choices` only makes sense on a
+// select-typed field. `show_error`/`show_warning` replace the old
+// `show_message` for new rules (severity split); `show_message` is kept
+// only so a rule saved before this round keeps evaluating exactly as it
+// always did - CURRENT_ACTION_TYPES (below) is what the builder offers.
+export const ACTION_TYPES = [
+  "require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value",
+  "restrict_choices", "block_save", "show_error", "show_warning", "show_message",
+] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
-export const FIELD_TARGETED_ACTIONS: ActionType[] = ["require", "hide", "lock", "set_default", "set_value"];
-export const MESSAGE_ACTIONS: ActionType[] = ["block_save", "show_message"];
+/** Actions the rule builder offers when creating or editing a rule -
+ * `show_message` is legacy-only (see ACTION_TYPES doc comment). */
+export const CURRENT_ACTION_TYPES: ActionType[] = [
+  "require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value",
+  "restrict_choices", "block_save", "show_error", "show_warning",
+];
+export const FIELD_TARGETED_ACTIONS: ActionType[] = ["require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value", "restrict_choices"];
+export const MESSAGE_ACTIONS: ActionType[] = ["block_save", "show_error", "show_warning", "show_message"];
+/** `set_default`/`set_value`/`restrict_choices` need a value; `clear_value`
+ * deliberately doesn't (the whole point is writing empty). */
+export const VALUE_REQUIRED_ACTIONS: ActionType[] = ["set_default", "set_value", "restrict_choices"];
 
 /** The valid values for an entity's built-in trigger field
  * (`builtinTriggerFieldFor`) - its status/stage enum, or ["true","false"]
@@ -985,6 +1024,11 @@ export interface BusinessRuleCondition {
    * literal `value` above. */
   compare_field_source: TriggerSource | null;
   compare_field_key: string | null;
+  /** See migration 0020 / core::domain::conditions::conditions_match -
+   * `null` for an ungrouped, top-level condition; a shared string for
+   * conditions OR'd together into one sub-unit before that unit
+   * participates in the rule's top-level match_type. */
+  group_id: string | null;
   sort_order: number;
 }
 
@@ -995,6 +1039,7 @@ export interface BusinessRuleConditionInput {
   value: string;
   compare_field_source: TriggerSource | null;
   compare_field_key: string | null;
+  group_id: string | null;
 }
 
 export interface BusinessRuleAction {
@@ -1066,8 +1111,19 @@ export interface RuleEvaluation {
    * built-in one). */
   builtin_field_effects: Record<string, string>;
   builtin_set_values: Record<string, string>;
+  /** Pipe-delimited (LIST_SEPARATOR) allowed-options subset from a
+   * matching `restrict_choices` action, keyed by target field key -
+   * custom and built-in targets share this one map (no separate
+   * builtin_restricted_choices - restrict_choices only ever targets a
+   * select-typed field, and custom/built-in select fields don't collide
+   * the way plain field keys can). */
+  restricted_choices: Record<string, string>;
   blocked: string | null;
-  messages: string[];
+  /** show_error messages - non-blocking but flagged more urgently than
+   * warnings. */
+  errors: string[];
+  /** show_warning (and legacy show_message) texts. */
+  warnings: string[];
 }
 
 // FR-WFL: admin-defined workflow automation - "when an Opportunity's stage
@@ -1099,6 +1155,13 @@ export const TRIGGER_TYPES = [
 export type TriggerType = (typeof TRIGGER_TYPES)[number];
 export const WORKFLOW_ACTION_TYPES = [
   "create_task", "update_field", "assign_owner", "create_record", "update_related_record", "add_notification", "create_reminder",
+  // Second addendum round: the trigger-time subset of business rules'
+  // field-effect vocabulary that fits a "fires once" model - update_field
+  // already covers "set field value", these two round it out. The
+  // continuous, live-form-governance effects (require/hide/show/lock/
+  // editable/restrict_choices/block_save/show_error/show_warning) stay
+  // business-rule-only.
+  "set_default_field", "clear_field",
 ] as const;
 export type WorkflowActionType = (typeof WORKFLOW_ACTION_TYPES)[number];
 export const NOTIFICATION_AUDIENCES = ["owner", "all_admins"] as const;
@@ -1124,6 +1187,7 @@ export interface WorkflowCondition {
   value: string;
   compare_field_source: TriggerSource | null;
   compare_field_key: string | null;
+  group_id: string | null;
   sort_order: number;
 }
 export interface WorkflowConditionInput {
@@ -1133,6 +1197,7 @@ export interface WorkflowConditionInput {
   value: string;
   compare_field_source: TriggerSource | null;
   compare_field_key: string | null;
+  group_id: string | null;
 }
 export interface WorkflowAction {
   id: string;

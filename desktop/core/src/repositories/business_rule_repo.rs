@@ -15,6 +15,7 @@ fn map_condition(row: &rusqlite::Row) -> rusqlite::Result<BusinessRuleCondition>
         value: row.get("value")?,
         compare_field_source: row.get("compare_field_source")?,
         compare_field_key: row.get("compare_field_key")?,
+        group_id: row.get("group_id")?,
         sort_order: row.get("sort_order")?,
     })
 }
@@ -67,11 +68,11 @@ fn write_conditions(conn: &Connection, rule_id: &str, conditions: &[BusinessRule
     conn.execute("DELETE FROM business_rule_conditions WHERE rule_id = ?1", [rule_id])?;
     for (i, c) in conditions.iter().enumerate() {
         conn.execute(
-            "INSERT INTO business_rule_conditions (id, rule_id, field_source, field_key, operator, value, compare_field_source, compare_field_key, sort_order)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO business_rule_conditions (id, rule_id, field_source, field_key, operator, value, compare_field_source, compare_field_key, group_id, sort_order)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 new_uuid(), rule_id, c.field_source, c.field_key, c.operator, c.value,
-                c.compare_field_source, c.compare_field_key, i as i64
+                c.compare_field_source, c.compare_field_key, c.group_id, i as i64
             ],
         )?;
     }
