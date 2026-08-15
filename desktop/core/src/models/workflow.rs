@@ -48,7 +48,7 @@ pub fn date_fields_for(entity_type: &str) -> &'static [&'static str] {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowCondition {
     pub id: String,
     pub field_source: String,
@@ -87,7 +87,7 @@ pub struct WorkflowConditionInput {
 /// (like custom_field_definitions.options_json) so this module doesn't
 /// need one Rust type per action shape; the service layer parses it at
 /// validation and execution time.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowAction {
     pub id: String,
     pub action_type: String,
@@ -101,7 +101,7 @@ pub struct WorkflowActionInput {
     pub params_json: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDefinition {
     pub id: String,
     pub workspace_id: String,
@@ -162,6 +162,17 @@ pub struct WorkflowDefinitionUpdate {
 
 fn default_field_source() -> String {
     "custom".to_string()
+}
+
+/// Admin UX polish (spec §10) - see `BusinessRuleVersion`'s doc comment for
+/// the full rationale; identical append-only snapshot mechanism, shared
+/// pruning behavior in `workflow_repo::insert_version`.
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkflowRuleVersion {
+    pub id: String,
+    pub workflow_id: String,
+    pub snapshot: WorkflowDefinition,
+    pub saved_at: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

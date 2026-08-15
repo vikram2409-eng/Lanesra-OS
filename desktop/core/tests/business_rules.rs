@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use lanesra_core::db::open_in_memory_db;
-use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
+use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput, BusinessRuleUpdate};
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::user::NewUser;
@@ -674,4 +674,111 @@ fn a_condition_with_only_a_compare_field_source_or_only_a_key_is_rejected() {
         Some(&admin),
     ).unwrap_err();
     assert!(format!("{err:?}").contains("needs both a source and a key"));
+}
+
+// --- Admin UX polish (spec §10) ------------------------------------------
+
+#[test]
+fn duplicate_rule_copies_conditions_and_actions_as_an_inactive_named_draft() {
+    let (conn, ws, admin) = setup_workspace();
+    let def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Lead Source"), Some(&admin)).unwrap();
+    let original = business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input("Company", 0, "all", vec![condition("status", "equals", "Prospect")], vec![require_action(&def.key)]),
+        Some(&admin),
+    ).unwrap();
+    assert!(original.is_active);
+
+    let copy = business_rule_service::duplicate_rule(&conn, &original.id, Some(&admin)).unwrap();
+    assert_ne!(copy.id, original.id);
+    assert_eq!(copy.name, format!("{} (Copy)", original.name));
+    assert!(!copy.is_active);
+    assert_eq!(copy.conditions.len(), 1);
+    assert_eq!(copy.conditions[0].field_key, "status");
+    assert_eq!(copy.actions.len(), 1);
+    assert_eq!(copy.actions[0].target_field_key.as_deref(), Some(def.key.as_str()));
+
+    // The source rule itself is untouched.
+    let reloaded = business_rule_service::list_rules(&conn, &ws, "Company", false).unwrap();
+    assert!(reloaded.iter().any(|r| r.id == original.id && r.is_active));
+}
+
+#[test]
+fn updating_a_rule_snapshots_its_prior_state_and_a_version_can_be_restored() {
+    let (conn, ws, admin) = setup_workspace();
+    let def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Lead Source"), Some(&admin)).unwrap();
+    let rule = business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input("Company", 0, "all", vec![condition("status", "equals", "Prospect")], vec![require_action(&def.key)]),
+        Some(&admin),
+    ).unwrap();
+
+    // Nothing's been edited yet - no history to show.
+    assert!(business_rule_service::list_versions(&conn, &rule.id, Some(&admin)).unwrap().is_empty());
+
+    let update = BusinessRuleUpdate {
+        name: "Renamed rule".into(), description: None, match_type: "all".into(), priority: 5, is_active: true,
+        effective_start_date: None, effective_end_date: None,
+        conditions: vec![condition("status", "equals", "Active Customer")],
+        actions: vec![require_action(&def.key)],
+    };
+    business_rule_service::update_rule(&conn, &rule.id, &update, Some(&admin)).unwrap();
+
+    let versions = business_rule_service::list_versions(&conn, &rule.id, Some(&admin)).unwrap();
+    assert_eq!(versions.len(), 1);
+    assert_eq!(versions[0].snapshot.name, "Test rule"); // the pre-edit name
+    assert_eq!(versions[0].snapshot.conditions[0].value, "Prospect");
+
+    let restored = business_rule_service::restore_version(&conn, &rule.id, &versions[0].id, Some(&admin)).unwrap();
+    assert_eq!(restored.name, "Test rule");
+    assert_eq!(restored.conditions[0].value, "Prospect");
+
+    // Restoring itself snapshots the state it just replaced - a restore is
+    // never a dead end.
+    assert_eq!(business_rule_service::list_versions(&conn, &rule.id, Some(&admin)).unwrap().len(), 2);
+}
+
+#[test]
+fn version_history_is_pruned_to_the_most_recent_ten() {
+    let (conn, ws, admin) = setup_workspace();
+    let def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Lead Source"), Some(&admin)).unwrap();
+    let rule = business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input("Company", 0, "all", vec![condition("status", "equals", "Prospect")], vec![require_action(&def.key)]),
+        Some(&admin),
+    ).unwrap();
+
+    for i in 0..12 {
+        let update = BusinessRuleUpdate {
+            name: format!("Rule v{i}"), description: None, match_type: "all".into(), priority: i, is_active: true,
+            effective_start_date: None, effective_end_date: None,
+            conditions: vec![condition("status", "equals", "Prospect")],
+            actions: vec![require_action(&def.key)],
+        };
+        business_rule_service::update_rule(&conn, &rule.id, &update, Some(&admin)).unwrap();
+    }
+
+    assert_eq!(business_rule_service::list_versions(&conn, &rule.id, Some(&admin)).unwrap().len(), 10);
+}
+
+#[test]
+fn describe_active_rules_referencing_field_finds_condition_and_action_references() {
+    let (conn, ws, admin) = setup_workspace();
+    let def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Lead Source"), Some(&admin)).unwrap();
+    let unused_def = custom_field_service::create_definition(&conn, &ws, &text_field_input("Referral Code"), Some(&admin)).unwrap();
+
+    assert!(business_rule_service::describe_active_rules_referencing_field(&conn, &ws, "Company", &unused_def.key).unwrap().is_empty());
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &rule_input("Company", 0, "all", vec![condition("status", "equals", "Prospect")], vec![require_action(&def.key)]),
+        Some(&admin),
+    ).unwrap();
+
+    let dependents = business_rule_service::describe_active_rules_referencing_field(&conn, &ws, "Company", &def.key).unwrap();
+    assert_eq!(dependents.len(), 1);
+    assert!(dependents[0].contains("Business rule"));
+
+    // Still nothing for the unrelated field.
+    assert!(business_rule_service::describe_active_rules_referencing_field(&conn, &ws, "Company", &unused_def.key).unwrap().is_empty());
 }

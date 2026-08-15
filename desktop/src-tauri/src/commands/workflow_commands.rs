@@ -4,7 +4,9 @@ use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::custom_field::CustomFieldValues;
-use lanesra_core::models::workflow::{WorkflowDefinition, WorkflowDefinitionInput, WorkflowDefinitionUpdate, WorkflowRun};
+use lanesra_core::models::workflow::{
+    WorkflowDefinition, WorkflowDefinitionInput, WorkflowDefinitionUpdate, WorkflowRun, WorkflowRuleVersion,
+};
 use lanesra_core::services::workflow_service;
 use lanesra_core::services::workflow_service::WorkflowTestResult;
 
@@ -50,4 +52,23 @@ pub fn test_workflows(state: State<AppState>, entity_type: String, context: Cust
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     workflow_service::test_workflows(&conn, &workspace_id, &entity_type, &context, current_actor(&state).as_deref())
+}
+
+/// Admin UX polish (spec §10).
+#[tauri::command]
+pub fn duplicate_workflow_rule(state: State<AppState>, id: String) -> AppResult<WorkflowDefinition> {
+    let conn = state.conn.lock().unwrap();
+    workflow_service::duplicate_rule(&conn, &id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn list_workflow_rule_versions(state: State<AppState>, workflow_id: String) -> AppResult<Vec<WorkflowRuleVersion>> {
+    let conn = state.conn.lock().unwrap();
+    workflow_service::list_versions(&conn, &workflow_id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn restore_workflow_rule_version(state: State<AppState>, workflow_id: String, version_id: String) -> AppResult<WorkflowDefinition> {
+    let conn = state.conn.lock().unwrap();
+    workflow_service::restore_version(&conn, &workflow_id, &version_id, current_actor(&state).as_deref())
 }

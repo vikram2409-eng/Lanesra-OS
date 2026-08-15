@@ -44,6 +44,15 @@ pub fn deactivate_custom_field_definition(state: State<AppState>, id: String) ->
     custom_field_service::deactivate_definition(&conn, &id, current_actor(&state).as_deref())
 }
 
+/// Admin UX polish (spec §10): the frontend calls this before either
+/// deactivation path above and shows a confirmation dialog when the result
+/// isn't empty.
+#[tauri::command]
+pub fn describe_custom_field_dependents(state: State<AppState>, id: String) -> AppResult<Vec<String>> {
+    let conn = state.conn.lock().unwrap();
+    custom_field_service::describe_active_dependents(&conn, &id, current_actor(&state).as_deref())
+}
+
 #[tauri::command]
 pub fn set_custom_field_values(
     state: State<AppState>,

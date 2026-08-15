@@ -56,7 +56,7 @@ pub fn builtin_trigger_field_for(entity_type: &str) -> &'static str {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusinessRuleCondition {
     pub id: String,
     pub field_source: String,
@@ -92,7 +92,7 @@ pub struct BusinessRuleConditionInput {
     pub group_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusinessRuleAction {
     pub id: String,
     pub action_type: String,
@@ -121,7 +121,7 @@ fn default_field_source() -> String {
     "custom".to_string()
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusinessRule {
     pub id: String,
     pub workspace_id: String,
@@ -164,4 +164,17 @@ pub struct BusinessRuleUpdate {
     pub effective_end_date: Option<String>,
     pub conditions: Vec<BusinessRuleConditionInput>,
     pub actions: Vec<BusinessRuleActionInput>,
+}
+
+/// Admin UX polish (spec §10): a read-only snapshot of a rule as it stood
+/// right before a save overwrote it. `snapshot` is the full rule shape at
+/// that point in time (deserialized from `snapshot_json` at the service
+/// layer - see `business_rule_repo::insert_version`), so restoring a version
+/// is just re-submitting its conditions/actions/fields as a normal update.
+#[derive(Debug, Clone, Serialize)]
+pub struct BusinessRuleVersion {
+    pub id: String,
+    pub business_rule_id: String,
+    pub snapshot: BusinessRule,
+    pub saved_at: String,
 }

@@ -26,6 +26,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (19, include_str!("migrations/0019_custom_field_extensibility.sql")),
     (20, include_str!("migrations/0020_condition_groups_and_field_effects.sql")),
     (21, include_str!("migrations/0021_company_contact_extra_fields.sql")),
+    (22, include_str!("migrations/0022_rule_version_history.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -89,7 +90,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 21);
+        assert_eq!(version, 22);
 
         let table_count: i64 = conn
             .query_row(

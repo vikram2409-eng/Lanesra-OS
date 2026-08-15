@@ -8,7 +8,7 @@ use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::invoice::{InvoiceInput, InvoiceLineInput};
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
-use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowConditionInput, WorkflowDefinitionInput};
+use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowConditionInput, WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::repositories::notification_repo;
 use lanesra_core::services::{
@@ -441,4 +441,110 @@ fn workflow_extra_condition_supports_field_to_field_comparison() {
     differing.status = "Won".into();
     opportunity_service::update(&conn, &opp2.id, &differing, Some(&admin)).unwrap();
     assert!(task_service::list_by_related(&conn, "Opportunity", &opp2.id).unwrap().is_empty());
+}
+
+// --- Admin UX polish (spec §10) ------------------------------------------
+
+#[test]
+fn duplicate_workflow_rule_copies_trigger_and_actions_as_an_inactive_named_draft() {
+    let (conn, ws, admin) = setup_workspace();
+    let original = workflow_service::create_rule(
+        &conn, &ws,
+        &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)),
+        Some(&admin),
+    ).unwrap();
+    assert!(original.is_active);
+
+    let copy = workflow_service::duplicate_rule(&conn, &original.id, Some(&admin)).unwrap();
+    assert_ne!(copy.id, original.id);
+    assert_eq!(copy.name, format!("{} (Copy)", original.name));
+    assert!(!copy.is_active);
+    assert_eq!(copy.trigger_type, "status_changed");
+    assert_eq!(copy.trigger_status.as_deref(), Some("Won"));
+    assert_eq!(copy.actions.len(), 1);
+
+    // The source workflow itself is untouched.
+    let reloaded = workflow_service::list_rules(&conn, &ws, "Opportunity", Some(&admin)).unwrap();
+    assert!(reloaded.iter().any(|w| w.id == original.id && w.is_active));
+}
+
+#[test]
+fn updating_a_workflow_snapshots_its_prior_state_and_a_version_can_be_restored() {
+    let (conn, ws, admin) = setup_workspace();
+    let wf = workflow_service::create_rule(
+        &conn, &ws,
+        &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)),
+        Some(&admin),
+    ).unwrap();
+
+    // Nothing's been edited yet - no history to show.
+    assert!(workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap().is_empty());
+
+    let update = WorkflowDefinitionUpdate {
+        name: "Renamed workflow".into(), description: None, trigger_status: Some("Lost".into()), trigger_field_key: None,
+        trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 1, is_active: true,
+        conditions: vec![], actions: vec![create_task_action("Send onboarding kit", 3, None)],
+    };
+    workflow_service::update_rule(&conn, &wf.id, &update, Some(&admin)).unwrap();
+
+    let versions = workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap();
+    assert_eq!(versions.len(), 1);
+    assert_eq!(versions[0].snapshot.trigger_status.as_deref(), Some("Won")); // the pre-edit trigger
+
+    let restored = workflow_service::restore_version(&conn, &wf.id, &versions[0].id, Some(&admin)).unwrap();
+    assert_eq!(restored.trigger_status.as_deref(), Some("Won"));
+
+    // Restoring itself snapshots the state it just replaced - a restore is
+    // never a dead end.
+    assert_eq!(workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap().len(), 2);
+}
+
+#[test]
+fn workflow_version_history_is_pruned_to_the_most_recent_ten() {
+    let (conn, ws, admin) = setup_workspace();
+    let wf = workflow_service::create_rule(
+        &conn, &ws,
+        &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)),
+        Some(&admin),
+    ).unwrap();
+
+    for i in 0..12 {
+        let update = WorkflowDefinitionUpdate {
+            name: format!("Workflow v{i}"), description: None, trigger_status: Some("Won".into()), trigger_field_key: None,
+            trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: i, is_active: true,
+            conditions: vec![], actions: vec![create_task_action("Send onboarding kit", 3, None)],
+        };
+        workflow_service::update_rule(&conn, &wf.id, &update, Some(&admin)).unwrap();
+    }
+
+    assert_eq!(workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap().len(), 10);
+}
+
+#[test]
+fn describe_active_workflows_referencing_field_finds_trigger_and_action_references() {
+    let (conn, ws, admin) = setup_workspace();
+
+    assert!(workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "next_step").unwrap().is_empty());
+
+    let wf = WorkflowDefinitionInput {
+        entity_type: "Opportunity".into(), name: "Next step watcher".into(), description: None,
+        trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("next_step".into()),
+        trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
+        conditions: vec![],
+        actions: vec![WorkflowActionInput {
+            action_type: "update_field".into(),
+            params_json: serde_json::json!({"target_field_key": "value", "target_field_source": "builtin", "value": "1.00"}).to_string(),
+        }],
+    };
+    workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
+
+    let via_trigger = workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "next_step").unwrap();
+    assert_eq!(via_trigger.len(), 1);
+    assert!(via_trigger[0].contains("Workflow"));
+
+    let via_action = workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "value").unwrap();
+    assert_eq!(via_action.len(), 1);
+
+    // An unrelated field has no dependents.
+    assert!(workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "stage").unwrap().is_empty());
 }
