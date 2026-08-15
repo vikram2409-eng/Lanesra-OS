@@ -1122,6 +1122,17 @@ export interface BusinessRuleUpdate {
   actions: BusinessRuleActionInput[];
 }
 
+/** Admin UX polish (spec §10): a read-only snapshot of a rule as it stood
+ * right before an edit overwrote it - see business_rule_service::
+ * BusinessRuleVersion's doc comment. `snapshot` is a full BusinessRule, so
+ * restoring one is just re-submitting its shape as a normal update. */
+export interface BusinessRuleVersion {
+  id: string;
+  business_rule_id: string;
+  snapshot: BusinessRule;
+  saved_at: string;
+}
+
 export interface RuleEvaluation {
   field_effects: Record<string, string>;
   set_values: Record<string, string>;
@@ -1282,6 +1293,15 @@ export interface WorkflowDefinitionUpdate {
   is_active: boolean;
   conditions: WorkflowConditionInput[];
   actions: WorkflowActionInput[];
+}
+
+/** Admin UX polish (spec §10) - see BusinessRuleVersion's doc comment for
+ * the full rationale; identical mechanism for workflows. */
+export interface WorkflowRuleVersion {
+  id: string;
+  workflow_id: string;
+  snapshot: WorkflowDefinition;
+  saved_at: string;
 }
 
 export interface WorkflowRun {

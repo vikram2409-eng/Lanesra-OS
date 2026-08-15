@@ -394,8 +394,24 @@ function DefinitionEditForm({
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
+          // Admin UX polish (spec §10): deactivating is the one transition
+          // that can silently break something an admin already built -
+          // check for active rules/workflows still reading or writing this
+          // field and confirm before going through with it. Advisory only:
+          // the backend never blocks this, so a cancelled confirm just
+          // leaves the form as-is.
+          if (definition.is_active && !isActive) {
+            const dependents = await api.describeCustomFieldDependents(definition.id);
+            if (dependents.length > 0) {
+              const proceed = window.confirm(
+                `This field is still referenced by ${dependents.length} active rule(s)/workflow(s):\n\n${dependents.join("\n")}\n\n` +
+                  "They'll silently stop matching it once it's deactivated. Deactivate anyway?",
+              );
+              if (!proceed) return;
+            }
+          }
           save.mutate();
         }}
       >
