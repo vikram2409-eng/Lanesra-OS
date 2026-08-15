@@ -62,16 +62,39 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "kpis", label: "Dashboard KPIs" },
 ];
 
+function tabLabel(key: AdminTab): string {
+  return ADMIN_TABS.find((t) => t.key === key)?.label ?? key;
+}
+
+// Groups the same 10 tabs above into named categories for the landing page
+// below - purely a presentation grouping, the tab keys and their screens
+// are unchanged. Desktop has no Screen layouts or Integrations tab (both
+// are demo-first capabilities that don't exist here), so its Customization
+// category has one fewer item than the online demo's equivalent.
+const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
+  { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis"] },
+  { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
+  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields"] },
+  { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
+];
+
 /**
  * The Admin panel - every administrator-facing capability lives here
  * under one nav item instead of scattered across the sidebar (Users used
  * to be its own top-level entry): user accounts and roles, business
  * profile/branding, custom fields, business rules, workflow automation,
  * ID/number formats, and which Dashboard KPIs show. Each tab is its own
- * previously-standalone screen, unchanged internally - this is purely a
- * navigation regrouping.
+ * previously-standalone screen, unchanged internally.
+ *
+ * Landing on Admin shows a categorized home (Workspace/Access/
+ * Customization/Automation) rather than jumping straight into a tab -
+ * clicking a category item opens that tool directly, with a breadcrumb
+ * back to the landing page. Re-entering Admin (this component remounting)
+ * always starts on the landing page, the same as Setup always reopening
+ * Setup Home in Salesforce.
  */
 export function AdminPanel() {
+  const [view, setView] = useState<"landing" | "tool">("landing");
   const [tab, setTab] = useState<AdminTab>("users");
   const queryClient = useQueryClient();
   const workspace = useQuery({ queryKey: ["workspaceStatus"], queryFn: () => api.workspaceStatus() });
@@ -80,22 +103,55 @@ export function AdminPanel() {
     queryClient.invalidateQueries({ queryKey: ["workspaceStatus"] });
   }
 
+  function openTab(key: AdminTab) {
+    setTab(key);
+    setView("tool");
+  }
+
+  if (view === "landing") {
+    return (
+      <div>
+        <h2>Admin</h2>
+        <p style={{ color: "var(--text-muted)" }}>
+          Users and access, business branding, and the admin-configurable layer on top of the fixed schema: custom
+          objects, relationships, custom fields, business rules, workflow automation, status transitions, number
+          formats and Dashboard KPIs.
+        </p>
+        <div className="admin-landing-grid">
+          {ADMIN_CATEGORIES.map((cat) => (
+            <div key={cat.key} className="admin-cat-card">
+              <div className="admin-cat-head">
+                <span className="admin-cat-icon">{cat.icon}</span>
+                <div>
+                  <h3>{cat.label}</h3>
+                  <p>{cat.note}</p>
+                </div>
+              </div>
+              <div className="admin-cat-items">
+                {cat.items.map((key) => (
+                  <button key={key} className="admin-cat-item" onClick={() => openTab(key)}>
+                    {tabLabel(key)}
+                    <span className="admin-cat-arrow">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <h2>Admin</h2>
-      <p style={{ color: "var(--text-muted)" }}>
-        Users and access, business branding, and the admin-configurable layer on top of the fixed schema: custom
-        objects, relationships, custom fields, business rules, workflow automation, status transitions, number
-        formats and Dashboard KPIs.
-      </p>
-
-      <div className="tab-row">
-        {ADMIN_TABS.map((t) => (
-          <button key={t.key} className={`tab${tab === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
+      <div className="admin-breadcrumb">
+        <button className="link-button" onClick={() => setView("landing")}>
+          Admin
+        </button>
+        <span> / </span>
+        <span>{tabLabel(tab)}</span>
       </div>
+      <h2>{tabLabel(tab)}</h2>
 
       {tab === "users" && <Users />}
 
