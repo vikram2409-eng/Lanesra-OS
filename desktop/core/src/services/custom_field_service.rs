@@ -294,6 +294,26 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
     Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
 }
 
+/// Admin UX polish (spec §10): the query half of the dependency-warning
+/// flow. The frontend calls this before letting an admin deactivate a
+/// custom field (via either `update_definition` with `is_active: false` or
+/// `deactivate_definition`) and shows a confirmation dialog when the result
+/// isn't empty - deliberately advisory rather than blocking here, matching
+/// the online demo's identical UX. A rule/workflow referencing a
+/// deactivated field doesn't error, it just silently stops finding it, so
+/// this is the one place that surfaces that before it happens, without
+/// taking away an admin's ability to still go through with it.
+pub fn describe_active_dependents(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<String>> {
+    require_admin(conn, actor_user_id)?;
+    let existing = custom_field_repo::get_definition(conn, id)?.ok_or_else(|| AppError::NotFound("Custom field".into()))?;
+    let mut dependents =
+        business_rule_service::describe_active_rules_referencing_field(conn, &existing.workspace_id, &existing.entity_type, &existing.key)?;
+    dependents.extend(workflow_service::describe_active_workflows_referencing_field(
+        conn, &existing.workspace_id, &existing.entity_type, &existing.key,
+    )?);
+    Ok(dependents)
+}
+
 /// Returns (workspace_id, builtin_trigger_value) - the value is whatever
 /// `field_rule::builtin_trigger_field_for(entity_type)` names for this
 /// entity ("status" for most, "is_active" as "true"/"false" for Product),

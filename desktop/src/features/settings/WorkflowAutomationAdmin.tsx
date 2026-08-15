@@ -173,7 +173,16 @@ export function WorkflowAutomationAdmin() {
   const [entityType, setEntityType] = useState<string>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [historyForId, setHistoryForId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const duplicate = useMutation({
+    mutationFn: (id: string) => api.duplicateWorkflowRule(id),
+    onSuccess: (copy) => {
+      queryClient.invalidateQueries({ queryKey: ["workflowRules"] });
+      setEditingId(copy.id);
+    },
+  });
 
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
   const entityTabs: { key: string; label: string }[] = [
@@ -194,6 +203,7 @@ export function WorkflowAutomationAdmin() {
   const activeDefs = (defs.data ?? []).filter((d) => d.is_active);
   const labelByKey = new Map((defs.data ?? []).map((d) => [d.key, d.label]));
   const editing = workflows.data?.find((w) => w.id === editingId) ?? null;
+  const historyWorkflow = workflows.data?.find((w) => w.id === historyForId) ?? null;
 
   return (
     <div className="card">
@@ -204,6 +214,7 @@ export function WorkflowAutomationAdmin() {
           onClick={() => {
             setCreating((v) => !v);
             setEditingId(null);
+            setHistoryForId(null);
           }}
         >
           + New workflow
@@ -224,6 +235,7 @@ export function WorkflowAutomationAdmin() {
               setEntityType(t.key);
               setCreating(false);
               setEditingId(null);
+              setHistoryForId(null);
             }}
           >
             {t.label}
@@ -231,7 +243,20 @@ export function WorkflowAutomationAdmin() {
         ))}
       </div>
 
-      {creating && (
+      {historyWorkflow && (
+        <WorkflowHistoryPanel
+          entityType={entityType}
+          customFields={activeDefs}
+          workflowId={historyWorkflow.id}
+          workflowName={historyWorkflow.name}
+          onDone={() => {
+            invalidate();
+          }}
+          onClose={() => setHistoryForId(null)}
+        />
+      )}
+
+      {creating && !historyWorkflow && (
         <WorkflowForm
           entityType={entityType}
           customFields={activeDefs}
@@ -253,7 +278,7 @@ export function WorkflowAutomationAdmin() {
         />
       )}
 
-      {editing && (
+      {editing && !historyWorkflow && (
         <WorkflowForm
           entityType={entityType}
           customFields={activeDefs}
@@ -282,11 +307,11 @@ export function WorkflowAutomationAdmin() {
         />
       )}
 
-      {workflows.isLoading && !creating && !editing && <p>Loading...</p>}
-      {workflows.data && workflows.data.length === 0 && !creating && !editing && (
+      {workflows.isLoading && !creating && !editing && !historyWorkflow && <p>Loading...</p>}
+      {workflows.data && workflows.data.length === 0 && !creating && !editing && !historyWorkflow && (
         <p className="empty-state">No workflows defined for {currentLabel} yet.</p>
       )}
-      {workflows.data && workflows.data.length > 0 && !creating && !editing && (
+      {workflows.data && workflows.data.length > 0 && !creating && !editing && !historyWorkflow && (
         <table>
           <thead>
             <tr>
@@ -312,9 +337,17 @@ export function WorkflowAutomationAdmin() {
                   {w.is_protected && <span className="badge" style={{ marginLeft: 4 }}>System</span>}
                 </td>
                 <td>
-                  <button className="btn" onClick={() => setEditingId(w.id)} disabled={w.is_protected}>
-                    Edit
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn" onClick={() => setEditingId(w.id)} disabled={w.is_protected}>
+                      Edit
+                    </button>
+                    <button className="btn" onClick={() => duplicate.mutate(w.id)} disabled={duplicate.isPending} title="Duplicate as an inactive draft">
+                      Duplicate
+                    </button>
+                    <button className="btn" onClick={() => setHistoryForId(w.id)} title="Version history">
+                      History
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1090,6 +1123,75 @@ function WorkflowForm({
           </div>
         </div>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Admin UX polish (spec §10) - mirrors BusinessRulesAdmin's identical
+ * RuleHistoryPanel; see that component's doc comment.
+ */
+function WorkflowHistoryPanel({
+  entityType,
+  customFields,
+  workflowId,
+  workflowName,
+  onDone,
+  onClose,
+}: {
+  entityType: string;
+  customFields: { key: string; label: string }[];
+  workflowId: string;
+  workflowName: string;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const labelByKey = new Map(customFields.map((f) => [f.key, f.label]));
+  const versions = useQuery({ queryKey: ["workflowRuleVersions", workflowId], queryFn: () => api.listWorkflowRuleVersions(workflowId) });
+
+  const restore = useMutation({
+    mutationFn: (versionId: string) => api.restoreWorkflowRuleVersion(workflowId, versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workflowRuleVersions", workflowId] });
+      onDone();
+    },
+  });
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>Version history — {workflowName}</h3>
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {versions.isLoading && <p>Loading...</p>}
+      {versions.data && versions.data.length === 0 && (
+        <p className="empty-state">No saved versions yet - history starts recording from the next edit.</p>
+      )}
+      {versions.data && versions.data.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {versions.data.map((v) => (
+            <div key={v.id} className="builder-row-card" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                <strong>{new Date(v.saved_at).toLocaleString()}</strong>
+                <span className={`badge${v.snapshot.is_active ? " badge-success" : ""}`}>{v.snapshot.is_active ? "Active" : "Inactive"}</span>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                {TRIGGER_LABELS[v.snapshot.trigger_type]}
+                {v.snapshot.trigger_status ? ` "${v.snapshot.trigger_status}"` : ""}
+                {v.snapshot.trigger_field_key ? ` (${v.snapshot.trigger_field_key})` : ""}
+                {" → "}
+                {v.snapshot.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}
+              </div>
+              <button className="btn" type="button" disabled={restore.isPending} onClick={() => restore.mutate(v.id)}>
+                Restore this version
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

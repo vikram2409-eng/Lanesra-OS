@@ -177,6 +177,36 @@ pub fn update(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate, act
     get(conn, id).map(|w| w.expect("just updated"))
 }
 
+/// Admin UX polish (spec §10) - see `business_rule_repo`'s version-history
+/// functions for the full rationale; identical bounded-snapshot mechanism.
+pub const VERSION_HISTORY_LIMIT: i64 = 10;
+
+pub fn insert_version(conn: &Connection, workflow_id: &str, snapshot_json: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO workflow_rule_versions (id, workflow_id, snapshot_json, saved_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![new_uuid(), workflow_id, snapshot_json, now_iso()],
+    )?;
+    conn.execute(
+        "DELETE FROM workflow_rule_versions WHERE workflow_id = ?1 AND id NOT IN (
+            SELECT id FROM workflow_rule_versions WHERE workflow_id = ?1 ORDER BY saved_at DESC LIMIT ?2
+        )",
+        rusqlite::params![workflow_id, VERSION_HISTORY_LIMIT],
+    )?;
+    Ok(())
+}
+
+/// Raw `(id, snapshot_json, saved_at)` rows, newest first - the service
+/// layer deserializes `snapshot_json` into a full `WorkflowDefinition`.
+pub fn list_version_rows(conn: &Connection, workflow_id: &str) -> rusqlite::Result<Vec<(String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, snapshot_json, saved_at FROM workflow_rule_versions WHERE workflow_id = ?1 ORDER BY saved_at DESC",
+    )?;
+    let rows = stmt
+        .query_map([workflow_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))?
+        .collect();
+    rows
+}
+
 pub fn set_last_scheduled_run(conn: &Connection, id: &str, at: &str) -> rusqlite::Result<()> {
     conn.execute("UPDATE workflow_definitions SET last_scheduled_run_at = ?1 WHERE id = ?2", (at, id))?;
     Ok(())

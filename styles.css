@@ -257,6 +257,21 @@
 .rule360-related-row:last-child{border-bottom:0}
 .rule360-related-row a{color:#4338ca;font-weight:700;cursor:pointer}
 .workflow-builder-layout{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.admin-landing-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+.admin-cat-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px}
+.admin-cat-head{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+.admin-cat-icon{font-size:22px;width:42px;height:42px;border-radius:12px;background:#eef2ff;display:grid;place-items:center;flex-shrink:0}
+.admin-cat-head h3{margin:0 0 3px;font-size:16px}
+.admin-cat-head p{margin:0;font-size:12.5px}
+.admin-cat-items{display:flex;flex-direction:column;gap:2px}
+.admin-cat-item{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:0;border-radius:9px;padding:9px 10px;font-size:13.5px;font-weight:600;color:#1f2937;cursor:pointer}
+.admin-cat-item:hover{background:#f5f6fa;color:#4338ca}
+.admin-cat-arrow{color:#9ca3af;font-weight:400}
+.admin-cat-item:hover .admin-cat-arrow{color:#4338ca}
+.history-list{display:flex;flex-direction:column;gap:14px;max-height:60vh;overflow:auto}
+.history-item{border:1px solid var(--line);border-radius:12px;padding:14px}
+.history-meta{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+@media(max-width:900px){.admin-landing-grid{grid-template-columns:1fr}}
 .cell-link{color:#4338ca;font-weight:700;cursor:pointer}
 .cell-link:hover{text-decoration:underline}
 @media(max-width:900px){.builder-layout,.rule360-grid,.workflow-builder-layout{grid-template-columns:1fr}.builder-summary-panel{position:static}}

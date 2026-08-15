@@ -44,8 +44,9 @@ use crate::domain::{builtin_fields, AppError, AppResult};
 use crate::models::business_rule::builtin_trigger_field_for;
 use crate::models::task::TaskInput;
 use crate::models::workflow::{
-    transition_field_for, WorkflowDefinition, WorkflowDefinitionInput, WorkflowDefinitionUpdate, ACTION_TYPES,
-    CORE_WORKFLOW_ENTITY_TYPES, NOTIFICATION_AUDIENCES, TRIGGER_TYPES,
+    transition_field_for, WorkflowActionInput, WorkflowConditionInput, WorkflowDefinition, WorkflowDefinitionInput,
+    WorkflowDefinitionUpdate, WorkflowRuleVersion, ACTION_TYPES, CORE_WORKFLOW_ENTITY_TYPES, NOTIFICATION_AUDIENCES,
+    TRIGGER_TYPES,
 };
 use crate::repositories::{
     company_repo, contract_repo, custom_field_repo, custom_record_repo, notification_repo, opportunity_repo,
@@ -252,7 +253,152 @@ pub fn update_rule(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate
     }
     validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions)?;
     validate_actions(conn, &existing.workspace_id, &existing.entity_type, &input.actions)?;
+    // Admin UX polish (spec §10) - see business_rule_service::update_rule's
+    // identical snapshot-before-overwrite step for the full rationale.
+    let snapshot_json = serde_json::to_string(&existing).expect("WorkflowDefinition is always serializable");
+    workflow_repo::insert_version(conn, id, &snapshot_json)?;
     Ok(workflow_repo::update(conn, id, input, actor_user_id)?)
+}
+
+/// Admin UX polish (spec §10) - see business_rule_service::list_versions's
+/// identical doc comment.
+pub fn list_versions(conn: &Connection, workflow_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<WorkflowRuleVersion>> {
+    require_admin(conn, actor_user_id)?;
+    workflow_repo::get(conn, workflow_id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
+    workflow_repo::list_version_rows(conn, workflow_id)?
+        .into_iter()
+        .map(|(version_id, snapshot_json, saved_at)| {
+            let snapshot: WorkflowDefinition =
+                serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt workflow version snapshot: {e}")))?;
+            Ok(WorkflowRuleVersion { id: version_id, workflow_id: workflow_id.to_string(), snapshot, saved_at })
+        })
+        .collect()
+}
+
+/// Admin UX polish (spec §10) - see business_rule_service::restore_version's
+/// identical doc comment.
+pub fn restore_version(conn: &Connection, workflow_id: &str, version_id: &str, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+    require_admin(conn, actor_user_id)?;
+    let (_, snapshot_json, _) = workflow_repo::list_version_rows(conn, workflow_id)?
+        .into_iter()
+        .find(|(vid, _, _)| vid == version_id)
+        .ok_or_else(|| AppError::NotFound("Workflow version".into()))?;
+    let snapshot: WorkflowDefinition =
+        serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt workflow version snapshot: {e}")))?;
+    let update = WorkflowDefinitionUpdate {
+        name: snapshot.name,
+        description: snapshot.description,
+        trigger_status: snapshot.trigger_status,
+        trigger_field_key: snapshot.trigger_field_key,
+        trigger_field_source: snapshot.trigger_field_source,
+        trigger_offset_days: snapshot.trigger_offset_days,
+        match_type: snapshot.match_type,
+        priority: snapshot.priority,
+        is_active: snapshot.is_active,
+        conditions: snapshot
+            .conditions
+            .into_iter()
+            .map(|c| WorkflowConditionInput {
+                field_source: c.field_source,
+                field_key: c.field_key,
+                operator: c.operator,
+                value: c.value,
+                compare_field_source: c.compare_field_source,
+                compare_field_key: c.compare_field_key,
+                group_id: c.group_id,
+            })
+            .collect(),
+        actions: snapshot.actions.into_iter().map(|a| WorkflowActionInput { action_type: a.action_type, params_json: a.params_json }).collect(),
+    };
+    update_rule(conn, workflow_id, &update, actor_user_id)
+}
+
+/// Admin UX polish (spec §10) - see business_rule_service::duplicate_rule's
+/// identical doc comment; the trigger fields carry over unchanged since a
+/// copy should fire on the same event as its source until an admin edits it.
+pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+    require_admin(conn, actor_user_id)?;
+    let existing = workflow_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
+    let input = WorkflowDefinitionInput {
+        entity_type: existing.entity_type.clone(),
+        name: format!("{} (Copy)", existing.name),
+        description: existing.description.clone(),
+        trigger_type: existing.trigger_type.clone(),
+        trigger_status: existing.trigger_status.clone(),
+        trigger_field_key: existing.trigger_field_key.clone(),
+        trigger_field_source: existing.trigger_field_source.clone(),
+        trigger_offset_days: existing.trigger_offset_days,
+        match_type: existing.match_type.clone(),
+        priority: existing.priority,
+        conditions: existing
+            .conditions
+            .iter()
+            .map(|c| WorkflowConditionInput {
+                field_source: c.field_source.clone(),
+                field_key: c.field_key.clone(),
+                operator: c.operator.clone(),
+                value: c.value.clone(),
+                compare_field_source: c.compare_field_source.clone(),
+                compare_field_key: c.compare_field_key.clone(),
+                group_id: c.group_id.clone(),
+            })
+            .collect(),
+        actions: existing.actions.iter().map(|a| WorkflowActionInput { action_type: a.action_type.clone(), params_json: a.params_json.clone() }).collect(),
+    };
+    let new_id = new_uuid();
+    let created = workflow_repo::create(conn, &new_id, &existing.workspace_id, &input, actor_user_id)?;
+    let deactivate = WorkflowDefinitionUpdate {
+        name: created.name.clone(),
+        description: created.description.clone(),
+        trigger_status: created.trigger_status.clone(),
+        trigger_field_key: created.trigger_field_key.clone(),
+        trigger_field_source: created.trigger_field_source.clone(),
+        trigger_offset_days: created.trigger_offset_days,
+        match_type: created.match_type.clone(),
+        priority: created.priority,
+        is_active: false,
+        conditions: input.conditions,
+        actions: input.actions,
+    };
+    Ok(workflow_repo::update(conn, &created.id, &deactivate, actor_user_id)?)
+}
+
+/// Admin UX polish (spec §10): human-readable descriptions of every active
+/// workflow on `entity_type` that watches (trigger_field_key or a
+/// condition's field/comparison field) or writes (an action's
+/// target_field_key, parsed generically out of `params_json`) `field_key` -
+/// see business_rule_service::describe_active_rules_referencing_field's
+/// doc comment for the full rationale; same caller, same use.
+pub fn describe_active_workflows_referencing_field(conn: &Connection, workspace_id: &str, entity_type: &str, field_key: &str) -> AppResult<Vec<String>> {
+    let workflows = workflow_repo::list(conn, workspace_id, entity_type)?;
+    Ok(workflows
+        .iter()
+        .filter(|w| w.is_active && workflow_references_field(w, field_key))
+        .map(|w| format!("Workflow \"{}\"", w.name))
+        .collect())
+}
+
+/// Every action type that can write a `target_field_key` encodes it as a
+/// same-named key in `params_json` (`UpdateFieldParams`/
+/// `UpdateRelatedRecordParams`) - parsed generically here via a
+/// single-field shape rather than one match arm per action type, since the
+/// dependency check only needs that one key, not the rest of each shape.
+#[derive(Debug, Deserialize)]
+struct TargetFieldOnly {
+    #[serde(default)]
+    target_field_key: Option<String>,
+}
+
+fn workflow_references_field(wf: &WorkflowDefinition, field_key: &str) -> bool {
+    if wf.trigger_field_key.as_deref() == Some(field_key) {
+        return true;
+    }
+    if wf.conditions.iter().any(|c| c.field_key == field_key || c.compare_field_key.as_deref() == Some(field_key)) {
+        return true;
+    }
+    wf.actions
+        .iter()
+        .any(|a| serde_json::from_str::<TargetFieldOnly>(&a.params_json).ok().and_then(|p| p.target_field_key).as_deref() == Some(field_key))
 }
 
 pub fn list_runs(conn: &Connection, workspace_id: &str, workflow_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<crate::models::workflow::WorkflowRun>> {

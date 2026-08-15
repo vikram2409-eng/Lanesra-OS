@@ -22,8 +22,9 @@ use serde::Serialize;
 
 use crate::domain::{builtin_fields, AppError, AppResult};
 use crate::models::business_rule::{
-    BusinessRule, BusinessRuleInput, BusinessRuleUpdate, ACTION_TYPES, CONDITION_OPERATORS,
-    FIELD_TARGETED_ACTIONS, MATCH_TYPES, MESSAGE_ACTIONS, TRIGGER_SOURCES,
+    BusinessRule, BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput, BusinessRuleUpdate,
+    BusinessRuleVersion, ACTION_TYPES, CONDITION_OPERATORS, FIELD_TARGETED_ACTIONS, MATCH_TYPES, MESSAGE_ACTIONS,
+    TRIGGER_SOURCES,
 };
 use crate::repositories::{business_rule_repo, custom_field_repo, user_repo};
 use crate::services::{custom_object_service, entity_registry};
@@ -166,7 +167,155 @@ pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, acto
     }
     validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions)?;
     validate_actions(conn, &existing.workspace_id, &existing.entity_type, &input.actions)?;
+    // Admin UX polish (spec §10): snapshot the pre-edit state before it's
+    // overwritten, so an admin can review or restore it later. `existing`
+    // is always serializable (plain String/bool/i64/Vec fields), so this
+    // can't fail the way parsing untrusted JSON can.
+    let snapshot_json = serde_json::to_string(&existing).expect("BusinessRule is always serializable");
+    business_rule_repo::insert_version(conn, id, &snapshot_json)?;
     Ok(business_rule_repo::update(conn, id, input, actor_user_id)?)
+}
+
+/// Admin UX polish (spec §10): every saved-version snapshot for a rule,
+/// newest first. `require_admin` first, then confirm the rule itself
+/// exists, so a bad id reads as 404 rather than an empty list.
+pub fn list_versions(conn: &Connection, rule_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<BusinessRuleVersion>> {
+    require_admin(conn, actor_user_id)?;
+    business_rule_repo::get(conn, rule_id)?.ok_or_else(|| AppError::NotFound("Business rule".into()))?;
+    business_rule_repo::list_version_rows(conn, rule_id)?
+        .into_iter()
+        .map(|(version_id, snapshot_json, saved_at)| {
+            let snapshot: BusinessRule =
+                serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt rule version snapshot: {e}")))?;
+            Ok(BusinessRuleVersion { id: version_id, business_rule_id: rule_id.to_string(), snapshot, saved_at })
+        })
+        .collect()
+}
+
+/// Admin UX polish (spec §10): re-submits an earlier snapshot through the
+/// normal update path, so a restore is validated exactly like a hand-edited
+/// save and (since `update_rule` always snapshots first) the state it
+/// replaces is itself recoverable.
+pub fn restore_version(conn: &Connection, rule_id: &str, version_id: &str, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+    require_admin(conn, actor_user_id)?;
+    let (_, snapshot_json, _) = business_rule_repo::list_version_rows(conn, rule_id)?
+        .into_iter()
+        .find(|(vid, _, _)| vid == version_id)
+        .ok_or_else(|| AppError::NotFound("Rule version".into()))?;
+    let snapshot: BusinessRule =
+        serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt rule version snapshot: {e}")))?;
+    let update = BusinessRuleUpdate {
+        name: snapshot.name,
+        description: snapshot.description,
+        match_type: snapshot.match_type,
+        priority: snapshot.priority,
+        is_active: snapshot.is_active,
+        effective_start_date: snapshot.effective_start_date,
+        effective_end_date: snapshot.effective_end_date,
+        conditions: snapshot
+            .conditions
+            .into_iter()
+            .map(|c| BusinessRuleConditionInput {
+                field_source: c.field_source,
+                field_key: c.field_key,
+                operator: c.operator,
+                value: c.value,
+                compare_field_source: c.compare_field_source,
+                compare_field_key: c.compare_field_key,
+                group_id: c.group_id,
+            })
+            .collect(),
+        actions: snapshot
+            .actions
+            .into_iter()
+            .map(|a| BusinessRuleActionInput {
+                action_type: a.action_type,
+                target_field_key: a.target_field_key,
+                target_field_source: a.target_field_source,
+                action_value: a.action_value,
+                message: a.message,
+            })
+            .collect(),
+    };
+    update_rule(conn, rule_id, &update, actor_user_id)
+}
+
+/// Admin UX polish (spec §10): copies a rule's full condition/action shape
+/// into a new, inactive draft (named "<name> (Copy)" so it's distinguishable
+/// in the list without opening it) - lets an admin build a close variant
+/// starting from a known-good rule instead of from scratch. Created active
+/// (via the normal `create` path) then immediately flipped inactive, rather
+/// than adding a second insert variant just for that one flag.
+pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+    require_admin(conn, actor_user_id)?;
+    let existing = business_rule_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Business rule".into()))?;
+    let input = BusinessRuleInput {
+        entity_type: existing.entity_type.clone(),
+        name: format!("{} (Copy)", existing.name),
+        description: existing.description.clone(),
+        match_type: existing.match_type.clone(),
+        priority: existing.priority,
+        effective_start_date: existing.effective_start_date.clone(),
+        effective_end_date: existing.effective_end_date.clone(),
+        conditions: existing
+            .conditions
+            .iter()
+            .map(|c| BusinessRuleConditionInput {
+                field_source: c.field_source.clone(),
+                field_key: c.field_key.clone(),
+                operator: c.operator.clone(),
+                value: c.value.clone(),
+                compare_field_source: c.compare_field_source.clone(),
+                compare_field_key: c.compare_field_key.clone(),
+                group_id: c.group_id.clone(),
+            })
+            .collect(),
+        actions: existing
+            .actions
+            .iter()
+            .map(|a| BusinessRuleActionInput {
+                action_type: a.action_type.clone(),
+                target_field_key: a.target_field_key.clone(),
+                target_field_source: a.target_field_source.clone(),
+                action_value: a.action_value.clone(),
+                message: a.message.clone(),
+            })
+            .collect(),
+    };
+    let new_id = crate::domain::ids::new_uuid();
+    let created = business_rule_repo::create(conn, &new_id, &existing.workspace_id, &input, actor_user_id)?;
+    let deactivate = BusinessRuleUpdate {
+        name: created.name.clone(),
+        description: created.description.clone(),
+        match_type: created.match_type.clone(),
+        priority: created.priority,
+        is_active: false,
+        effective_start_date: created.effective_start_date.clone(),
+        effective_end_date: created.effective_end_date.clone(),
+        conditions: input.conditions,
+        actions: input.actions,
+    };
+    Ok(business_rule_repo::update(conn, &created.id, &deactivate, actor_user_id)?)
+}
+
+/// Admin UX polish (spec §10): human-readable descriptions of every active
+/// rule on `entity_type` that reads (a condition's field or comparison
+/// field) or writes (an action's target field) `field_key` - called by
+/// `custom_field_service` before letting an admin deactivate a custom
+/// field, since a rule referencing a deactivated field just silently stops
+/// finding it and never fires that clause again.
+pub fn describe_active_rules_referencing_field(conn: &Connection, workspace_id: &str, entity_type: &str, field_key: &str) -> AppResult<Vec<String>> {
+    let rules = business_rule_repo::list(conn, workspace_id, entity_type)?;
+    Ok(rules
+        .iter()
+        .filter(|r| r.is_active && rule_references_field(r, field_key))
+        .map(|r| format!("Business rule \"{}\"", r.name))
+        .collect())
+}
+
+fn rule_references_field(rule: &BusinessRule, field_key: &str) -> bool {
+    rule.conditions.iter().any(|c| c.field_key == field_key || c.compare_field_key.as_deref() == Some(field_key))
+        || rule.actions.iter().any(|a| a.target_field_key.as_deref() == Some(field_key))
 }
 
 #[derive(Debug, Clone, Default, Serialize)]

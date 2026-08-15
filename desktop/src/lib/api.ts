@@ -38,6 +38,7 @@ import type {
   BusinessRule,
   BusinessRuleInput,
   BusinessRuleUpdate,
+  BusinessRuleVersion,
   CustomFieldDefinition,
   CustomFieldDefinitionInput,
   CustomFieldDefinitionUpdate,
@@ -73,6 +74,7 @@ import type {
   WorkflowDefinition,
   WorkflowDefinitionInput,
   WorkflowDefinitionUpdate,
+  WorkflowRuleVersion,
   WorkflowRun,
   WorkflowTestResult,
   Workspace,
@@ -236,6 +238,10 @@ export const api = {
     call<CustomFieldDefinition>("update_custom_field_definition", { id, input }),
   deactivateCustomFieldDefinition: (id: string) =>
     call<CustomFieldDefinition>("deactivate_custom_field_definition", { id }),
+  // Admin UX polish (spec §10): call before either deactivation path above
+  // and show a confirmation when the result isn't empty - see
+  // custom_field_service::describe_active_dependents's doc comment.
+  describeCustomFieldDependents: (id: string) => call<string[]>("describe_custom_field_dependents", { id }),
   // Returns any non-blocking show_error/show_warning notices that fired
   // (both empty normally) - see custom_field_service::set_entity_values.
   setCustomFieldValues: (entityType: string, entityId: string, values: CustomFieldValues) =>
@@ -248,6 +254,10 @@ export const api = {
   updateBusinessRule: (id: string, input: BusinessRuleUpdate) => call<BusinessRule>("update_business_rule", { id, input }),
   testBusinessRules: (entityType: string, context: Record<string, string>) =>
     call<RuleEvaluation>("test_business_rules", { entityType, context }),
+  duplicateBusinessRule: (id: string) => call<BusinessRule>("duplicate_business_rule", { id }),
+  listBusinessRuleVersions: (ruleId: string) => call<BusinessRuleVersion[]>("list_business_rule_versions", { ruleId }),
+  restoreBusinessRuleVersion: (ruleId: string, versionId: string) =>
+    call<BusinessRule>("restore_business_rule_version", { ruleId, versionId }),
 
   listStatusTransitions: (entityType: string) => call<StatusTransition[]>("list_status_transitions", { entityType }),
   createStatusTransition: (input: StatusTransitionInput) => call<StatusTransition>("create_status_transition", { input }),
@@ -262,6 +272,10 @@ export const api = {
   runScheduledWorkflows: () => call<number>("run_scheduled_workflows"),
   testWorkflows: (entityType: string, context: Record<string, string>) =>
     call<WorkflowTestResult>("test_workflows", { entityType, context }),
+  duplicateWorkflowRule: (id: string) => call<WorkflowDefinition>("duplicate_workflow_rule", { id }),
+  listWorkflowRuleVersions: (workflowId: string) => call<WorkflowRuleVersion[]>("list_workflow_rule_versions", { workflowId }),
+  restoreWorkflowRuleVersion: (workflowId: string, versionId: string) =>
+    call<WorkflowDefinition>("restore_workflow_rule_version", { workflowId, versionId }),
 
   listNotifications: (unreadOnly: boolean) => call<Notification[]>("list_notifications", { unreadOnly }),
   markNotificationRead: (id: string) => call<void>("mark_notification_read", { id }),

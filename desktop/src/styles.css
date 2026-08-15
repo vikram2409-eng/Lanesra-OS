@@ -149,6 +149,93 @@ textarea {
   text-decoration: underline;
 }
 
+/* Admin landing page redesign round: a categorized home in place of the
+   old flat tab row, plus the breadcrumb shown once inside a tool. */
+.admin-landing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.admin-cat-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.admin-cat-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.admin-cat-icon {
+  font-size: 20px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.admin-cat-head h3 {
+  margin: 0 0 2px;
+  font-size: 15px;
+}
+
+.admin-cat-head p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.admin-cat-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-cat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.admin-cat-item:hover {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.admin-cat-item .admin-cat-arrow {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.admin-cat-item:hover .admin-cat-arrow {
+  color: var(--accent);
+}
+
+.admin-breadcrumb {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
 .btn-danger {
   border-color: var(--danger);
   color: var(--danger);

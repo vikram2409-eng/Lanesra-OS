@@ -329,6 +329,9 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "deactivate_custom_field_definition" => {
             to_value(custom_field_service::deactivate_definition(conn, &arg::<String>(args, "id")?, actor)?)
         }
+        "describe_custom_field_dependents" => {
+            to_value(custom_field_service::describe_active_dependents(conn, &arg::<String>(args, "id")?, actor)?)
+        }
         "set_custom_field_values" => {
             let entity_type: String = arg(args, "entityType")?;
             let entity_id: String = arg(args, "entityId")?;
@@ -357,6 +360,15 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let entity_type: String = arg(args, "entityType")?;
             let context: CustomFieldValues = arg(args, "context")?;
             to_value(business_rule_service::test_rules(conn, &require_workspace_id(conn)?, &entity_type, &context, actor)?)
+        }
+        "duplicate_business_rule" => to_value(business_rule_service::duplicate_rule(conn, &arg::<String>(args, "id")?, actor)?),
+        "list_business_rule_versions" => {
+            to_value(business_rule_service::list_versions(conn, &arg::<String>(args, "ruleId")?, actor)?)
+        }
+        "restore_business_rule_version" => {
+            let rule_id: String = arg(args, "ruleId")?;
+            let version_id: String = arg(args, "versionId")?;
+            to_value(business_rule_service::restore_version(conn, &rule_id, &version_id, actor)?)
         }
 
         "list_status_transitions" => {
@@ -399,6 +411,15 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let entity_type: String = arg(args, "entityType")?;
             let context: CustomFieldValues = arg(args, "context")?;
             to_value(workflow_service::test_workflows(conn, &require_workspace_id(conn)?, &entity_type, &context, actor)?)
+        }
+        "duplicate_workflow_rule" => to_value(workflow_service::duplicate_rule(conn, &arg::<String>(args, "id")?, actor)?),
+        "list_workflow_rule_versions" => {
+            to_value(workflow_service::list_versions(conn, &arg::<String>(args, "workflowId")?, actor)?)
+        }
+        "restore_workflow_rule_version" => {
+            let workflow_id: String = arg(args, "workflowId")?;
+            let version_id: String = arg(args, "versionId")?;
+            to_value(workflow_service::restore_version(conn, &workflow_id, &version_id, actor)?)
         }
 
         "list_notifications" => {

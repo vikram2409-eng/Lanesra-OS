@@ -146,7 +146,16 @@ export function BusinessRulesAdmin() {
   const [entityType, setEntityType] = useState<string>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [historyForId, setHistoryForId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const duplicate = useMutation({
+    mutationFn: (id: string) => api.duplicateBusinessRule(id),
+    onSuccess: (copy) => {
+      queryClient.invalidateQueries({ queryKey: ["businessRules"] });
+      setEditingId(copy.id);
+    },
+  });
 
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
   const entityTabs: { key: string; label: string }[] = [
@@ -165,6 +174,7 @@ export function BusinessRulesAdmin() {
   const activeDefs = (defs.data ?? []).filter((d) => d.is_active);
   const labelByKey = new Map((defs.data ?? []).map((d) => [d.key, d.label]));
   const editing = rules.data?.find((r) => r.id === editingId) ?? null;
+  const historyRule = rules.data?.find((r) => r.id === historyForId) ?? null;
 
   return (
     <div className="card">
@@ -175,6 +185,7 @@ export function BusinessRulesAdmin() {
           onClick={() => {
             setCreating((v) => !v);
             setEditingId(null);
+            setHistoryForId(null);
           }}
         >
           + New rule
@@ -194,6 +205,7 @@ export function BusinessRulesAdmin() {
               setEntityType(t.key);
               setCreating(false);
               setEditingId(null);
+              setHistoryForId(null);
             }}
           >
             {t.label}
@@ -201,7 +213,20 @@ export function BusinessRulesAdmin() {
         ))}
       </div>
 
-      {creating && (
+      {historyRule && (
+        <RuleHistoryPanel
+          entityType={entityType}
+          customFields={activeDefs}
+          ruleId={historyRule.id}
+          ruleName={historyRule.name}
+          onDone={() => {
+            invalidate();
+          }}
+          onClose={() => setHistoryForId(null)}
+        />
+      )}
+
+      {creating && !historyRule && (
         <RuleForm
           entityType={entityType}
           customFields={activeDefs}
@@ -220,7 +245,7 @@ export function BusinessRulesAdmin() {
         />
       )}
 
-      {editing && (
+      {editing && !historyRule && (
         <RuleForm
           entityType={entityType}
           customFields={activeDefs}
@@ -245,11 +270,11 @@ export function BusinessRulesAdmin() {
         />
       )}
 
-      {rules.isLoading && !creating && !editing && <p>Loading...</p>}
-      {rules.data && rules.data.length === 0 && !creating && !editing && (
+      {rules.isLoading && !creating && !editing && !historyRule && <p>Loading...</p>}
+      {rules.data && rules.data.length === 0 && !creating && !editing && !historyRule && (
         <p className="empty-state">No business rules defined for {currentLabel} yet.</p>
       )}
-      {rules.data && rules.data.length > 0 && !creating && !editing && (
+      {rules.data && rules.data.length > 0 && !creating && !editing && !historyRule && (
         <table>
           <thead>
             <tr>
@@ -273,9 +298,17 @@ export function BusinessRulesAdmin() {
                   {r.is_protected && <span className="badge" style={{ marginLeft: 4 }}>System</span>}
                 </td>
                 <td>
-                  <button className="btn" onClick={() => setEditingId(r.id)} disabled={r.is_protected}>
-                    Edit
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn" onClick={() => setEditingId(r.id)} disabled={r.is_protected}>
+                      Edit
+                    </button>
+                    <button className="btn" onClick={() => duplicate.mutate(r.id)} disabled={duplicate.isPending} title="Duplicate as an inactive draft">
+                      Duplicate
+                    </button>
+                    <button className="btn" onClick={() => setHistoryForId(r.id)} title="Version history">
+                      History
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -763,6 +796,76 @@ function RuleForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Admin UX polish (spec §10): the last `VERSION_HISTORY_LIMIT` (10) saves
+ * of a rule, newest first, each restorable in one click. Restoring is
+ * itself a normal validated update (see business_rule_service::
+ * restore_version), so it snapshots the state it's replacing too - a
+ * restore is never a dead end.
+ */
+function RuleHistoryPanel({
+  entityType,
+  customFields,
+  ruleId,
+  ruleName,
+  onDone,
+  onClose,
+}: {
+  entityType: string;
+  customFields: CustomFieldLite[];
+  ruleId: string;
+  ruleName: string;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const labelByKey = new Map(customFields.map((f) => [f.key, f.label]));
+  const versions = useQuery({ queryKey: ["businessRuleVersions", ruleId], queryFn: () => api.listBusinessRuleVersions(ruleId) });
+
+  const restore = useMutation({
+    mutationFn: (versionId: string) => api.restoreBusinessRuleVersion(ruleId, versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["businessRuleVersions", ruleId] });
+      onDone();
+    },
+  });
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="toolbar">
+        <h3 style={{ margin: 0 }}>Version history — {ruleName}</h3>
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {versions.isLoading && <p>Loading...</p>}
+      {versions.data && versions.data.length === 0 && (
+        <p className="empty-state">No saved versions yet - history starts recording from the next edit.</p>
+      )}
+      {versions.data && versions.data.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {versions.data.map((v) => (
+            <div key={v.id} className="builder-row-card" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                <strong>{new Date(v.saved_at).toLocaleString()}</strong>
+                <span className={`badge${v.snapshot.is_active ? " badge-success" : ""}`}>{v.snapshot.is_active ? "Active" : "Inactive"}</span>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                {describeGroupedConditions(v.snapshot.conditions, v.snapshot.match_type, (c) => describeCondition(entityType, c, labelByKey))}
+                {" → "}
+                {v.snapshot.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}
+              </div>
+              <button className="btn" type="button" disabled={restore.isPending} onClick={() => restore.mutate(v.id)}>
+                Restore this version
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

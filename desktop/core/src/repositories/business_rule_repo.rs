@@ -152,3 +152,34 @@ pub fn update(conn: &Connection, id: &str, input: &BusinessRuleUpdate, actor_use
     write_actions(conn, id, &input.actions)?;
     get(conn, id).map(|r| r.expect("just updated"))
 }
+
+/// Admin UX polish (spec §10): bounded version history. Kept per-rule at
+/// most `VERSION_HISTORY_LIMIT` rows - each save prunes anything older than
+/// the newest N right after inserting, so history can't grow unbounded.
+pub const VERSION_HISTORY_LIMIT: i64 = 10;
+
+pub fn insert_version(conn: &Connection, rule_id: &str, snapshot_json: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO business_rule_versions (id, business_rule_id, snapshot_json, saved_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![new_uuid(), rule_id, snapshot_json, now_iso()],
+    )?;
+    conn.execute(
+        "DELETE FROM business_rule_versions WHERE business_rule_id = ?1 AND id NOT IN (
+            SELECT id FROM business_rule_versions WHERE business_rule_id = ?1 ORDER BY saved_at DESC LIMIT ?2
+        )",
+        rusqlite::params![rule_id, VERSION_HISTORY_LIMIT],
+    )?;
+    Ok(())
+}
+
+/// Raw `(id, snapshot_json, saved_at)` rows, newest first - the service
+/// layer deserializes `snapshot_json` into a full `BusinessRule`.
+pub fn list_version_rows(conn: &Connection, rule_id: &str) -> rusqlite::Result<Vec<(String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, snapshot_json, saved_at FROM business_rule_versions WHERE business_rule_id = ?1 ORDER BY saved_at DESC",
+    )?;
+    let rows = stmt
+        .query_map([rule_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))?
+        .collect();
+    rows
+}
