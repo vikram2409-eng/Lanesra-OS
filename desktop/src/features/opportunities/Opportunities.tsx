@@ -6,7 +6,9 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill } from "../../components/AppShell";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STATUSES,
@@ -52,16 +54,19 @@ export function Opportunities({
   prefill,
   onPrefillConsumed,
 }: { prefill?: Prefill | null; onPrefillConsumed?: () => void } = {}) {
-  const [view, setView] = useState<View>(() => (prefill?.companyId ? { mode: "create" } : { mode: "list" }));
+  const [view, setView] = useState<View>(() =>
+    prefill?.openId ? { mode: "edit", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" },
+  );
   const queryClient = useQueryClient();
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
+  const fieldFilters = useCustomFieldFilters("Opportunity");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   // One-shot: this component fully remounts on every navigation into this
   // section, so "on mount" reliably means "just navigated here" - see
   // Prefill's doc comment in AppShell.tsx.
   useEffect(() => {
-    if (prefill?.companyId) onPrefillConsumed?.();
+    if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -102,11 +107,16 @@ export function Opportunities({
           </button>
         </div>
       </div>
+      <CustomFieldFilterBar filters={fieldFilters} />
       {opportunities.isLoading && <p>Loading...</p>}
       {opportunities.data && opportunities.data.length === 0 && (
         <p className="empty-state">No opportunities yet.</p>
       )}
-      {opportunities.data && opportunities.data.length > 0 && (
+      {opportunities.data && opportunities.data.length > 0 && (() => {
+        const rows = opportunities.data.filter((o) => fieldFilters.matches(o.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No opportunities match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -120,7 +130,7 @@ export function Opportunities({
             </tr>
           </thead>
           <tbody>
-            {opportunities.data.map((o) => (
+            {rows.map((o) => (
               <tr key={o.id}>
                 <td>{o.opportunity_number}</td>
                 <td>{o.name}</td>
@@ -137,7 +147,8 @@ export function Opportunities({
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

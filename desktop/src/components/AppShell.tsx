@@ -1,3 +1,4 @@
+import { GlobalSearch } from "./GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
 import type { CustomObjectDefinition, User } from "../lib/types";
 
@@ -67,6 +68,7 @@ const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
 export function AppShell({
   active,
   onNavigate,
+  onOpenSearchResult,
   user,
   onLogout,
   customObjects,
@@ -74,6 +76,9 @@ export function AppShell({
 }: {
   active: Section;
   onNavigate: (section: Section) => void;
+  /** Global search "jump to a record" - reuses the same one-shot openId
+   * prefill mechanism every list screen's ID-hyperlinks already use. */
+  onOpenSearchResult: (section: Section, id: string) => void;
   user: User;
   onLogout: () => void;
   customObjects: CustomObjectDefinition[];
@@ -107,7 +112,7 @@ export function AppShell({
       </nav>
       <main className="main">
         <div className="topbar">
-          <div />
+          <GlobalSearch customObjects={customObjects} onOpenResult={onOpenSearchResult} />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <NotificationBell />
             <button

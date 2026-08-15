@@ -11,10 +11,12 @@ import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
 import { ORDER_STATUSES, type CustomFieldValues, type Order, type OrderInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -47,6 +49,7 @@ export function Orders({
   );
   const queryClient = useQueryClient();
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
+  const fieldFilters = useCustomFieldFilters("Order");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -101,9 +104,14 @@ export function Orders({
           </button>
         </div>
       </div>
+      <CustomFieldFilterBar filters={fieldFilters} />
       {orders.isLoading && <p>Loading...</p>}
       {orders.data && orders.data.length === 0 && <p className="empty-state">No orders yet.</p>}
-      {orders.data && orders.data.length > 0 && (
+      {orders.data && orders.data.length > 0 && (() => {
+        const rows = orders.data.filter((o) => fieldFilters.matches(o.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No orders match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -115,7 +123,7 @@ export function Orders({
             </tr>
           </thead>
           <tbody>
-            {orders.data.map((o) => (
+            {rows.map((o) => (
               <tr key={o.id} onClick={() => setView({ mode: "detail", id: o.id })} style={{ cursor: "pointer" }}>
                 <td><span className="id-link">{o.order_number}</span></td>
                 <td>{companyNameById.get(o.company_id) ?? "—"}</td>
@@ -128,7 +136,8 @@ export function Orders({
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

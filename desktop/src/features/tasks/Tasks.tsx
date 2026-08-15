@@ -6,6 +6,7 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
 import {
   TASK_PRIORITIES,
@@ -16,6 +17,7 @@ import {
   type TaskInput,
   type TaskRelatedType,
 } from "../../lib/types";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 
 type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
@@ -99,6 +101,7 @@ export function Tasks({
   }, []);
 
   const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() });
+  const fieldFilters = useCustomFieldFilters("Task");
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
@@ -171,7 +174,7 @@ export function Tasks({
     );
   }
 
-  const all = tasks.data ?? [];
+  const all = (tasks.data ?? []).filter((t) => fieldFilters.matches(t.id));
   const open = all.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const today = todayIso();
   const ownerName = (id: string | null): string =>
@@ -219,6 +222,7 @@ export function Tasks({
         ))}
       </div>
 
+      <CustomFieldFilterBar filters={fieldFilters} />
       {tasks.isLoading && <p>Loading...</p>}
       {groups.every((g) => g.rows.length === 0) && <p className="empty-state">No tasks here.</p>}
       {groups.map(

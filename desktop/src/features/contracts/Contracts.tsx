@@ -8,10 +8,12 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
 import { CONTRACT_STATUSES, type Contract, type ContractInput, type CustomFieldValues } from "../../lib/types";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -69,6 +71,7 @@ export function Contracts({
   );
   const queryClient = useQueryClient();
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
+  const fieldFilters = useCustomFieldFilters("Contract");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -124,9 +127,14 @@ export function Contracts({
           </button>
         </div>
       </div>
+      <CustomFieldFilterBar filters={fieldFilters} />
       {contracts.isLoading && <p>Loading...</p>}
       {contracts.data && contracts.data.length === 0 && <p className="empty-state">No contracts yet.</p>}
-      {contracts.data && contracts.data.length > 0 && (
+      {contracts.data && contracts.data.length > 0 && (() => {
+        const rows = contracts.data.filter((c) => fieldFilters.matches(c.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No contracts match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -140,7 +148,7 @@ export function Contracts({
             </tr>
           </thead>
           <tbody>
-            {contracts.data.map((c) => (
+            {rows.map((c) => (
               <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
                 <td><span className="id-link">{c.contract_number}</span></td>
                 <td>{c.title}</td>
@@ -168,7 +176,8 @@ export function Contracts({
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

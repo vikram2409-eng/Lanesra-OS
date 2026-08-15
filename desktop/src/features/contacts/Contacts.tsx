@@ -7,11 +7,13 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { TabListCard } from "../../components/TabListCard";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { formatCents } from "../../lib/money";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import {
   CONTACT_STATUSES,
   PREFERRED_CONTACT_METHODS,
@@ -132,6 +134,7 @@ export function Contacts({
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
+  const fieldFilters = useCustomFieldFilters("Contact");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -199,11 +202,16 @@ export function Contacts({
           onClose={() => setImporting(false)}
         />
       )}
+      <CustomFieldFilterBar filters={fieldFilters} />
       {contacts.isLoading && <p>Loading...</p>}
       {contacts.data && contacts.data.length === 0 && (
         <p className="empty-state">No contacts yet. Create your first one.</p>
       )}
-      {contacts.data && contacts.data.length > 0 && (
+      {contacts.data && contacts.data.length > 0 && (() => {
+        const rows = contacts.data.filter((c) => fieldFilters.matches(c.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No contacts match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -216,7 +224,7 @@ export function Contacts({
             </tr>
           </thead>
           <tbody>
-            {contacts.data.map((c) => (
+            {rows.map((c) => (
               <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
                 <td><span className="id-link">{c.contact_number}</span></td>
                 <td>
@@ -242,7 +250,8 @@ export function Contacts({
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

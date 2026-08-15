@@ -11,10 +11,12 @@ import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
 import { QUOTE_STATUSES, type CustomFieldValues, type Quote, type QuoteInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -47,6 +49,7 @@ export function Quotes({
   );
   const queryClient = useQueryClient();
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
+  const fieldFilters = useCustomFieldFilters("Quote");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -101,9 +104,14 @@ export function Quotes({
           </button>
         </div>
       </div>
+      <CustomFieldFilterBar filters={fieldFilters} />
       {quotes.isLoading && <p>Loading...</p>}
       {quotes.data && quotes.data.length === 0 && <p className="empty-state">No quotes yet.</p>}
-      {quotes.data && quotes.data.length > 0 && (
+      {quotes.data && quotes.data.length > 0 && (() => {
+        const rows = quotes.data.filter((q) => fieldFilters.matches(q.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No quotes match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -114,7 +122,7 @@ export function Quotes({
             </tr>
           </thead>
           <tbody>
-            {quotes.data.map((q) => (
+            {rows.map((q) => (
               <tr key={q.id} onClick={() => setView({ mode: "detail", id: q.id })} style={{ cursor: "pointer" }}>
                 <td><span className="id-link">{q.quote_number}</span></td>
                 <td>{companyNameById.get(q.company_id) ?? "—"}</td>
@@ -126,7 +134,8 @@ export function Quotes({
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

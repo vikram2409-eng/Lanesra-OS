@@ -5,6 +5,8 @@
 //! entity_type string here, validated dynamically instead of against the
 //! fixed CUSTOM_FIELD_ENTITY_TYPES list.
 
+use std::collections::HashMap;
+
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -481,4 +483,14 @@ pub fn set_entity_values(
 
 pub fn get_entity_values(conn: &Connection, entity_id: &str) -> AppResult<CustomFieldValues> {
     Ok(custom_field_repo::get_values(conn, entity_id)?)
+}
+
+/// List-view filtering (roadmap "Global search & list-view filtering"):
+/// every `is_filterable` value for one entity type, across the whole
+/// workspace, keyed by entity id then field key. A list screen calls this
+/// once alongside its normal list fetch rather than per-row, then filters
+/// client-side - the same "no dedicated filter engine, just enough to be
+/// useful" scope as global search itself.
+pub fn get_filterable_values(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<HashMap<String, CustomFieldValues>> {
+    Ok(custom_field_repo::get_filterable_values(conn, workspace_id, entity_type)?)
 }

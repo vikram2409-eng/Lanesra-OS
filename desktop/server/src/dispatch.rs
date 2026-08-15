@@ -34,8 +34,8 @@ use lanesra_core::services::{
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
-    quote_service, relationship_service, report_service, status_transition_service, task_service, user_service,
-    workflow_service, workspace_service,
+    quote_service, relationship_service, report_service, search_service, status_transition_service, task_service,
+    user_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -267,6 +267,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
 
         "dashboard_summary" => to_value(dashboard_service::summary(conn, &require_workspace_id(conn)?)?),
 
+        "global_search" => {
+            let query: String = arg(args, "query")?;
+            to_value(search_service::global_search(conn, &require_workspace_id(conn)?, &query)?)
+        }
+
         "update_workspace" => {
             let input: WorkspaceUpdate = arg(args, "input")?;
             to_value(workspace_service::update(conn, &input, actor)?)
@@ -340,6 +345,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
         "get_custom_field_values" => {
             to_value(custom_field_service::get_entity_values(conn, &arg::<String>(args, "entityId")?)?)
+        }
+        "list_filterable_custom_field_values" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(custom_field_service::get_filterable_values(conn, &require_workspace_id(conn)?, &entity_type)?)
         }
 
         "list_business_rules" => {

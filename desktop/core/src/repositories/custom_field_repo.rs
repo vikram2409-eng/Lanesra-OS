@@ -152,3 +152,31 @@ pub fn get_values(conn: &Connection, entity_id: &str) -> rusqlite::Result<HashMa
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows.into_iter().collect())
 }
+
+/// Every `is_filterable` value for every active definition of one entity
+/// type, across the whole workspace, keyed by entity id then field key -
+/// powers desktop list-view filtering (roadmap "Global search &
+/// list-view filtering"). One query per list screen load rather than one
+/// `get_values` call per row, and scoped to filterable fields only so a
+/// list screen never pulls values it has no control to show.
+pub fn get_filterable_values(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<HashMap<String, HashMap<String, String>>> {
+    let mut stmt = conn.prepare(
+        "SELECT v.entity_id, d.key, v.value_text FROM custom_field_values v
+         JOIN custom_field_definitions d ON d.id = v.definition_id
+         WHERE d.workspace_id = ?1 AND d.entity_type = ?2 AND d.is_active = 1 AND d.is_filterable = 1",
+    )?;
+    let rows = stmt
+        .query_map(rusqlite::params![workspace_id, entity_type], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut out: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for (entity_id, key, value) in rows {
+        out.entry(entity_id).or_default().insert(key, value);
+    }
+    Ok(out)
+}

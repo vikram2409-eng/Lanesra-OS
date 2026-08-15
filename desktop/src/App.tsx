@@ -123,7 +123,14 @@ function Ready({
   return (
     <SessionLock user={user}>
       <TaskReminderNotifier currentUserId={user.id} />
-      <AppShell active={section} onNavigate={setSection} user={user} onLogout={onLogout} customObjects={customObjects.data ?? []}>
+      <AppShell
+        active={section}
+        onNavigate={setSection}
+        onOpenSearchResult={(target, id) => navigateTo(target, { openId: id })}
+        user={user}
+        onLogout={onLogout}
+        customObjects={customObjects.data ?? []}
+      >
         {section === "dashboard" && <Dashboard onNavigate={setSection} />}
         {section === "companies" && (
           <Companies prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
@@ -158,7 +165,9 @@ function Ready({
         {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
         {section === "admin" && <AdminPanel />}
         {section === "account" && <Account user={user} />}
-        {activeCustomObject && <CustomObjectRecords definition={activeCustomObject} />}
+        {activeCustomObject && (
+          <CustomObjectRecords definition={activeCustomObject} prefill={prefill} onPrefillConsumed={clearPrefill} />
+        )}
       </AppShell>
     </SessionLock>
   );

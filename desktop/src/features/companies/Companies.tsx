@@ -8,10 +8,12 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { COMPANY_STATUSES, PREFERRED_CONTACT_METHODS, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
@@ -105,6 +107,7 @@ export function Companies({
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const fieldFilters = useCustomFieldFilters("Company");
 
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
@@ -163,34 +166,40 @@ export function Companies({
           onClose={() => setImporting(false)}
         />
       )}
+      <CustomFieldFilterBar filters={fieldFilters} />
       {companies.isLoading && <p>Loading...</p>}
       {companies.data && companies.data.length === 0 && (
         <p className="empty-state">No companies yet. Create your first one.</p>
       )}
-      {companies.data && companies.data.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Tax number</th>
-            </tr>
-          </thead>
-          <tbody>
-            {companies.data.map((c) => (
-              <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
-                <td><span className="id-link">{c.customer_number}</span></td>
-                <td>{c.name}</td>
-                <td>
-                  <StatusBadge status={c.status} />
-                </td>
-                <td>{c.tax_number ?? "—"}</td>
+      {companies.data && companies.data.length > 0 && (() => {
+        const rows = companies.data.filter((c) => fieldFilters.matches(c.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No companies match the current filters.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Number</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Tax number</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
+                  <td><span className="id-link">{c.customer_number}</span></td>
+                  <td>{c.name}</td>
+                  <td>
+                    <StatusBadge status={c.status} />
+                  </td>
+                  <td>{c.tax_number ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      })()}
     </div>
   );
 }

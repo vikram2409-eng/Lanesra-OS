@@ -551,6 +551,18 @@ export interface DashboardSummary {
   recent_activity: RecentActivity[];
 }
 
+// Global search: entity_type is either a core entity name (Company,
+// Contact, Opportunity, Quote, Order, Invoice, Contract, Task, Product) or
+// a custom object's key - see search_service::global_search. subtitle is
+// set when the match came from something other than the title itself (an
+// email/phone, or a matched searchable custom field's "label: value").
+export interface SearchResult {
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  subtitle: string | null;
+}
+
 export const CONTRACT_STATUSES = [
   "Draft",
   "Under Review",

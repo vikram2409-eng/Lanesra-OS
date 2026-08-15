@@ -11,10 +11,12 @@ import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
 import type { CustomFieldValues, Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -46,6 +48,7 @@ export function Invoices({
   );
   const queryClient = useQueryClient();
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
+  const fieldFilters = useCustomFieldFilters("Invoice");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -100,9 +103,14 @@ export function Invoices({
           </button>
         </div>
       </div>
+      <CustomFieldFilterBar filters={fieldFilters} />
       {invoices.isLoading && <p>Loading...</p>}
       {invoices.data && invoices.data.length === 0 && <p className="empty-state">No invoices yet.</p>}
-      {invoices.data && invoices.data.length > 0 && (
+      {invoices.data && invoices.data.length > 0 && (() => {
+        const rows = invoices.data.filter((inv) => fieldFilters.matches(inv.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No invoices match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -115,7 +123,7 @@ export function Invoices({
             </tr>
           </thead>
           <tbody>
-            {invoices.data.map((inv) => (
+            {rows.map((inv) => (
               <tr key={inv.id} onClick={() => setView({ mode: "detail", id: inv.id })} style={{ cursor: "pointer" }}>
                 <td><span className="id-link">{inv.invoice_number}</span></td>
                 <td>{companyNameById.get(inv.company_id) ?? "—"}</td>
@@ -129,7 +137,8 @@ export function Invoices({
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

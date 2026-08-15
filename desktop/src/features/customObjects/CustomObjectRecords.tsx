@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
+import type { Prefill } from "../../components/AppShell";
 import {
   CUSTOM_RECORD_STATUSES,
   type CustomFieldValues,
   type CustomObjectDefinition,
   type CustomRecordInput,
 } from "../../lib/types";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -20,15 +23,33 @@ type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string }
  * the same way Products/Contracts/Tasks etc. are - the only difference is
  * `objectKey`/`definition` come from data instead of being hardcoded, so
  * one component serves every custom object rather than one per type.
+ *
+ * `prefill.openId` (global search "jump to a record") reuses the same
+ * one-shot mechanism every other list screen already has - there's no
+ * separate read-only "detail" mode here, so it opens straight into Edit,
+ * which already shows every field plus RelatedRecordsCard.
  */
-export function CustomObjectRecords({ definition }: { definition: CustomObjectDefinition }) {
-  const [view, setView] = useState<View>({ mode: "list" });
+export function CustomObjectRecords({
+  definition,
+  prefill,
+  onPrefillConsumed,
+}: {
+  definition: CustomObjectDefinition;
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+}) {
+  const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "edit", id: prefill.openId } : { mode: "list" }));
+  useEffect(() => {
+    if (prefill?.openId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const queryClient = useQueryClient();
   const records = useQuery({
     queryKey: ["customRecords", definition.key],
     queryFn: () => api.listCustomRecords(definition.key),
   });
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+  const fieldFilters = useCustomFieldFilters(definition.key);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["customRecords", definition.key] });
@@ -61,11 +82,16 @@ export function CustomObjectRecords({ definition }: { definition: CustomObjectDe
           + New {definition.singular_label.toLowerCase()}
         </button>
       </div>
+      <CustomFieldFilterBar filters={fieldFilters} />
       {records.isLoading && <p>Loading...</p>}
       {records.data && records.data.length === 0 && (
         <p className="empty-state">No {definition.plural_label.toLowerCase()} yet.</p>
       )}
-      {records.data && records.data.length > 0 && (
+      {records.data && records.data.length > 0 && (() => {
+        const rows = records.data.filter((r) => fieldFilters.matches(r.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No {definition.plural_label.toLowerCase()} match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -77,7 +103,7 @@ export function CustomObjectRecords({ definition }: { definition: CustomObjectDe
             </tr>
           </thead>
           <tbody>
-            {records.data.map((r) => (
+            {rows.map((r) => (
               <tr key={r.id}>
                 <td>{r.display_number}</td>
                 <td>{r.primary_name}</td>
@@ -94,7 +120,8 @@ export function CustomObjectRecords({ definition }: { definition: CustomObjectDe
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }

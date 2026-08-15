@@ -7,8 +7,10 @@ import { centsToInputValue, formatCents, parseDecimalToCents } from "../../lib/m
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CustomFieldsSection } from "../../components/CustomFieldsSection";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
+import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -49,6 +51,7 @@ export function Products({
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
   const queryClient = useQueryClient();
   const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
+  const fieldFilters = useCustomFieldFilters("Product");
 
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
@@ -93,9 +96,14 @@ export function Products({
           </button>
         </div>
       </div>
+      <CustomFieldFilterBar filters={fieldFilters} />
       {products.isLoading && <p>Loading...</p>}
       {products.data && products.data.length === 0 && <p className="empty-state">No products yet.</p>}
-      {products.data && products.data.length > 0 && (
+      {products.data && products.data.length > 0 && (() => {
+        const rows = products.data.filter((p) => fieldFilters.matches(p.id));
+        return rows.length === 0 ? (
+          <p className="empty-state">No products match the current filters.</p>
+        ) : (
         <table>
           <thead>
             <tr>
@@ -108,7 +116,7 @@ export function Products({
             </tr>
           </thead>
           <tbody>
-            {products.data.map((p) => (
+            {rows.map((p) => (
               <tr key={p.id} onClick={() => setView({ mode: "detail", id: p.id })} style={{ cursor: "pointer" }}>
                 <td><span className="id-link">{p.product_number}</span></td>
                 <td>{p.name}</td>
@@ -130,7 +138,8 @@ export function Products({
             ))}
           </tbody>
         </table>
-      )}
+        );
+      })()}
     </div>
   );
 }
