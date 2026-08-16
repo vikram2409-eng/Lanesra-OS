@@ -17,6 +17,7 @@ pub mod product;
 pub mod relationship;
 pub mod report;
 pub mod quote;
+pub mod screen_layout;
 pub mod status_transition;
 pub mod task;
 pub mod user;

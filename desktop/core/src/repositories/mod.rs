@@ -15,6 +15,7 @@ pub mod order_repo;
 pub mod product_repo;
 pub mod quote_repo;
 pub mod relationship_repo;
+pub mod screen_layout_repo;
 pub mod session_repo;
 pub mod status_transition_repo;
 pub mod task_repo;

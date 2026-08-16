@@ -25,6 +25,7 @@ use lanesra_core::models::business_rule::{BusinessRuleInput, BusinessRuleUpdate}
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
+use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate};
 use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
@@ -34,7 +35,7 @@ use lanesra_core::services::{
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
-    quote_service, relationship_service, report_service, search_service, status_transition_service, task_service,
+    quote_service, relationship_service, report_service, screen_layout_service, search_service, status_transition_service, task_service,
     user_service, workflow_service, workspace_service,
 };
 
@@ -499,6 +500,42 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "delete_custom_object" => {
             custom_object_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
             Ok(Value::Null)
+        }
+
+        "list_screen_layouts" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(screen_layout_service::list_layouts(conn, &require_workspace_id(conn)?, &entity_type)?)
+        }
+        "create_screen_layout" => {
+            let input: ScreenLayoutInput = arg(args, "input")?;
+            to_value(screen_layout_service::create_layout(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_screen_layout" => {
+            let id: String = arg(args, "id")?;
+            let update: ScreenLayoutUpdate = arg(args, "update")?;
+            to_value(screen_layout_service::update_layout(conn, &id, &update, actor)?)
+        }
+        "publish_screen_layout" => {
+            to_value(screen_layout_service::publish_layout(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "unpublish_screen_layout" => {
+            to_value(screen_layout_service::unpublish_layout(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "revert_screen_layout_draft" => {
+            to_value(screen_layout_service::revert_layout_draft(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "make_screen_layout_default" => {
+            to_value(screen_layout_service::make_default(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "delete_screen_layout" => {
+            screen_layout_service::delete_layout(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "effective_screen_layout" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let workspace_id = require_workspace_id(conn)?;
+            let tabs = screen_layout_service::resolve_effective_layout(conn, &workspace_id, &entity_type, actor)?;
+            to_value(lanesra_core::services::screen_layout_service::EffectiveLayout { tabs })
         }
 
         "list_custom_records" => {

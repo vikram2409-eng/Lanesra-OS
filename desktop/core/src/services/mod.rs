@@ -19,6 +19,7 @@ pub mod quote_service;
 pub mod relationship_service;
 pub mod report_service;
 pub mod custom_report_service;
+pub mod screen_layout_service;
 pub mod search_service;
 pub mod status_transition_service;
 pub mod task_service;
