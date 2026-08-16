@@ -82,6 +82,12 @@
 .side-nav::-webkit-scrollbar{width:6px}
 .side-nav::-webkit-scrollbar-track{background:transparent}
 .side-nav::-webkit-scrollbar-thumb{background:#334155;border-radius:999px}
+/* App Builder: the sidebar App Switcher sits above the nav buttons inside
+   #sideNav - a plain <select> defaults to a light native appearance that
+   doesn't fit the dark sidebar, so it's restyled to match .side-nav button. */
+.side-app-switcher{padding:0 2px 10px;flex:0 0 auto}
+.side-app-switcher select{width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:10px;padding:9px 10px;font-size:13px;font-weight:700;cursor:pointer}
+.side-app-switcher select:hover{background:#243244}
 .side-bottom{
   position:static;
   flex:0 0 auto;

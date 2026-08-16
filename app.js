@@ -100,6 +100,10 @@ let viewFilter=null;
 // any - {type:'companies'|'contacts', id}. Cleared by any real navigation
 // so the sidebar/breadcrumbs always return to the list.
 let detailRecord=null;
+// App Builder: which app (data.apps entry, if any) the sidebar App
+// Switcher currently has selected - `null` is "All", the pre-App-Builder
+// sidebar with every section visible. See navSections()/activeApp() below.
+let activeAppId=null;
 const save=()=>localStorage.setItem(storeKey,JSON.stringify(data));
 const uid=()=>Math.random().toString(36).slice(2,10);
 const pad=(n,w=4)=>String(n).padStart(w,'0');
@@ -215,6 +219,8 @@ function ensureAdminData(){
  if(!data.uiLayouts)data.uiLayouts={};
  if(!data.dashboards||!data.dashboards.length)data.dashboards=[freshDashboard('Default',true)];
  if(!data.dashboards.some(d=>d.isDefault))data.dashboards[0].isDefault=true;
+ if(!data.apps)data.apps=[];
+ (data.apps||[]).forEach(a=>{if(!a.permissions)a.permissions=[];if(!a.objectKeys)a.objectKeys=[];if(a.description===undefined)a.description=''});
  if(!data.integrationJobs)data.integrationJobs=[];
  if(!data.apiEndpoints)data.apiEndpoints=[];
  if(!data.externalConnections)data.externalConnections=[];
@@ -337,11 +343,11 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering','kpis','dashboards']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users']},
- {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts']},
+ {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts','apps']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
 ];
@@ -738,9 +744,9 @@ function landing(){
 
 function appShell(){
  document.title='Lanesra OS Demo';
- $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav" id="sideNav">${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button></nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.26.0</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
- document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;if(current==='admin')adminView='landing';renderView()});
- $('#resetDemo').onclick=()=>{data=structuredClone(seed);ensureAdminData();syncCustomObjectRegistry();renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored');refreshNotifBadge();renderView()};
+ $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav" id="sideNav"></nav><div class="side-bottom"><div class="side-meta"><strong>Early Access v0.26.0</strong><div class="side-product-links"><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
+ renderSidebarNav();
+ $('#resetDemo').onclick=()=>{data=structuredClone(seed);ensureAdminData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored');refreshNotifBadge();renderView()};
  const searchInput=$('#globalSearch'), searchBox=$('#searchResults');
  const searchable=[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['products','Product / Service'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']];
  function closeSearch(){searchBox.hidden=true;searchBox.innerHTML=''}
@@ -805,11 +811,25 @@ function selectHtml(name,label,items,value,required=true,cls='field'){return `<d
 // innerHTML - unlike #view/#adminBody it's never re-rendered by
 // renderView()/renderAdminTab(), so a Custom Objects create/edit/delete
 // (or Reset demo) needs to explicitly rebuild it or its entry would never
-// appear/disappear from navigation.
+// appear/disappear from navigation. App Builder: also owns the App
+// Switcher <select> sitting above the nav buttons, so switching apps -
+// which changes which sections are visible - only ever needs this one
+// function called again, same as any other sidebar-affecting change.
 function renderSidebarNav(){
  const nav=$('#sideNav'); if(!nav)return;
- nav.innerHTML=`${Object.keys(labels).map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button>`;
+ const apps=ensureApps().filter(a=>a.isPublished);
+ const switcherHtml=apps.length?`<div class="side-app-switcher"><select id="appSwitcher" aria-label="Switch app"><option value="">All</option>${apps.map(a=>`<option value="${a.id}" ${a.id===activeAppId?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select></div>`:'';
+ nav.innerHTML=`${switcherHtml}${navSections().map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button>`;
  document.querySelectorAll('[data-nav]').forEach(b=>{b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;if(current==='admin')adminView='landing';renderView()};b.classList.toggle('active',b.dataset.nav===current)});
+ const switcher=$('#appSwitcher');
+ if(switcher)switcher.onchange=e=>{
+  activeAppId=e.target.value||null;
+  // A section the just-left app exposed may not exist in the new scope
+  // (or "All") - land back on Dashboard rather than risk stranding on a
+  // now-hidden nav item, same reasoning App.tsx's switchApp uses on desktop.
+  current='dashboard';viewFilter=null;detailRecord=null;
+  renderSidebarNav();renderView();
+ };
 }
 function renderView(){
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
@@ -857,7 +877,15 @@ function dashboard(){
  // override the fixed KPI row and add chart/record-list widget rows -
  // `null` (the common case until an admin builds one) falls back to the
  // pre-this-feature behavior below, unchanged. See effectiveDashboardWidgets.
- const effective=effectiveDashboardWidgets();
+ // App Builder: when the sidebar App Switcher has an app selected and that
+ // app names a dashboard, its *published* widgets win instead - the same
+ // "content only ever comes from published, never draft" rule the Default
+ // dashboard above already follows. A picked-but-unpublished dashboard (or
+ // one that's since been deleted) falls back exactly like "no app selected"
+ // would, not a broken/empty state.
+ const appForDash=activeApp();
+ const appDashboard=appForDash&&appForDash.dashboardId?dashboardById(appForDash.dashboardId):null;
+ const effective=appDashboard?appDashboard.publishedWidgets:effectiveDashboardWidgets();
  const kpis=effective
   ?effective.filter(w=>w.kind==='kpi').map(w=>KPI_DEFS.find(k=>k.key===w.config.kpiKey)).filter(Boolean)
   :visibleKpis();
@@ -1588,7 +1616,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -2148,6 +2176,147 @@ function dashboardPreviewModal(){
  const body=`<p class="muted" style="font-size:12px;margin-top:0">Shows "${dash.name}"'s draft, as it will appear once published. Values are illustrative here.</p><div style="display:flex;flex-wrap:wrap;gap:12px">${dash.draftWidgets.length?dash.draftWidgets.map(w=>`<div class="kpi" style="min-width:140px;cursor:default"><div class="kpi-value">—</div><div class="kpi-label">${dashboardWidgetLabel(w,reports)}</div></div>`).join(''):'<span class="muted">No widgets on this dashboard yet.</span>'}</div><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
  modal(`Preview: ${dash.name}`,body);
  $('[data-close]').onclick=closeModal;
+}
+// ---- App Builder (mirrors the desktop edition's app_service) --------------
+// The packaging layer on top of everything above it: an Administrator
+// groups a set of already-existing objects (built-in or custom), their
+// screens and a dashboard into one named, publishable application - with
+// its own icon and access grants - the same way Salesforce's AppDefinition
+// scopes a Lightning app. No draft/publish content fork like Screen layouts
+// or Dashboards above (an app's grouping doesn't need a preview-before-
+// going-live step) - just a visibility boolean, `isPublished`.
+//
+// Access grants (role or one specific person, viewer or editor) are stored
+// and editable here, the same genuinely-new-per-app permission model the
+// desktop edition ships - but this browser demo has no signed-in user (the
+// same limitation every other role assignment here already has, see
+// usersTab's own note), so the sidebar App Switcher simply shows every
+// *published* app to everyone; permission grants are illustrative only.
+const APP_ICON_CHOICES=['⬡','🏠','👥','💼','🔧','📦','🏗️','📋','🚗','🏭'];
+const APP_PERMISSION_LEVELS=['viewer','editor'];
+// Built-in object types an app can group, using the same capitalized-
+// singular vocabulary the desktop edition's object_keys use - a custom
+// object contributes its own lowercase key instead (== its data[key]
+// section already), exactly like everywhere else custom objects plug into
+// a fixed vocabulary (business rules, workflow, custom fields).
+const APP_OBJECT_TYPES=['Company','Contact','Opportunity','Quote','Order','Invoice','Contract','Task','Product'];
+const APP_OBJECT_TYPE_LABELS={Company:'Companies',Contact:'Contacts',Opportunity:'Sales Pipeline',Quote:'Quotes',Order:'Orders',Invoice:'Invoices',Contract:'Contracts',Task:'Tasks',Product:'Products'};
+// Maps an object_keys entry to the sidebar section it resolves to via
+// sectionForAppObjectKey below - mirrors AppShell.tsx's own sectionFor.
+const APP_OBJECT_TYPE_SECTION={Company:'companies',Contact:'contacts',Opportunity:'pipeline',Quote:'quotes',Order:'orders',Invoice:'invoices',Contract:'contracts',Task:'tasks',Product:'products'};
+function sectionForAppObjectKey(k){return APP_OBJECT_TYPE_SECTION[k]||k}
+function appObjectChoices(){return [...APP_OBJECT_TYPES.map(k=>({key:k,label:APP_OBJECT_TYPE_LABELS[k]})),...activeCustomObjects().map(o=>({key:o.key,label:o.labelPlural}))]}
+function freshApp(name,icon){return {id:uid(),name,icon,description:'',objectKeys:[],dashboardId:null,isPublished:false,permissions:[]}}
+function ensureApps(){if(!data.apps)data.apps=[];return data.apps}
+function appLabel(a){return `${a.icon} ${a.name}`}
+function appPermPrincipalLabel(p){if(p.principalType==='role')return p.principalId;const u=(data.users||[]).find(u=>u.id===p.principalId);return u?u.name:'(user removed)'}
+function appPermLevelLabel(l){return l==='editor'?'Editor':'Viewer'}
+// The currently selected app, only if it's still published - an app
+// unpublished or deleted out from under an active selection silently falls
+// back to "All" everywhere this is consulted (navSections, the live
+// Dashboard), never a broken/half-filtered state.
+function activeApp(){const app=ensureApps().find(a=>a.id===activeAppId);return (app&&app.isPublished)?app:null}
+// Structural sections an active app never hides - Dashboard and Reports
+// aren't object-specific, and Admin is a fixed button outside this list
+// entirely (see renderSidebarNav) so it's never filtered either.
+const APP_STRUCTURAL_SECTIONS=new Set(['dashboard','reports']);
+function navSections(){
+ const app=activeApp();
+ if(!app)return Object.keys(labels);
+ const allowed=new Set(app.objectKeys.map(sectionForAppObjectKey));
+ return Object.keys(labels).filter(k=>APP_STRUCTURAL_SECTIONS.has(k)||allowed.has(k));
+}
+let appsSelectedId=null;
+function appsTab(body){
+ const apps=ensureApps();
+ if(!appsSelectedId||!apps.some(a=>a.id===appsSelectedId))appsSelectedId=apps[0]?.id||null;
+ const app=apps.find(a=>a.id===appsSelectedId);
+ const dashboards=ensureDashboards();
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>Apps</h3><button class="btn btn-primary" id="addApp" type="button">+ New app</button></div>
+ <p class="muted" style="font-size:13px">Group a set of objects, their screens and a dashboard into one named, publishable application, with its own icon and access grants. Every primitive an app assembles — Custom Objects, Screen/App Builder, Dashboards — already ships and works elsewhere in Admin; this is the packaging layer on top.</p>
+ ${apps.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0">${apps.map(a=>`<button type="button" class="tab ${a.id===appsSelectedId?'active':''}" data-select-app="${a.id}">${appLabel(a)}${a.isPublished?'':' · Draft'}</button>`).join('')}</div>`:'<div class="empty">No apps yet.</div>'}
+ ${app?appEditorHtml(app,dashboards):''}
+ </div>`;
+ $('#addApp').onclick=()=>{const name=prompt('New app name?','Property Management');if(!name)return;const a=freshApp(name.trim(),APP_ICON_CHOICES[0]);apps.push(a);save();appsSelectedId=a.id;appsTab(body)};
+ if(!app)return;
+ body.querySelectorAll('[data-select-app]').forEach(b=>b.onclick=()=>{appsSelectedId=b.dataset.selectApp;appsTab(body)});
+ wireAppEditor(body,app,()=>appsTab(body));
+}
+function appEditorHtml(app,dashboards){
+ const objectChoices=appObjectChoices();
+ return `
+ <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:16px 0">
+  <div class="field" style="margin:0"><label>App name</label><input id="appName" value="${app.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
+  <div class="field" style="margin:0"><label>Icon</label><select id="appIcon">${APP_ICON_CHOICES.map(i=>`<option value="${i}" ${app.icon===i?'selected':''}>${i}</option>`).join('')}</select></div>
+  <div class="field" style="margin:0;flex:1;min-width:220px"><label>Description (optional)</label><input id="appDescription" value="${app.description||''}" placeholder="What this app is for" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
+ </div>
+ <div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <span class="badge">${app.isPublished?'Published':'Draft'}</span>
+  <button class="btn ${app.isPublished?'btn-secondary':'btn-primary'}" id="togglePublishApp" type="button">${app.isPublished?'Unpublish':'Publish'}</button>
+  <button class="btn btn-secondary" id="deleteApp" type="button">Delete app</button>
+ </div>
+ <div style="font-weight:700;margin-bottom:8px">Objects in this app</div>
+ <p class="muted" style="font-size:12px;margin-top:0">${app.objectKeys.length?`${app.objectKeys.length} object${app.objectKeys.length===1?'':'s'} selected.`:'Pick at least one object before publishing.'}</p>
+ <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px">${objectChoices.map(c=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" data-app-object="${c.key}" ${app.objectKeys.includes(c.key)?'checked':''}> ${c.label}</label>`).join('')}</div>
+ <div class="field" style="max-width:320px;margin-bottom:20px"><label>Dashboard for this app (optional)</label><select id="appDashboard"><option value="">No dashboard</option>${dashboards.map(d=>`<option value="${d.id}" ${app.dashboardId===d.id?'selected':''}>${d.name}${d.isDefault?' · Default':''}</option>`).join('')}</select></div>
+ ${appPermissionsHtml(app)}
+ `;
+}
+function appPermissionsHtml(app){
+ const perms=app.permissions||[];
+ const grantedRoles=new Set(perms.filter(p=>p.principalType==='role').map(p=>p.principalId));
+ const grantedUserIds=new Set(perms.filter(p=>p.principalType==='user').map(p=>p.principalId));
+ const availableRoles=DEMO_LAYOUT_ROLES.filter(r=>!grantedRoles.has(r));
+ const availableUsers=(data.users||[]).filter(u=>!grantedUserIds.has(u.id));
+ return `<div class="panel" style="background:var(--surface-alt,#f7f8fc);margin-top:4px">
+ <div style="font-weight:700;margin-bottom:8px">Access</div>
+ <p class="muted" style="font-size:12px;margin-top:0">Administrators always see every published app. Everyone else would need a grant here — to a role, or to one specific person — on the desktop edition; this browser demo has no signed-in user, so the App Switcher shows every published app to everyone regardless of grants below (see this section's own doc comment).</p>
+ ${perms.length?`<div style="display:flex;flex-direction:column;gap:6px;margin:8px 0">${perms.map(p=>`<span class="badge" style="display:inline-flex;align-items:center;gap:8px;justify-content:space-between;width:fit-content">${p.principalType==='role'?'Role':'Person'}: ${appPermPrincipalLabel(p)} — ${appPermLevelLabel(p.level)}<button class="icon-btn" data-revoke-perm="${p.id}" type="button" title="Remove this grant">×</button></span>`).join('')}</div>`:'<p class="empty">No grants yet.</p>'}
+ <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+  ${availableRoles.length?`<span style="display:inline-flex;gap:6px;align-items:center"><select id="grantRoleSelect"><option value="">Choose a role…</option>${availableRoles.map(r=>`<option value="${r}">${r}</option>`).join('')}</select><select id="grantRoleLevel">${APP_PERMISSION_LEVELS.map(l=>`<option value="${l}">${appPermLevelLabel(l)}</option>`).join('')}</select><button class="btn btn-secondary" id="grantRoleBtn" type="button">+ Grant role</button></span>`:''}
+  ${availableUsers.length?`<span style="display:inline-flex;gap:6px;align-items:center"><select id="grantUserSelect"><option value="">Choose a person…</option>${availableUsers.map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}</select><select id="grantUserLevel">${APP_PERMISSION_LEVELS.map(l=>`<option value="${l}">${appPermLevelLabel(l)}</option>`).join('')}</select><button class="btn btn-secondary" id="grantUserBtn" type="button">+ Grant person</button></span>`:''}
+ </div>
+ </div>`;
+}
+function wireAppEditor(body,app,rerender){
+ $('#appName').onchange=e=>{app.name=e.target.value.trim()||app.name;save();setTimeout(rerender,0)};
+ $('#appIcon').onchange=e=>{app.icon=e.target.value;save();rerender()};
+ $('#appDescription').onchange=e=>{app.description=e.target.value.trim();save()};
+ body.querySelectorAll('[data-app-object]').forEach(cb=>cb.onchange=()=>{
+  const key=cb.dataset.appObject;
+  app.objectKeys=cb.checked?[...app.objectKeys,key]:app.objectKeys.filter(k=>k!==key);
+  save();rerender();
+ });
+ $('#appDashboard').onchange=e=>{app.dashboardId=e.target.value||null;save()};
+ $('#togglePublishApp').onclick=()=>{
+  if(!app.isPublished&&app.objectKeys.length===0){toast('Add at least one object before publishing this app');return}
+  app.isPublished=!app.isPublished;
+  if(!app.isPublished&&activeAppId===app.id)activeAppId=null;
+  save();toast(app.isPublished?'App published':'App unpublished');renderSidebarNav();rerender();
+ };
+ $('#deleteApp').onclick=()=>{
+  if(!confirm(`Delete the "${app.name}" app? This can't be undone.`))return;
+  data.apps=ensureApps().filter(a=>a.id!==app.id);
+  if(activeAppId===app.id)activeAppId=null;
+  save();appsSelectedId=null;toast('App deleted');renderSidebarNav();appsTab(body);
+ };
+ const grantRoleBtn=$('#grantRoleBtn'); if(grantRoleBtn)grantRoleBtn.onclick=()=>{
+  const role=$('#grantRoleSelect').value; if(!role)return;
+  const level=$('#grantRoleLevel').value;
+  app.permissions.push({id:uid(),principalType:'role',principalId:role,level});
+  save();rerender();
+ };
+ const grantUserBtn=$('#grantUserBtn'); if(grantUserBtn)grantUserBtn.onclick=()=>{
+  const userId=$('#grantUserSelect').value; if(!userId)return;
+  const level=$('#grantUserLevel').value;
+  app.permissions.push({id:uid(),principalType:'user',principalId:userId,level});
+  save();rerender();
+ };
+ body.querySelectorAll('[data-revoke-perm]').forEach(b=>b.onclick=()=>{
+  app.permissions=app.permissions.filter(p=>p.id!==b.dataset.revokePerm);
+  save();rerender();
+ });
 }
 // ---- Integrations (Phase 5: UI-only simulation) ---------------------------
 // New to the demo (and not on desktop either): scheduled data jobs, exposed
@@ -3293,14 +3462,14 @@ function roadmapPage(){
   ['Desktop: Global search & list-view filtering','A topbar search box (Companies, Contacts, Opportunities, Products, Quotes, Orders, Invoices, Contracts, Tasks, active custom objects, plus any custom field flagged Searchable) resolves matches to a real display name via the entity-registry dispatcher and jumps straight to the record, reusing the exact same one-shot openId navigation every ID hyperlink already uses. Every list screen also gained filter controls for whichever custom fields an admin flagged Filterable — a select/boolean field filters by exact match, text by case-insensitive contains — client-side against one bulk values fetch per screen. Gives the is_searchable/is_filterable capability flags their first real use since Phase E introduced them. Desktop only; the online demo\'s own simple ⌘K search stays unaffected, as planned.'],
   ['Self-hosted internet deployment','The Docker-packaged Team Workspace server (axum) can now be exposed on the open internet on an organization\'s own domain/infrastructure, still self-hosted and never a Lanesra-run SaaS. LANESRA_TRUST_PROXY_HTTPS marks the session cookie Secure and sends Strict-Transport-Security once a reverse proxy is actually terminating TLS in front of it — off by default so the original LAN-only, plain-HTTP behavior is unchanged unless explicitly opted into. LANESRA_ALLOWED_ORIGINS adds a credentialed CORS layer for the rare case the frontend is served from a different origin than the API — also off (same-origin only) by default. Every response now also carries always-on security headers (nosniff, deny framing, a trimmed Referer). The README documents minimal Caddy and nginx reverse-proxy recipes to pair with it.'],
   ['Screen/App Builder — full, 4 phases','What was the single largest item on this roadmap, now the biggest thing shipped on it: a real drag-and-drop layout builder for any object\'s create/edit form, on both the desktop app and the online demo. Phase 1 — named layouts, made of tabs of field sections, assigned to roles with a required Default fallback, and Draft → Publish (desktop had no layout designer at all before this; the demo\'s previous "Screen layouts" was field-order-only). Phase 2 — 1-3 column sections with a per-field full-width span. Phase 3 — placing a custom relationship\'s related-records list on a specific tab, with anything a tab doesn\'t claim still showing in an always-visible spot rather than disappearing. Phase 4 — the same published layout also drives the record\'s read-only detail/Overview view, not just the edit form, so a custom field an admin added is now visible there too. This is exactly the mechanism behind <a href="/platform">building your own app</a> on top of a custom object, not just reordering a form.'],
-  ['Dashboard customization — Phase 1','Admin → Dashboards (desktop) lets an Administrator build multiple named dashboard layouts — each an ordered list of KPI-tile widgets — and assign them by role, with a required Default fallback, reusing the exact same draft/publish/role-resolution model Screen/App Builder just shipped. No dashboard published yet falls back to exactly the fixed KPI picker that existed before this feature, unchanged. Chart and record-list widgets, and an online demo mirror, are next (see Near-term backlog).'],
+  ['Dashboard customization — full, 3 phases + online demo','Admin → Dashboards lets an Administrator build multiple named dashboard layouts — each an ordered list of widgets — and assign them by role, with a required Default fallback, reusing the exact same draft/publish/role-resolution model Screen/App Builder shipped. Phase 1 — KPI tiles. Phase 2 — chart widgets, reusing the existing Custom Reports engine. Phase 3 — record-list widgets, a short list of an object\'s most recent (or, for Tasks and Invoices, soonest-due) records that jump straight to that record on click. No dashboard published yet falls back to exactly the fixed KPI picker that existed before this feature, unchanged. Shipped on both the desktop app and the online demo.'],
+  ['App Builder — Phase 1: publish a named app from your custom objects','Admin → Apps (desktop and online demo) groups a set of already-existing objects (built-in or custom), their screens and a dashboard into one named, publishable application — Property Management, Recruitment, Asset Tracking, whatever your organization actually runs — with its own icon, a sidebar App Switcher that filters navigation down to that app\'s objects, and an app-scoped dashboard, the same way Salesforce\'s AppDefinition scopes a Lightning app. Access is a genuinely new permission model — a grant to a role or to one specific person, at Viewer or Editor — not the existing role-checkbox pattern; on the desktop app, Administrators always see every published app and everyone else needs an explicit grant, while the browser demo (no signed-in user) simply shows every published app to everyone. What "Editor" doesn\'t yet do: gate individual create/update/delete commands server-side — it\'s a resolved, frontend-visible level, not yet a command-layer enforcement, which is the natural next phase.'],
  ];
  const planned=[
-  ['Dashboard customization — Phase 2/3: chart + record-list widgets, and the online demo mirror','Extends the shipped Phase 1 widget catalog (KPI tiles only) with a chart widget (reusing the existing Custom Reports engine — pick an object, group by status/stage or a reportable custom field, count or sum) and a record-list widget (a short list of recent/upcoming records of any type, with basic filters), on both platforms — plus mirroring the whole feature into the online demo, which doesn\'t have it yet.',null,'M'],
+  ['App Builder — Phase 2: server-side access enforcement','App Builder Phase 1 resolves and exposes an app\'s Viewer/Editor access level so the frontend can gate its own controls, but doesn\'t yet block a create/update/delete command server-side for a Viewer who reaches an app\'s object through some other route (Global search, a related-record link). Phase 2 closes that gap on the desktop app\'s command layer.',null,'M'],
   ['Saved Views & Bulk Actions','Global search and per-field list filtering shipped this round; saving a filter/sort/column/grouping combination as a named view (Private or Shared, with an admin-settable object default) — and reusing it as a dashboard/report data source — didn\'t. Bulk operations (update a field, reassign owner, change status, export, tag, archive across a multi-select) are the natural pairing once a saved view exists to select from.',null,'M'],
  ];
  const proposed=[
-  ['App Builder — publish a named app from your custom objects','Right now, a custom object you define shows up in the same flat sidebar as every built-in one. App Builder groups a set of objects, their screens, a dashboard and a role assignment into one named, publishable application — Property Management, Recruitment, Asset Tracking, whatever your organization actually runs — with its own navigation and icon, the same way Salesforce\'s AppDefinition scopes a Lightning app. Every primitive it would assemble (Custom Objects, Relationships, Screen/App Builder, Business Rules, Workflow, Dashboards, Reports) already ships and works today; this is the packaging layer on top, and the flagship move in the platform story — see <a href="/platform">what you can build</a> with what already exists.','The build itself is mostly assembly of existing primitives behind a new AppDefinition record and a navigation-grouping UI, not new automation logic — the open question is the creation flow\'s exact shape (a guided wizard vs. assembling an app from already-built pieces) and whether v1 needs per-app permission scoping beyond the existing role system.','App Builder','L'],
   ['Approval Engine','Optional approval routing for a record — a high-value order, a large quote discount, a contract — with Pending/Approved/Rejected/Cancelled states, approver comments, and the result visible on the record, in audit history, and to workflows. Explicitly optional so it never complicates the simple SMB flows that don\'t need it.','Needs a decision on where approval criteria live (a standalone rule type vs. reusing the Business Rules condition engine) and how deep multi-step/multi-approver routing should go in v1 vs. later.',null,'M'],
   ['APIs & Webhooks','A generic REST API over the same object services Custom Objects already use — CRUD + metadata endpoints without a bespoke endpoint per object — plus outbound webhooks (record.created/updated/deleted, workflow.completed/failed) with signed payloads, retry and an execution log.','Authentication model for a self-hosted, no-mandatory-cloud product needs deciding (API keys vs. OAuth client credentials), and this is the one item here that directly enables real external integrations, so it\'s worth sequencing deliberately rather than rushing.',null,'L'],
   ['Full drag-and-drop report builder','The shipped report builder covers pick-an-object → group-by-field (including custom fields) → count or sum. A richer builder — multiple group-bys, filters, joins across objects, a visual canvas — was scoped down to that simpler version by explicit choice.','Worth revisiting once real usage shows the count/sum + single group-by shape is genuinely too narrow.',null,'M–L'],
@@ -3398,8 +3567,8 @@ function platformPage(){
  $('#app').innerHTML=`${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">One platform, any business</div><h1>Lanesra OS isn't only a CRM. It's what your CRM is built on.</h1><p>Companies, Contacts, Opportunities, Quotes, Orders, Invoices, Contracts and Tasks — the sales system you get out of the box — aren't hardcoded into Lanesra. They're one app built from the same platform every workspace has underneath it. An Administrator gets the identical building blocks, from a settings screen, to model whatever your organization actually runs on.</p><div class="hero-actions"><a class="btn btn-primary" href="/demo">Try the live demo →</a><a class="btn btn-secondary" href="#examples">See what you could build ↓</a></div></div></section>
  <section class="section"><div class="container narrow"><div class="section-head" style="text-align:center;margin:0 auto 8px"><div class="eyebrow">The building blocks</div><h2>Seven primitives. One workspace.</h2><p class="muted">Every example below is assembled from these — nothing industry-specific is baked into the product itself.</p></div><div class="platform-primitives">${primitives.map((p,i)=>`<span class="platform-primitive"><span class="n">${i+1}</span>${p}</span>${i<primitives.length-1?'<span class="platform-arrow">→</span>':''}`).join('')}</div></div></section>
  <section id="examples" class="section" style="background:var(--surface-alt,#f7f8fc)"><div class="container"><div class="section-head"><div class="eyebrow">Make it real</div><h2>What this actually becomes.</h2><p class="muted">Four businesses that look nothing like a CRM, each modeled entirely from Admin → Custom Objects, Relationships, Screen layouts, Business rules, Workflow automation and Dashboards.</p></div><div class="app-examples">${apps.map(a=>`<article class="app-example-card"><div class="eyebrow">${a.eyebrow}</div><h3>${a.name}</h3><p class="tagline">${a.tagline}</p><ul class="example-detail">${a.details.map(d=>`<li>${d}</li>`).join('')}</ul><div class="built-from">${a.builtFrom.map(b=>`<span>${b}</span>`).join('')}</div></article>`).join('')}</div></div></section>
- <section class="section"><div class="container narrow"><div class="honesty-note"><h3>What's real today, and what's next</h3><p>Every building block used above — Custom Objects, Relationships, Screen/App Builder, Business Rules, Workflow Automation, Dashboards, Reports — is shipped and working right now, in both the desktop app and the <a href="/demo">online demo</a>. Open Admin → Custom Objects in the demo today and you can start building any of these four examples yourself, this minute.</p><p>What's <em>not</em> built yet is the packaging step: grouping a set of these into one named, publishable application with its own navigation and icon, instead of every custom object sharing the same flat sidebar. That's <b>App Builder</b>, the current flagship item on the <a href="/roadmap">roadmap</a> — everything it would assemble already exists.</p></div></div></section>
- <section class="section"><div class="container cta"><h2>Go build something.</h2><p style="color:#cbd5e1;max-width:640px;margin:0 auto 24px">The live demo already has Admin → Custom Objects, Relationships, Screen layouts, Business rules, Workflow automation and Dashboards turned on. No account required.</p><div class="hero-actions" style="justify-content:center"><a class="btn btn-primary" href="/demo">Try the live demo →</a><a class="btn btn-secondary" href="/roadmap">View the roadmap</a></div></div></section>
+ <section class="section"><div class="container narrow"><div class="honesty-note"><h3>What's real today, and what's next</h3><p>Every building block used above — Custom Objects, Relationships, Screen/App Builder, Business Rules, Workflow Automation, Dashboards, Reports — is shipped and working right now, in both the desktop app and the <a href="/demo">online demo</a>. Open Admin → Custom Objects in the demo today and you can start building any of these four examples yourself, this minute.</p><p>The packaging step is shipped too: <b>App Builder</b> (Admin → Apps) groups a set of these into one named, publishable application with its own icon, a sidebar App Switcher and access grants, instead of every custom object sharing the same flat sidebar — <a href="/roadmap">see what's next on the roadmap</a>.</p></div></div></section>
+ <section class="section"><div class="container cta"><h2>Go build something.</h2><p style="color:#cbd5e1;max-width:640px;margin:0 auto 24px">The live demo already has Admin → Custom Objects, Relationships, Screen layouts, Business rules, Workflow automation, Dashboards and Apps turned on. No account required.</p><div class="hero-actions" style="justify-content:center"><a class="btn btn-primary" href="/demo">Try the live demo →</a><a class="btn btn-secondary" href="/roadmap">View the roadmap</a></div></div></section>
  </main>${publicFooter()}`;
  bindPublicNav();
 }
