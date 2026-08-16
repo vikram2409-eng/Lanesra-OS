@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 
 import { api } from "../lib/api";
 import { fieldEffectsFor, restrictedChoicesFor } from "../lib/businessRules";
@@ -17,10 +18,12 @@ function fieldIsHidden(def: CustomFieldDefinition, effect: string | undefined): 
 }
 
 /**
- * Renders the active custom fields for an entity type inside whatever
- * form is using it - expects to sit inside a `.form-grid` container, since
- * it only renders `.form-field` children, not a wrapper div, so it lays
- * out identically to the form's built-in fields (FR-CFG-04).
+ * The active custom fields for an entity type, each already rendered as a
+ * `.form-field` element and keyed by its field key - the shared logic
+ * behind `CustomFieldsSection` below, pulled out into a hook so a form
+ * that needs to place custom fields into a Screen layout's tabs/sections
+ * (via `LayoutFormFields`) can do so, rather than always appending them
+ * as one flat trailing block.
  *
  * `status` is the entity's current built-in status value, used as the
  * trigger context for any conditional business rules (ADM-BR) - a rule
@@ -31,7 +34,7 @@ function fieldIsHidden(def: CustomFieldDefinition, effect: string | undefined): 
  * on save (the other cosmetic effects have nothing for the server to
  * validate - see that function's comment).
  */
-export function CustomFieldsSection({
+export function useCustomFieldElements({
   entityType,
   status,
   values,
@@ -41,7 +44,7 @@ export function CustomFieldsSection({
   status: string;
   values: CustomFieldValues;
   onChange: (values: CustomFieldValues) => void;
-}) {
+}): { order: string[]; elements: Record<string, ReactNode> } {
   const defs = useQuery({
     queryKey: ["customFieldDefinitions", entityType],
     queryFn: () => api.listCustomFieldDefinitions(entityType, true),
@@ -51,7 +54,7 @@ export function CustomFieldsSection({
     queryFn: () => api.listBusinessRules(entityType, true),
   });
 
-  if (!defs.data || defs.data.length === 0) return null;
+  if (!defs.data || defs.data.length === 0) return { order: [], elements: {} };
 
   const context = { ...values, status };
   const effects = fieldEffectsFor(rules.data ?? [], context);
@@ -61,56 +64,70 @@ export function CustomFieldsSection({
     onChange({ ...values, [key]: value });
   }
 
-  return (
-    <>
-      {defs.data
-        .filter((def) => !fieldIsHidden(def, effects[def.key]))
-        .map((def) => {
-          const required = def.required || effects[def.key] === "require";
-          const locked = effects[def.key] === "lock";
-          const allowedOptions = restrictedChoices[def.key]
-            ? def.options.filter((o) => restrictedChoices[def.key].split(LIST_SEPARATOR).includes(o))
-            : def.options;
-          return (
-            <div className="form-field" key={def.id}>
-              <label>
-                {def.label}
-                {required ? " *" : ""}
-                {locked ? " 🔒" : ""}
-              </label>
-              {def.field_type === "select" && (
-                <select value={values[def.key] ?? ""} onChange={(e) => setValue(def.key, e.target.value)} required={required} disabled={locked}>
-                  <option value="">{def.placeholder || "— Select —"}</option>
-                  {allowedOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {def.field_type === "boolean" && (
-                <select value={values[def.key] ?? ""} onChange={(e) => setValue(def.key, e.target.value)} disabled={locked}>
-                  <option value="">—</option>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              )}
-              {(def.field_type === "text" || def.field_type === "number" || def.field_type === "date") && (
-                <input
-                  type={def.field_type === "date" ? "date" : def.field_type === "number" ? "number" : "text"}
-                  value={values[def.key] ?? ""}
-                  onChange={(e) => setValue(def.key, e.target.value)}
-                  required={required}
-                  disabled={locked}
-                  placeholder={def.placeholder ?? undefined}
-                />
-              )}
-              {def.help_text && (
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{def.help_text}</span>
-              )}
-            </div>
-          );
-        })}
-    </>
-  );
+  const visible = defs.data.filter((def) => !fieldIsHidden(def, effects[def.key]));
+  const elements: Record<string, ReactNode> = {};
+  for (const def of visible) {
+    const required = def.required || effects[def.key] === "require";
+    const locked = effects[def.key] === "lock";
+    const allowedOptions = restrictedChoices[def.key]
+      ? def.options.filter((o) => restrictedChoices[def.key].split(LIST_SEPARATOR).includes(o))
+      : def.options;
+    elements[def.key] = (
+      <div className="form-field" key={def.id}>
+        <label>
+          {def.label}
+          {required ? " *" : ""}
+          {locked ? " 🔒" : ""}
+        </label>
+        {def.field_type === "select" && (
+          <select value={values[def.key] ?? ""} onChange={(e) => setValue(def.key, e.target.value)} required={required} disabled={locked}>
+            <option value="">{def.placeholder || "— Select —"}</option>
+            {allowedOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        )}
+        {def.field_type === "boolean" && (
+          <select value={values[def.key] ?? ""} onChange={(e) => setValue(def.key, e.target.value)} disabled={locked}>
+            <option value="">—</option>
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        )}
+        {(def.field_type === "text" || def.field_type === "number" || def.field_type === "date") && (
+          <input
+            type={def.field_type === "date" ? "date" : def.field_type === "number" ? "number" : "text"}
+            value={values[def.key] ?? ""}
+            onChange={(e) => setValue(def.key, e.target.value)}
+            required={required}
+            disabled={locked}
+            placeholder={def.placeholder ?? undefined}
+          />
+        )}
+        {def.help_text && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{def.help_text}</span>}
+      </div>
+    );
+  }
+
+  return { order: visible.map((d) => d.key), elements };
+}
+
+/**
+ * Renders the active custom fields for an entity type inside whatever
+ * form is using it - expects to sit inside a `.form-grid` container, since
+ * it only renders `.form-field` children, not a wrapper div, so it lays
+ * out identically to the form's built-in fields (FR-CFG-04). A thin
+ * wrapper over `useCustomFieldElements` for forms that don't need to
+ * place custom fields into a Screen layout's tabs.
+ */
+export function CustomFieldsSection(props: {
+  entityType: string;
+  status: string;
+  values: CustomFieldValues;
+  onChange: (values: CustomFieldValues) => void;
+}) {
+  const { order, elements } = useCustomFieldElements(props);
+  return <>{order.map((key) => elements[key])}</>;
 }

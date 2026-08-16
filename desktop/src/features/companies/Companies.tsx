@@ -7,7 +7,8 @@ import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/m
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { TabListCard } from "../../components/TabListCard";
@@ -274,6 +275,13 @@ function CompanyForm({
     save.mutate();
   }
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: "Company",
+    status: input.status,
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   return (
     <div>
       <h2>{companyId ? "Edit company" : "New company"}</h2>
@@ -285,107 +293,120 @@ function CompanyForm({
         </div>
       )}
       <form className="form-grid" onSubmit={handleSubmit}>
-        <div className="form-field full">
-          <label>Company name</label>
-          <input
-            value={input.name}
-            onChange={(e) => {
-              setDuplicateWarning(null);
-              setInput({ ...input, name: e.target.value });
-            }}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label>Status</label>
-          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
-            {COMPANY_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Tax number</label>
-          <input
-            value={input.tax_number ?? ""}
-            onChange={(e) => setInput({ ...input, tax_number: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Phone</label>
-          <input
-            value={input.phone ?? ""}
-            onChange={(e) => setInput({ ...input, phone: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Email</label>
-          <input
-            type="email"
-            value={input.email ?? ""}
-            onChange={(e) => setInput({ ...input, email: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Website</label>
-          <input
-            value={input.website ?? ""}
-            onChange={(e) => setInput({ ...input, website: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Annual revenue</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={input.annual_revenue_cents === null ? "" : centsToInputValue(input.annual_revenue_cents)}
-            onChange={(e) =>
-              setInput({ ...input, annual_revenue_cents: e.target.value === "" ? null : parseDecimalToCents(e.target.value) })
-            }
-          />
-        </div>
-        <div className="form-field">
-          <label>Employees</label>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={input.employee_count ?? ""}
-            onChange={(e) => setInput({ ...input, employee_count: e.target.value === "" ? null : Number(e.target.value) })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Preferred contact method</label>
-          <select
-            value={input.preferred_contact_method ?? ""}
-            onChange={(e) => setInput({ ...input, preferred_contact_method: e.target.value || null })}
-          >
-            <option value="">— Unspecified —</option>
-            {PREFERRED_CONTACT_METHODS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field full">
-          <label>Billing address</label>
-          <input
-            value={input.billing_address ?? ""}
-            onChange={(e) => setInput({ ...input, billing_address: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field full">
-          <label>Notes</label>
-          <textarea
-            value={input.notes ?? ""}
-            onChange={(e) => setInput({ ...input, notes: e.target.value || null })}
-          />
-        </div>
-        <CustomFieldsSection entityType="Company" status={input.status} values={customValues} onChange={setCustomValues} />
+        <LayoutFormFields
+          entityType="Company"
+          order={[
+            "name", "status", "tax_number", "phone", "email", "website",
+            "annual_revenue_cents", "employee_count", "preferred_contact_method",
+            "billing_address", "notes", ...customFieldOrder,
+          ]}
+          fields={{
+            name: (
+              <div className="form-field full" key="name">
+                <label>Company name</label>
+                <input
+                  value={input.name}
+                  onChange={(e) => {
+                    setDuplicateWarning(null);
+                    setInput({ ...input, name: e.target.value });
+                  }}
+                  required
+                />
+              </div>
+            ),
+            status: (
+              <div className="form-field" key="status">
+                <label>Status</label>
+                <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+                  {COMPANY_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            tax_number: (
+              <div className="form-field" key="tax_number">
+                <label>Tax number</label>
+                <input value={input.tax_number ?? ""} onChange={(e) => setInput({ ...input, tax_number: e.target.value || null })} />
+              </div>
+            ),
+            phone: (
+              <div className="form-field" key="phone">
+                <label>Phone</label>
+                <input value={input.phone ?? ""} onChange={(e) => setInput({ ...input, phone: e.target.value || null })} />
+              </div>
+            ),
+            email: (
+              <div className="form-field" key="email">
+                <label>Email</label>
+                <input type="email" value={input.email ?? ""} onChange={(e) => setInput({ ...input, email: e.target.value || null })} />
+              </div>
+            ),
+            website: (
+              <div className="form-field" key="website">
+                <label>Website</label>
+                <input value={input.website ?? ""} onChange={(e) => setInput({ ...input, website: e.target.value || null })} />
+              </div>
+            ),
+            annual_revenue_cents: (
+              <div className="form-field" key="annual_revenue_cents">
+                <label>Annual revenue</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={input.annual_revenue_cents === null ? "" : centsToInputValue(input.annual_revenue_cents)}
+                  onChange={(e) =>
+                    setInput({ ...input, annual_revenue_cents: e.target.value === "" ? null : parseDecimalToCents(e.target.value) })
+                  }
+                />
+              </div>
+            ),
+            employee_count: (
+              <div className="form-field" key="employee_count">
+                <label>Employees</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={input.employee_count ?? ""}
+                  onChange={(e) => setInput({ ...input, employee_count: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </div>
+            ),
+            preferred_contact_method: (
+              <div className="form-field" key="preferred_contact_method">
+                <label>Preferred contact method</label>
+                <select
+                  value={input.preferred_contact_method ?? ""}
+                  onChange={(e) => setInput({ ...input, preferred_contact_method: e.target.value || null })}
+                >
+                  <option value="">— Unspecified —</option>
+                  {PREFERRED_CONTACT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            billing_address: (
+              <div className="form-field full" key="billing_address">
+                <label>Billing address</label>
+                <input value={input.billing_address ?? ""} onChange={(e) => setInput({ ...input, billing_address: e.target.value || null })} />
+              </div>
+            ),
+            notes: (
+              <div className="form-field full" key="notes">
+                <label>Notes</label>
+                <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             {duplicateWarning ? "Save anyway" : "Save"}

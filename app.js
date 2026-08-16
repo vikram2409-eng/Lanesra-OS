@@ -1216,13 +1216,22 @@ function genericRecordDetail(key,id){
 function recordModal(key,fields,record={}){
  const isDoc=['quotes','orders','invoices'].includes(key);
  if(!record.id){const r0=effectiveRule(key);if(r0)record={...record,[r0.field]:nextNumber(key)}}
- // Phase 4 no-code layout designer: a published layout (Admin -> Screen
- // layouts) groups these same fields into admin-drag-ordered sections; with
- // no published layout the fields render in their plain default order,
- // exactly as before this feature existed.
- const fieldsHtml=orderedFieldGroupsFor(key,fields).map(g=>(g.title?`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>`:'')+g.fields.map(f=>fieldHtml(f,record)).join('')).join('');
- const form=`<form id="recordForm"><div class="form-grid">${fieldsHtml}${isDoc?lineItemsHtml(record.items||[]):''}</div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
+ // Screen/App Builder Phase 1: the live form always renders the object's
+ // Default layout's published tabs/sections (see layoutsTab's own comment
+ // on why there's no per-role resolution here - this demo has no
+ // signed-in user). No published layout at all renders the plain default
+ // field order in one untitled tab, exactly as before this feature
+ // existed. Every tab's fields stay present in the DOM (just hidden) so
+ // switching tabs never loses values already typed into another one.
+ const tabsOut=orderedTabsFor(fields,defaultLayoutFor(key).publishedTabs);
+ const tabsHtml=tabsOut.length>1?`<div class="layout-tabs" style="display:flex;gap:8px;margin-bottom:12px">${tabsOut.map((t,i)=>`<button type="button" class="tab ${i===0?'active':''}" data-form-tab="${i}">${t.title||'Details'}</button>`).join('')}</div>`:'';
+ const panelsHtml=tabsOut.map((t,i)=>`<div class="form-grid" data-form-panel="${i}" style="${i===0?'':'display:none'}">${t.groups.map(g=>(g.title?`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>`:'')+g.fields.map(f=>fieldHtml(f,record)).join('')).join('')}</div>`).join('');
+ const form=`<form id="recordForm">${tabsHtml}${panelsHtml}${isDoc?lineItemsHtml(record.items||[]):''}<div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
  modal(record.id?'Edit record':'Create record',form); $('[data-close]').onclick=closeModal;
+ document.querySelectorAll('[data-form-tab]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-form-panel]').forEach(p=>p.style.display=p.dataset.formPanel===b.dataset.formTab?'':'none');
+  document.querySelectorAll('[data-form-tab]').forEach(x=>x.classList.toggle('active',x===b));
+ });
  wireRelations(record); if(isDoc)wireLines();
  applyFieldRules(key,$('#recordForm'));
  // Custom Relationships (admin extensibility, Phase B): a record being
@@ -1579,51 +1588,103 @@ function relationshipModal(def){
   };
  }
 }
-// ---- Screen layouts (Phase 4: no-code UI layout designer) -----------------
-// A new capability, not a desktop port (desktop has no layout designer
-// either): an admin arranges any object's create/edit fields into
-// drag-ordered sections. Editing only ever touches the *draft* - the live
-// record form keeps using the plain field order until Publish copies the
-// draft to publishedSections, and Unpublish clears it back to that default.
-// A published layout never hides a field it doesn't know about: any field
-// missing from the layout (new custom field added after publishing, a
-// stale key from a deleted one) is filtered out or auto-appended to a
-// trailing "Other fields" group, so a layout change can never silently
-// drop something off the live form.
+// ---- Screen layouts (Screen/App Builder Phase 1: multi-layout, tabs, roles)
+// A new capability, not a desktop port (desktop had no layout designer
+// either until this same round). An object can have several named
+// layouts, not just one - each with its own tabs of drag-ordered field
+// sections - and an admin assigns roles to a layout so different roles
+// see a different arrangement; exactly one layout is the Default, the
+// fallback for any role no other layout claims.
+//
+// This demo has no signed-in user/session (see usersTab's own "roles are
+// illustrative" note), so the live create/edit form always renders the
+// object's *Default* layout - there's no real viewer identity to resolve
+// role assignment against. Role assignment is still fully editable here
+// (illustrative, same honesty level as Users & roles) and Preview always
+// shows the layout you're actively editing regardless of role, so the
+// tabs/sections mechanics themselves are fully exercisable.
+//
+// Editing only ever touches a layout's *draft* - Publish copies draftTabs
+// to publishedTabs, Unpublish clears the published copy back to null. A
+// published layout never hides a field it doesn't know about: any field
+// missing from it (a new custom field added after publishing, a stale key
+// from a deleted one) is auto-appended to a trailing "Other fields"
+// section, so a layout can never silently drop something off the form.
+const DEMO_LAYOUT_ROLES=['Administrator','Sales Rep','Viewer'];
 let layoutsEntityKey=null;
+let layoutsSelectedLayoutId=null;
+let layoutsActiveTabIdx=0;
 function allFieldsFor(entityKey){return fieldsFor(entityKey,fieldsFnFor(entityKey))}
-function ensureLayoutDraft(entityKey){
- if(!data.uiLayouts[entityKey]){
-  data.uiLayouts[entityKey]={draftSections:[{id:uid(),title:'Details',fields:allFieldsFor(entityKey).map(f=>f[0])}],publishedSections:null,updatedAt:null};
-  save();
+function freshTab(entityKey){return {id:uid(),title:'Details',sections:[{id:uid(),title:'Details',fields:allFieldsFor(entityKey).map(f=>f[0])}]}}
+function freshLayout(entityKey,name,isDefault){return {id:uid(),name,isDefault,roles:[],draftTabs:[freshTab(entityKey)],publishedTabs:null,updatedAt:null}}
+// Migrates the old single-layout-per-entity shape (a bare
+// {draftSections,publishedSections}) into an array of named layouts, and
+// auto-provisions a Default layout for any entity with none yet.
+function ensureLayouts(entityKey){
+ if(!data.uiLayouts)data.uiLayouts={};
+ let arr=data.uiLayouts[entityKey];
+ if(arr&&!Array.isArray(arr)){
+  arr=[{id:uid(),name:'Default',isDefault:true,roles:[],
+   draftTabs:[{id:uid(),title:'Details',sections:arr.draftSections||[]}],
+   publishedTabs:arr.publishedSections?[{id:uid(),title:'Details',sections:arr.publishedSections}]:null,
+   updatedAt:arr.updatedAt||null}];
  }
- return data.uiLayouts[entityKey];
+ if(!arr||!arr.length)arr=[freshLayout(entityKey,'Default',true)];
+ if(!arr.some(l=>l.isDefault))arr[0].isDefault=true;
+ data.uiLayouts[entityKey]=arr;
+ return arr;
 }
-function orderedFieldGroupsFor(entityKey,fields){
- const layout=data.uiLayouts&&data.uiLayouts[entityKey];
- if(!layout||!layout.publishedSections)return [{title:null,fields}];
+function defaultLayoutFor(entityKey){const arr=ensureLayouts(entityKey);return arr.find(l=>l.isDefault)||arr[0]}
+function layoutById(entityKey,id){return ensureLayouts(entityKey).find(l=>l.id===id)}
+// Groups fields into the tab/section structure `tabs` describes (a
+// layout's draftTabs or publishedTabs); `tabs` null/undefined means "no
+// layout in effect" - a single untitled tab/section in the fields' plain
+// default order, exactly the pre-layout-builder behavior.
+function orderedTabsFor(fields,tabs){
+ if(!tabs||!tabs.length)return [{title:null,groups:[{title:null,fields}]}];
  const byKey=Object.fromEntries(fields.map(f=>[f[0],f]));
  const used=new Set();
- const groups=layout.publishedSections.map(s=>{
-  const secFields=s.fields.map(k=>byKey[k]).filter(Boolean);
-  secFields.forEach(f=>used.add(f[0]));
-  return {title:s.title,fields:secFields};
- }).filter(g=>g.fields.length);
+ const out=tabs.map(t=>{
+  const groups=t.sections.map(s=>{
+   const secFields=s.fields.map(k=>byKey[k]).filter(Boolean);
+   secFields.forEach(f=>used.add(f[0]));
+   return {title:s.title,fields:secFields};
+  }).filter(g=>g.fields.length);
+  return {title:t.title,groups};
+ }).filter(t=>t.groups.length);
  const rest=fields.filter(f=>!used.has(f[0]));
- if(rest.length)groups.push({title:groups.length?'Other fields':null,fields:rest});
- return groups.length?groups:[{title:null,fields}];
+ if(rest.length){
+  if(out.length)out[out.length-1].groups.push({title:'Other fields',fields:rest});
+  else out.push({title:null,groups:[{title:null,fields:rest}]});
+ }
+ return out.length?out:[{title:null,groups:[{title:null,fields}]}];
 }
 function layoutsTab(body){
  const keys=allEntityTypeKeys();
  if(!layoutsEntityKey||!keys.includes(layoutsEntityKey))layoutsEntityKey=keys[0];
  const entityKey=layoutsEntityKey;
- const layout=ensureLayoutDraft(entityKey);
- const isPublished=!!layout.publishedSections;
- const hasDraftChanges=JSON.stringify(layout.draftSections)!==JSON.stringify(layout.publishedSections);
+ const layouts=ensureLayouts(entityKey);
+ if(!layoutsSelectedLayoutId||!layouts.some(l=>l.id===layoutsSelectedLayoutId))layoutsSelectedLayoutId=defaultLayoutFor(entityKey).id;
+ const layout=layoutById(entityKey,layoutsSelectedLayoutId);
+ if(layoutsActiveTabIdx>=layout.draftTabs.length)layoutsActiveTabIdx=0;
+ const isPublished=!!layout.publishedTabs;
+ const hasDraftChanges=JSON.stringify(layout.draftTabs)!==JSON.stringify(layout.publishedTabs);
  body.innerHTML=`<div class="panel">
  <div class="panel-head"><h3>Screen layouts</h3><select id="layoutsEntitySelect">${keys.map(k=>`<option value="${k}" ${k===entityKey?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
- <p class="muted" style="font-size:13px">Drag fields to reorder them or move them between sections on ${entityLabel(entityKey)}'s create/edit form. Editing here only changes the draft — the live form keeps its default order until you Publish.</p>
+ <p class="muted" style="font-size:13px">Build multiple named layouts for ${entityLabel(entityKey)}'s create/edit form, each with its own tabs of drag-ordered field sections, and assign roles to each. There's no signed-in user in this browser demo, so the live form always uses the <b>Default</b> layout — role assignment here is illustrative, the same as Users & roles; the desktop edition resolves it against the real signed-in user.</p>
+ <div class="panel-head" style="margin-top:4px">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${layouts.map(l=>`<button type="button" class="tab ${l.id===layout.id?'active':''}" data-select-layout="${l.id}">${l.name}${l.isDefault?' · Default':''}</button>`).join('')}</div>
+  <button class="btn btn-secondary" id="addLayout" type="button">+ New layout</button>
+ </div>
+ <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
+  <div class="field" style="margin:0"><label>Layout name</label><input id="layoutName" value="${layout.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
+  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${DEMO_LAYOUT_ROLES.map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-layout-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  ${layout.isDefault?'<span class="badge">Default layout — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="makeDefaultLayout" type="button">Make default</button>'}
+  <button class="btn btn-secondary" id="deleteLayout" type="button" ${layouts.length<=1||layout.isDefault?'disabled':''}>Delete layout</button>
+ </div>
+ <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${layout.draftTabs.map((t,i)=>`<button type="button" class="tab ${i===layoutsActiveTabIdx?'active':''}" data-select-tab="${i}">${t.title}</button>`).join('')}<button class="icon-btn" id="addTab" type="button">+ Add tab</button></div>
  <div style="margin-bottom:14px"><span class="badge">${isPublished?(hasDraftChanges?'Published — unpublished draft changes':'Published'):'Not published — using default field order'}</span></div>
+ <div id="layoutTabMeta"></div>
  <div id="layoutSections"></div>
  <div class="actions" style="margin-top:16px;flex-wrap:wrap">
   <button class="btn btn-secondary" id="addSection" type="button">+ Add section</button>
@@ -1633,55 +1694,99 @@ function layoutsTab(body){
   ${isPublished?'<button class="btn btn-secondary" id="unpublishLayout" type="button">Unpublish</button>':''}
  </div>
  </div>`;
- $('#layoutsEntitySelect').onchange=e=>{layoutsEntityKey=e.target.value;layoutsTab(body)};
+ $('#layoutsEntitySelect').onchange=e=>{layoutsEntityKey=e.target.value;layoutsSelectedLayoutId=null;layoutsActiveTabIdx=0;layoutsTab(body)};
+ body.querySelectorAll('[data-select-layout]').forEach(b=>b.onclick=()=>{layoutsSelectedLayoutId=b.dataset.selectLayout;layoutsActiveTabIdx=0;layoutsTab(body)});
+ $('#addLayout').onclick=()=>{const name=prompt('New layout name?','New layout');if(!name)return;const l=freshLayout(entityKey,name.trim(),false);layouts.push(l);save();layoutsSelectedLayoutId=l.id;layoutsActiveTabIdx=0;layoutsTab(body)};
+ // setTimeout defers the re-render past this same change event's own
+ // dispatch/blur handling - re-rendering (tearing down #layoutName) while
+ // the browser is still processing the event that fired on it throws
+ // "node is no longer a child of this node".
+ $('#layoutName').onchange=e=>{layout.name=e.target.value.trim()||layout.name;save();setTimeout(()=>layoutsTab(body),0)};
+ body.querySelectorAll('[data-layout-role]').forEach(cb=>cb.onchange=()=>{
+  const role=cb.dataset.layoutRole;
+  layout.roles=cb.checked?[...layout.roles,role]:layout.roles.filter(r=>r!==role);
+  save();
+ });
+ const makeDefault=$('#makeDefaultLayout'); if(makeDefault)makeDefault.onclick=()=>{layouts.forEach(l=>l.isDefault=(l.id===layout.id));save();toast(`${layout.name} is now the default layout`);layoutsTab(body)};
+ $('#deleteLayout').onclick=()=>{
+  if(layouts.length<=1||layout.isDefault)return;
+  if(!confirm(`Delete the "${layout.name}" layout? This can't be undone.`))return;
+  data.uiLayouts[entityKey]=layouts.filter(l=>l.id!==layout.id);
+  save();layoutsSelectedLayoutId=null;layoutsActiveTabIdx=0;toast('Layout deleted');layoutsTab(body);
+ };
+ body.querySelectorAll('[data-select-tab]').forEach(b=>b.onclick=()=>{layoutsActiveTabIdx=Number(b.dataset.selectTab);layoutsTab(body)});
+ $('#addTab').onclick=()=>{layout.draftTabs.push(freshTabEmpty());save();layoutsActiveTabIdx=layout.draftTabs.length-1;layoutsTab(body)};
+ renderLayoutTabMeta(entityKey);
  renderLayoutSections(entityKey);
- $('#addSection').onclick=()=>{layout.draftSections.push({id:uid(),title:'New section',fields:[]});save();renderLayoutSections(entityKey)};
+ $('#addSection').onclick=()=>{layout.draftTabs[layoutsActiveTabIdx].sections.push({id:uid(),title:'New section',fields:[]});save();renderLayoutSections(entityKey)};
  $('#previewLayout').onclick=()=>layoutPreviewModal(entityKey);
- $('#publishLayout').onclick=()=>{layout.publishedSections=structuredClone(layout.draftSections);layout.updatedAt=new Date().toISOString();save();toast('Layout published');layoutsTab(body)};
- $('#revertLayout').onclick=()=>{if(!layout.publishedSections)return;layout.draftSections=structuredClone(layout.publishedSections);save();toast('Draft reverted to the published layout');layoutsTab(body)};
- const unpub=$('#unpublishLayout'); if(unpub)unpub.onclick=()=>{if(!confirm('Unpublish this layout? The live form goes back to the default field order until you publish again.'))return;layout.publishedSections=null;save();toast('Layout unpublished');layoutsTab(body)};
+ $('#publishLayout').onclick=()=>{layout.publishedTabs=structuredClone(layout.draftTabs);layout.updatedAt=new Date().toISOString();save();toast('Layout published');layoutsTab(body)};
+ $('#revertLayout').onclick=()=>{if(!layout.publishedTabs)return;layout.draftTabs=structuredClone(layout.publishedTabs);save();toast('Draft reverted to the published layout');layoutsTab(body)};
+ const unpub=$('#unpublishLayout'); if(unpub)unpub.onclick=()=>{if(!confirm('Unpublish this layout? Any role assigned to it falls back to the Default layout until you publish again.'))return;layout.publishedTabs=null;save();toast('Layout unpublished');layoutsTab(body)};
+}
+function freshTabEmpty(){return {id:uid(),title:'New tab',sections:[{id:uid(),title:'Section',fields:[]}]}}
+function renderLayoutTabMeta(entityKey){
+ const layout=layoutById(entityKey,layoutsSelectedLayoutId);
+ const tab=layout.draftTabs[layoutsActiveTabIdx];
+ const box=$('#layoutTabMeta'); if(!box)return;
+ box.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+  <input id="tabTitle" value="${tab.title}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-weight:700">
+  <button class="icon-btn" id="deleteTab" type="button" ${layout.draftTabs.length<=1?'disabled':''}>Delete tab</button>
+ </div>`;
+ // Same deferred-re-render reasoning as #layoutName above.
+ $('#tabTitle').onchange=e=>{tab.title=e.target.value.trim()||'Tab';save();setTimeout(()=>layoutsTab($('#adminBody')),0)};
+ $('#deleteTab').onclick=()=>{if(layout.draftTabs.length<=1)return;layout.draftTabs.splice(layoutsActiveTabIdx,1);layoutsActiveTabIdx=0;save();layoutsTab($('#adminBody'))};
 }
 function renderLayoutSections(entityKey){
- const layout=data.uiLayouts[entityKey];
+ const layout=layoutById(entityKey,layoutsSelectedLayoutId);
+ const tab=layout.draftTabs[layoutsActiveTabIdx];
  const allFields=allFieldsFor(entityKey);
  const fieldLabel=k=>{const f=allFields.find(x=>x[0]===k);return f?f[1]:k};
- const placedKeys=new Set(layout.draftSections.flatMap(s=>s.fields));
- const unplaced=allFields.map(f=>f[0]).filter(k=>!placedKeys.has(k));
+ // "Available" is scoped to *this* tab - not just fields placed nowhere
+ // in the whole layout, but also anything currently sitting on a
+ // different tab, so dragging it into a section here moves it onto this
+ // tab (see moveField's own comment on why that's a move, not a copy).
+ const placedInThisTab=new Set(tab.sections.flatMap(s=>s.fields));
+ const available=allFields.map(f=>f[0]).filter(k=>!placedInThisTab.has(k));
  const chip=(k,idx)=>`<span class="layout-field-chip" draggable="true" data-field-key="${k}" data-section-idx="${idx}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:${idx>=0?'#f9fafb':'#fff'};cursor:grab;font-size:13px;display:inline-block">⠿ ${fieldLabel(k)}</span>`;
  const listHtml=(fieldsArr,idx)=>`<div class="layout-field-list" data-section-idx="${idx}" style="display:flex;flex-wrap:wrap;gap:8px;min-height:34px">${fieldsArr.map(k=>chip(k,idx)).join('')||'<span class="muted" style="font-size:12px">Drag fields here</span>'}</div>`;
  const box=$('#layoutSections'); if(!box)return;
- box.innerHTML=`${layout.draftSections.map((s,idx)=>`<div class="layout-section" style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
+ box.innerHTML=`${tab.sections.map((s,idx)=>`<div class="layout-section" style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
    <input class="layout-section-title" data-section-idx="${idx}" value="${s.title}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-weight:700;flex:1">
-   <button class="icon-btn" data-remove-section="${idx}" type="button" ${layout.draftSections.length<=1?'disabled':''}>Delete section</button>
+   <button class="icon-btn" data-remove-section="${idx}" type="button" ${tab.sections.length<=1?'disabled':''}>Delete section</button>
   </div>
   ${listHtml(s.fields,idx)}
  </div>`).join('')}
  <div class="layout-section" style="border:1px dashed var(--line);border-radius:12px;padding:12px">
-  <div class="muted" style="font-weight:700;margin-bottom:8px">Unplaced fields — not shown on the form</div>
-  ${listHtml(unplaced,-1)}
+  <div class="muted" style="font-weight:700;margin-bottom:8px">Available fields — not on this tab (drag into a section above to place here)</div>
+  ${listHtml(available,-1)}
  </div>`;
- box.querySelectorAll('.layout-section-title').forEach(inp=>inp.onchange=e=>{const idx=Number(e.target.dataset.sectionIdx);layout.draftSections[idx].title=e.target.value.trim()||'Section';save()});
- box.querySelectorAll('[data-remove-section]').forEach(b=>b.onclick=()=>{const idx=Number(b.dataset.removeSection);if(layout.draftSections.length<=1)return;layout.draftSections.splice(idx,1);save();renderLayoutSections(entityKey)});
+ box.querySelectorAll('.layout-section-title').forEach(inp=>inp.onchange=e=>{const idx=Number(e.target.dataset.sectionIdx);tab.sections[idx].title=e.target.value.trim()||'Section';save()});
+ box.querySelectorAll('[data-remove-section]').forEach(b=>b.onclick=()=>{const idx=Number(b.dataset.removeSection);if(tab.sections.length<=1)return;tab.sections.splice(idx,1);save();renderLayoutSections(entityKey)});
  wireLayoutDragDrop(entityKey);
 }
 function wireLayoutDragDrop(entityKey){
- const layout=data.uiLayouts[entityKey];
- let dragKey=null,dragFromIdx=null;
+ const layout=layoutById(entityKey,layoutsSelectedLayoutId);
+ const tab=layout.draftTabs[layoutsActiveTabIdx];
+ let dragKey=null;
  function moveField(toIdx,beforeKey){
   if(dragKey===null)return;
-  if(dragFromIdx>=0)layout.draftSections[dragFromIdx].fields=layout.draftSections[dragFromIdx].fields.filter(k=>k!==dragKey);
+  // A field lives in at most one section across the *whole* layout, not
+  // just this tab - strip it from every tab's sections first, so dragging
+  // a field that's currently on a different tab into this tab's section
+  // moves it here instead of placing a second copy.
+  layout.draftTabs.forEach(t=>t.sections.forEach(s=>{s.fields=s.fields.filter(k=>k!==dragKey)}));
   if(toIdx>=0){
-   const s=layout.draftSections[toIdx];
-   s.fields=s.fields.filter(k=>k!==dragKey);
+   const s=tab.sections[toIdx];
    const insertAt=beforeKey?s.fields.indexOf(beforeKey):-1;
    s.fields.splice(insertAt<0?s.fields.length:insertAt,0,dragKey);
   }
-  save();dragKey=null;dragFromIdx=null;
+  save();dragKey=null;
   renderLayoutSections(entityKey);
  }
  document.querySelectorAll('.layout-field-chip').forEach(el=>{
-  el.ondragstart=e=>{dragKey=el.dataset.fieldKey;dragFromIdx=Number(el.dataset.sectionIdx);e.dataTransfer.effectAllowed='move'};
+  el.ondragstart=e=>{dragKey=el.dataset.fieldKey;e.dataTransfer.effectAllowed='move'};
   el.ondragover=e=>{e.preventDefault();e.stopPropagation()};
   el.ondrop=e=>{e.preventDefault();e.stopPropagation();moveField(Number(el.dataset.sectionIdx),el.dataset.fieldKey)};
  });
@@ -1692,16 +1797,18 @@ function wireLayoutDragDrop(entityKey){
 }
 function layoutPreviewModal(entityKey){
  const fields=allFieldsFor(entityKey);
- const layout=data.uiLayouts[entityKey];
- const byKey=Object.fromEntries(fields.map(f=>[f[0],f]));
- const used=new Set();
- const groups=layout.draftSections.map(s=>{const fs=s.fields.map(k=>byKey[k]).filter(Boolean);fs.forEach(f=>used.add(f[0]));return {title:s.title,fields:fs}}).filter(g=>g.fields.length);
- const rest=fields.filter(f=>!used.has(f[0]));
- if(rest.length)groups.push({title:'Other fields (not placed in a section)',fields:rest});
+ const layout=layoutById(entityKey,layoutsSelectedLayoutId);
  const sample={};
- const body=`<div class="form-grid">${groups.map(g=>`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>${g.fields.map(f=>fieldHtml(f,sample)).join('')}`).join('')}</div><p class="muted" style="font-size:12px;margin-top:12px">Preview of the draft layout only — nothing here is saved, and the live form is unaffected until you Publish.</p><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
- modal(`Preview: ${entityLabel(entityKey)} form`,body);
+ const tabsOut=orderedTabsFor(fields,layout.draftTabs);
+ const tabsHtml=tabsOut.length>1?`<div class="layout-tabs" style="display:flex;gap:8px;margin-bottom:12px">${tabsOut.map((t,i)=>`<button type="button" class="tab ${i===0?'active':''}" data-preview-tab="${i}">${t.title||'Details'}</button>`).join('')}</div>`:'';
+ const panelsHtml=tabsOut.map((t,i)=>`<div class="form-grid" data-preview-panel="${i}" style="${i===0?'':'display:none'}">${t.groups.map(g=>(g.title?`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>`:'')+g.fields.map(f=>fieldHtml(f,sample)).join('')).join('')}</div>`).join('');
+ const body=`${tabsHtml}${panelsHtml}<p class="muted" style="font-size:12px;margin-top:12px">Preview of "${layout.name}"'s draft only — nothing here is saved, and the live form is unaffected until you Publish.</p><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal(`Preview: ${entityLabel(entityKey)} — ${layout.name}`,body);
  $('[data-close]').onclick=closeModal;
+ document.querySelectorAll('[data-preview-tab]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-preview-panel]').forEach(p=>p.style.display=p.dataset.previewPanel===b.dataset.previewTab?'':'none');
+  document.querySelectorAll('[data-preview-tab]').forEach(x=>x.classList.toggle('active',x===b));
+ });
 }
 // ---- Integrations (Phase 5: UI-only simulation) ---------------------------
 // New to the demo (and not on desktop either): scheduled data jobs, exposed
