@@ -7,6 +7,7 @@ import { centsToInputValue, formatCents, parseDecimalToCents } from "../../lib/m
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
+import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -300,6 +301,13 @@ function ProductForm({
  * quotes/orders/invoices reference this product lives in each document's
  * own line items, not a query this screen can cheaply run client-side, so
  * this stays a focused field overview instead of guessing at one.
+ *
+ * Screen/App Builder Phase 4: the built-in fields below go through
+ * `LayoutDetailFields` instead of a hardcoded list, so the same layout
+ * that already controls ProductForm's field order/columns also controls
+ * this read-only view. Custom fields keep their own always-editable
+ * `CustomFieldsCard` below, unchanged - that's a separate, pre-existing
+ * mechanism this phase doesn't touch.
  */
 function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void; onBack: () => void }) {
   const product = useQuery({ queryKey: ["product", id], queryFn: () => api.getProduct(id) });
@@ -326,12 +334,50 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Details</h3>
-        <p><strong>SKU:</strong> {p.sku ?? "—"}</p>
-        <p><strong>Category:</strong> {p.category ?? "—"}</p>
-        <p><strong>Unit price:</strong> {formatCents(p.unit_price_cents)}</p>
-        <p><strong>Cost:</strong> {formatCents(p.cost_cents)}</p>
-        <p><strong>Tax rate:</strong> {(p.tax_rate_bp / 100).toFixed(2)}%</p>
-        <p><strong>Description:</strong> {p.description ?? "—"}</p>
+        <div className="form-grid">
+        <LayoutDetailFields
+          entityType="Product"
+          order={["sku", "category", "unit_price_cents", "cost_cents", "tax_rate_bp", "description"]}
+          fields={{
+            sku: (
+              <div className="form-field" key="sku">
+                <label>SKU</label>
+                <div>{p.sku ?? "—"}</div>
+              </div>
+            ),
+            category: (
+              <div className="form-field" key="category">
+                <label>Category</label>
+                <div>{p.category ?? "—"}</div>
+              </div>
+            ),
+            unit_price_cents: (
+              <div className="form-field" key="unit_price_cents">
+                <label>Unit price</label>
+                <div>{formatCents(p.unit_price_cents)}</div>
+              </div>
+            ),
+            cost_cents: (
+              <div className="form-field" key="cost_cents">
+                <label>Cost</label>
+                <div>{formatCents(p.cost_cents)}</div>
+              </div>
+            ),
+            tax_rate_bp: (
+              <div className="form-field" key="tax_rate_bp">
+                <label>Tax rate</label>
+                <div>{(p.tax_rate_bp / 100).toFixed(2)}%</div>
+              </div>
+            ),
+            description: (
+              <div className="form-field full" key="description">
+                <label>Description</label>
+                <div>{p.description ?? "—"}</div>
+              </div>
+            ),
+          }}
+        />
+        </div>
       </div>
 
       <div style={{ marginTop: 16 }}>

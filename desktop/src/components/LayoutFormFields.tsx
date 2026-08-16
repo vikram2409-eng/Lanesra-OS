@@ -11,8 +11,9 @@ import type { LayoutSection } from "../lib/types";
  * wins over a class, in either direction, so this works whether the
  * layout is making a field wider or narrower than the code originally
  * wrote it. `undefined` fields (a stale key with nothing in `fields`)
- * pass through as `null`. */
-function withSpan(node: ReactNode, fullWidth: boolean): ReactNode {
+ * pass through as `null`. Exported for `LayoutDetailFields` (Phase 4),
+ * which arranges the same sections/columns/spans read-only. */
+export function withSpan(node: ReactNode, fullWidth: boolean): ReactNode {
   if (!isValidElement(node)) return node ?? null;
   const existingStyle = (node.props as { style?: CSSProperties }).style ?? {};
   return cloneElement(node as React.ReactElement<{ style?: CSSProperties }>, {
@@ -25,7 +26,7 @@ function withSpan(node: ReactNode, fullWidth: boolean): ReactNode {
  * being forced to a single column - it's landing in the "Other fields"
  * safety net, not something an admin actually placed, so there's no
  * admin intent to honor instead. */
-function inferFullWidth(node: ReactNode): boolean {
+export function inferFullWidth(node: ReactNode): boolean {
   if (!isValidElement(node)) return false;
   const className = (node.props as { className?: string }).className ?? "";
   return className.split(/\s+/).includes("full");

@@ -9,6 +9,7 @@ import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
+import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { TabListCard } from "../../components/TabListCard";
@@ -551,17 +552,83 @@ function CompanyDetail({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Details</h3>
-            <p><strong>Phone:</strong> {company.data.phone ?? "—"}</p>
-            <p><strong>Email:</strong> {company.data.email ?? "—"}</p>
-            <p><strong>Website:</strong> {company.data.website ?? "—"}</p>
-            <p><strong>Annual revenue:</strong> {company.data.annual_revenue_cents === null ? "—" : formatCents(company.data.annual_revenue_cents)}</p>
-            <p><strong>Employees:</strong> {company.data.employee_count ?? "—"}</p>
-            <p><strong>Preferred contact method:</strong> {company.data.preferred_contact_method ?? "—"}</p>
-            <p><strong>Tax number:</strong> {company.data.tax_number ?? "—"}</p>
-            <p><strong>Billing address:</strong> {company.data.billing_address ?? "—"}</p>
-            <p><strong>Shipping address:</strong> {company.data.shipping_address ?? "—"}</p>
-            <p><strong>Tags:</strong> {company.data.tags ?? "—"}</p>
-            <p><strong>Notes:</strong> {company.data.notes ?? "—"}</p>
+            <div className="form-grid">
+              <LayoutDetailFields
+                entityType="Company"
+                order={[
+                  "phone", "email", "website", "annual_revenue_cents", "employee_count",
+                  "preferred_contact_method", "tax_number", "billing_address", "shipping_address", "tags", "notes",
+                ]}
+                fields={{
+                  phone: (
+                    <div className="form-field" key="phone">
+                      <label>Phone</label>
+                      <div>{company.data.phone ?? "—"}</div>
+                    </div>
+                  ),
+                  email: (
+                    <div className="form-field" key="email">
+                      <label>Email</label>
+                      <div>{company.data.email ?? "—"}</div>
+                    </div>
+                  ),
+                  website: (
+                    <div className="form-field" key="website">
+                      <label>Website</label>
+                      <div>{company.data.website ?? "—"}</div>
+                    </div>
+                  ),
+                  annual_revenue_cents: (
+                    <div className="form-field" key="annual_revenue_cents">
+                      <label>Annual revenue</label>
+                      <div>{company.data.annual_revenue_cents === null ? "—" : formatCents(company.data.annual_revenue_cents)}</div>
+                    </div>
+                  ),
+                  employee_count: (
+                    <div className="form-field" key="employee_count">
+                      <label>Employees</label>
+                      <div>{company.data.employee_count ?? "—"}</div>
+                    </div>
+                  ),
+                  preferred_contact_method: (
+                    <div className="form-field" key="preferred_contact_method">
+                      <label>Preferred contact method</label>
+                      <div>{company.data.preferred_contact_method ?? "—"}</div>
+                    </div>
+                  ),
+                  tax_number: (
+                    <div className="form-field" key="tax_number">
+                      <label>Tax number</label>
+                      <div>{company.data.tax_number ?? "—"}</div>
+                    </div>
+                  ),
+                  billing_address: (
+                    <div className="form-field full" key="billing_address">
+                      <label>Billing address</label>
+                      <div>{company.data.billing_address ?? "—"}</div>
+                    </div>
+                  ),
+                  shipping_address: (
+                    <div className="form-field full" key="shipping_address">
+                      <label>Shipping address</label>
+                      <div>{company.data.shipping_address ?? "—"}</div>
+                    </div>
+                  ),
+                  tags: (
+                    <div className="form-field full" key="tags">
+                      <label>Tags</label>
+                      <div>{company.data.tags ?? "—"}</div>
+                    </div>
+                  ),
+                  notes: (
+                    <div className="form-field full" key="notes">
+                      <label>Notes</label>
+                      <div>{company.data.notes ?? "—"}</div>
+                    </div>
+                  ),
+                }}
+              />
+            </div>
           </div>
           <RelatedRecordsCard entityType="Company" entityId={id} />
         </div>

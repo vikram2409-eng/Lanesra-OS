@@ -1104,7 +1104,7 @@ function companyDetail(id){
  const tasks=data.tasks.filter(x=>x.relatedType==='Company'&&x.relatedId===id);
  $('#view').innerHTML=`${detail360Header('Companies',c.name,c.customerNumber,`${badgeMaybe(c.status)}<span>Owner: ${c.owner||'Unassigned'}</span>`)}
  <div class="rule360-grid">
-  <div><div class="panel"><h3 style="margin-top:0">Overview</h3><div class="form-grid" style="margin-top:0">${overviewFields.map(f=>`<div class="field"><label>${f[1]}</label><div>${badgeMaybe(c[f[0]])}</div></div>`).join('')}</div></div></div>
+  <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewGroupsHtml('companies',overviewGroupsFor('companies',overviewFields),c)}</div></div>
   <div>
    ${relatedCardHtml('Contacts',contacts,'contacts',x=>x.name,x=>x.role||'')}
    ${relatedCardHtml('Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value))}
@@ -1113,6 +1113,7 @@ function companyDetail(id){
    ${relatedCardHtml('Invoices',invoices,'invoices',x=>x.number,x=>x.status)}
    ${relatedCardHtml('Contracts',contracts,'contracts',x=>x.number,x=>x.status)}
    ${relatedCardHtml('Tasks',tasks,'tasks',x=>x.title,x=>x.status)}
+   ${customRelatedCardsHtml('companies',id)}
   </div>
  </div>`;
  wireDetail360Nav(()=>recordModal('companies',fieldsFor('companies',companyFields),c));
@@ -1128,13 +1129,14 @@ function contactDetail(id){
  const tasks=data.tasks.filter(x=>x.relatedType==='Contact'&&x.relatedId===id);
  $('#view').innerHTML=`${detail360Header('Contacts',c.name,c.contactNumber,`${badgeMaybe(c.status)}<span>${c.role||'—'}</span><a class="cell-link" data-nav-related="companies:${c.companyId}">${companyName(c.companyId)}</a>`)}
  <div class="rule360-grid">
-  <div><div class="panel"><h3 style="margin-top:0">Overview</h3><div class="form-grid" style="margin-top:0">${overviewFields.map(f=>`<div class="field"><label>${f[1]}</label><div>${badgeMaybe(c[f[0]])}</div></div>`).join('')}</div></div></div>
+  <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewGroupsHtml('contacts',overviewGroupsFor('contacts',overviewFields),c)}</div></div>
   <div>
    ${relatedCardHtml('Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value))}
    ${relatedCardHtml('Quotes',quotes,'quotes',x=>x.number,x=>x.status)}
    ${relatedCardHtml('Orders',orders,'orders',x=>x.number,x=>x.status)}
    ${relatedCardHtml('Contracts',contracts,'contracts',x=>x.number,x=>x.status)}
    ${relatedCardHtml('Tasks',tasks,'tasks',x=>x.title,x=>x.status)}
+   ${customRelatedCardsHtml('contacts',id)}
   </div>
  </div>`;
  wireDetail360Nav(()=>recordModal('contacts',fieldsFor('contacts',contactFields),c));
@@ -1200,6 +1202,32 @@ function overviewValueHtml(key,f,r){
  if((MONEY_OVERVIEW_FIELDS[key]||[]).includes(f[0])&&r[f[0]]!==undefined&&r[f[0]]!=='')return money(r[f[0]]);
  return badgeMaybe(r[f[0]]);
 }
+// Screen/App Builder Phase 4: groups a detail page's Overview fields per
+// the object's published layout, same order/sections/columns the live
+// edit form already uses (`orderedTabsFor`) - flattened across tabs
+// since a detail page is one glanceable summary, not a form filled out
+// in stages, so (unlike the edit form) the layout's *tab* boundaries
+// don't carry over here, only its section grouping and field placement.
+// No published layout at all falls back to one untitled group in the
+// fields' plain order, exactly the pre-Phase-4 behavior.
+function overviewGroupsFor(key,fields){
+ return orderedTabsFor(fields,defaultLayoutFor(key).publishedTabs).flatMap(t=>t.groups);
+}
+// Read-only counterpart to groupsHtml, for overviewGroupsFor's output.
+function overviewGroupsHtml(key,groups,record){
+ return groups.map(g=>`${g.title?`<h4 style="margin:0 0 8px">${g.title}</h4>`:''}<div class="form-grid" style="grid-template-columns:repeat(${g.columns},1fr);margin-bottom:14px">${g.items.map(it=>`<div class="field${it.full?' full':''}"><label>${it.field[1]}</label><div>${overviewValueHtml(key,it.field,record)}</div></div>`).join('')}</div>`).join('');
+}
+// Screen/App Builder Phase 4: the custom-relationship "Related records"
+// this record participates in (Admin > Relationships), reusing the same
+// relatedCardHtml every other related list on a detail page already
+// renders with - previously shown nowhere on any detail page, only in
+// the create/edit modal (Phase 3). Read-only here (click through to the
+// linked record, same as every other card on this page) - link/unlink
+// stays a create/edit-modal action, consistent with how this page's
+// other related cards work.
+function customRelatedCardsHtml(entityType,entityId){
+ return relatedGroupsFor(entityType,entityId).map(g=>relatedCardHtml(g.label,g.rows.map(r=>({...r,id:r.entityId})),g.otherType,x=>x.displayName,x=>x.status)).join('');
+}
 function genericRecordDetail(key,id){
  const r=byId(key,id);
  if(!r){current=key;detailRecord=null;return renderView()}
@@ -1212,9 +1240,9 @@ function genericRecordDetail(key,id){
  <div class="rule360-grid">
   <div>
    ${linesHtml}
-   <div class="panel"><h3 style="margin-top:0">Overview</h3><div class="form-grid" style="margin-top:0">${overviewFields.map(f=>`<div class="field"><label>${f[1]}</label><div>${overviewValueHtml(key,f,r)}</div></div>`).join('')}</div></div>
+   <div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewGroupsHtml(key,overviewGroupsFor(key,overviewFields),r)}</div>
   </div>
-  <div>${recordRelatedDefs(key,r).map(([title,items,navKey,labelFn,metaFn])=>relatedCardHtml(title,items,navKey,labelFn,metaFn)).join('')}</div>
+  <div>${recordRelatedDefs(key,r).map(([title,items,navKey,labelFn,metaFn])=>relatedCardHtml(title,items,navKey,labelFn,metaFn)).join('')}${customRelatedCardsHtml(key,id)}</div>
  </div>`;
  wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r));
 }
