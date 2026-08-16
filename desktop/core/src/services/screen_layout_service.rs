@@ -24,7 +24,7 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 }
 
 fn empty_tabs() -> LayoutTabs {
-    LayoutTabs { tabs: vec![LayoutTab { id: crate::domain::ids::new_uuid(), title: "Details".into(), sections: vec![] }] }
+    LayoutTabs { tabs: vec![LayoutTab { id: crate::domain::ids::new_uuid(), title: "Details".into(), sections: vec![], related: vec![] }] }
 }
 
 fn seeded_tabs(initial_fields: &[String]) -> LayoutTabs {
@@ -39,6 +39,7 @@ fn seeded_tabs(initial_fields: &[String]) -> LayoutTabs {
                 columns: 2,
                 fields: initial_fields.iter().map(SectionField::new).collect(),
             }],
+            related: vec![],
         }],
     }
 }

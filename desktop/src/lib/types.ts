@@ -1491,6 +1491,10 @@ export interface LayoutTab {
   id: string;
   title: string;
   sections: LayoutSection[];
+  // Phase 3: RelationshipDefinition.key values whose related-records list
+  // renders on this tab. A key placed on no tab isn't hidden - it falls
+  // back to an always-visible spot outside the tab strip.
+  related: string[];
 }
 
 export interface LayoutTabs {

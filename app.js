@@ -1230,7 +1230,10 @@ function recordModal(key,fields,record={}){
  // switching tabs never loses values already typed into another one.
  const tabsOut=orderedTabsFor(fields,defaultLayoutFor(key).publishedTabs);
  const tabsHtml=tabsOut.length>1?`<div class="layout-tabs" style="display:flex;gap:8px;margin-bottom:12px">${tabsOut.map((t,i)=>`<button type="button" class="tab ${i===0?'active':''}" data-form-tab="${i}">${t.title||'Details'}</button>`).join('')}</div>`:'';
- const panelsHtml=tabsOut.map((t,i)=>`<div data-form-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,record)}</div>`).join('');
+ // Screen/App Builder Phase 3: each tab gets a `data-related-slot` for
+ // whichever relationships it claims, filled in below (only meaningful
+ // once record.id exists - a create form has nothing to link yet).
+ const panelsHtml=tabsOut.map((t,i)=>`<div data-form-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,record)}<div data-related-slot="${i}"></div></div>`).join('');
  const form=`<form id="recordForm">${tabsHtml}${panelsHtml}${isDoc?lineItemsHtml(record.items||[]):''}<div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
  modal(record.id?'Edit record':'Create record',form); $('[data-close]').onclick=closeModal;
  document.querySelectorAll('[data-form-tab]').forEach(b=>b.onclick=()=>{
@@ -1239,12 +1242,14 @@ function recordModal(key,fields,record={}){
  });
  wireRelations(record); if(isDoc)wireLines();
  applyFieldRules(key,$('#recordForm'));
- // Custom Relationships (admin extensibility, Phase B): a record being
- // edited shows every linked record across every applicable relationship,
- // with inline link/unlink - the same place desktop puts RelatedRecordsCard
- // (below the edit form), since this demo has no separate detail page for
- // most entities.
- if(record.id){relLinkingKey=null;renderRelatedRecordsPanel(key,record.id)}
+ // Custom Relationships (admin extensibility, Phase B) + Screen/App
+ // Builder Phase 3: a record being edited shows every linked record
+ // across every applicable relationship, with inline link/unlink -
+ // placed per-tab where a layout claims one, with anything unclaimed in
+ // an always-visible panel below the tabs. Mirrors desktop's
+ // RelatedRecordsCard (`only` prop), just re-rendering itself in place
+ // on every change instead of a query-client refetch.
+ if(record.id){relLinkingKey=null;refreshRelatedPanels(key,record.id,tabsOut)}
  $('#recordForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());
  const relationError=validateRelationships(key,obj);if(relationError)return alert(relationError);
  // Phase 4 custom field extensibility: a save that leaves a custom field
@@ -1364,32 +1369,53 @@ function linkPickerHtml(g){
  const optionsHtml=(data[g.otherType]||[]).map(r=>`<option value="${r.id}">${recordDisplayName(g.otherType,r)}</option>`).join('');
  return `<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><select data-link-select><option value="">Select a record…</option>${optionsHtml}</select><button type="button" class="btn btn-primary" data-link-submit>Link</button><button type="button" class="btn btn-secondary" data-link-cancel>Cancel</button></div>`;
 }
-// Renders every related record for entityType/entityId across every
-// applicable relationship, with inline link/unlink - mirrors desktop's
-// RelatedRecordsCard, just re-rendering itself in place on every change
-// instead of a query-client refetch.
-function renderRelatedRecordsPanel(entityType,entityId){
- const panel=$('#relatedRecordsPanel'); if(!panel)return;
- const defs=relationshipDefsFor(entityType);
- if(!defs.length){panel.innerHTML='';return}
+// The related-record groups for entityType/entityId, optionally
+// restricted to `onlyKeys` (Screen/App Builder Phase 3 - a tab's
+// `related` list, or the leftover keys no tab claims) - mirrors
+// desktop's RelatedRecordsCard's `only` prop.
+function relatedGroupsFor(entityType,entityId,onlyKeys){
+ const defs=relationshipDefsFor(entityType).filter(d=>!onlyKeys||onlyKeys.includes(d.key));
  const related=relatedRecordsFor(entityType,entityId);
- const groups=defs.map(def=>{
+ return defs.map(def=>{
   const isSource=def.sourceEntity===entityType;
   return {def,label:isSource?def.forwardLabel:def.reverseLabel,otherType:isSource?def.targetEntity:def.sourceEntity,isSource,rows:related.filter(r=>r.defKey===def.key)};
  });
- panel.innerHTML=`<div class="panel" style="margin-top:16px"><h3 style="margin-top:0">Related records</h3>${groups.map(g=>`<div style="margin-bottom:14px"><div class="panel-head" style="margin-bottom:4px"><strong>${g.label}</strong><button type="button" class="btn btn-secondary" data-link-group="${g.def.key}">+ Link</button></div>${g.rows.length?g.rows.map(r=>`<div class="deal" style="display:flex;justify-content:space-between;align-items:center"><span>${r.displayName} ${badgeMaybe(r.status)}</span><button type="button" class="icon-btn" data-unlink="${r.instanceId}">Unlink</button></div>`).join(''):'<div class="empty">None linked</div>'}${relLinkingKey===g.def.key?linkPickerHtml(g):''}</div>`).join('')}</div>`;
- groups.forEach(g=>{
-  const btn=panel.querySelector(`[data-link-group="${g.def.key}"]`);
-  if(btn)btn.onclick=()=>{relLinkingKey=relLinkingKey===g.def.key?null:g.def.key;renderRelatedRecordsPanel(entityType,entityId)};
+}
+function relatedGroupsHtml(groups){
+ if(!groups.length)return '';
+ return `<div class="panel" style="margin-top:16px"><h3 style="margin-top:0">Related records</h3>${groups.map(g=>`<div style="margin-bottom:14px"><div class="panel-head" style="margin-bottom:4px"><strong>${g.label}</strong><button type="button" class="btn btn-secondary" data-link-group="${g.def.key}">+ Link</button></div>${g.rows.length?g.rows.map(r=>`<div class="deal" style="display:flex;justify-content:space-between;align-items:center"><span>${r.displayName} ${badgeMaybe(r.status)}</span><button type="button" class="icon-btn" data-unlink="${r.instanceId}">Unlink</button></div>`).join(''):'<div class="empty">None linked</div>'}${relLinkingKey===g.def.key?linkPickerHtml(g):''}</div>`).join('')}</div>`;
+}
+// Fills in every related-records slot for a record being edited - each
+// tab's `data-related-slot` (Screen/App Builder Phase 3 placement) plus
+// the always-visible `#relatedRecordsPanel` for anything no tab claims -
+// and (re)wires every link/unlink control across all of them. Called
+// once when the form opens and again after every link/unlink/cancel, the
+// same self-re-rendering pattern the old single-panel version used.
+function refreshRelatedPanels(entityType,entityId,tabsOut){
+ const claimed=tabsOut.flatMap(t=>t.related);
+ tabsOut.forEach((t,i)=>{
+  const slot=document.querySelector(`[data-related-slot="${i}"]`);
+  if(slot)slot.innerHTML=relatedGroupsHtml(relatedGroupsFor(entityType,entityId,t.related));
  });
- panel.querySelectorAll('[data-unlink]').forEach(b=>b.onclick=()=>{
+ const leftoverKeys=relationshipDefsFor(entityType).map(d=>d.key).filter(k=>!claimed.includes(k));
+ const leftoverPanel=$('#relatedRecordsPanel');
+ if(leftoverPanel)leftoverPanel.innerHTML=relatedGroupsHtml(relatedGroupsFor(entityType,entityId,leftoverKeys));
+
+ document.querySelectorAll('[data-link-group]').forEach(btn=>{
+  btn.onclick=()=>{relLinkingKey=relLinkingKey===btn.dataset.linkGroup?null:btn.dataset.linkGroup;refreshRelatedPanels(entityType,entityId,tabsOut)};
+ });
+ document.querySelectorAll('[data-unlink]').forEach(b=>b.onclick=()=>{
   data.relationshipInstances=(data.relationshipInstances||[]).filter(i=>i.id!==b.dataset.unlink);
-  save();toast('Unlinked');renderRelatedRecordsPanel(entityType,entityId);
+  save();toast('Unlinked');refreshRelatedPanels(entityType,entityId,tabsOut);
  });
- const linkGroup=groups.find(g=>g.def.key===relLinkingKey);
+ // relLinkingKey is a single value, so at most one group across every
+ // slot + the leftover panel ever renders a link picker - looking it up
+ // unscoped (rather than per-container) is safe.
+ const allGroups=[...tabsOut.flatMap(t=>relatedGroupsFor(entityType,entityId,t.related)),...relatedGroupsFor(entityType,entityId,leftoverKeys)];
+ const linkGroup=allGroups.find(g=>g.def.key===relLinkingKey);
  if(linkGroup){
-  const select=panel.querySelector('[data-link-select]'), linkBtn=panel.querySelector('[data-link-submit]'), cancelBtn=panel.querySelector('[data-link-cancel]');
-  if(cancelBtn)cancelBtn.onclick=()=>{relLinkingKey=null;renderRelatedRecordsPanel(entityType,entityId)};
+  const select=document.querySelector('[data-link-select]'), linkBtn=document.querySelector('[data-link-submit]'), cancelBtn=document.querySelector('[data-link-cancel]');
+  if(cancelBtn)cancelBtn.onclick=()=>{relLinkingKey=null;refreshRelatedPanels(entityType,entityId,tabsOut)};
   if(linkBtn)linkBtn.onclick=()=>{
    const otherId=select.value; if(!otherId)return;
    const sourceEntity=linkGroup.isSource?entityType:linkGroup.otherType, sourceId=linkGroup.isSource?entityId:otherId;
@@ -1397,7 +1423,7 @@ function renderRelatedRecordsPanel(entityType,entityId){
    const err=relationshipLinkError(linkGroup.def,sourceId,targetId);
    if(err)return alert(err);
    data.relationshipInstances.push({id:uid(),definitionId:linkGroup.def.id,sourceEntity,sourceId,targetEntity,targetId});
-   save();toast('Linked');relLinkingKey=null;renderRelatedRecordsPanel(entityType,entityId);
+   save();toast('Linked');relLinkingKey=null;refreshRelatedPanels(entityType,entityId,tabsOut);
   };
  }
 }
@@ -1630,15 +1656,16 @@ function allFieldsFor(entityKey){return fieldsFor(entityKey,fieldsFnFor(entityKe
 function freshSectionField(key,full=false){return {key,full}}
 function normalizeFieldEntry(sf){return typeof sf==='string'?freshSectionField(sf):{key:sf.key,full:!!sf.full}}
 function normalizeSection(s){return {...s,columns:s.columns||2,fields:(s.fields||[]).map(normalizeFieldEntry)}}
-function freshTab(entityKey){return {id:uid(),title:'Details',sections:[{id:uid(),title:'Details',columns:2,fields:allFieldsFor(entityKey).map(f=>freshSectionField(f[0]))}]}}
+function freshTab(entityKey){return {id:uid(),title:'Details',sections:[{id:uid(),title:'Details',columns:2,fields:allFieldsFor(entityKey).map(f=>freshSectionField(f[0]))}],related:[]}}
 function freshLayout(entityKey,name,isDefault){return {id:uid(),name,isDefault,roles:[],draftTabs:[freshTab(entityKey)],publishedTabs:null,updatedAt:null}}
 // Migrates the old single-layout-per-entity shape (a bare
 // {draftSections,publishedSections}) into an array of named layouts, and
 // auto-provisions a Default layout for any entity with none yet. Also
 // normalizes every section to the Phase 2 shape (a `columns` count, each
-// field a `{key,full}` pair) - in memory only, the same as the
-// layouts-array migration below it; the next actual edit's `save()`
-// persists it.
+// field a `{key,full}` pair) and every tab to carry a `related` array
+// (Phase 3 - relationship-definition keys whose related-records list
+// shows on that tab) - in memory only, the same as the layouts-array
+// migration below it; the next actual edit's `save()` persists it.
 function ensureLayouts(entityKey){
  if(!data.uiLayouts)data.uiLayouts={};
  let arr=data.uiLayouts[entityKey];
@@ -1651,8 +1678,8 @@ function ensureLayouts(entityKey){
  if(!arr||!arr.length)arr=[freshLayout(entityKey,'Default',true)];
  if(!arr.some(l=>l.isDefault))arr[0].isDefault=true;
  arr.forEach(l=>{
-  l.draftTabs.forEach(t=>{t.sections=t.sections.map(normalizeSection)});
-  if(l.publishedTabs)l.publishedTabs.forEach(t=>{t.sections=t.sections.map(normalizeSection)});
+  l.draftTabs.forEach(t=>{t.sections=t.sections.map(normalizeSection);t.related=t.related||[]});
+  if(l.publishedTabs)l.publishedTabs.forEach(t=>{t.sections=t.sections.map(normalizeSection);t.related=t.related||[]});
  });
  data.uiLayouts[entityKey]=arr;
  return arr;
@@ -1664,12 +1691,13 @@ function layoutById(entityKey,id){return ensureLayouts(entityKey).find(l=>l.id==
 // layout in effect" - a single untitled tab/section in the fields' plain
 // default order, exactly the pre-layout-builder behavior. Each group
 // carries its own `columns` (Phase 2) and each resolved field its `full`
-// flag, both consumed by the render step (`recordModal`/
-// `layoutPreviewModal`) to build a per-section grid instead of one grid
-// shared by the whole tab.
+// flag; each output tab also carries its `related` list (Phase 3 -
+// relationship-definition keys), threaded straight through unchanged. A
+// tab survives even with zero field groups as long as it claims a
+// related list - a tab can be purely a related-records tab.
 function orderedTabsFor(fields,tabs){
  const plainGroup=()=>({title:null,columns:2,items:fields.map(f=>({field:f,full:undefined}))});
- if(!tabs||!tabs.length)return [{title:null,groups:[plainGroup()]}];
+ if(!tabs||!tabs.length)return [{title:null,groups:[plainGroup()],related:[]}];
  const byKey=Object.fromEntries(fields.map(f=>[f[0],f]));
  const used=new Set();
  const out=tabs.map(t=>{
@@ -1682,15 +1710,15 @@ function orderedTabsFor(fields,tabs){
    }).filter(Boolean);
    return {title:s.title,columns:s.columns||2,items};
   }).filter(g=>g.items.length);
-  return {title:t.title,groups};
- }).filter(t=>t.groups.length);
+  return {title:t.title,groups,related:t.related||[]};
+ }).filter(t=>t.groups.length||t.related.length);
  const rest=fields.filter(f=>!used.has(f[0]));
  if(rest.length){
   const restGroup={title:'Other fields',columns:2,items:rest.map(f=>({field:f,full:undefined}))};
   if(out.length)out[out.length-1].groups.push(restGroup);
-  else out.push({title:null,groups:[restGroup]});
+  else out.push({title:null,groups:[restGroup],related:[]});
  }
- return out.length?out:[{title:null,groups:[plainGroup()]}];
+ return out.length?out:[{title:null,groups:[plainGroup()],related:[]}];
 }
 // Renders `orderedTabsFor`'s groups for one tab panel - each group is its
 // own `.form-grid` (Phase 2: a section's own `columns` count, not one
@@ -1726,6 +1754,7 @@ function layoutsTab(body){
  <div style="margin-bottom:14px"><span class="badge">${isPublished?(hasDraftChanges?'Published — unpublished draft changes':'Published'):'Not published — using default field order'}</span></div>
  <div id="layoutTabMeta"></div>
  <div id="layoutSections"></div>
+ <div id="layoutRelated"></div>
  <div class="actions" style="margin-top:16px;flex-wrap:wrap">
   <button class="btn btn-secondary" id="addSection" type="button">+ Add section</button>
   <button class="btn btn-secondary" id="previewLayout" type="button">Preview draft</button>
@@ -1758,6 +1787,7 @@ function layoutsTab(body){
  $('#addTab').onclick=()=>{layout.draftTabs.push(freshTabEmpty());save();layoutsActiveTabIdx=layout.draftTabs.length-1;layoutsTab(body)};
  renderLayoutTabMeta(entityKey);
  renderLayoutSections(entityKey);
+ renderLayoutRelated(entityKey);
  $('#addSection').onclick=()=>{layout.draftTabs[layoutsActiveTabIdx].sections.push({id:uid(),title:'New section',columns:2,fields:[]});save();renderLayoutSections(entityKey)};
  $('#previewLayout').onclick=()=>layoutPreviewModal(entityKey);
  $('#publishLayout').onclick=()=>{layout.publishedTabs=structuredClone(layout.draftTabs);layout.updatedAt=new Date().toISOString();save();toast('Layout published');layoutsTab(body)};
@@ -1853,13 +1883,43 @@ function wireLayoutDragDrop(entityKey){
   list.ondrop=e=>{e.preventDefault();moveField(Number(list.dataset.sectionIdx),null)};
  });
 }
+// Screen/App Builder Phase 3: lets an admin pick which of this object's
+// relationships show their related-records list on the active tab. A
+// relationship shows on at most one tab, same "only lives in one place"
+// rule fields follow - checking it here strips it from every other tab
+// first. Nothing to place at all (no applicable relationships) renders
+// nothing rather than an empty box.
+function renderLayoutRelated(entityKey){
+ const layout=layoutById(entityKey,layoutsSelectedLayoutId);
+ const tab=layout.draftTabs[layoutsActiveTabIdx];
+ const defs=relationshipDefsFor(entityKey);
+ const box=$('#layoutRelated'); if(!box)return;
+ if(!defs.length){box.innerHTML='';return}
+ box.innerHTML=`<div class="layout-section" style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:12px">
+  <div style="font-weight:700;margin-bottom:6px">Related lists</div>
+  <p class="muted" style="font-size:12px;margin:0 0 8px">Shows once a record exists to link against — not on the create form. A relationship left unchecked everywhere still shows, in an always-visible spot below the tabs.</p>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">${defs.map(def=>{
+   const isSource=def.sourceEntity===entityKey;
+   const label=isSource?def.forwardLabel:def.reverseLabel;
+   return `<label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" data-related-key="${def.key}" ${tab.related.includes(def.key)?'checked':''}> ${label}</label>`;
+  }).join('')}</div>
+ </div>`;
+ box.querySelectorAll('[data-related-key]').forEach(cb=>cb.onchange=()=>{
+  const key=cb.dataset.relatedKey;
+  layout.draftTabs.forEach(t=>{t.related=t.related.filter(r=>r!==key)});
+  if(cb.checked)tab.related=[...tab.related,key];
+  save();
+ });
+}
 function layoutPreviewModal(entityKey){
  const fields=allFieldsFor(entityKey);
  const layout=layoutById(entityKey,layoutsSelectedLayoutId);
  const sample={};
  const tabsOut=orderedTabsFor(fields,layout.draftTabs);
+ const defs=relationshipDefsFor(entityKey);
+ const relatedLabel=key=>{const def=defs.find(d=>d.key===key);if(!def)return key;return def.sourceEntity===entityKey?def.forwardLabel:def.reverseLabel};
  const tabsHtml=tabsOut.length>1?`<div class="layout-tabs" style="display:flex;gap:8px;margin-bottom:12px">${tabsOut.map((t,i)=>`<button type="button" class="tab ${i===0?'active':''}" data-preview-tab="${i}">${t.title||'Details'}</button>`).join('')}</div>`:'';
- const panelsHtml=tabsOut.map((t,i)=>`<div data-preview-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,sample)}</div>`).join('');
+ const panelsHtml=tabsOut.map((t,i)=>`<div data-preview-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,sample)}${t.related.length?`<div class="panel" style="margin-top:12px"><strong style="font-size:13px">Related records</strong><p class="muted" style="font-size:12px;margin:4px 0 0">${t.related.map(relatedLabel).join(', ')} — shown here once a record exists to link against.</p></div>`:''}</div>`).join('');
  const body=`${tabsHtml}${panelsHtml}<p class="muted" style="font-size:12px;margin-top:12px">Preview of "${layout.name}"'s draft only — nothing here is saved, and the live form is unaffected until you Publish.</p><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
  modal(`Preview: ${entityLabel(entityKey)} — ${layout.name}`,body);
  $('[data-close]').onclick=closeModal;
