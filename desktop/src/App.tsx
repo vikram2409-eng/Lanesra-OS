@@ -131,7 +131,9 @@ function Ready({
         onLogout={onLogout}
         customObjects={customObjects.data ?? []}
       >
-        {section === "dashboard" && <Dashboard onNavigate={setSection} />}
+        {section === "dashboard" && (
+          <Dashboard onNavigate={setSection} onOpenRecord={(target, id) => navigateTo(target, { openId: id })} />
+        )}
         {section === "companies" && (
           <Companies prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
         )}

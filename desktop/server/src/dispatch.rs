@@ -35,6 +35,7 @@ use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
+    dashboard_widget_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
     quote_service, relationship_service, report_service, screen_layout_service, search_service, status_transition_service, task_service,
     user_service, workflow_service, workspace_service,
@@ -569,6 +570,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let workspace_id = require_workspace_id(conn)?;
             let widgets = dashboard_layout_service::resolve_effective_dashboard(conn, &workspace_id, actor)?;
             to_value(lanesra_core::services::dashboard_layout_service::EffectiveDashboard { widgets })
+        }
+        "run_dashboard_record_list" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let mode: String = arg(args, "mode")?;
+            let limit: i64 = arg(args, "limit")?;
+            to_value(dashboard_widget_service::run(conn, &require_workspace_id(conn)?, &entity_type, &mode, limit)?)
         }
 
         "list_custom_records" => {

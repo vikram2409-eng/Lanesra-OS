@@ -10,6 +10,7 @@ pub mod custom_object_service;
 pub mod custom_record_service;
 pub mod dashboard_layout_service;
 pub mod dashboard_service;
+pub mod dashboard_widget_service;
 pub mod entity_registry;
 pub mod invoice_service;
 pub mod numbering_service;

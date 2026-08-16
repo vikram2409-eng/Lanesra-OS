@@ -5,11 +5,21 @@ import { api } from "../../lib/api";
 import { formatCents } from "../../lib/money";
 import { Bar } from "../../components/Bar";
 import type { Section } from "../../components/AppShell";
-import type { CustomReport } from "../../lib/types";
+import { sectionFor } from "../../components/GlobalSearch";
+import { entityTypeLabel, type CustomReport, type DashboardWidget, type RecordListMode } from "../../lib/types";
 import { useEffectiveDashboard } from "../../lib/useEffectiveDashboard";
 import { KPI_DEFS, resolveVisibleKpis, type KpiDef } from "./kpis";
 
-export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => void }) {
+export function Dashboard({
+  onNavigate,
+  onOpenRecord,
+}: {
+  onNavigate: (section: Section) => void;
+  /** A record-list widget row jumps straight to that record, reusing the
+   * same one-shot openId navigation Global search's own results already
+   * use (see AppShell's Prefill doc comment). */
+  onOpenRecord: (section: Section, id: string) => void;
+}) {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["dashboard"],
@@ -59,6 +69,11 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
         .filter((r): r is CustomReport => !!r)
     : [];
 
+  // A record-list widget's config is fully self-contained (entity_type,
+  // mode, limit) - unlike a chart widget's report_id, there's no
+  // "resolves to something that might have been deleted" step here.
+  const recordListWidgets: DashboardWidget[] = layoutWidgets ? layoutWidgets.filter((w) => w.kind === "record_list") : [];
+
   return (
     <div>
       <h2>Dashboard</h2>
@@ -75,6 +90,14 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
           {chartReports.map((report) => (
             <DashboardChartCard key={report.id} report={report} />
+          ))}
+        </div>
+      )}
+
+      {recordListWidgets.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          {recordListWidgets.map((w) => (
+            <DashboardRecordListCard key={w.id} widget={w} onOpenRecord={onOpenRecord} />
           ))}
         </div>
       )}
@@ -162,6 +185,59 @@ function DashboardChartCard({ report }: { report: CustomReport }) {
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+/** One record-list widget on the live Dashboard - a short list of records
+ * for `widget.config.entity_type`, run fresh via `run_dashboard_record_list`
+ * (see `dashboard_widget_service` in core for what "recent" vs "due_soon"
+ * mean). Clicking a row jumps straight to that record, the same one-shot
+ * navigation an ID hyperlink or a Global search result already uses. */
+function DashboardRecordListCard({
+  widget,
+  onOpenRecord,
+}: {
+  widget: DashboardWidget;
+  onOpenRecord: (section: Section, id: string) => void;
+}) {
+  const entityType = widget.config.entity_type as string;
+  const mode = widget.config.mode as RecordListMode;
+  const limit = (widget.config.limit as number) ?? 5;
+  const q = useQuery({
+    queryKey: ["dashboardRecordList", entityType, mode, limit],
+    queryFn: () => api.runDashboardRecordList(entityType, mode, limit),
+  });
+  const rows = q.data ?? [];
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>
+        {entityTypeLabel(entityType)} - {mode === "due_soon" ? "due soon" : "recent"}
+      </h3>
+      {q.isLoading && <p>Loading...</p>}
+      {rows.length === 0 && !q.isLoading && <p className="empty-state">Nothing here yet.</p>}
+      {rows.length > 0 && (
+        <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", fontSize: 14 }}>
+          {rows.map((r) => (
+            <li
+              key={r.entity_id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "6px 0",
+                borderBottom: "1px solid var(--border, #e5e7eb)",
+                cursor: "pointer",
+              }}
+              onClick={() => onOpenRecord(sectionFor(r.entity_type), r.entity_id)}
+            >
+              <span>{r.title}</span>
+              {r.subtitle && <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{r.subtitle}</span>}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

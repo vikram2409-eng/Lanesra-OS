@@ -62,6 +62,7 @@ import type {
   LostReasonBreakdown,
   Notification,
   NumberingOverrideInput,
+  RecordListRow,
   RelatedRecord,
   RelationshipDefinition,
   RelationshipDefinitionInput,
@@ -334,6 +335,8 @@ export const api = {
   makeDashboardLayoutDefault: (id: string) => call<DashboardLayout>("make_dashboard_layout_default", { id }),
   deleteDashboardLayout: (id: string) => call<void>("delete_dashboard_layout", { id }),
   effectiveDashboardLayout: () => call<EffectiveDashboard>("effective_dashboard_layout"),
+  runDashboardRecordList: (entityType: string, mode: string, limit: number) =>
+    call<RecordListRow[]>("run_dashboard_record_list", { entityType, mode, limit }),
 
   listCustomRecords: (objectKey: string) => call<CustomRecord[]>("list_custom_records", { objectKey }),
   getCustomRecord: (id: string) => call<CustomRecord>("get_custom_record", { id }),

@@ -1542,10 +1542,13 @@ export interface EffectiveLayout {
  * ships `"kpi"`, whose config is `{kpi_key}` (one of KPI_DEFS's keys -
  * see kpis.tsx). Phase 2 adds `"chart"`, whose config is `{report_id}` -
  * an existing saved Custom Report, run fresh on every render (see
- * `CustomReportChart` in Dashboard.tsx); a report deleted after being
- * added to a dashboard is simply skipped, not an error. This layer
- * (like the backend) never inspects `config` beyond that per-kind
- * shape. */
+ * `DashboardChartCard` in Dashboard.tsx); a report deleted after being
+ * added to a dashboard is simply skipped, not an error. Phase 3 adds
+ * `"record_list"`, whose config is `{entity_type, mode, limit}` - a
+ * short list of records for one entity type, run fresh via
+ * `run_dashboard_record_list` (see `dashboard_widget_service` in core
+ * for what "recent" vs "due_soon" mean). This layer (like the backend)
+ * never inspects `config` beyond that per-kind shape. */
 export interface DashboardWidget {
   id: string;
   kind: string;
@@ -1583,6 +1586,20 @@ export interface DashboardLayoutUpdate {
 
 export interface EffectiveDashboard {
   widgets: DashboardWidgets | null;
+}
+
+// Dashboard customization Phase 3: record-list widget data - see
+// `DashboardWidget`'s own doc comment above for the "record_list" kind's
+// config shape, and `dashboard_widget_service` in core for what each mode
+// actually does per entity type.
+export const RECORD_LIST_MODES = ["recent", "due_soon"] as const;
+export type RecordListMode = (typeof RECORD_LIST_MODES)[number];
+
+export interface RecordListRow {
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  subtitle: string | null;
 }
 
 export interface CustomRecordInput {
