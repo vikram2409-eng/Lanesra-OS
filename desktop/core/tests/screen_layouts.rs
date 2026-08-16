@@ -52,6 +52,7 @@ fn one_field_draft(field: &str) -> LayoutTabs {
             id: "t1".into(),
             title: "Details".into(),
             sections: vec![LayoutSection { id: "s1".into(), title: "Details".into(), columns: 2, fields: vec![field.into()] }],
+            related: vec![],
         }],
     }
 }
@@ -247,6 +248,7 @@ fn a_sections_column_count_and_each_fields_full_width_flag_round_trip_through_sa
                     SectionField { key: "industry".into(), full_width: false },
                 ],
             }],
+            related: vec![],
         }],
     };
     let update = ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft };
@@ -280,8 +282,54 @@ fn a_phase_1_layout_saved_before_columns_existed_still_loads_with_the_old_defaul
     assert_eq!(section.columns, 2, "a section with no stored columns falls back to the Phase 1 fixed width");
     assert_eq!(field_keys(section), vec!["industry".to_string(), "city".to_string()]);
     assert!(section.fields.iter().all(|f| !f.full_width));
+    assert!(reloaded.draft.tabs[0].related.is_empty(), "a tab with no stored 'related' key falls back to none placed");
 
     // And it now round-trips as the new shape once saved again.
+    let update = ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft: reloaded.draft.clone() };
+    let resaved = screen_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
+    assert_eq!(resaved.draft, reloaded.draft);
+}
+
+// --- Screen/App Builder Phase 3: related-list tab placement ---
+
+#[test]
+fn a_tabs_related_list_keys_round_trip_through_save() {
+    let (conn, ws, admin) = setup_workspace();
+    let layout = screen_layout_service::list_layouts(&conn, &ws, "Company").unwrap().remove(0);
+
+    let draft = LayoutTabs {
+        tabs: vec![
+            LayoutTab { id: "t1".into(), title: "Details".into(), sections: vec![], related: vec!["primary_contacts".into()] },
+            LayoutTab { id: "t2".into(), title: "History".into(), sections: vec![], related: vec!["opportunities".into(), "quotes".into()] },
+        ],
+    };
+    let update = ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft };
+    let saved = screen_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
+
+    assert_eq!(saved.draft.tabs[0].related, vec!["primary_contacts".to_string()]);
+    assert_eq!(saved.draft.tabs[1].related, vec!["opportunities".to_string(), "quotes".to_string()]);
+
+    // A tab can carry only a related list and no field sections at all -
+    // it isn't required to have both.
+    assert!(saved.draft.tabs[0].sections.is_empty());
+
+    let reloaded = screen_layout_service::get_layout(&conn, &layout.id).unwrap();
+    assert_eq!(reloaded.draft, saved.draft);
+}
+
+#[test]
+fn a_phase_2_layout_saved_before_related_lists_existed_still_loads_with_none_placed() {
+    // Simulates a draft persisted by the Phase 1/2 code: sections in the
+    // current shape, but no "related" key on the tab at all.
+    let (conn, ws, admin) = setup_workspace();
+    let layout = screen_layout_service::list_layouts(&conn, &ws, "Company").unwrap().remove(0);
+    let legacy_draft_json = r#"{"tabs":[{"id":"t1","title":"Details","sections":[{"id":"s1","title":"Details","columns":2,"fields":[{"key":"industry","full_width":false}]}]}]}"#;
+    conn.execute("UPDATE screen_layouts SET draft_json = ?1 WHERE id = ?2", rusqlite::params![legacy_draft_json, layout.id]).unwrap();
+
+    let reloaded = screen_layout_service::get_layout(&conn, &layout.id).unwrap();
+    assert!(reloaded.draft.tabs[0].related.is_empty());
+    assert_eq!(field_keys(&reloaded.draft.tabs[0].sections[0]), vec!["industry".to_string()]);
+
     let update = ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft: reloaded.draft.clone() };
     let resaved = screen_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
     assert_eq!(resaved.draft, reloaded.draft);

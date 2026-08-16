@@ -25,16 +25,20 @@ function emptySection(): LayoutSection {
   return { id: newId(), title: "Section", columns: 2, fields: [] };
 }
 function emptyTab(): LayoutTab {
-  return { id: newId(), title: "New tab", sections: [emptySection()] };
+  return { id: newId(), title: "New tab", sections: [emptySection()], related: [] };
 }
 
 /**
- * Screen/App Builder Phase 1-2: lets an Administrator design the
+ * Screen/App Builder Phase 1-3: lets an Administrator design the
  * create/edit form for any built-in or custom object - named layouts
  * made of tabs of field sections, assigned to roles. Each section lays
  * its fields out in its own 1-3 column grid (Phase 2), with any field
- * optionally spanning the section's full width. Edits are all against a
- * layout's draft; nothing changes on a live form until Publish (see
+ * optionally spanning the section's full width. A tab can also claim one
+ * or more of the object's relationships (Phase 3), rendering that
+ * related-records list on the tab once a record actually exists to link
+ * against - unclaimed relationships still show, in an always-visible
+ * spot outside the tab strip. Edits are all against a layout's draft;
+ * nothing changes on a live form until Publish (see
  * screen_layout_service's doc comments in the Rust core for the full
  * draft/published/role-resolution model - this screen is a thin editor
  * over it). Mirrors the online demo's Admin > Screen layouts builder,
@@ -71,6 +75,16 @@ export function ScreenLayoutsAdmin() {
     ...(customFields.data ?? []).map((f) => ({ key: f.key, label: f.label })),
   ];
   const fieldLabel = (key: string) => fields.find((f) => f.key === key)?.label ?? key;
+
+  // Phase 3: the relationships this object can show a related-list for -
+  // same "active + show_related_list, either direction" filter
+  // RelatedRecordsCard itself uses, so what an admin can place here is
+  // exactly what would otherwise show up unplaced.
+  const relationshipDefs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
+  const relatedLists: { key: string; label: string }[] = (relationshipDefs.data ?? [])
+    .filter((d) => d.show_related_list && (d.source_entity_type === entityType || d.target_entity_type === entityType))
+    .map((d) => ({ key: d.key, label: d.source_entity_type === entityType ? d.forward_label : d.reverse_label }));
+  const relatedListLabel = (key: string) => relatedLists.find((r) => r.key === key)?.label ?? key;
 
   const layouts = useQuery({ queryKey: ["screenLayouts", entityType], queryFn: () => api.listScreenLayouts(entityType) });
 
@@ -150,6 +164,7 @@ export function ScreenLayoutsAdmin() {
           layout={selected}
           fields={fields}
           fieldLabel={fieldLabel}
+          relatedLists={relatedLists}
           layoutCount={list.length}
           onChanged={invalidate}
           onDeleted={() => {
@@ -160,7 +175,9 @@ export function ScreenLayoutsAdmin() {
         />
       )}
 
-      {previewLayout && <LayoutPreviewModal layout={previewLayout} fieldLabel={fieldLabel} onClose={() => setPreviewId(null)} />}
+      {previewLayout && (
+        <LayoutPreviewModal layout={previewLayout} fieldLabel={fieldLabel} relatedListLabel={relatedListLabel} onClose={() => setPreviewId(null)} />
+      )}
     </div>
   );
 }
@@ -216,6 +233,7 @@ function LayoutEditor({
   layout,
   fields,
   fieldLabel,
+  relatedLists,
   layoutCount,
   onChanged,
   onDeleted,
@@ -224,6 +242,7 @@ function LayoutEditor({
   layout: ScreenLayout;
   fields: { key: string; label: string }[];
   fieldLabel: (key: string) => string;
+  relatedLists: { key: string; label: string }[];
   layoutCount: number;
   onChanged: () => void;
   onDeleted: () => void;
@@ -304,6 +323,14 @@ function LayoutEditor({
     const next: LayoutTabs = { tabs: tabs.tabs.filter((_, i) => i !== idx) };
     save(next);
     setActiveTabIdx((cur) => Math.max(0, Math.min(cur, next.tabs.length - 1)));
+  }
+
+  // A relationship's related-list only ever shows on one tab, same rule
+  // as fields - claiming it here strips it from every other tab first.
+  function toggleTabRelated(tabIdx: number, key: string, checked: boolean) {
+    const stripped = tabs.tabs.map((t) => ({ ...t, related: t.related.filter((r) => r !== key) }));
+    if (checked) stripped[tabIdx] = { ...stripped[tabIdx], related: [...stripped[tabIdx].related, key] };
+    save({ tabs: stripped });
   }
 
   function addSection(tabIdx: number) {
@@ -597,6 +624,28 @@ function LayoutEditor({
           <button className="btn" onClick={() => addSection(activeTabIdxClamped)}>
             + Add section
           </button>
+
+          {relatedLists.length > 0 && (
+            <div className="card" style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Related lists</div>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 0 }}>
+                Shows once a record exists to link against - not on the create form. A relationship left unchecked
+                everywhere still shows, in an always-visible spot below the tabs.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                {relatedLists.map((r) => (
+                  <label key={r.key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={activeTab.related.includes(r.key)}
+                      onChange={(e) => toggleTabRelated(activeTabIdxClamped, r.key, e.target.checked)}
+                    />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -630,10 +679,12 @@ function LayoutEditor({
 function LayoutPreviewModal({
   layout,
   fieldLabel,
+  relatedListLabel,
   onClose,
 }: {
   layout: ScreenLayout;
   fieldLabel: (key: string) => string;
+  relatedListLabel: (key: string) => string;
   onClose: () => void;
 }) {
   const [tabIdx, setTabIdx] = useState(0);
@@ -688,6 +739,14 @@ function LayoutPreviewModal({
               </div>
             </div>
           ))}
+        {active && active.related.length > 0 && (
+          <div className="card" style={{ background: "var(--surface-2, transparent)" }}>
+            <strong style={{ fontSize: 13 }}>Related records</strong>
+            <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "4px 0 0" }}>
+              {active.related.map(relatedListLabel).join(", ")} - shown here once a record exists to link against.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -36,6 +36,18 @@ pub struct LayoutTab {
     pub id: String,
     pub title: String,
     pub sections: Vec<LayoutSection>,
+    /// Screen/App Builder Phase 3: relationship-definition keys (see
+    /// `RelationshipDefinition::key` - this layer stores them the same
+    /// opaque-string way it stores field keys) whose related-records list
+    /// renders on this tab. A key that isn't on any tab's `related` still
+    /// isn't hidden - the frontend falls back to showing it in an
+    /// always-visible spot outside the tab strip, the same "never
+    /// silently drop something the layout doesn't know about" rule
+    /// `LayoutFormFields` already applies to unplaced fields. `#[serde(default)]`
+    /// so a layout saved before this phase (no `related` key at all)
+    /// still loads.
+    #[serde(default)]
+    pub related: Vec<String>,
 }
 
 /// Screen/App Builder Phase 2: a section lays its fields out in a CSS

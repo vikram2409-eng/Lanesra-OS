@@ -6,7 +6,6 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
-import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import type { Prefill } from "../../components/AppShell";
 import {
   CUSTOM_RECORD_STATUSES,
@@ -28,7 +27,9 @@ type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string }
  * `prefill.openId` (global search "jump to a record") reuses the same
  * one-shot mechanism every other list screen already has - there's no
  * separate read-only "detail" mode here, so it opens straight into Edit,
- * which already shows every field plus RelatedRecordsCard.
+ * which already shows every field plus its related-records lists (see
+ * `LayoutFormFields`'s `entityId`/`relatedKeys` props - Screen/App
+ * Builder Phase 3).
  */
 export function CustomObjectRecords({
   definition,
@@ -193,6 +194,15 @@ function RecordForm({
     onChange: setCustomValues,
   });
 
+  // Screen/App Builder Phase 3: every relationship this object can show a
+  // related-list for - same set RelatedRecordsCard itself would show
+  // unfiltered, so LayoutFormFields knows what's still "unplaced" if a
+  // layout only claims some of them for a tab.
+  const relationshipDefs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
+  const relatedKeys = (relationshipDefs.data ?? [])
+    .filter((d) => d.show_related_list && (d.source_entity_type === definition.key || d.target_entity_type === definition.key))
+    .map((d) => d.key);
+
   return (
     <div>
       <h2>
@@ -209,6 +219,8 @@ function RecordForm({
         <LayoutFormFields
           entityType={definition.key}
           order={["primary_name", "status", "owner_user_id", "notes", ...customFieldOrder]}
+          entityId={recordId}
+          relatedKeys={relatedKeys}
           fields={{
             primary_name: (
               <div className="form-field full" key="primary_name">
@@ -262,11 +274,6 @@ function RecordForm({
           </button>
         </div>
       </form>
-      {recordId && (
-        <div style={{ marginTop: 16 }}>
-          <RelatedRecordsCard entityType={definition.key} entityId={recordId} />
-        </div>
-      )}
     </div>
   );
 }

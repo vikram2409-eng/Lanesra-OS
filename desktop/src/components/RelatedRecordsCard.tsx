@@ -42,8 +42,15 @@ async function listRecordsOfType(entityType: string): Promise<PickableRecord[]> 
  * either direction - custom relationships automatically show up here with
  * no per-screen wiring, the same "compose for free" property custom
  * fields/business rules already have on a custom object.
+ *
+ * `only` (Screen/App Builder Phase 3): restricts which relationships
+ * render, by `RelationshipDefinition.key` - how a Screen layout places
+ * different related lists on different tabs (`LayoutFormFields` renders
+ * one `RelatedRecordsCard` per tab that claims any keys, each with its
+ * own `only`). Omitted (every caller outside the layout system) shows
+ * everything applicable, the pre-Phase-3 behavior.
  */
-export function RelatedRecordsCard({ entityType, entityId }: { entityType: string; entityId: string }) {
+export function RelatedRecordsCard({ entityType, entityId, only }: { entityType: string; entityId: string; only?: string[] }) {
   const queryClient = useQueryClient();
   const [linkingKey, setLinkingKey] = useState<string | null>(null);
 
@@ -54,7 +61,7 @@ export function RelatedRecordsCard({ entityType, entityId }: { entityType: strin
   const defs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
 
   const applicableDefs = (defs.data ?? []).filter(
-    (d) => d.show_related_list && (d.source_entity_type === entityType || d.target_entity_type === entityType),
+    (d) => d.show_related_list && (d.source_entity_type === entityType || d.target_entity_type === entityType) && (!only || only.includes(d.key)),
   );
 
   function invalidate() {

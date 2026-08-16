@@ -282,6 +282,15 @@ function CompanyForm({
     onChange: setCustomValues,
   });
 
+  // Screen/App Builder Phase 3: places related-records lists into the
+  // create/edit form itself, tab-scoped per the effective layout - a new
+  // capability for Companies, which previously only showed related
+  // records on the (separate) detail page below.
+  const relationshipDefs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
+  const relatedKeys = (relationshipDefs.data ?? [])
+    .filter((d) => d.show_related_list && (d.source_entity_type === "Company" || d.target_entity_type === "Company"))
+    .map((d) => d.key);
+
   return (
     <div>
       <h2>{companyId ? "Edit company" : "New company"}</h2>
@@ -300,6 +309,8 @@ function CompanyForm({
             "annual_revenue_cents", "employee_count", "preferred_contact_method",
             "billing_address", "notes", ...customFieldOrder,
           ]}
+          entityId={companyId}
+          relatedKeys={relatedKeys}
           fields={{
             name: (
               <div className="form-field full" key="name">
