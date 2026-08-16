@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 
+use crate::security::SecurityConfig;
+
 /// Shared across every request. A single mutex-guarded connection is enough
 /// for the "small team on a LAN" scale this mode targets - SQLite already
 /// serializes writers, and request volume at this scale won't contend on
@@ -14,12 +16,15 @@ pub struct ServerState {
     /// under the live connection - every other command only ever needs
     /// `conn`.
     pub db_path: PathBuf,
+    /// Self-hosted internet deployment settings (secure cookies, CORS) -
+    /// see `security::SecurityConfig`.
+    pub security: SecurityConfig,
 }
 
 pub type SharedState = Arc<ServerState>;
 
 impl ServerState {
-    pub fn new(conn: Connection, db_path: PathBuf) -> SharedState {
-        Arc::new(ServerState { conn: Mutex::new(conn), db_path })
+    pub fn new(conn: Connection, db_path: PathBuf, security: SecurityConfig) -> SharedState {
+        Arc::new(ServerState { conn: Mutex::new(conn), db_path, security })
     }
 }

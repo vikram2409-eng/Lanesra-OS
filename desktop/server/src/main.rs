@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use lanesra_server::{build_router, ServerState};
+use lanesra_server::{build_router, SecurityConfig, ServerState};
 
 #[tokio::main]
 async fn main() {
@@ -26,7 +26,15 @@ async fn main() {
     let conn = lanesra_core::db::open_workspace_db(&db_path).expect("could not open the workspace database");
     tracing::info!(path = %db_path.display(), "opened workspace database");
 
-    let state = ServerState::new(conn, db_path);
+    let security = SecurityConfig::from_env();
+    if security.trust_proxy_https {
+        tracing::info!("trusting a reverse proxy for TLS - session cookie will be marked Secure");
+    }
+    if !security.allowed_origins.is_empty() {
+        tracing::info!(origins = ?security.allowed_origins, "CORS enabled for the listed origins");
+    }
+
+    let state = ServerState::new(conn, db_path, security);
     let app = build_router(state, frontend_dir);
 
     let addr: SocketAddr = format!("{host}:{port}").parse().expect("invalid HOST/PORT");

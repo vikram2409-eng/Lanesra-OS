@@ -119,9 +119,82 @@ login, two independent concurrent sessions, and data persisting across a
 container restart all verified against the real image - see "Verification
 performed this session").
 
-This targets the PRD's explicit scope: a local network, not the public
-internet. There's no HTTPS/TLS termination built in - put it behind a
-reverse proxy with TLS if you need that, or keep it LAN-only as intended.
+This targets the PRD's original scope: a local network. There's still no
+HTTPS/TLS termination built into `lanesra-server` itself - that's what the
+reverse proxy in the next section is for - but the server now knows how to
+behave correctly *behind* one, so an organization can expose Team
+Workspace on the open internet on its own domain/infrastructure if it
+wants to (still self-hosted, never a Lanesra-run SaaS).
+
+### Exposing it on the open internet (optional)
+
+Everything in this section is opt-in via environment variables; leave
+them unset and the server behaves exactly as it always has (LAN-only,
+plain HTTP, same-origin frontend). Three things change when you expose
+Team Workspace beyond a trusted LAN:
+
+1. **TLS termination.** `lanesra-server` speaks plain HTTP only - put a
+   reverse proxy in front of it that terminates TLS and forwards to
+   `127.0.0.1:8080` (or wherever the container is bound). Minimal
+   examples for the two most common choices:
+
+   **Caddy** (`Caddyfile`, automatic HTTPS via Let's Encrypt):
+   ```
+   lanesra.example.com {
+       reverse_proxy 127.0.0.1:8080
+   }
+   ```
+
+   **nginx** (assumes a cert already provisioned, e.g. via certbot):
+   ```nginx
+   server {
+       listen 443 ssl;
+       server_name lanesra.example.com;
+       ssl_certificate     /etc/letsencrypt/live/lanesra.example.com/fullchain.pem;
+       ssl_certificate_key /etc/letsencrypt/live/lanesra.example.com/privkey.pem;
+
+       location / {
+           proxy_pass http://127.0.0.1:8080;
+           proxy_set_header Host $host;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   server {
+       listen 80;
+       server_name lanesra.example.com;
+       return 301 https://$host$request_uri;
+   }
+   ```
+
+2. **`LANESRA_TRUST_PROXY_HTTPS=1`** - tells the server to mark the
+   session cookie `Secure` and send `Strict-Transport-Security`. Only set
+   this once a proxy like the above is actually terminating TLS in front
+   of the server - a `Secure` cookie handed to a browser that only ever
+   sees the plain-HTTP hop between it and the proxy is simply never sent
+   back, which silently breaks every session rather than failing loudly.
+   Leave it unset for a LAN-only, plain-HTTP deployment.
+
+3. **`LANESRA_ALLOWED_ORIGINS`** (optional, comma-separated) - only
+   needed if the frontend is served from a different origin than this
+   API (e.g. a separate static-hosting deployment). `lanesra-server`
+   serves its own frontend same-origin by default, so this is unset in
+   the normal case; setting it enables a CORS layer that allows the
+   listed origins to call the API with credentials (the session cookie)
+   included.
+
+Every response also now carries a conservative, always-on header set
+(`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: strict-origin-when-cross-origin`) regardless of any of
+the above - see `server/src/security.rs`.
+
+With Docker, pass these through `-e` or Compose's `environment:` (see
+`docker-compose.yml`), e.g.:
+```bash
+docker run -p 8080:8080 -v lanesra-data:/data \
+  -e LANESRA_TRUST_PROXY_HTTPS=1 \
+  lanesra-os-server
+```
 
 ## What's here
 

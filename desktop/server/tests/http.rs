@@ -2,15 +2,22 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use lanesra_core::db::open_in_memory_db;
-use lanesra_server::{build_router, ServerState};
+use lanesra_server::{build_router, SecurityConfig, ServerState};
 use serde_json::{json, Value};
 
 async fn spawn_server() -> SocketAddr {
+    spawn_server_with_security(SecurityConfig::default()).await
+}
+
+/// Same as `spawn_server`, but with an explicit `SecurityConfig` - for
+/// tests exercising `trust_proxy_https`/`allowed_origins` behavior (see
+/// server/src/security.rs).
+async fn spawn_server_with_security(security: SecurityConfig) -> SocketAddr {
     let conn = open_in_memory_db().unwrap();
     // db_path is unused by every test below - none of them exercise
     // restore_backup, the only command that touches it - so an in-memory
     // connection with a placeholder path is fine here.
-    let state = ServerState::new(conn, std::env::temp_dir().join("lanesra-http-test-unused.sqlite3"));
+    let state = ServerState::new(conn, std::env::temp_dir().join("lanesra-http-test-unused.sqlite3"), security);
     let frontend_dir = std::env::temp_dir().join("lanesra-server-test-frontend");
     std::fs::create_dir_all(&frontend_dir).unwrap();
     let app = build_router(state, frontend_dir);
@@ -32,7 +39,7 @@ async fn spawn_file_backed_server() -> (SocketAddr, PathBuf) {
         lanesra_core::domain::ids::new_uuid()
     ));
     let conn = lanesra_core::db::open_workspace_db(&db_path).unwrap();
-    let state = ServerState::new(conn, db_path.clone());
+    let state = ServerState::new(conn, db_path.clone(), SecurityConfig::default());
     let frontend_dir = std::env::temp_dir().join("lanesra-server-test-frontend");
     std::fs::create_dir_all(&frontend_dir).unwrap();
     let app = build_router(state, frontend_dir);
@@ -325,4 +332,100 @@ async fn self_service_password_change_over_http() {
     )
     .await;
     assert_eq!(old_login_result["ok"], false);
+}
+
+/// A plain client with no cookie store, so the raw `Set-Cookie` header can
+/// be inspected directly - `reqwest`'s cookie jar hides the cookie's own
+/// attributes (Secure, SameSite, ...) from callers.
+fn raw_client() -> reqwest::Client {
+    reqwest::Client::new()
+}
+
+async fn first_run_raw(client: &reqwest::Client, addr: SocketAddr) -> reqwest::Response {
+    client
+        .post(format!("http://{addr}/api/invoke/first_run_setup"))
+        .json(&json!({"setup": {
+            "business_name": "Test Co", "legal_name": null, "currency_code": "USD", "locale": "en-US",
+            "timezone": "UTC", "default_tax_rate_bp": 0, "admin_username": "admin", "admin_display_name": "Admin",
+            "admin_password": "supersecretpw", "load_sample_data": false
+        }}))
+        .send()
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn session_cookie_is_not_secure_by_default() {
+    let addr = spawn_server().await;
+    let response = first_run_raw(&raw_client(), addr).await;
+    let set_cookie = response.headers().get("set-cookie").unwrap().to_str().unwrap().to_ascii_lowercase();
+    assert!(set_cookie.contains("lanesra_session="));
+    assert!(!set_cookie.contains("secure"), "the LAN-only default must never mark the cookie Secure: {set_cookie}");
+}
+
+#[tokio::test]
+async fn session_cookie_is_secure_when_trusting_a_proxy_for_https() {
+    let addr = spawn_server_with_security(SecurityConfig { trust_proxy_https: true, allowed_origins: vec![] }).await;
+    let response = first_run_raw(&raw_client(), addr).await;
+    let set_cookie = response.headers().get("set-cookie").unwrap().to_str().unwrap().to_ascii_lowercase();
+    assert!(set_cookie.contains("secure"), "LANESRA_TRUST_PROXY_HTTPS=1 must mark the cookie Secure: {set_cookie}");
+}
+
+#[tokio::test]
+async fn strict_transport_security_is_only_sent_when_trusting_a_proxy_for_https() {
+    let addr_default = spawn_server().await;
+    let default_response = reqwest::get(format!("http://{addr_default}/api/health")).await.unwrap();
+    assert!(default_response.headers().get("strict-transport-security").is_none());
+
+    let addr_https = spawn_server_with_security(SecurityConfig { trust_proxy_https: true, allowed_origins: vec![] }).await;
+    let https_response = reqwest::get(format!("http://{addr_https}/api/health")).await.unwrap();
+    assert!(https_response.headers().get("strict-transport-security").is_some());
+}
+
+#[tokio::test]
+async fn always_on_security_headers_are_present_regardless_of_config() {
+    let addr = spawn_server().await;
+    let response = reqwest::get(format!("http://{addr}/api/health")).await.unwrap();
+    assert_eq!(response.headers().get("x-content-type-options").unwrap(), "nosniff");
+    assert_eq!(response.headers().get("x-frame-options").unwrap(), "DENY");
+    assert_eq!(response.headers().get("referrer-policy").unwrap(), "strict-origin-when-cross-origin");
+}
+
+#[tokio::test]
+async fn cors_header_is_absent_by_default_and_present_for_an_allowed_origin() {
+    let client = raw_client();
+
+    let addr_default = spawn_server().await;
+    let default_response = client
+        .get(format!("http://{addr_default}/api/health"))
+        .header("Origin", "https://example.com")
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        default_response.headers().get("access-control-allow-origin").is_none(),
+        "no LANESRA_ALLOWED_ORIGINS must mean no CORS layer at all - same-origin only"
+    );
+
+    let addr_cors = spawn_server_with_security(SecurityConfig {
+        trust_proxy_https: false,
+        allowed_origins: vec!["https://example.com".into()],
+    })
+    .await;
+    let cors_response = client
+        .get(format!("http://{addr_cors}/api/health"))
+        .header("Origin", "https://example.com")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cors_response.headers().get("access-control-allow-origin").unwrap(), "https://example.com");
+
+    // A different, non-allowlisted origin must not be reflected back.
+    let other_origin_response = client
+        .get(format!("http://{addr_cors}/api/health"))
+        .header("Origin", "https://not-allowed.example.com")
+        .send()
+        .await
+        .unwrap();
+    assert!(other_origin_response.headers().get("access-control-allow-origin").is_none());
 }

@@ -7,6 +7,12 @@ services:
     volumes:
       - lanesra-data:/data
     restart: unless-stopped
+    # Uncomment if exposing this on the open internet behind a reverse
+    # proxy that terminates TLS (see README.md "Exposing it on the open
+    # internet"). Leave commented out for a LAN-only, plain-HTTP deployment.
+    # environment:
+    #   LANESRA_TRUST_PROXY_HTTPS: "1"
+    #   LANESRA_ALLOWED_ORIGINS: "https://lanesra.example.com"
 
 volumes:
   lanesra-data:
