@@ -321,3 +321,24 @@
 .backlog-group .timeline-content .rt{font-weight:700;font-size:14.5px;color:var(--text)}
 .backlog-group .timeline-content .rd{font-size:13.5px;color:var(--muted);margin-top:4px;line-height:1.6}
 @media(max-width:720px){.backlog-stats{grid-template-columns:repeat(2,1fr)}.backlog-card-head{flex-direction:column}.backlog-card-tags{justify-content:flex-start}}
+
+/* Platform page */
+.platform-primitives{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:30px 0 6px}
+.platform-primitive{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:9px 16px 9px 12px;font-weight:700;font-size:14px;color:#1c2130}
+.platform-primitive .n{width:22px;height:22px;border-radius:50%;background:#eef2ff;color:#4338ca;display:grid;place-items:center;font-size:11.5px;font-weight:900}
+.platform-arrow{color:#c7cbe0;font-size:18px;align-self:center}
+.app-examples{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.app-example-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 8px 30px rgba(17,24,39,.04)}
+.app-example-card .eyebrow{margin-bottom:8px}
+.app-example-card h3{margin:0 0 8px;font-size:22px}
+.app-example-card .tagline{color:#6b7280;margin:0 0 16px;line-height:1.6}
+.app-example-card .example-detail{margin:0 0 16px;padding-left:18px;color:#475569;line-height:1.75;font-size:14px}
+.app-example-card .example-detail li{margin-bottom:5px}
+.built-from{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.built-from span{background:#eef2ff;color:#4338ca;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
+.honesty-note{background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #d97706;border-radius:14px;padding:22px 26px}
+.honesty-note h3{margin:0 0 10px;font-size:16px;color:#92400e}
+.honesty-note p{margin:0;color:#78350f;line-height:1.7;font-size:14.5px}
+.honesty-note p+p{margin-top:10px}
+.honesty-note a{color:#92400e;font-weight:700}
+@media(max-width:720px){.app-examples{grid-template-columns:1fr}.platform-arrow{display:none}}
