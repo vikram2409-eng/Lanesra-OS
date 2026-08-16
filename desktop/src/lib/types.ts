@@ -1539,9 +1539,13 @@ export interface EffectiveLayout {
 // core::models::dashboard_layout's doc comment for the full rationale.
 
 /** One dashboard tile. `kind` selects how `config` is shaped - Phase 1
- * ships one kind, `"kpi"`, whose config is `{kpi_key}` (one of
- * KPI_DEFS's keys - see kpis.tsx). This layer (like the backend) never
- * inspects `config` beyond that per-kind shape. */
+ * ships `"kpi"`, whose config is `{kpi_key}` (one of KPI_DEFS's keys -
+ * see kpis.tsx). Phase 2 adds `"chart"`, whose config is `{report_id}` -
+ * an existing saved Custom Report, run fresh on every render (see
+ * `CustomReportChart` in Dashboard.tsx); a report deleted after being
+ * added to a dashboard is simply skipped, not an error. This layer
+ * (like the backend) never inspects `config` beyond that per-kind
+ * shape. */
 export interface DashboardWidget {
   id: string;
   kind: string;
