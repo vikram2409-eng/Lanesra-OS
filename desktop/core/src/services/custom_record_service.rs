@@ -16,7 +16,7 @@ use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::custom_object::CUSTOM_RECORD_STATUSES;
 use crate::models::custom_record::{CustomRecord, CustomRecordInput, CustomRecordUpdate};
-use crate::repositories::{custom_object_repo, custom_record_repo};
+use crate::repositories::{audit_repo, custom_object_repo, custom_record_repo};
 use crate::services::{app_service, builtin_field_service, relationship_service, workflow_service};
 
 fn resolve_active_object(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<crate::models::custom_object::CustomObjectDefinition> {
@@ -59,6 +59,16 @@ pub fn create(
     let display_number = allocate_number(conn, workspace_id, &def.key, &def.prefix, def.digits)?;
     let id = new_uuid();
     let record = custom_record_repo::create(conn, &id, workspace_id, &display_number, input, actor_user_id)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some(&def.key),
+        Some(&record.id),
+        &format!("Created {} {}", def.singular_label, record.display_number),
+        None,
+    )?;
     workflow_service::fire_event(conn, workspace_id, &def.key, &record.id, None, &record.status, record.owner_user_id.as_deref(), actor_user_id)?;
     Ok(record)
 }
@@ -93,6 +103,16 @@ pub fn update(
     app_service::require_object_write_access(conn, &before.workspace_id, &before.object_key, actor_user_id)?;
     let before_fields = builtin_field_service::field_values(conn, &before.object_key, id)?;
     let record = custom_record_repo::update(conn, id, input, actor_user_id)?;
+    audit_repo::record(
+        conn,
+        &record.workspace_id,
+        actor_user_id,
+        "update",
+        Some(&before.object_key),
+        Some(id),
+        &format!("Updated {}", record.display_number),
+        None,
+    )?;
     workflow_service::fire_event(conn, &record.workspace_id, &before.object_key, id, Some(&before.status), &record.status, record.owner_user_id.as_deref(), actor_user_id)?;
     let after_fields = builtin_field_service::field_values(conn, &before.object_key, id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
@@ -107,5 +127,16 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
     // to this record blocks archiving it; an `archive` one has its link
     // rows cleared instead of following the record into archive.
     relationship_service::enforce_delete_behavior(conn, &record.object_key, id)?;
-    Ok(custom_record_repo::archive(conn, id, actor_user_id)?)
+    let archived = custom_record_repo::archive(conn, id, actor_user_id)?;
+    audit_repo::record(
+        conn,
+        &archived.workspace_id,
+        actor_user_id,
+        "archive",
+        Some(&record.object_key),
+        Some(id),
+        &format!("Archived {}", archived.display_number),
+        None,
+    )?;
+    Ok(archived)
 }

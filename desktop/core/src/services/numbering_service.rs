@@ -57,9 +57,9 @@ pub fn list_effective(conn: &Connection, workspace_id: &str, actor_user_id: Opti
     let mut result = Vec::with_capacity(ENTITY_CONFIGS.len());
     for (label, config) in ENTITY_CONFIGS {
         let over = numbering_override_repo::get_for_entity(conn, workspace_id, config.entity_type)?;
-        let (prefix, digits, is_custom) = match over {
-            Some(o) => (o.prefix, o.digits, true),
-            None => (config.default_prefix.to_string(), config.digits as i64, false),
+        let (prefix, digits, is_custom, created_by, updated_by) = match over {
+            Some(o) => (o.prefix, o.digits, true, o.created_by, o.updated_by),
+            None => (config.default_prefix.to_string(), config.digits as i64, false, None, None),
         };
         result.push(EffectiveNumbering {
             entity_type: label.to_string(),
@@ -67,6 +67,8 @@ pub fn list_effective(conn: &Connection, workspace_id: &str, actor_user_id: Opti
             prefix,
             digits,
             is_custom,
+            created_by,
+            updated_by,
         });
     }
     Ok(result)
@@ -86,13 +88,15 @@ pub fn set_override(conn: &Connection, workspace_id: &str, input: &NumberingOver
         return Err(AppError::Validation("Digit width must be between 1 and 10".into()));
     }
 
-    let saved = numbering_override_repo::upsert(conn, workspace_id, config.entity_type, prefix, input.digits)?;
+    let saved = numbering_override_repo::upsert(conn, workspace_id, config.entity_type, prefix, input.digits, actor_user_id)?;
     Ok(EffectiveNumbering {
         entity_type: input.entity_type.clone(),
         example: example_number(config, &saved.prefix, saved.digits),
         prefix: saved.prefix,
         digits: saved.digits,
         is_custom: true,
+        created_by: saved.created_by,
+        updated_by: saved.updated_by,
     })
 }
 
@@ -107,5 +111,7 @@ pub fn reset_override(conn: &Connection, workspace_id: &str, entity_type: &str, 
         prefix: config.default_prefix.to_string(),
         digits: config.digits as i64,
         is_custom: false,
+        created_by: None,
+        updated_by: None,
     })
 }

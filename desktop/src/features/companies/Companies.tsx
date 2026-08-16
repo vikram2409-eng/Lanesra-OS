@@ -12,6 +12,7 @@ import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
@@ -534,6 +535,12 @@ function CompanyDetail({
         {company.data.name} <StatusBadge status={company.data.status} />
       </h2>
       <p style={{ color: "var(--text-muted)" }}>{company.data.customer_number}</p>
+      <AuditByline
+        createdAt={company.data.created_at}
+        createdBy={company.data.created_by}
+        updatedAt={company.data.updated_at}
+        updatedBy={company.data.updated_by}
+      />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (
@@ -639,6 +646,7 @@ function CompanyDetail({
             </div>
           </div>
           <RelatedRecordsCard entityType="Company" entityId={id} />
+          <AuditTrail entityType="Company" entityId={id} />
         </div>
       )}
 

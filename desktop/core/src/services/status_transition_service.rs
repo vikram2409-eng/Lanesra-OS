@@ -67,13 +67,13 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &StatusTransitionInp
     require_admin(conn, actor_user_id)?;
     validate_input(&input.entity_type, input)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(status_transition_repo::create(conn, &id, workspace_id, input)?)
+    Ok(status_transition_repo::create(conn, &id, workspace_id, input, actor_user_id)?)
 }
 
 pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     status_transition_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Status transition rule".into()))?;
-    Ok(status_transition_repo::set_active(conn, id, is_active)?)
+    Ok(status_transition_repo::set_active(conn, id, is_active, actor_user_id)?)
 }
 
 pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {

@@ -15,7 +15,9 @@ pub struct NumberingOverride {
     pub prefix: String,
     pub digits: i64,
     pub created_at: String,
+    pub created_by: Option<String>,
     pub updated_at: String,
+    pub updated_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -36,4 +38,8 @@ pub struct EffectiveNumbering {
     pub digits: i64,
     pub example: String,
     pub is_custom: bool,
+    /// Only populated when `is_custom` is true - a fallback to the
+    /// built-in default has no real record behind it to attribute.
+    pub created_by: Option<String>,
+    pub updated_by: Option<String>,
 }

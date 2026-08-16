@@ -7,6 +7,7 @@ import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
 import {
@@ -555,6 +556,7 @@ function TaskDetail({
       <p style={{ color: "var(--text-muted)" }}>
         {t.task_number} · {t.priority} priority
       </p>
+      <AuditByline createdAt={t.created_at} createdBy={t.created_by} updatedAt={t.updated_at} updatedBy={t.updated_by} />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Details</h3>
@@ -584,6 +586,7 @@ function TaskDetail({
 
       <div style={{ marginTop: 16 }}>
         <CustomFieldsCard entityType="Task" entityId={t.id} status={t.status} />
+        <AuditTrail entityType="Task" entityId={t.id} />
       </div>
     </div>
   );

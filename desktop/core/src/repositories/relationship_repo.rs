@@ -20,7 +20,9 @@ fn map_def(row: &rusqlite::Row) -> rusqlite::Result<RelationshipDefinition> {
         is_active: row.get("is_active")?,
         sort_order: row.get("sort_order")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
     })
 }
 
@@ -34,6 +36,7 @@ fn map_instance(row: &rusqlite::Row) -> rusqlite::Result<RelationshipInstance> {
         target_entity_type: row.get("target_entity_type")?,
         target_id: row.get("target_id")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
     })
 }
 

@@ -9,6 +9,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
@@ -341,6 +342,7 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
       <p style={{ color: "var(--text-muted)" }}>
         {p.product_number} · {p.type}
       </p>
+      <AuditByline createdAt={p.created_at} createdBy={p.created_by} updatedAt={p.updated_at} updatedBy={p.updated_by} />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Details</h3>
@@ -392,6 +394,7 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
 
       <div style={{ marginTop: 16 }}>
         <CustomFieldsCard entityType="Product" entityId={p.id} status={p.is_active ? "true" : "false"} />
+        <AuditTrail entityType="Product" entityId={p.id} />
       </div>
     </div>
   );

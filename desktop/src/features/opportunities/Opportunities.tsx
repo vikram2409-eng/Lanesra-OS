@@ -8,6 +8,7 @@ import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import type { Prefill } from "../../components/AppShell";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
@@ -261,6 +262,14 @@ function OpportunityForm({
   return (
     <div>
       <h2>{opportunityId ? "Edit opportunity" : "New opportunity"}</h2>
+      {existing.data && (
+        <AuditByline
+          createdAt={existing.data.created_at}
+          createdBy={existing.data.created_by}
+          updatedAt={existing.data.updated_at}
+          updatedBy={existing.data.updated_by}
+        />
+      )}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"
@@ -382,6 +391,7 @@ function OpportunityForm({
           </button>
         </div>
       </form>
+      {opportunityId && <AuditTrail entityType="Opportunity" entityId={opportunityId} />}
     </div>
   );
 }

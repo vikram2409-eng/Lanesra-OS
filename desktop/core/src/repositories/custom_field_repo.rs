@@ -35,7 +35,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomFieldDefinition> {
         placeholder: row.get("placeholder")?,
         is_hidden_by_default: row.get("is_hidden_by_default")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
     })
 }
 

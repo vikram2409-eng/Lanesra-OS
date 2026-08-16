@@ -11,7 +11,9 @@ pub struct CustomRecord {
     pub owner_user_id: Option<String>,
     pub notes: Option<String>,
     pub created_at: String,
+    pub created_by: Option<String>,
     pub updated_at: String,
+    pub updated_by: Option<String>,
     pub archived_at: Option<String>,
 }
 

@@ -20,7 +20,9 @@ pub struct RelationshipDefinition {
     pub is_active: bool,
     pub sort_order: i64,
     pub created_at: String,
+    pub created_by: Option<String>,
     pub updated_at: String,
+    pub updated_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,6 +65,7 @@ pub struct RelationshipInstance {
     pub target_entity_type: String,
     pub target_id: String,
     pub created_at: String,
+    pub created_by: Option<String>,
 }
 
 /// One row the UI renders in a related list - the linked record's own

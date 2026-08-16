@@ -135,7 +135,9 @@ pub struct BusinessRule {
     pub effective_end_date: Option<String>,
     pub is_protected: bool,
     pub created_at: String,
+    pub created_by: Option<String>,
     pub updated_at: String,
+    pub updated_by: Option<String>,
     pub conditions: Vec<BusinessRuleCondition>,
     pub actions: Vec<BusinessRuleAction>,
 }

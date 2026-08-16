@@ -88,6 +88,7 @@ pub fn run() {
             commands::user_commands::set_user_password,
             commands::dashboard_commands::dashboard_summary,
             commands::search_commands::global_search,
+            commands::audit_commands::list_audit_events,
             commands::report_commands::report_revenue_by_month,
             commands::report_commands::report_win_rate_by_owner,
             commands::report_commands::report_lost_reasons,

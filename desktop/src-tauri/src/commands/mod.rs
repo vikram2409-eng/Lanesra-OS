@@ -1,4 +1,5 @@
 pub mod app_commands;
+pub mod audit_commands;
 pub mod auth_commands;
 pub mod backup_commands;
 pub mod business_rule_commands;

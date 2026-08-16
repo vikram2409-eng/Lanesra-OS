@@ -10,6 +10,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { TabListCard } from "../../components/TabListCard";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -588,6 +589,7 @@ function ContactDetail({
         {companyName ? ` · ${companyName}` : ""}
         {c.job_title ? ` · ${c.job_title}` : ""}
       </p>
+      <AuditByline createdAt={c.created_at} createdBy={c.created_by} updatedAt={c.updated_at} updatedBy={c.updated_by} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (
@@ -624,6 +626,7 @@ function ContactDetail({
             <p><strong>Notes:</strong> {c.notes ?? "—"}</p>
           </div>
           <RelatedRecordsCard entityType="Contact" entityId={id} />
+          <AuditTrail entityType="Contact" entityId={id} />
         </div>
       )}
 
