@@ -7,6 +7,7 @@ pub mod custom_field_repo;
 pub mod custom_object_repo;
 pub mod custom_record_repo;
 pub mod custom_report_repo;
+pub mod dashboard_layout_repo;
 pub mod invoice_repo;
 pub mod notification_repo;
 pub mod numbering_override_repo;

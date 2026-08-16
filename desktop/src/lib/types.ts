@@ -1532,6 +1532,55 @@ export interface EffectiveLayout {
   tabs: LayoutTabs | null;
 }
 
+// Dashboard customization Phase 1: mirrors ScreenLayout/LayoutTabs above -
+// a workspace can have several named dashboard layouts (widgets instead
+// of field tabs, no entity_type since a dashboard isn't per-object),
+// role-assigned with a required default fallback, draft/publish. See
+// core::models::dashboard_layout's doc comment for the full rationale.
+
+/** One dashboard tile. `kind` selects how `config` is shaped - Phase 1
+ * ships one kind, `"kpi"`, whose config is `{kpi_key}` (one of
+ * KPI_DEFS's keys - see kpis.tsx). This layer (like the backend) never
+ * inspects `config` beyond that per-kind shape. */
+export interface DashboardWidget {
+  id: string;
+  kind: string;
+  config: Record<string, unknown>;
+}
+
+export interface DashboardWidgets {
+  widgets: DashboardWidget[];
+}
+
+export interface DashboardLayout {
+  id: string;
+  workspace_id: string;
+  name: string;
+  is_default: boolean;
+  roles: string[];
+  draft: DashboardWidgets;
+  published: DashboardWidgets | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface DashboardLayoutInput {
+  name: string;
+  initial_kpi_keys: string[];
+}
+
+export interface DashboardLayoutUpdate {
+  name: string;
+  roles: string[];
+  draft: DashboardWidgets;
+}
+
+export interface EffectiveDashboard {
+  widgets: DashboardWidgets | null;
+}
+
 export interface CustomRecordInput {
   object_key: string;
   primary_name: string;

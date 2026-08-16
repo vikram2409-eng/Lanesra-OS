@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { api } from "../../lib/api";
 import { formatCents } from "../../lib/money";
 import type { Section } from "../../components/AppShell";
-import { resolveVisibleKpis } from "./kpis";
+import { useEffectiveDashboard } from "../../lib/useEffectiveDashboard";
+import { KPI_DEFS, resolveVisibleKpis, type KpiDef } from "./kpis";
 
 export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => void }) {
   const queryClient = useQueryClient();
@@ -13,6 +14,12 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
     queryFn: () => api.dashboardSummary(),
   });
   const workspace = useQuery({ queryKey: ["workspaceStatus"], queryFn: () => api.workspaceStatus() });
+  // Dashboard customization Phase 1: a published dashboard layout (see
+  // useEffectiveDashboard's own doc comment) overrides which KPI tiles
+  // show and in what order - `null` (the common case until an admin
+  // builds one) falls back to the pre-this-feature workspace-wide
+  // `dashboard_kpi_prefs` selection below, unchanged.
+  const effectiveDashboard = useEffectiveDashboard();
 
   useEffect(() => {
     api.refreshOverdueInvoices().then(() => {
@@ -25,7 +32,14 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
   if (isLoading) return <p>Loading dashboard...</p>;
   if (error || !data) return <div className="error-banner">Could not load the dashboard</div>;
 
-  const visibleKpis = resolveVisibleKpis(workspace.data?.dashboard_kpi_prefs ?? null);
+  const layoutWidgets = effectiveDashboard.data?.widgets?.widgets ?? null;
+  const kpiByKey = new Map(KPI_DEFS.map((k) => [k.key, k]));
+  const visibleKpis: KpiDef[] = layoutWidgets
+    ? layoutWidgets
+        .filter((w) => w.kind === "kpi")
+        .map((w) => kpiByKey.get(w.config.kpi_key as string))
+        .filter((k): k is KpiDef => !!k)
+    : resolveVisibleKpis(workspace.data?.dashboard_kpi_prefs ?? null);
 
   return (
     <div>

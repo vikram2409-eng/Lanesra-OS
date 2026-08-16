@@ -12,6 +12,7 @@ import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
 import { StatusTransitionsAdmin } from "./StatusTransitionsAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
+import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -48,7 +49,19 @@ function resizeImageToPngBase64(file: File): Promise<string> {
   });
 }
 
-type AdminTab = "users" | "profile" | "objects" | "relationships" | "fields" | "layouts" | "rules" | "workflow" | "transitions" | "numbering" | "kpis";
+type AdminTab =
+  | "users"
+  | "profile"
+  | "objects"
+  | "relationships"
+  | "fields"
+  | "layouts"
+  | "rules"
+  | "workflow"
+  | "transitions"
+  | "numbering"
+  | "kpis"
+  | "dashboards";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -62,6 +75,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "transitions", label: "Status transitions" },
   { key: "numbering", label: "Numbering" },
   { key: "kpis", label: "Dashboard KPIs" },
+  { key: "dashboards", label: "Dashboards" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -74,7 +88,7 @@ function tabLabel(key: AdminTab): string {
 // capability that doesn't exist here), but Screen layouts (Screen/App
 // Builder Phase 1) now ships on both.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
-  { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis"] },
+  { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis", "dashboards"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
   { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
@@ -174,6 +188,7 @@ export function AdminPanel() {
       {tab === "transitions" && <StatusTransitionsAdmin />}
       {tab === "numbering" && <NumberingAdmin />}
       {tab === "kpis" && <DashboardKpiAdmin />}
+      {tab === "dashboards" && <DashboardLayoutsAdmin />}
     </div>
   );
 }
