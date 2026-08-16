@@ -1,3 +1,4 @@
+pub mod app_definition_repo;
 pub mod audit_repo;
 pub mod business_rule_repo;
 pub mod company_repo;

@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use lanesra_core::domain::{AppError, AppResult};
+use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
 use lanesra_core::models::contract::ContractInput;
@@ -33,6 +34,7 @@ use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinition
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
+    app_service,
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service,
@@ -577,6 +579,37 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let limit: i64 = arg(args, "limit")?;
             to_value(dashboard_widget_service::run(conn, &require_workspace_id(conn)?, &entity_type, &mode, limit)?)
         }
+
+        "list_apps" => to_value(app_service::list(conn, &require_workspace_id(conn)?)?),
+        "create_app" => {
+            let input: AppDefinitionInput = arg(args, "input")?;
+            to_value(app_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_app" => {
+            let id: String = arg(args, "id")?;
+            let update: AppDefinitionUpdate = arg(args, "update")?;
+            to_value(app_service::update(conn, &id, &update, actor)?)
+        }
+        "publish_app" => to_value(app_service::publish(conn, &arg::<String>(args, "id")?, actor)?),
+        "unpublish_app" => to_value(app_service::unpublish(conn, &arg::<String>(args, "id")?, actor)?),
+        "delete_app" => {
+            app_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "list_app_permissions" => {
+            let app_id: String = arg(args, "appId")?;
+            to_value(app_service::list_permissions(conn, &app_id, actor)?)
+        }
+        "grant_app_permission" => {
+            let app_id: String = arg(args, "appId")?;
+            let input: AppPermissionInput = arg(args, "input")?;
+            to_value(app_service::grant_permission(conn, &app_id, &input, actor)?)
+        }
+        "revoke_app_permission" => {
+            app_service::revoke_permission(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "list_accessible_apps" => to_value(app_service::list_accessible(conn, &require_workspace_id(conn)?, actor)?),
 
         "list_custom_records" => {
             let object_key: String = arg(args, "objectKey")?;

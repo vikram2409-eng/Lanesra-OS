@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AccessibleApp,
+  AppDefinition,
+  AppDefinitionInput,
+  AppDefinitionUpdate,
   AppErrorPayload,
+  AppPermission,
+  AppPermissionInput,
   BackupManifest,
   BackupPackage,
   ChangeOwnPassword,
@@ -337,6 +343,17 @@ export const api = {
   effectiveDashboardLayout: () => call<EffectiveDashboard>("effective_dashboard_layout"),
   runDashboardRecordList: (entityType: string, mode: string, limit: number) =>
     call<RecordListRow[]>("run_dashboard_record_list", { entityType, mode, limit }),
+
+  listApps: () => call<AppDefinition[]>("list_apps"),
+  createApp: (input: AppDefinitionInput) => call<AppDefinition>("create_app", { input }),
+  updateApp: (id: string, update: AppDefinitionUpdate) => call<AppDefinition>("update_app", { id, update }),
+  publishApp: (id: string) => call<AppDefinition>("publish_app", { id }),
+  unpublishApp: (id: string) => call<AppDefinition>("unpublish_app", { id }),
+  deleteApp: (id: string) => call<void>("delete_app", { id }),
+  listAppPermissions: (appId: string) => call<AppPermission[]>("list_app_permissions", { appId }),
+  grantAppPermission: (appId: string, input: AppPermissionInput) => call<AppPermission>("grant_app_permission", { appId, input }),
+  revokeAppPermission: (id: string) => call<void>("revoke_app_permission", { id }),
+  listAccessibleApps: () => call<AccessibleApp[]>("list_accessible_apps"),
 
   listCustomRecords: (objectKey: string) => call<CustomRecord[]>("list_custom_records", { objectKey }),
   getCustomRecord: (id: string) => call<CustomRecord>("get_custom_record", { id }),

@@ -1720,3 +1720,70 @@ export interface StatusTransitionInput {
   from_status: string | null;
   to_status: string;
 }
+
+// App Builder Phase 1 (spec §24): a named, publishable grouping of
+// already-existing objects, screens and a dashboard - the packaging layer
+// on top of Custom Objects/Screen Builder/Dashboards, plus a genuinely new
+// per-app permission model (a grant to a role OR to one specific user,
+// not just a role checkbox list) - see the Rust core's app_service doc
+// comment for the full rationale and what "editor" does and doesn't
+// enforce yet.
+export interface AppDefinition {
+  id: string;
+  workspace_id: string;
+  name: string;
+  icon: string;
+  description: string | null;
+  /** Entity types (built-in, e.g. "Task", or a custom object's key) this
+   * app groups into its own nav - opaque here, resolved by AppShell the
+   * same way a custom object's key already is. */
+  object_keys: string[];
+  dashboard_id: string | null;
+  is_published: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AppDefinitionInput {
+  name: string;
+  icon: string;
+  description: string | null;
+}
+
+export interface AppDefinitionUpdate {
+  name: string;
+  icon: string;
+  description: string | null;
+  object_keys: string[];
+  dashboard_id: string | null;
+}
+
+export const APP_PERMISSION_PRINCIPAL_TYPES = ["role", "user"] as const;
+export type AppPermissionPrincipalType = (typeof APP_PERMISSION_PRINCIPAL_TYPES)[number];
+export const APP_PERMISSION_LEVELS = ["viewer", "editor"] as const;
+export type AppPermissionLevel = (typeof APP_PERMISSION_LEVELS)[number];
+
+export interface AppPermission {
+  id: string;
+  app_id: string;
+  principal_type: string;
+  principal_id: string;
+  level: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface AppPermissionInput {
+  principal_type: AppPermissionPrincipalType;
+  principal_id: string;
+  level: AppPermissionLevel;
+}
+
+/** One app the current signed-in user can see, with their resolved access
+ * level on it - drives the sidebar's app switcher. */
+export interface AccessibleApp {
+  app: AppDefinition;
+  level: string;
+}

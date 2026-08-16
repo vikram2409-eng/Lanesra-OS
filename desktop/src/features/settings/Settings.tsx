@@ -13,6 +13,7 @@ import { StatusTransitionsAdmin } from "./StatusTransitionsAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
+import { AppsAdmin } from "./AppsAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -61,7 +62,8 @@ type AdminTab =
   | "transitions"
   | "numbering"
   | "kpis"
-  | "dashboards";
+  | "dashboards"
+  | "apps";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -76,6 +78,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "numbering", label: "Numbering" },
   { key: "kpis", label: "Dashboard KPIs" },
   { key: "dashboards", label: "Dashboards" },
+  { key: "apps", label: "Apps" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -90,7 +93,7 @@ function tabLabel(key: AdminTab): string {
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis", "dashboards"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
-  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts"] },
+  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts", "apps"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
 ];
 
@@ -130,7 +133,7 @@ export function AdminPanel() {
         <h2>Admin</h2>
         <p style={{ color: "var(--text-muted)" }}>
           Users and access, business branding, and the admin-configurable layer on top of the fixed schema: custom
-          objects, relationships, custom fields, screen layouts, business rules, workflow automation, status
+          objects, relationships, custom fields, screen layouts, apps, business rules, workflow automation, status
           transitions, number formats and Dashboard KPIs.
         </p>
         <div className="admin-landing-grid">
@@ -189,6 +192,7 @@ export function AdminPanel() {
       {tab === "numbering" && <NumberingAdmin />}
       {tab === "kpis" && <DashboardKpiAdmin />}
       {tab === "dashboards" && <DashboardLayoutsAdmin />}
+      {tab === "apps" && <AppsAdmin />}
     </div>
   );
 }

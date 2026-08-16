@@ -13,12 +13,21 @@ import { KPI_DEFS, resolveVisibleKpis, type KpiDef } from "./kpis";
 export function Dashboard({
   onNavigate,
   onOpenRecord,
+  appDashboardId,
 }: {
   onNavigate: (section: Section) => void;
   /** A record-list widget row jumps straight to that record, reusing the
    * same one-shot openId navigation Global search's own results already
    * use (see AppShell's Prefill doc comment). */
   onOpenRecord: (section: Section, id: string) => void;
+  /** App Builder: when the sidebar's App Switcher has an app selected and
+   * that app names a dashboard, render that dashboard's *published*
+   * widgets instead of the role-resolved default below - the same
+   * "content only ever comes from `published`, never `draft`" rule
+   * `useEffectiveDashboard` already follows. `null`/`undefined` (no app
+   * selected, or the selected app doesn't name one) is the pre-App-Builder
+   * behavior, unchanged. */
+  appDashboardId?: string | null;
 }) {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
@@ -30,8 +39,18 @@ export function Dashboard({
   // useEffectiveDashboard's own doc comment) overrides which KPI tiles
   // show and in what order - `null` (the common case until an admin
   // builds one) falls back to the pre-this-feature workspace-wide
-  // `dashboard_kpi_prefs` selection below, unchanged.
+  // `dashboard_kpi_prefs` selection below, unchanged. Skipped entirely
+  // once an app names its own dashboard (below) - that layout wins.
   const effectiveDashboard = useEffectiveDashboard();
+  // App Builder: the full layout list, only fetched when an app-scoped
+  // dashboard is actually in play - `list_dashboard_layouts` (unlike
+  // `effective_dashboard_layout`) returns every layout so this can look
+  // up one specific id instead of the role-resolved one.
+  const appLayouts = useQuery({
+    queryKey: ["dashboardLayouts"],
+    queryFn: () => api.listDashboardLayouts(),
+    enabled: !!appDashboardId,
+  });
   // Phase 2: chart widgets reference a saved Custom Report by id -
   // fetched once here so every chart widget below can just look its
   // report up instead of each re-fetching the whole list.
@@ -48,7 +67,10 @@ export function Dashboard({
   if (isLoading) return <p>Loading dashboard...</p>;
   if (error || !data) return <div className="error-banner">Could not load the dashboard</div>;
 
-  const layoutWidgets = effectiveDashboard.data?.widgets?.widgets ?? null;
+  const appLayout = appDashboardId ? appLayouts.data?.find((l) => l.id === appDashboardId) : undefined;
+  const layoutWidgets = appDashboardId
+    ? appLayout?.published?.widgets ?? null
+    : effectiveDashboard.data?.widgets?.widgets ?? null;
   const kpiByKey = new Map(KPI_DEFS.map((k) => [k.key, k]));
   const visibleKpis: KpiDef[] = layoutWidgets
     ? layoutWidgets
