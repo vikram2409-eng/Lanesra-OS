@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
@@ -68,4 +70,13 @@ pub fn set_custom_field_values(
 pub fn get_custom_field_values(state: State<AppState>, entity_id: String) -> AppResult<CustomFieldValues> {
     let conn = state.conn.lock().unwrap();
     custom_field_service::get_entity_values(&conn, &entity_id)
+}
+
+/// List-view filtering: every `is_filterable` value for one entity type,
+/// keyed by entity id then field key - see
+/// custom_field_service::get_filterable_values.
+#[tauri::command]
+pub fn list_filterable_custom_field_values(state: State<AppState>, entity_type: String) -> AppResult<HashMap<String, CustomFieldValues>> {
+    let conn = state.conn.lock().unwrap();
+    custom_field_service::get_filterable_values(&conn, &require_workspace_id(&conn)?, &entity_type)
 }

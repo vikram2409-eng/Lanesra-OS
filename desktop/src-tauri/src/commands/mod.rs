@@ -18,6 +18,7 @@ pub mod product_commands;
 pub mod quote_commands;
 pub mod relationship_commands;
 pub mod report_commands;
+pub mod search_commands;
 pub mod status_transition_commands;
 pub mod task_commands;
 pub mod user_commands;

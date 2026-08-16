@@ -68,6 +68,7 @@ import type {
   RevenueByMonth,
   SalesByOwner,
   SaveNotices,
+  SearchResult,
   StatusTransition,
   StatusTransitionInput,
   WinRateByOwner,
@@ -202,6 +203,7 @@ export const api = {
   refreshOverdueInvoices: () => call<number>("refresh_overdue_invoices"),
 
   dashboardSummary: () => call<DashboardSummary>("dashboard_summary"),
+  globalSearch: (query: string) => call<SearchResult[]>("global_search", { query }),
 
   listContracts: () => call<Contract[]>("list_contracts"),
   listContractsByCompany: (companyId: string) =>
@@ -247,6 +249,10 @@ export const api = {
   setCustomFieldValues: (entityType: string, entityId: string, values: CustomFieldValues) =>
     call<SaveNotices>("set_custom_field_values", { entityType, entityId, values }),
   getCustomFieldValues: (entityId: string) => call<CustomFieldValues>("get_custom_field_values", { entityId }),
+  // List-view filtering: every is_filterable value for one entity type,
+  // keyed by entity id then field key - one call per list screen load.
+  listFilterableCustomFieldValues: (entityType: string) =>
+    call<Record<string, CustomFieldValues>>("list_filterable_custom_field_values", { entityType }),
 
   listBusinessRules: (entityType: string, activeOnly: boolean) =>
     call<BusinessRule[]>("list_business_rules", { entityType, activeOnly }),
