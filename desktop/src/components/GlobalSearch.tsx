@@ -1,34 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "../lib/api";
-import { customObjectSection, type Section } from "./AppShell";
+import { sectionFor, type Section } from "./AppShell";
 import type { CustomObjectDefinition, SearchResult } from "../lib/types";
 
-// Core entities each have their own fixed nav section; anything else is a
-// custom object, addressed by its `key` (== SearchResult.entity_type) via
-// customObjectSection - see search_service::global_search's own comment on
-// why a custom record's entity_type is its object key, not a fixed name.
-const CORE_ENTITY_SECTION: Record<string, Section> = {
-  Company: "companies",
-  Contact: "contacts",
-  Opportunity: "opportunities",
-  Quote: "quotes",
-  Order: "orders",
-  Invoice: "invoices",
-  Contract: "contracts",
-  Task: "tasks",
-  Product: "products",
-};
+// `sectionFor` (entity_type -> nav Section, == SearchResult.entity_type)
+// now lives in AppShell.tsx, alongside Section/customObjectSection - see
+// that module's own doc comment for why. Re-exported here so anything
+// that already imports it from this module (Dashboard.tsx) keeps working.
+export { sectionFor };
 
-// Exported for reuse by anything else that resolves an entity_type to a
-// nav Section without its own copy of this map - so far, dashboard
-// record-list widgets (Dashboard.tsx).
-export function sectionFor(entityType: string): Section {
-  return CORE_ENTITY_SECTION[entityType] ?? customObjectSection(entityType);
-}
+const BUILT_IN_ENTITY_TYPES = ["Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task", "Product"];
 
 function groupLabel(entityType: string, customObjects: CustomObjectDefinition[]): string {
-  if (entityType in CORE_ENTITY_SECTION) return entityType;
+  if (BUILT_IN_ENTITY_TYPES.includes(entityType)) return entityType;
   return customObjects.find((o) => o.key === entityType)?.plural_label ?? entityType;
 }
 

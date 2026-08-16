@@ -96,6 +96,21 @@ function Ready({
   onLogout: () => void;
 }) {
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
+  // App Builder: which accessible app (if any) is scoping the sidebar and
+  // Dashboard right now - see AppShell's own doc comment on activeAppId.
+  // Same query AppShell itself runs (React Query dedupes to one fetch);
+  // run here too since Dashboard needs the active app's dashboard_id,
+  // which AppShell has no reason to expose back up.
+  const accessibleApps = useQuery({ queryKey: ["accessibleApps"], queryFn: () => api.listAccessibleApps() });
+  const [activeAppId, setActiveAppId] = useState<string | null>(null);
+  const activeAppDashboardId = accessibleApps.data?.find((a) => a.app.id === activeAppId)?.app.dashboard_id ?? null;
+  function switchApp(appId: string | null) {
+    setActiveAppId(appId);
+    // A section the just-left app exposed may not exist in the new scope
+    // (or "All") - land back on Dashboard rather than risk stranding on a
+    // now-hidden nav item, same reasoning as a prefill's one-shot reset.
+    setSection("dashboard");
+  }
   const [prefill, setPrefill] = useState<Prefill | null>(null);
   function navigateTo(target: Section, pre: Prefill) {
     setPrefill(pre);
@@ -130,9 +145,15 @@ function Ready({
         user={user}
         onLogout={onLogout}
         customObjects={customObjects.data ?? []}
+        activeAppId={activeAppId}
+        onSwitchApp={switchApp}
       >
         {section === "dashboard" && (
-          <Dashboard onNavigate={setSection} onOpenRecord={(target, id) => navigateTo(target, { openId: id })} />
+          <Dashboard
+            onNavigate={setSection}
+            onOpenRecord={(target, id) => navigateTo(target, { openId: id })}
+            appDashboardId={activeAppId ? activeAppDashboardId : null}
+          />
         )}
         {section === "companies" && (
           <Companies prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
