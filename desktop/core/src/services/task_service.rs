@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, TASK};
 use crate::domain::{AppError, AppResult};
 use crate::models::task::{Task, TaskInput, TASK_PRIORITIES, TASK_STATUSES};
 use crate::repositories::{audit_repo, task_repo};
-use crate::services::{builtin_field_service, entity_registry, status_transition_service, workflow_service};
+use crate::services::{app_service, builtin_field_service, entity_registry, status_transition_service, workflow_service};
 
 /// A task's related record can be any built-in entity type task_links has
 /// always supported, or (Phase D, ADM-WF-06) any active custom object -
@@ -49,6 +49,7 @@ pub fn create(
     actor_user_id: Option<&str>,
 ) -> AppResult<Task> {
     validate(conn, input)?;
+    app_service::require_object_write_access(conn, workspace_id, "Task", actor_user_id)?;
     let id = new_uuid();
     let task_number = numbering::allocate_number(conn, workspace_id, &TASK)?;
     let task = task_repo::create(conn, &id, workspace_id, &task_number, input, actor_user_id)?;
@@ -86,6 +87,7 @@ pub fn update(
     actor_user_id: Option<&str>,
 ) -> AppResult<Task> {
     validate(conn, input)?;
+    app_service::require_object_write_access(conn, workspace_id, "Task", actor_user_id)?;
     let before = get(conn, id)?;
     if before.status != input.status {
         status_transition_service::validate_transition(conn, workspace_id, "Task", &before.status, &input.status)?;
@@ -113,6 +115,7 @@ pub fn update(
 
 pub fn archive(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
+    app_service::require_object_write_access(conn, workspace_id, "Task", actor_user_id)?;
     task_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

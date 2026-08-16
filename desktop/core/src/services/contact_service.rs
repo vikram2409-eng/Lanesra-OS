@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, CONTACT};
 use crate::domain::{AppError, AppResult};
 use crate::models::contact::{Contact, ContactInput, CONTACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo};
-use crate::services::{builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{app_service, builtin_field_service, status_transition_service, workflow_service};
 
 fn validate(conn: &Connection, input: &ContactInput) -> AppResult<String> {
     if input.first_name.trim().is_empty() || input.last_name.trim().is_empty() {
@@ -44,6 +44,7 @@ pub fn create(
     actor_user_id: Option<&str>,
 ) -> AppResult<Contact> {
     let workspace_id = validate(conn, input)?;
+    app_service::require_object_write_access(conn, &workspace_id, "Contact", actor_user_id)?;
     let id = new_uuid();
     let contact_number = numbering::allocate_number(conn, &workspace_id, &CONTACT)?;
     let contact = contact_repo::create(conn, &id, &workspace_id, &contact_number, input, actor_user_id)?;
@@ -80,6 +81,7 @@ pub fn update(
     actor_user_id: Option<&str>,
 ) -> AppResult<Contact> {
     let workspace_id = validate(conn, input)?;
+    app_service::require_object_write_access(conn, &workspace_id, "Contact", actor_user_id)?;
     let before = get(conn, id)?;
     if before.status != input.status {
         status_transition_service::validate_transition(conn, &workspace_id, "Contact", &before.status, &input.status)?;
@@ -107,6 +109,7 @@ pub fn update(
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
+    app_service::require_object_write_access(conn, &existing.workspace_id, "Contact", actor_user_id)?;
     contact_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

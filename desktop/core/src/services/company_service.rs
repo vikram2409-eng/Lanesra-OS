@@ -5,7 +5,7 @@ use crate::domain::numbering::{self, COMPANY};
 use crate::domain::{AppError, AppResult};
 use crate::models::company::{Company, CompanyInput, COMPANY_STATUSES};
 use crate::repositories::{audit_repo, company_repo};
-use crate::services::{builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{app_service, builtin_field_service, status_transition_service, workflow_service};
 
 fn validate(input: &CompanyInput) -> AppResult<()> {
     if input.name.trim().is_empty() {
@@ -43,6 +43,7 @@ pub fn create(
     actor_user_id: Option<&str>,
 ) -> AppResult<Company> {
     validate(input)?;
+    app_service::require_object_write_access(conn, workspace_id, "Company", actor_user_id)?;
     let id = new_uuid();
     let customer_number = numbering::allocate_number(conn, workspace_id, &COMPANY)?;
     let company = company_repo::create(conn, &id, workspace_id, &customer_number, input, actor_user_id)?;
@@ -76,6 +77,7 @@ pub fn update(
 ) -> AppResult<Company> {
     validate(input)?;
     let before = get(conn, id)?;
+    app_service::require_object_write_access(conn, &before.workspace_id, "Company", actor_user_id)?;
     if before.status != input.status {
         status_transition_service::validate_transition(conn, &before.workspace_id, "Company", &before.status, &input.status)?;
     }
@@ -109,6 +111,7 @@ pub fn update(
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
+    app_service::require_object_write_access(conn, &existing.workspace_id, "Company", actor_user_id)?;
     company_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

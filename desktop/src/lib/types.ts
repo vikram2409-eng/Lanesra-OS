@@ -1721,13 +1721,14 @@ export interface StatusTransitionInput {
   to_status: string;
 }
 
-// App Builder Phase 1 (spec §24): a named, publishable grouping of
-// already-existing objects, screens and a dashboard - the packaging layer
-// on top of Custom Objects/Screen Builder/Dashboards, plus a genuinely new
-// per-app permission model (a grant to a role OR to one specific user,
-// not just a role checkbox list) - see the Rust core's app_service doc
-// comment for the full rationale and what "editor" does and doesn't
-// enforce yet.
+// App Builder (spec §24): a named, publishable grouping of already-existing
+// objects, screens and a dashboard - the packaging layer on top of Custom
+// Objects/Screen Builder/Dashboards, plus a genuinely new per-app
+// permission model (a grant to a role OR to one specific user, not just a
+// role checkbox list). Phase 2 enforces "editor" server-side on the
+// object's own create/update/archive commands - see the Rust core's
+// app_service doc comment for the full rationale and exactly what's
+// covered.
 export interface AppDefinition {
   id: string;
   workspace_id: string;
