@@ -38,11 +38,71 @@ pub struct LayoutTab {
     pub sections: Vec<LayoutSection>,
 }
 
+/// Screen/App Builder Phase 2: a section lays its fields out in a CSS
+/// grid of `columns` columns (1-3); each field spans either one column or
+/// the section's full width. `columns` defaults to 2 (the fixed width
+/// every Phase 1 form already used) when absent from stored JSON, and
+/// `fields` accepts either the Phase 1 shape (`["key", ...]`, each
+/// implicitly one column wide) or the Phase 2 shape
+/// (`[{"key":"...", "full_width":false}, ...]`) so a layout saved before
+/// this phase shipped still loads - see `deserialize_fields` below.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LayoutSection {
     pub id: String,
     pub title: String,
-    pub fields: Vec<String>,
+    #[serde(default = "default_columns")]
+    pub columns: u8,
+    #[serde(deserialize_with = "deserialize_fields")]
+    pub fields: Vec<SectionField>,
+}
+
+fn default_columns() -> u8 {
+    2
+}
+
+/// One field placed in a section: its key, and whether it spans the
+/// section's full width (like a name or notes field usually does) rather
+/// than a single column.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SectionField {
+    pub key: String,
+    #[serde(default)]
+    pub full_width: bool,
+}
+
+impl SectionField {
+    pub fn new(key: impl Into<String>) -> Self {
+        Self { key: key.into(), full_width: false }
+    }
+}
+
+impl From<&str> for SectionField {
+    fn from(key: &str) -> Self {
+        Self::new(key)
+    }
+}
+
+/// Accepts a plain field-key string (the Phase 1 wire format, defaulting
+/// to a single-column field) alongside the Phase 2 `{key, full_width}`
+/// object shape, so existing draft/published JSON keeps loading as-is.
+fn deserialize_fields<'de, D>(deserializer: D) -> Result<Vec<SectionField>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum RawField {
+        Key(String),
+        Full(SectionField),
+    }
+    let raw = Vec::<RawField>::deserialize(deserializer)?;
+    Ok(raw
+        .into_iter()
+        .map(|f| match f {
+            RawField::Key(key) => SectionField::new(key),
+            RawField::Full(field) => field,
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Deserialize)]

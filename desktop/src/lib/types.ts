@@ -1468,10 +1468,23 @@ export interface CustomRecord {
 // admin-drag-ordered field sections. Fields are opaque key strings here -
 // this layer round-trips whatever the caller places, the same way the
 // backend does (see the migration's own comment).
+
+// Phase 2: a section lays its fields out in a `columns`-wide grid (1-3);
+// each field spans one column or the section's full width. Mirrors
+// core::models::screen_layout::SectionField - see its doc comment for
+// the backward-compatible wire format (a layout saved before Phase 2
+// still loads as plain field-key strings, each implicitly one column
+// wide, with `columns` defaulting to 2).
+export interface SectionField {
+  key: string;
+  full_width: boolean;
+}
+
 export interface LayoutSection {
   id: string;
   title: string;
-  fields: string[];
+  columns: number;
+  fields: SectionField[];
 }
 
 export interface LayoutTab {

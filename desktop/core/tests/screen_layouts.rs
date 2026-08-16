@@ -5,7 +5,7 @@
 //! demo can't: resolving a layout against a real signed-in user's roles.
 
 use lanesra_core::db::open_in_memory_db;
-use lanesra_core::models::screen_layout::{LayoutSection, LayoutTab, LayoutTabs, ScreenLayoutInput, ScreenLayoutUpdate};
+use lanesra_core::models::screen_layout::{LayoutSection, LayoutTab, LayoutTabs, ScreenLayoutInput, ScreenLayoutUpdate, SectionField};
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{screen_layout_service, user_service, workspace_service};
@@ -51,9 +51,15 @@ fn one_field_draft(field: &str) -> LayoutTabs {
         tabs: vec![LayoutTab {
             id: "t1".into(),
             title: "Details".into(),
-            sections: vec![LayoutSection { id: "s1".into(), title: "Details".into(), fields: vec![field.into()] }],
+            sections: vec![LayoutSection { id: "s1".into(), title: "Details".into(), columns: 2, fields: vec![field.into()] }],
         }],
     }
+}
+
+/// The key list a section's fields hold, in order - lets tests assert on
+/// field placement without spelling out each `SectionField`'s full_width.
+fn field_keys(section: &LayoutSection) -> Vec<String> {
+    section.fields.iter().map(|f| f.key.clone()).collect()
 }
 
 #[test]
@@ -74,7 +80,7 @@ fn a_new_layout_is_not_default_and_the_first_ever_layout_is() {
 
     let second = screen_layout_service::create_layout(&conn, &ws, &layout_input("Sales layout", &["industry"]), Some(&admin)).unwrap();
     assert!(!second.is_default);
-    assert_eq!(second.draft.tabs[0].sections[0].fields, vec!["industry".to_string()]);
+    assert_eq!(field_keys(&second.draft.tabs[0].sections[0]), vec!["industry".to_string()]);
 }
 
 #[test]
@@ -169,7 +175,7 @@ fn resolve_effective_layout_falls_back_to_the_published_default_for_an_unclaimed
 
     let sam = sales_user(&conn, &ws, &admin);
     let effective = screen_layout_service::resolve_effective_layout(&conn, &ws, "Company", Some(&sam)).unwrap();
-    assert_eq!(effective.unwrap().tabs[0].sections[0].fields, vec!["industry".to_string()]);
+    assert_eq!(field_keys(&effective.unwrap().tabs[0].sections[0]), vec!["industry".to_string()]);
 }
 
 #[test]
@@ -183,7 +189,7 @@ fn resolve_effective_layout_prefers_a_published_layout_matching_the_actors_role(
 
     let sam = sales_user(&conn, &ws, &admin);
     let effective = screen_layout_service::resolve_effective_layout(&conn, &ws, "Company", Some(&sam)).unwrap();
-    assert_eq!(effective.unwrap().tabs[0].sections[0].fields, vec!["city".to_string()]);
+    assert_eq!(field_keys(&effective.unwrap().tabs[0].sections[0]), vec!["city".to_string()]);
 
     // The Administrator (no Sales role) is unaffected - falls back to
     // Default, which was never published, so still None.
@@ -210,4 +216,73 @@ fn an_invalid_entity_type_is_rejected() {
     let (conn, ws, _admin) = setup_workspace();
     let result = screen_layout_service::list_layouts(&conn, &ws, "NotARealEntity");
     assert!(result.is_err());
+}
+
+// --- Screen/App Builder Phase 2: multi-column sections ---
+
+#[test]
+fn a_newly_created_layout_seeds_a_two_column_section_with_no_full_width_fields() {
+    let (conn, ws, admin) = setup_workspace();
+    let layout = screen_layout_service::create_layout(&conn, &ws, &layout_input("Sales layout", &["industry", "city"]), Some(&admin)).unwrap();
+    let section = &layout.draft.tabs[0].sections[0];
+    assert_eq!(section.columns, 2);
+    assert!(section.fields.iter().all(|f| !f.full_width), "fresh fields default to a single column");
+}
+
+#[test]
+fn a_sections_column_count_and_each_fields_full_width_flag_round_trip_through_save() {
+    let (conn, ws, admin) = setup_workspace();
+    let layout = screen_layout_service::list_layouts(&conn, &ws, "Company").unwrap().remove(0);
+
+    let draft = LayoutTabs {
+        tabs: vec![LayoutTab {
+            id: "t1".into(),
+            title: "Details".into(),
+            sections: vec![LayoutSection {
+                id: "s1".into(),
+                title: "Details".into(),
+                columns: 3,
+                fields: vec![
+                    SectionField { key: "name".into(), full_width: true },
+                    SectionField { key: "industry".into(), full_width: false },
+                ],
+            }],
+        }],
+    };
+    let update = ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft };
+    let saved = screen_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
+
+    let section = &saved.draft.tabs[0].sections[0];
+    assert_eq!(section.columns, 3);
+    assert_eq!(section.fields[0], SectionField { key: "name".into(), full_width: true });
+    assert_eq!(section.fields[1], SectionField { key: "industry".into(), full_width: false });
+
+    // And it's still there after a fresh read, not just the mutation's own response.
+    let reloaded = screen_layout_service::get_layout(&conn, &layout.id).unwrap();
+    assert_eq!(reloaded.draft.tabs[0].sections[0].columns, 3);
+}
+
+#[test]
+fn a_phase_1_layout_saved_before_columns_existed_still_loads_with_the_old_default() {
+    // Simulates a draft persisted by the Phase 1 code: "fields" as bare
+    // key strings, no "columns" key on the section at all.
+    let (conn, ws, admin) = setup_workspace();
+    let layout = screen_layout_service::list_layouts(&conn, &ws, "Company").unwrap().remove(0);
+    let legacy_draft_json = r#"{"tabs":[{"id":"t1","title":"Details","sections":[{"id":"s1","title":"Details","fields":["industry","city"]}]}]}"#;
+
+    // Go around the service (which only ever serializes the new shape) to
+    // write the legacy JSON directly into the draft column, then read it
+    // back through the ordinary service path.
+    conn.execute("UPDATE screen_layouts SET draft_json = ?1 WHERE id = ?2", rusqlite::params![legacy_draft_json, layout.id]).unwrap();
+
+    let reloaded = screen_layout_service::get_layout(&conn, &layout.id).unwrap();
+    let section = &reloaded.draft.tabs[0].sections[0];
+    assert_eq!(section.columns, 2, "a section with no stored columns falls back to the Phase 1 fixed width");
+    assert_eq!(field_keys(section), vec!["industry".to_string(), "city".to_string()]);
+    assert!(section.fields.iter().all(|f| !f.full_width));
+
+    // And it now round-trips as the new shape once saved again.
+    let update = ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft: reloaded.draft.clone() };
+    let resaved = screen_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
+    assert_eq!(resaved.draft, reloaded.draft);
 }
