@@ -33,13 +33,19 @@ pub struct DashboardWidgets {
 }
 
 /// One tile on the dashboard. `kind` selects how `config` is shaped -
-/// Phase 1 ships one kind, `"kpi"`, whose config is `{"kpi_key": "..."}`
-/// (the same opaque KPI-key string `Workspace.dashboard_kpi_prefs`
-/// already stored workspace-wide - see that field's own doc comment -
-/// now scoped per dashboard layout instead). This layer never inspects
-/// `config`'s shape beyond routing it in and out as JSON, the same
-/// "opaque to this layer, a frontend registry resolves it" choice
-/// `screen_layout`'s field keys and relationship keys already make.
+/// Phase 1 ships `"kpi"`, whose config is `{"kpi_key": "..."}` (the same
+/// opaque KPI-key string `Workspace.dashboard_kpi_prefs` already stored
+/// workspace-wide - see that field's own doc comment - now scoped per
+/// dashboard layout instead). Phase 2 adds `"chart"`, whose config is
+/// `{"report_id": "..."}` - an existing saved Custom Report (see
+/// `custom_report_service`), run fresh each time the dashboard renders;
+/// a `report_id` whose report was since deleted is simply skipped by the
+/// frontend, the same "stale key, no server-side cleanup needed" choice
+/// a KPI widget's `kpi_key` already makes if a KPI definition is ever
+/// retired. This layer never inspects `config`'s shape beyond routing it
+/// in and out as JSON, the same "opaque to this layer, a frontend
+/// registry resolves it" choice `screen_layout`'s field keys and
+/// relationship keys already make.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DashboardWidget {
     pub id: String,

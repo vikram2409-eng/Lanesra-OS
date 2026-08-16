@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
-import { ROLES, type DashboardLayout, type DashboardWidget, type DashboardWidgets } from "../../lib/types";
+import { ROLES, type CustomReport, type DashboardLayout, type DashboardWidget, type DashboardWidgets } from "../../lib/types";
 import { KPI_DEFS, kpiLabel } from "../dashboard/kpis";
 
 function newId(): string {
@@ -20,11 +20,15 @@ function newId(): string {
  * at the workspace level: one dashboard per layout, not one per object,
  * so there's no entity-type tab row here.
  *
- * Phase 1 ships one widget kind - KPI tiles, the same catalog
+ * Phase 1 shipped one widget kind - KPI tiles, the same catalog
  * `Dashboard.tsx`'s pre-existing (workspace-wide) KPI picker already
  * drew from (see `kpis.tsx`) - now placed per dashboard layout instead.
- * Chart and record-list widgets are follow-up phases, the same
- * incremental-capability rollout Screen/App Builder's own phases used.
+ * Phase 2 adds chart widgets: pick an existing saved Custom Report (see
+ * Admin -> Reports) and it's rendered as a bar chart on the dashboard,
+ * reusing the same report engine rather than a second one just for
+ * dashboards. Record-list widgets are a further follow-up phase, the
+ * same incremental-capability rollout Screen/App Builder's own phases
+ * used.
  *
  * Every workspace always has at least one layout: the Default,
  * auto-created server-side (empty, unpublished) the first time this
@@ -41,6 +45,10 @@ export function DashboardLayoutsAdmin() {
   const queryClient = useQueryClient();
 
   const layouts = useQuery({ queryKey: ["dashboardLayouts"], queryFn: () => api.listDashboardLayouts() });
+  // Chart widgets reference a saved Custom Report by id - fetched once
+  // here and threaded down, rather than re-fetched per widget.
+  const reports = useQuery({ queryKey: ["customReports"], queryFn: () => api.listCustomReports() });
+  const reportList = reports.data ?? [];
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["dashboardLayouts"] });
@@ -100,6 +108,7 @@ export function DashboardLayoutsAdmin() {
           key={selected.id}
           layout={selected}
           layoutCount={list.length}
+          reports={reportList}
           onChanged={invalidate}
           onDeleted={() => {
             invalidate();
@@ -109,7 +118,9 @@ export function DashboardLayoutsAdmin() {
         />
       )}
 
-      {previewLayout && <LayoutPreviewModal layout={previewLayout} onClose={() => setPreviewId(null)} />}
+      {previewLayout && (
+        <LayoutPreviewModal layout={previewLayout} reports={reportList} onClose={() => setPreviewId(null)} />
+      )}
     </div>
   );
 }
@@ -154,12 +165,14 @@ function NewLayoutForm({ onDone, onCancel }: { onDone: (created: DashboardLayout
 function LayoutEditor({
   layout,
   layoutCount,
+  reports,
   onChanged,
   onDeleted,
   onPreview,
 }: {
   layout: DashboardLayout;
   layoutCount: number;
+  reports: CustomReport[];
   onChanged: () => void;
   onDeleted: () => void;
   onPreview: () => void;
@@ -219,6 +232,10 @@ function LayoutEditor({
     save({ widgets: [...widgets.widgets, { id: newId(), kind: "kpi", config: { kpi_key: key } }] });
   }
 
+  function addChart(reportId: string) {
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "chart", config: { report_id: reportId } }] });
+  }
+
   function removeWidget(id: string) {
     save({ widgets: widgets.widgets.filter((w) => w.id !== id) });
   }
@@ -234,6 +251,9 @@ function LayoutEditor({
 
   const usedKpiKeys = new Set(widgets.widgets.filter((w) => w.kind === "kpi").map((w) => w.config.kpi_key as string));
   const availableKpis = KPI_DEFS.filter((k) => !usedKpiKeys.has(k.key));
+
+  const usedReportIds = new Set(widgets.widgets.filter((w) => w.kind === "chart").map((w) => w.config.report_id as string));
+  const availableReports = reports.filter((r) => !usedReportIds.has(r.id));
 
   const hasPublished = layout.published !== null;
   const draftPublishedMatch = hasPublished && JSON.stringify(widgets) === JSON.stringify(layout.published);
@@ -316,7 +336,7 @@ function LayoutEditor({
           {widgets.widgets.length === 0 && <span className="empty-state">No widgets yet.</span>}
           {widgets.widgets.map((w, i) => (
             <span key={w.id} className="badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {widgetLabel(w)}
+              {widgetLabel(w, reports)}
               <button className="link-button" onClick={() => moveWidget(w.id, -1)} disabled={i === 0} title="Move earlier">
                 ↑
               </button>
@@ -334,21 +354,44 @@ function LayoutEditor({
             </span>
           ))}
         </div>
-        {availableKpis.length > 0 && (
-          <select
-            value=""
-            onChange={(e) => {
-              if (e.target.value) addKpi(e.target.value);
-            }}
-          >
-            <option value="">+ Add KPI tile...</option>
-            {availableKpis.map((k) => (
-              <option key={k.key} value={k.key}>
-                {kpiLabel(k.key)}
-              </option>
-            ))}
-          </select>
-        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {availableKpis.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) addKpi(e.target.value);
+              }}
+            >
+              <option value="">+ Add KPI tile...</option>
+              {availableKpis.map((k) => (
+                <option key={k.key} value={k.key}>
+                  {kpiLabel(k.key)}
+                </option>
+              ))}
+            </select>
+          )}
+          {reports.length === 0 ? (
+            <span style={{ color: "var(--text-muted)", fontSize: 12, alignSelf: "center" }}>
+              No custom reports yet - build one in Admin → Reports to add it as a chart here.
+            </span>
+          ) : (
+            availableReports.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) addChart(e.target.value);
+                }}
+              >
+                <option value="">+ Add chart...</option>
+                {availableReports.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            )
+          )}
+        </div>
       </div>
 
       <div className="toolbar" style={{ marginTop: 16 }}>
@@ -372,12 +415,24 @@ function LayoutEditor({
   );
 }
 
-function widgetLabel(w: DashboardWidget): string {
+function widgetLabel(w: DashboardWidget, reports: CustomReport[]): string {
   if (w.kind === "kpi") return kpiLabel(w.config.kpi_key as string);
+  if (w.kind === "chart") {
+    const report = reports.find((r) => r.id === w.config.report_id);
+    return report ? `📊 ${report.name}` : "📊 (report deleted)";
+  }
   return w.kind;
 }
 
-function LayoutPreviewModal({ layout, onClose }: { layout: DashboardLayout; onClose: () => void }) {
+function LayoutPreviewModal({
+  layout,
+  reports,
+  onClose,
+}: {
+  layout: DashboardLayout;
+  reports: CustomReport[];
+  onClose: () => void;
+}) {
   return (
     <div
       style={{
@@ -406,7 +461,7 @@ function LayoutPreviewModal({ layout, onClose }: { layout: DashboardLayout; onCl
           {layout.draft.widgets.map((w) => (
             <div key={w.id} className="kpi-tile" style={{ minWidth: 140 }}>
               <div className="value">—</div>
-              <div className="label">{widgetLabel(w)}</div>
+              <div className="label">{widgetLabel(w, reports)}</div>
             </div>
           ))}
         </div>

@@ -3,7 +3,9 @@ import { useEffect } from "react";
 
 import { api } from "../../lib/api";
 import { formatCents } from "../../lib/money";
+import { Bar } from "../../components/Bar";
 import type { Section } from "../../components/AppShell";
+import type { CustomReport } from "../../lib/types";
 import { useEffectiveDashboard } from "../../lib/useEffectiveDashboard";
 import { KPI_DEFS, resolveVisibleKpis, type KpiDef } from "./kpis";
 
@@ -20,6 +22,10 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
   // builds one) falls back to the pre-this-feature workspace-wide
   // `dashboard_kpi_prefs` selection below, unchanged.
   const effectiveDashboard = useEffectiveDashboard();
+  // Phase 2: chart widgets reference a saved Custom Report by id -
+  // fetched once here so every chart widget below can just look its
+  // report up instead of each re-fetching the whole list.
+  const reports = useQuery({ queryKey: ["customReports"], queryFn: () => api.listCustomReports() });
 
   useEffect(() => {
     api.refreshOverdueInvoices().then(() => {
@@ -41,6 +47,18 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
         .filter((k): k is KpiDef => !!k)
     : resolveVisibleKpis(workspace.data?.dashboard_kpi_prefs ?? null);
 
+  // A chart widget's report_id may point at a report that's since been
+  // deleted - that widget is simply skipped, not an error (see
+  // DashboardWidget's own doc comment on this "opaque key can go stale"
+  // choice, same as an unresolved KPI key above).
+  const reportById = new Map((reports.data ?? []).map((r) => [r.id, r]));
+  const chartReports: CustomReport[] = layoutWidgets
+    ? layoutWidgets
+        .filter((w) => w.kind === "chart")
+        .map((w) => reportById.get(w.config.report_id as string))
+        .filter((r): r is CustomReport => !!r)
+    : [];
+
   return (
     <div>
       <h2>Dashboard</h2>
@@ -52,6 +70,14 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
           </div>
         ))}
       </div>
+
+      {chartReports.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          {chartReports.map((report) => (
+            <DashboardChartCard key={report.id} report={report} />
+          ))}
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div className="card">
@@ -97,6 +123,46 @@ export function Dashboard({ onNavigate }: { onNavigate: (section: Section) => vo
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** One chart widget on the live Dashboard - runs its report fresh (same
+ * `run_custom_report` command the Reports screen's own runner uses) and
+ * draws it with the same dependency-free `Bar` the Reports screen uses,
+ * so a chart looks identical whether it's viewed there or here. */
+function DashboardChartCard({ report }: { report: CustomReport }) {
+  const q = useQuery({ queryKey: ["runCustomReport", report.id], queryFn: () => api.runCustomReport(report.id) });
+  const rows = q.data ?? [];
+  const max = Math.max(0, ...rows.map((r) => r.value));
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>{report.name}</h3>
+      {q.isLoading && <p>Loading...</p>}
+      {rows.length === 0 && !q.isLoading && <p className="empty-state">No data yet.</p>}
+      {rows.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th></th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.group}>
+                <td>{r.group}</td>
+                <td>
+                  <Bar value={r.value} max={max} />
+                </td>
+                <td>{report.aggregate === "sum" ? r.value.toLocaleString() : r.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { formatCents } from "../../lib/money";
+import { Bar } from "../../components/Bar";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import {
   CUSTOM_FIELD_ENTITY_TYPES,
@@ -34,16 +35,6 @@ const REPORTS: { key: ReportKey; label: string }[] = [
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-/** A dependency-free horizontal bar, sized relative to the row's own max value. */
-function Bar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
-  return (
-    <div style={{ background: "var(--surface-2, rgba(127,127,127,0.15))", borderRadius: 3, height: 8, width: 120 }}>
-      <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", borderRadius: 3 }} />
-    </div>
-  );
 }
 
 export function Reports({ isAdmin }: { isAdmin: boolean }) {
