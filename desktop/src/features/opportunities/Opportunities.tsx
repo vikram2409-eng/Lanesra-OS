@@ -5,7 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill } from "../../components/AppShell";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
@@ -238,6 +239,13 @@ function OpportunityForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the opportunity"),
   });
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: "Opportunity",
+    status: input.status,
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   return (
     <div>
       <h2>{opportunityId ? "Edit opportunity" : "New opportunity"}</h2>
@@ -249,85 +257,110 @@ function OpportunityForm({
           save.mutate();
         }}
       >
-        <div className="form-field full">
-          <label>Name</label>
-          <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} required />
-        </div>
-        <div className="form-field">
-          <label>Company</label>
-          <select
-            value={input.company_id}
-            onChange={(e) => setInput({ ...input, company_id: e.target.value, primary_contact_id: null })}
-            required
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Primary contact (optional)</label>
-          <select
-            value={input.primary_contact_id ?? ""}
-            onChange={(e) => setInput({ ...input, primary_contact_id: e.target.value || null })}
-          >
-            <option value="">— None —</option>
-            {(contacts.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.first_name} {c.last_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Stage</label>
-          <select value={input.stage} onChange={(e) => setInput({ ...input, stage: e.target.value })}>
-            {OPPORTUNITY_STAGES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Status</label>
-          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
-            {OPPORTUNITY_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Value</label>
-          <input
-            type="number"
-            step="0.01"
-            value={centsToInputValue(input.value_cents)}
-            onChange={(e) => setInput({ ...input, value_cents: parseDecimalToCents(e.target.value) })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Probability (%)</label>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            value={(input.probability_bp / 100).toString()}
-            onChange={(e) => setInput({ ...input, probability_bp: Math.round(parseFloat(e.target.value || "0") * 100) })}
-          />
-        </div>
-        <div className="form-field full">
-          <label>Next step</label>
-          <input
-            value={input.next_step ?? ""}
-            onChange={(e) => setInput({ ...input, next_step: e.target.value || null })}
-          />
-        </div>
-        <CustomFieldsSection entityType="Opportunity" status={input.status} values={customValues} onChange={setCustomValues} />
+        <LayoutFormFields
+          entityType="Opportunity"
+          order={[
+            "name", "company_id", "primary_contact_id", "stage", "status",
+            "value_cents", "probability_bp", "next_step", ...customFieldOrder,
+          ]}
+          fields={{
+            name: (
+              <div className="form-field full" key="name">
+                <label>Name</label>
+                <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} required />
+              </div>
+            ),
+            company_id: (
+              <div className="form-field" key="company_id">
+                <label>Company</label>
+                <select
+                  value={input.company_id}
+                  onChange={(e) => setInput({ ...input, company_id: e.target.value, primary_contact_id: null })}
+                  required
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            primary_contact_id: (
+              <div className="form-field" key="primary_contact_id">
+                <label>Primary contact (optional)</label>
+                <select
+                  value={input.primary_contact_id ?? ""}
+                  onChange={(e) => setInput({ ...input, primary_contact_id: e.target.value || null })}
+                >
+                  <option value="">— None —</option>
+                  {(contacts.data ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.first_name} {c.last_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            stage: (
+              <div className="form-field" key="stage">
+                <label>Stage</label>
+                <select value={input.stage} onChange={(e) => setInput({ ...input, stage: e.target.value })}>
+                  {OPPORTUNITY_STAGES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            status: (
+              <div className="form-field" key="status">
+                <label>Status</label>
+                <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+                  {OPPORTUNITY_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            value_cents: (
+              <div className="form-field" key="value_cents">
+                <label>Value</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={centsToInputValue(input.value_cents)}
+                  onChange={(e) => setInput({ ...input, value_cents: parseDecimalToCents(e.target.value) })}
+                />
+              </div>
+            ),
+            probability_bp: (
+              <div className="form-field" key="probability_bp">
+                <label>Probability (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={(input.probability_bp / 100).toString()}
+                  onChange={(e) => setInput({ ...input, probability_bp: Math.round(parseFloat(e.target.value || "0") * 100) })}
+                />
+              </div>
+            ),
+            next_step: (
+              <div className="form-field full" key="next_step">
+                <label>Next step</label>
+                <input
+                  value={input.next_step ?? ""}
+                  onChange={(e) => setInput({ ...input, next_step: e.target.value || null })}
+                />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save

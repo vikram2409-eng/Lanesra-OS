@@ -6,7 +6,8 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDialog";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { TabListCard } from "../../components/TabListCard";
@@ -346,6 +347,13 @@ function ContactForm({
     save.mutate();
   }
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: "Contact",
+    status: input.status,
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   return (
     <div>
       <h2>{contactId ? "Edit contact" : "New contact"}</h2>
@@ -356,92 +364,121 @@ function ContactForm({
         </div>
       )}
       <form className="form-grid" onSubmit={handleSubmit}>
-        <div className="form-field full">
-          <label>Company</label>
-          <select
-            value={input.company_id}
-            onChange={(e) => setInput({ ...input, company_id: e.target.value })}
-            required
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>First name</label>
-          <input value={input.first_name} onChange={(e) => setInput({ ...input, first_name: e.target.value })} required />
-        </div>
-        <div className="form-field">
-          <label>Last name</label>
-          <input value={input.last_name} onChange={(e) => setInput({ ...input, last_name: e.target.value })} required />
-        </div>
-        <div className="form-field">
-          <label>Job title</label>
-          <input value={input.job_title ?? ""} onChange={(e) => setInput({ ...input, job_title: e.target.value || null })} />
-        </div>
-        <div className="form-field">
-          <label>Email</label>
-          <input
-            type="email"
-            value={input.email ?? ""}
-            onChange={(e) => {
-              setDuplicateWarning(null);
-              setInput({ ...input, email: e.target.value || null });
-            }}
-          />
-        </div>
-        <div className="form-field">
-          <label>Status</label>
-          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
-            {CONTACT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={input.is_primary}
-              onChange={(e) => setInput({ ...input, is_primary: e.target.checked })}
-            />
-            Primary contact
-          </label>
-        </div>
-        <div className="form-field">
-          <label>Department</label>
-          <input
-            value={input.department ?? ""}
-            onChange={(e) => setInput({ ...input, department: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Preferred contact method</label>
-          <select
-            value={input.preferred_contact_method ?? ""}
-            onChange={(e) => setInput({ ...input, preferred_contact_method: e.target.value || null })}
-          >
-            <option value="">— Unspecified —</option>
-            {PREFERRED_CONTACT_METHODS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>LinkedIn (optional)</label>
-          <input
-            value={input.linkedin_url ?? ""}
-            onChange={(e) => setInput({ ...input, linkedin_url: e.target.value || null })}
-          />
-        </div>
-        <CustomFieldsSection entityType="Contact" status={input.status} values={customValues} onChange={setCustomValues} />
+        <LayoutFormFields
+          entityType="Contact"
+          order={[
+            "company_id", "first_name", "last_name", "job_title", "email", "status",
+            "is_primary", "department", "preferred_contact_method", "linkedin_url", ...customFieldOrder,
+          ]}
+          fields={{
+            company_id: (
+              <div className="form-field full" key="company_id">
+                <label>Company</label>
+                <select
+                  value={input.company_id}
+                  onChange={(e) => setInput({ ...input, company_id: e.target.value })}
+                  required
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            first_name: (
+              <div className="form-field" key="first_name">
+                <label>First name</label>
+                <input value={input.first_name} onChange={(e) => setInput({ ...input, first_name: e.target.value })} required />
+              </div>
+            ),
+            last_name: (
+              <div className="form-field" key="last_name">
+                <label>Last name</label>
+                <input value={input.last_name} onChange={(e) => setInput({ ...input, last_name: e.target.value })} required />
+              </div>
+            ),
+            job_title: (
+              <div className="form-field" key="job_title">
+                <label>Job title</label>
+                <input value={input.job_title ?? ""} onChange={(e) => setInput({ ...input, job_title: e.target.value || null })} />
+              </div>
+            ),
+            email: (
+              <div className="form-field" key="email">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={input.email ?? ""}
+                  onChange={(e) => {
+                    setDuplicateWarning(null);
+                    setInput({ ...input, email: e.target.value || null });
+                  }}
+                />
+              </div>
+            ),
+            status: (
+              <div className="form-field" key="status">
+                <label>Status</label>
+                <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+                  {CONTACT_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            is_primary: (
+              <div className="form-field" key="is_primary">
+                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={input.is_primary}
+                    onChange={(e) => setInput({ ...input, is_primary: e.target.checked })}
+                  />
+                  Primary contact
+                </label>
+              </div>
+            ),
+            department: (
+              <div className="form-field" key="department">
+                <label>Department</label>
+                <input
+                  value={input.department ?? ""}
+                  onChange={(e) => setInput({ ...input, department: e.target.value || null })}
+                />
+              </div>
+            ),
+            preferred_contact_method: (
+              <div className="form-field" key="preferred_contact_method">
+                <label>Preferred contact method</label>
+                <select
+                  value={input.preferred_contact_method ?? ""}
+                  onChange={(e) => setInput({ ...input, preferred_contact_method: e.target.value || null })}
+                >
+                  <option value="">— Unspecified —</option>
+                  {PREFERRED_CONTACT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            linkedin_url: (
+              <div className="form-field" key="linkedin_url">
+                <label>LinkedIn (optional)</label>
+                <input
+                  value={input.linkedin_url ?? ""}
+                  onChange={(e) => setInput({ ...input, linkedin_url: e.target.value || null })}
+                />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending || !input.company_id}>
             {duplicateWarning ? "Save anyway" : "Save"}

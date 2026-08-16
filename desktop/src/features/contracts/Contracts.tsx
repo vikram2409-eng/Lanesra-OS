@@ -6,7 +6,8 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents } from "../../lib/money";
 import { StatusBadge } from "../../components/StatusBadge";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
@@ -271,6 +272,13 @@ function ContractForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the contract"),
   });
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: "Contract",
+    status: input.status,
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   return (
     <div>
       <h2>{contractId ? "Edit contract" : "New contract"}</h2>
@@ -282,101 +290,134 @@ function ContractForm({
           save.mutate();
         }}
       >
-        <div className="form-field full">
-          <label>Title</label>
-          <input value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })} required />
-        </div>
-        <div className="form-field">
-          <label>Company</label>
-          <select
-            value={input.company_id}
-            onChange={(e) => setInput({ ...input, company_id: e.target.value, contact_id: null, source_quote_id: null })}
-            required
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Contact (optional)</label>
-          <select value={input.contact_id ?? ""} onChange={(e) => setInput({ ...input, contact_id: e.target.value || null })}>
-            <option value="">— None —</option>
-            {(contacts.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.first_name} {c.last_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Source quote (optional)</label>
-          <select
-            value={input.source_quote_id ?? ""}
-            onChange={(e) => setInput({ ...input, source_quote_id: e.target.value || null })}
-          >
-            <option value="">— None —</option>
-            {companyQuotes.map((q) => (
-              <option key={q.id} value={q.id}>
-                {q.quote_number}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Type</label>
-          <input value={input.type ?? ""} onChange={(e) => setInput({ ...input, type: e.target.value || null })} />
-        </div>
-        <div className="form-field">
-          <label>Status</label>
-          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
-            {CONTRACT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Value</label>
-          <input
-            type="number"
-            step="0.01"
-            value={(input.value_cents / 100).toFixed(2)}
-            onChange={(e) => setInput({ ...input, value_cents: Math.round(parseFloat(e.target.value || "0") * 100) })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Notice period (days)</label>
-          <input
-            type="number"
-            value={input.notice_period_days ?? ""}
-            onChange={(e) => setInput({ ...input, notice_period_days: e.target.value ? Number(e.target.value) : null })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Start date</label>
-          <input type="date" value={input.start_date ?? ""} onChange={(e) => setInput({ ...input, start_date: e.target.value || null })} />
-        </div>
-        <div className="form-field">
-          <label>End date</label>
-          <input type="date" value={input.end_date ?? ""} onChange={(e) => setInput({ ...input, end_date: e.target.value || null })} />
-        </div>
-        <div className="form-field">
-          <label>Renewal date</label>
-          <input
-            type="date"
-            value={input.renewal_date ?? ""}
-            onChange={(e) => setInput({ ...input, renewal_date: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field full">
-          <label>Notes</label>
-          <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
-        </div>
-        <CustomFieldsSection entityType="Contract" status={input.status} values={customValues} onChange={setCustomValues} />
+        <LayoutFormFields
+          entityType="Contract"
+          order={[
+            "title", "company_id", "contact_id", "source_quote_id", "type", "status", "value_cents",
+            "notice_period_days", "start_date", "end_date", "renewal_date", "notes", ...customFieldOrder,
+          ]}
+          fields={{
+            title: (
+              <div className="form-field full" key="title">
+                <label>Title</label>
+                <input value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })} required />
+              </div>
+            ),
+            company_id: (
+              <div className="form-field" key="company_id">
+                <label>Company</label>
+                <select
+                  value={input.company_id}
+                  onChange={(e) => setInput({ ...input, company_id: e.target.value, contact_id: null, source_quote_id: null })}
+                  required
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            contact_id: (
+              <div className="form-field" key="contact_id">
+                <label>Contact (optional)</label>
+                <select value={input.contact_id ?? ""} onChange={(e) => setInput({ ...input, contact_id: e.target.value || null })}>
+                  <option value="">— None —</option>
+                  {(contacts.data ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.first_name} {c.last_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            source_quote_id: (
+              <div className="form-field" key="source_quote_id">
+                <label>Source quote (optional)</label>
+                <select
+                  value={input.source_quote_id ?? ""}
+                  onChange={(e) => setInput({ ...input, source_quote_id: e.target.value || null })}
+                >
+                  <option value="">— None —</option>
+                  {companyQuotes.map((q) => (
+                    <option key={q.id} value={q.id}>
+                      {q.quote_number}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            type: (
+              <div className="form-field" key="type">
+                <label>Type</label>
+                <input value={input.type ?? ""} onChange={(e) => setInput({ ...input, type: e.target.value || null })} />
+              </div>
+            ),
+            status: (
+              <div className="form-field" key="status">
+                <label>Status</label>
+                <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+                  {CONTRACT_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            value_cents: (
+              <div className="form-field" key="value_cents">
+                <label>Value</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={(input.value_cents / 100).toFixed(2)}
+                  onChange={(e) => setInput({ ...input, value_cents: Math.round(parseFloat(e.target.value || "0") * 100) })}
+                />
+              </div>
+            ),
+            notice_period_days: (
+              <div className="form-field" key="notice_period_days">
+                <label>Notice period (days)</label>
+                <input
+                  type="number"
+                  value={input.notice_period_days ?? ""}
+                  onChange={(e) => setInput({ ...input, notice_period_days: e.target.value ? Number(e.target.value) : null })}
+                />
+              </div>
+            ),
+            start_date: (
+              <div className="form-field" key="start_date">
+                <label>Start date</label>
+                <input type="date" value={input.start_date ?? ""} onChange={(e) => setInput({ ...input, start_date: e.target.value || null })} />
+              </div>
+            ),
+            end_date: (
+              <div className="form-field" key="end_date">
+                <label>End date</label>
+                <input type="date" value={input.end_date ?? ""} onChange={(e) => setInput({ ...input, end_date: e.target.value || null })} />
+              </div>
+            ),
+            renewal_date: (
+              <div className="form-field" key="renewal_date">
+                <label>Renewal date</label>
+                <input
+                  type="date"
+                  value={input.renewal_date ?? ""}
+                  onChange={(e) => setInput({ ...input, renewal_date: e.target.value || null })}
+                />
+              </div>
+            ),
+            notes: (
+              <div className="form-field full" key="notes">
+                <label>Notes</label>
+                <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save

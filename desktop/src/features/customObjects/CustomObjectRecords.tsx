@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import type { Prefill } from "../../components/AppShell";
@@ -185,6 +186,13 @@ function RecordForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : `Could not save this ${definition.singular_label.toLowerCase()}`),
   });
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: definition.key,
+    status: input.status,
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   return (
     <div>
       <h2>
@@ -198,39 +206,53 @@ function RecordForm({
           save.mutate();
         }}
       >
-        <div className="form-field full">
-          <label>Name</label>
-          <input value={input.primary_name} onChange={(e) => setInput({ ...input, primary_name: e.target.value })} required />
-        </div>
-        <div className="form-field">
-          <label>Status</label>
-          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
-            {CUSTOM_RECORD_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Owner</label>
-          <select
-            value={input.owner_user_id ?? ""}
-            onChange={(e) => setInput({ ...input, owner_user_id: e.target.value || null })}
-          >
-            <option value="">— Unassigned —</option>
-            {(users.data ?? []).map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.display_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field full">
-          <label>Notes</label>
-          <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
-        </div>
-        <CustomFieldsSection entityType={definition.key} status={input.status} values={customValues} onChange={setCustomValues} />
+        <LayoutFormFields
+          entityType={definition.key}
+          order={["primary_name", "status", "owner_user_id", "notes", ...customFieldOrder]}
+          fields={{
+            primary_name: (
+              <div className="form-field full" key="primary_name">
+                <label>Name</label>
+                <input value={input.primary_name} onChange={(e) => setInput({ ...input, primary_name: e.target.value })} required />
+              </div>
+            ),
+            status: (
+              <div className="form-field" key="status">
+                <label>Status</label>
+                <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+                  {CUSTOM_RECORD_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            owner_user_id: (
+              <div className="form-field" key="owner_user_id">
+                <label>Owner</label>
+                <select
+                  value={input.owner_user_id ?? ""}
+                  onChange={(e) => setInput({ ...input, owner_user_id: e.target.value || null })}
+                >
+                  <option value="">— Unassigned —</option>
+                  {(users.data ?? []).map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            notes: (
+              <div className="form-field full" key="notes">
+                <label>Notes</label>
+                <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save
