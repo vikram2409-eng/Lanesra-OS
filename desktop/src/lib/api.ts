@@ -7,6 +7,7 @@ import type {
   AppErrorPayload,
   AppPermission,
   AppPermissionInput,
+  AuditEvent,
   BackupManifest,
   BackupPackage,
   ChangeOwnPassword,
@@ -219,6 +220,8 @@ export const api = {
 
   dashboardSummary: () => call<DashboardSummary>("dashboard_summary"),
   globalSearch: (query: string) => call<SearchResult[]>("global_search", { query }),
+  listAuditEvents: (entityType: string, entityId: string) =>
+    call<AuditEvent[]>("list_audit_events", { entityType, entityId }),
 
   listContracts: () => call<Contract[]>("list_contracts"),
   listContractsByCompany: (companyId: string) =>

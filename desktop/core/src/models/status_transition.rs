@@ -28,7 +28,9 @@ pub struct StatusTransition {
     pub to_status: String,
     pub is_active: bool,
     pub created_at: String,
+    pub created_by: Option<String>,
     pub updated_at: String,
+    pub updated_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

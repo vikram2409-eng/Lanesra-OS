@@ -9,6 +9,7 @@ import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import { TabListCard } from "../../components/TabListCard";
@@ -484,6 +485,7 @@ function ContractDetail({
         {isRenewingSoon(c.renewal_date) && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Renewing soon</span>}
       </h2>
       <p style={{ color: "var(--text-muted)" }}>{c.contract_number}</p>
+      <AuditByline createdAt={c.created_at} createdBy={c.created_by} updatedAt={c.updated_at} updatedBy={c.updated_by} />
 
       <RelatedRecordSummary
         companyId={c.company_id}
@@ -530,6 +532,7 @@ function ContractDetail({
 
       <div style={{ marginTop: 16 }}>
         <CustomFieldsCard entityType="Contract" entityId={c.id} status={c.status} />
+        <AuditTrail entityType="Contract" entityId={c.id} />
       </div>
     </div>
   );

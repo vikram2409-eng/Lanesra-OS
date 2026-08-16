@@ -563,6 +563,23 @@ export interface SearchResult {
   subtitle: string | null;
 }
 
+// A single logged create/update/archive, keyed to the record it happened
+// to - see audit_repo::record, called from every built-in entity's service
+// plus custom_record_service. user_id is null for a write with no
+// authenticated actor (a system/scheduled job); resolve it against
+// api.listUsers() the same way created_by/updated_by are resolved.
+export interface AuditEvent {
+  id: string;
+  workspace_id: string;
+  occurred_at: string;
+  user_id: string | null;
+  event_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  summary: string;
+  details_json: string | null;
+}
+
 export const CONTRACT_STATUSES = [
   "Draft",
   "Under Review",
@@ -899,7 +916,9 @@ export interface CustomFieldDefinition {
   // hidden-by-default+required field can never block a save on its own.
   is_hidden_by_default: boolean;
   created_at: string;
+  created_by: string | null;
   updated_at: string;
+  updated_by: string | null;
 }
 
 export interface CustomFieldDefinitionInput {
@@ -1105,7 +1124,9 @@ export interface BusinessRule {
   effective_end_date: string | null;
   is_protected: boolean;
   created_at: string;
+  created_by: string | null;
   updated_at: string;
+  updated_by: string | null;
   conditions: BusinessRuleCondition[];
   actions: BusinessRuleAction[];
 }
@@ -1273,7 +1294,9 @@ export interface WorkflowDefinition {
   is_protected: boolean;
   last_scheduled_run_at: string | null;
   created_at: string;
+  created_by: string | null;
   updated_at: string;
+  updated_by: string | null;
   conditions: WorkflowCondition[];
   actions: WorkflowAction[];
 }
@@ -1369,6 +1392,10 @@ export interface EffectiveNumbering {
   digits: number;
   example: string;
   is_custom: boolean;
+  // Only set when is_custom is true - a fallback to the built-in default
+  // has no real record behind it to attribute.
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 export interface NumberingOverrideInput {
@@ -1395,7 +1422,9 @@ export interface CustomReport {
   aggregate: string;
   sum_field_key: string | null;
   created_at: string;
+  created_by: string | null;
   updated_at: string;
+  updated_by: string | null;
 }
 
 export interface CustomReportInput {
@@ -1459,7 +1488,9 @@ export interface CustomRecord {
   owner_user_id: string | null;
   notes: string | null;
   created_at: string;
+  created_by: string | null;
   updated_at: string;
+  updated_by: string | null;
   archived_at: string | null;
 }
 
@@ -1643,7 +1674,9 @@ export interface RelationshipDefinition {
   is_active: boolean;
   sort_order: number;
   created_at: string;
+  created_by: string | null;
   updated_at: string;
+  updated_by: string | null;
 }
 
 export interface RelationshipDefinitionInput {
@@ -1677,6 +1710,7 @@ export interface RelationshipInstance {
   target_entity_type: string;
   target_id: string;
   created_at: string;
+  created_by: string | null;
 }
 
 export interface RelatedRecord {
@@ -1712,7 +1746,9 @@ export interface StatusTransition {
   to_status: string;
   is_active: boolean;
   created_at: string;
+  created_by: string | null;
   updated_at: string;
+  updated_by: string | null;
 }
 
 export interface StatusTransitionInput {

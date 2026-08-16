@@ -6,6 +6,7 @@ import { showRuleMessages } from "../../lib/ruleMessages";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import type { Prefill } from "../../components/AppShell";
 import {
   CUSTOM_RECORD_STATUSES,
@@ -220,6 +221,14 @@ function RecordForm({
       <h2>
         {recordId ? `Edit ${definition.singular_label.toLowerCase()}` : `New ${definition.singular_label.toLowerCase()}`}
       </h2>
+      {existing.data && (
+        <AuditByline
+          createdAt={existing.data.created_at}
+          createdBy={existing.data.created_by}
+          updatedAt={existing.data.updated_at}
+          updatedBy={existing.data.updated_by}
+        />
+      )}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"
@@ -286,6 +295,7 @@ function RecordForm({
           </button>
         </div>
       </form>
+      {recordId && <AuditTrail entityType={definition.key} entityId={recordId} />}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -346,6 +347,7 @@ function OrderDetail({
       <h2>
         {o.order_number} <StatusBadge status={o.status} />
       </h2>
+      <AuditByline createdAt={o.created_at} createdBy={o.created_by} updatedAt={o.updated_at} updatedBy={o.updated_by} />
       {error && <div className="error-banner">{error}</div>}
 
       <RelatedRecordSummary
@@ -452,6 +454,7 @@ function OrderDetail({
 
       <div style={{ marginTop: 16 }}>
         <CustomFieldsCard entityType="Order" entityId={o.id} status={o.status} />
+        <AuditTrail entityType="Order" entityId={o.id} />
       </div>
     </div>
   );

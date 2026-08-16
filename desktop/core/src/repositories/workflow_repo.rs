@@ -47,7 +47,9 @@ fn map_header(row: &rusqlite::Row) -> rusqlite::Result<WorkflowDefinition> {
         is_protected: row.get("is_protected")?,
         last_scheduled_run_at: row.get("last_scheduled_run_at")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
         conditions: Vec::new(),
         actions: Vec::new(),
     })

@@ -122,7 +122,9 @@ pub struct WorkflowDefinition {
     pub is_protected: bool,
     pub last_scheduled_run_at: Option<String>,
     pub created_at: String,
+    pub created_by: Option<String>,
     pub updated_at: String,
+    pub updated_by: Option<String>,
     pub conditions: Vec<WorkflowCondition>,
     pub actions: Vec<WorkflowAction>,
 }

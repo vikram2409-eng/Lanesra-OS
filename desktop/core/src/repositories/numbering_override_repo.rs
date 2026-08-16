@@ -11,7 +11,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<NumberingOverride> {
         prefix: row.get("prefix")?,
         digits: row.get("digits")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
     })
 }
 
@@ -25,14 +27,25 @@ pub fn get_for_entity(conn: &Connection, workspace_id: &str, entity_type: &str) 
     .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
 }
 
-pub fn upsert(conn: &Connection, workspace_id: &str, entity_type: &str, prefix: &str, digits: i64) -> rusqlite::Result<NumberingOverride> {
+/// On a fresh insert, `actor_user_id` becomes both `created_by` and
+/// `updated_by`. On conflict (an override already exists for this entity
+/// type), only `updated_by` changes - `created_by` stays whoever set the
+/// override up originally, standard upsert audit semantics.
+pub fn upsert(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    prefix: &str,
+    digits: i64,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<NumberingOverride> {
     let now = now_iso();
     conn.execute(
-        "INSERT INTO numbering_configs (id, workspace_id, entity_type, prefix, digits, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+        "INSERT INTO numbering_configs (id, workspace_id, entity_type, prefix, digits, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?6, ?7)
          ON CONFLICT (workspace_id, entity_type)
-         DO UPDATE SET prefix = ?4, digits = ?5, updated_at = ?6",
-        (new_uuid(), workspace_id, entity_type, prefix, digits, now),
+         DO UPDATE SET prefix = ?4, digits = ?5, updated_at = ?6, updated_by = ?7",
+        (new_uuid(), workspace_id, entity_type, prefix, digits, now, actor_user_id),
     )?;
     get_for_entity(conn, workspace_id, entity_type).map(|r| r.expect("just upserted"))
 }

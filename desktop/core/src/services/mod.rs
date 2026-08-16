@@ -1,4 +1,5 @@
 pub mod app_service;
+pub mod audit_service;
 pub mod auth_service;
 pub mod backup_service;
 pub mod builtin_field_service;

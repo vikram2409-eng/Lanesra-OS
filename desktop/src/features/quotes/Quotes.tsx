@@ -12,6 +12,7 @@ import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -362,6 +363,7 @@ function QuoteDetail({
       <h2>
         {q.quote_number} <StatusBadge status={q.status} />
       </h2>
+      <AuditByline createdAt={q.created_at} createdBy={q.created_by} updatedAt={q.updated_at} updatedBy={q.updated_by} />
       {error && <div className="error-banner">{error}</div>}
 
       <RelatedRecordSummary
@@ -466,6 +468,7 @@ function QuoteDetail({
 
       <div style={{ marginTop: 16 }}>
         <CustomFieldsCard entityType="Quote" entityId={q.id} status={q.status} />
+        <AuditTrail entityType="Quote" entityId={q.id} />
       </div>
     </div>
   );

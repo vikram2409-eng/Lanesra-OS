@@ -14,7 +14,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomRecord> {
         owner_user_id: row.get("owner_user_id")?,
         notes: row.get("notes")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
         archived_at: row.get("archived_at")?,
     })
 }

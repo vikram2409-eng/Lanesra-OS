@@ -12,7 +12,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<StatusTransition> {
         to_status: row.get("to_status")?,
         is_active: row.get("is_active")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
     })
 }
 
@@ -43,20 +45,26 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<StatusTransit
         .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
 }
 
-pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &StatusTransitionInput) -> rusqlite::Result<StatusTransition> {
+pub fn create(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &StatusTransitionInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<StatusTransition> {
     let now = now_iso();
     conn.execute(
-        "INSERT INTO status_transitions (id, workspace_id, entity_type, from_status, to_status, is_active, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?6)",
-        (id, workspace_id, &input.entity_type, &input.from_status, &input.to_status, &now),
+        "INSERT INTO status_transitions (id, workspace_id, entity_type, from_status, to_status, is_active, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?6, ?7)",
+        (id, workspace_id, &input.entity_type, &input.from_status, &input.to_status, &now, &actor_user_id),
     )?;
     Ok(get(conn, id)?.expect("just inserted"))
 }
 
-pub fn set_active(conn: &Connection, id: &str, is_active: bool) -> rusqlite::Result<()> {
+pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE status_transitions SET is_active = ?2, updated_at = ?3 WHERE id = ?1",
-        (id, is_active, now_iso()),
+        "UPDATE status_transitions SET is_active = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?1",
+        (id, is_active, now_iso(), actor_user_id),
     )?;
     Ok(())
 }

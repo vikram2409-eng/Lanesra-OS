@@ -34,7 +34,7 @@ use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinition
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
-    app_service,
+    app_service, audit_service,
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service,
@@ -275,6 +275,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "global_search" => {
             let query: String = arg(args, "query")?;
             to_value(search_service::global_search(conn, &require_workspace_id(conn)?, &query)?)
+        }
+        "list_audit_events" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let entity_id: String = arg(args, "entityId")?;
+            to_value(audit_service::list_for_entity(conn, &entity_type, &entity_id)?)
         }
 
         "update_workspace" => {

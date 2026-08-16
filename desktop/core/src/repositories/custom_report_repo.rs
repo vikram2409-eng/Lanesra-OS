@@ -14,7 +14,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomReport> {
         aggregate: row.get("aggregate")?,
         sum_field_key: row.get("sum_field_key")?,
         created_at: row.get("created_at")?,
+        created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
     })
 }
 
