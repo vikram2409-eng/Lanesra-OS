@@ -28,7 +28,7 @@ fn empty_tabs() -> LayoutTabs {
 }
 
 fn seeded_tabs(initial_fields: &[String]) -> LayoutTabs {
-    use crate::models::screen_layout::LayoutSection;
+    use crate::models::screen_layout::{LayoutSection, SectionField};
     LayoutTabs {
         tabs: vec![LayoutTab {
             id: crate::domain::ids::new_uuid(),
@@ -36,7 +36,8 @@ fn seeded_tabs(initial_fields: &[String]) -> LayoutTabs {
             sections: vec![LayoutSection {
                 id: crate::domain::ids::new_uuid(),
                 title: "Details".into(),
-                fields: initial_fields.to_vec(),
+                columns: 2,
+                fields: initial_fields.iter().map(SectionField::new).collect(),
             }],
         }],
     }

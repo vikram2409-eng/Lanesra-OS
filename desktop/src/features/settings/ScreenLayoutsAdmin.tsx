@@ -13,6 +13,8 @@ import {
   type ScreenLayout,
 } from "../../lib/types";
 
+const SECTION_COLUMN_CHOICES = [1, 2, 3] as const;
+
 function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -20,17 +22,19 @@ function newId(): string {
 }
 
 function emptySection(): LayoutSection {
-  return { id: newId(), title: "Section", fields: [] };
+  return { id: newId(), title: "Section", columns: 2, fields: [] };
 }
 function emptyTab(): LayoutTab {
   return { id: newId(), title: "New tab", sections: [emptySection()] };
 }
 
 /**
- * Screen/App Builder Phase 1: lets an Administrator design the create/edit
- * form for any built-in or custom object - named layouts made of tabs of
- * field sections, assigned to roles. Edits are all against a layout's
- * draft; nothing changes on a live form until Publish (see
+ * Screen/App Builder Phase 1-2: lets an Administrator design the
+ * create/edit form for any built-in or custom object - named layouts
+ * made of tabs of field sections, assigned to roles. Each section lays
+ * its fields out in its own 1-3 column grid (Phase 2), with any field
+ * optionally spanning the section's full width. Edits are all against a
+ * layout's draft; nothing changes on a live form until Publish (see
  * screen_layout_service's doc comments in the Rust core for the full
  * draft/published/role-resolution model - this screen is a thin editor
  * over it). Mirrors the online demo's Admin > Screen layouts builder,
@@ -306,6 +310,14 @@ function LayoutEditor({
     save({ tabs: tabs.tabs.map((t, i) => (i === tabIdx ? { ...t, sections: [...t.sections, emptySection()] } : t)) });
   }
 
+  function setSectionColumns(tabIdx: number, sectionIdx: number, columns: number) {
+    save({
+      tabs: tabs.tabs.map((t, i) =>
+        i !== tabIdx ? t : { ...t, sections: t.sections.map((s, si) => (si === sectionIdx ? { ...s, columns } : s)) },
+      ),
+    });
+  }
+
   function renameSection(tabIdx: number, sectionIdx: number, title: string) {
     save({
       tabs: tabs.tabs.map((t, i) =>
@@ -325,15 +337,18 @@ function LayoutEditor({
   // A field only ever lives in one place across the whole layout, so
   // placing it strips it from every section on every tab first - picking
   // a field that's already elsewhere in the layout moves it here instead
-  // of duplicating it (including across tabs).
+  // of duplicating it (including across tabs). New placements default to
+  // a single column - an admin who wants it full-width flips that after.
   function addField(tabIdx: number, sectionIdx: number, key: string) {
     const stripped = tabs.tabs.map((t) => ({
       ...t,
-      sections: t.sections.map((s) => ({ ...s, fields: s.fields.filter((f) => f !== key) })),
+      sections: t.sections.map((s) => ({ ...s, fields: s.fields.filter((f) => f.key !== key) })),
     }));
     stripped[tabIdx] = {
       ...stripped[tabIdx],
-      sections: stripped[tabIdx].sections.map((s, si) => (si === sectionIdx ? { ...s, fields: [...s.fields, key] } : s)),
+      sections: stripped[tabIdx].sections.map((s, si) =>
+        si === sectionIdx ? { ...s, fields: [...s.fields, { key, full_width: false }] } : s,
+      ),
     };
     save({ tabs: stripped });
   }
@@ -345,7 +360,7 @@ function LayoutEditor({
           ? t
           : {
               ...t,
-              sections: t.sections.map((s, si) => (si === sectionIdx ? { ...s, fields: s.fields.filter((f) => f !== key) } : s)),
+              sections: t.sections.map((s, si) => (si === sectionIdx ? { ...s, fields: s.fields.filter((f) => f.key !== key) } : s)),
             },
       ),
     });
@@ -359,7 +374,7 @@ function LayoutEditor({
           ...t,
           sections: t.sections.map((s, si) => {
             if (si !== sectionIdx) return s;
-            const idx = s.fields.indexOf(key);
+            const idx = s.fields.findIndex((f) => f.key === key);
             const swapWith = idx + direction;
             if (idx < 0 || swapWith < 0 || swapWith >= s.fields.length) return s;
             const nextFields = [...s.fields];
@@ -371,11 +386,30 @@ function LayoutEditor({
     });
   }
 
-  const placedKeys = new Set(tabs.tabs.flatMap((t) => t.sections.flatMap((s) => s.fields)));
+  function toggleFieldFullWidth(tabIdx: number, sectionIdx: number, key: string) {
+    save({
+      tabs: tabs.tabs.map((t, i) =>
+        i !== tabIdx
+          ? t
+          : {
+              ...t,
+              sections: t.sections.map((s, si) =>
+                si !== sectionIdx
+                  ? s
+                  : { ...s, fields: s.fields.map((f) => (f.key === key ? { ...f, full_width: !f.full_width } : f)) },
+              ),
+            },
+      ),
+    });
+  }
+
+  const placedKeys = new Set(tabs.tabs.flatMap((t) => t.sections.flatMap((s) => s.fields.map((f) => f.key))));
   // "Available" for a section's picker means "not already on this tab" -
   // a field placed on another tab still shows up here (labeled as such),
   // so picking it is how you move a field between tabs.
-  const availableForActiveTab = activeTab ? fields.filter((f) => !activeTab.sections.some((s) => s.fields.includes(f.key))) : [];
+  const availableForActiveTab = activeTab
+    ? fields.filter((f) => !activeTab.sections.some((s) => s.fields.some((sf) => sf.key === f.key)))
+    : [];
   const unplacedCount = fields.length - placedKeys.size;
 
   const hasPublished = layout.published !== null;
@@ -486,18 +520,42 @@ function LayoutEditor({
                   onChange={(e) => renameSection(activeTabIdxClamped, si, e.target.value)}
                   style={{ fontWeight: 600, border: "none", background: "transparent", fontSize: 14, padding: 0 }}
                 />
-                <button className="btn" onClick={() => deleteSection(activeTabIdxClamped, si)} disabled={activeTab.sections.length <= 1}>
-                  Remove section
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
+                    Columns
+                    {SECTION_COLUMN_CHOICES.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`tab${section.columns === n ? " active" : ""}`}
+                        style={{ padding: "2px 10px" }}
+                        onClick={() => setSectionColumns(activeTabIdxClamped, si, n)}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="btn" onClick={() => deleteSection(activeTabIdxClamped, si)} disabled={activeTab.sections.length <= 1}>
+                    Remove section
+                  </button>
+                </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "8px 0" }}>
                 {section.fields.length === 0 && <span className="empty-state">No fields yet.</span>}
-                {section.fields.map((key, fi) => (
-                  <span key={key} className="badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    {fieldLabel(key)}
+                {section.fields.map((f, fi) => (
+                  <span key={f.key} className="badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {fieldLabel(f.key)}
                     <button
                       className="link-button"
-                      onClick={() => moveField(activeTabIdxClamped, si, key, -1)}
+                      onClick={() => toggleFieldFullWidth(activeTabIdxClamped, si, f.key)}
+                      title={f.full_width ? "Full width - click to shrink to one column" : "One column - click to span the full section"}
+                      disabled={section.columns === 1}
+                    >
+                      {f.full_width ? "⭤ full" : "⭤ 1 col"}
+                    </button>
+                    <button
+                      className="link-button"
+                      onClick={() => moveField(activeTabIdxClamped, si, f.key, -1)}
                       disabled={fi === 0}
                       title="Move earlier"
                     >
@@ -505,13 +563,13 @@ function LayoutEditor({
                     </button>
                     <button
                       className="link-button"
-                      onClick={() => moveField(activeTabIdxClamped, si, key, 1)}
+                      onClick={() => moveField(activeTabIdxClamped, si, f.key, 1)}
                       disabled={fi === section.fields.length - 1}
                       title="Move later"
                     >
                       ↓
                     </button>
-                    <button className="link-button" onClick={() => removeField(activeTabIdxClamped, si, key)} title="Remove from layout">
+                    <button className="link-button" onClick={() => removeField(activeTabIdxClamped, si, f.key)} title="Remove from layout">
                       ×
                     </button>
                   </span>
@@ -620,11 +678,11 @@ function LayoutPreviewModal({
             <div key={s.id} style={{ marginBottom: 16 }}>
               <h4 style={{ marginBottom: 8 }}>{s.title}</h4>
               {s.fields.length === 0 && <span className="empty-state">No fields in this section.</span>}
-              <div className="form-grid">
-                {s.fields.map((key) => (
-                  <div className="form-field" key={key}>
-                    <label>{fieldLabel(key)}</label>
-                    <input disabled placeholder={fieldLabel(key)} />
+              <div className="form-grid" style={{ gridTemplateColumns: `repeat(${s.columns}, 1fr)` }}>
+                {s.fields.map((f) => (
+                  <div className={`form-field${f.full_width ? " full" : ""}`} key={f.key}>
+                    <label>{fieldLabel(f.key)}</label>
+                    <input disabled placeholder={fieldLabel(f.key)} />
                   </div>
                 ))}
               </div>

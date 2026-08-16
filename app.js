@@ -742,7 +742,7 @@ const docBalance=r=>Math.max(0,docTotal(r)-Number(r.amountPaid||0));
 const relatedLabel=t=>({Company:companyName,Contact:contactName,Opportunity:opportunityName,Quote:quoteName,Order:orderName,Invoice:id=>byId('invoices',id)?.number||'—',Contract:id=>byId('contracts',id)?.number||'—',General:()=> 'General'}[t.relatedType]?.(t.relatedId)||'General');
 function options(list,value,labelFn=x=>x.name){return `<option value="">Select…</option>`+list.map(x=>`<option value="${x.id}" ${x.id===value?'selected':''}>${labelFn(x)}</option>`).join('')}
 function optionalOptions(list,value,emptyLabel='None',labelFn=x=>x.name){return `<option value="">${emptyLabel}</option>`+list.map(x=>`<option value="${x.id}" ${x.id===value?'selected':''}>${labelFn(x)}</option>`).join('')}
-function selectHtml(name,label,items,value,required=true){return `<div class="field"><label>${label}</label><select name="${name}" ${required?'required':''}>${options(items,value)}</select></div>`}
+function selectHtml(name,label,items,value,required=true,cls='field'){return `<div class="${cls}"><label>${label}</label><select name="${name}" ${required?'required':''}>${options(items,value)}</select></div>`}
 // The sidebar's <nav> is only built once, inside appShell()'s initial
 // innerHTML - unlike #view/#adminBody it's never re-rendered by
 // renderView()/renderAdminTab(), so a Custom Objects create/edit/delete
@@ -1035,7 +1035,12 @@ function tablePage(key,cfg){
  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove(key,b.dataset.del));
 }
 function badgeMaybe(v){const vals=['Active','Inactive','Customer','Prospect','Lead','Sent','Accepted','Draft','Paid','Overdue','Open','Completed','High','Medium','Low','Urgent','Renewal Due','In Progress','Won','Lost','Confirmed','Cancelled'];return vals.includes(String(v))?`<span class="badge">${v}</span>`:(v??'—')}
-function fieldHtml(f,record){const [name,label,type,opts]=f;const extra=f[4];const val=record[name]??(!record.id&&extra?.defaultValue?extra.defaultValue:'');const help=extra?.helpText?`<small class="field-help">${extra.helpText}</small>`:'';const req=extra?.required?'required':(['name','title','number'].includes(name)?'required':'');if(type==='auto')return `<div class="field"><label>${label}</label><input name="${name}" value="${val}" readonly placeholder="Generated automatically"><small class="field-help">Generated when the record is saved</small></div>`;if(type==='select')return `<div class="field"><label>${label}</label><select name="${name}" ${req}>${opts.split('|').map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>${help}</div>`;if(type==='relation')return selectHtml(name,label,data[opts],val);if(type==='filteredContact')return `<div class="field"><label>${label}</label><select name="${name}" data-filter="contact">${optionalOptions(data.contacts.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No contact')}</select></div>`;if(type==='filteredOpportunity')return `<div class="field"><label>${label}</label><select name="${name}" data-filter="opportunity">${optionalOptions(data.opportunities.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No opportunity',x=>x.title)}</select></div>`;if(type==='filteredQuote')return `<div class="field"><label>${label}</label><select name="${name}" data-filter="quote">${optionalOptions(data.quotes.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source quote',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='filteredOrder')return `<div class="field"><label>${label}</label><select name="${name}" data-filter="order">${optionalOptions(data.orders.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source order',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='dynamicRelation')return `<div class="field"><label>${label}</label><select name="${name}" data-dynamic-related></select></div>`;
+// `full` (Screen/App Builder Phase 2): explicit true/false forces this
+// field's width, overriding the field's own default - how a layout
+// section's admin-set full_width choice takes effect. Left undefined
+// (every call site outside the layout system), the pre-Phase-2 default
+// applies: only the "title" field is full-width.
+function fieldHtml(f,record,full){const [name,label,type,opts]=f;const extra=f[4];const val=record[name]??(!record.id&&extra?.defaultValue?extra.defaultValue:'');const help=extra?.helpText?`<small class="field-help">${extra.helpText}</small>`:'';const req=extra?.required?'required':(['name','title','number'].includes(name)?'required':'');const cls=`field${(full??name==='title')?' full':''}`;if(type==='auto')return `<div class="${cls}"><label>${label}</label><input name="${name}" value="${val}" readonly placeholder="Generated automatically"><small class="field-help">Generated when the record is saved</small></div>`;if(type==='select')return `<div class="${cls}"><label>${label}</label><select name="${name}" ${req}>${opts.split('|').map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>${help}</div>`;if(type==='relation')return selectHtml(name,label,data[opts],val,true,cls);if(type==='filteredContact')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="contact">${optionalOptions(data.contacts.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No contact')}</select></div>`;if(type==='filteredOpportunity')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="opportunity">${optionalOptions(data.opportunities.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No opportunity',x=>x.title)}</select></div>`;if(type==='filteredQuote')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="quote">${optionalOptions(data.quotes.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source quote',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='filteredOrder')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="order">${optionalOptions(data.orders.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source order',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='dynamicRelation')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-dynamic-related></select></div>`;
  // Custom fields carry their own HTML5-native validation constraints - a
  // maxlength/pattern for text, min/max for number - so the browser blocks
  // an invalid save the same way desktop's server-side validation does,
@@ -1043,7 +1048,7 @@ function fieldHtml(f,record){const [name,label,type,opts]=f;const extra=f[4];con
  const extraAttrs=type==='number'
   ?`${extra?.minValue!==''&&extra?.minValue!==undefined?`min="${extra.minValue}"`:''} ${extra?.maxValue!==''&&extra?.maxValue!==undefined?`max="${extra.maxValue}"`:''}`
   :`${extra?.maxLength?`maxlength="${extra.maxLength}"`:''} ${extra?.pattern?`pattern="${extra.pattern}"`:''}`;
- return `<div class="field ${name==='title'?'full':''}"><label>${label}</label><input name="${name}" type="${type||'text'}" value="${val}" placeholder="${extra?.placeholder||''}" ${req} ${extraAttrs}>${help}</div>`}
+ return `<div class="${cls}"><label>${label}</label><input name="${name}" type="${type||'text'}" value="${val}" placeholder="${extra?.placeholder||''}" ${req} ${extraAttrs}>${help}</div>`}
 function lineItemsHtml(items=[]){const rows=(items.length?items:[{productId:'',quantity:1,unitPrice:0}]).map(lineRow).join('');return `<div class="full line-items"><div class="line-head"><h3>Products & services</h3><button type="button" class="btn btn-secondary" id="addLine">+ Add line</button></div><div id="lineRows">${rows}</div><div class="line-total">Total <strong id="docTotal">${money(items.reduce((s,i)=>s+lineTotal(i),0))}</strong></div></div>`}
 function lineRow(i={productId:'',quantity:1,unitPrice:0}){return `<div class="line-row"><div class="field"><label>Product / service</label><select class="line-product">${options(data.products.filter(p=>p.status==='Active'),i.productId)}</select></div><div class="field"><label>Quantity</label><input class="line-qty" type="number" min="0.01" step="0.01" value="${i.quantity??1}"></div><div class="field"><label>Unit price</label><input class="line-price" type="number" min="0" step="0.01" value="${i.unitPrice??0}"></div><div class="line-subtotal">${money(lineTotal(i))}</div><button type="button" class="icon-btn line-remove">Remove</button></div>`}
 // ---- Customer 360 / Contact 360 (Phase 5), generalized in the v0.25
@@ -1225,7 +1230,7 @@ function recordModal(key,fields,record={}){
  // switching tabs never loses values already typed into another one.
  const tabsOut=orderedTabsFor(fields,defaultLayoutFor(key).publishedTabs);
  const tabsHtml=tabsOut.length>1?`<div class="layout-tabs" style="display:flex;gap:8px;margin-bottom:12px">${tabsOut.map((t,i)=>`<button type="button" class="tab ${i===0?'active':''}" data-form-tab="${i}">${t.title||'Details'}</button>`).join('')}</div>`:'';
- const panelsHtml=tabsOut.map((t,i)=>`<div class="form-grid" data-form-panel="${i}" style="${i===0?'':'display:none'}">${t.groups.map(g=>(g.title?`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>`:'')+g.fields.map(f=>fieldHtml(f,record)).join('')).join('')}</div>`).join('');
+ const panelsHtml=tabsOut.map((t,i)=>`<div data-form-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,record)}</div>`).join('');
  const form=`<form id="recordForm">${tabsHtml}${panelsHtml}${isDoc?lineItemsHtml(record.items||[]):''}<div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
  modal(record.id?'Edit record':'Create record',form); $('[data-close]').onclick=closeModal;
  document.querySelectorAll('[data-form-tab]').forEach(b=>b.onclick=()=>{
@@ -1611,15 +1616,29 @@ function relationshipModal(def){
 // from a deleted one) is auto-appended to a trailing "Other fields"
 // section, so a layout can never silently drop something off the form.
 const DEMO_LAYOUT_ROLES=['Administrator','Sales Rep','Viewer'];
+const SECTION_COLUMN_CHOICES=[1,2,3];
 let layoutsEntityKey=null;
 let layoutsSelectedLayoutId=null;
 let layoutsActiveTabIdx=0;
 function allFieldsFor(entityKey){return fieldsFor(entityKey,fieldsFnFor(entityKey))}
-function freshTab(entityKey){return {id:uid(),title:'Details',sections:[{id:uid(),title:'Details',fields:allFieldsFor(entityKey).map(f=>f[0])}]}}
+// Screen/App Builder Phase 2: a section field is `{key,full}` - `full`
+// spans the section's full width instead of one column. Accepts a plain
+// key string too (the Phase 1 shape, `full` defaulting to false), so a
+// layout saved before Phase 2 still normalizes cleanly - see
+// `normalizeSection` below, the same backward-compat approach the Rust
+// core's `deserialize_fields` takes for the desktop edition.
+function freshSectionField(key,full=false){return {key,full}}
+function normalizeFieldEntry(sf){return typeof sf==='string'?freshSectionField(sf):{key:sf.key,full:!!sf.full}}
+function normalizeSection(s){return {...s,columns:s.columns||2,fields:(s.fields||[]).map(normalizeFieldEntry)}}
+function freshTab(entityKey){return {id:uid(),title:'Details',sections:[{id:uid(),title:'Details',columns:2,fields:allFieldsFor(entityKey).map(f=>freshSectionField(f[0]))}]}}
 function freshLayout(entityKey,name,isDefault){return {id:uid(),name,isDefault,roles:[],draftTabs:[freshTab(entityKey)],publishedTabs:null,updatedAt:null}}
 // Migrates the old single-layout-per-entity shape (a bare
 // {draftSections,publishedSections}) into an array of named layouts, and
-// auto-provisions a Default layout for any entity with none yet.
+// auto-provisions a Default layout for any entity with none yet. Also
+// normalizes every section to the Phase 2 shape (a `columns` count, each
+// field a `{key,full}` pair) - in memory only, the same as the
+// layouts-array migration below it; the next actual edit's `save()`
+// persists it.
 function ensureLayouts(entityKey){
  if(!data.uiLayouts)data.uiLayouts={};
  let arr=data.uiLayouts[entityKey];
@@ -1631,6 +1650,10 @@ function ensureLayouts(entityKey){
  }
  if(!arr||!arr.length)arr=[freshLayout(entityKey,'Default',true)];
  if(!arr.some(l=>l.isDefault))arr[0].isDefault=true;
+ arr.forEach(l=>{
+  l.draftTabs.forEach(t=>{t.sections=t.sections.map(normalizeSection)});
+  if(l.publishedTabs)l.publishedTabs.forEach(t=>{t.sections=t.sections.map(normalizeSection)});
+ });
  data.uiLayouts[entityKey]=arr;
  return arr;
 }
@@ -1639,25 +1662,42 @@ function layoutById(entityKey,id){return ensureLayouts(entityKey).find(l=>l.id==
 // Groups fields into the tab/section structure `tabs` describes (a
 // layout's draftTabs or publishedTabs); `tabs` null/undefined means "no
 // layout in effect" - a single untitled tab/section in the fields' plain
-// default order, exactly the pre-layout-builder behavior.
+// default order, exactly the pre-layout-builder behavior. Each group
+// carries its own `columns` (Phase 2) and each resolved field its `full`
+// flag, both consumed by the render step (`recordModal`/
+// `layoutPreviewModal`) to build a per-section grid instead of one grid
+// shared by the whole tab.
 function orderedTabsFor(fields,tabs){
- if(!tabs||!tabs.length)return [{title:null,groups:[{title:null,fields}]}];
+ const plainGroup=()=>({title:null,columns:2,items:fields.map(f=>({field:f,full:undefined}))});
+ if(!tabs||!tabs.length)return [{title:null,groups:[plainGroup()]}];
  const byKey=Object.fromEntries(fields.map(f=>[f[0],f]));
  const used=new Set();
  const out=tabs.map(t=>{
   const groups=t.sections.map(s=>{
-   const secFields=s.fields.map(k=>byKey[k]).filter(Boolean);
-   secFields.forEach(f=>used.add(f[0]));
-   return {title:s.title,fields:secFields};
-  }).filter(g=>g.fields.length);
+   const items=(s.fields||[]).map(normalizeFieldEntry).map(sf=>{
+    const field=byKey[sf.key];
+    if(!field)return null;
+    used.add(sf.key);
+    return {field,full:sf.full};
+   }).filter(Boolean);
+   return {title:s.title,columns:s.columns||2,items};
+  }).filter(g=>g.items.length);
   return {title:t.title,groups};
  }).filter(t=>t.groups.length);
  const rest=fields.filter(f=>!used.has(f[0]));
  if(rest.length){
-  if(out.length)out[out.length-1].groups.push({title:'Other fields',fields:rest});
-  else out.push({title:null,groups:[{title:null,fields:rest}]});
+  const restGroup={title:'Other fields',columns:2,items:rest.map(f=>({field:f,full:undefined}))};
+  if(out.length)out[out.length-1].groups.push(restGroup);
+  else out.push({title:null,groups:[restGroup]});
  }
- return out.length?out:[{title:null,groups:[{title:null,fields}]}];
+ return out.length?out:[{title:null,groups:[plainGroup()]}];
+}
+// Renders `orderedTabsFor`'s groups for one tab panel - each group is its
+// own `.form-grid` (Phase 2: a section's own `columns` count, not one
+// grid shared by every section in the tab), with the section title (if
+// any) as a plain heading above it rather than a grid cell.
+function groupsHtml(groups,record){
+ return groups.map(g=>`${g.title?`<h4 style="margin:0 0 8px">${g.title}</h4>`:''}<div class="form-grid" style="grid-template-columns:repeat(${g.columns},1fr);margin-bottom:14px">${g.items.map(it=>fieldHtml(it.field,record,it.full)).join('')}</div>`).join('');
 }
 function layoutsTab(body){
  const keys=allEntityTypeKeys();
@@ -1718,13 +1758,13 @@ function layoutsTab(body){
  $('#addTab').onclick=()=>{layout.draftTabs.push(freshTabEmpty());save();layoutsActiveTabIdx=layout.draftTabs.length-1;layoutsTab(body)};
  renderLayoutTabMeta(entityKey);
  renderLayoutSections(entityKey);
- $('#addSection').onclick=()=>{layout.draftTabs[layoutsActiveTabIdx].sections.push({id:uid(),title:'New section',fields:[]});save();renderLayoutSections(entityKey)};
+ $('#addSection').onclick=()=>{layout.draftTabs[layoutsActiveTabIdx].sections.push({id:uid(),title:'New section',columns:2,fields:[]});save();renderLayoutSections(entityKey)};
  $('#previewLayout').onclick=()=>layoutPreviewModal(entityKey);
  $('#publishLayout').onclick=()=>{layout.publishedTabs=structuredClone(layout.draftTabs);layout.updatedAt=new Date().toISOString();save();toast('Layout published');layoutsTab(body)};
  $('#revertLayout').onclick=()=>{if(!layout.publishedTabs)return;layout.draftTabs=structuredClone(layout.publishedTabs);save();toast('Draft reverted to the published layout');layoutsTab(body)};
  const unpub=$('#unpublishLayout'); if(unpub)unpub.onclick=()=>{if(!confirm('Unpublish this layout? Any role assigned to it falls back to the Default layout until you publish again.'))return;layout.publishedTabs=null;save();toast('Layout unpublished');layoutsTab(body)};
 }
-function freshTabEmpty(){return {id:uid(),title:'New tab',sections:[{id:uid(),title:'Section',fields:[]}]}}
+function freshTabEmpty(){return {id:uid(),title:'New tab',sections:[{id:uid(),title:'Section',columns:2,fields:[]}]}}
 function renderLayoutTabMeta(entityKey){
  const layout=layoutById(entityKey,layoutsSelectedLayoutId);
  const tab=layout.draftTabs[layoutsActiveTabIdx];
@@ -1746,24 +1786,34 @@ function renderLayoutSections(entityKey){
  // in the whole layout, but also anything currently sitting on a
  // different tab, so dragging it into a section here moves it onto this
  // tab (see moveField's own comment on why that's a move, not a copy).
- const placedInThisTab=new Set(tab.sections.flatMap(s=>s.fields));
+ const placedInThisTab=new Set(tab.sections.flatMap(s=>s.fields.map(f=>f.key)));
  const available=allFields.map(f=>f[0]).filter(k=>!placedInThisTab.has(k));
- const chip=(k,idx)=>`<span class="layout-field-chip" draggable="true" data-field-key="${k}" data-section-idx="${idx}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:${idx>=0?'#f9fafb':'#fff'};cursor:grab;font-size:13px;display:inline-block">⠿ ${fieldLabel(k)}</span>`;
- const listHtml=(fieldsArr,idx)=>`<div class="layout-field-list" data-section-idx="${idx}" style="display:flex;flex-wrap:wrap;gap:8px;min-height:34px">${fieldsArr.map(k=>chip(k,idx)).join('')||'<span class="muted" style="font-size:12px">Drag fields here</span>'}</div>`;
+ // `full`/`onCols` are only meaningful for a chip actually sitting in a
+ // section (idx>=0) - the "Available" bucket isn't part of any grid yet.
+ const chip=(key,idx,full,onCols)=>`<span class="layout-field-chip" draggable="true" data-field-key="${key}" data-section-idx="${idx}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:${idx>=0?'#f9fafb':'#fff'};cursor:grab;font-size:13px;display:inline-flex;align-items:center;gap:6px">⠿ ${fieldLabel(key)}${idx>=0?`<button type="button" class="link-btn" draggable="false" data-toggle-full data-section-idx="${idx}" data-field-key="${key}" style="font-size:11px" ${onCols===1?'disabled':''} title="${full?'Full width - click to shrink to one column':'One column - click to span the full section'}">${full?'⭤ full':'⭤ 1 col'}</button>`:''}</span>`;
+ const listHtml=(entries,idx,columns)=>`<div class="layout-field-list" data-section-idx="${idx}" style="display:flex;flex-wrap:wrap;gap:8px;min-height:34px">${entries.map(e=>chip(e.key,idx,e.full,columns)).join('')||'<span class="muted" style="font-size:12px">Drag fields here</span>'}</div>`;
+ const columnsPicker=(idx,current)=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280">Columns${SECTION_COLUMN_CHOICES.map(n=>`<button type="button" class="tab ${current===n?'active':''}" data-set-columns="${idx}" data-columns="${n}" style="padding:2px 10px">${n}</button>`).join('')}</div>`;
  const box=$('#layoutSections'); if(!box)return;
  box.innerHTML=`${tab.sections.map((s,idx)=>`<div class="layout-section" style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
-   <input class="layout-section-title" data-section-idx="${idx}" value="${s.title}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-weight:700;flex:1">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+   <input class="layout-section-title" data-section-idx="${idx}" value="${s.title}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-weight:700;flex:1;min-width:120px">
+   ${columnsPicker(idx,s.columns)}
    <button class="icon-btn" data-remove-section="${idx}" type="button" ${tab.sections.length<=1?'disabled':''}>Delete section</button>
   </div>
-  ${listHtml(s.fields,idx)}
+  ${listHtml(s.fields,idx,s.columns)}
  </div>`).join('')}
  <div class="layout-section" style="border:1px dashed var(--line);border-radius:12px;padding:12px">
   <div class="muted" style="font-weight:700;margin-bottom:8px">Available fields — not on this tab (drag into a section above to place here)</div>
-  ${listHtml(available,-1)}
+  ${listHtml(available.map(k=>({key:k,full:undefined})),-1,2)}
  </div>`;
  box.querySelectorAll('.layout-section-title').forEach(inp=>inp.onchange=e=>{const idx=Number(e.target.dataset.sectionIdx);tab.sections[idx].title=e.target.value.trim()||'Section';save()});
  box.querySelectorAll('[data-remove-section]').forEach(b=>b.onclick=()=>{const idx=Number(b.dataset.removeSection);if(tab.sections.length<=1)return;tab.sections.splice(idx,1);save();renderLayoutSections(entityKey)});
+ box.querySelectorAll('[data-set-columns]').forEach(b=>b.onclick=()=>{const idx=Number(b.dataset.setColumns);tab.sections[idx].columns=Number(b.dataset.columns);save();renderLayoutSections(entityKey)});
+ box.querySelectorAll('[data-toggle-full]').forEach(b=>b.onclick=()=>{
+  const idx=Number(b.dataset.sectionIdx),key=b.dataset.fieldKey;
+  const f=tab.sections[idx].fields.find(x=>x.key===key);
+  if(f){f.full=!f.full;save();renderLayoutSections(entityKey)}
+ });
  wireLayoutDragDrop(entityKey);
 }
 function wireLayoutDragDrop(entityKey){
@@ -1775,12 +1825,20 @@ function wireLayoutDragDrop(entityKey){
   // A field lives in at most one section across the *whole* layout, not
   // just this tab - strip it from every tab's sections first, so dragging
   // a field that's currently on a different tab into this tab's section
-  // moves it here instead of placing a second copy.
-  layout.draftTabs.forEach(t=>t.sections.forEach(s=>{s.fields=s.fields.filter(k=>k!==dragKey)}));
+  // moves it here instead of placing a second copy. Its `full` choice
+  // travels with it (a re-drag is a move, not a fresh placement); a field
+  // coming from the "Available" bucket has no prior entry, so defaults to
+  // one column, same as picking a brand new field on desktop.
+  let full=false;
+  layout.draftTabs.forEach(t=>t.sections.forEach(s=>{
+   const existing=s.fields.find(f=>f.key===dragKey);
+   if(existing)full=existing.full;
+   s.fields=s.fields.filter(f=>f.key!==dragKey);
+  }));
   if(toIdx>=0){
    const s=tab.sections[toIdx];
-   const insertAt=beforeKey?s.fields.indexOf(beforeKey):-1;
-   s.fields.splice(insertAt<0?s.fields.length:insertAt,0,dragKey);
+   const insertAt=beforeKey?s.fields.findIndex(f=>f.key===beforeKey):-1;
+   s.fields.splice(insertAt<0?s.fields.length:insertAt,0,{key:dragKey,full});
   }
   save();dragKey=null;
   renderLayoutSections(entityKey);
@@ -1801,7 +1859,7 @@ function layoutPreviewModal(entityKey){
  const sample={};
  const tabsOut=orderedTabsFor(fields,layout.draftTabs);
  const tabsHtml=tabsOut.length>1?`<div class="layout-tabs" style="display:flex;gap:8px;margin-bottom:12px">${tabsOut.map((t,i)=>`<button type="button" class="tab ${i===0?'active':''}" data-preview-tab="${i}">${t.title||'Details'}</button>`).join('')}</div>`:'';
- const panelsHtml=tabsOut.map((t,i)=>`<div class="form-grid" data-preview-panel="${i}" style="${i===0?'':'display:none'}">${t.groups.map(g=>(g.title?`<div class="field full"><h4 style="margin:14px 0 0">${g.title}</h4></div>`:'')+g.fields.map(f=>fieldHtml(f,sample)).join('')).join('')}</div>`).join('');
+ const panelsHtml=tabsOut.map((t,i)=>`<div data-preview-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,sample)}</div>`).join('');
  const body=`${tabsHtml}${panelsHtml}<p class="muted" style="font-size:12px;margin-top:12px">Preview of "${layout.name}"'s draft only — nothing here is saved, and the live form is unaffected until you Publish.</p><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
  modal(`Preview: ${entityLabel(entityKey)} — ${layout.name}`,body);
  $('[data-close]').onclick=closeModal;

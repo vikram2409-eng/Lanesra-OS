@@ -1,11 +1,39 @@
-import { Fragment, useState } from "react";
-import type { ReactNode } from "react";
+import { Fragment, cloneElement, isValidElement, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { useEffectiveLayout } from "../lib/useEffectiveLayout";
+import type { LayoutSection } from "../lib/types";
+
+/** Forces a field's own grid placement to match the section's admin-set
+ * `full_width` choice for it, overriding whatever `.form-field`/
+ * `.form-field.full` class the form's own JSX used - inline style always
+ * wins over a class, in either direction, so this works whether the
+ * layout is making a field wider or narrower than the code originally
+ * wrote it. `undefined` fields (a stale key with nothing in `fields`)
+ * pass through as `null`. */
+function withSpan(node: ReactNode, fullWidth: boolean): ReactNode {
+  if (!isValidElement(node)) return node ?? null;
+  const existingStyle = (node.props as { style?: CSSProperties }).style ?? {};
+  return cloneElement(node as React.ReactElement<{ style?: CSSProperties }>, {
+    style: { ...existingStyle, gridColumn: fullWidth ? "1 / -1" : "auto" },
+  });
+}
+
+/** A field the layout doesn't mention keeps whatever width the form's own
+ * JSX gave it (`.form-field.full` vs plain `.form-field`) rather than
+ * being forced to a single column - it's landing in the "Other fields"
+ * safety net, not something an admin actually placed, so there's no
+ * admin intent to honor instead. */
+function inferFullWidth(node: ReactNode): boolean {
+  if (!isValidElement(node)) return false;
+  const className = (node.props as { className?: string }).className ?? "";
+  return className.split(/\s+/).includes("full");
+}
 
 /**
  * Arranges a record form's fields per that entity's effective Screen
- * layout (Screen/App Builder Phase 1) - tabs of field sections, resolved
+ * layout (Screen/App Builder Phase 1-2) - tabs of field sections, each
+ * laid out in its own `columns`-wide grid (Phase 2), resolved
  * server-side against the signed-in user's roles. `fields` maps each
  * field's layout key to its already-built `.form-field` (or
  * `.form-field.full`) element; `order` is the form's own natural field
@@ -44,21 +72,18 @@ export function LayoutFormFields({
     );
   }
 
-  const placed = new Set(tabs.flatMap((t) => t.sections.flatMap((s) => s.fields)));
+  const placed = new Set(tabs.flatMap((t) => t.sections.flatMap((s) => s.fields.map((f) => f.key))));
   const leftover = order.filter((key) => !placed.has(key) && fields[key]);
+  const leftoverSection: LayoutSection = {
+    id: "__leftover",
+    title: "Other fields",
+    columns: 2,
+    fields: leftover.map((key) => ({ key, full_width: inferFullWidth(fields[key]) })),
+  };
   const effectiveTabs =
     leftover.length === 0
       ? tabs
-      : [
-          ...tabs.slice(0, -1),
-          {
-            ...tabs[tabs.length - 1],
-            sections: [
-              ...tabs[tabs.length - 1].sections,
-              { id: "__leftover", title: "Other fields", fields: leftover },
-            ],
-          },
-        ];
+      : [...tabs.slice(0, -1), { ...tabs[tabs.length - 1], sections: [...tabs[tabs.length - 1].sections, leftoverSection] }];
 
   const idx = Math.min(activeIdx, effectiveTabs.length - 1);
   const active = effectiveTabs[idx];
@@ -78,14 +103,18 @@ export function LayoutFormFields({
         </div>
       )}
       {active.sections.map((section) => (
-        <div className="form-grid full" key={section.id} style={{ maxWidth: "none" }}>
+        <div
+          className="form-grid full"
+          key={section.id}
+          style={{ maxWidth: "none", gridTemplateColumns: `repeat(${section.columns}, 1fr)` }}
+        >
           {showSectionTitles && (
             <div className="form-field full" style={{ marginBottom: -4 }}>
               <strong style={{ fontSize: 13 }}>{section.title}</strong>
             </div>
           )}
-          {section.fields.map((key) => (
-            <Fragment key={key}>{fields[key] ?? null}</Fragment>
+          {section.fields.map((f) => (
+            <Fragment key={f.key}>{withSpan(fields[f.key] ?? null, f.full_width)}</Fragment>
           ))}
         </div>
       ))}
