@@ -6,7 +6,7 @@ use crate::domain::numbering::{self, QUOTE};
 use crate::domain::{AppError, AppResult};
 use crate::models::quote::{Quote, QuoteInput, QuoteWithLines, QUOTE_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo, quote_repo};
-use crate::services::{status_transition_service, workflow_service};
+use crate::services::{app_service, status_transition_service, workflow_service};
 
 /// Quotes have no owner of their own, so a workflow assigning to "the
 /// record's owner" resolves via the Quote's Company owner - the same
@@ -64,6 +64,7 @@ pub fn create(
     actor_user_id: Option<&str>,
 ) -> AppResult<QuoteWithLines> {
     let workspace_id = validate_relationships(conn, input)?;
+    app_service::require_object_write_access(conn, &workspace_id, "Quote", actor_user_id)?;
 
     let calculations: Vec<_> = input
         .lines

@@ -6,14 +6,14 @@
 //! nothing else in the product has: per-app access grants to a specific
 //! *user*, not only a role (see migration 0025's own doc comment).
 //!
-//! What "editor" vs "viewer" access does *not* yet do: gate individual
-//! create/update/delete commands on an app's objects server-side. Phase 1
-//! resolves and exposes the effective level (`list_accessible`) so the
-//! frontend can gate its own Create/Edit/Delete controls per app, but a
-//! Viewer with an app's object sections in reach through some other
-//! route (e.g. Global search, a related-record link) is not blocked at
-//! the command layer yet - that's explicitly a later phase, not silently
-//! promised here.
+//! Phase 2 (`require_object_write_access` below) closes the gap Phase 1's
+//! doc comment used to describe here: an app's Viewer/Editor grant now
+//! actually gates that object's own create/update/archive commands, not
+//! just resolving a level for the frontend to read. Scope stays bounded to
+//! those three verbs on the entity itself - a status-lifecycle command
+//! with its own name (issue_invoice, convert_quote_to_order,
+//! set_opportunity_products, ...) is unaffected, a later increment, not
+//! silently promised here either.
 
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -211,4 +211,51 @@ pub fn list_accessible(conn: &Connection, workspace_id: &str, actor_user_id: Opt
         }
     }
     Ok(out)
+}
+
+/// App Builder Phase 2: called at the top of an entity's own
+/// create/update/archive service function (see each call site) to gate it
+/// on the actor's App Builder access, the same way `require_admin` gates
+/// admin-only operations elsewhere in this codebase.
+///
+/// Only engages once `entity_type` (the same capitalized-singular strings
+/// `CUSTOM_FIELD_ENTITY_TYPES` uses for built-ins, or a custom object's own
+/// key) is actually placed in a *published* app - an entity type in zero
+/// published apps is unaffected, exactly the pre-App-Builder behavior. Once
+/// it is, this reuses `list_accessible`'s exact resolution (Administrator
+/// bypass, a user grant beating a role grant, the strongest of several
+/// matching role grants) rather than a second copy of that logic, folding
+/// across every published app that contains this entity type with
+/// `stronger` the same way `list_accessible` folds multiple role grants on
+/// one app. "Editor" on at least one such app is enough to write; "viewer"
+/// everywhere it matters, or no access to any app that claims this entity
+/// type at all, is not.
+pub fn require_object_write_access(conn: &Connection, workspace_id: &str, entity_type: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+    let accessible = list_accessible(conn, workspace_id, actor_user_id)?;
+    let level = accessible
+        .iter()
+        .filter(|a| a.app.object_keys.iter().any(|k| k == entity_type))
+        .fold(None::<String>, |acc, a| Some(match acc { Some(l) => stronger(&l, &a.level), None => a.level.clone() }));
+    match level.as_deref() {
+        Some("editor") => Ok(()),
+        Some(_) => Err(AppError::Validation(format!(
+            "You have view-only access to {entity_type} records through an app - ask an Administrator for Editor access to make changes"
+        ))),
+        // No accessible app claims this entity type - either none does (the
+        // common case, entirely unaffected by App Builder) or the actor
+        // simply can't see any of the ones that do, which still needs
+        // telling apart so an unscoped object stays silently unaffected.
+        None => {
+            let scoped = list(conn, workspace_id)?
+                .into_iter()
+                .any(|a| a.is_published && a.object_keys.iter().any(|k| k == entity_type));
+            if scoped {
+                Err(AppError::Validation(format!(
+                    "You don't have access to {entity_type} records through any app - ask an Administrator for access"
+                )))
+            } else {
+                Ok(())
+            }
+        }
+    }
 }

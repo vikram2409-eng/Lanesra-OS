@@ -8,7 +8,7 @@ use crate::models::opportunity::{
     OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES,
 };
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo};
-use crate::services::{builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{app_service, builtin_field_service, status_transition_service, workflow_service};
 
 fn validate(conn: &Connection, input: &OpportunityInput) -> AppResult<String> {
     if input.name.trim().is_empty() {
@@ -45,6 +45,7 @@ pub fn create(
     actor_user_id: Option<&str>,
 ) -> AppResult<Opportunity> {
     let workspace_id = validate(conn, input)?;
+    app_service::require_object_write_access(conn, &workspace_id, "Opportunity", actor_user_id)?;
     let id = new_uuid();
     let opportunity_number = numbering::allocate_number(conn, &workspace_id, &OPPORTUNITY)?;
     let opportunity = opportunity_repo::create(
@@ -88,6 +89,7 @@ pub fn update(
     actor_user_id: Option<&str>,
 ) -> AppResult<Opportunity> {
     let workspace_id = validate(conn, input)?;
+    app_service::require_object_write_access(conn, &workspace_id, "Opportunity", actor_user_id)?;
     let before = get(conn, id)?;
     if before.stage != input.stage {
         status_transition_service::validate_transition(conn, &workspace_id, "Opportunity", &before.stage, &input.stage)?;
@@ -148,6 +150,7 @@ pub fn list_products(conn: &Connection, opportunity_id: &str) -> AppResult<Vec<O
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
+    app_service::require_object_write_access(conn, &existing.workspace_id, "Opportunity", actor_user_id)?;
     opportunity_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

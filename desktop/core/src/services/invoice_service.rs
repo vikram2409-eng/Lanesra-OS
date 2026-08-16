@@ -7,7 +7,7 @@ use crate::domain::numbering::{self, INVOICE};
 use crate::domain::{AppError, AppResult};
 use crate::models::invoice::{Invoice, InvoiceInput, InvoiceWithLines, PaymentInput, INVOICE_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, invoice_repo};
-use crate::services::workflow_service;
+use crate::services::{app_service, workflow_service};
 
 /// ADM-WF: invoices have no owner of their own, so a workflow assigning
 /// to "the record's owner" resolves via the invoice's Company owner - the
@@ -70,6 +70,7 @@ pub fn create(
     actor_user_id: Option<&str>,
 ) -> AppResult<InvoiceWithLines> {
     let workspace_id = validate_relationships(conn, input)?;
+    app_service::require_object_write_access(conn, &workspace_id, "Invoice", actor_user_id)?;
 
     let calculations: Vec<_> = input
         .lines

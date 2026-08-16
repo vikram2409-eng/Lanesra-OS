@@ -30,10 +30,11 @@ const APP_ICON_CHOICES = ["⬡", "🏠", "👥", "💼", "🔧", "📦", "🏗�
  * Access is a genuinely new model, not the same role-checkbox pattern
  * Screen layouts and Dashboards use: a grant here is either to a role or
  * to one specific person, and with zero grants an app is invisible to
- * everyone but Administrators - see `AppPermissionsPanel` below and the
- * Rust core's `app_service` doc comment for what "Editor" does and
- * doesn't enforce yet (today: it's a stored intent the frontend can read,
- * not yet a server-side gate on every command).
+ * everyone but Administrators - see `AppPermissionsPanel` below. As of
+ * Phase 2, "Editor" is enforced server-side too, on the object's own
+ * create/update/archive commands (see the Rust core's `app_service` doc
+ * comment for exactly which commands and what's still out of scope) -
+ * this screen isn't only advisory.
  */
 export function AppsAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null);

@@ -5,6 +5,7 @@ use crate::domain::numbering::{self, PRODUCT};
 use crate::domain::{AppError, AppResult};
 use crate::models::product::{Product, ProductInput, PRODUCT_TYPES};
 use crate::repositories::{audit_repo, product_repo};
+use crate::services::app_service;
 
 fn validate(input: &ProductInput) -> AppResult<()> {
     if input.name.trim().is_empty() {
@@ -26,6 +27,7 @@ pub fn create(
     actor_user_id: Option<&str>,
 ) -> AppResult<Product> {
     validate(input)?;
+    app_service::require_object_write_access(conn, workspace_id, "Product", actor_user_id)?;
     let id = new_uuid();
     let product_number = numbering::allocate_number(conn, workspace_id, &PRODUCT)?;
     let product = product_repo::create(conn, &id, workspace_id, &product_number, input, actor_user_id)?;
@@ -58,6 +60,7 @@ pub fn update(
 ) -> AppResult<Product> {
     validate(input)?;
     let workspace_id = get(conn, id)?.workspace_id;
+    app_service::require_object_write_access(conn, &workspace_id, "Product", actor_user_id)?;
     let product = product_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -74,6 +77,7 @@ pub fn update(
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
+    app_service::require_object_write_access(conn, &existing.workspace_id, "Product", actor_user_id)?;
     product_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,
