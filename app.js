@@ -213,6 +213,8 @@ function ensureAdminData(){
  (data.relationshipDefinitions||[]).forEach(d=>{if(d.active===undefined)d.active=true;if(d.showRelatedList===undefined)d.showRelatedList=true;if(d.required===undefined)d.required=false});
  if(!data.customReports)data.customReports=[];
  if(!data.uiLayouts)data.uiLayouts={};
+ if(!data.dashboards||!data.dashboards.length)data.dashboards=[freshDashboard('Default',true)];
+ if(!data.dashboards.some(d=>d.isDefault))data.dashboards[0].isDefault=true;
  if(!data.integrationJobs)data.integrationJobs=[];
  if(!data.apiEndpoints)data.apiEndpoints=[];
  if(!data.externalConnections)data.externalConnections=[];
@@ -335,9 +337,9 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 const ADMIN_CATEGORIES=[
- {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering','kpis']},
+ {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering','kpis','dashboards']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users']},
  {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
@@ -661,6 +663,61 @@ const KPI_DEFS=[
 ];
 function visibleKpis(){const prefs=data.kpiPrefs||[]; return prefs.length?KPI_DEFS.filter(k=>prefs.includes(k.key)):KPI_DEFS}
 
+// Dashboard customization (mirrors the desktop edition's dashboard_layout_
+// service/dashboard_widget_service, all 3 phases at once): named dashboard
+// layouts, each an ordered list of widgets, assigned to roles with a
+// required Default fallback, and Draft -> Publish - same shape as Screen/
+// App Builder's own layouts above, just at the workspace level instead of
+// per entity_type. No dashboard published yet (the common case) leaves the
+// live Dashboard rendering exactly as it did before this feature existed,
+// driven by the older workspace-wide kpiPrefs selection above.
+function freshDashboardWidget(kind,config){return {id:uid(),kind,config}}
+function freshDashboard(name,isDefault){return {id:uid(),name,isDefault,roles:[],draftWidgets:[],publishedWidgets:null}}
+function ensureDashboards(){
+ if(!data.dashboards||!data.dashboards.length)data.dashboards=[freshDashboard('Default',true)];
+ if(!data.dashboards.some(d=>d.isDefault))data.dashboards[0].isDefault=true;
+ return data.dashboards;
+}
+function defaultDashboard(){const arr=ensureDashboards();return arr.find(d=>d.isDefault)||arr[0]}
+function dashboardById(id){return ensureDashboards().find(d=>d.id===id)}
+// There's no signed-in user in this browser demo (same note layoutsTab's
+// own doc comment makes) - the live Dashboard always uses the Default
+// dashboard's published widgets, if any; role assignment on non-default
+// dashboards here is illustrative only, same as Users & roles.
+function effectiveDashboardWidgets(){return defaultDashboard().publishedWidgets}
+
+// Phase 3's per-entity "title" field, mirroring entity_registry's
+// per-entity match arms in the Rust core - the field a record-list widget
+// row shows as its title. Falls back to 'name' for custom objects, whose
+// records all share that same primary field (see customObjectFields).
+const RECORD_TITLE_FIELD={companies:'name',contacts:'name',opportunities:'title',products:'name',quotes:'number',orders:'number',invoices:'number',contracts:'title',tasks:'title'};
+function recordTitle(entityKey,r){return r[RECORD_TITLE_FIELD[entityKey]||'name']||r.id}
+// Only Tasks and Invoices carry a real due date to sort "due soon" by -
+// every other entity type's due_soon request falls back to "recent",
+// mirroring dashboard_widget_service::run's identical scoping.
+const DUE_SOON_ENTITY_KEYS=['tasks','invoices'];
+function dashboardRecordListRows(entityKey,mode,limit){
+ limit=Math.min(10,Math.max(1,Number(limit)||5));
+ const arr=data[entityKey]||[];
+ if(mode==='due_soon'&&entityKey==='tasks'){
+  return arr.filter(t=>t.due&&!['Completed','Cancelled'].includes(t.status))
+   .slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''))
+   .slice(0,limit).map(t=>({id:t.id,title:t.title,subtitle:`Due ${t.due}`}));
+ }
+ if(mode==='due_soon'&&entityKey==='invoices'){
+  return arr.filter(i=>i.due&&!['Paid','Cancelled'].includes(i.status))
+   .slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''))
+   .slice(0,limit).map(i=>({id:i.id,title:i.number||i.id,subtitle:`Due ${i.due}`}));
+ }
+ // "recent" (or due_soon requested for a type with no due date to sort
+ // by): newest first. This demo has no created-at timestamp on every
+ // record, so insertion order (new records are always appended) stands
+ // in for it - a "close enough for a browser demo" approximation, the
+ // same kind the fixed reports above already disclose for a few of their
+ // own date fields.
+ return arr.slice(-limit).reverse().map(r=>({id:r.id,title:recordTitle(entityKey,r),subtitle:null}));
+}
+
 function landing(){
  document.title='Lanesra OS — Open-source sales management you can shape yourself';
  $('#app').innerHTML=`
@@ -781,10 +838,35 @@ function renderView(){
  };
  tablePage(current,configs[current]);
 }
+// A chart widget's reportId may point at a report that's since been
+// deleted - filtered out by the caller before this ever runs, the same
+// "stale key, no cleanup needed" choice a stale kpiKey already gets.
+function dashboardChartWidgetHtml(w){
+ const report=(data.customReports||[]).find(r=>r.id===w.config.reportId);
+ const rows=runCustomReport(report);
+ const max=Math.max(0,...rows.map(r=>r.value));
+ return `<section class="panel"><div class="panel-head"><h3>${report.name}</h3></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</section>`;
+}
+function dashboardRecordListWidgetHtml(w){
+ const {entityKey,mode,limit}=w.config;
+ const rows=dashboardRecordListRows(entityKey,mode,limit);
+ return `<section class="panel"><div class="panel-head"><h3>${entityLabel(entityKey)} — ${mode==='due_soon'?'due soon':'recent'}</h3></div>${rows.length?rows.map(r=>`<div class="deal" style="cursor:pointer" data-open-record="${entityKey}:${r.id}"><strong>${r.title}</strong>${r.subtitle?`<small class="muted"> · ${r.subtitle}</small>`:''}</div>`).join(''):'<div class="empty">Nothing here yet.</div>'}</section>`;
+}
 function dashboard(){
- $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1>Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div><div class="kpi-grid">${visibleKpis().map(k=>`<button class="kpi kpi-link" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value()}</div><span>View ${k.label.toLowerCase()} →</span></button>`).join('')}</div><div class="grid-2"><section class="panel"><div class="panel-head"><h3>Pipeline snapshot</h3><button class="link-btn" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div>${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="deal"><div style="display:flex;justify-content:space-between"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</section><section class="panel"><div class="panel-head"><h3>Tasks requiring attention</h3><button class="link-btn" data-nav2="tasks" data-filter2="open">View tasks</button></div>${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="deal"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</section></div>`;
+ // Dashboard customization: a published Default dashboard's widgets
+ // override the fixed KPI row and add chart/record-list widget rows -
+ // `null` (the common case until an admin builds one) falls back to the
+ // pre-this-feature behavior below, unchanged. See effectiveDashboardWidgets.
+ const effective=effectiveDashboardWidgets();
+ const kpis=effective
+  ?effective.filter(w=>w.kind==='kpi').map(w=>KPI_DEFS.find(k=>k.key===w.config.kpiKey)).filter(Boolean)
+  :visibleKpis();
+ const chartWidgets=effective?effective.filter(w=>w.kind==='chart'&&(data.customReports||[]).some(r=>r.id===w.config.reportId)):[];
+ const listWidgets=effective?effective.filter(w=>w.kind==='record_list'):[];
+ $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1>Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div><div class="kpi-grid">${kpis.map(k=>`<button class="kpi kpi-link" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value()}</div><span>View ${k.label.toLowerCase()} →</span></button>`).join('')}</div>${(chartWidgets.length||listWidgets.length)?`<div class="grid-2">${chartWidgets.map(dashboardChartWidgetHtml).join('')}${listWidgets.map(dashboardRecordListWidgetHtml).join('')}</div>`:''}<div class="grid-2"><section class="panel"><div class="panel-head"><h3>Pipeline snapshot</h3><button class="link-btn" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div>${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="deal"><div style="display:flex;justify-content:space-between"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</section><section class="panel"><div class="panel-head"><h3>Tasks requiring attention</h3><button class="link-btn" data-nav2="tasks" data-filter2="open">View tasks</button></div>${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="deal"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</section></div>`;
  document.querySelectorAll('[data-kpi-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.kpiNav;viewFilter=b.dataset.kpiFilter;detailRecord=null;renderView()});
  document.querySelectorAll('[data-nav2]').forEach(b=>b.onclick=()=>{current=b.dataset.nav2;viewFilter=b.dataset.filter2||null;detailRecord=null;renderView()});
+ wireCellLinks($('#view'));
  const quick=$('#quickNew'),menu=$('#quickMenu'); quick.onclick=e=>{e.stopPropagation();menu.hidden=!menu.hidden};
  menu.querySelectorAll('[data-create]').forEach(b=>b.onclick=()=>{const k=b.dataset.create;menu.hidden=true;if(k==='opportunities')recordModal('opportunities',fieldsFor('opportunities',opportunityFields));else{const fn={companies:companyFields,contacts:contactFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[k];recordModal(k,fieldsFor(k,fn))}});
  document.addEventListener('click',()=>{if(menu)menu.hidden=true},{once:true});
@@ -1506,7 +1588,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -1675,6 +1757,7 @@ const SECTION_COLUMN_CHOICES=[1,2,3];
 let layoutsEntityKey=null;
 let layoutsSelectedLayoutId=null;
 let layoutsActiveTabIdx=0;
+let dashboardsSelectedId=null;
 function allFieldsFor(entityKey){return fieldsFor(entityKey,fieldsFnFor(entityKey))}
 // Screen/App Builder Phase 2: a section field is `{key,full}` - `full`
 // spans the section's full width instead of one column. Accepts a plain
@@ -1956,6 +2039,115 @@ function layoutPreviewModal(entityKey){
   document.querySelectorAll('[data-preview-panel]').forEach(p=>p.style.display=p.dataset.previewPanel===b.dataset.previewTab?'':'none');
   document.querySelectorAll('[data-preview-tab]').forEach(x=>x.classList.toggle('active',x===b));
  });
+}
+// ---- Dashboards (mirrors the desktop edition's dashboard_layout_service/
+// dashboard_widget_service, all 3 phases at once) --------------------------
+// Structurally the same draft/publish/role-assignment feature as Screen
+// layouts above, just at the workspace level: one dashboard per layout,
+// not one per object, so there's no entity selector here. Widgets: 'kpi'
+// (a KPI_DEFS tile), 'chart' (an existing saved custom report, run fresh -
+// see runCustomReport above), 'record_list' (a short list of records for
+// one entity type - see dashboardRecordListRows above).
+function dashboardWidgetLabel(w,reports){
+ if(w.kind==='kpi'){const k=KPI_DEFS.find(k=>k.key===w.config.kpiKey);return k?k.label:'(KPI removed)'}
+ if(w.kind==='chart'){const r=reports.find(r=>r.id===w.config.reportId);return r?`📊 ${r.name}`:'📊 (report deleted)'}
+ if(w.kind==='record_list')return `📋 ${entityLabel(w.config.entityKey)} — ${w.config.mode==='due_soon'?'due soon':'recent'}`;
+ return w.kind;
+}
+function dashboardsTab(body){
+ const dashboards=ensureDashboards();
+ if(!dashboardsSelectedId||!dashboards.some(d=>d.id===dashboardsSelectedId))dashboardsSelectedId=defaultDashboard().id;
+ const dash=dashboardById(dashboardsSelectedId);
+ const isPublished=!!dash.publishedWidgets;
+ const hasDraftChanges=JSON.stringify(dash.draftWidgets)!==JSON.stringify(dash.publishedWidgets);
+ const reports=data.customReports||[];
+ const usedKpiKeys=new Set(dash.draftWidgets.filter(w=>w.kind==='kpi').map(w=>w.config.kpiKey));
+ const availableKpis=KPI_DEFS.filter(k=>!usedKpiKeys.has(k.key));
+ const usedReportIds=new Set(dash.draftWidgets.filter(w=>w.kind==='chart').map(w=>w.config.reportId));
+ const availableReports=reports.filter(r=>!usedReportIds.has(r.id));
+ const entityKeys=allEntityTypeKeys();
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>Dashboards</h3></div>
+ <p class="muted" style="font-size:13px">Build multiple named dashboard layouts — an ordered list of widgets — and assign roles to each. There's no signed-in user in this browser demo, so the live Dashboard always uses the <b>Default</b> dashboard — role assignment here is illustrative, the same as Screen layouts and Users & roles.</p>
+ <div class="panel-head" style="margin-top:4px">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${dashboards.map(d=>`<button type="button" class="tab ${d.id===dash.id?'active':''}" data-select-dashboard="${d.id}">${d.name}${d.isDefault?' · Default':''}</button>`).join('')}</div>
+  <button class="btn btn-secondary" id="addDashboard" type="button">+ New dashboard</button>
+ </div>
+ <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
+  <div class="field" style="margin:0"><label>Dashboard name</label><input id="dashboardName" value="${dash.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
+  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${DEMO_LAYOUT_ROLES.map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-dashboard-role="${r}" ${dash.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  ${dash.isDefault?'<span class="badge">Default dashboard — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="makeDefaultDashboard" type="button">Make default</button>'}
+  <button class="btn btn-secondary" id="deleteDashboard" type="button" ${dashboards.length<=1||dash.isDefault?'disabled':''}>Delete dashboard</button>
+ </div>
+ <div style="margin-bottom:14px"><span class="badge">${isPublished?(hasDraftChanges?'Published — unpublished draft changes':'Published'):'Not published — Dashboard shows the fixed KPI picker selection'}</span></div>
+ <div style="font-weight:700;margin-bottom:8px">Widgets</div>
+ <div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0">${dash.draftWidgets.length?dash.draftWidgets.map((w,i)=>`<span class="badge" style="display:inline-flex;align-items:center;gap:6px">${dashboardWidgetLabel(w,reports)}<button class="icon-btn" data-move-widget="${w.id}" data-dir="-1" ${i===0?'disabled':''} type="button" title="Move earlier">↑</button><button class="icon-btn" data-move-widget="${w.id}" data-dir="1" ${i===dash.draftWidgets.length-1?'disabled':''} type="button" title="Move later">↓</button><button class="icon-btn" data-remove-widget="${w.id}" type="button" title="Remove">×</button></span>`).join(''):'<span class="muted">No widgets yet.</span>'}</div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+  ${availableKpis.length?`<select id="addKpiWidget"><option value="">+ Add KPI tile…</option>${availableKpis.map(k=>`<option value="${k.key}">${k.label}</option>`).join('')}</select>`:''}
+  ${reports.length===0?'<span class="muted" style="font-size:12px">No custom reports yet — build one in Reports → Custom reports to add it as a chart here.</span>':(availableReports.length?`<select id="addChartWidget"><option value="">+ Add chart…</option>${availableReports.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')}</select>`:'')}
+  <span style="display:inline-flex;gap:6px;align-items:center">
+   <select id="recordListEntity">${entityKeys.map(k=>`<option value="${k}">${entityLabel(k)}</option>`).join('')}</select>
+   <select id="recordListMode"></select>
+   <button class="btn btn-secondary" id="addRecordListWidget" type="button">+ Add record list</button>
+  </span>
+ </div>
+ <div class="actions" style="margin-top:16px;flex-wrap:wrap">
+  <button class="btn btn-secondary" id="previewDashboard" type="button">Preview draft</button>
+  <button class="btn btn-secondary" id="revertDashboard" type="button" ${isPublished?'':'disabled'}>Revert draft to published</button>
+  <button class="btn btn-primary" id="publishDashboard" type="button">Publish</button>
+  ${isPublished?'<button class="btn btn-secondary" id="unpublishDashboard" type="button">Unpublish</button>':''}
+ </div>
+ </div>`;
+ $('#addDashboard').onclick=()=>{const name=prompt('New dashboard name?','New dashboard');if(!name)return;const d=freshDashboard(name.trim(),false);dashboards.push(d);save();dashboardsSelectedId=d.id;dashboardsTab(body)};
+ body.querySelectorAll('[data-select-dashboard]').forEach(b=>b.onclick=()=>{dashboardsSelectedId=b.dataset.selectDashboard;dashboardsTab(body)});
+ // Same deferred-re-render reasoning as layoutsTab's #layoutName.
+ $('#dashboardName').onchange=e=>{dash.name=e.target.value.trim()||dash.name;save();setTimeout(()=>dashboardsTab(body),0)};
+ body.querySelectorAll('[data-dashboard-role]').forEach(cb=>cb.onchange=()=>{
+  const role=cb.dataset.dashboardRole;
+  dash.roles=cb.checked?[...dash.roles,role]:dash.roles.filter(r=>r!==role);
+  save();
+ });
+ const makeDefault=$('#makeDefaultDashboard'); if(makeDefault)makeDefault.onclick=()=>{dashboards.forEach(d=>d.isDefault=(d.id===dash.id));save();toast(`${dash.name} is now the default dashboard`);dashboardsTab(body)};
+ $('#deleteDashboard').onclick=()=>{
+  if(dashboards.length<=1||dash.isDefault)return;
+  if(!confirm(`Delete the "${dash.name}" dashboard? This can't be undone.`))return;
+  data.dashboards=dashboards.filter(d=>d.id!==dash.id);
+  save();dashboardsSelectedId=null;toast('Dashboard deleted');dashboardsTab(body);
+ };
+ const addKpi=$('#addKpiWidget'); if(addKpi)addKpi.onchange=e=>{if(!e.target.value)return;dash.draftWidgets.push(freshDashboardWidget('kpi',{kpiKey:e.target.value}));save();dashboardsTab(body)};
+ const addChart=$('#addChartWidget'); if(addChart)addChart.onchange=e=>{if(!e.target.value)return;dash.draftWidgets.push(freshDashboardWidget('chart',{reportId:e.target.value}));save();dashboardsTab(body)};
+ const recordListEntity=$('#recordListEntity'),recordListMode=$('#recordListMode');
+ function refreshRecordListModeOptions(){
+  const dueSoonAvailable=DUE_SOON_ENTITY_KEYS.includes(recordListEntity.value);
+  recordListMode.innerHTML=dueSoonAvailable
+   ?'<option value="due_soon">Due soon</option><option value="recent">Recently created</option>'
+   :'<option value="recent">Recently created</option>';
+ }
+ refreshRecordListModeOptions();
+ recordListEntity.onchange=refreshRecordListModeOptions;
+ $('#addRecordListWidget').onclick=()=>{
+  dash.draftWidgets.push(freshDashboardWidget('record_list',{entityKey:recordListEntity.value,mode:recordListMode.value,limit:5}));
+  save();dashboardsTab(body);
+ };
+ body.querySelectorAll('[data-move-widget]').forEach(b=>b.onclick=()=>{
+  const idx=dash.draftWidgets.findIndex(w=>w.id===b.dataset.moveWidget);
+  const swapWith=idx+Number(b.dataset.dir);
+  if(idx<0||swapWith<0||swapWith>=dash.draftWidgets.length)return;
+  [dash.draftWidgets[idx],dash.draftWidgets[swapWith]]=[dash.draftWidgets[swapWith],dash.draftWidgets[idx]];
+  save();dashboardsTab(body);
+ });
+ body.querySelectorAll('[data-remove-widget]').forEach(b=>b.onclick=()=>{dash.draftWidgets=dash.draftWidgets.filter(w=>w.id!==b.dataset.removeWidget);save();dashboardsTab(body)});
+ $('#previewDashboard').onclick=()=>dashboardPreviewModal();
+ $('#publishDashboard').onclick=()=>{dash.publishedWidgets=structuredClone(dash.draftWidgets);save();toast('Dashboard published');dashboardsTab(body)};
+ $('#revertDashboard').onclick=()=>{if(!dash.publishedWidgets)return;dash.draftWidgets=structuredClone(dash.publishedWidgets);save();toast('Draft reverted to the published dashboard');dashboardsTab(body)};
+ const unpub=$('#unpublishDashboard'); if(unpub)unpub.onclick=()=>{if(!confirm('Unpublish this dashboard? Any role assigned to it falls back to the Default dashboard until you publish again.'))return;dash.publishedWidgets=null;save();toast('Dashboard unpublished');dashboardsTab(body)};
+}
+function dashboardPreviewModal(){
+ const dash=dashboardById(dashboardsSelectedId);
+ const reports=data.customReports||[];
+ const body=`<p class="muted" style="font-size:12px;margin-top:0">Shows "${dash.name}"'s draft, as it will appear once published. Values are illustrative here.</p><div style="display:flex;flex-wrap:wrap;gap:12px">${dash.draftWidgets.length?dash.draftWidgets.map(w=>`<div class="kpi" style="min-width:140px;cursor:default"><div class="kpi-value">—</div><div class="kpi-label">${dashboardWidgetLabel(w,reports)}</div></div>`).join(''):'<span class="muted">No widgets on this dashboard yet.</span>'}</div><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal(`Preview: ${dash.name}`,body);
+ $('[data-close]').onclick=closeModal;
 }
 // ---- Integrations (Phase 5: UI-only simulation) ---------------------------
 // New to the demo (and not on desktop either): scheduled data jobs, exposed
