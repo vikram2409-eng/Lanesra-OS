@@ -13,11 +13,14 @@ pub fn current_actor(conn: &Connection, jar: &CookieJar) -> Option<String> {
     session_repo::resolve_and_touch(conn, &token).ok().flatten()
 }
 
-pub fn set_session_cookie(jar: CookieJar, token: String) -> CookieJar {
+/// `secure` should be `SecurityConfig::trust_proxy_https` - see that
+/// field's doc comment for why it's opt-in rather than always-on.
+pub fn set_session_cookie(jar: CookieJar, token: String, secure: bool) -> CookieJar {
     let cookie = Cookie::build((SESSION_COOKIE, token))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Lax)
+        .secure(secure)
         .max_age(time::Duration::hours(session_repo::SESSION_LIFETIME_HOURS))
         .build();
     jar.add(cookie)

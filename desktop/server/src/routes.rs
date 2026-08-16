@@ -15,18 +15,26 @@ use lanesra_core::repositories::session_repo;
 use lanesra_core::services::{auth_service, backup_service, workspace_service};
 
 use crate::dispatch::{arg, dispatch, require_workspace_id, to_value};
+use crate::security::{cors_layer, security_headers};
 use crate::session::{clear_session_cookie, current_actor, set_session_cookie, SESSION_COOKIE};
 use crate::state::SharedState;
 
 pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
     let index = frontend_dir.join("index.html");
     let static_service = ServeDir::new(frontend_dir).not_found_service(ServeFile::new(index));
+    let cors = cors_layer(&state.security.allowed_origins);
 
-    Router::new()
+    let mut router = Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/invoke/:command", post(invoke))
         .fallback_service(static_service)
-        .with_state(state)
+        .layer(axum::middleware::from_fn_with_state(state.security.clone(), security_headers));
+
+    if let Some(cors) = cors {
+        router = router.layer(cors);
+    }
+
+    router.with_state(state)
 }
 
 async fn invoke(
@@ -48,7 +56,7 @@ async fn invoke(
     }
 
     let conn = state.conn.lock().unwrap();
-    match handle(&command, &args, &conn, jar.clone()) {
+    match handle(&command, &args, &conn, jar.clone(), state.security.trust_proxy_https) {
         Ok((jar, value)) => (jar, Json(json!({"ok": true, "data": value}))),
         Err(err) => (jar, Json(json!({"ok": false, "error": err}))),
     }
@@ -65,8 +73,8 @@ fn handle_restore(state: &SharedState, args: &Value, jar: CookieJar) -> AppResul
 
 /// Handles the commands that mutate the session cookie itself; everything
 /// else is delegated to `dispatch`, which only needs read access to the
-/// already-resolved actor.
-fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar) -> AppResult<(CookieJar, Value)> {
+/// already-resolved actor. `secure_cookies` is `SecurityConfig::trust_proxy_https`.
+fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar, secure_cookies: bool) -> AppResult<(CookieJar, Value)> {
     match command {
         "workspace_status" => {
             let workspace = lanesra_core::repositories::workspace_repo::get_current(conn)?;
@@ -76,7 +84,7 @@ fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar) -> App
             let setup: WorkspaceSetup = arg(args, "setup")?;
             let (workspace, user) = workspace_service::first_run_setup(conn, &setup)?;
             let token = session_repo::create(conn, &workspace.id, &user.id)?;
-            let jar = set_session_cookie(jar, token);
+            let jar = set_session_cookie(jar, token, secure_cookies);
             Ok((jar, to_value((workspace, user))?))
         }
         "login" => {
@@ -84,7 +92,7 @@ fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar) -> App
             let workspace_id = require_workspace_id(conn)?;
             let user = auth_service::login(conn, &workspace_id, &credentials)?;
             let token = session_repo::create(conn, &workspace_id, &user.id)?;
-            let jar = set_session_cookie(jar, token);
+            let jar = set_session_cookie(jar, token, secure_cookies);
             Ok((jar, to_value(user)?))
         }
         "logout" => {
