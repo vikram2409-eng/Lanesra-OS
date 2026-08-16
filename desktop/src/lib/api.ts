@@ -354,6 +354,7 @@ export const api = {
   grantAppPermission: (appId: string, input: AppPermissionInput) => call<AppPermission>("grant_app_permission", { appId, input }),
   revokeAppPermission: (id: string) => call<void>("revoke_app_permission", { id }),
   listAccessibleApps: () => call<AccessibleApp[]>("list_accessible_apps"),
+  canWriteObject: (entityType: string) => call<boolean>("can_write_object", { entityType }),
 
   listCustomRecords: (objectKey: string) => call<CustomRecord[]>("list_custom_records", { objectKey }),
   getCustomRecord: (id: string) => call<CustomRecord>("get_custom_record", { id }),

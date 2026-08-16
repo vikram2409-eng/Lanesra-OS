@@ -122,6 +122,7 @@ pub fn set_status(
         return Err(AppError::Validation(format!("Invalid order status '{status}'")));
     }
     let existing = load(conn, id)?;
+    app_service::require_object_write_access(conn, &existing.order.workspace_id, "Order", actor_user_id)?;
     status_transition_service::validate_transition(conn, &existing.order.workspace_id, "Order", &existing.order.status, status)?;
     order_repo::update_status(conn, id, status, actor_user_id)?;
     audit_repo::record(
@@ -147,6 +148,10 @@ pub fn convert_to_invoice(
     actor_user_id: Option<&str>,
 ) -> AppResult<crate::models::invoice::InvoiceWithLines> {
     let source = load(conn, order_id)?;
+    // The result is a new Invoice, not a write to the source Order (which
+    // is never mutated), so the gate is on Invoice write access, the same
+    // as calling invoice_service::create directly would require.
+    app_service::require_object_write_access(conn, &source.order.workspace_id, "Invoice", actor_user_id)?;
 
     let invoice_id = new_uuid();
     let invoice_number = numbering::allocate_number(conn, &source.order.workspace_id, &INVOICE)?;

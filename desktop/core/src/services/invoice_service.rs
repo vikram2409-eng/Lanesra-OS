@@ -146,6 +146,7 @@ fn set_status(
         return Err(AppError::Validation(format!("Invalid invoice status '{status}'")));
     }
     let existing = load(conn, id)?;
+    app_service::require_object_write_access(conn, &existing.invoice.workspace_id, "Invoice", actor_user_id)?;
     invoice_repo::update_status(conn, id, status, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -173,6 +174,7 @@ pub fn record_payment(
         return Err(AppError::Validation("Payment amount must be positive".into()));
     }
     let existing = load(conn, invoice_id)?;
+    app_service::require_object_write_access(conn, &existing.invoice.workspace_id, "Invoice", actor_user_id)?;
     if matches!(existing.invoice.status.as_str(), "Void" | "Cancelled" | "Draft") {
         return Err(AppError::Validation(format!(
             "Cannot record a payment against a {} invoice",

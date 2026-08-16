@@ -139,8 +139,10 @@ pub fn set_products(
     conn: &Connection,
     opportunity_id: &str,
     products: &[OpportunityProductInput],
+    actor_user_id: Option<&str>,
 ) -> AppResult<Vec<OpportunityProduct>> {
-    get(conn, opportunity_id)?;
+    let existing = get(conn, opportunity_id)?;
+    app_service::require_object_write_access(conn, &existing.workspace_id, "Opportunity", actor_user_id)?;
     Ok(opportunity_repo::set_products(conn, opportunity_id, products)?)
 }
 

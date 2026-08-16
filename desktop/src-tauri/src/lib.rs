@@ -166,6 +166,7 @@ pub fn run() {
             commands::app_commands::grant_app_permission,
             commands::app_commands::revoke_app_permission,
             commands::app_commands::list_accessible_apps,
+            commands::app_commands::can_write_object,
             commands::custom_record_commands::list_custom_records,
             commands::custom_record_commands::get_custom_record,
             commands::custom_record_commands::create_custom_record,

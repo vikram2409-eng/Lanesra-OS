@@ -18,6 +18,7 @@ import type { Prefill, Section } from "../../components/AppShell";
 import { ORDER_STATUSES, type CustomFieldValues, type Order, type OrderInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -51,6 +52,7 @@ export function Orders({
   const queryClient = useQueryClient();
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const fieldFilters = useCustomFieldFilters("Order");
+  const canWrite = useCanWriteObject("Order");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -100,7 +102,12 @@ export function Orders({
             columns={orderExportColumns(companyNameById)}
             filename="orders.csv"
           />
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Orders through an app"}
+          >
             + New order
           </button>
         </div>
@@ -301,6 +308,12 @@ function OrderDetail({
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const canWriteOrder = useCanWriteObject("Order");
+  // convert_to_invoice is gated on Invoice write access, not Order (it
+  // never touches the source order) - see app_service::
+  // require_object_write_access's own doc comment on why a conversion
+  // command gates on its destination type.
+  const canWriteInvoice = useCanWriteObject("Invoice");
 
   const setStatus = useMutation({
     mutationFn: (status: string) => api.setOrderStatus(id, status),
@@ -363,12 +376,23 @@ function OrderDetail({
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {ORDER_STATUSES.filter((s) => s !== o.status).map((s) => (
-          <button key={s} className="btn" onClick={() => setStatus.mutate(s)} disabled={setStatus.isPending}>
+          <button
+            key={s}
+            className="btn"
+            onClick={() => setStatus.mutate(s)}
+            disabled={setStatus.isPending || !canWriteOrder}
+            title={canWriteOrder ? undefined : "You have view-only access to Orders through an app"}
+          >
             Mark {s}
           </button>
         ))}
         {o.status !== "Cancelled" && (
-          <button className="btn btn-primary" onClick={() => convert.mutate()} disabled={convert.isPending}>
+          <button
+            className="btn btn-primary"
+            onClick={() => convert.mutate()}
+            disabled={convert.isPending || !canWriteInvoice}
+            title={canWriteInvoice ? undefined : "You have view-only access to Invoices through an app"}
+          >
             Convert to invoice
           </button>
         )}

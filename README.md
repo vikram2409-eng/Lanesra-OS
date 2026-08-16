@@ -18,6 +18,7 @@ Modern, open-source sales and business management software for small businesses 
 - **Business Rules** — multi-condition AND/OR logic across 10 operators, driving require/hide/lock/set-value/block-save/show-message effects on any field
 - **Workflow Automation** — trigger on a status or field change, a date reached or overdue, or a schedule; create a task, assign an owner, create a related record, update a field, or post an in-app notification
 - **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
+- **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
 
 **The core CRM:**
 

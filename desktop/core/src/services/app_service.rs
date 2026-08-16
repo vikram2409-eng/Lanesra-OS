@@ -9,11 +9,16 @@
 //! Phase 2 (`require_object_write_access` below) closes the gap Phase 1's
 //! doc comment used to describe here: an app's Viewer/Editor grant now
 //! actually gates that object's own create/update/archive commands, not
-//! just resolving a level for the frontend to read. Scope stays bounded to
-//! those three verbs on the entity itself - a status-lifecycle command
-//! with its own name (issue_invoice, convert_quote_to_order,
-//! set_opportunity_products, ...) is unaffected, a later increment, not
-//! silently promised here either.
+//! just resolving a level for the frontend to read - including every
+//! status-lifecycle command with its own name (issue_invoice,
+//! record_payment, convert_quote_to_order, convert_order_to_invoice,
+//! set_quote_status, set_order_status, set_opportunity_products), each
+//! gated on whichever entity it actually writes to (a conversion command
+//! gates on the *destination* type it creates, e.g. convert_to_order on
+//! Order, never the untouched source document - see each call site's own
+//! comment). refresh_overdue_invoices is the one mutation left ungated: a
+//! system/scheduled consistency sweep with no actor of its own to check,
+//! not a user-initiated write.
 
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -258,4 +263,15 @@ pub fn require_object_write_access(conn: &Connection, workspace_id: &str, entity
             }
         }
     }
+}
+
+/// A boolean-returning wrapper around `require_object_write_access` for
+/// callers that want to *ask* rather than *enforce* - the frontend, so it
+/// can hide or disable a Create/Edit/Delete control before the actor ever
+/// tries and gets a rejected command back. Never itself a security
+/// boundary (the frontend can't be trusted to have called it, or called it
+/// honestly) - `require_object_write_access` at each command's own call
+/// site is what actually blocks the write; this is purely UI convenience.
+pub fn can_write_object(conn: &Connection, workspace_id: &str, entity_type: &str, actor_user_id: Option<&str>) -> AppResult<bool> {
+    Ok(require_object_write_access(conn, workspace_id, entity_type, actor_user_id).is_ok())
 }

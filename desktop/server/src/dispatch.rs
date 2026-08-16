@@ -152,7 +152,7 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "set_opportunity_products" => {
             let opportunity_id: String = arg(args, "opportunityId")?;
             let products: Vec<OpportunityProductInput> = arg(args, "products")?;
-            to_value(opportunity_service::set_products(conn, &opportunity_id, &products)?)
+            to_value(opportunity_service::set_products(conn, &opportunity_id, &products, actor)?)
         }
         "list_opportunity_products" => to_value(opportunity_service::list_products(
             conn,
@@ -610,6 +610,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             Ok(Value::Null)
         }
         "list_accessible_apps" => to_value(app_service::list_accessible(conn, &require_workspace_id(conn)?, actor)?),
+        "can_write_object" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(app_service::can_write_object(conn, &require_workspace_id(conn)?, &entity_type, actor)?)
+        }
 
         "list_custom_records" => {
             let object_key: String = arg(args, "objectKey")?;

@@ -13,6 +13,7 @@ import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -54,6 +55,7 @@ export function Products({
   const queryClient = useQueryClient();
   const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
   const fieldFilters = useCustomFieldFilters("Product");
+  const canWrite = useCanWriteObject("Product");
 
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
@@ -93,7 +95,12 @@ export function Products({
         <h2 style={{ margin: 0 }}>Products &amp; Services</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <ExportCsvButton rows={products.data ?? []} columns={PRODUCT_EXPORT_COLUMNS} filename="products.csv" />
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Products through an app"}
+          >
             + New product
           </button>
         </div>
@@ -132,6 +139,8 @@ export function Products({
                       e.stopPropagation();
                       setView({ mode: "edit", id: p.id });
                     }}
+                    disabled={!canWrite}
+                    title={canWrite ? undefined : "You have view-only access to Products through an app"}
                   >
                     Edit
                   </button>
@@ -310,6 +319,7 @@ function ProductForm({
  * mechanism this phase doesn't touch.
  */
 function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void; onBack: () => void }) {
+  const canWrite = useCanWriteObject("Product");
   const product = useQuery({ queryKey: ["product", id], queryFn: () => api.getProduct(id) });
 
   if (!product.data) return <p>Loading...</p>;
@@ -321,7 +331,7 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
-        <button className="btn" onClick={onEdit}>
+        <button className="btn" onClick={onEdit} disabled={!canWrite} title={canWrite ? undefined : "You have view-only access to Products through an app"}>
           Edit
         </button>
       </div>

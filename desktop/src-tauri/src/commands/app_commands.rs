@@ -71,3 +71,14 @@ pub fn list_accessible_apps(state: State<AppState>) -> AppResult<Vec<AccessibleA
     let workspace_id = require_workspace_id(&conn)?;
     app_service::list_accessible(&conn, &workspace_id, current_actor(&state).as_deref())
 }
+
+/// Whether the current signed-in user can write `entity_type` records -
+/// UI convenience only (see `app_service::can_write_object`'s own doc
+/// comment on why this is never itself the security boundary). Any
+/// authenticated user can call this, same as `list_accessible_apps`.
+#[tauri::command]
+pub fn can_write_object(state: State<AppState>, entity_type: String) -> AppResult<bool> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    app_service::can_write_object(&conn, &workspace_id, &entity_type, current_actor(&state).as_deref())
+}

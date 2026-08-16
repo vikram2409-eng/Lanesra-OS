@@ -14,6 +14,7 @@ import {
   type CustomRecordInput,
 } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -52,6 +53,7 @@ export function CustomObjectRecords({
   });
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
   const fieldFilters = useCustomFieldFilters(definition.key);
+  const canWrite = useCanWriteObject(definition.key);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["customRecords", definition.key] });
@@ -80,7 +82,12 @@ export function CustomObjectRecords({
         <h2 style={{ margin: 0 }}>
           {definition.icon} {definition.plural_label}
         </h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+        <button
+          className="btn btn-primary"
+          onClick={() => setView({ mode: "create" })}
+          disabled={!canWrite}
+          title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+        >
           + New {definition.singular_label.toLowerCase()}
         </button>
       </div>
@@ -114,7 +121,12 @@ export function CustomObjectRecords({
                 </td>
                 <td>{ownerName(r.owner_user_id)}</td>
                 <td>
-                  <button className="btn" onClick={() => setView({ mode: "edit", id: r.id })}>
+                  <button
+                    className="btn"
+                    onClick={() => setView({ mode: "edit", id: r.id })}
+                    disabled={!canWrite}
+                    title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+                  >
                     Edit
                   </button>
                 </td>
