@@ -6,6 +6,7 @@ import { Users } from "../users/Users";
 import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
 import { RelationshipsAdmin } from "./RelationshipsAdmin";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
+import { ScreenLayoutsAdmin } from "./ScreenLayoutsAdmin";
 import { BusinessRulesAdmin } from "./BusinessRulesAdmin";
 import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
 import { StatusTransitionsAdmin } from "./StatusTransitionsAdmin";
@@ -47,7 +48,7 @@ function resizeImageToPngBase64(file: File): Promise<string> {
   });
 }
 
-type AdminTab = "users" | "profile" | "objects" | "relationships" | "fields" | "rules" | "workflow" | "transitions" | "numbering" | "kpis";
+type AdminTab = "users" | "profile" | "objects" | "relationships" | "fields" | "layouts" | "rules" | "workflow" | "transitions" | "numbering" | "kpis";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -55,6 +56,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "objects", label: "Custom Objects" },
   { key: "relationships", label: "Relationships" },
   { key: "fields", label: "Custom fields" },
+  { key: "layouts", label: "Screen layouts" },
   { key: "rules", label: "Business rules" },
   { key: "workflow", label: "Workflow automation" },
   { key: "transitions", label: "Status transitions" },
@@ -66,15 +68,15 @@ function tabLabel(key: AdminTab): string {
   return ADMIN_TABS.find((t) => t.key === key)?.label ?? key;
 }
 
-// Groups the same 10 tabs above into named categories for the landing page
+// Groups the same tabs above into named categories for the landing page
 // below - purely a presentation grouping, the tab keys and their screens
-// are unchanged. Desktop has no Screen layouts or Integrations tab (both
-// are demo-first capabilities that don't exist here), so its Customization
-// category has one fewer item than the online demo's equivalent.
+// are unchanged. Desktop still has no Integrations tab (a demo-first
+// capability that doesn't exist here), but Screen layouts (Screen/App
+// Builder Phase 1) now ships on both.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
-  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields"] },
+  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
 ];
 
@@ -114,8 +116,8 @@ export function AdminPanel() {
         <h2>Admin</h2>
         <p style={{ color: "var(--text-muted)" }}>
           Users and access, business branding, and the admin-configurable layer on top of the fixed schema: custom
-          objects, relationships, custom fields, business rules, workflow automation, status transitions, number
-          formats and Dashboard KPIs.
+          objects, relationships, custom fields, screen layouts, business rules, workflow automation, status
+          transitions, number formats and Dashboard KPIs.
         </p>
         <div className="admin-landing-grid">
           {ADMIN_CATEGORIES.map((cat) => (
@@ -166,6 +168,7 @@ export function AdminPanel() {
       {tab === "objects" && <CustomObjectsAdmin />}
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
+      {tab === "layouts" && <ScreenLayoutsAdmin />}
       {tab === "rules" && <BusinessRulesAdmin />}
       {tab === "workflow" && <WorkflowAutomationAdmin />}
       {tab === "transitions" && <StatusTransitionsAdmin />}

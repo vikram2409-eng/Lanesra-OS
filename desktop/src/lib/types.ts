@@ -1463,6 +1463,58 @@ export interface CustomRecord {
   archived_at: string | null;
 }
 
+// Screen/App Builder Phase 1: an object (built-in entity_type or a custom
+// object's key) can have several named layouts, each with its own tabs of
+// admin-drag-ordered field sections. Fields are opaque key strings here -
+// this layer round-trips whatever the caller places, the same way the
+// backend does (see the migration's own comment).
+export interface LayoutSection {
+  id: string;
+  title: string;
+  fields: string[];
+}
+
+export interface LayoutTab {
+  id: string;
+  title: string;
+  sections: LayoutSection[];
+}
+
+export interface LayoutTabs {
+  tabs: LayoutTab[];
+}
+
+export interface ScreenLayout {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  name: string;
+  is_default: boolean;
+  roles: string[];
+  draft: LayoutTabs;
+  published: LayoutTabs | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface ScreenLayoutInput {
+  entity_type: string;
+  name: string;
+  initial_fields: string[];
+}
+
+export interface ScreenLayoutUpdate {
+  name: string;
+  roles: string[];
+  draft: LayoutTabs;
+}
+
+export interface EffectiveLayout {
+  tabs: LayoutTabs | null;
+}
+
 export interface CustomRecordInput {
   object_key: string;
   primary_name: string;
