@@ -9,7 +9,8 @@ import { LineItemsEditor } from "../../components/LineItemsEditor";
 import { PrintableDocument } from "../../components/PrintableDocument";
 import { PrintOverlay } from "../../components/PrintOverlay";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
@@ -198,6 +199,13 @@ function QuoteForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create the quote"),
   });
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: "Quote",
+    status: "Draft",
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   return (
     <div>
       <h2>New quote</h2>
@@ -209,55 +217,71 @@ function QuoteForm({
         }}
       >
         <div className="form-grid" style={{ marginBottom: 16 }}>
-          <div className="form-field">
-            <label>Company</label>
-            <select
-              value={companyId}
-              onChange={(e) => {
-                setCompanyId(e.target.value);
-                setContactId(null);
-                setOpportunityId(null);
-              }}
-              required
-            >
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-field">
-            <label>Contact (optional)</label>
-            <select value={contactId ?? ""} onChange={(e) => setContactId(e.target.value || null)}>
-              <option value="">— None —</option>
-              {(contacts.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.first_name} {c.last_name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-field">
-            <label>Opportunity (optional)</label>
-            <select value={opportunityId ?? ""} onChange={(e) => setOpportunityId(e.target.value || null)}>
-              <option value="">— None —</option>
-              {(opportunities.data ?? []).map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-field">
-            <label>Currency</label>
-            <input value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value.toUpperCase())} maxLength={3} />
-          </div>
-          <div className="form-field full">
-            <label>Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-          <CustomFieldsSection entityType="Quote" status="Draft" values={customValues} onChange={setCustomValues} />
+          <LayoutFormFields
+            entityType="Quote"
+            order={["company_id", "contact_id", "opportunity_id", "currency_code", "notes", ...customFieldOrder]}
+            fields={{
+              company_id: (
+                <div className="form-field" key="company_id">
+                  <label>Company</label>
+                  <select
+                    value={companyId}
+                    onChange={(e) => {
+                      setCompanyId(e.target.value);
+                      setContactId(null);
+                      setOpportunityId(null);
+                    }}
+                    required
+                  >
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+              contact_id: (
+                <div className="form-field" key="contact_id">
+                  <label>Contact (optional)</label>
+                  <select value={contactId ?? ""} onChange={(e) => setContactId(e.target.value || null)}>
+                    <option value="">— None —</option>
+                    {(contacts.data ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.first_name} {c.last_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+              opportunity_id: (
+                <div className="form-field" key="opportunity_id">
+                  <label>Opportunity (optional)</label>
+                  <select value={opportunityId ?? ""} onChange={(e) => setOpportunityId(e.target.value || null)}>
+                    <option value="">— None —</option>
+                    {(opportunities.data ?? []).map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ),
+              currency_code: (
+                <div className="form-field" key="currency_code">
+                  <label>Currency</label>
+                  <input value={currencyCode} onChange={(e) => setCurrencyCode(e.target.value.toUpperCase())} maxLength={3} />
+                </div>
+              ),
+              notes: (
+                <div className="form-field full" key="notes">
+                  <label>Notes</label>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+                </div>
+              ),
+              ...customFieldElements,
+            }}
+          />
         </div>
 
         <LineItemsEditor lines={lines} onChange={setLines} products={products.data ?? []} currencyCode={currencyCode} />

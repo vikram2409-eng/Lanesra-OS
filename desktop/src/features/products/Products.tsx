@@ -5,7 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { centsToInputValue, formatCents, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -187,6 +188,13 @@ function ProductForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the product"),
   });
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: "Product",
+    status: input.is_active ? "true" : "false",
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   return (
     <div>
       <h2>{productId ? "Edit product" : "New product"}</h2>
@@ -198,64 +206,79 @@ function ProductForm({
           save.mutate();
         }}
       >
-        <div className="form-field full">
-          <label>Name</label>
-          <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} required />
-        </div>
-        <div className="form-field">
-          <label>Type</label>
-          <select value={input.type} onChange={(e) => setInput({ ...input, type: e.target.value })}>
-            {PRODUCT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>SKU / code</label>
-          <input value={input.sku ?? ""} onChange={(e) => setInput({ ...input, sku: e.target.value || null })} />
-        </div>
-        <div className="form-field">
-          <label>Unit price</label>
-          <input
-            type="number"
-            step="0.01"
-            value={centsToInputValue(input.unit_price_cents)}
-            onChange={(e) => setInput({ ...input, unit_price_cents: parseDecimalToCents(e.target.value) })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Tax rate (%)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={(input.tax_rate_bp / 100).toString()}
-            onChange={(e) => setInput({ ...input, tax_rate_bp: Math.round(parseFloat(e.target.value || "0") * 100) })}
-          />
-        </div>
-        <div className="form-field">
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={input.is_active}
-              onChange={(e) => setInput({ ...input, is_active: e.target.checked })}
-            />
-            Active
-          </label>
-        </div>
-        <div className="form-field full">
-          <label>Description</label>
-          <textarea
-            value={input.description ?? ""}
-            onChange={(e) => setInput({ ...input, description: e.target.value || null })}
-          />
-        </div>
-        <CustomFieldsSection
+        <LayoutFormFields
           entityType="Product"
-          status={input.is_active ? "true" : "false"}
-          values={customValues}
-          onChange={setCustomValues}
+          order={["name", "type", "sku", "unit_price_cents", "tax_rate_bp", "is_active", "description", ...customFieldOrder]}
+          fields={{
+            name: (
+              <div className="form-field full" key="name">
+                <label>Name</label>
+                <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} required />
+              </div>
+            ),
+            type: (
+              <div className="form-field" key="type">
+                <label>Type</label>
+                <select value={input.type} onChange={(e) => setInput({ ...input, type: e.target.value })}>
+                  {PRODUCT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            sku: (
+              <div className="form-field" key="sku">
+                <label>SKU / code</label>
+                <input value={input.sku ?? ""} onChange={(e) => setInput({ ...input, sku: e.target.value || null })} />
+              </div>
+            ),
+            unit_price_cents: (
+              <div className="form-field" key="unit_price_cents">
+                <label>Unit price</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={centsToInputValue(input.unit_price_cents)}
+                  onChange={(e) => setInput({ ...input, unit_price_cents: parseDecimalToCents(e.target.value) })}
+                />
+              </div>
+            ),
+            tax_rate_bp: (
+              <div className="form-field" key="tax_rate_bp">
+                <label>Tax rate (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={(input.tax_rate_bp / 100).toString()}
+                  onChange={(e) => setInput({ ...input, tax_rate_bp: Math.round(parseFloat(e.target.value || "0") * 100) })}
+                />
+              </div>
+            ),
+            is_active: (
+              <div className="form-field" key="is_active">
+                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={input.is_active}
+                    onChange={(e) => setInput({ ...input, is_active: e.target.checked })}
+                  />
+                  Active
+                </label>
+              </div>
+            ),
+            description: (
+              <div className="form-field full" key="description">
+                <label>Description</label>
+                <textarea
+                  value={input.description ?? ""}
+                  onChange={(e) => setInput({ ...input, description: e.target.value || null })}
+                />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
         />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>

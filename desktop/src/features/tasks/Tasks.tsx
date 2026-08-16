@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
-import { CustomFieldsSection } from "../../components/CustomFieldsSection";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -329,6 +330,13 @@ function TaskForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save the task"),
   });
 
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: "Task",
+    status: input.status,
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
   const relatedType = input.related_type as TaskRelatedType | null;
   const options = relatedType ? relatedOptions[relatedType] ?? [] : [];
 
@@ -343,98 +351,123 @@ function TaskForm({
           save.mutate();
         }}
       >
-        <div className="form-field full">
-          <label>Title</label>
-          <input value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })} required />
-        </div>
-        <div className="form-field">
-          <label>Owner</label>
-          <select
-            value={input.owner_user_id ?? ""}
-            onChange={(e) => setInput({ ...input, owner_user_id: e.target.value || null })}
-          >
-            <option value="">— Unassigned —</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.display_name}
-                {u.id === currentUserId ? " (you)" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Priority</label>
-          <select value={input.priority} onChange={(e) => setInput({ ...input, priority: e.target.value })}>
-            {TASK_PRIORITIES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Status</label>
-          <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
-            {TASK_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Due date</label>
-          <input type="date" value={input.due_date ?? ""} onChange={(e) => setInput({ ...input, due_date: e.target.value || null })} />
-        </div>
-        <div className="form-field">
-          <label>Reminder</label>
-          <input
-            type="datetime-local"
-            value={input.reminder_at ?? ""}
-            onChange={(e) => setInput({ ...input, reminder_at: e.target.value || null })}
-          />
-        </div>
-        <div className="form-field">
-          <label>Relates to</label>
-          <select
-            value={input.related_type ?? ""}
-            onChange={(e) =>
-              setInput({ ...input, related_type: e.target.value || null, related_id: null })
-            }
-          >
-            <option value="">General (no relation)</option>
-            {TASK_RELATED_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-        {relatedType && (
-          <div className="form-field">
-            <label>{relatedType} record</label>
-            <select
-              value={input.related_id ?? ""}
-              onChange={(e) => setInput({ ...input, related_id: e.target.value || null })}
-              required
-            >
-              <option value="">— Select —</option>
-              {options.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div className="form-field full">
-          <label>Description</label>
-          <textarea
-            value={input.description ?? ""}
-            onChange={(e) => setInput({ ...input, description: e.target.value || null })}
-          />
-        </div>
-        <CustomFieldsSection entityType="Task" status={input.status} values={customValues} onChange={setCustomValues} />
+        <LayoutFormFields
+          entityType="Task"
+          order={[
+            "title", "owner_user_id", "priority", "status", "due_date", "reminder_at",
+            "related_type", "related_id", "description", ...customFieldOrder,
+          ]}
+          fields={{
+            title: (
+              <div className="form-field full" key="title">
+                <label>Title</label>
+                <input value={input.title} onChange={(e) => setInput({ ...input, title: e.target.value })} required />
+              </div>
+            ),
+            owner_user_id: (
+              <div className="form-field" key="owner_user_id">
+                <label>Owner</label>
+                <select
+                  value={input.owner_user_id ?? ""}
+                  onChange={(e) => setInput({ ...input, owner_user_id: e.target.value || null })}
+                >
+                  <option value="">— Unassigned —</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name}
+                      {u.id === currentUserId ? " (you)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            priority: (
+              <div className="form-field" key="priority">
+                <label>Priority</label>
+                <select value={input.priority} onChange={(e) => setInput({ ...input, priority: e.target.value })}>
+                  {TASK_PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            status: (
+              <div className="form-field" key="status">
+                <label>Status</label>
+                <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+                  {TASK_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            due_date: (
+              <div className="form-field" key="due_date">
+                <label>Due date</label>
+                <input type="date" value={input.due_date ?? ""} onChange={(e) => setInput({ ...input, due_date: e.target.value || null })} />
+              </div>
+            ),
+            reminder_at: (
+              <div className="form-field" key="reminder_at">
+                <label>Reminder</label>
+                <input
+                  type="datetime-local"
+                  value={input.reminder_at ?? ""}
+                  onChange={(e) => setInput({ ...input, reminder_at: e.target.value || null })}
+                />
+              </div>
+            ),
+            related_type: (
+              <div className="form-field" key="related_type">
+                <label>Relates to</label>
+                <select
+                  value={input.related_type ?? ""}
+                  onChange={(e) =>
+                    setInput({ ...input, related_type: e.target.value || null, related_id: null })
+                  }
+                >
+                  <option value="">General (no relation)</option>
+                  {TASK_RELATED_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            related_id: relatedType ? (
+              <div className="form-field" key="related_id">
+                <label>{relatedType} record</label>
+                <select
+                  value={input.related_id ?? ""}
+                  onChange={(e) => setInput({ ...input, related_id: e.target.value || null })}
+                  required
+                >
+                  <option value="">— Select —</option>
+                  {options.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : undefined,
+            description: (
+              <div className="form-field full" key="description">
+                <label>Description</label>
+                <textarea
+                  value={input.description ?? ""}
+                  onChange={(e) => setInput({ ...input, description: e.target.value || null })}
+                />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
+        />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             Save
