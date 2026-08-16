@@ -22,6 +22,7 @@ use lanesra_core::models::custom_object::{CustomObjectDefinitionInput, CustomObj
 use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
 use lanesra_core::models::business_rule::{BusinessRuleInput, BusinessRuleUpdate};
+use lanesra_core::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate};
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
@@ -33,7 +34,7 @@ use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, Workspac
 use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
-    custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_service,
+    custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
     quote_service, relationship_service, report_service, screen_layout_service, search_service, status_transition_service, task_service,
     user_service, workflow_service, workspace_service,
@@ -536,6 +537,38 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let workspace_id = require_workspace_id(conn)?;
             let tabs = screen_layout_service::resolve_effective_layout(conn, &workspace_id, &entity_type, actor)?;
             to_value(lanesra_core::services::screen_layout_service::EffectiveLayout { tabs })
+        }
+
+        "list_dashboard_layouts" => to_value(dashboard_layout_service::list_layouts(conn, &require_workspace_id(conn)?)?),
+        "create_dashboard_layout" => {
+            let input: DashboardLayoutInput = arg(args, "input")?;
+            to_value(dashboard_layout_service::create_layout(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_dashboard_layout" => {
+            let id: String = arg(args, "id")?;
+            let update: DashboardLayoutUpdate = arg(args, "update")?;
+            to_value(dashboard_layout_service::update_layout(conn, &id, &update, actor)?)
+        }
+        "publish_dashboard_layout" => {
+            to_value(dashboard_layout_service::publish_layout(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "unpublish_dashboard_layout" => {
+            to_value(dashboard_layout_service::unpublish_layout(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "revert_dashboard_layout_draft" => {
+            to_value(dashboard_layout_service::revert_layout_draft(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "make_dashboard_layout_default" => {
+            to_value(dashboard_layout_service::make_default(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "delete_dashboard_layout" => {
+            dashboard_layout_service::delete_layout(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "effective_dashboard_layout" => {
+            let workspace_id = require_workspace_id(conn)?;
+            let widgets = dashboard_layout_service::resolve_effective_dashboard(conn, &workspace_id, actor)?;
+            to_value(lanesra_core::services::dashboard_layout_service::EffectiveDashboard { widgets })
         }
 
         "list_custom_records" => {
