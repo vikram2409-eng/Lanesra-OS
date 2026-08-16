@@ -108,6 +108,34 @@ const save=()=>localStorage.setItem(storeKey,JSON.stringify(data));
 const uid=()=>Math.random().toString(36).slice(2,10);
 const pad=(n,w=4)=>String(n).padStart(w,'0');
 const year=()=>new Date().getFullYear();
+// Audit trail: mirrors the desktop app's created_at/created_by/updated_at/
+// updated_by on every entity, built-in or custom-defined. The demo has no
+// real sign-in, so CURRENT_USER_ID stands in for "whoever has this browser
+// tab open" - the same identity the sidebar's "MC" avatar already implies
+// (Maya Chen, the workspace's seed Administrator, u1).
+const CURRENT_USER_ID='u1';
+function userName(id){return (data.users||[]).find(u=>u.id===id)?.name||'System'}
+// Stamps a freshly created record with created_at/created_by AND
+// updated_at/updated_by set equal, exactly like every desktop repository's
+// INSERT statement (see e.g. custom_record_repo::create).
+function stampCreate(obj){const now=new Date().toISOString();obj.createdAt=now;obj.createdBy=CURRENT_USER_ID;obj.updatedAt=now;obj.updatedBy=CURRENT_USER_ID;return obj}
+// Refreshes only updated_at/updated_by on a save - created_at/created_by
+// are never touched again after a record's first save (mirrors every
+// desktop UPDATE statement, including numbering_override_repo::upsert's ON
+// CONFLICT branch, which is the one place this demo also upserts rather
+// than always inserting).
+function stampUpdate(obj){obj.updatedAt=new Date().toISOString();obj.updatedBy=CURRENT_USER_ID;return obj}
+// "Created by X on ... · Last updated by Y on ..." - same convention as
+// the desktop app's AuditByline component. Renders nothing for anything
+// that predates this feature (or was never stamped, like a User) rather
+// than showing a misleading blank line.
+function auditByline(r){
+ if(!r||!r.createdAt)return '';
+ const created=new Date(r.createdAt).toLocaleString();
+ let html=`Created by ${userName(r.createdBy)} on ${created}`;
+ if(r.updatedAt&&r.updatedAt!==r.createdAt)html+=` · Last updated by ${userName(r.updatedBy)} on ${new Date(r.updatedAt).toLocaleString()}`;
+ return `<div class="muted" style="font-size:12px;margin-top:4px">${html}</div>`;
+}
 ensureAdminData();
 const numberRules={
  companies:{field:'customerNumber',prefix:'CUS',year:false,width:4},
@@ -230,6 +258,25 @@ function ensureAdminData(){
  (data.fieldRules||[]).forEach(migrateFieldRule);
  (data.workflowRules||[]).forEach(migrateWorkflowRule);
  (data.customFields||[]).forEach(f=>{if(f.defaultValue===undefined)f.defaultValue='';if(f.unique===undefined)f.unique=false;if(f.helpText===undefined)f.helpText='';if(f.placeholder===undefined)f.placeholder='';if(f.required===undefined)f.required=false;if(f.maxLength===undefined)f.maxLength=null;if(f.pattern===undefined)f.pattern='';if(f.minValue===undefined)f.minValue='';if(f.maxValue===undefined)f.maxValue='';if(f.searchable===undefined)f.searchable=false;if(f.filterable===undefined)f.filterable=false;if(f.reportable===undefined)f.reportable=true;if(f.hiddenByDefault===undefined)f.hiddenByDefault=false});
+ // Audit trail: backfill created_at/created_by/updated_at/updated_by on
+ // anything saved (or seeded) before this feature existed - additive and
+ // idempotent, same as every other migration step in this function. Not
+ // hardcoded against numberRules (that const isn't defined yet the first
+ // time this runs, at module load) - the built-in keys are spelled out
+ // directly instead.
+ const AUDITED_BUILTIN_KEYS=['companies','contacts','opportunities','products','quotes','orders','invoices','contracts','tasks'];
+ [...AUDITED_BUILTIN_KEYS.map(k=>data[k]),...((data.customObjects||[]).map(o=>data[o.key]))].forEach(arr=>(arr||[]).forEach(r=>{if(!r.createdAt)stampCreate(r)}));
+ (data.customFields||[]).forEach(r=>{if(!r.createdAt)stampCreate(r)});
+ (data.fieldRules||[]).forEach(r=>{if(!r.createdAt)stampCreate(r)});
+ (data.workflowRules||[]).forEach(r=>{if(!r.createdAt)stampCreate(r)});
+ (data.statusTransitionRules||[]).forEach(r=>{if(!r.createdAt)stampCreate(r)});
+ (data.customReports||[]).forEach(r=>{if(!r.createdAt)stampCreate(r)});
+ (data.relationshipDefinitions||[]).forEach(r=>{if(!r.createdAt)stampCreate(r)});
+ // Relationship instances only ever get created_by (see the desktop
+ // RelationshipInstance model's own comment - they're never updated, only
+ // created or deleted).
+ (data.relationshipInstances||[]).forEach(r=>{if(!r.createdAt){r.createdAt=new Date().toISOString();r.createdBy=CURRENT_USER_ID}});
+ Object.values(data.numberingOverrides||{}).forEach(o=>{if(!o.createdAt)stampCreate(o)});
  save();
 }
 const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓',reports:'▥'};
@@ -1113,7 +1160,7 @@ function customReportModal(){
   e.preventDefault();
   const fd=Object.fromEntries(new FormData(e.target).entries());
   if(fd.aggregate==='sum'&&!fd.sumFieldKey)return alert('Pick a numeric field to sum, or choose Count of records instead.');
-  const report={id:uid(),name:fd.name,entityKey:fd.entityKey,groupBySource:fd.groupBy==='__builtin__'?'builtin':'custom',groupByField:fd.groupBy==='__builtin__'?transitionFieldFor(fd.entityKey):fd.groupBy,aggregate:fd.aggregate,sumFieldKey:fd.aggregate==='sum'?fd.sumFieldKey:''};
+  const report=stampCreate({id:uid(),name:fd.name,entityKey:fd.entityKey,groupBySource:fd.groupBy==='__builtin__'?'builtin':'custom',groupByField:fd.groupBy==='__builtin__'?transitionFieldFor(fd.entityKey):fd.groupBy,aggregate:fd.aggregate,sumFieldKey:fd.aggregate==='sum'?fd.sumFieldKey:''});
   data.customReports.push(report);
   save();closeModal();
   selectedCustomReportId=report.id;
@@ -1189,10 +1236,10 @@ function wireRelatedRows(scope){
   openRecordDetail(navKey,id);
  });
 }
-function detail360Header(breadcrumbLabel,title,eyebrow,metaHtml){
+function detail360Header(breadcrumbLabel,title,eyebrow,metaHtml,auditHtml){
  return `<div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><button data-back-list>${breadcrumbLabel}</button><span>›</span><span>${title}</span></div>
  <div class="rule360-header">
-  <div><div class="eyebrow">${eyebrow||''}</div><h1>${title}</h1><div class="rule360-meta">${metaHtml}</div></div>
+  <div><div class="eyebrow">${eyebrow||''}</div><h1>${title}</h1><div class="rule360-meta">${metaHtml}</div>${auditHtml||''}</div>
   <button class="btn btn-secondary" id="editDetailRecord">Edit</button>
  </div>`;
 }
@@ -1213,7 +1260,7 @@ function companyDetail(id){
  const invoices=data.invoices.filter(x=>x.companyId===id);
  const contracts=data.contracts.filter(x=>x.companyId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Company'&&x.relatedId===id);
- $('#view').innerHTML=`${detail360Header('Companies',c.name,c.customerNumber,`${badgeMaybe(c.status)}<span>Owner: ${c.owner||'Unassigned'}</span>`)}
+ $('#view').innerHTML=`${detail360Header('Companies',c.name,c.customerNumber,`${badgeMaybe(c.status)}<span>Owner: ${c.owner||'Unassigned'}</span>`,auditByline(c))}
  <div class="rule360-grid">
   <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewGroupsHtml('companies',overviewGroupsFor('companies',overviewFields),c)}</div></div>
   <div>
@@ -1238,7 +1285,7 @@ function contactDetail(id){
  const orders=data.orders.filter(x=>x.contactId===id);
  const contracts=data.contracts.filter(x=>x.contactId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Contact'&&x.relatedId===id);
- $('#view').innerHTML=`${detail360Header('Contacts',c.name,c.contactNumber,`${badgeMaybe(c.status)}<span>${c.role||'—'}</span><a class="cell-link" data-nav-related="companies:${c.companyId}">${companyName(c.companyId)}</a>`)}
+ $('#view').innerHTML=`${detail360Header('Contacts',c.name,c.contactNumber,`${badgeMaybe(c.status)}<span>${c.role||'—'}</span><a class="cell-link" data-nav-related="companies:${c.companyId}">${companyName(c.companyId)}</a>`,auditByline(c))}
  <div class="rule360-grid">
   <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewGroupsHtml('contacts',overviewGroupsFor('contacts',overviewFields),c)}</div></div>
   <div>
@@ -1347,7 +1394,7 @@ function genericRecordDetail(key,id){
  const overviewFields=fieldsFor(key,fieldsFn).filter(f=>!relationTypes.includes(f[2])&&f[0]!==DETAIL_TITLE_FIELD[key]);
  const isDoc=['quotes','orders','invoices'].includes(key);
  const linesHtml=isDoc?`<div class="panel" style="margin-bottom:16px"><h3 style="margin-top:0">Products & services</h3><div class="table-wrap"><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table></div><div class="line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="muted" style="font-size:13px;font-weight:400">· Balance ${money(docBalance(r))}</span>`:''}</div></div>`:'';
- $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],r[DETAIL_TITLE_FIELD[key]]||'—',DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r))}
+ $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],r[DETAIL_TITLE_FIELD[key]]||'—',DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r),auditByline(r))}
  <div class="rule360-grid">
   <div>
    ${linesHtml}
@@ -1373,7 +1420,13 @@ function recordModal(key,fields,record={}){
  // whichever relationships it claims, filled in below (only meaningful
  // once record.id exists - a create form has nothing to link yet).
  const panelsHtml=tabsOut.map((t,i)=>`<div data-form-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,record)}<div data-related-slot="${i}"></div></div>`).join('');
- const form=`<form id="recordForm">${tabsHtml}${panelsHtml}${isDoc?lineItemsHtml(record.items||[]):''}<div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
+ // Audit trail: entities with their own detail page (companies, contacts,
+ // and the six DETAIL_PAGE_ENTITIES generic-360 types) show the byline
+ // there instead - only show it here, in the shared edit form, for
+ // entities that have no separate detail view (opportunities, custom
+ // object records).
+ const auditHtml=(record.id&&!DETAIL_PAGE_ENTITIES.has(key))?auditByline(record):'';
+ const form=`<form id="recordForm">${auditHtml}${tabsHtml}${panelsHtml}${isDoc?lineItemsHtml(record.items||[]):''}<div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
  modal(record.id?'Edit record':'Create record',form); $('[data-close]').onclick=closeModal;
  document.querySelectorAll('[data-form-tab]').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('[data-form-panel]').forEach(p=>p.style.display=p.dataset.formPanel===b.dataset.formTab?'':'none');
@@ -1419,7 +1472,11 @@ function recordModal(key,fields,record={}){
     return alert(`"${fromVal||'—'} → ${toVal}" is not an allowed ${fieldLabelFor(key,tf)} transition. Configure allowed transitions in Admin → Status transitions.`);
   }
  }
- if(wasEdit)Object.assign(byId(key,record.id),obj);else{const rule=effectiveRule(key);if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);data[key].unshift({id:uid(),...obj})}
+ // Audit trail: every entity through this shared save path gets stamped
+ // except users (the desktop User model carries no created_by/updated_by
+ // either - see audit_trail.rs's own scope).
+ if(wasEdit){const target=byId(key,record.id);Object.assign(target,obj);if(key!=='users')stampUpdate(target)}
+ else{const rule=effectiveRule(key);if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);const created={id:uid(),...obj};if(key!=='users')stampCreate(created);data[key].unshift(created)}
  // Workflow execution isn't limited to relatedTypeFor's built-ins anymore -
  // create_record/update_related_record/update_field don't need a Task
  // relatedType at all, and create_task itself already falls back to
@@ -1561,7 +1618,10 @@ function refreshRelatedPanels(entityType,entityId,tabsOut){
    const targetEntity=linkGroup.isSource?linkGroup.otherType:entityType, targetId=linkGroup.isSource?otherId:entityId;
    const err=relationshipLinkError(linkGroup.def,sourceId,targetId);
    if(err)return alert(err);
-   data.relationshipInstances.push({id:uid(),definitionId:linkGroup.def.id,sourceEntity,sourceId,targetEntity,targetId});
+   // Relationship instances only ever get created_by (see the desktop
+   // RelationshipInstance model's own comment - never updated, only
+   // created/deleted).
+   data.relationshipInstances.push({id:uid(),definitionId:linkGroup.def.id,sourceEntity,sourceId,targetEntity,targetId,createdAt:new Date().toISOString(),createdBy:CURRENT_USER_ID});
    save();toast('Linked');relLinkingKey=null;refreshRelatedPanels(entityType,entityId,tabsOut);
   };
  }
@@ -1718,6 +1778,7 @@ function relationshipModal(def){
  const keys=allEntityTypeKeys();
  const source=def?.sourceEntity||keys[0], target=def?.targetEntity||keys[1]||keys[0];
  const body=`<form id="relForm" class="form-grid">
+ ${isEdit?`<div class="field full">${auditByline(def)}</div>`:''}
  <div class="field"><label>Source (the "many"/owning side)</label><select name="source" ${isEdit?'disabled':''}>${keys.map(k=>`<option value="${k}" ${k===source?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
  <div class="field"><label>Target</label><select name="target" ${isEdit?'disabled':''}>${keys.map(k=>`<option value="${k}" ${k===target?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
  <div class="field"><label>Relationship type</label><select name="relType" ${isEdit?'disabled':''}>${RELATIONSHIP_TYPES.map(t=>`<option value="${t}" ${def?.relType===t?'selected':''}>${RELATIONSHIP_TYPE_LABELS[t]}</option>`).join('')}</select></div>
@@ -1737,12 +1798,13 @@ function relationshipModal(def){
   if(!fd.forwardLabel.trim()||!fd.reverseLabel.trim())return alert('Both direction labels are required.');
   if(isEdit){
    Object.assign(def,{forwardLabel:fd.forwardLabel,reverseLabel:fd.reverseLabel,deleteBehavior:fd.deleteBehavior,showRelatedList:fd.showRelatedList==='true',required:fd.required==='true',active:fd.active==='true'});
+   stampUpdate(def);
   }else{
    if(fd.source===fd.target)return alert('A relationship must connect two different object types.');
    const base=`${fd.source}_${fd.target}`;
    let key=base,suffix=2;
    while((data.relationshipDefinitions||[]).some(d=>d.key===key))key=`${base}_${suffix++}`;
-   data.relationshipDefinitions.push({id:uid(),key,sourceEntity:fd.source,targetEntity:fd.target,relType:fd.relType,forwardLabel:fd.forwardLabel,reverseLabel:fd.reverseLabel,deleteBehavior:fd.deleteBehavior,showRelatedList:fd.showRelatedList==='true',required:fd.required==='true',active:true,protected:false});
+   data.relationshipDefinitions.push(stampCreate({id:uid(),key,sourceEntity:fd.source,targetEntity:fd.target,relType:fd.relType,forwardLabel:fd.forwardLabel,reverseLabel:fd.reverseLabel,deleteBehavior:fd.deleteBehavior,showRelatedList:fd.showRelatedList==='true',required:fd.required==='true',active:true,protected:false}));
   }
   save();closeModal();toast(isEdit?'Relationship saved':'Relationship created');renderAdminTab();
  };
@@ -2551,6 +2613,7 @@ function customFieldModal(field){
  const f=field||{entity:cfEntity,label:'',type:'text',options:'',active:true,defaultValue:'',unique:false,helpText:'',placeholder:'',required:false,maxLength:'',pattern:'',minValue:'',maxValue:'',searchable:false,filterable:false,reportable:true,hiddenByDefault:false};
  const isText=f.type==='text', isNum=f.type==='number';
  const body=`<form id="cfForm" class="form-grid">
+ ${isEdit?`<div class="field full">${auditByline(f)}</div>`:''}
  <div class="field"><label>Field label</label><input name="label" value="${f.label}" required></div>
  <div class="field"><label>Type</label><select name="type">${['text','number','date','boolean','select'].map(t=>`<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
  <div class="field full" id="cfOptionsWrap" ${f.type==='select'?'':'style="display:none"'}><label>Options (separate with |)</label><input name="options" value="${f.options||''}" placeholder="Referral|Website|Event"></div>
@@ -2607,8 +2670,8 @@ function customFieldModal(field){
    searchable:fd.searchable==='true',filterable:fd.filterable==='true',reportable:fd.reportable==='true',
    hiddenByDefault:fd.hiddenByDefault==='true',
   };
-  if(isEdit){Object.assign(field,shared)}
-  else{data.customFields.push({id:uid(),entity:cfEntity,key:slugify(fd.label),...shared})}
+  if(isEdit){Object.assign(field,shared);stampUpdate(field)}
+  else{data.customFields.push(stampCreate({id:uid(),entity:cfEntity,key:slugify(fd.label),...shared}))}
   save();closeModal();toast('Custom field saved');renderView();
  };
 }
@@ -2677,7 +2740,7 @@ function rulesTab(body){
  body.querySelectorAll('[data-edit-rule]').forEach(b=>b.onclick=()=>{ruleBuilderMode=b.dataset.editRule;renderAdminTab()});
  body.querySelectorAll('[data-dup-rule]').forEach(b=>b.onclick=()=>{
   const src=data.fieldRules.find(r=>r.id===b.dataset.dupRule); if(!src)return;
-  const copy=JSON.parse(JSON.stringify(src)); copy.id=uid(); copy.active=false; delete copy.history;
+  const copy=JSON.parse(JSON.stringify(src)); copy.id=uid(); copy.active=false; delete copy.history; stampCreate(copy);
   data.fieldRules.push(copy); save(); toast('Rule duplicated as inactive — review and activate when ready');
   ruleBuilderMode=copy.id; renderAdminTab();
  });
@@ -2705,6 +2768,7 @@ function renderRuleBuilder(body){
    <div class="builder-breadcrumb">Business Rules / ${isEdit?'Edit rule':'New rule'}</div>
    <div class="builder-title-row"><h2>${isEdit?'Edit business rule':'New business rule'}</h2>${isEdit?`<span class="badge" style="${existing.active?'background:#dcfce7;color:#166534':''}">${existing.active?'Active':'Inactive'}</span>`:''}</div>
    <p class="builder-subtitle">Applies to ${entityLabel(entityKey)}.</p>
+   ${isEdit?auditByline(existing):''}
   </div>
   <div class="builder-header-actions">
    <button class="btn btn-secondary" type="button" id="ruleBuilderTest">${testingRules?'Hide test':'Test rule'}</button>
@@ -2775,7 +2839,7 @@ function renderRuleBuilder(body){
   if(!conditions.length)return alert('Add at least one condition.');
   if(!actions.length)return alert('Add at least one action.');
   const payload={entity:entityKey,matchType,conditions,actions};
-  if(isEdit){pushRuleHistory(existing);Object.assign(existing,payload)}else{data.fieldRules.push({id:uid(),active:true,...payload})}
+  if(isEdit){pushRuleHistory(existing);Object.assign(existing,payload);stampUpdate(existing)}else{data.fieldRules.push(stampCreate({id:uid(),active:true,...payload}))}
   save();toast(isEdit?'Business rule saved':'Business rule added');ruleBuilderMode=null;testingRules=false;renderView()};
 }
 // Renders the operator + value pair for whichever condition field is
@@ -3165,7 +3229,7 @@ function workflowTab(body){
  body.querySelectorAll('[data-edit-wf]').forEach(b=>b.onclick=()=>{wfBuilderMode=b.dataset.editWf;renderAdminTab()});
  body.querySelectorAll('[data-dup-wf]').forEach(b=>b.onclick=()=>{
   const src=data.workflowRules.find(r=>r.id===b.dataset.dupWf); if(!src)return;
-  const copy=JSON.parse(JSON.stringify(src)); copy.id=uid(); copy.active=false; delete copy.history;
+  const copy=JSON.parse(JSON.stringify(src)); copy.id=uid(); copy.active=false; delete copy.history; stampCreate(copy);
   data.workflowRules.push(copy); save(); toast('Workflow rule duplicated as inactive — review and activate when ready');
   wfBuilderMode=copy.id; renderAdminTab();
  });
@@ -3276,6 +3340,7 @@ function renderWorkflowBuilder(body){
    <div class="builder-breadcrumb">Workflow Automation / ${isEdit?'Edit workflow':'New workflow'}</div>
    <div class="builder-title-row"><h2>${isEdit?'Edit workflow rule':'New workflow rule'}</h2>${isEdit?`<span class="badge" style="${existing.active?'background:#dcfce7;color:#166534':''}">${existing.active?'Active':'Inactive'}</span>`:''}</div>
    <p class="builder-subtitle">Applies to ${entityLabel(entityKey)}.</p>
+   ${isEdit?auditByline(existing):''}
   </div>
   <div class="builder-header-actions">
    <button class="btn btn-secondary" type="button" id="wfBuilderTest">${testingWorkflow?'Hide test':'Test workflow'}</button>
@@ -3358,7 +3423,7 @@ function renderWorkflowBuilder(body){
    if((a.type==='update_field'||a.type==='set_default_field')&&!a.updateCopyFrom&&!a.updateValue)return alert('Enter a value to write, or a field to copy from.');
   }
   const payload={entity:entityKey,notify:fd.notify==='true',conditions,matchType,actions,conditionsMerged:true};
-  if(isEdit){pushRuleHistory(existing);Object.assign(existing,payload)}else{data.workflowRules.push({id:uid(),active:true,...payload})}
+  if(isEdit){pushRuleHistory(existing);Object.assign(existing,payload);stampUpdate(existing)}else{data.workflowRules.push(stampCreate({id:uid(),active:true,...payload}))}
   save();toast(isEdit?'Workflow rule saved':'Workflow rule added');wfBuilderMode=null;testingWorkflow=false;renderView()};
 }
 
@@ -3374,7 +3439,7 @@ function transitionsTab(body){
  </div>`;
  body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{trEntity=b.dataset.entity;renderAdminTab()});
  $('#addTransition').onclick=()=>transitionModal(trEntity);
- body.querySelectorAll('[data-toggle-tr]').forEach(b=>b.onclick=()=>{const r=data.statusTransitionRules.find(x=>x.id===b.dataset.toggleTr);r.active=!r.active;save();toast(r.active?'Rule activated':'Rule deactivated');renderAdminTab()});
+ body.querySelectorAll('[data-toggle-tr]').forEach(b=>b.onclick=()=>{const r=data.statusTransitionRules.find(x=>x.id===b.dataset.toggleTr);r.active=!r.active;stampUpdate(r);save();toast(r.active?'Rule activated':'Rule deactivated');renderAdminTab()});
  body.querySelectorAll('[data-del-tr]').forEach(b=>b.onclick=()=>{data.statusTransitionRules=data.statusTransitionRules.filter(r=>r.id!==b.dataset.delTr);save();toast('Transition rule deleted');renderAdminTab()});
 }
 function transitionModal(entityKey){
@@ -3388,7 +3453,7 @@ function transitionModal(entityKey){
  modal(`New ${fieldLabelFor(entityKey,tf).toLowerCase()} transition — ${entityLabel(entityKey)}`,body);
  $('[data-close]').onclick=closeModal;
  $('#trForm').onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());
-  data.statusTransitionRules.push({id:uid(),entity:entityKey,active:true,from:fd.from||'',to:fd.to});
+  data.statusTransitionRules.push(stampCreate({id:uid(),entity:entityKey,active:true,from:fd.from||'',to:fd.to}));
   save();closeModal();toast('Transition rule added');renderView()};
 }
 function numberingTab(body){
@@ -3409,13 +3474,21 @@ function numberingTab(body){
 function numberingModal(key){
  const base=numberRules[key];const o=data.numberingOverrides[key];
  const body=`<form id="numForm" class="form-grid">
+ ${o?`<div class="field full">${auditByline(o)}</div>`:''}
  <div class="field full"><label>Prefix (include any punctuation, e.g. "ACC-" or "ACC-ab")</label><input name="prefix" value="${o?o.prefix:base.prefix+(base.year?'-'+year()+'-':'-')}" required></div>
  <div class="field"><label>Digits</label><input name="width" type="number" min="1" max="10" value="${o?o.width||base.width:base.width}"></div>
  <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save format</button></div>
  </form>`;
  modal(`Numbering format — ${entityLabel(key)}`,body);
  $('[data-close]').onclick=closeModal;
- $('#numForm').onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());if(!fd.prefix.trim())return alert('Enter a prefix.');data.numberingOverrides[key]={prefix:fd.prefix.trim(),width:Math.min(10,Math.max(1,Number(fd.width||base.width)))};save();closeModal();toast('Numbering format updated');renderView()};
+ $('#numForm').onsubmit=e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.target).entries());if(!fd.prefix.trim())return alert('Enter a prefix.');
+  // Upsert semantics (mirrors numbering_override_repo::upsert): on an
+  // existing override, created_by is preserved and only updated_by moves;
+  // a brand-new override gets both set to the same actor.
+  const existing=data.numberingOverrides[key];
+  const rec={prefix:fd.prefix.trim(),width:Math.min(10,Math.max(1,Number(fd.width||base.width)))};
+  if(existing){Object.assign(existing,rec);stampUpdate(existing)}else{data.numberingOverrides[key]=stampCreate(rec)}
+  save();closeModal();toast('Numbering format updated');renderView()};
 }
 function kpisTab(body){
  const prefs=data.kpiPrefs||[];
