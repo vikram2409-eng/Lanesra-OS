@@ -10,6 +10,7 @@ import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill } from "../../components/AppShell";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STATUSES,
@@ -61,6 +62,7 @@ export function Opportunities({
   const queryClient = useQueryClient();
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
   const fieldFilters = useCustomFieldFilters("Opportunity");
+  const canWrite = useCanWriteObject("Opportunity");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   // One-shot: this component fully remounts on every navigation into this
@@ -103,7 +105,12 @@ export function Opportunities({
             columns={opportunityExportColumns(companyNameById)}
             filename="opportunities.csv"
           />
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Opportunities through an app"}
+          >
             + New opportunity
           </button>
         </div>
@@ -140,7 +147,12 @@ export function Opportunities({
                 <td>{formatCents(o.value_cents, o.currency_code)}</td>
                 <td>{(o.probability_bp / 100).toFixed(0)}%</td>
                 <td>
-                  <button className="btn" onClick={() => setView({ mode: "edit", id: o.id })}>
+                  <button
+                    className="btn"
+                    onClick={() => setView({ mode: "edit", id: o.id })}
+                    disabled={!canWrite}
+                    title={canWrite ? undefined : "You have view-only access to Opportunities through an app"}
+                  >
                     Edit
                   </button>
                 </td>

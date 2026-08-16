@@ -18,6 +18,7 @@ import type { Prefill, Section } from "../../components/AppShell";
 import type { CustomFieldValues, Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -50,6 +51,7 @@ export function Invoices({
   const queryClient = useQueryClient();
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const fieldFilters = useCustomFieldFilters("Invoice");
+  const canWrite = useCanWriteObject("Invoice");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -99,7 +101,12 @@ export function Invoices({
             columns={invoiceExportColumns(companyNameById)}
             filename="invoices.csv"
           />
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Invoices through an app"}
+          >
             + New invoice
           </button>
         </div>
@@ -312,6 +319,7 @@ function InvoiceDetail({
   const [paymentAmount, setPaymentAmount] = useState("0.00");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [printing, setPrinting] = useState(false);
+  const canWrite = useCanWriteObject("Invoice");
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["invoice", id] });
@@ -377,12 +385,22 @@ function InvoiceDetail({
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {inv.status === "Draft" && (
-          <button className="btn btn-primary" onClick={() => issue.mutate()} disabled={issue.isPending}>
+          <button
+            className="btn btn-primary"
+            onClick={() => issue.mutate()}
+            disabled={issue.isPending || !canWrite}
+            title={canWrite ? undefined : "You have view-only access to Invoices through an app"}
+          >
             Issue invoice
           </button>
         )}
         {inv.status !== "Void" && inv.status !== "Paid" && (
-          <button className="btn btn-danger" onClick={() => voidInvoice.mutate()} disabled={voidInvoice.isPending}>
+          <button
+            className="btn btn-danger"
+            onClick={() => voidInvoice.mutate()}
+            disabled={voidInvoice.isPending || !canWrite}
+            title={canWrite ? undefined : "You have view-only access to Invoices through an app"}
+          >
             Void invoice
           </button>
         )}
@@ -500,7 +518,12 @@ function InvoiceDetail({
               <label>Method</label>
               <input value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} />
             </div>
-            <button className="btn btn-primary" type="submit" disabled={recordPayment.isPending}>
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={recordPayment.isPending || !canWrite}
+              title={canWrite ? undefined : "You have view-only access to Invoices through an app"}
+            >
               Record payment
             </button>
           </form>

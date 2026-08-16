@@ -15,6 +15,7 @@ import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { formatCents } from "../../lib/money";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import {
   CONTACT_STATUSES,
   PREFERRED_CONTACT_METHODS,
@@ -136,6 +137,7 @@ export function Contacts({
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const fieldFilters = useCustomFieldFilters("Contact");
+  const canWrite = useCanWriteObject("Contact");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -188,7 +190,12 @@ export function Contacts({
           <button className="btn" onClick={() => setImporting((v) => !v)}>
             Import CSV
           </button>
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
+          >
             + New contact
           </button>
         </div>
@@ -243,6 +250,8 @@ export function Contacts({
                       e.stopPropagation();
                       setView({ mode: "edit", id: c.id });
                     }}
+                    disabled={!canWrite}
+                    title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
                   >
                     Edit
                   </button>
@@ -524,6 +533,7 @@ function ContactDetail({
   onNavigateTo?: (section: Section, prefill: Prefill) => void;
 }) {
   const [tab, setTab] = useState<ContactTab>("overview");
+  const canWrite = useCanWriteObject("Contact");
   const contact = useQuery({ queryKey: ["contact", id], queryFn: () => api.getContact(id) });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
@@ -566,7 +576,7 @@ function ContactDetail({
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
-        <button className="btn" onClick={onEdit}>
+        <button className="btn" onClick={onEdit} disabled={!canWrite} title={canWrite ? undefined : "You have view-only access to Contacts through an app"}>
           Edit
         </button>
       </div>

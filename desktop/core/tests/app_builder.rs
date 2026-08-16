@@ -4,14 +4,23 @@
 //! rationale and what "editor" does and doesn't enforce yet.
 
 use lanesra_core::db::open_in_memory_db;
-use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
+use lanesra_core::models::app_definition::{AppDefinition, AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
+use lanesra_core::models::company::CompanyInput;
+use lanesra_core::models::contact::ContactInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::dashboard_layout::DashboardLayoutInput;
+use lanesra_core::models::invoice::PaymentInput;
+use lanesra_core::models::opportunity::OpportunityInput;
+use lanesra_core::models::quote::{QuoteInput, QuoteLineInput};
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{app_service, custom_object_service, custom_record_service, dashboard_layout_service, task_service, user_service, workspace_service};
+use lanesra_core::services::{
+    app_service, company_service, contact_service, custom_object_service, custom_record_service,
+    dashboard_layout_service, invoice_service, opportunity_service, order_service, quote_service,
+    task_service, user_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -204,11 +213,44 @@ fn revoke_permission_removes_the_grant() {
     assert!(app_service::list_permissions(&conn, &app.id, Some(&admin)).unwrap().is_empty());
 }
 
-fn published_app(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str) -> lanesra_core::models::app_definition::AppDefinition {
+fn published_app(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str) -> AppDefinition {
+    published_app_with_objects(conn, ws, admin, name, vec!["Task".into()])
+}
+
+fn published_app_with_objects(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str, object_keys: Vec<String>) -> AppDefinition {
     let app = app_service::create(conn, ws, &app_input(name), Some(admin)).unwrap();
-    let update = AppDefinitionUpdate { name: app.name.clone(), icon: app.icon.clone(), description: None, object_keys: vec!["Task".into()], dashboard_id: None };
+    let update = AppDefinitionUpdate { name: app.name.clone(), icon: app.icon.clone(), description: None, object_keys, dashboard_id: None };
     app_service::update(conn, &app.id, &update, Some(admin)).unwrap();
     app_service::publish(conn, &app.id, Some(admin)).unwrap()
+}
+
+fn viewer_grant(conn: &rusqlite::Connection, admin: &str, app_id: &str, role: &str) {
+    app_service::grant_permission(
+        conn, app_id,
+        &AppPermissionInput { principal_type: "role".into(), principal_id: role.into(), level: "viewer".into() },
+        Some(admin),
+    )
+    .unwrap();
+}
+
+fn company_input(name: &str) -> CompanyInput {
+    CompanyInput { name: name.into(), status: "Prospect".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, ..Default::default() }
+}
+
+fn contact_input(company_id: &str) -> ContactInput {
+    ContactInput {
+        company_id: company_id.into(), first_name: "Jane".into(), last_name: "Doe".into(), job_title: None,
+        email: Some("jane.doe@example.com".into()), phone: None, mobile: None, is_primary: true,
+        status: "Active".into(), tags: None, notes: None, ..Default::default()
+    }
+}
+
+fn quote_input(company_id: &str, contact_id: &str) -> QuoteInput {
+    QuoteInput {
+        company_id: company_id.into(), contact_id: Some(contact_id.into()), opportunity_id: None,
+        currency_code: "USD".into(), issue_date: None, expiry_date: None, notes: None, terms: None,
+        lines: vec![QuoteLineInput { product_id: None, description: "Consulting".into(), quantity_milli: 1000, unit_price_cents: 10000, discount_bp: 0, tax_rate_bp: 0 }],
+    }
 }
 
 #[test]
@@ -421,4 +463,108 @@ fn write_enforcement_also_gates_custom_object_records() {
     let input = CustomRecordInput { object_key: obj.key.clone(), primary_name: "123 Main St".into(), status: "Active".into(), owner_user_id: None, notes: None };
     let err = custom_record_service::create(&conn, &ws, &input, Some(&sales)).unwrap_err();
     assert!(err.to_string().contains("view-only access"));
+}
+
+// ---- Phase 3: write enforcement also covers status-lifecycle commands ----
+
+#[test]
+fn set_products_is_gated_on_opportunity_write_access() {
+    let (conn, ws, admin) = setup_workspace();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
+    let opportunity = opportunity_service::create(
+        &conn,
+        &OpportunityInput {
+            company_id: company.id.clone(), primary_contact_id: None, name: "Acme Deal".into(), stage: "New".into(),
+            status: "Open".into(), value_cents: 10000, currency_code: "USD".into(), probability_bp: 1000,
+            expected_close_date: None, owner_user_id: None, lost_reason: None, next_step: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    let app = published_app_with_objects(&conn, &ws, &admin, "Pipeline App", vec!["Opportunity".into()]);
+    viewer_grant(&conn, &admin, &app.id, "Sales");
+    let sales = user_with_role(&conn, &ws, &admin, "sam", "Sales");
+
+    let err = opportunity_service::set_products(&conn, &opportunity.id, &[], Some(&sales)).unwrap_err();
+    assert!(err.to_string().contains("view-only access"));
+
+    // An editor can.
+    app_service::grant_permission(
+        &conn, &app.id,
+        &AppPermissionInput { principal_type: "role".into(), principal_id: "Sales".into(), level: "editor".into() },
+        Some(&admin),
+    )
+    .unwrap();
+    opportunity_service::set_products(&conn, &opportunity.id, &[], Some(&sales)).unwrap();
+}
+
+/// Full quote -> order -> invoice lifecycle, with a Sales viewer blocked
+/// at every status-changing/conversion step along the way - the exact
+/// commands Phase 2's own doc comment named as deliberately out of scope
+/// until this phase closed them. Each conversion is gated on the
+/// *destination* entity's write access (Order for convert_to_order,
+/// Invoice for convert_to_invoice), never the untouched source document.
+#[test]
+fn status_lifecycle_commands_are_gated_end_to_end() {
+    let (conn, ws, admin) = setup_workspace();
+    let sales = user_with_role(&conn, &ws, &admin, "sam", "Sales");
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
+    let contact = contact_service::create(&conn, &contact_input(&company.id), Some(&admin)).unwrap();
+
+    let quote_app = published_app_with_objects(&conn, &ws, &admin, "Quote App", vec!["Quote".into()]);
+    viewer_grant(&conn, &admin, &quote_app.id, "Sales");
+    let order_app = published_app_with_objects(&conn, &ws, &admin, "Order App", vec!["Order".into()]);
+    viewer_grant(&conn, &admin, &order_app.id, "Sales");
+    let invoice_app = published_app_with_objects(&conn, &ws, &admin, "Invoice App", vec!["Invoice".into()]);
+    viewer_grant(&conn, &admin, &invoice_app.id, "Sales");
+
+    let quote = quote_service::create(&conn, &quote_input(&company.id, &contact.id), Some(&admin)).unwrap();
+
+    let err = quote_service::set_status(&conn, &quote.quote.id, "Sent", Some(&sales)).unwrap_err();
+    assert!(err.to_string().contains("view-only access"), "set_status on a viewer-only Quote must be blocked");
+
+    quote_service::set_status(&conn, &quote.quote.id, "Sent", Some(&admin)).unwrap();
+    let accepted = quote_service::set_status(&conn, &quote.quote.id, "Accepted", Some(&admin)).unwrap();
+
+    let err = quote_service::convert_to_order(&conn, &accepted.quote.id, Some(&sales)).unwrap_err();
+    assert!(err.to_string().contains("view-only access"), "convert_to_order must be gated on Order write access");
+
+    let order = quote_service::convert_to_order(&conn, &accepted.quote.id, Some(&admin)).unwrap();
+
+    let err = order_service::set_status(&conn, &order.order.id, "Confirmed", Some(&sales)).unwrap_err();
+    assert!(err.to_string().contains("view-only access"), "set_status on a viewer-only Order must be blocked");
+
+    let confirmed = order_service::set_status(&conn, &order.order.id, "Confirmed", Some(&admin)).unwrap();
+
+    let err = order_service::convert_to_invoice(&conn, &confirmed.order.id, Some(&sales)).unwrap_err();
+    assert!(err.to_string().contains("view-only access"), "convert_to_invoice must be gated on Invoice write access");
+
+    let invoice = order_service::convert_to_invoice(&conn, &confirmed.order.id, Some(&admin)).unwrap();
+
+    let err = invoice_service::issue(&conn, &invoice.invoice.id, Some(&sales)).unwrap_err();
+    assert!(err.to_string().contains("view-only access"), "issue must be gated on Invoice write access");
+
+    let issued = invoice_service::issue(&conn, &invoice.invoice.id, Some(&admin)).unwrap();
+
+    let err = invoice_service::record_payment(
+        &conn, &issued.invoice.id,
+        &PaymentInput { amount_cents: 1000, paid_at: "2026-01-15".into(), method: None, reference: None },
+        Some(&sales),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("view-only access"), "record_payment must be gated on Invoice write access");
+
+    // An editor can walk the whole thing through to Paid.
+    app_service::grant_permission(
+        &conn, &invoice_app.id,
+        &AppPermissionInput { principal_type: "role".into(), principal_id: "Sales".into(), level: "editor".into() },
+        Some(&admin),
+    )
+    .unwrap();
+    invoice_service::record_payment(
+        &conn, &issued.invoice.id,
+        &PaymentInput { amount_cents: issued.invoice.total_cents, paid_at: "2026-01-20".into(), method: None, reference: None },
+        Some(&sales),
+    )
+    .unwrap();
 }

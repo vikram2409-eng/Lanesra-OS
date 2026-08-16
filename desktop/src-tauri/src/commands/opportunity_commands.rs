@@ -59,7 +59,7 @@ pub fn set_opportunity_products(
     products: Vec<OpportunityProductInput>,
 ) -> AppResult<Vec<OpportunityProduct>> {
     let conn = state.conn.lock().unwrap();
-    opportunity_service::set_products(&conn, &opportunity_id, &products)
+    opportunity_service::set_products(&conn, &opportunity_id, &products, current_actor(&state).as_deref())
 }
 
 #[tauri::command]

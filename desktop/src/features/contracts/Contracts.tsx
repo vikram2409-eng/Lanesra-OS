@@ -15,6 +15,7 @@ import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
 import { CONTRACT_STATUSES, type Contract, type ContractInput, type CustomFieldValues } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -74,6 +75,7 @@ export function Contracts({
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
   const fieldFilters = useCustomFieldFilters("Contract");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const canWrite = useCanWriteObject("Contract");
 
   useEffect(() => {
     if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
@@ -123,7 +125,12 @@ export function Contracts({
             columns={contractExportColumns(companyNameById)}
             filename="contracts.csv"
           />
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Contracts through an app"}
+          >
             + New contract
           </button>
         </div>
@@ -169,6 +176,8 @@ export function Contracts({
                       e.stopPropagation();
                       setView({ mode: "edit", id: c.id });
                     }}
+                    disabled={!canWrite}
+                    title={canWrite ? undefined : "You have view-only access to Contracts through an app"}
                   >
                     Edit
                   </button>
@@ -450,6 +459,7 @@ function ContractDetail({
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const tasks = useQuery({ queryKey: ["tasksByRelated", "Contract", id], queryFn: () => api.listTasksByRelated("Contract", id) });
+  const canWrite = useCanWriteObject("Contract");
 
   if (!contract.data) return <p>Loading...</p>;
   const c = contract.data;
@@ -460,7 +470,12 @@ function ContractDetail({
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
-        <button className="btn" onClick={onEdit}>
+        <button
+          className="btn"
+          onClick={onEdit}
+          disabled={!canWrite}
+          title={canWrite ? undefined : "You have view-only access to Contracts through an app"}
+        >
           Edit
         </button>
       </div>

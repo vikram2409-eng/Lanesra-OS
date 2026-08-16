@@ -131,6 +131,7 @@ pub fn set_status(
         return Err(AppError::Validation(format!("Invalid quote status '{status}'")));
     }
     let existing = load(conn, id)?;
+    app_service::require_object_write_access(conn, &existing.quote.workspace_id, "Quote", actor_user_id)?;
     if existing.quote.status != status {
         status_transition_service::validate_transition(conn, &existing.quote.workspace_id, "Quote", &existing.quote.status, status)?;
     }
@@ -163,6 +164,11 @@ pub fn convert_to_order(
             "Only an Accepted quote can be converted to an order".into(),
         ));
     }
+    // The result is a new Order, not a write to the source Quote (which is
+    // never mutated - see this function's own doc comment above), so the
+    // gate is on Order write access, the same as calling order_service::
+    // create directly would require.
+    app_service::require_object_write_access(conn, &source.quote.workspace_id, "Order", actor_user_id)?;
 
     let order_id = new_uuid();
     let order_number = numbering::allocate_number(conn, &source.quote.workspace_id, &numbering::ORDER)?;

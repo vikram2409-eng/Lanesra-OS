@@ -16,6 +16,7 @@ import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { COMPANY_STATUSES, PREFERRED_CONTACT_METHODS, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
@@ -110,6 +111,7 @@ export function Companies({
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const fieldFilters = useCustomFieldFilters("Company");
+  const canWrite = useCanWriteObject("Company");
 
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
@@ -153,7 +155,12 @@ export function Companies({
           <button className="btn" onClick={() => setImporting((v) => !v)}>
             Import CSV
           </button>
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Companies through an app"}
+          >
             + New company
           </button>
         </div>
@@ -466,6 +473,7 @@ function CompanyDetail({
   onNavigateTo?: (section: Section, prefill: Prefill) => void;
 }) {
   const [tab, setTab] = useState<CompanyTab>("overview");
+  const canWrite = useCanWriteObject("Company");
   const company = useQuery({ queryKey: ["company", id], queryFn: () => api.getCompany(id) });
   const contacts = useQuery({ queryKey: ["contactsByCompany", id], queryFn: () => api.listContactsByCompany(id) });
   const opportunities = useQuery({
@@ -518,7 +526,7 @@ function CompanyDetail({
             ← Back
           </button>
         </div>
-        <button className="btn" onClick={onEdit}>
+        <button className="btn" onClick={onEdit} disabled={!canWrite} title={canWrite ? undefined : "You have view-only access to Companies through an app"}>
           Edit
         </button>
       </div>

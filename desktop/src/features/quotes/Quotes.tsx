@@ -18,6 +18,7 @@ import type { Prefill, Section } from "../../components/AppShell";
 import { QUOTE_STATUSES, type CustomFieldValues, type Quote, type QuoteInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -51,6 +52,7 @@ export function Quotes({
   const queryClient = useQueryClient();
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const fieldFilters = useCustomFieldFilters("Quote");
+  const canWrite = useCanWriteObject("Quote");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
 
   useEffect(() => {
@@ -100,7 +102,12 @@ export function Quotes({
             columns={quoteExportColumns(companyNameById)}
             filename="quotes.csv"
           />
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Quotes through an app"}
+          >
             + New quote
           </button>
         </div>
@@ -318,6 +325,11 @@ function QuoteDetail({
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const canWriteQuote = useCanWriteObject("Quote");
+  // convert_to_order is gated on Order write access, not Quote (it never
+  // touches the source quote) - see app_service::require_object_write_access's
+  // own doc comment on why a conversion command gates on its destination type.
+  const canWriteOrder = useCanWriteObject("Order");
 
   const setStatus = useMutation({
     mutationFn: (status: string) => api.setQuoteStatus(id, status),
@@ -375,12 +387,23 @@ function QuoteDetail({
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {QUOTE_STATUSES.filter((s) => s !== q.status).map((s) => (
-          <button key={s} className="btn" onClick={() => setStatus.mutate(s)} disabled={setStatus.isPending}>
+          <button
+            key={s}
+            className="btn"
+            onClick={() => setStatus.mutate(s)}
+            disabled={setStatus.isPending || !canWriteQuote}
+            title={canWriteQuote ? undefined : "You have view-only access to Quotes through an app"}
+          >
             Mark {s}
           </button>
         ))}
         {q.status === "Accepted" && (
-          <button className="btn btn-primary" onClick={() => convert.mutate()} disabled={convert.isPending}>
+          <button
+            className="btn btn-primary"
+            onClick={() => convert.mutate()}
+            disabled={convert.isPending || !canWriteOrder}
+            title={canWriteOrder ? undefined : "You have view-only access to Orders through an app"}
+          >
             Convert to order
           </button>
         )}

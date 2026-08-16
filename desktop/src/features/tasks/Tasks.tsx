@@ -19,6 +19,7 @@ import {
   type TaskRelatedType,
 } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
@@ -103,6 +104,7 @@ export function Tasks({
 
   const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() });
   const fieldFilters = useCustomFieldFilters("Task");
+  const canWrite = useCanWriteObject("Task");
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
@@ -209,7 +211,12 @@ export function Tasks({
         <h2 style={{ margin: 0 }}>Tasks</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <ExportCsvButton rows={all} columns={taskExportColumns(ownerName)} filename="tasks.csv" />
-          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : "You have view-only access to Tasks through an app"}
+          >
             + New task
           </button>
         </div>
@@ -261,6 +268,8 @@ export function Tasks({
                             e.stopPropagation();
                             setView({ mode: "edit", id: t.id });
                           }}
+                          disabled={!canWrite}
+                          title={canWrite ? undefined : "You have view-only access to Tasks through an app"}
                         >
                           Edit
                         </button>
@@ -506,6 +515,7 @@ function TaskDetail({
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
+  const canWrite = useCanWriteObject("Task");
 
   if (!task.data) return <p>Loading...</p>;
   const t = task.data;
@@ -530,7 +540,12 @@ function TaskDetail({
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
-        <button className="btn" onClick={onEdit}>
+        <button
+          className="btn"
+          onClick={onEdit}
+          disabled={!canWrite}
+          title={canWrite ? undefined : "You have view-only access to Tasks through an app"}
+        >
           Edit
         </button>
       </div>
