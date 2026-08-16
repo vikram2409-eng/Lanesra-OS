@@ -155,6 +155,7 @@ pub fn run() {
             commands::dashboard_layout_commands::make_dashboard_layout_default,
             commands::dashboard_layout_commands::delete_dashboard_layout,
             commands::dashboard_layout_commands::effective_dashboard_layout,
+            commands::dashboard_widget_commands::run_dashboard_record_list,
             commands::custom_record_commands::list_custom_records,
             commands::custom_record_commands::get_custom_record,
             commands::custom_record_commands::create_custom_record,

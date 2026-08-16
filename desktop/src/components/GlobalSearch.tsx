@@ -20,7 +20,10 @@ const CORE_ENTITY_SECTION: Record<string, Section> = {
   Product: "products",
 };
 
-function sectionFor(entityType: string): Section {
+// Exported for reuse by anything else that resolves an entity_type to a
+// nav Section without its own copy of this map - so far, dashboard
+// record-list widgets (Dashboard.tsx).
+export function sectionFor(entityType: string): Section {
   return CORE_ENTITY_SECTION[entityType] ?? customObjectSection(entityType);
 }
 

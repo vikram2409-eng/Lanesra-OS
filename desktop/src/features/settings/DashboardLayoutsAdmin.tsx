@@ -2,8 +2,23 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
-import { ROLES, type CustomReport, type DashboardLayout, type DashboardWidget, type DashboardWidgets } from "../../lib/types";
+import {
+  CUSTOM_FIELD_ENTITY_TYPES,
+  ROLES,
+  entityTypeLabel,
+  type CustomFieldEntityType,
+  type CustomReport,
+  type DashboardLayout,
+  type DashboardWidget,
+  type DashboardWidgets,
+  type RecordListMode,
+} from "../../lib/types";
 import { KPI_DEFS, kpiLabel } from "../dashboard/kpis";
+
+/** Entity types whose "due_soon" mode actually sorts by a real due date -
+ * see `dashboard_widget_service::run` in core. Every other entity type
+ * only offers "Recently created". */
+const DUE_SOON_ENTITY_TYPES: CustomFieldEntityType[] = ["Task", "Invoice"];
 
 function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -26,9 +41,10 @@ function newId(): string {
  * Phase 2 adds chart widgets: pick an existing saved Custom Report (see
  * Admin -> Reports) and it's rendered as a bar chart on the dashboard,
  * reusing the same report engine rather than a second one just for
- * dashboards. Record-list widgets are a further follow-up phase, the
- * same incremental-capability rollout Screen/App Builder's own phases
- * used.
+ * dashboards. Phase 3 adds record-list widgets: pick an entity type and
+ * a mode (recently created, or - for Tasks and Invoices specifically -
+ * soonest due) and it renders as a short list of records, same
+ * incremental-capability rollout Screen/App Builder's own phases used.
  *
  * Every workspace always has at least one layout: the Default,
  * auto-created server-side (empty, unpublished) the first time this
@@ -236,6 +252,12 @@ function LayoutEditor({
     save({ widgets: [...widgets.widgets, { id: newId(), kind: "chart", config: { report_id: reportId } }] });
   }
 
+  function addRecordList(entityType: string, mode: RecordListMode) {
+    save({
+      widgets: [...widgets.widgets, { id: newId(), kind: "record_list", config: { entity_type: entityType, mode, limit: 5 } }],
+    });
+  }
+
   function removeWidget(id: string) {
     save({ widgets: widgets.widgets.filter((w) => w.id !== id) });
   }
@@ -391,6 +413,7 @@ function LayoutEditor({
               </select>
             )
           )}
+          <AddRecordListWidget onAdd={addRecordList} />
         </div>
       </div>
 
@@ -415,11 +438,53 @@ function LayoutEditor({
   );
 }
 
+/** A small inline picker for a record-list widget - two dropdowns
+ * (entity type, mode) rather than one, so it's its own component instead
+ * of a single `<select>` like the KPI/chart pickers above. */
+function AddRecordListWidget({ onAdd }: { onAdd: (entityType: string, mode: RecordListMode) => void }) {
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>("Task");
+  const dueSoonAvailable = DUE_SOON_ENTITY_TYPES.includes(entityType);
+  const [mode, setMode] = useState<RecordListMode>("due_soon");
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select
+        value={entityType}
+        onChange={(e) => {
+          const next = e.target.value as CustomFieldEntityType;
+          setEntityType(next);
+          if (!DUE_SOON_ENTITY_TYPES.includes(next)) setMode("recent");
+        }}
+      >
+        {CUSTOM_FIELD_ENTITY_TYPES.map((t) => (
+          <option key={t} value={t}>
+            {entityTypeLabel(t)}
+          </option>
+        ))}
+      </select>
+      {dueSoonAvailable && (
+        <select value={mode} onChange={(e) => setMode(e.target.value as RecordListMode)}>
+          <option value="due_soon">Due soon</option>
+          <option value="recent">Recently created</option>
+        </select>
+      )}
+      <button className="btn" onClick={() => onAdd(entityType, dueSoonAvailable ? mode : "recent")}>
+        + Add record list
+      </button>
+    </span>
+  );
+}
+
 function widgetLabel(w: DashboardWidget, reports: CustomReport[]): string {
   if (w.kind === "kpi") return kpiLabel(w.config.kpi_key as string);
   if (w.kind === "chart") {
     const report = reports.find((r) => r.id === w.config.report_id);
     return report ? `📊 ${report.name}` : "📊 (report deleted)";
+  }
+  if (w.kind === "record_list") {
+    const entityType = w.config.entity_type as string;
+    const mode = w.config.mode as string;
+    return `📋 ${entityTypeLabel(entityType)} - ${mode === "due_soon" ? "due soon" : "recent"}`;
   }
   return w.kind;
 }

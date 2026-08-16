@@ -10,6 +10,7 @@ pub mod custom_record_commands;
 pub mod custom_report_commands;
 pub mod dashboard_commands;
 pub mod dashboard_layout_commands;
+pub mod dashboard_widget_commands;
 pub mod invoice_commands;
 pub mod notification_commands;
 pub mod numbering_commands;
