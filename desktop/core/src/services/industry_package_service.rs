@@ -192,6 +192,7 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> AppResult<Vec<App
 pub fn reference_package_manifest(key: &str) -> AppResult<String> {
     match key {
         "field_service" => Ok(super::reference_packages::field_service_manifest_json()),
+        "property_management" => Ok(super::reference_packages::property_management_manifest_json()),
         other => Err(AppError::NotFound(format!("Reference package '{other}'"))),
     }
 }

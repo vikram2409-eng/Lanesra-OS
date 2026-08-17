@@ -103,9 +103,12 @@ export function IndustryPackagesAdmin() {
           install it.
         </p>
         {importError && <div className="error-banner">{importError}</div>}
-        <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 8, display: "flex", gap: 8 }}>
           <button className="btn" disabled={loadStarter.isPending} onClick={() => loadStarter.mutate("field_service")}>
             {loadStarter.isPending ? "Loading..." : "Load Field Service starter"}
+          </button>
+          <button className="btn" disabled={loadStarter.isPending} onClick={() => loadStarter.mutate("property_management")}>
+            {loadStarter.isPending ? "Loading..." : "Load Property Management starter"}
           </button>
         </div>
         <textarea
