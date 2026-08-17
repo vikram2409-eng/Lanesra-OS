@@ -184,6 +184,18 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> AppResult<Vec<App
     Ok(industry_package_repo::list_packages(conn, workspace_id)?)
 }
 
+/// Bundled starter manifests (`services::reference_packages`) an admin
+/// can load into the Review step's textarea before importing - not a
+/// silent one-click install, so the same Review -> Validate -> Install
+/// flow a hand-authored manifest goes through still applies. `key` is
+/// the reference package's own short name, not its `package_id`.
+pub fn reference_package_manifest(key: &str) -> AppResult<String> {
+    match key {
+        "field_service" => Ok(super::reference_packages::field_service_manifest_json()),
+        other => Err(AppError::NotFound(format!("Reference package '{other}'"))),
+    }
+}
+
 /// Re-parses and re-validates an already-imported package's manifest -
 /// what the Admin -> App Catalog screen's "Validate" step calls before
 /// offering "Install".
@@ -281,6 +293,48 @@ fn resolve_dashboard_widgets(widgets: &[ManifestDashboardWidget], reports: &[Cus
         .collect()
 }
 
+/// Same index-reference reasoning again, for the two workflow action
+/// types that embed a relationship id in their opaque `params_json`
+/// (`create_record`'s optional link, `update_related_record`'s target) -
+/// see those actions' own param structs in `workflow_service`. A
+/// manifest author writes `"relationship_ref": <index>` in place of
+/// `"relationship_definition_id"`; this rewrites it to the real id
+/// before the action is ever validated, the same substitution
+/// `resolve_related_indices`/`resolve_dashboard_widgets` do for their
+/// own opaque references. Any other action type's `params_json` passes
+/// through untouched.
+fn resolve_workflow_action_relationship_refs(
+    workflow: &crate::models::workflow::WorkflowDefinitionInput,
+    relationships: &[RelationshipDefinition],
+) -> AppResult<crate::models::workflow::WorkflowDefinitionInput> {
+    let mut resolved = workflow.clone();
+    for action in &mut resolved.actions {
+        if action.action_type != "create_record" && action.action_type != "update_related_record" {
+            continue;
+        }
+        let mut params: serde_json::Value = serde_json::from_str(&action.params_json)
+            .map_err(|e| AppError::Validation(format!("Invalid parameters for '{}': {e}", action.action_type)))?;
+        let idx = match params.get("relationship_ref").and_then(|v| v.as_u64()) {
+            Some(idx) => idx as usize,
+            None => continue, // create_record's link is optional - no ref, nothing to resolve
+        };
+        let rel = relationships.get(idx).ok_or_else(|| {
+            AppError::Validation(format!(
+                "Workflow '{}' action '{}' references relationship index {idx}, but the manifest only defines {} relationship(s)",
+                workflow.name,
+                action.action_type,
+                relationships.len()
+            ))
+        })?;
+        if let Some(obj) = params.as_object_mut() {
+            obj.remove("relationship_ref");
+            obj.insert("relationship_definition_id".to_string(), serde_json::Value::String(rel.id.clone()));
+        }
+        action.params_json = params.to_string();
+    }
+    Ok(resolved)
+}
+
 /// The actual work of an install, run inside `install`'s transaction -
 /// every sub-service call below takes `&Connection`, which a
 /// `rusqlite::Transaction` derefs to, so a failure anywhere (a `?` on any
@@ -329,7 +383,8 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
     }
 
     for workflow_input in &manifest.workflows {
-        let created = workflow_service::create_rule(conn, workspace_id, workflow_input, actor_user_id)?;
+        let resolved_input = resolve_workflow_action_relationship_refs(workflow_input, &created_relationships)?;
+        let created = workflow_service::create_rule(conn, workspace_id, &resolved_input, actor_user_id)?;
         artifacts.push(("workflow_definition", created.id));
     }
 
