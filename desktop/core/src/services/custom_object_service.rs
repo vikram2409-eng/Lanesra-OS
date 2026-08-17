@@ -110,6 +110,37 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &CustomObjectDefinit
     Ok(custom_object_repo::create(conn, &id, workspace_id, &key, input, actor_user_id)?)
 }
 
+/// Industry Data Model packages (spec: roadmap "Industry Data Model") need
+/// a *deterministic* key, not the admin UI's auto-slugified-and-uniquified
+/// one: a package's other entries (a field's `entity_type`, a
+/// relationship's source/target, a business rule/workflow's entity_type)
+/// name this object by the exact key the package author chose, so a
+/// silent "_2" suffix on collision would silently break every one of
+/// those references. Collision is therefore a hard install failure here,
+/// never an auto-rename - see `industry_package_service::validate` for
+/// where that's actually checked before any object exists.
+pub fn create_with_key(
+    conn: &Connection,
+    workspace_id: &str,
+    key: &str,
+    input: &CustomObjectDefinitionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomObjectDefinition> {
+    require_admin(conn, actor_user_id)?;
+    validate_shape(input)?;
+    if key.trim().is_empty() {
+        return Err(AppError::Validation("Object key is required".into()));
+    }
+    if CUSTOM_FIELD_ENTITY_TYPES.iter().any(|t| t.eq_ignore_ascii_case(key)) {
+        return Err(AppError::Validation(format!("'{key}' is too close to a built-in object name - choose another")));
+    }
+    if custom_object_repo::get_by_key(conn, workspace_id, key)?.is_some() {
+        return Err(AppError::Validation(format!("An object with key '{key}' already exists in this workspace")));
+    }
+    let id = crate::domain::ids::new_uuid();
+    Ok(custom_object_repo::create(conn, &id, workspace_id, key, input, actor_user_id)?)
+}
+
 /// Any authenticated user can list active object definitions (needed to
 /// build the sidebar nav and quick-create menu); only an Administrator
 /// sees inactive ones too, via the admin screen.

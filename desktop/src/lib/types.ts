@@ -1824,3 +1824,102 @@ export interface AccessibleApp {
   app: AppDefinition;
   level: string;
 }
+
+// Industry Data Model foundations (roadmap "Industry Data Model"): a
+// declarative package - object/field/relationship/business rule/workflow/
+// screen layout/dashboard/report/numbering definitions plus an optional
+// App Builder grouping - that installs into an existing workspace. This
+// mirrors the Rust core's `models::industry_package` shapes; see that
+// module's doc comments for the full rationale (deterministic keys,
+// index-based relationship/report references, transactional install).
+// The Admin -> App Catalog screen is the only UI these types back for
+// now - no per-industry package content exists yet, only the machinery
+// to import and install whatever manifest is handed to it.
+
+export interface RecommendedPermission {
+  role: string;
+  level: string;
+}
+
+/** A package imported into this workspace's local catalog - validated
+ * and available to install, not yet necessarily installed. */
+export interface AppPackage {
+  id: string;
+  workspace_id: string;
+  package_id: string;
+  name: string;
+  industry: string;
+  version: string;
+  min_lanesra_version: string;
+  manifest_json: string;
+  checksum: string;
+  source: string;
+  imported_at: string;
+  imported_by: string | null;
+}
+
+export const INSTALLED_APP_STATUSES = ["active", "deactivated"] as const;
+export type InstalledAppStatus = (typeof INSTALLED_APP_STATUSES)[number];
+
+/** One package actually installed into this workspace. */
+export interface InstalledApp {
+  id: string;
+  workspace_id: string;
+  package_id: string;
+  name: string;
+  icon: string;
+  industry: string;
+  description: string | null;
+  installed_version: string;
+  status: string;
+  app_definition_id: string | null;
+  recommended_permissions: RecommendedPermission[];
+  installed_at: string;
+  installed_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+  deactivated_at: string | null;
+  deactivated_by: string | null;
+}
+
+/** One record an install created - lets the App Catalog detail view show
+ * exactly what an install touched. */
+export interface PackageArtifact {
+  id: string;
+  installed_app_id: string;
+  artifact_type: string;
+  metadata_id: string;
+  origin_version: string;
+  is_locally_customized: boolean;
+  created_at: string;
+}
+
+export const APP_INSTALL_RUN_ACTIONS = ["install", "update", "deactivate", "reactivate"] as const;
+export type AppInstallRunAction = (typeof APP_INSTALL_RUN_ACTIONS)[number];
+export const APP_INSTALL_RUN_STATUSES = ["running", "succeeded", "failed"] as const;
+export type AppInstallRunStatus = (typeof APP_INSTALL_RUN_STATUSES)[number];
+
+/** One install/update/deactivate/reactivate attempt, success or failure -
+ * kept even when it failed, as the readable "why did this fail" record. */
+export interface AppInstallRun {
+  id: string;
+  workspace_id: string;
+  package_id: string;
+  package_version: string;
+  action: string;
+  status: string;
+  started_at: string;
+  completed_at: string | null;
+  backup_snapshot_path: string | null;
+  error_message: string | null;
+  actor_user_id: string | null;
+}
+
+export interface InstalledAppDetail {
+  app: InstalledApp;
+  artifacts: PackageArtifact[];
+}
+
+export interface ImportPackageInput {
+  manifest_json: string;
+}

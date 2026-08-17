@@ -243,6 +243,39 @@ pub fn create_definition(
     Ok(custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?)
 }
 
+/// Industry Data Model packages need the same explicit-key determinism as
+/// `custom_object_service::create_with_key` - see that function's doc
+/// comment. A key collision on the same `(entity_type, key)` pair is a
+/// hard install failure here, never an auto-"_2"-suffixed rename; the
+/// admin UI's own `create_definition` above is unaffected and keeps
+/// auto-uniquifying as before.
+pub fn create_definition_with_key(
+    conn: &Connection,
+    workspace_id: &str,
+    key: &str,
+    input: &CustomFieldDefinitionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomFieldDefinition> {
+    require_admin(conn, actor_user_id)?;
+    validate_definition_shape(conn, workspace_id, &input.entity_type, &input.field_type, &input.options, &input.label)?;
+    validate_definition_extras(
+        &input.field_type, &input.options, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length,
+        input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
+    )?;
+    if key.trim().is_empty() {
+        return Err(AppError::Validation("Field key is required".into()));
+    }
+    let existing = custom_field_repo::list_definitions(conn, workspace_id, &input.entity_type)?;
+    if existing.iter().any(|d| d.key == key) {
+        return Err(AppError::Validation(format!(
+            "A field with key '{key}' already exists on '{}' in this workspace",
+            input.entity_type
+        )));
+    }
+    let id = crate::domain::ids::new_uuid();
+    Ok(custom_field_repo::create_definition(conn, &id, workspace_id, key, input, actor_user_id)?)
+}
+
 /// Any authenticated user can list active definitions (needed to render
 /// the Company/Contact form); only an Administrator sees inactive ones
 /// too, via the admin screen.

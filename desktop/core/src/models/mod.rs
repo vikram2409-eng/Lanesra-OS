@@ -11,6 +11,7 @@ pub mod custom_record;
 pub mod custom_report;
 pub mod dashboard;
 pub mod dashboard_layout;
+pub mod industry_package;
 pub mod invoice;
 pub mod numbering_override;
 pub mod opportunity;
