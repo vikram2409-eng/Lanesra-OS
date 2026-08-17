@@ -64,3 +64,10 @@ pub fn reactivate_installed_app(state: State<AppState>, id: String) -> AppResult
     let conn = state.conn.lock().unwrap();
     industry_package_service::reactivate(&conn, &id, current_actor(&state).as_deref())
 }
+
+/// Fetches a bundled starter manifest's raw JSON to prefill the Review
+/// step's textarea - no database access needed, so no `state`.
+#[tauri::command]
+pub fn get_reference_package_manifest(key: String) -> AppResult<String> {
+    industry_package_service::reference_package_manifest(&key)
+}

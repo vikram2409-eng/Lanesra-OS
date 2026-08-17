@@ -194,6 +194,15 @@ pub struct IndustryPackageManifest {
     pub relationships: Vec<RelationshipDefinitionInput>,
     #[serde(default)]
     pub business_rules: Vec<BusinessRuleInput>,
+    /// A `create_record` or `update_related_record` action's `params_json`
+    /// normally carries a real `relationship_definition_id` - not
+    /// something a package author has at manifest-authoring time, for the
+    /// same reason `ManifestScreenLayout::related` doesn't. Write
+    /// `"relationship_ref": <0-based index into relationships above>` in
+    /// its place; `industry_package_service::resolve_workflow_action_relationship_refs`
+    /// substitutes the real id once that relationship actually exists,
+    /// the same index-reference convention used everywhere else in this
+    /// manifest.
     #[serde(default)]
     pub workflows: Vec<WorkflowDefinitionInput>,
     #[serde(default)]

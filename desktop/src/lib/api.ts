@@ -373,6 +373,7 @@ export const api = {
   listIndustryInstallRuns: () => call<AppInstallRun[]>("list_industry_install_runs"),
   deactivateInstalledApp: (id: string) => call<InstalledApp>("deactivate_installed_app", { id }),
   reactivateInstalledApp: (id: string) => call<InstalledApp>("reactivate_installed_app", { id }),
+  getReferencePackageManifest: (key: string) => call<string>("get_reference_package_manifest", { key }),
 
   listCustomRecords: (objectKey: string) => call<CustomRecord[]>("list_custom_records", { objectKey }),
   getCustomRecord: (id: string) => call<CustomRecord>("get_custom_record", { id }),

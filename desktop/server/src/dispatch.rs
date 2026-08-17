@@ -606,6 +606,7 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_industry_install_runs" => to_value(industry_package_service::list_runs(conn, &require_workspace_id(conn)?)?),
         "deactivate_installed_app" => to_value(industry_package_service::deactivate(conn, &arg::<String>(args, "id")?, actor)?),
         "reactivate_installed_app" => to_value(industry_package_service::reactivate(conn, &arg::<String>(args, "id")?, actor)?),
+        "get_reference_package_manifest" => to_value(industry_package_service::reference_package_manifest(&arg::<String>(args, "key")?)?),
 
         "list_apps" => to_value(app_service::list(conn, &require_workspace_id(conn)?)?),
         "create_app" => {

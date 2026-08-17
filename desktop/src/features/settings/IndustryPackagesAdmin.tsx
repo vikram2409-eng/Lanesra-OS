@@ -43,6 +43,15 @@ export function IndustryPackagesAdmin() {
     queryClient.invalidateQueries({ queryKey: ["apps"] });
   }
 
+  const loadStarter = useMutation({
+    mutationFn: (key: string) => api.getReferencePackageManifest(key),
+    onSuccess: (manifestJsonText) => {
+      setImportError(null);
+      setManifestJson(manifestJsonText);
+    },
+    onError: (err) => setImportError(err instanceof ApiError ? err.message : "Could not load that starter package"),
+  });
+
   const importPackage = useMutation({
     mutationFn: () => api.importIndustryPackage({ manifest_json: manifestJson }),
     onSuccess: () => {
@@ -89,10 +98,16 @@ export function IndustryPackagesAdmin() {
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Import a package</h3>
         <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-          Paste a Lanesra industry app package manifest (JSON). Importing only adds it to this workspace's local
-          catalog for review - nothing is created until you install it.
+          Paste a Lanesra industry app package manifest (JSON), or load a bundled starter below to review first.
+          Importing only adds it to this workspace's local catalog for review - nothing is created until you
+          install it.
         </p>
         {importError && <div className="error-banner">{importError}</div>}
+        <div style={{ marginBottom: 8 }}>
+          <button className="btn" disabled={loadStarter.isPending} onClick={() => loadStarter.mutate("field_service")}>
+            {loadStarter.isPending ? "Loading..." : "Load Field Service starter"}
+          </button>
+        </div>
         <textarea
           value={manifestJson}
           onChange={(e) => setManifestJson(e.target.value)}
