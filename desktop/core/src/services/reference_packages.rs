@@ -3,9 +3,9 @@
 //! (not shipped as loose files) so they're compiled, testable, and
 //! versioned with the engine they target. The dev spec ("Top 10 Industry
 //! Data Models & Packaged Business Apps") sequences Field Service and
-//! Property Management first; this module ships Field Service as the
-//! first one, proving the foundation against real content rather than
-//! only the synthetic manifests `industry_data_model.rs`'s tests use.
+//! Property Management first; this module ships both, proving the
+//! foundation against real content rather than only the synthetic
+//! manifests `industry_data_model.rs`'s tests use.
 //!
 //! Where the spec calls for something the current engine genuinely can't
 //! express, that item is left out rather than faked - each gap is called
@@ -13,19 +13,24 @@
 //! once the underlying engine gains the capability:
 //! - Cross-record validation (a business rule reading a *related*
 //!   record's own field, e.g. "the selected Asset must belong to the
-//!   selected Site") - conditions only ever see the triggering record's
-//!   own field values.
+//!   selected Site", or Property Management's "the Unit must not already
+//!   have an overlapping active Lease") - conditions only ever see the
+//!   triggering record's own field values, never a related record's or an
+//!   aggregate across several.
 //! - `date_reached`/`due_overdue` triggers on a custom object - a
 //!   workflow trigger's watchable date fields are one specific, hardcoded
 //!   set of core-entity fields (`models::workflow::date_fields_for`),
-//!   empty for every custom object.
+//!   empty for every custom object. Rules out Field Service's preventive-
+//!   maintenance workflow and Property Management's lease-renewal/
+//!   document-expiry ones.
 //! - A per-object custom status/stage vocabulary using the built-in
 //!   `status_changed` trigger or `status`/`stage` action targets - every
 //!   custom object's built-in status is the fixed Active/Inactive/
-//!   Archived set (`CUSTOM_RECORD_STATUSES`). This package works around
+//!   Archived set (`CUSTOM_RECORD_STATUSES`). Both packages work around
 //!   it the intended way: an ordinary custom select field (`stage` on
-//!   Work Order, `appt_stage` on Service Appointment) carries the real
-//!   domain vocabulary, driving `field_changed`-triggered workflows and
+//!   Work Order, `appt_stage` on Service Appointment, `stage` on Lease,
+//!   `unit_stage` on Unit, ...) carries the real domain vocabulary,
+//!   driving `field_changed`-triggered workflows and
 //!   `field_source: "custom"` rule conditions exactly like any other
 //!   custom field would.
 //! - A workflow triggered by two records getting *linked* via
@@ -34,6 +39,14 @@
 //!   record's own save, not a separate link action against it); see
 //!   `field_service_workflows`'s own doc comment for where this ruled out
 //!   an otherwise-natural automation.
+//! - Conditional, install-time-optional content ("only create this
+//!   relationship/screen if another package is installed") - the
+//!   manifest format has no such conditional; Property Management's own
+//!   optional Field Service integration (spec: "Maintenance Request 1:1
+//!   optional Field Service Work Order") is left out entirely rather than
+//!   shipped as a relationship to an object that may not exist, matching
+//!   the spec's own "must work without it" requirement the honest way -
+//!   by not depending on it at all yet.
 
 use serde_json::json;
 
@@ -370,6 +383,312 @@ fn field_service_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":4,\"target_field_key\":\"last_service_date\",\"target_field_source\":\"custom\",\"value\":null,\"copy_from_field_key\":\"completion_date\"}" }
+            ]
+        }
+    ])
+}
+
+// --- lanesra.property_management -------------------------------------
+
+/// `lanesra.property_management` v1.0.0 - see this module's own doc
+/// comment for what's included and deliberately left out (notably: no
+/// Field Service integration, no lease-overlap/occupancy cross-record
+/// checks, no lease-renewal or document-expiry date-based workflows).
+pub fn property_management_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.property_management",
+        "name": "Property Management",
+        "industry": "Property Management",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "property", "singular_label": "Property", "plural_label": "Properties", "icon": "🏢", "prefix": "PROP", "digits": 4 },
+            { "key": "unit", "singular_label": "Unit", "plural_label": "Units", "icon": "🚪", "prefix": "UNIT", "digits": 5 },
+            { "key": "lease", "singular_label": "Lease", "plural_label": "Leases", "icon": "📃", "prefix": "LSE", "digits": 5 },
+            // Junction object rather than a plain many_to_many relationship, since a party's
+            // "role" (Tenant/Guarantor/Occupant) has nowhere to live on a bare RelationshipInstance.
+            { "key": "lease_party", "singular_label": "Lease Party", "plural_label": "Lease Parties", "icon": "🧑", "prefix": "LP", "digits": 5 },
+            { "key": "rent_schedule", "singular_label": "Rent Schedule Entry", "plural_label": "Rent Schedule", "icon": "💰", "prefix": "RENT", "digits": 6 },
+            { "key": "maintenance_request", "singular_label": "Maintenance Request", "plural_label": "Maintenance Requests", "icon": "🛠", "prefix": "MR", "digits": 5 },
+            { "key": "vendor_assignment", "singular_label": "Vendor Assignment", "plural_label": "Vendor Assignments", "icon": "🧰", "prefix": "VA", "digits": 5 },
+            { "key": "property_document", "singular_label": "Property Document", "plural_label": "Property Documents", "icon": "📄", "prefix": "DOC", "digits": 5 }
+        ],
+        "fields": property_management_fields(),
+        "relationships": property_management_relationships(),
+        "business_rules": property_management_business_rules(),
+        "workflows": property_management_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "lease",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "terms",
+                            "title": "Terms",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["stage", "start_date", "end_date", "rent_amount", "deposit_amount"] }
+                            ],
+                            // Indices into `relationships` below: Lease Parties (3), Rent Schedule (5).
+                            "related": ["3", "5"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Leases by Stage", "entity_type": "lease", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Property Management Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Property Management",
+            "icon": "🏘",
+            "description": "Properties, units, leases, rent schedules and maintenance for residential/commercial property managers.",
+            "object_keys": [
+                "property", "unit", "lease", "lease_party", "rent_schedule",
+                "maintenance_request", "vendor_assignment", "property_document", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // See field_service_manifest_json's own note on mapping the spec's role
+            // names (Property Manager, Leasing, Maintenance Coordinator, ...) onto
+            // this build's actual role set.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "editor" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        // No pure reference/lookup object exists in this data model the way Field
+        // Service's Skill/Territory did (every object here is a live business
+        // record) - nothing to seed under spec 1.1's "reference data only".
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn property_management_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        property_fields(),
+        unit_fields(),
+        lease_fields(),
+        lease_party_fields(),
+        rent_schedule_fields(),
+        maintenance_request_fields(),
+        vendor_assignment_fields(),
+        property_document_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn property_fields() -> serde_json::Value {
+    json!([
+        { "key": "property_type", "entity_type": "property", "label": "Property Type", "field_type": "select", "options": ["Residential", "Commercial", "Mixed Use"], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "address", "entity_type": "property", "label": "Address", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "stage", "entity_type": "property", "label": "Status", "field_type": "select", "options": ["Active", "Inactive", "Sold / No Longer Managed"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn unit_fields() -> serde_json::Value {
+    json!([
+        { "key": "unit_number", "entity_type": "unit", "label": "Unit Number", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "unit_type", "entity_type": "unit", "label": "Unit Type", "field_type": "select", "options": ["Studio", "1BR", "2BR", "3BR+", "Commercial"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "size_sqft", "entity_type": "unit", "label": "Size (sqft)", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "bedrooms", "entity_type": "unit", "label": "Bedrooms", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "rent_target", "entity_type": "unit", "label": "Rent Target", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Written by the Lease activation / termination workflows below.
+        { "key": "unit_stage", "entity_type": "unit", "label": "Occupancy Status", "field_type": "select", "options": ["Vacant", "Reserved", "Occupied", "Maintenance", "Inactive"], "required": true, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Vacant", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn lease_fields() -> serde_json::Value {
+    json!([
+        { "key": "start_date", "entity_type": "lease", "label": "Start Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "end_date", "entity_type": "lease", "label": "End Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "rent_amount", "entity_type": "lease", "label": "Rent Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "deposit_amount", "entity_type": "lease", "label": "Deposit Amount", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "stage", "entity_type": "lease", "label": "Stage", "field_type": "select", "options": ["Draft", "Pending Signature", "Active", "Expiring", "Renewed", "Expired", "Terminated"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn lease_party_fields() -> serde_json::Value {
+    json!([
+        { "key": "role", "entity_type": "lease_party", "label": "Role", "field_type": "select", "options": ["Tenant", "Guarantor", "Occupant"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Tenant", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn rent_schedule_fields() -> serde_json::Value {
+    json!([
+        { "key": "due_date", "entity_type": "rent_schedule", "label": "Due Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "frequency", "entity_type": "rent_schedule", "label": "Frequency", "field_type": "select", "options": ["Monthly", "Quarterly", "Annual"], "required": false, "show_in_list": false, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "Monthly", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "expected_amount", "entity_type": "rent_schedule", "label": "Expected Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "schedule_stage", "entity_type": "rent_schedule", "label": "Status", "field_type": "select", "options": ["Pending", "Paid", "Overdue", "Waived"], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn maintenance_request_fields() -> serde_json::Value {
+    json!([
+        { "key": "category", "entity_type": "maintenance_request", "label": "Category", "field_type": "select", "options": ["Plumbing", "Electrical", "HVAC", "Appliance", "General", "Other"], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "priority", "entity_type": "maintenance_request", "label": "Priority", "field_type": "select", "options": ["Low", "Medium", "High", "Urgent"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Medium", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "description", "entity_type": "maintenance_request", "label": "Description", "field_type": "text", "options": [], "required": true, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "stage", "entity_type": "maintenance_request", "label": "Stage", "field_type": "select", "options": ["New", "Assigned", "In Progress", "Waiting", "Resolved", "Closed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "New", "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Closed by the "Maintenance closure" business rule below.
+        { "key": "resolution", "entity_type": "maintenance_request", "label": "Resolution", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "completed_date", "entity_type": "maintenance_request", "label": "Completed Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn vendor_assignment_fields() -> serde_json::Value {
+    json!([
+        { "key": "assigned_date", "entity_type": "vendor_assignment", "label": "Assigned Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "notes", "entity_type": "vendor_assignment", "label": "Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn property_document_fields() -> serde_json::Value {
+    json!([
+        { "key": "category", "entity_type": "property_document", "label": "Category", "field_type": "select", "options": ["Lease Agreement", "Insurance", "Inspection", "Compliance", "Other"], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "effective_date", "entity_type": "property_document", "label": "Effective Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "expiry_date", "entity_type": "property_document", "label": "Expiry Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: `screen_layouts[0].draft`'s `related`
+/// and both `update_related_record` workflow actions reference these
+/// relationships by their position in this array.
+fn property_management_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "property", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Owner", "reverse_label": "Properties", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "unit", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Units", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 2 */ { "source_entity_type": "lease", "target_entity_type": "unit", "relationship_type": "many_to_one", "forward_label": "Unit", "reverse_label": "Leases", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 3 */ { "source_entity_type": "lease_party", "target_entity_type": "lease", "relationship_type": "many_to_one", "forward_label": "Lease", "reverse_label": "Parties", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 4 */ { "source_entity_type": "lease_party", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Contact", "reverse_label": "Lease Roles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 5 */ { "source_entity_type": "rent_schedule", "target_entity_type": "lease", "relationship_type": "many_to_one", "forward_label": "Lease", "reverse_label": "Rent Schedule", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 2 },
+        /* 6 */ { "source_entity_type": "maintenance_request", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Maintenance Requests", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 7 */ { "source_entity_type": "maintenance_request", "target_entity_type": "unit", "relationship_type": "many_to_one", "forward_label": "Unit", "reverse_label": "Maintenance Requests", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 8 */ { "source_entity_type": "vendor_assignment", "target_entity_type": "maintenance_request", "relationship_type": "many_to_one", "forward_label": "Maintenance Request", "reverse_label": "Vendor Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 9 */ { "source_entity_type": "vendor_assignment", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Vendor", "reverse_label": "Vendor Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 10 */ { "source_entity_type": "property_document", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Documents", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 3 }
+    ])
+}
+
+/// Two of the spec's four rules - "Occupancy conflict" and "Lease
+/// activation"'s own eligibility checks both need cross-record/aggregate
+/// reads (another Lease on the same Unit; counting linked Lease Parties)
+/// no condition can do; see this module's own doc comment.
+fn property_management_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "lease",
+            "name": "Lease date validation",
+            "description": "A lease's end date must be after its start date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "end_date", "operator": "on_or_before", "value": "", "compare_field_source": "custom", "compare_field_key": "start_date" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Lease end date must be after the start date." }
+            ]
+        },
+        {
+            "entity_type": "maintenance_request",
+            "name": "Maintenance closure",
+            "description": "A closed maintenance request must record its resolution and completion date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Closed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "resolution", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// Three of the spec's five workflows - "Lease renewal" and "Document
+/// expiry" both need a `date_reached` trigger on a custom object, which
+/// the engine doesn't support (see this module's own doc comment).
+/// "Maintenance intake"'s optional Work Order creation is left out for
+/// the same reason the Field Service relationship itself is: no
+/// conditional-on-another-package's-presence content in the manifest
+/// format yet. "Lease termination/expiry" simplifies away the spec's
+/// "unless another active lease exists" clause - checking that needs
+/// reading every other Lease linked to the same Unit, a cross-record
+/// aggregate no condition can express.
+fn property_management_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "lease",
+            "name": "Lease activation",
+            "description": "Activating a lease marks its unit occupied.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Active" }
+            ],
+            "actions": [
+                { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":2,\"target_field_key\":\"unit_stage\",\"target_field_source\":\"custom\",\"value\":\"Occupied\",\"copy_from_field_key\":null}" }
+            ]
+        },
+        {
+            "entity_type": "lease",
+            "name": "Lease termination or expiry",
+            "description": "Ending a lease frees up its unit.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "in_list", "value": "Expired|Terminated" }
+            ],
+            "actions": [
+                { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":2,\"target_field_key\":\"unit_stage\",\"target_field_source\":\"custom\",\"value\":\"Vacant\",\"copy_from_field_key\":null}" }
+            ]
+        },
+        {
+            "entity_type": "maintenance_request",
+            "name": "Maintenance intake",
+            "description": "Give the maintenance coordinator a task as soon as a request comes in.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Triage this maintenance request\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
         }
     ])
