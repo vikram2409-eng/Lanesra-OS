@@ -249,6 +249,14 @@ function ensureAdminData(){
  if(!data.dashboards.some(d=>d.isDefault))data.dashboards[0].isDefault=true;
  if(!data.apps)data.apps=[];
  (data.apps||[]).forEach(a=>{if(!a.permissions)a.permissions=[];if(!a.objectKeys)a.objectKeys=[];if(a.description===undefined)a.description=''});
+ // Industry Data Model / App Catalog - see REFERENCE_PACKAGES below.
+ // appPackages is the "imported, not yet installed" catalog;
+ // installedApps records what installReferencePackage actually created, so
+ // it can be deactivated/reactivated as one unit without re-parsing the
+ // package definition.
+ if(!data.appPackages)data.appPackages=[];
+ if(!data.installedApps)data.installedApps=[];
+ (data.installedApps||[]).forEach(a=>{if(a.status===undefined)a.status='active'});
  if(!data.integrationJobs)data.integrationJobs=[];
  if(!data.apiEndpoints)data.apiEndpoints=[];
  if(!data.externalConnections)data.externalConnections=[];
@@ -390,11 +398,11 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering','kpis','dashboards']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users']},
- {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts','apps']},
+ {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts','apps','packages']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
 ];
@@ -1676,7 +1684,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -2379,6 +2387,208 @@ function wireAppEditor(body,app,rerender){
   app.permissions=app.permissions.filter(p=>p.id!==b.dataset.revokePerm);
   save();rerender();
  });
+}
+// ---- Industry Data Model / App Catalog -------------------------------------
+// Mirrors the desktop edition's industry_package_service: an Administrator
+// imports a package manifest into a local catalog for review, then installs
+// it, which creates real Custom Objects/Fields/Relationships/Business Rules/
+// Workflow rules and a published App in one step - every artifact type this
+// demo already supports elsewhere in Admin, just assembled from one bundle
+// instead of by hand. There's no free-text manifest upload here (nothing in
+// this browser-only demo parses arbitrary JSON against a server-side
+// schema) - REFERENCE_PACKAGES holds the two bundled starters as plain JS,
+// the same "compiled, not user-supplied" approach the desktop edition's own
+// reference_packages.rs takes for its starter packages.
+//
+// Two real engine gaps surfaced while porting the desktop edition's Field
+// Service and Property Management packages here, both left deliberately
+// unfixed and worked around below rather than faked:
+//  - Workflow rules only ever fire on an *edit* that changes a watched
+//    field (see the wasEdit&&before guard around executeWorkflowAction's
+//    call site) - there's no "on record created" trigger in this demo the
+//    way desktop's record_created trigger type provides. Every workflow
+//    below is written as a field-changed-on-edit rule instead (e.g. "stage
+//    becomes Completed"), never "when first created" - the same fix desktop
+//    had to make for its own "work order scheduled" workflow, just forced
+//    on every workflow here rather than just one.
+//  - The Lease date-validation rule desktop ships (block save when an end
+//    date is on/before a start date) isn't reproduced here: this demo's
+//    greater_than/less_than operators compare with `Number(v)`, which is
+//    NaN for an ISO date string like "2026-06-01" - a pre-existing bug in
+//    the condition engine, unrelated to this feature, and out of scope to
+//    fix here. Both packages below only use operators (equals/is_empty/
+//    in_list) that already work correctly on every field type.
+// update_related_record itself needed one real fix, not a workaround: it
+// only ever consulted the static built-in foreign-key graph (RELATIONS),
+// so it silently no-op'd for any relationship between two Custom Objects -
+// exactly what every relationship in both packages below is. See
+// customRelationTargetsFor and executeWorkflowAction's update_related_record
+// branch above for the fix (falls back to an admin-defined Custom
+// Relationship when the built-in graph has nothing).
+function freshFieldDef(entity,key,label,type,options){
+ return {id:uid(),entity,key,label,type,options:options||'',active:true,defaultValue:'',unique:false,helpText:'',placeholder:'',required:false,maxLength:null,pattern:'',minValue:'',maxValue:'',searchable:false,filterable:false,reportable:true,hiddenByDefault:false};
+}
+const REFERENCE_PACKAGES={
+ field_service:{
+  packageId:'lanesra.field_service',name:'Field Service',industry:'Field Service',version:'1.0.0',
+  description:'Sites, assets, work orders and appointments for a field service crew - dispatch work, track what was serviced, and close out completed jobs.',
+  appIcon:'🔧',
+  objects:[
+   {key:'service_site',label:'Service Site',labelPlural:'Service Sites',icon:'📍',prefix:'SITE',digits:4},
+   {key:'asset',label:'Asset',labelPlural:'Assets',icon:'🔩',prefix:'AST',digits:4},
+   {key:'work_order',label:'Work Order',labelPlural:'Work Orders',icon:'🛠️',prefix:'WO',digits:4},
+   {key:'service_appointment',label:'Appointment',labelPlural:'Appointments',icon:'📅',prefix:'APT',digits:4},
+  ],
+  fields:[
+   ['service_site','address','Address','text'],['service_site','city','City','text'],
+   ['asset','model','Model','text'],['asset','serial_number','Serial Number','text'],
+   ['asset','last_service_status','Last Service Status','select','Pending|Serviced'],
+   ['work_order','wo_stage','Stage','select','New|Scheduled|In Progress|Completed|Cancelled'],
+   ['work_order','priority','Priority','select','Low|Medium|High|Urgent'],
+   ['work_order','resolution','Resolution','text'],['work_order','completion_date','Completion Date','date'],
+   ['service_appointment','appt_stage','Stage','select','Scheduled|En Route|In Progress|Completed|Cancelled'],
+   ['service_appointment','actual_start','Actual Start','date'],['service_appointment','actual_end','Actual End','date'],
+   ['service_appointment','outcome','Outcome','text'],
+  ],
+  relationships:[
+   {source:'work_order',target:'service_site',relType:'many_to_one',forwardLabel:'Service Site',reverseLabel:'Work Orders'},
+   {source:'work_order',target:'asset',relType:'many_to_one',forwardLabel:'Asset',reverseLabel:'Work Orders'},
+   {source:'service_appointment',target:'work_order',relType:'many_to_one',forwardLabel:'Work Order',reverseLabel:'Appointments'},
+  ],
+  rules:[
+   {entity:'work_order',matchType:'all',
+    conditions:[{fieldKey:'wo_stage',operator:'equals',value:'Completed',compareField:null,groupId:null},{fieldKey:'resolution',operator:'is_empty',value:'',compareField:null,groupId:'g1'},{fieldKey:'completion_date',operator:'is_empty',value:'',compareField:null,groupId:'g1'}],
+    actions:[{type:'block_save',message:'Enter a resolution and completion date before marking a work order Completed.'}]},
+   {entity:'service_appointment',matchType:'all',
+    conditions:[{fieldKey:'appt_stage',operator:'equals',value:'Completed',compareField:null,groupId:null},{fieldKey:'actual_start',operator:'is_empty',value:'',compareField:null,groupId:'g1'},{fieldKey:'actual_end',operator:'is_empty',value:'',compareField:null,groupId:'g1'},{fieldKey:'outcome',operator:'is_empty',value:'',compareField:null,groupId:'g1'}],
+    actions:[{type:'block_save',message:'Enter actual start/end times and an outcome before marking an appointment Completed.'}]},
+  ],
+  workflows:[
+   {entity:'work_order',matchType:'all',notify:true,
+    conditions:[{fieldKey:'wo_stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
+    actions:[{type:'update_related_record',relTargetEntity:'asset',relTargetField:'last_service_status',relValue:'Serviced'},{type:'create_task',taskTitle:'Review completed work order',daysOffset:1}]},
+  ],
+ },
+ property_management:{
+  packageId:'lanesra.property_management',name:'Property Management',industry:'Real Estate',version:'1.0.0',
+  description:'Properties, units, leases and maintenance requests - activate or end a lease and its unit\'s occupancy follows automatically.',
+  appIcon:'🏢',
+  objects:[
+   {key:'property',label:'Property',labelPlural:'Properties',icon:'🏢',prefix:'PROP',digits:4},
+   {key:'unit',label:'Unit',labelPlural:'Units',icon:'🚪',prefix:'UNIT',digits:4},
+   {key:'lease',label:'Lease',labelPlural:'Leases',icon:'📄',prefix:'LSE',digits:4},
+   {key:'maintenance_request',label:'Maintenance Request',labelPlural:'Maintenance Requests',icon:'🔧',prefix:'MNT',digits:4},
+  ],
+  fields:[
+   ['property','address','Address','text'],['property','city','City','text'],
+   ['unit','unit_stage','Occupancy','select','Vacant|Occupied|Under Maintenance'],['unit','bedrooms','Bedrooms','number'],
+   ['lease','lease_stage','Stage','select','Draft|Active|Expired|Terminated|Renewed'],
+   ['lease','start_date','Start Date','date'],['lease','end_date','End Date','date'],['lease','monthly_rent','Monthly Rent','number'],
+   ['maintenance_request','mr_stage','Stage','select','New|Assigned|In Progress|Closed'],
+   ['maintenance_request','description','Description','text'],['maintenance_request','resolution','Resolution','text'],['maintenance_request','completed_date','Completed Date','date'],
+  ],
+  relationships:[
+   {source:'unit',target:'property',relType:'many_to_one',forwardLabel:'Property',reverseLabel:'Units'},
+   {source:'lease',target:'unit',relType:'many_to_one',forwardLabel:'Unit',reverseLabel:'Leases'},
+   {source:'maintenance_request',target:'unit',relType:'many_to_one',forwardLabel:'Unit',reverseLabel:'Maintenance Requests'},
+  ],
+  rules:[
+   {entity:'maintenance_request',matchType:'all',
+    conditions:[{fieldKey:'mr_stage',operator:'equals',value:'Closed',compareField:null,groupId:null},{fieldKey:'resolution',operator:'is_empty',value:'',compareField:null,groupId:'g1'},{fieldKey:'completed_date',operator:'is_empty',value:'',compareField:null,groupId:'g1'}],
+    actions:[{type:'block_save',message:'Enter a resolution and completed date before closing a maintenance request.'}]},
+  ],
+  workflows:[
+   {entity:'lease',matchType:'all',notify:false,
+    conditions:[{fieldKey:'lease_stage',operator:'equals',value:'Active',compareField:null,groupId:null}],
+    actions:[{type:'update_related_record',relTargetEntity:'unit',relTargetField:'unit_stage',relValue:'Occupied'}]},
+   {entity:'lease',matchType:'all',notify:false,
+    conditions:[{fieldKey:'lease_stage',operator:'in_list',value:'Expired|Terminated',compareField:null,groupId:null}],
+    actions:[{type:'update_related_record',relTargetEntity:'unit',relTargetField:'unit_stage',relValue:'Vacant'}]},
+   {entity:'maintenance_request',matchType:'all',notify:true,
+    conditions:[{fieldKey:'mr_stage',operator:'equals',value:'Assigned',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Follow up on assigned maintenance request',daysOffset:1}]},
+  ],
+ },
+};
+// Every custom-object key a package would create - used to block importing/
+// installing a package that collides with an object already in this
+// workspace (matches desktop's own import-time collision check).
+function packageObjectKeys(pkg){return pkg.objects.map(o=>o.key)}
+function packageArtifactCount(pkg){return pkg.objects.length+pkg.fields.length+pkg.relationships.length+pkg.rules.length+pkg.workflows.length}
+function packageCollision(pkg){return packageObjectKeys(pkg).find(k=>(data.customObjects||[]).some(o=>o.key===k)||RESERVED_ENTITY_KEYS.includes(k))}
+function importPackage(key){
+ const pkg=REFERENCE_PACKAGES[key]; if(!pkg)return;
+ if((data.appPackages||[]).some(p=>p.key===key))return toast('Already imported');
+ data.appPackages.push({id:uid(),key,packageId:pkg.packageId,name:pkg.name,industry:pkg.industry,version:pkg.version,importedAt:new Date().toISOString()});
+ save();toast(`${pkg.name} imported - review it below, then Install`);
+}
+// Creates every artifact a package defines - Custom Objects, their fields,
+// the relationships between them, business rules, workflow rules, and a
+// published App grouping the lot - in one step, then records what it did in
+// data.installedApps so Deactivate/Reactivate can act on the whole bundle
+// without re-reading the package definition. Mirrors desktop's transactional
+// industry_package_service::install, minus the rollback-on-error machinery
+// this demo's single-threaded, no-network save doesn't need.
+function installReferencePackage(key){
+ const pkg=REFERENCE_PACKAGES[key]; if(!pkg)return;
+ const collision=packageCollision(pkg);
+ if(collision)return alert(`Cannot install ${pkg.name} — "${collision}" is already used by another object in this workspace.`);
+ pkg.objects.forEach(o=>{data.customObjects.push({id:uid(),key:o.key,label:o.label,labelPlural:o.labelPlural,icon:o.icon,prefix:o.prefix,digits:o.digits,active:true});data[o.key]=[]});
+ pkg.fields.forEach(([entity,key,label,type,options])=>data.customFields.push(stampCreate(freshFieldDef(entity,key,label,type,options))));
+ const relIds={};
+ pkg.relationships.forEach(r=>{
+  const relKey=`${r.source}_${r.target}`;
+  const rel=stampCreate({id:uid(),key:relKey,sourceEntity:r.source,targetEntity:r.target,relType:r.relType,forwardLabel:r.forwardLabel,reverseLabel:r.reverseLabel,deleteBehavior:'restrict',showRelatedList:true,required:false,active:true,protected:false});
+  data.relationshipDefinitions.push(rel);
+  relIds[relKey]=rel.id;
+ });
+ pkg.rules.forEach(r=>data.fieldRules.push(stampCreate({id:uid(),active:true,entity:r.entity,matchType:r.matchType,conditions:r.conditions,actions:r.actions})));
+ pkg.workflows.forEach(w=>data.workflowRules.push(stampCreate({id:uid(),active:true,conditionsMerged:true,entity:w.entity,matchType:w.matchType,conditions:w.conditions,actions:w.actions,notify:w.notify})));
+ const app=freshApp(pkg.name,pkg.appIcon);
+ app.description=pkg.description;
+ app.objectKeys=packageObjectKeys(pkg);
+ app.isPublished=true;
+ data.apps.push(app);
+ data.installedApps.push({id:uid(),key,packageId:pkg.packageId,name:pkg.name,industry:pkg.industry,version:pkg.version,status:'active',appId:app.id,objectKeys:app.objectKeys,installedAt:new Date().toISOString()});
+ data.appPackages=(data.appPackages||[]).filter(p=>p.key!==key);
+ syncCustomObjectRegistry();
+ renderSidebarNav();
+ save();toast(`${pkg.name} installed`);
+}
+// Deactivate hides the package's objects from nav/creation and unpublishes
+// its App, without deleting any data - the same "safe to undo" semantics
+// Custom Objects' own deactivate already has. Reactivate reverses both.
+function setInstalledAppActive(installedId,activate){
+ const installed=(data.installedApps||[]).find(a=>a.id===installedId); if(!installed)return;
+ installed.status=activate?'active':'inactive';
+ (installed.objectKeys||[]).forEach(k=>{const o=customObjectByKey(k); if(o)o.active=activate});
+ const app=(data.apps||[]).find(a=>a.id===installed.appId);
+ if(app)app.isPublished=activate;
+ if(!activate&&activeAppId===installed.appId)activeAppId=null;
+ syncCustomObjectRegistry();
+ renderSidebarNav();
+ save();toast(activate?'App reactivated':'App deactivated');
+}
+function packagesTab(body){
+ const catalogKeys=Object.keys(REFERENCE_PACKAGES).filter(k=>!(data.appPackages||[]).some(p=>p.key===k)&&!(data.installedApps||[]).some(a=>a.key===k));
+ const imported=data.appPackages||[];
+ const installed=data.installedApps||[];
+ body.innerHTML=`
+ <div class="panel"><h3 style="margin-top:0">Available starter packages</h3>
+ <p class="muted">Bundled reference packages - each creates a small, working set of Custom Objects, fields, relationships, business rules and workflow automation for a specific industry, plus an App grouping them together. Import one to review what it contains, then install it.</p>
+ ${catalogKeys.length?`<div style="display:flex;gap:12px;flex-wrap:wrap">${catalogKeys.map(k=>{const p=REFERENCE_PACKAGES[k];return `<div class="panel" style="flex:1;min-width:240px;background:var(--surface-alt,#f7f8fc)"><div style="font-weight:700">${p.appIcon} ${p.name}</div><p class="muted" style="font-size:12px">${p.description}</p><p class="muted" style="font-size:12px">${p.objects.length} objects · ${p.fields.length} fields · ${p.relationships.length} relationships · ${p.rules.length} rules · ${p.workflows.length} workflows</p><button class="btn btn-secondary" data-import="${k}">Import</button></div>`}).join('')}</div>`:'<div class="empty">Every starter package has been imported or installed.</div>'}
+ </div>
+ <div class="panel"><h3 style="margin-top:0">Imported packages</h3>
+ ${imported.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Package</th><th>Industry</th><th>Version</th><th>Imported</th><th></th></tr></thead><tbody>${imported.map(p=>`<tr><td>${REFERENCE_PACKAGES[p.key]?.appIcon||''} ${p.name}</td><td>${p.industry}</td><td>${p.version}</td><td>${new Date(p.importedAt).toLocaleString()}</td><td><div class="actions"><button class="btn btn-primary" data-install="${p.key}">Install</button><button class="icon-btn" data-discard="${p.key}">Discard</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing imported yet.</div>'}
+ </div>
+ <div class="panel"><h3 style="margin-top:0">Installed apps</h3>
+ ${installed.length?`<div class="table-wrap"><table class="table"><thead><tr><th>App</th><th>Industry</th><th>Version</th><th>Creates</th><th>Status</th><th></th></tr></thead><tbody>${installed.map(a=>`<tr><td>${REFERENCE_PACKAGES[a.key]?.appIcon||''} ${a.name}</td><td>${a.industry}</td><td>${a.version}</td><td>${(a.objectKeys||[]).length} object${(a.objectKeys||[]).length===1?'':'s'}</td><td>${badgeMaybe(a.status==='active'?'Active':'Inactive')}</td><td>${a.status==='active'?`<button class="btn btn-secondary" data-deactivate="${a.id}">Deactivate</button>`:`<button class="btn btn-secondary" data-reactivate="${a.id}">Reactivate</button>`}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing installed yet.</div>'}
+ </div>`;
+ body.querySelectorAll('[data-import]').forEach(b=>b.onclick=()=>{importPackage(b.dataset.import);renderAdminTab()});
+ body.querySelectorAll('[data-discard]').forEach(b=>b.onclick=()=>{data.appPackages=(data.appPackages||[]).filter(p=>p.key!==b.dataset.discard);save();toast('Removed from catalog');renderAdminTab()});
+ body.querySelectorAll('[data-install]').forEach(b=>b.onclick=()=>{installReferencePackage(b.dataset.install);renderAdminTab()});
+ body.querySelectorAll('[data-deactivate]').forEach(b=>b.onclick=()=>{setInstalledAppActive(b.dataset.deactivate,false);renderAdminTab()});
+ body.querySelectorAll('[data-reactivate]').forEach(b=>b.onclick=()=>{setInstalledAppActive(b.dataset.reactivate,true);renderAdminTab()});
 }
 // ---- Integrations (Phase 5: UI-only simulation) ---------------------------
 // New to the demo (and not on desktop either): scheduled data jobs, exposed
@@ -3110,7 +3320,18 @@ function describeWorkflowAction(a,entityKey){
  }
  return `create task "${a.taskTitle||''}" (${a.daysOffset?`due ${a.daysOffset} day(s) later`:'due same day'})`;
 }
-function relTargetsFor(entityKey){return [...new Set((RELATIONS[entityKey]||[]).map(x=>x.target))]}
+// Every other entity type reachable from `entityKey` through an active,
+// admin-defined Custom Relationship (data.relationshipDefinitions) - in
+// either direction, since update_related_record doesn't care which side
+// is "source". This is the Custom Relationships equivalent of RELATIONS'
+// hardcoded built-in foreign-key graph below - added for the Industry
+// Data Model reference packages, whose objects are entirely custom and so
+// have no entry in RELATIONS at all.
+function customRelationTargetsFor(entityKey){
+ return (data.relationshipDefinitions||[]).filter(d=>d.active&&(d.sourceEntity===entityKey||d.targetEntity===entityKey))
+  .map(d=>d.sourceEntity===entityKey?d.targetEntity:d.sourceEntity);
+}
+function relTargetsFor(entityKey){return [...new Set([...(RELATIONS[entityKey]||[]).map(x=>x.target),...customRelationTargetsFor(entityKey)])]}
 // Executes one workflow action against the record that just triggered its
 // rule. Returns a short human description of what happened, for the
 // notification message - or null when the action is a legitimate no-op
@@ -3164,26 +3385,42 @@ function executeWorkflowAction(a,key,record){
  }
  if(a.type==='update_related_record'){
   const rel=(RELATIONS[key]||[]).find(x=>x.target===a.relTargetEntity);
-  if(!rel||!a.relTargetField)return null;
-  const {target:targetEntity,fk,direction}=rel;
-  let linked;
-  if(direction==='down'){
-   // Target rows carry a foreign key pointing at this record.
-   linked=(data[targetEntity]||[]).filter(x=>x[fk]===record.id);
-  }else if(direction==='up'){
-   // This record's own foreign key points at a single parent row.
-   const parent=byId(targetEntity,record[fk]);
-   linked=parent?[parent]:[];
-  }else if(direction==='taskBack'){
-   // Tasks linked to this record via the polymorphic relatedType/relatedId pair.
-   linked=data.tasks.filter(t=>t.relatedType===relatedTypeFor[key]&&t.relatedId===record.id);
-  }else{ // 'taskLink': the single record this task itself points at
-   if(record.relatedType!==relatedTypeFor[targetEntity])linked=[];
-   else{const parent=byId(targetEntity,record.relatedId);linked=parent?[parent]:[]}
+  if(rel){
+   const {target:targetEntity,fk,direction}=rel;
+   let linked;
+   if(direction==='down'){
+    // Target rows carry a foreign key pointing at this record.
+    linked=(data[targetEntity]||[]).filter(x=>x[fk]===record.id);
+   }else if(direction==='up'){
+    // This record's own foreign key points at a single parent row.
+    const parent=byId(targetEntity,record[fk]);
+    linked=parent?[parent]:[];
+   }else if(direction==='taskBack'){
+    // Tasks linked to this record via the polymorphic relatedType/relatedId pair.
+    linked=data.tasks.filter(t=>t.relatedType===relatedTypeFor[key]&&t.relatedId===record.id);
+   }else{ // 'taskLink': the single record this task itself points at
+    if(record.relatedType!==relatedTypeFor[targetEntity])linked=[];
+    else{const parent=byId(targetEntity,record.relatedId);linked=parent?[parent]:[]}
+   }
+   if(!linked.length||!a.relTargetField)return null;
+   linked.forEach(x=>{x[a.relTargetField]=a.relValue});
+   return `set ${fieldLabelFor(targetEntity,a.relTargetField)} = "${a.relValue}" on ${linked.length} related ${entityLabel(targetEntity).toLowerCase()}`;
   }
+  // Not in the static built-in graph - fall back to an active admin-defined
+  // Custom Relationship instead (see customRelationTargetsFor above),
+  // resolved through data.relationshipInstances exactly the way
+  // relatedRecordsFor() reads a record's related list, from whichever side
+  // `key` sits on. This is what makes update_related_record usable for the
+  // Industry Data Model reference packages, whose objects are entirely
+  // custom and never appear in RELATIONS.
+  const def=(data.relationshipDefinitions||[]).find(d=>d.active&&((d.sourceEntity===key&&d.targetEntity===a.relTargetEntity)||(d.targetEntity===key&&d.sourceEntity===a.relTargetEntity)));
+  if(!def||!a.relTargetField)return null;
+  const linked=def.sourceEntity===key
+   ?(data.relationshipInstances||[]).filter(i=>i.definitionId===def.id&&i.sourceId===record.id).map(i=>byId(i.targetEntity,i.targetId)).filter(Boolean)
+   :(data.relationshipInstances||[]).filter(i=>i.definitionId===def.id&&i.targetId===record.id).map(i=>byId(i.sourceEntity,i.sourceId)).filter(Boolean);
   if(!linked.length)return null;
   linked.forEach(x=>{x[a.relTargetField]=a.relValue});
-  return `set ${fieldLabelFor(targetEntity,a.relTargetField)} = "${a.relValue}" on ${linked.length} related ${entityLabel(targetEntity).toLowerCase()}`;
+  return `set ${fieldLabelFor(a.relTargetEntity,a.relTargetField)} = "${a.relValue}" on ${linked.length} related ${entityLabel(a.relTargetEntity).toLowerCase()}`;
  }
  // update_field/set_default_field/clear_field: the companion to
  // update_related_record for the common case of "when this record's
