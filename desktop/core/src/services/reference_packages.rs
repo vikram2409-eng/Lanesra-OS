@@ -2,10 +2,10 @@
 //! `models::industry_package`/`industry_package_service`, kept in Rust
 //! (not shipped as loose files) so they're compiled, testable, and
 //! versioned with the engine they target. The dev spec ("Top 10 Industry
-//! Data Models & Packaged Business Apps") sequences Field Service and
-//! Property Management first; this module ships both, proving the
-//! foundation against real content rather than only the synthetic
-//! manifests `industry_data_model.rs`'s tests use.
+//! Data Models & Packaged Business Apps") sequences Field Service,
+//! Property Management and Construction & Contractors first; this module
+//! ships all three, proving the foundation against real content rather
+//! than only the synthetic manifests `industry_data_model.rs`'s tests use.
 //!
 //! Where the spec calls for something the current engine genuinely can't
 //! express, that item is left out rather than faked - each gap is called
@@ -47,6 +47,21 @@
 //!   shipped as a relationship to an object that may not exist, matching
 //!   the spec's own "must work without it" requirement the honest way -
 //!   by not depending on it at all yet.
+//! - An accumulating/incrementing workflow action - `update_related_record`
+//!   only ever *sets* a related record's field to a literal or a value
+//!   copied from the triggering record, it never reads the target's
+//!   current value first. Construction & Contractors' "Change approved
+//!   increments Project's approved change value" is left unautomated for
+//!   this reason (see `construction_workflows`'s own doc comment) rather
+//!   than shipped as an overwrite that would silently erase every earlier
+//!   approval's contribution instead of accumulating them.
+//! - A conditional bulk update through a relationship - `update_related_record`
+//!   writes to *every* record currently linked through the named
+//!   relationship, with no way to filter which ones by another field on
+//!   those records. Construction & Contractors' "Project close closes
+//!   outstanding tasks that are configured auto-close" needs exactly that
+//!   filter (only the flagged tasks, not every task on the project) and
+//!   is left out for the same reason.
 
 use serde_json::json;
 
@@ -689,6 +704,336 @@ fn property_management_workflows() -> serde_json::Value {
             "conditions": [],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Triage this maintenance request\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+// --- lanesra.construction -----------------------------------------------
+
+/// `lanesra.construction` v1.0.0 - the third package, sequenced right
+/// after Property Management per the dev spec. See this module's own doc
+/// comment for what's included and deliberately left out.
+///
+/// A few simplifications relative to the spec's own object model, beyond
+/// the standard omissions this module's doc comment already covers:
+/// - No separate Project Site object - the spec itself lists it as
+///   "Custom or shared Site"; its two fields (address, access notes) are
+///   folded straight onto Project instead of a second object.
+/// - No separate Estimate object - the spec's own technical note says
+///   "Estimate screen can extend Quote rather than create a parallel
+///   quote engine", so Project relates to the core Quote object directly.
+/// - "Project Manager" is the custom object's own built-in owner field,
+///   not a duplicate custom field.
+pub fn construction_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.construction",
+        "name": "Construction & Contractors",
+        "industry": "Construction",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "project", "singular_label": "Project", "plural_label": "Projects", "icon": "🏗", "prefix": "PROJ", "digits": 4 },
+            { "key": "work_package", "singular_label": "Work Package", "plural_label": "Work Packages", "icon": "📦", "prefix": "WP", "digits": 4 },
+            { "key": "change_order", "singular_label": "Change Order", "plural_label": "Change Orders", "icon": "📝", "prefix": "CO", "digits": 4 },
+            { "key": "subcontract_assignment", "singular_label": "Subcontract Assignment", "plural_label": "Subcontract Assignments", "icon": "🤝", "prefix": "SUB", "digits": 4 },
+            { "key": "inspection", "singular_label": "Inspection", "plural_label": "Inspections", "icon": "🔎", "prefix": "INSP", "digits": 4 }
+        ],
+        "fields": construction_fields(),
+        "relationships": construction_relationships(),
+        "business_rules": construction_business_rules(),
+        "workflows": construction_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "project",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["stage", "start_date", "end_date", "actual_end_date", "contract_value", "approved_change_value"] },
+                                { "id": "site", "title": "Site", "columns": 1, "fields": ["site_address", "site_access_notes"] }
+                            ],
+                            // Indices into `relationships` below: Work Packages (1), Change Orders (2), Inspections (5), Invoices (8).
+                            "related": ["1", "2", "5", "8"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Projects by Stage", "entity_type": "project", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Construction Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Construction & Contractors",
+            "icon": "🏗️",
+            "description": "Projects, work packages, change orders, subcontractor assignments and inspections for general contractors and specialty trades.",
+            "object_keys": [
+                "project", "work_package", "change_order", "subcontract_assignment", "inspection", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // See field_service_manifest_json's own note on mapping the spec's role
+            // names (Construction Admin, Project Manager, Estimator, Site Supervisor)
+            // onto this build's actual role set.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "viewer" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        // No pure reference/lookup object exists here either (same as Property
+        // Management) - every object is a live project-operations record.
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn construction_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        project_fields(),
+        construction_opportunity_fields(),
+        work_package_fields(),
+        change_order_fields(),
+        subcontract_assignment_fields(),
+        inspection_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn project_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "project", "label": "Stage", "field_type": "select", "options": ["Lead/Estimating", "Awarded", "Planning", "Active", "On Hold", "Substantially Complete", "Closed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Lead/Estimating", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "site_address", "entity_type": "project", "label": "Site Address", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "site_access_notes", "entity_type": "project", "label": "Site Access Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Gate codes, parking, hazards, etc.", "placeholder": null },
+        { "key": "start_date", "entity_type": "project", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "end_date", "entity_type": "project", "label": "Planned End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Closed by the "Close project" business rule below.
+        { "key": "actual_end_date", "entity_type": "project", "label": "Actual End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "contract_value", "entity_type": "project", "label": "Contract Value", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 6, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Manually maintained, not auto-incremented by the Change approval workflow -
+        // see this module's own doc comment on the missing accumulate/increment action.
+        { "key": "approved_change_value", "entity_type": "project", "label": "Approved Change Value", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 7, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": "0", "is_unique": false, "help_text": "Update this manually when a change order is approved - see the 'Change order approved' workflow's notification.", "placeholder": null }
+    ])
+}
+
+/// A custom field on the *built-in* Opportunity entity, not on any custom
+/// object here - custom fields work on any of the nine built-in entity
+/// types as well as custom objects (see `custom_field_service`), which is
+/// what makes the spec's "Opportunity Won AND 'Create Project' enabled"
+/// condition on the Opportunity Won workflow expressible at all.
+fn construction_opportunity_fields() -> serde_json::Value {
+    json!([
+        { "key": "create_project_enabled", "entity_type": "Opportunity", "label": "Create Project on Won", "field_type": "boolean", "options": [], "required": false, "show_in_list": false, "sort_order": 100, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": "When this opportunity is marked Won, automatically create a Project shell linked to it.", "placeholder": null }
+    ])
+}
+
+fn work_package_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "work_package", "label": "Stage", "field_type": "select", "options": ["Planned", "Ready", "In Progress", "Blocked", "Complete"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Planned", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "trade_scope", "entity_type": "work_package", "label": "Trade / Scope", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "budget", "entity_type": "work_package", "label": "Budget", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "start_date", "entity_type": "work_package", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "end_date", "entity_type": "work_package", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Complete by the "Work package complete" business rule below.
+        { "key": "completion_date", "entity_type": "work_package", "label": "Completion Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn change_order_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "change_order", "label": "Stage", "field_type": "select", "options": ["Draft", "Submitted", "Approved", "Rejected", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reason", "entity_type": "change_order", "label": "Reason", "field_type": "text", "options": [], "required": true, "show_in_list": false, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount", "entity_type": "change_order", "label": "Requested Amount", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "requested_date", "entity_type": "change_order", "label": "Requested Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Both required-when-Approved by the "Change approval" business rule below.
+        { "key": "approved_date", "entity_type": "change_order", "label": "Approved Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "approved_amount", "entity_type": "change_order", "label": "Approved Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 5, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn subcontract_assignment_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "subcontract_assignment", "label": "Stage", "field_type": "select", "options": ["Pending", "Confirmed", "Active", "Completed", "Cancelled"], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount", "entity_type": "subcontract_assignment", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn inspection_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "inspection", "label": "Stage", "field_type": "select", "options": ["Planned", "Passed", "Failed", "Reinspection Required"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Planned", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "inspection_type", "entity_type": "inspection", "label": "Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "due_date", "entity_type": "inspection", "label": "Due Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "completed_date", "entity_type": "inspection", "label": "Completed Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "notes", "entity_type": "inspection", "label": "Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related` and the
+/// Opportunity-Won workflow's `create_record` action reference these
+/// relationships by their position in this array.
+fn construction_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "project", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Customer", "reverse_label": "Projects", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "work_package", "target_entity_type": "project", "relationship_type": "many_to_one", "forward_label": "Project", "reverse_label": "Work Packages", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 2 */ { "source_entity_type": "change_order", "target_entity_type": "project", "relationship_type": "many_to_one", "forward_label": "Project", "reverse_label": "Change Orders", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 3 */ { "source_entity_type": "subcontract_assignment", "target_entity_type": "work_package", "relationship_type": "many_to_one", "forward_label": "Work Package", "reverse_label": "Subcontract Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 4 */ { "source_entity_type": "subcontract_assignment", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Vendor", "reverse_label": "Subcontract Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 5 */ { "source_entity_type": "inspection", "target_entity_type": "project", "relationship_type": "many_to_one", "forward_label": "Project", "reverse_label": "Inspections", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 6 */ { "source_entity_type": "project", "target_entity_type": "Quote", "relationship_type": "many_to_one", "forward_label": "Quote", "reverse_label": "Projects", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 7 */ { "source_entity_type": "project", "target_entity_type": "Contract", "relationship_type": "many_to_one", "forward_label": "Contract", "reverse_label": "Projects", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 8 */ { "source_entity_type": "Invoice", "target_entity_type": "project", "relationship_type": "many_to_one", "forward_label": "Project", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 9 */ { "source_entity_type": "project", "target_entity_type": "Opportunity", "relationship_type": "many_to_one", "forward_label": "Opportunity", "reverse_label": "Projects", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+    ])
+}
+
+fn construction_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "project",
+            "name": "Close project",
+            "description": "A closed project must record its actual end date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Closed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "actual_end_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "change_order",
+            "name": "Change approval",
+            "description": "An approved change order must record its approved amount and date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Approved" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "approved_amount", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "approved_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "work_package",
+            "name": "Work package complete",
+            "description": "A completed work package must record its completion date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Complete" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "completion_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// "Vendor integrity" (spec: a Subcontract Assignment's vendor Company
+/// must be marked Vendor/active) is left out - it reads a *related*
+/// Company record's own field from a Subcontract Assignment condition,
+/// the same cross-record gap ruled out for Field Service's Asset/Site
+/// integrity and Property Management's occupancy conflict.
+fn construction_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "Opportunity",
+            "name": "Opportunity won creates project",
+            "description": "Winning an opportunity with 'Create Project' enabled spins up a Project shell linked to it.",
+            "trigger_type": "status_changed",
+            "trigger_status": "Won",
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "create_project_enabled", "operator": "equals", "value": "true" }
+            ],
+            "actions": [
+                { "action_type": "create_record", "params_json": "{\"entity_type\":\"project\",\"relationship_ref\":9,\"name_template\":null}" }
+            ]
+        },
+        {
+            "entity_type": "change_order",
+            "name": "Change order approved",
+            "description": "Approving a change order notifies admins to update the project's approved change value - see this module's own doc comment on why that update isn't automated.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Approved" }
+            ],
+            "actions": [
+                { "action_type": "add_notification", "params_json": "{\"message\":\"A change order was approved - update the project's approved change value.\",\"audience\":\"all_admins\"}" }
+            ]
+        },
+        {
+            "entity_type": "inspection",
+            "name": "Inspection failed",
+            "description": "A failed inspection opens a corrective task and lets admins know.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Failed" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Address failed inspection\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" },
+                { "action_type": "add_notification", "params_json": "{\"message\":\"An inspection failed\",\"audience\":\"all_admins\"}" }
+            ]
+        },
+        {
+            "entity_type": "project",
+            "name": "Project close",
+            "description": "Closing a project opens a final billing review task - see this module's own doc comment on why the spec's 'close outstanding auto-close tasks' clause isn't automated.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Closed" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Final billing review\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
             ]
         }
     ])
