@@ -14,6 +14,7 @@ import { NumberingAdmin } from "./NumberingAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import { AppsAdmin } from "./AppsAdmin";
+import { IndustryPackagesAdmin } from "./IndustryPackagesAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -63,7 +64,8 @@ type AdminTab =
   | "numbering"
   | "kpis"
   | "dashboards"
-  | "apps";
+  | "apps"
+  | "packages";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -79,6 +81,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "kpis", label: "Dashboard KPIs" },
   { key: "dashboards", label: "Dashboards" },
   { key: "apps", label: "Apps" },
+  { key: "packages", label: "App Catalog" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -93,7 +96,7 @@ function tabLabel(key: AdminTab): string {
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis", "dashboards"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
-  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts", "apps"] },
+  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts", "apps", "packages"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
 ];
 
@@ -193,6 +196,7 @@ export function AdminPanel() {
       {tab === "kpis" && <DashboardKpiAdmin />}
       {tab === "dashboards" && <DashboardLayoutsAdmin />}
       {tab === "apps" && <AppsAdmin />}
+      {tab === "packages" && <IndustryPackagesAdmin />}
     </div>
   );
 }

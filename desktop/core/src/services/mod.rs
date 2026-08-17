@@ -14,6 +14,7 @@ pub mod dashboard_layout_service;
 pub mod dashboard_service;
 pub mod dashboard_widget_service;
 pub mod entity_registry;
+pub mod industry_package_service;
 pub mod invoice_service;
 pub mod numbering_service;
 pub mod opportunity_service;

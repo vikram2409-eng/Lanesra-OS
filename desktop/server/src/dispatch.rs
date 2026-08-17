@@ -24,6 +24,7 @@ use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate}
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
 use lanesra_core::models::business_rule::{BusinessRuleInput, BusinessRuleUpdate};
 use lanesra_core::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate};
+use lanesra_core::models::industry_package::ImportPackageInput;
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
@@ -38,6 +39,7 @@ use lanesra_core::services::{
     auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service,
+    industry_package_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
     quote_service, relationship_service, report_service, screen_layout_service, search_service, status_transition_service, task_service,
     user_service, workflow_service, workspace_service,
@@ -584,6 +586,26 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let limit: i64 = arg(args, "limit")?;
             to_value(dashboard_widget_service::run(conn, &require_workspace_id(conn)?, &entity_type, &mode, limit)?)
         }
+
+        "import_industry_package" => {
+            let input: ImportPackageInput = arg(args, "input")?;
+            to_value(industry_package_service::import_package(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "list_industry_packages" => to_value(industry_package_service::list_packages(conn, &require_workspace_id(conn)?)?),
+        "validate_industry_package" => {
+            let app_package_id: String = arg(args, "appPackageId")?;
+            industry_package_service::validate_package(conn, &require_workspace_id(conn)?, &app_package_id)?;
+            to_value(())
+        }
+        "install_industry_package" => {
+            let app_package_id: String = arg(args, "appPackageId")?;
+            to_value(industry_package_service::install(conn, &require_workspace_id(conn)?, &app_package_id, actor)?)
+        }
+        "list_installed_apps" => to_value(industry_package_service::list_installed(conn, &require_workspace_id(conn)?)?),
+        "get_installed_app_detail" => to_value(industry_package_service::get_installed_detail(conn, &arg::<String>(args, "id")?)?),
+        "list_industry_install_runs" => to_value(industry_package_service::list_runs(conn, &require_workspace_id(conn)?)?),
+        "deactivate_installed_app" => to_value(industry_package_service::deactivate(conn, &arg::<String>(args, "id")?, actor)?),
+        "reactivate_installed_app" => to_value(industry_package_service::reactivate(conn, &arg::<String>(args, "id")?, actor)?),
 
         "list_apps" => to_value(app_service::list(conn, &require_workspace_id(conn)?)?),
         "create_app" => {
