@@ -3,9 +3,18 @@
 //! (not shipped as loose files) so they're compiled, testable, and
 //! versioned with the engine they target. The dev spec ("Top 10 Industry
 //! Data Models & Packaged Business Apps") sequences Field Service,
-//! Property Management and Construction & Contractors first; this module
-//! ships all three, proving the foundation against real content rather
-//! than only the synthetic manifests `industry_data_model.rs`'s tests use.
+//! Property Management, Construction & Contractors and Professional
+//! Services first; this module ships all four, proving the foundation
+//! against real content rather than only the synthetic manifests
+//! `industry_data_model.rs`'s tests use.
+//!
+//! Two packages both needing a "Project"-shaped object (Construction &
+//! Contractors and Professional Services) is also the first real test of
+//! packages coexisting in one workspace: a custom object's key is
+//! workspace-wide, so Professional Services' equivalent object is named
+//! `engagement`, not `project` - see `professional_services_manifest_json`'s
+//! own doc comment for the same consideration applied to a custom field
+//! it adds to the shared built-in Opportunity entity.
 //!
 //! Where the spec calls for something the current engine genuinely can't
 //! express, that item is left out rather than faked - each gap is called
@@ -21,8 +30,9 @@
 //!   workflow trigger's watchable date fields are one specific, hardcoded
 //!   set of core-entity fields (`models::workflow::date_fields_for`),
 //!   empty for every custom object. Rules out Field Service's preventive-
-//!   maintenance workflow and Property Management's lease-renewal/
-//!   document-expiry ones.
+//!   maintenance workflow, Property Management's lease-renewal/
+//!   document-expiry ones, and Professional Services' "Milestone due
+//!   soon" reminder.
 //! - A per-object custom status/stage vocabulary using the built-in
 //!   `status_changed` trigger or `status`/`stage` action targets - every
 //!   custom object's built-in status is the fixed Active/Inactive/
@@ -1034,6 +1044,360 @@ fn construction_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Final billing review\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+// --- lanesra.professional_services ---------------------------------------
+
+/// `lanesra.professional_services` v1.0.0 - the fourth package, sequenced
+/// right after Construction & Contractors per the dev spec. See this
+/// module's own doc comment for what's included and deliberately left
+/// out.
+///
+/// Named `engagement`, not `project` - Construction & Contractors already
+/// claims the `project` custom object key, and a custom object's key is
+/// workspace-wide (`custom_object_service::create_with_key` hard-fails on
+/// a collision), not per-package. A workspace should be free to install
+/// both packages side by side. The same consideration applies to the
+/// custom field this package adds to the shared built-in Opportunity
+/// entity: it's `create_engagement_enabled`, not Construction's
+/// `create_project_enabled`, for the identical reason (custom field keys
+/// are unique per `(entity_type, key)`, and Opportunity is the same
+/// built-in entity both packages attach to).
+///
+/// "Resource Assignment: Project <-> User/Resource" doesn't use a
+/// relationship the way every other object connection here does - `User`
+/// isn't one of the nine relationship-capable entity types
+/// (`entity_registry::ALL`), since a user account isn't a CRM record.
+/// Resource Assignment's own built-in owner field (present on every
+/// custom object) stands in for "which user this assignment is for"
+/// instead, the same field a Task or Company already uses to mean
+/// "assigned to".
+pub fn professional_services_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.professional_services",
+        "name": "Professional Services",
+        "industry": "Professional Services",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "engagement", "singular_label": "Engagement", "plural_label": "Engagements", "icon": "💼", "prefix": "ENG", "digits": 4 },
+            { "key": "milestone", "singular_label": "Milestone", "plural_label": "Milestones", "icon": "🚩", "prefix": "MS", "digits": 4 },
+            { "key": "resource_assignment", "singular_label": "Resource Assignment", "plural_label": "Resource Assignments", "icon": "🧑‍💻", "prefix": "RA", "digits": 4 },
+            { "key": "time_entry", "singular_label": "Time Entry", "plural_label": "Time Entries", "icon": "⏱", "prefix": "TE", "digits": 5 },
+            { "key": "expense", "singular_label": "Expense", "plural_label": "Expenses", "icon": "💳", "prefix": "EXP", "digits": 5 },
+            { "key": "deliverable", "singular_label": "Deliverable", "plural_label": "Deliverables", "icon": "📦", "prefix": "DLV", "digits": 4 }
+        ],
+        "fields": professional_services_fields(),
+        "relationships": professional_services_relationships(),
+        "business_rules": professional_services_business_rules(),
+        "workflows": professional_services_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "engagement",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["stage", "billing_model", "contract_value", "start_date", "end_date", "actual_end_date"] }
+                            ],
+                            // Indices into `relationships` below: Milestones (1), Resource Assignments (2), Time Entries (3), Expenses (5), Deliverables (6).
+                            "related": ["1", "2", "3", "5", "6"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Engagements by Stage", "entity_type": "engagement", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Professional Services Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Professional Services",
+            "icon": "💼",
+            "description": "Engagements, milestones, resourcing, time and expenses for consulting, IT services, agencies and other billable professional-services firms.",
+            "object_keys": [
+                "engagement", "milestone", "resource_assignment", "time_entry", "expense", "deliverable", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // See field_service_manifest_json's own note on mapping the spec's role
+            // names (PSA Admin, Project Manager, Consultant, Practice Manager) onto
+            // this build's actual role set.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "editor" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        // No pure reference/lookup object exists here either - every object is a
+        // live delivery/billing record.
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn professional_services_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        engagement_fields(),
+        professional_services_opportunity_fields(),
+        milestone_fields(),
+        resource_assignment_fields(),
+        time_entry_fields(),
+        expense_fields(),
+        deliverable_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn engagement_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "engagement", "label": "Stage", "field_type": "select", "options": ["Planned", "Active", "On Hold", "Complete", "Closed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Planned", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billing_model", "entity_type": "engagement", "label": "Billing Model", "field_type": "select", "options": ["Time & Materials", "Fixed Fee", "Retainer"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Time & Materials", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "contract_value", "entity_type": "engagement", "label": "Contract Value", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "start_date", "entity_type": "engagement", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "end_date", "entity_type": "engagement", "label": "Planned End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Complete by the "Engagement completion" business rule below.
+        { "key": "actual_end_date", "entity_type": "engagement", "label": "Actual End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// See this module's own doc comment on why this key is
+/// `create_engagement_enabled`, not Construction & Contractors'
+/// `create_project_enabled`.
+fn professional_services_opportunity_fields() -> serde_json::Value {
+    json!([
+        { "key": "create_engagement_enabled", "entity_type": "Opportunity", "label": "Create Engagement on Won", "field_type": "boolean", "options": [], "required": false, "show_in_list": false, "sort_order": 101, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": "When this opportunity is marked Won, automatically create an Engagement draft linked to it.", "placeholder": null }
+    ])
+}
+
+fn milestone_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "milestone", "label": "Stage", "field_type": "select", "options": ["Not Started", "In Progress", "At Risk", "Complete"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Not Started", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "due_date", "entity_type": "milestone", "label": "Due Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Reminder automation isn't available for a custom object's own date fields - see this module's own doc comment.", "placeholder": null },
+        { "key": "amount", "entity_type": "milestone", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Complete by the "Milestone completion" business rule below.
+        { "key": "completed_date", "entity_type": "milestone", "label": "Completed Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn resource_assignment_fields() -> serde_json::Value {
+    json!([
+        { "key": "role", "entity_type": "resource_assignment", "label": "Role", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "allocation_percent", "entity_type": "resource_assignment", "label": "Allocation %", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": "100", "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "start_date", "entity_type": "resource_assignment", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "end_date", "entity_type": "resource_assignment", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "bill_rate", "entity_type": "resource_assignment", "label": "Bill Rate", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn time_entry_fields() -> serde_json::Value {
+    json!([
+        { "key": "date", "entity_type": "time_entry", "label": "Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-greater-than-zero-when-Submitted by the "Time submission" business rule below.
+        { "key": "hours", "entity_type": "time_entry", "label": "Hours", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billable", "entity_type": "time_entry", "label": "Billable", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "stage", "entity_type": "time_entry", "label": "Stage", "field_type": "select", "options": ["Draft", "Submitted", "Approved", "Rejected"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        // Entered manually rather than snapshotted from the linked Resource Assignment's own
+        // bill_rate at creation time - that snapshot would need to read a *related* record's
+        // field, the same cross-record gap this module's own doc comment already covers.
+        { "key": "bill_rate", "entity_type": "time_entry", "label": "Bill Rate", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": "Not auto-copied from the resource's assignment rate - enter it directly.", "placeholder": null },
+        // Written by the "Time approved" workflow below.
+        { "key": "billing_status", "entity_type": "time_entry", "label": "Billing Status", "field_type": "select", "options": ["Not Billed", "Eligible", "Billed"], "required": false, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Not Billed", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn expense_fields() -> serde_json::Value {
+    json!([
+        { "key": "date", "entity_type": "expense", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount", "entity_type": "expense", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "category", "entity_type": "expense", "label": "Category", "field_type": "select", "options": ["Travel", "Meals", "Materials", "Software", "Other"], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billable", "entity_type": "expense", "label": "Billable", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null },
+        // category/amount/date are required-when-Submitted by the "Expense
+        // submission" business rule below, not required at creation.
+        { "key": "stage", "entity_type": "expense", "label": "Stage", "field_type": "select", "options": ["Draft", "Submitted", "Approved", "Rejected"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn deliverable_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "deliverable", "label": "Stage", "field_type": "select", "options": ["Not Started", "In Progress", "Complete"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Not Started", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "due_date", "entity_type": "deliverable", "label": "Due Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "acceptance", "entity_type": "deliverable", "label": "Acceptance", "field_type": "select", "options": ["Pending", "Accepted", "Rejected"], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related` and the
+/// Opportunity-Won workflow's `create_record` action reference these
+/// relationships by their position in this array.
+fn professional_services_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "engagement", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Customer", "reverse_label": "Engagements", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "milestone", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Milestones", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 2 */ { "source_entity_type": "resource_assignment", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Resource Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 3 */ { "source_entity_type": "time_entry", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Time Entries", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 4 */ { "source_entity_type": "time_entry", "target_entity_type": "milestone", "relationship_type": "many_to_one", "forward_label": "Milestone", "reverse_label": "Time Entries", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 5 */ { "source_entity_type": "expense", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Expenses", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 6 */ { "source_entity_type": "deliverable", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Deliverables", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 7 */ { "source_entity_type": "engagement", "target_entity_type": "Opportunity", "relationship_type": "many_to_one", "forward_label": "Opportunity", "reverse_label": "Engagements", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 8 */ { "source_entity_type": "engagement", "target_entity_type": "Contract", "relationship_type": "many_to_one", "forward_label": "Contract", "reverse_label": "Engagements", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 9 */ { "source_entity_type": "Invoice", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 }
+    ])
+}
+
+/// "Time submission" only enforces `hours > 0` (via `less_than "0.01"` on
+/// the violating side, since the condition engine has no `<=` operator)
+/// when a time entry moves to Submitted - the spec's other half, "AND
+/// Project Active", would need this rule to read the *linked* engagement's
+/// own stage field, the same cross-record gap this module's own doc
+/// comment already covers.
+fn professional_services_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "engagement",
+            "name": "Engagement completion",
+            "description": "A complete engagement must record its actual end date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Complete" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "actual_end_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "time_entry",
+            "name": "Time submission",
+            "description": "A submitted time entry must record more than zero hours.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Submitted" },
+                { "field_source": "custom", "field_key": "hours", "operator": "less_than", "value": "0.01" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Enter more than zero hours before submitting a time entry." }
+            ]
+        },
+        {
+            "entity_type": "expense",
+            "name": "Expense submission",
+            "description": "A submitted expense must record its category, amount and date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Submitted" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "category", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "amount", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "milestone",
+            "name": "Milestone completion",
+            "description": "A completed milestone must record its completed date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Complete" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// "Milestone due soon" (spec: due in 7 days AND not Complete creates a
+/// reminder task) is left out - it needs a `date_reached`-style trigger on
+/// a custom object's own date field, which this module's own doc comment
+/// already rules out.
+fn professional_services_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "Opportunity",
+            "name": "Opportunity won creates engagement",
+            "description": "Winning an opportunity with 'Create Engagement' enabled spins up an Engagement draft linked to it.",
+            "trigger_type": "status_changed",
+            "trigger_status": "Won",
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "create_engagement_enabled", "operator": "equals", "value": "true" }
+            ],
+            "actions": [
+                { "action_type": "create_record", "params_json": "{\"entity_type\":\"engagement\",\"relationship_ref\":7,\"name_template\":null}" }
+            ]
+        },
+        {
+            "entity_type": "time_entry",
+            "name": "Time approved",
+            "description": "Approved time is marked eligible for the billing pool.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Approved" }
+            ],
+            "actions": [
+                { "action_type": "update_field", "params_json": "{\"target_field_key\":\"billing_status\",\"target_field_source\":\"custom\",\"value\":\"Eligible\",\"copy_from_field_key\":null}" }
+            ]
+        },
+        {
+            "entity_type": "engagement",
+            "name": "Engagement complete",
+            "description": "Completing an engagement opens a closure/review task and an invoice-preparation task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Complete" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Engagement closure and review\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" },
+                { "action_type": "create_task", "params_json": "{\"title\":\"Prepare final invoice\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
             ]
         }
     ])

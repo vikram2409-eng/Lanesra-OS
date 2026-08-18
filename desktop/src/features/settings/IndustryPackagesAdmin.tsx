@@ -113,6 +113,9 @@ export function IndustryPackagesAdmin() {
           <button className="btn" disabled={loadStarter.isPending} onClick={() => loadStarter.mutate("construction")}>
             {loadStarter.isPending ? "Loading..." : "Load Construction & Contractors starter"}
           </button>
+          <button className="btn" disabled={loadStarter.isPending} onClick={() => loadStarter.mutate("professional_services")}>
+            {loadStarter.isPending ? "Loading..." : "Load Professional Services starter"}
+          </button>
         </div>
         <textarea
           value={manifestJson}
