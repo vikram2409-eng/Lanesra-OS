@@ -79,6 +79,7 @@ fn require_action(target_key: &str) -> BusinessRuleActionInput {
 
 fn rule_input(entity_type: &str, priority: i64, match_type: &str, conditions: Vec<BusinessRuleConditionInput>, actions: Vec<BusinessRuleActionInput>) -> BusinessRuleInput {
     BusinessRuleInput {
+        app_id: None,
         entity_type: entity_type.into(), name: "Test rule".into(), description: None, match_type: match_type.into(),
         priority, effective_start_date: None, effective_end_date: None, conditions, actions,
     }
@@ -717,6 +718,7 @@ fn updating_a_rule_snapshots_its_prior_state_and_a_version_can_be_restored() {
     assert!(business_rule_service::list_versions(&conn, &rule.id, Some(&admin)).unwrap().is_empty());
 
     let update = BusinessRuleUpdate {
+        app_id: None,
         name: "Renamed rule".into(), description: None, match_type: "all".into(), priority: 5, is_active: true,
         effective_start_date: None, effective_end_date: None,
         conditions: vec![condition("status", "equals", "Active Customer")],
@@ -750,6 +752,7 @@ fn version_history_is_pruned_to_the_most_recent_ten() {
 
     for i in 0..12 {
         let update = BusinessRuleUpdate {
+            app_id: None,
             name: format!("Rule v{i}"), description: None, match_type: "all".into(), priority: i, is_active: true,
             effective_start_date: None, effective_end_date: None,
             conditions: vec![condition("status", "equals", "Prospect")],

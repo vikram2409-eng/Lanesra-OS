@@ -429,13 +429,13 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
         let created = dashboard_layout_service::create_layout(
             conn,
             workspace_id,
-            &DashboardLayoutInput { name: dashboard.name.clone(), initial_kpi_keys: vec![] },
+            &DashboardLayoutInput { name: dashboard.name.clone(), initial_kpi_keys: vec![], app_id: None },
             actor_user_id,
         )?;
         let created = dashboard_layout_service::update_layout(
             conn,
             &created.id,
-            &DashboardLayoutUpdate { name: dashboard.name.clone(), roles: vec![], draft: DashboardWidgets { widgets } },
+            &DashboardLayoutUpdate { name: dashboard.name.clone(), roles: vec![], draft: DashboardWidgets { widgets }, app_id: None },
             actor_user_id,
         )?;
         if dashboard.publish {

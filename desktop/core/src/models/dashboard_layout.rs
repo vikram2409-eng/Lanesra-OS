@@ -21,6 +21,12 @@ pub struct DashboardLayout {
     /// `None` until first published - the live Dashboard only ever
     /// renders this, never the draft.
     pub published: Option<DashboardWidgets>,
+    /// Per-app scoped automation - see `BusinessRule::app_id`'s doc
+    /// comment for the full rationale; identical mechanism. Unlike
+    /// business rules/workflows, a dashboard layout's `app_id` has no
+    /// bearing on `resolve_effective_dashboard`'s own role resolution -
+    /// it's purely which app's Admin screen shows the layout by default.
+    pub app_id: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -59,6 +65,10 @@ pub struct DashboardLayoutInput {
     /// KPI keys to pre-populate as the new layout's initial widgets (in
     /// order) - mirrors `ScreenLayoutInput::initial_fields`. May be empty.
     pub initial_kpi_keys: Vec<String>,
+    /// `None` (the default) means workspace-wide - see
+    /// `BusinessRuleInput::app_id`'s doc comment.
+    #[serde(default)]
+    pub app_id: Option<String>,
 }
 
 /// Covers rename, role reassignment, and any draft edit (widget add/
@@ -68,4 +78,6 @@ pub struct DashboardLayoutUpdate {
     pub name: String,
     pub roles: Vec<String>,
     pub draft: DashboardWidgets,
+    #[serde(default)]
+    pub app_id: Option<String>,
 }

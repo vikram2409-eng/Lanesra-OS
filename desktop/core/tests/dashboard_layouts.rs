@@ -40,7 +40,7 @@ fn sales_user(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
 }
 
 fn layout_input(name: &str, initial_kpi_keys: &[&str]) -> DashboardLayoutInput {
-    DashboardLayoutInput { name: name.into(), initial_kpi_keys: initial_kpi_keys.iter().map(|s| s.to_string()).collect() }
+    DashboardLayoutInput { name: name.into(), initial_kpi_keys: initial_kpi_keys.iter().map(|s| s.to_string()).collect(), app_id: None }
 }
 
 fn one_kpi_draft(key: &str) -> DashboardWidgets {
@@ -96,14 +96,14 @@ fn publish_unpublish_and_revert_round_trip() {
     let (conn, ws, admin) = setup_workspace();
     let layout = dashboard_layout_service::list_layouts(&conn, &ws).unwrap().remove(0);
 
-    let update = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft: one_kpi_draft("open_pipeline") };
+    let update = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft: one_kpi_draft("open_pipeline"), app_id: None };
     let updated = dashboard_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
     assert!(updated.published.is_none());
 
     let published = dashboard_layout_service::publish_layout(&conn, &layout.id, Some(&admin)).unwrap();
     assert_eq!(published.published, Some(published.draft.clone()));
 
-    let update2 = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft: one_kpi_draft("won_revenue") };
+    let update2 = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft: one_kpi_draft("won_revenue"), app_id: None };
     let edited = dashboard_layout_service::update_layout(&conn, &layout.id, &update2, Some(&admin)).unwrap();
     assert_ne!(edited.draft, edited.published.clone().unwrap());
 
@@ -160,7 +160,7 @@ fn resolve_effective_dashboard_returns_none_when_nothing_is_published() {
 fn resolve_effective_dashboard_falls_back_to_the_published_default_for_an_unclaimed_role() {
     let (conn, ws, admin) = setup_workspace();
     let default_layout = dashboard_layout_service::list_layouts(&conn, &ws).unwrap().remove(0);
-    let update = DashboardLayoutUpdate { name: default_layout.name.clone(), roles: vec![], draft: one_kpi_draft("open_pipeline") };
+    let update = DashboardLayoutUpdate { name: default_layout.name.clone(), roles: vec![], draft: one_kpi_draft("open_pipeline"), app_id: None };
     dashboard_layout_service::update_layout(&conn, &default_layout.id, &update, Some(&admin)).unwrap();
     dashboard_layout_service::publish_layout(&conn, &default_layout.id, Some(&admin)).unwrap();
 
@@ -174,7 +174,7 @@ fn resolve_effective_dashboard_prefers_a_published_layout_matching_the_actors_ro
     let (conn, ws, admin) = setup_workspace();
     dashboard_layout_service::list_layouts(&conn, &ws).unwrap();
     let sales_layout = dashboard_layout_service::create_layout(&conn, &ws, &layout_input("Sales dashboard", &[]), Some(&admin)).unwrap();
-    let update = DashboardLayoutUpdate { name: sales_layout.name.clone(), roles: vec!["Sales".into()], draft: one_kpi_draft("won_revenue") };
+    let update = DashboardLayoutUpdate { name: sales_layout.name.clone(), roles: vec!["Sales".into()], draft: one_kpi_draft("won_revenue"), app_id: None };
     dashboard_layout_service::update_layout(&conn, &sales_layout.id, &update, Some(&admin)).unwrap();
     dashboard_layout_service::publish_layout(&conn, &sales_layout.id, Some(&admin)).unwrap();
 
@@ -193,7 +193,7 @@ fn an_unpublished_role_matching_layout_is_never_used_live() {
     let (conn, ws, admin) = setup_workspace();
     dashboard_layout_service::list_layouts(&conn, &ws).unwrap();
     let sales_layout = dashboard_layout_service::create_layout(&conn, &ws, &layout_input("Sales dashboard", &[]), Some(&admin)).unwrap();
-    let update = DashboardLayoutUpdate { name: sales_layout.name.clone(), roles: vec!["Sales".into()], draft: one_kpi_draft("won_revenue") };
+    let update = DashboardLayoutUpdate { name: sales_layout.name.clone(), roles: vec!["Sales".into()], draft: one_kpi_draft("won_revenue"), app_id: None };
     dashboard_layout_service::update_layout(&conn, &sales_layout.id, &update, Some(&admin)).unwrap();
     // Deliberately never published.
 
@@ -221,7 +221,7 @@ fn widgets_round_trip_through_save_and_a_fresh_reload() {
             DashboardWidget { id: "w2".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": "overdue_invoices" }) },
         ],
     };
-    let update = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft };
+    let update = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft, app_id: None };
     let saved = dashboard_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
     assert_eq!(kpi_keys(&saved.draft), vec!["open_pipeline".to_string(), "overdue_invoices".to_string()]);
 

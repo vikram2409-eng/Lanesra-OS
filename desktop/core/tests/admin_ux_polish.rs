@@ -54,6 +54,7 @@ fn describe_active_dependents_reports_both_a_referencing_rule_and_a_referencing_
     business_rule_service::create_rule(
         &conn, &ws,
         &BusinessRuleInput {
+            app_id: None,
             entity_type: "Company".into(), name: "Requires lead source".into(), description: None, match_type: "all".into(),
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {
@@ -71,6 +72,7 @@ fn describe_active_dependents_reports_both_a_referencing_rule_and_a_referencing_
     workflow_service::create_rule(
         &conn, &ws,
         &WorkflowDefinitionInput {
+            app_id: None,
             entity_type: "Company".into(), name: "Watch lead source".into(), description: None,
             trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some(def.key.clone()),
             trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
@@ -100,6 +102,7 @@ fn describe_active_dependents_is_advisory_not_blocking() {
     business_rule_service::create_rule(
         &conn, &ws,
         &BusinessRuleInput {
+            app_id: None,
             entity_type: "Company".into(), name: "Requires lead source".into(), description: None, match_type: "all".into(),
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {

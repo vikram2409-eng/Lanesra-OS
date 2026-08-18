@@ -57,6 +57,7 @@ fn map_rule_header(row: &rusqlite::Row) -> rusqlite::Result<BusinessRule> {
         effective_start_date: row.get("effective_start_date")?,
         effective_end_date: row.get("effective_end_date")?,
         is_protected: row.get("is_protected")?,
+        app_id: row.get("app_id")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -98,11 +99,11 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &BusinessR
     conn.execute(
         "INSERT INTO business_rules
             (id, workspace_id, entity_type, name, description, match_type, priority, is_active,
-             effective_start_date, effective_end_date, is_protected, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, 0, ?10, ?11, ?10, ?11)",
+             effective_start_date, effective_end_date, is_protected, app_id, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9, 0, ?10, ?11, ?12, ?11, ?12)",
         rusqlite::params![
             id, workspace_id, input.entity_type, input.name, input.description, input.match_type, input.priority,
-            input.effective_start_date, input.effective_end_date, now, actor_user_id,
+            input.effective_start_date, input.effective_end_date, input.app_id, now, actor_user_id,
         ],
     )?;
     write_conditions(conn, id, &input.conditions)?;
@@ -143,11 +144,11 @@ pub fn update(conn: &Connection, id: &str, input: &BusinessRuleUpdate, actor_use
     conn.execute(
         "UPDATE business_rules
          SET name = ?1, description = ?2, match_type = ?3, priority = ?4, is_active = ?5,
-             effective_start_date = ?6, effective_end_date = ?7, updated_at = ?8, updated_by = ?9
-         WHERE id = ?10",
+             effective_start_date = ?6, effective_end_date = ?7, app_id = ?8, updated_at = ?9, updated_by = ?10
+         WHERE id = ?11",
         rusqlite::params![
             input.name, input.description, input.match_type, input.priority, input.is_active,
-            input.effective_start_date, input.effective_end_date, now_iso(), actor_user_id, id,
+            input.effective_start_date, input.effective_end_date, input.app_id, now_iso(), actor_user_id, id,
         ],
     )?;
     write_conditions(conn, id, &input.conditions)?;

@@ -81,6 +81,7 @@ fn a_business_rules_set_default_still_wins_over_the_fields_own_default_value() {
     business_rule_service::create_rule(
         &conn, &ws,
         &BusinessRuleInput {
+            app_id: None,
             entity_type: "Company".into(), name: "Prefer referral".into(), description: None, match_type: "all".into(),
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {
@@ -213,6 +214,7 @@ fn a_field_hidden_by_default_is_skipped_unless_a_rule_shows_it() {
     business_rule_service::create_rule(
         &conn, &ws,
         &BusinessRuleInput {
+            app_id: None,
             entity_type: "Company".into(), name: "Reveal VIP tier".into(), description: None, match_type: "all".into(),
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {

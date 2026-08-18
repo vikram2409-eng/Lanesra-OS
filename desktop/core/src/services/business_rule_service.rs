@@ -38,6 +38,20 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     Ok(())
 }
 
+/// Per-app scoped automation: `app_id`, if set, must reference an existing
+/// App Builder app (migration 0025) in the same workspace - same "exists
+/// and is in this workspace, else 404-shaped Validation error" check
+/// `app_service::validate_object_keys_and_dashboard` already uses for
+/// `dashboard_id`. `None` (workspace-wide) always passes.
+fn require_valid_app_id(conn: &Connection, workspace_id: &str, app_id: Option<&str>) -> AppResult<()> {
+    let Some(app_id) = app_id else { return Ok(()) };
+    let app = super::app_service::get(conn, app_id).map_err(|_| AppError::Validation("App not found".into()))?;
+    if app.workspace_id != workspace_id {
+        return Err(AppError::Validation("App not found".into()));
+    }
+    Ok(())
+}
+
 fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<()> {
     if entity_registry::CORE_ENTITY_TYPES.contains(&entity_type) {
         return Ok(());
@@ -135,6 +149,7 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
     }
     validate_conditions(conn, workspace_id, entity_type, &input.conditions)?;
     validate_actions(conn, workspace_id, entity_type, &input.actions)?;
+    require_valid_app_id(conn, workspace_id, input.app_id.as_deref())?;
     Ok(())
 }
 
@@ -167,6 +182,7 @@ pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, acto
     }
     validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions)?;
     validate_actions(conn, &existing.workspace_id, &existing.entity_type, &input.actions)?;
+    require_valid_app_id(conn, &existing.workspace_id, input.app_id.as_deref())?;
     // Admin UX polish (spec §10): snapshot the pre-edit state before it's
     // overwritten, so an admin can review or restore it later. `existing`
     // is always serializable (plain String/bool/i64/Vec fields), so this
@@ -212,6 +228,7 @@ pub fn restore_version(conn: &Connection, rule_id: &str, version_id: &str, actor
         is_active: snapshot.is_active,
         effective_start_date: snapshot.effective_start_date,
         effective_end_date: snapshot.effective_end_date,
+        app_id: snapshot.app_id,
         conditions: snapshot
             .conditions
             .into_iter()
@@ -257,6 +274,7 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
         priority: existing.priority,
         effective_start_date: existing.effective_start_date.clone(),
         effective_end_date: existing.effective_end_date.clone(),
+        app_id: existing.app_id.clone(),
         conditions: existing
             .conditions
             .iter()
@@ -292,6 +310,7 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
         is_active: false,
         effective_start_date: created.effective_start_date.clone(),
         effective_end_date: created.effective_end_date.clone(),
+        app_id: created.app_id.clone(),
         conditions: input.conditions,
         actions: input.actions,
     };
