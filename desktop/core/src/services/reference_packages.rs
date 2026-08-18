@@ -4,10 +4,10 @@
 //! versioned with the engine they target. The dev spec ("Top 10 Industry
 //! Data Models & Packaged Business Apps") sequences Field Service,
 //! Property Management, Construction & Contractors, Professional
-//! Services and Dental/Clinic Practice Administration first; this module
-//! ships all five, proving the foundation against real content rather
-//! than only the synthetic manifests `industry_data_model.rs`'s tests
-//! use.
+//! Services, Dental/Clinic Practice Administration and Recruitment &
+//! Staffing first; this module ships all six, proving the foundation
+//! against real content rather than only the synthetic manifests
+//! `industry_data_model.rs`'s tests use.
 //!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
@@ -94,6 +94,13 @@
 //!   engine can do; it's not simply a bigger instance of the cross-record
 //!   gap, since even a single related record's field wouldn't be enough
 //!   to answer it.
+//! - A condition compared against "now"/"today", not just a literal or
+//!   another field - every operator's right-hand side is either a fixed
+//!   value or another field on the same record, never the current
+//!   date/time at evaluation time. Recruitment & Staffing's "Interview
+//!   scheduling must be in the future unless already completed" is left
+//!   out for this reason - see `recruitment_business_rules`'s own doc
+//!   comment.
 
 use serde_json::json;
 
@@ -1714,6 +1721,323 @@ fn practice_admin_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Prepare billing/quote for accepted treatment plan\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+// --- lanesra.recruitment ---------------------------------------------------
+
+/// `lanesra.recruitment` v1.0.0 - the sixth package, sequenced right
+/// after Dental/Clinic Practice Administration per the dev spec. See
+/// this module's own doc comment for what's included and deliberately
+/// left out.
+///
+/// The spec's "Skill" object is named `competency` here, not `skill` -
+/// Field Service already claims the `skill` custom object key
+/// workspace-wide, the same "Project"/"engagement" collision this
+/// module's own doc comment already covers for Construction &
+/// Contractors and Professional Services.
+///
+/// Interviewer isn't its own field - like Professional Services'
+/// Resource Assignment and Practice Administration's Provider Profile,
+/// there's no relationship-capable `User` entity type, so Interview's
+/// built-in owner field stands in for "who's interviewing" instead.
+pub fn recruitment_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.recruitment",
+        "name": "Recruitment & Staffing",
+        "industry": "Staffing",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "job_requisition", "singular_label": "Job", "plural_label": "Jobs", "icon": "📌", "prefix": "JOB", "digits": 4 },
+            { "key": "candidate_profile", "singular_label": "Candidate Profile", "plural_label": "Candidate Profiles", "icon": "🧑‍💼", "prefix": "CAND", "digits": 4 },
+            { "key": "application", "singular_label": "Application", "plural_label": "Applications", "icon": "📨", "prefix": "APP", "digits": 5 },
+            { "key": "interview", "singular_label": "Interview", "plural_label": "Interviews", "icon": "🎙", "prefix": "INT", "digits": 5 },
+            { "key": "offer", "singular_label": "Offer", "plural_label": "Offers", "icon": "🤝", "prefix": "OFR", "digits": 4 },
+            { "key": "placement", "singular_label": "Placement", "plural_label": "Placements", "icon": "✅", "prefix": "PLC", "digits": 4 },
+            { "key": "competency", "singular_label": "Skill", "plural_label": "Skills", "icon": "🏅", "prefix": "SKL", "digits": 3 },
+            { "key": "candidate_skill", "singular_label": "Candidate Skill", "plural_label": "Candidate Skills", "icon": "🔗", "prefix": "CSK", "digits": 5 }
+        ],
+        "fields": recruitment_fields(),
+        "relationships": recruitment_relationships(),
+        "business_rules": recruitment_business_rules(),
+        "workflows": recruitment_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "application",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["stage", "submitted_date", "score", "disposition"] }
+                            ],
+                            // Indices into `relationships` below: Interviews (5), Offers (6), Placement (7).
+                            "related": ["5", "6", "7"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Applications by Stage", "entity_type": "application", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Recruiting Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Recruitment & Staffing",
+            "icon": "🧑‍💼",
+            "description": "Jobs, candidates, applications, interviews, offers and placements for recruiting agencies and SMB talent teams.",
+            "object_keys": [
+                "job_requisition", "candidate_profile", "application", "interview", "offer", "placement", "competency", "candidate_skill", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // See field_service_manifest_json's own note on mapping the spec's role
+            // names (Recruitment Admin, Recruiter, Recruiting Manager, Account
+            // Manager, Coordinator) onto this build's actual role set.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "viewer" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        // No pure reference/lookup object exists here either - even Skill is
+        // populated as recruiters build out their own taxonomy, not shipped
+        // pre-seeded.
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn recruitment_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        job_requisition_fields(),
+        candidate_profile_fields(),
+        application_fields(),
+        interview_fields(),
+        offer_fields(),
+        placement_fields(),
+        competency_fields(),
+        candidate_skill_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn job_requisition_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "job_requisition", "label": "Stage", "field_type": "select", "options": ["Draft", "Open", "On Hold", "Filled", "Closed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "title", "entity_type": "job_requisition", "label": "Title", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "location", "entity_type": "job_requisition", "label": "Location", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "openings", "entity_type": "job_requisition", "label": "Openings", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": "1", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "rate_or_salary", "entity_type": "job_requisition", "label": "Rate / Salary", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn candidate_profile_fields() -> serde_json::Value {
+    json!([
+        { "key": "skills_summary", "entity_type": "candidate_profile", "label": "Skills Summary", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "location", "entity_type": "candidate_profile", "label": "Location", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "source", "entity_type": "candidate_profile", "label": "Source", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "availability", "entity_type": "candidate_profile", "label": "Availability", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "consent_flags", "entity_type": "candidate_profile", "label": "Consent to Contact", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn application_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "application", "label": "Stage", "field_type": "select", "options": ["Sourced", "Screening", "Submitted", "Interview", "Offer", "Placed", "Rejected", "Withdrawn"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Sourced", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "submitted_date", "entity_type": "application", "label": "Submitted Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "score", "entity_type": "application", "label": "Score", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "disposition", "entity_type": "application", "label": "Disposition", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn interview_fields() -> serde_json::Value {
+    json!([
+        { "key": "interview_type", "entity_type": "interview", "label": "Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // See this module's own doc comment on the missing time-of-day field type.
+        { "key": "scheduled_date", "entity_type": "interview", "label": "Scheduled Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "outcome", "entity_type": "interview", "label": "Outcome", "field_type": "select", "options": ["Scheduled", "Completed", "Cancelled", "No Show"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Scheduled", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "feedback_status", "entity_type": "interview", "label": "Feedback Status", "field_type": "select", "options": ["Pending", "Submitted"], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn offer_fields() -> serde_json::Value {
+    json!([
+        { "key": "amount", "entity_type": "offer", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "start_date", "entity_type": "offer", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "stage", "entity_type": "offer", "label": "Stage", "field_type": "select", "options": ["Draft", "Sent", "Accepted", "Rejected", "Withdrawn"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn placement_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "placement", "label": "Stage", "field_type": "select", "options": ["Planned", "Active", "Completed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Planned", "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Active by the "Placement start" business rule below - a
+        // re-scoping of the spec's "Placement validation" rule onto the object that
+        // actually holds a start date (see this file's own doc comment on why the
+        // spec's own Application-side version of this rule isn't implementable).
+        { "key": "start_date", "entity_type": "placement", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "end_date", "entity_type": "placement", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "fee_or_rate", "entity_type": "placement", "label": "Fee / Rate", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn competency_fields() -> serde_json::Value {
+    json!([
+        { "key": "category", "entity_type": "competency", "label": "Category", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn candidate_skill_fields() -> serde_json::Value {
+    json!([
+        { "key": "proficiency", "entity_type": "candidate_skill", "label": "Proficiency", "field_type": "select", "options": ["Beginner", "Intermediate", "Advanced", "Expert"], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Beginner", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "years_experience", "entity_type": "candidate_skill", "label": "Years of Experience", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related` and the
+/// Offer-Accepted workflow's `update_related_record`/`create_record`
+/// actions reference these relationships by their position in this
+/// array. The last one (Placement <-> Offer) exists purely to give that
+/// workflow's `create_record` action a relationship to link the new
+/// Placement back to the Offer that spawned it - the same "add one
+/// relationship purely to support a create_record workflow" pattern
+/// Construction & Contractors and Professional Services both used for
+/// their own Opportunity link.
+fn recruitment_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "job_requisition", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Customer", "reverse_label": "Jobs", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "job_requisition", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Hiring Contact", "reverse_label": "Jobs", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 2 */ { "source_entity_type": "candidate_profile", "target_entity_type": "Contact", "relationship_type": "one_to_one", "forward_label": "Contact", "reverse_label": "Candidate Profile", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 3 */ { "source_entity_type": "application", "target_entity_type": "candidate_profile", "relationship_type": "many_to_one", "forward_label": "Candidate", "reverse_label": "Applications", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 4 */ { "source_entity_type": "application", "target_entity_type": "job_requisition", "relationship_type": "many_to_one", "forward_label": "Job", "reverse_label": "Applications", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 5 */ { "source_entity_type": "interview", "target_entity_type": "application", "relationship_type": "many_to_one", "forward_label": "Application", "reverse_label": "Interviews", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 6 */ { "source_entity_type": "offer", "target_entity_type": "application", "relationship_type": "many_to_one", "forward_label": "Application", "reverse_label": "Offers", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 7 */ { "source_entity_type": "placement", "target_entity_type": "application", "relationship_type": "many_to_one", "forward_label": "Application", "reverse_label": "Placement", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 8 */ { "source_entity_type": "placement", "target_entity_type": "candidate_profile", "relationship_type": "many_to_one", "forward_label": "Candidate", "reverse_label": "Placements", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 9 */ { "source_entity_type": "placement", "target_entity_type": "job_requisition", "relationship_type": "many_to_one", "forward_label": "Job", "reverse_label": "Placements", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 10 */ { "source_entity_type": "placement", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Customer", "reverse_label": "Placements", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 11 */ { "source_entity_type": "candidate_skill", "target_entity_type": "candidate_profile", "relationship_type": "many_to_one", "forward_label": "Candidate", "reverse_label": "Skills", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 12 */ { "source_entity_type": "candidate_skill", "target_entity_type": "competency", "relationship_type": "many_to_one", "forward_label": "Skill", "reverse_label": "Candidates", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        // Exists purely so the "Offer accepted" workflow's create_record action has a
+        // relationship connecting its trigger entity (offer) to the entity it creates
+        // (placement) - index 7 above (Placement <-> Application) is the spec's own
+        // relationship and doesn't connect to Offer at all.
+        /* 13 */ { "source_entity_type": "placement", "target_entity_type": "offer", "relationship_type": "many_to_one", "forward_label": "Offer", "reverse_label": "Placement Draft", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+    ])
+}
+
+/// The spec's four business rules are all either cross-record checks
+/// this module's own doc comment already rules out ("Candidate
+/// duplicate" and "Application uniqueness" both need scanning every
+/// other record of the same type for a match) or need a capability nothing
+/// else in this file needed yet ("Interview scheduling"'s "must be in
+/// the future" needs comparing against today's date, not a literal or
+/// another field). "Placement validation" (spec: on Application ->
+/// Placed, require an accepted Offer, a Start Date and a Customer) is
+/// re-scoped below into "Placement start requires a start date" - the
+/// Start Date the spec actually means lives on Placement, not
+/// Application, and "an accepted Offer" is the same cross-record gap
+/// as the other two.
+fn recruitment_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "placement",
+            "name": "Placement start",
+            "description": "An active placement must record its start date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Active" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "start_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// "Job filled" (spec: filled placements >= openings optionally sets Job
+/// -> Filled) needs a count of a job's own linked Placements, the same
+/// cross-record aggregate gap already covered above. "Placement start"
+/// (spec: Placement Start Date reached creates a check-in task) needs a
+/// `date_reached`-style trigger on a custom object's own date field,
+/// already ruled out too.
+fn recruitment_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "application",
+            "name": "Application interview stage",
+            "description": "Moving an application to Interview creates a scheduling task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Interview" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Schedule interview\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "interview",
+            "name": "Interview scheduled",
+            "description": "A newly created interview notifies the recruiting team.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "add_notification", "params_json": "{\"message\":\"An interview was scheduled\",\"audience\":\"all_admins\"}" }
+            ]
+        },
+        {
+            "entity_type": "offer",
+            "name": "Offer accepted",
+            "description": "Accepting an offer moves its application to Placed and opens a Placement draft linked back to the offer.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Accepted" }
+            ],
+            "actions": [
+                { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":6,\"target_field_key\":\"stage\",\"target_field_source\":\"custom\",\"value\":\"Placed\",\"copy_from_field_key\":null}" },
+                { "action_type": "create_record", "params_json": "{\"entity_type\":\"placement\",\"relationship_ref\":13,\"name_template\":null}" }
             ]
         }
     ])
