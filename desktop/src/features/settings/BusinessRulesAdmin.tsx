@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { AppScopeFilter, AppScopeSelect, matchesAppFilter, useApps } from "../../components/AppScope";
 import { BuiltinValueInput } from "../../components/BuiltinValueInput";
 import { describeGroupedConditions, groupConditionIndices, newGroupId } from "../../lib/conditionGroups";
 import {
@@ -19,6 +20,7 @@ import {
   VALUE_REQUIRED_ACTIONS,
   VALUELESS_OPERATORS,
   type ActionType,
+  type AppDefinition,
   type BusinessRuleActionInput,
   type BusinessRuleConditionInput,
   type BusinessRuleInput,
@@ -147,7 +149,11 @@ export function BusinessRulesAdmin() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyForId, setHistoryForId] = useState<string | null>(null);
+  const [appFilter, setAppFilter] = useState<"all" | "none" | string>("all");
   const queryClient = useQueryClient();
+
+  const apps = useApps();
+  const appList = apps.data ?? [];
 
   const duplicate = useMutation({
     mutationFn: (id: string) => api.duplicateBusinessRule(id),
@@ -175,6 +181,8 @@ export function BusinessRulesAdmin() {
   const labelByKey = new Map((defs.data ?? []).map((d) => [d.key, d.label]));
   const editing = rules.data?.find((r) => r.id === editingId) ?? null;
   const historyRule = rules.data?.find((r) => r.id === historyForId) ?? null;
+  const visibleRules = (rules.data ?? []).filter((r) => matchesAppFilter(r.app_id, appFilter));
+  const newRuleAppId = appFilter !== "all" && appFilter !== "none" ? appFilter : null;
 
   return (
     <div className="card">
@@ -230,9 +238,10 @@ export function BusinessRulesAdmin() {
         <RuleForm
           entityType={entityType}
           customFields={activeDefs}
+          apps={appList}
           initial={{
             entity_type: entityType, name: "", description: null, match_type: "all", priority: 0,
-            effective_start_date: null, effective_end_date: null,
+            effective_start_date: null, effective_end_date: null, app_id: newRuleAppId,
             conditions: [emptyCondition(entityType)], actions: [emptyAction(entityType, activeDefs)],
           }}
           submitLabel="Add rule"
@@ -249,9 +258,11 @@ export function BusinessRulesAdmin() {
         <RuleForm
           entityType={entityType}
           customFields={activeDefs}
+          apps={appList}
           initial={{
             entity_type: entityType, name: editing.name, description: editing.description, match_type: editing.match_type,
             priority: editing.priority, effective_start_date: editing.effective_start_date, effective_end_date: editing.effective_end_date,
+            app_id: editing.app_id,
             conditions: editing.conditions.map((c) => ({
               field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
               compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
@@ -270,11 +281,15 @@ export function BusinessRulesAdmin() {
         />
       )}
 
+      {!creating && !editing && !historyRule && <AppScopeFilter apps={appList} value={appFilter} onChange={setAppFilter} />}
+
       {rules.isLoading && !creating && !editing && !historyRule && <p>Loading...</p>}
-      {rules.data && rules.data.length === 0 && !creating && !editing && !historyRule && (
-        <p className="empty-state">No business rules defined for {currentLabel} yet.</p>
+      {rules.data && visibleRules.length === 0 && !creating && !editing && !historyRule && (
+        <p className="empty-state">
+          {rules.data.length === 0 ? `No business rules defined for ${currentLabel} yet.` : "No rules match this app filter."}
+        </p>
       )}
-      {rules.data && rules.data.length > 0 && !creating && !editing && !historyRule && (
+      {visibleRules.length > 0 && !creating && !editing && !historyRule && (
         <table>
           <thead>
             <tr>
@@ -282,17 +297,19 @@ export function BusinessRulesAdmin() {
               <th>If</th>
               <th>Then</th>
               <th>Priority</th>
+              <th>App</th>
               <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {rules.data.map((r) => (
+            {visibleRules.map((r) => (
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td>{describeGroupedConditions(r.conditions, r.match_type, (c) => describeCondition(entityType, c, labelByKey))}</td>
                 <td>{r.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</td>
                 <td>{r.priority}</td>
+                <td>{r.app_id ? appList.find((a) => a.id === r.app_id)?.name ?? "—" : <span style={{ color: "var(--text-muted)" }}>Workspace-wide</span>}</td>
                 <td>
                   <span className={`badge${r.is_active ? " badge-success" : ""}`}>{r.is_active ? "Active" : "Inactive"}</span>
                   {r.is_protected && <span className="badge" style={{ marginLeft: 4 }}>System</span>}
@@ -527,6 +544,7 @@ function ActionRow({
 function RuleForm({
   entityType,
   customFields,
+  apps,
   initial,
   submitLabel,
   onSubmit,
@@ -536,6 +554,7 @@ function RuleForm({
 }: {
   entityType: string;
   customFields: CustomFieldLite[];
+  apps: AppDefinition[];
   initial: BusinessRuleInput & { is_active?: boolean };
   submitLabel: string;
   onSubmit: (input: BusinessRuleInput, isActive: boolean) => Promise<unknown>;
@@ -549,6 +568,7 @@ function RuleForm({
   const [priority, setPriority] = useState(initial.priority);
   const [startDate, setStartDate] = useState(initial.effective_start_date ?? "");
   const [endDate, setEndDate] = useState(initial.effective_end_date ?? "");
+  const [appId, setAppId] = useState<string | null>(initial.app_id);
   const [conditions, setConditions] = useState<BusinessRuleConditionInput[]>(initial.conditions);
   const [actions, setActions] = useState<BusinessRuleActionInput[]>(initial.actions);
   const [isActive, setIsActive] = useState(initial.is_active ?? true);
@@ -560,7 +580,7 @@ function RuleForm({
       onSubmit(
         {
           entity_type: entityType, name, description: description || null, match_type: matchType, priority,
-          effective_start_date: startDate || null, effective_end_date: endDate || null, conditions, actions,
+          effective_start_date: startDate || null, effective_end_date: endDate || null, app_id: appId, conditions, actions,
         },
         nextActive,
       ),
@@ -662,6 +682,9 @@ function RuleForm({
             <div className="form-field">
               <label>Effective until (optional)</label>
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+            <div className="form-field">
+              <AppScopeSelect apps={apps} value={appId} onChange={setAppId} />
             </div>
             {showActiveToggle && (
               <div className="form-field">
