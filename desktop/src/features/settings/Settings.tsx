@@ -96,8 +96,9 @@ function tabLabel(key: AdminTab): string {
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis", "dashboards"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
-  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts", "apps", "packages"] },
+  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
+  { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
 ];
 
 /**

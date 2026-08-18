@@ -1,5 +1,20 @@
 [build]
   publish = "."
+  # Skip the build entirely when a push/PR only touches desktop/** - the
+  # published site is everything else at the repo root (app.js, index.html,
+  # the other public pages), and desktop-only changes (the Tauri app, the
+  # Rust core, its tests) have nothing to deploy here. Without this, every
+  # push to every branch triggers a full build + deploy (production and
+  # every PR's deploy preview), which is most of what was burning through
+  # build minutes/credits on a repo that ships both a website and a
+  # separate desktop app from the same tree.
+  #
+  # `git diff --quiet ... -- . ':!desktop'` exits 0 (no differences outside
+  # desktop/) when the only changes are under desktop/, and exits non-zero
+  # the moment anything else changed - Netlify's convention is exit 0 =
+  # skip this build, non-zero = build normally, so no extra wrapping is
+  # needed. Applies to production and PR deploy-preview builds alike.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':!desktop'"
 
 [[redirects]]
   from = "/backlog"

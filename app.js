@@ -402,8 +402,9 @@ const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],[
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering','kpis','dashboards']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users']},
- {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts','apps','packages']},
+ {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
+ {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
 ];
 let cfEntity='companies';
@@ -2356,7 +2357,13 @@ function wireAppEditor(body,app,rerender){
  body.querySelectorAll('[data-app-object]').forEach(cb=>cb.onchange=()=>{
   const key=cb.dataset.appObject;
   app.objectKeys=cb.checked?[...app.objectKeys,key]:app.objectKeys.filter(k=>k!==key);
-  save();rerender();
+  // Bug fix: adding/removing an object on an *already-published* app saved
+  // correctly but never refreshed the sidebar's own nav-section filter
+  // (only togglePublishApp did), so a newly-added object silently never
+  // showed up until something else forced a re-render - looked like the
+  // change "didn't take" even though it was saved and no republish is
+  // actually required.
+  save();renderSidebarNav();rerender();
  });
  $('#appDashboard').onchange=e=>{app.dashboardId=e.target.value||null;save()};
  $('#togglePublishApp').onclick=()=>{
