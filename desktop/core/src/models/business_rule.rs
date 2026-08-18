@@ -134,6 +134,12 @@ pub struct BusinessRule {
     pub effective_start_date: Option<String>,
     pub effective_end_date: Option<String>,
     pub is_protected: bool,
+    /// Per-app scoped automation: which App Builder app (migration 0025)
+    /// this rule belongs to, or `None` for workspace-wide - see migration
+    /// 0028's own doc comment for the full rationale. Purely a "which
+    /// app's Admin screen shows this by default" tag; evaluation is
+    /// unaffected either way.
+    pub app_id: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -151,6 +157,11 @@ pub struct BusinessRuleInput {
     pub priority: i64,
     pub effective_start_date: Option<String>,
     pub effective_end_date: Option<String>,
+    /// `None` (the default, via `#[serde(default)]`) means workspace-wide
+    /// - existing callers/tests that never set this keep getting exactly
+    /// that.
+    #[serde(default)]
+    pub app_id: Option<String>,
     pub conditions: Vec<BusinessRuleConditionInput>,
     pub actions: Vec<BusinessRuleActionInput>,
 }
@@ -164,6 +175,8 @@ pub struct BusinessRuleUpdate {
     pub is_active: bool,
     pub effective_start_date: Option<String>,
     pub effective_end_date: Option<String>,
+    #[serde(default)]
+    pub app_id: Option<String>,
     pub conditions: Vec<BusinessRuleConditionInput>,
     pub actions: Vec<BusinessRuleActionInput>,
 }

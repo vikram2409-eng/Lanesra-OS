@@ -121,6 +121,9 @@ pub struct WorkflowDefinition {
     pub is_active: bool,
     pub is_protected: bool,
     pub last_scheduled_run_at: Option<String>,
+    /// Per-app scoped automation - see `BusinessRule::app_id`'s doc
+    /// comment for the full rationale; identical mechanism.
+    pub app_id: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -142,6 +145,10 @@ pub struct WorkflowDefinitionInput {
     pub trigger_offset_days: i64,
     pub match_type: String,
     pub priority: i64,
+    /// `None` (the default) means workspace-wide - see
+    /// `BusinessRuleInput::app_id`'s doc comment.
+    #[serde(default)]
+    pub app_id: Option<String>,
     pub conditions: Vec<WorkflowConditionInput>,
     pub actions: Vec<WorkflowActionInput>,
 }
@@ -158,6 +165,8 @@ pub struct WorkflowDefinitionUpdate {
     pub match_type: String,
     pub priority: i64,
     pub is_active: bool,
+    #[serde(default)]
+    pub app_id: Option<String>,
     pub conditions: Vec<WorkflowConditionInput>,
     pub actions: Vec<WorkflowActionInput>,
 }

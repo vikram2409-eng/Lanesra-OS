@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { AppScopeFilter, AppScopeSelect, matchesAppFilter, useApps } from "../../components/AppScope";
 import { BuiltinValueInput } from "../../components/BuiltinValueInput";
 import { describeGroupedConditions, groupConditionIndices, newGroupId } from "../../lib/conditionGroups";
 import {
@@ -19,6 +20,7 @@ import {
   TRIGGER_SOURCES,
   VALUELESS_OPERATORS,
   WORKFLOW_ACTION_TYPES,
+  type AppDefinition,
   type ConditionOperator,
   type MatchType,
   type NotificationAudience,
@@ -174,7 +176,11 @@ export function WorkflowAutomationAdmin() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyForId, setHistoryForId] = useState<string | null>(null);
+  const [appFilter, setAppFilter] = useState<"all" | "none" | string>("all");
   const queryClient = useQueryClient();
+
+  const apps = useApps();
+  const appList = apps.data ?? [];
 
   const duplicate = useMutation({
     mutationFn: (id: string) => api.duplicateWorkflowRule(id),
@@ -204,6 +210,8 @@ export function WorkflowAutomationAdmin() {
   const labelByKey = new Map((defs.data ?? []).map((d) => [d.key, d.label]));
   const editing = workflows.data?.find((w) => w.id === editingId) ?? null;
   const historyWorkflow = workflows.data?.find((w) => w.id === historyForId) ?? null;
+  const visibleWorkflows = (workflows.data ?? []).filter((w) => matchesAppFilter(w.app_id, appFilter));
+  const newWorkflowAppId = appFilter !== "all" && appFilter !== "none" ? appFilter : null;
 
   return (
     <div className="card">
@@ -263,10 +271,11 @@ export function WorkflowAutomationAdmin() {
           customObjects={customObjects.data ?? []}
           users={users.data ?? []}
           relationshipDefs={relationshipDefs.data ?? []}
+          apps={appList}
           initial={{
             entity_type: entityType, name: "", description: null, trigger_type: "status_changed",
             trigger_status: transitionValuesForEntity(entityType)[0] ?? null, trigger_field_key: null, trigger_field_source: "custom",
-            trigger_offset_days: 0, match_type: "all", priority: 0, conditions: [], actions: [emptyAction(activeDefs[0]?.key ?? "")],
+            trigger_offset_days: 0, match_type: "all", priority: 0, app_id: newWorkflowAppId, conditions: [], actions: [emptyAction(activeDefs[0]?.key ?? "")],
           }}
           submitLabel="Add workflow"
           onSubmit={(input) => api.createWorkflowRule(input)}
@@ -285,10 +294,12 @@ export function WorkflowAutomationAdmin() {
           customObjects={customObjects.data ?? []}
           users={users.data ?? []}
           relationshipDefs={relationshipDefs.data ?? []}
+          apps={appList}
           initial={{
             entity_type: entityType, name: editing.name, description: editing.description, trigger_type: editing.trigger_type,
             trigger_status: editing.trigger_status, trigger_field_key: editing.trigger_field_key, trigger_field_source: editing.trigger_field_source,
             trigger_offset_days: editing.trigger_offset_days, match_type: editing.match_type, priority: editing.priority,
+            app_id: editing.app_id,
             conditions: editing.conditions.map((c) => ({
               field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
               compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
@@ -307,23 +318,28 @@ export function WorkflowAutomationAdmin() {
         />
       )}
 
+      {!creating && !editing && !historyWorkflow && <AppScopeFilter apps={appList} value={appFilter} onChange={setAppFilter} />}
+
       {workflows.isLoading && !creating && !editing && !historyWorkflow && <p>Loading...</p>}
-      {workflows.data && workflows.data.length === 0 && !creating && !editing && !historyWorkflow && (
-        <p className="empty-state">No workflows defined for {currentLabel} yet.</p>
+      {workflows.data && visibleWorkflows.length === 0 && !creating && !editing && !historyWorkflow && (
+        <p className="empty-state">
+          {workflows.data.length === 0 ? `No workflows defined for ${currentLabel} yet.` : "No workflows match this app filter."}
+        </p>
       )}
-      {workflows.data && workflows.data.length > 0 && !creating && !editing && !historyWorkflow && (
+      {visibleWorkflows.length > 0 && !creating && !editing && !historyWorkflow && (
         <table>
           <thead>
             <tr>
               <th>Name</th>
               <th>Trigger</th>
               <th>Then</th>
+              <th>App</th>
               <th>Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {workflows.data.map((w) => (
+            {visibleWorkflows.map((w) => (
               <tr key={w.id}>
                 <td>{w.name}</td>
                 <td>
@@ -332,6 +348,7 @@ export function WorkflowAutomationAdmin() {
                   {w.trigger_field_key ? ` (${w.trigger_field_key})` : ""}
                 </td>
                 <td>{w.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</td>
+                <td>{w.app_id ? appList.find((a) => a.id === w.app_id)?.name ?? "—" : <span style={{ color: "var(--text-muted)" }}>Workspace-wide</span>}</td>
                 <td>
                   <span className={`badge${w.is_active ? " badge-success" : ""}`}>{w.is_active ? "Active" : "Inactive"}</span>
                   {w.is_protected && <span className="badge" style={{ marginLeft: 4 }}>System</span>}
@@ -678,6 +695,7 @@ function WorkflowForm({
   customObjects,
   users,
   relationshipDefs,
+  apps,
   initial,
   submitLabel,
   onSubmit,
@@ -690,6 +708,7 @@ function WorkflowForm({
   customObjects: { key: string; plural_label: string }[];
   users: { id: string; display_name: string; is_active: boolean }[];
   relationshipDefs: { id: string; source_entity_type: string; target_entity_type: string; forward_label: string; reverse_label: string }[];
+  apps: AppDefinition[];
   initial: WorkflowDefinitionInput & { is_active?: boolean };
   submitLabel: string;
   onSubmit: (input: WorkflowDefinitionInput, isActive: boolean) => Promise<unknown>;
@@ -706,6 +725,7 @@ function WorkflowForm({
   const [triggerOffsetDays, setTriggerOffsetDays] = useState(initial.trigger_offset_days);
   const [matchType, setMatchType] = useState<MatchType>(initial.match_type);
   const [priority, setPriority] = useState(initial.priority);
+  const [appId, setAppId] = useState<string | null>(initial.app_id);
   const [conditions, setConditions] = useState<WorkflowConditionInput[]>(initial.conditions);
   const [actions, setActions] = useState<WorkflowActionInput[]>(initial.actions);
   const [isActive, setIsActive] = useState(initial.is_active ?? true);
@@ -742,7 +762,7 @@ function WorkflowForm({
           trigger_status: triggerType === "status_changed" ? triggerStatus : null,
           trigger_field_key: triggerType === "field_changed" || triggerType === "date_reached" || triggerType === "due_overdue" ? triggerFieldKey : null,
           trigger_field_source: triggerType === "field_changed" ? triggerFieldSource : "custom",
-          trigger_offset_days: triggerOffsetDays, match_type: matchType, priority, conditions, actions,
+          trigger_offset_days: triggerOffsetDays, match_type: matchType, priority, app_id: appId, conditions, actions,
         },
         nextActive,
       ),
@@ -900,6 +920,9 @@ function WorkflowForm({
                   <div className="form-field">
                     <label>Priority (lower runs first)</label>
                     <input type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
+                  </div>
+                  <div className="form-field">
+                    <AppScopeSelect apps={apps} value={appId} onChange={setAppId} />
                   </div>
                 </div>
               )}

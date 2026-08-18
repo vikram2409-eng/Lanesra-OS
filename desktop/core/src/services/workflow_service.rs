@@ -168,6 +168,17 @@ fn validate_actions(conn: &Connection, workspace_id: &str, entity_type: &str, ac
     Ok(())
 }
 
+/// Per-app scoped automation - see
+/// `business_rule_service::require_valid_app_id`'s identical doc comment.
+fn require_valid_app_id(conn: &Connection, workspace_id: &str, app_id: Option<&str>) -> AppResult<()> {
+    let Some(app_id) = app_id else { return Ok(()) };
+    let app = super::app_service::get(conn, app_id).map_err(|_| AppError::Validation("App not found".into()))?;
+    if app.workspace_id != workspace_id {
+        return Err(AppError::Validation("App not found".into()));
+    }
+    Ok(())
+}
+
 fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, input: &WorkflowDefinitionInput) -> AppResult<()> {
     require_valid_entity_type(conn, workspace_id, entity_type)?;
     if input.name.trim().is_empty() {
@@ -219,6 +230,7 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
     }
     validate_conditions(conn, workspace_id, entity_type, &input.conditions)?;
     validate_actions(conn, workspace_id, entity_type, &input.actions)?;
+    require_valid_app_id(conn, workspace_id, input.app_id.as_deref())?;
     Ok(())
 }
 
@@ -253,6 +265,7 @@ pub fn update_rule(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate
     }
     validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions)?;
     validate_actions(conn, &existing.workspace_id, &existing.entity_type, &input.actions)?;
+    require_valid_app_id(conn, &existing.workspace_id, input.app_id.as_deref())?;
     // Admin UX polish (spec §10) - see business_rule_service::update_rule's
     // identical snapshot-before-overwrite step for the full rationale.
     let snapshot_json = serde_json::to_string(&existing).expect("WorkflowDefinition is always serializable");
@@ -295,6 +308,7 @@ pub fn restore_version(conn: &Connection, workflow_id: &str, version_id: &str, a
         match_type: snapshot.match_type,
         priority: snapshot.priority,
         is_active: snapshot.is_active,
+        app_id: snapshot.app_id,
         conditions: snapshot
             .conditions
             .into_iter()
@@ -330,6 +344,7 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
         trigger_offset_days: existing.trigger_offset_days,
         match_type: existing.match_type.clone(),
         priority: existing.priority,
+        app_id: existing.app_id.clone(),
         conditions: existing
             .conditions
             .iter()
@@ -357,6 +372,7 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
         match_type: created.match_type.clone(),
         priority: created.priority,
         is_active: false,
+        app_id: created.app_id.clone(),
         conditions: input.conditions,
         actions: input.actions,
     };

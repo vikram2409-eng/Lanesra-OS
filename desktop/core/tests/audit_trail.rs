@@ -85,6 +85,7 @@ fn business_rule_exposes_created_by_and_updated_by() {
     let rule = business_rule_service::create_rule(
         &conn, &ws,
         &BusinessRuleInput {
+            app_id: None,
             entity_type: "Company".into(), name: "Rule A".into(), description: None, match_type: "all".into(),
             priority: 0, effective_start_date: None, effective_end_date: None, conditions: vec![rule_condition()], actions: vec![rule_action()],
         },
@@ -96,6 +97,7 @@ fn business_rule_exposes_created_by_and_updated_by() {
     let updated = business_rule_service::update_rule(
         &conn, &rule.id,
         &BusinessRuleUpdate {
+            app_id: None,
             name: "Rule A renamed".into(), description: None, match_type: "all".into(), priority: 1, is_active: true,
             effective_start_date: None, effective_end_date: None, conditions: vec![rule_condition()], actions: vec![rule_action()],
         },
@@ -122,6 +124,7 @@ fn workflow_definition_exposes_created_by_and_updated_by() {
     let wf = workflow_service::create_rule(
         &conn, &ws,
         &WorkflowDefinitionInput {
+            app_id: None,
             entity_type: "Company".into(), name: "Workflow A".into(), description: None, trigger_type: "record_created".into(),
             trigger_status: None, trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
             match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![workflow_action()],
@@ -134,6 +137,7 @@ fn workflow_definition_exposes_created_by_and_updated_by() {
     let updated = workflow_service::update_rule(
         &conn, &wf.id,
         &WorkflowDefinitionUpdate {
+            app_id: None,
             name: "Workflow A renamed".into(), description: None, trigger_status: None, trigger_field_key: None,
             trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
             is_active: true, conditions: vec![], actions: vec![workflow_action()],

@@ -46,6 +46,7 @@ fn map_header(row: &rusqlite::Row) -> rusqlite::Result<WorkflowDefinition> {
         is_active: row.get("is_active")?,
         is_protected: row.get("is_protected")?,
         last_scheduled_run_at: row.get("last_scheduled_run_at")?,
+        app_id: row.get("app_id")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -98,11 +99,12 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &WorkflowD
     conn.execute(
         "INSERT INTO workflow_definitions
             (id, workspace_id, entity_type, name, description, trigger_type, trigger_status, trigger_field_key,
-             trigger_field_source, trigger_offset_days, match_type, priority, is_active, is_protected, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, 0, ?13, ?14, ?13, ?14)",
+             trigger_field_source, trigger_offset_days, match_type, priority, is_active, is_protected, app_id, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, 0, ?13, ?14, ?15, ?14, ?15)",
         rusqlite::params![
             id, workspace_id, input.entity_type, input.name, input.description, input.trigger_type, input.trigger_status,
-            input.trigger_field_key, input.trigger_field_source, input.trigger_offset_days, input.match_type, input.priority, now, actor_user_id,
+            input.trigger_field_key, input.trigger_field_source, input.trigger_offset_days, input.match_type, input.priority,
+            input.app_id, now, actor_user_id,
         ],
     )?;
     write_conditions(conn, id, &input.conditions)?;
@@ -167,11 +169,11 @@ pub fn update(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate, act
     conn.execute(
         "UPDATE workflow_definitions
          SET name = ?1, description = ?2, trigger_status = ?3, trigger_field_key = ?4, trigger_field_source = ?5,
-             trigger_offset_days = ?6, match_type = ?7, priority = ?8, is_active = ?9, updated_at = ?10, updated_by = ?11
-         WHERE id = ?12",
+             trigger_offset_days = ?6, match_type = ?7, priority = ?8, is_active = ?9, app_id = ?10, updated_at = ?11, updated_by = ?12
+         WHERE id = ?13",
         rusqlite::params![
             input.name, input.description, input.trigger_status, input.trigger_field_key, input.trigger_field_source,
-            input.trigger_offset_days, input.match_type, input.priority, input.is_active, now_iso(), actor_user_id, id,
+            input.trigger_offset_days, input.match_type, input.priority, input.is_active, input.app_id, now_iso(), actor_user_id, id,
         ],
     )?;
     write_conditions(conn, id, &input.conditions)?;

@@ -61,6 +61,7 @@ fn create_task_action(title: &str, due_in_days: i64, assignee_user_id: Option<&s
 
 fn status_changed_workflow(entity_type: &str, trigger_status: &str, action: WorkflowActionInput) -> WorkflowDefinitionInput {
     WorkflowDefinitionInput {
+        app_id: None,
         entity_type: entity_type.into(), name: format!("{entity_type} -> {trigger_status}"), description: None,
         trigger_type: "status_changed".into(), trigger_status: Some(trigger_status.into()), trigger_field_key: None, trigger_field_source: "custom".into(),
         trigger_offset_days: 0, match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![action],
@@ -180,6 +181,7 @@ fn invoice_overdue_transition_fires_a_workflow_assigned_via_the_company_owner() 
 fn record_created_trigger_fires_on_creation_but_not_on_update() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
+        app_id: None,
         entity_type: "Company".into(), name: "Welcome new company".into(), description: None,
         trigger_type: "record_created".into(), trigger_status: None, trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
         match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![create_task_action("Send welcome email", 0, None)],
@@ -201,6 +203,7 @@ fn add_notification_action_notifies_the_records_owner() {
     let (conn, ws, admin) = setup_workspace();
     let rep = user_service::create(&conn, &ws, &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
     let wf = WorkflowDefinitionInput {
+        app_id: None,
         entity_type: "Company".into(), name: "Notify owner on Prospect".into(), description: None,
         trigger_type: "status_changed".into(), trigger_status: Some("Prospect".into()), trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
         match_type: "all".into(), priority: 0, conditions: vec![],
@@ -227,6 +230,7 @@ fn test_business_rules_style_recursion_guard_bounds_a_self_referential_workflow_
     // an infinite loop; this mainly proves the engine terminates.
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
+        app_id: None,
         entity_type: "Task".into(), name: "On task update, log a follow-up".into(), description: None,
         trigger_type: "record_updated".into(), trigger_status: None, trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
         match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![create_task_action("Follow-up", 0, None)],
@@ -257,6 +261,7 @@ fn test_business_rules_style_recursion_guard_bounds_a_self_referential_workflow_
 fn field_changed_trigger_fires_when_a_builtin_field_changes() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
+        app_id: None,
         entity_type: "Opportunity".into(), name: "Next step set".into(), description: None,
         trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("next_step".into()),
         trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
@@ -369,6 +374,7 @@ fn clear_field_action_always_writes_empty_even_when_a_value_exists() {
 fn field_changed_trigger_rejects_a_non_active_builtin_field() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
+        app_id: None,
         entity_type: "Opportunity".into(), name: "Bogus field".into(), description: None,
         trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("not_a_real_field".into()),
         trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
@@ -481,6 +487,7 @@ fn updating_a_workflow_snapshots_its_prior_state_and_a_version_can_be_restored()
     assert!(workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap().is_empty());
 
     let update = WorkflowDefinitionUpdate {
+        app_id: None,
         name: "Renamed workflow".into(), description: None, trigger_status: Some("Lost".into()), trigger_field_key: None,
         trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 1, is_active: true,
         conditions: vec![], actions: vec![create_task_action("Send onboarding kit", 3, None)],
@@ -510,6 +517,7 @@ fn workflow_version_history_is_pruned_to_the_most_recent_ten() {
 
     for i in 0..12 {
         let update = WorkflowDefinitionUpdate {
+            app_id: None,
             name: format!("Workflow v{i}"), description: None, trigger_status: Some("Won".into()), trigger_field_key: None,
             trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: i, is_active: true,
             conditions: vec![], actions: vec![create_task_action("Send onboarding kit", 3, None)],
@@ -527,6 +535,7 @@ fn describe_active_workflows_referencing_field_finds_trigger_and_action_referenc
     assert!(workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "next_step").unwrap().is_empty());
 
     let wf = WorkflowDefinitionInput {
+        app_id: None,
         entity_type: "Opportunity".into(), name: "Next step watcher".into(), description: None,
         trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("next_step".into()),
         trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,

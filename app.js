@@ -402,8 +402,9 @@ const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],[
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering','kpis','dashboards']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users']},
- {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts','apps','packages']},
+ {key:'customization',label:'Customization',icon:'🧩',note:'Extend the data model without code',items:['objects','relationships','fields','layouts']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
+ {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
 ];
 let cfEntity='companies';
@@ -416,6 +417,12 @@ let testingWorkflow=false;
 // is the id of an existing rule/workflow being edited in the builder.
 let ruleBuilderMode=null;
 let wfBuilderMode=null;
+// Per-app scoped automation: which app's rules/workflows/dashboards the
+// list view is filtered to - 'all' | 'none' (workspace-wide only) | an
+// app id. Mirrors the desktop edition's AppScopeFilter state.
+let ruleAppFilter='all';
+let wfAppFilter='all';
+let dashAppFilter='all';
 const ENTITY_SINGULAR={companies:'company',contacts:'contact',opportunities:'opportunity',products:'product',quotes:'quote',orders:'order',invoices:'invoice',contracts:'contract',tasks:'task'};
 const relatedTypeFor={companies:'Company',contacts:'Contact',opportunities:'Opportunity',quotes:'Quote',orders:'Order',invoices:'Invoice',contracts:'Contract'};
 // The demo has no generic relationship system (unlike the desktop
@@ -733,7 +740,7 @@ function visibleKpis(){const prefs=data.kpiPrefs||[]; return prefs.length?KPI_DE
 // live Dashboard rendering exactly as it did before this feature existed,
 // driven by the older workspace-wide kpiPrefs selection above.
 function freshDashboardWidget(kind,config){return {id:uid(),kind,config}}
-function freshDashboard(name,isDefault){return {id:uid(),name,isDefault,roles:[],draftWidgets:[],publishedWidgets:null}}
+function freshDashboard(name,isDefault,appId){return {id:uid(),name,isDefault,roles:[],draftWidgets:[],publishedWidgets:null,appId:appId||null}}
 function ensureDashboards(){
  if(!data.dashboards||!data.dashboards.length)data.dashboards=[freshDashboard('Default',true)];
  if(!data.dashboards.some(d=>d.isDefault))data.dashboards[0].isDefault=true;
@@ -2156,6 +2163,7 @@ function dashboardsTab(body){
  const dashboards=ensureDashboards();
  if(!dashboardsSelectedId||!dashboards.some(d=>d.id===dashboardsSelectedId))dashboardsSelectedId=defaultDashboard().id;
  const dash=dashboardById(dashboardsSelectedId);
+ const visibleDashboards=dashboards.filter(d=>matchesAppFilter(d.appId,dashAppFilter));
  const isPublished=!!dash.publishedWidgets;
  const hasDraftChanges=JSON.stringify(dash.draftWidgets)!==JSON.stringify(dash.publishedWidgets);
  const reports=data.customReports||[];
@@ -2167,13 +2175,15 @@ function dashboardsTab(body){
  body.innerHTML=`<div class="panel">
  <div class="panel-head"><h3>Dashboards</h3></div>
  <p class="muted" style="font-size:13px">Build multiple named dashboard layouts — an ordered list of widgets — and assign roles to each. There's no signed-in user in this browser demo, so the live Dashboard always uses the <b>Default</b> dashboard — role assignment here is illustrative, the same as Screen layouts and Users & roles.</p>
+ ${appFilterPills(dashAppFilter)}
  <div class="panel-head" style="margin-top:4px">
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${dashboards.map(d=>`<button type="button" class="tab ${d.id===dash.id?'active':''}" data-select-dashboard="${d.id}">${d.name}${d.isDefault?' · Default':''}</button>`).join('')}</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${visibleDashboards.map(d=>`<button type="button" class="tab ${d.id===dash.id?'active':''}" data-select-dashboard="${d.id}">${d.name}${d.isDefault?' · Default':''}</button>`).join('')}${visibleDashboards.length?'':'<span class="muted" style="font-size:13px">No dashboards match this app filter.</span>'}</div>
   <button class="btn btn-secondary" id="addDashboard" type="button">+ New dashboard</button>
  </div>
  <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
   <div class="field" style="margin:0"><label>Dashboard name</label><input id="dashboardName" value="${dash.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
   <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${DEMO_LAYOUT_ROLES.map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-dashboard-role="${r}" ${dash.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  ${appSelectHtml('dashboardApp',dash.appId||null)}
   ${dash.isDefault?'<span class="badge">Default dashboard — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="makeDefaultDashboard" type="button">Make default</button>'}
   <button class="btn btn-secondary" id="deleteDashboard" type="button" ${dashboards.length<=1||dash.isDefault?'disabled':''}>Delete dashboard</button>
  </div>
@@ -2196,8 +2206,10 @@ function dashboardsTab(body){
   ${isPublished?'<button class="btn btn-secondary" id="unpublishDashboard" type="button">Unpublish</button>':''}
  </div>
  </div>`;
- $('#addDashboard').onclick=()=>{const name=prompt('New dashboard name?','New dashboard');if(!name)return;const d=freshDashboard(name.trim(),false);dashboards.push(d);save();dashboardsSelectedId=d.id;dashboardsTab(body)};
+ $('#addDashboard').onclick=()=>{const name=prompt('New dashboard name?','New dashboard');if(!name)return;const d=freshDashboard(name.trim(),false,defaultAppIdFor(dashAppFilter));dashboards.push(d);save();dashboardsSelectedId=d.id;dashboardsTab(body)};
  body.querySelectorAll('[data-select-dashboard]').forEach(b=>b.onclick=()=>{dashboardsSelectedId=b.dataset.selectDashboard;dashboardsTab(body)});
+ wireAppFilterPills(body,()=>dashAppFilter,v=>dashAppFilter=v,()=>dashboardsTab(body));
+ const dashboardAppSelect=$('#dashboardApp'); if(dashboardAppSelect)dashboardAppSelect.onchange=e=>{dash.appId=e.target.value||null;save();dashboardsTab(body)};
  // Same deferred-re-render reasoning as layoutsTab's #layoutName.
  $('#dashboardName').onchange=e=>{dash.name=e.target.value.trim()||dash.name;save();setTimeout(()=>dashboardsTab(body),0)};
  body.querySelectorAll('[data-dashboard-role]').forEach(cb=>cb.onchange=()=>{
@@ -2279,6 +2291,36 @@ function appObjectChoices(){return [...APP_OBJECT_TYPES.map(k=>({key:k,label:APP
 function freshApp(name,icon){return {id:uid(),name,icon,description:'',objectKeys:[],dashboardId:null,isPublished:false,permissions:[]}}
 function ensureApps(){if(!data.apps)data.apps=[];return data.apps}
 function appLabel(a){return `${a.icon} ${a.name}`}
+// Per-app scoped automation: business rules, workflow rules, and
+// dashboards can each optionally carry an appId tagging them to one App
+// Builder app instead of always being workspace-wide - mirrors the
+// desktop edition's migration 0028 (`app_id`) and its AppScope.tsx
+// components. Rules/workflows/dashboards keep evaluating exactly as they
+// always have regardless of appId; it's purely which app's Admin screen
+// shows them by default.
+function matchesAppFilter(appId,filter){if(filter==='all')return true;if(filter==='none')return !appId;return appId===filter}
+function appFilterPills(active){
+ const apps=ensureApps();
+ if(!apps.length)return '';
+ return `<div class="entity-tabs" style="margin-bottom:8px">
+  <button type="button" class="pill-tab ${active==='all'?'active':''}" data-app-filter="all">All apps</button>
+  <button type="button" class="pill-tab ${active==='none'?'active':''}" data-app-filter="none">Workspace-wide</button>
+  ${apps.map(a=>`<button type="button" class="pill-tab ${active===a.id?'active':''}" data-app-filter="${a.id}">${appLabel(a)}</button>`).join('')}
+ </div>`;
+}
+function wireAppFilterPills(body,get,set,rerender){
+ body.querySelectorAll('[data-app-filter]').forEach(b=>b.onclick=()=>{set(b.dataset.appFilter);rerender()});
+}
+function appSelectHtml(id,selectedAppId){
+ const apps=ensureApps();
+ if(!apps.length)return '';
+ return `<div class="field" style="margin:0"><label>App</label><select id="${id}"><option value="">Workspace-wide</option>${apps.map(a=>`<option value="${a.id}" ${selectedAppId===a.id?'selected':''}>${appLabel(a)}</option>`).join('')}</select></div>`;
+}
+function appNameFor(appId){if(!appId)return null;const a=ensureApps().find(x=>x.id===appId);return a?appLabel(a):null}
+/** Which real app id (if any) a "+ New" button should default a freshly
+ * created rule/workflow/dashboard to: the currently selected app filter,
+ * or null (workspace-wide) when the filter is 'all'/'none'. */
+function defaultAppIdFor(filter){return (filter!=='all'&&filter!=='none')?filter:null}
 function appPermPrincipalLabel(p){if(p.principalType==='role')return p.principalId;const u=(data.users||[]).find(u=>u.id===p.principalId);return u?u.name:'(user removed)'}
 function appPermLevelLabel(l){return l==='editor'?'Editor':'Viewer'}
 // The currently selected app, only if it's still published - an app
@@ -2356,7 +2398,13 @@ function wireAppEditor(body,app,rerender){
  body.querySelectorAll('[data-app-object]').forEach(cb=>cb.onchange=()=>{
   const key=cb.dataset.appObject;
   app.objectKeys=cb.checked?[...app.objectKeys,key]:app.objectKeys.filter(k=>k!==key);
-  save();rerender();
+  // Bug fix: adding/removing an object on an *already-published* app saved
+  // correctly but never refreshed the sidebar's own nav-section filter
+  // (only togglePublishApp did), so a newly-added object silently never
+  // showed up until something else forced a re-render - looked like the
+  // change "didn't take" even though it was saved and no republish is
+  // actually required.
+  save();renderSidebarNav();rerender();
  });
  $('#appDashboard').onchange=e=>{app.dashboardId=e.target.value||null;save()};
  $('#togglePublishApp').onclick=()=>{
@@ -2542,12 +2590,18 @@ function installReferencePackage(key){
   data.relationshipDefinitions.push(rel);
   relIds[relKey]=rel.id;
  });
- pkg.rules.forEach(r=>data.fieldRules.push(stampCreate({id:uid(),active:true,entity:r.entity,matchType:r.matchType,conditions:r.conditions,actions:r.actions})));
- pkg.workflows.forEach(w=>data.workflowRules.push(stampCreate({id:uid(),active:true,conditionsMerged:true,entity:w.entity,matchType:w.matchType,conditions:w.conditions,actions:w.actions,notify:w.notify})));
+ // Per-app scoped automation: a package's rules/workflows are tagged to
+ // the app this install creates below, not left workspace-wide - the
+ // natural default for "installed as its own focused app" content,
+ // mirroring the desktop edition's identical choice in
+ // industry_package_service. Created before the rules/workflows so its id
+ // is already known.
  const app=freshApp(pkg.name,pkg.appIcon);
  app.description=pkg.description;
  app.objectKeys=packageObjectKeys(pkg);
  app.isPublished=true;
+ pkg.rules.forEach(r=>data.fieldRules.push(stampCreate({id:uid(),active:true,entity:r.entity,matchType:r.matchType,conditions:r.conditions,actions:r.actions,appId:app.id})));
+ pkg.workflows.forEach(w=>data.workflowRules.push(stampCreate({id:uid(),active:true,conditionsMerged:true,entity:w.entity,matchType:w.matchType,conditions:w.conditions,actions:w.actions,notify:w.notify,appId:app.id})));
  data.apps.push(app);
  data.installedApps.push({id:uid(),key,packageId:pkg.packageId,name:pkg.name,industry:pkg.industry,version:pkg.version,status:'active',appId:app.id,objectKeys:app.objectKeys,installedAt:new Date().toISOString()});
  data.appPackages=(data.appPackages||[]).filter(p=>p.key!==key);
@@ -2940,12 +2994,14 @@ function rulesTab(body){
  if(ruleBuilderMode){renderRuleBuilder(body);return}
  const keys=[...Object.keys(numberRules),...activeCustomObjectKeys()];
  const actionFields=actionableFieldsFor(ruleEntity);
- const list=(data.fieldRules||[]).filter(r=>r.entity===ruleEntity);
+ const list=(data.fieldRules||[]).filter(r=>r.entity===ruleEntity&&matchesAppFilter(r.appId,ruleAppFilter));
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Business rules</h3><p class="muted">Build an IF (AND/OR conditions, with one level of OR-groups) / THEN (any number of actions) rule against any built-in or custom field.</p>
  ${entityPills(keys,ruleEntity)}
- ${actionFields.length?`<div class="table-wrap"><table class="table"><thead><tr><th>If</th><th>Then</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${describeConditions(r.entity,r.conditions,r.matchType||'all')}</td><td>${(r.actions||[]).map(a=>describeRuleAction(r.entity,a)).join('; ')}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-rule="${r.id}">Edit</button><button class="icon-btn" data-dup-rule="${r.id}" title="Duplicate">Duplicate</button><button class="icon-btn" data-history-rule="${r.id}" title="Version history">History</button><button class="icon-btn" data-del-rule="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No business rules on '+entityLabel(ruleEntity)+' yet</div>'}</div><button class="btn btn-secondary" id="addRule" style="margin-top:14px">+ New rule</button>`:`<div class="empty">${entityLabel(ruleEntity)} has no field a rule can act on yet.</div>`}
+ ${appFilterPills(ruleAppFilter)}
+ ${actionFields.length?`<div class="table-wrap"><table class="table"><thead><tr><th>If</th><th>Then</th><th>App</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${describeConditions(r.entity,r.conditions,r.matchType||'all')}</td><td>${(r.actions||[]).map(a=>describeRuleAction(r.entity,a)).join('; ')}</td><td>${appNameFor(r.appId)||'<span class="muted">Workspace-wide</span>'}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-rule="${r.id}">Edit</button><button class="icon-btn" data-dup-rule="${r.id}" title="Duplicate">Duplicate</button><button class="icon-btn" data-history-rule="${r.id}" title="Version history">History</button><button class="icon-btn" data-del-rule="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No business rules on '+entityLabel(ruleEntity)+' match this filter</div>'}</div><button class="btn btn-secondary" id="addRule" style="margin-top:14px">+ New rule</button>`:`<div class="empty">${entityLabel(ruleEntity)} has no field a rule can act on yet.</div>`}
  </div>`;
  body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{ruleEntity=b.dataset.entity;renderAdminTab()});
+ wireAppFilterPills(body,()=>ruleAppFilter,v=>ruleAppFilter=v,()=>renderAdminTab());
  $('#addRule')?.addEventListener('click',()=>{ruleBuilderMode='create';renderAdminTab()});
  body.querySelectorAll('[data-edit-rule]').forEach(b=>b.onclick=()=>{ruleBuilderMode=b.dataset.editRule;renderAdminTab()});
  body.querySelectorAll('[data-dup-rule]').forEach(b=>b.onclick=()=>{
@@ -2971,6 +3027,7 @@ function renderRuleBuilder(body){
  const entityKey=existing?existing.entity:ruleEntity;
  const condFields=conditionFieldsFor(entityKey);
  const actionFields=actionableFieldsFor(entityKey);
+ const initialAppId=isEdit?(existing.appId||null):defaultAppIdFor(ruleAppFilter);
  const initialConditions=existing?.conditions?.length?existing.conditions:[{fieldKey:transitionFieldFor(entityKey),operator:'equals',value:'',compareField:null,groupId:null}];
  const initialActions=existing?.actions?.length?existing.actions:[{type:'require',targetField:actionFields[0]?.[0]||'',value:'',message:''}];
  body.innerHTML=`<div class="builder-header">
@@ -2978,6 +3035,7 @@ function renderRuleBuilder(body){
    <div class="builder-breadcrumb">Business Rules / ${isEdit?'Edit rule':'New rule'}</div>
    <div class="builder-title-row"><h2>${isEdit?'Edit business rule':'New business rule'}</h2>${isEdit?`<span class="badge" style="${existing.active?'background:#dcfce7;color:#166534':''}">${existing.active?'Active':'Inactive'}</span>`:''}</div>
    <p class="builder-subtitle">Applies to ${entityLabel(entityKey)}.</p>
+   ${appSelectHtml('ruleBuilderApp',initialAppId)}
    ${isEdit?auditByline(existing):''}
   </div>
   <div class="builder-header-actions">
@@ -3048,7 +3106,8 @@ function renderRuleBuilder(body){
   const conditions=condEditor.getConditions(), matchType=condEditor.getMatchType(), actions=actEditor.getActions();
   if(!conditions.length)return alert('Add at least one condition.');
   if(!actions.length)return alert('Add at least one action.');
-  const payload={entity:entityKey,matchType,conditions,actions};
+  const appId=$('#ruleBuilderApp')?.value||null;
+  const payload={entity:entityKey,matchType,conditions,actions,appId};
   if(isEdit){pushRuleHistory(existing);Object.assign(existing,payload);stampUpdate(existing)}else{data.fieldRules.push(stampCreate({id:uid(),active:true,...payload}))}
   save();toast(isEdit?'Business rule saved':'Business rule added');ruleBuilderMode=null;testingRules=false;renderView()};
 }
@@ -3455,13 +3514,15 @@ function executeWorkflowAction(a,key,record){
 function workflowTab(body){
  if(wfBuilderMode){renderWorkflowBuilder(body);return}
  const keys=[...Object.keys(relatedTypeFor),...activeCustomObjectKeys()];
- const list=(data.workflowRules||[]).filter(r=>r.entity===wfEntity);
+ const list=(data.workflowRules||[]).filter(r=>r.entity===wfEntity&&matchesAppFilter(r.appId,wfAppFilter));
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Workflow automation</h3><p class="muted">Trigger any number of actions - create a task, create a new record, update a related record, or update/default/clear a field on this record - when a saved record's changed fields match a set of AND/OR conditions (with one level of OR-groups).</p>
  ${entityPills(keys,wfEntity)}
- <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Then</th><th>Notifies admins</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${describeConditions(r.entity,r.conditions,r.matchType||'all')}</td><td>${(r.actions||[]).map(a=>describeWorkflowAction(a,r.entity)).join('; ')}</td><td>${r.notify?'Yes':'No'}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-wf="${r.id}">Edit</button><button class="icon-btn" data-dup-wf="${r.id}" title="Duplicate">Duplicate</button><button class="icon-btn" data-history-wf="${r.id}" title="Version history">History</button><button class="icon-btn" data-del-wf="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No workflow rules on '+entityLabel(wfEntity)+' yet</div>'}</div>
+ ${appFilterPills(wfAppFilter)}
+ <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Then</th><th>App</th><th>Notifies admins</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(r=>`<tr><td>${describeConditions(r.entity,r.conditions,r.matchType||'all')}</td><td>${(r.actions||[]).map(a=>describeWorkflowAction(a,r.entity)).join('; ')}</td><td>${appNameFor(r.appId)||'<span class="muted">Workspace-wide</span>'}</td><td>${r.notify?'Yes':'No'}</td><td>${badgeMaybe(r.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-wf="${r.id}">Edit</button><button class="icon-btn" data-dup-wf="${r.id}" title="Duplicate">Duplicate</button><button class="icon-btn" data-history-wf="${r.id}" title="Version history">History</button><button class="icon-btn" data-del-wf="${r.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No workflow rules on '+entityLabel(wfEntity)+' match this filter</div>'}</div>
  <button class="btn btn-secondary" id="addWf" style="margin-top:14px">+ New workflow rule</button>
  </div>`;
  body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{wfEntity=b.dataset.entity;renderAdminTab()});
+ wireAppFilterPills(body,()=>wfAppFilter,v=>wfAppFilter=v,()=>renderAdminTab());
  $('#addWf').onclick=()=>{wfBuilderMode='create';renderAdminTab()};
  body.querySelectorAll('[data-edit-wf]').forEach(b=>b.onclick=()=>{wfBuilderMode=b.dataset.editWf;renderAdminTab()});
  body.querySelectorAll('[data-dup-wf]').forEach(b=>b.onclick=()=>{
@@ -3570,6 +3631,7 @@ function renderWorkflowBuilder(body){
  const condFields=conditionFieldsFor(entityKey);
  const recordTargets=createRecordTargetsFor(entityKey);
  const relTargets=relTargetsFor(entityKey);
+ const initialAppId=isEdit?(existing.appId||null):defaultAppIdFor(wfAppFilter);
  const initialConditions=existing?.conditions?.length?existing.conditions:[{fieldKey:transitionFieldFor(entityKey),operator:'equals',value:'',compareField:null,groupId:null}];
  const initialActions=existing?.actions?.length?existing.actions:[emptyWorkflowAction('create_task',entityKey,recordTargets,relTargets)];
  body.innerHTML=`<div class="builder-header">
@@ -3577,6 +3639,7 @@ function renderWorkflowBuilder(body){
    <div class="builder-breadcrumb">Workflow Automation / ${isEdit?'Edit workflow':'New workflow'}</div>
    <div class="builder-title-row"><h2>${isEdit?'Edit workflow rule':'New workflow rule'}</h2>${isEdit?`<span class="badge" style="${existing.active?'background:#dcfce7;color:#166534':''}">${existing.active?'Active':'Inactive'}</span>`:''}</div>
    <p class="builder-subtitle">Applies to ${entityLabel(entityKey)}.</p>
+   ${appSelectHtml('wfBuilderApp',initialAppId)}
    ${isEdit?auditByline(existing):''}
   </div>
   <div class="builder-header-actions">
@@ -3659,7 +3722,8 @@ function renderWorkflowBuilder(body){
    if(a.type==='update_related_record'&&!a.relValue)return alert('Enter the value to write on the related record.');
    if((a.type==='update_field'||a.type==='set_default_field')&&!a.updateCopyFrom&&!a.updateValue)return alert('Enter a value to write, or a field to copy from.');
   }
-  const payload={entity:entityKey,notify:fd.notify==='true',conditions,matchType,actions,conditionsMerged:true};
+  const appId=$('#wfBuilderApp')?.value||null;
+  const payload={entity:entityKey,notify:fd.notify==='true',conditions,matchType,actions,conditionsMerged:true,appId};
   if(isEdit){pushRuleHistory(existing);Object.assign(existing,payload);stampUpdate(existing)}else{data.workflowRules.push(stampCreate({id:uid(),active:true,...payload}))}
   save();toast(isEdit?'Workflow rule saved':'Workflow rule added');wfBuilderMode=null;testingWorkflow=false;renderView()};
 }

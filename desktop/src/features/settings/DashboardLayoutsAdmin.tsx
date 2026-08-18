@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { AppScopeFilter, AppScopeSelect, matchesAppFilter, useApps } from "../../components/AppScope";
 import {
   CUSTOM_FIELD_ENTITY_TYPES,
   ROLES,
   entityTypeLabel,
+  type AppDefinition,
   type CustomFieldEntityType,
   type CustomReport,
   type DashboardLayout,
@@ -58,7 +60,11 @@ export function DashboardLayoutsAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [appFilter, setAppFilter] = useState<"all" | "none" | string>("all");
   const queryClient = useQueryClient();
+
+  const apps = useApps();
+  const appList = apps.data ?? [];
 
   const layouts = useQuery({ queryKey: ["dashboardLayouts"], queryFn: () => api.listDashboardLayouts() });
   // Chart widgets reference a saved Custom Report by id - fetched once
@@ -72,8 +78,10 @@ export function DashboardLayoutsAdmin() {
   }
 
   const list = layouts.data ?? [];
-  const selected = list.find((l) => l.id === selectedId) ?? list.find((l) => l.is_default) ?? list[0] ?? null;
+  const visibleList = list.filter((l) => matchesAppFilter(l.app_id, appFilter));
+  const selected = visibleList.find((l) => l.id === selectedId) ?? visibleList.find((l) => l.is_default) ?? visibleList[0] ?? null;
   const previewLayout = list.find((l) => l.id === previewId) ?? null;
+  const newLayoutAppId = appFilter !== "all" && appFilter !== "none" ? appFilter : null;
 
   return (
     <div className="card">
@@ -87,9 +95,11 @@ export function DashboardLayoutsAdmin() {
 
       {layouts.isLoading && <p>Loading...</p>}
 
-      {list.length > 0 && (
+      <AppScopeFilter apps={appList} value={appFilter} onChange={setAppFilter} />
+
+      {visibleList.length > 0 && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "12px 0" }}>
-          {list.map((l) => (
+          {visibleList.map((l) => (
             <button
               key={l.id}
               className={`tab${selected?.id === l.id ? " active" : ""}`}
@@ -107,9 +117,19 @@ export function DashboardLayoutsAdmin() {
           </button>
         </div>
       )}
+      {visibleList.length === 0 && list.length > 0 && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "12px 0" }}>
+          <p className="empty-state" style={{ margin: 0 }}>No dashboards match this app filter.</p>
+          <button className="btn" onClick={() => setCreating((v) => !v)}>
+            + New dashboard
+          </button>
+        </div>
+      )}
 
       {creating && (
         <NewLayoutForm
+          apps={appList}
+          defaultAppId={newLayoutAppId}
           onDone={(created) => {
             invalidate();
             setCreating(false);
@@ -125,6 +145,7 @@ export function DashboardLayoutsAdmin() {
           layout={selected}
           layoutCount={list.length}
           reports={reportList}
+          apps={appList}
           onChanged={invalidate}
           onDeleted={() => {
             invalidate();
@@ -141,12 +162,23 @@ export function DashboardLayoutsAdmin() {
   );
 }
 
-function NewLayoutForm({ onDone, onCancel }: { onDone: (created: DashboardLayout) => void; onCancel: () => void }) {
+function NewLayoutForm({
+  apps,
+  defaultAppId,
+  onDone,
+  onCancel,
+}: {
+  apps: AppDefinition[];
+  defaultAppId: string | null;
+  onDone: (created: DashboardLayout) => void;
+  onCancel: () => void;
+}) {
   const [name, setName] = useState("");
+  const [appId, setAppId] = useState<string | null>(defaultAppId);
   const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
-    mutationFn: () => api.createDashboardLayout({ name, initial_kpi_keys: KPI_DEFS.map((k) => k.key) }),
+    mutationFn: () => api.createDashboardLayout({ name, initial_kpi_keys: KPI_DEFS.map((k) => k.key), app_id: appId }),
     onSuccess: onDone,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create this dashboard"),
   });
@@ -165,6 +197,9 @@ function NewLayoutForm({ onDone, onCancel }: { onDone: (created: DashboardLayout
           <label>Dashboard name</label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sales dashboard" required autoFocus />
         </div>
+        <div className="form-field">
+          <AppScopeSelect apps={apps} value={appId} onChange={setAppId} />
+        </div>
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={create.isPending}>
             Create dashboard
@@ -182,6 +217,7 @@ function LayoutEditor({
   layout,
   layoutCount,
   reports,
+  apps,
   onChanged,
   onDeleted,
   onPreview,
@@ -189,6 +225,7 @@ function LayoutEditor({
   layout: DashboardLayout;
   layoutCount: number;
   reports: CustomReport[];
+  apps: AppDefinition[];
   onChanged: () => void;
   onDeleted: () => void;
   onPreview: () => void;
@@ -196,19 +233,20 @@ function LayoutEditor({
   const [name, setName] = useState(layout.name);
   const [roles, setRoles] = useState<string[]>(layout.roles);
   const [widgets, setWidgets] = useState<DashboardWidgets>(layout.draft);
+  const [appId, setAppId] = useState<string | null>(layout.app_id);
   const [error, setError] = useState<string | null>(null);
 
   // Every structural edit (add/remove/reorder a widget) saves immediately
   // - same reasoning as ScreenLayoutsAdmin's identical choice.
   const update = useMutation({
-    mutationFn: (next: { name: string; roles: string[]; draft: DashboardWidgets }) => api.updateDashboardLayout(layout.id, next),
+    mutationFn: (next: { name: string; roles: string[]; draft: DashboardWidgets; app_id: string | null }) => api.updateDashboardLayout(layout.id, next),
     onSuccess: onChanged,
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this dashboard"),
   });
 
-  function save(nextWidgets: DashboardWidgets, nextName = name, nextRoles = roles) {
+  function save(nextWidgets: DashboardWidgets, nextName = name, nextRoles = roles, nextAppId = appId) {
     setWidgets(nextWidgets);
-    update.mutate({ name: nextName, roles: nextRoles, draft: nextWidgets });
+    update.mutate({ name: nextName, roles: nextRoles, draft: nextWidgets, app_id: nextAppId });
   }
 
   const makeDefault = useMutation({
@@ -316,6 +354,16 @@ function LayoutEditor({
                 </label>
               ))}
             </div>
+          </div>
+          <div className="form-field">
+            <AppScopeSelect
+              apps={apps}
+              value={appId}
+              onChange={(next) => {
+                setAppId(next);
+                save(widgets, name, roles, next);
+              }}
+            />
           </div>
           <div className="form-field full" style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <span className={`badge${layout.is_default ? " badge-success" : ""}`}>

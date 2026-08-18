@@ -17,6 +17,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<(DashboardLayout, String, St
         roles: Vec::new(),         // filled in by the caller from roles_json
         draft: Default::default(), // filled in by the caller from draft_json
         published: None,           // filled in by the caller from published_json
+        app_id: row.get("app_id")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -48,28 +49,31 @@ pub fn create(
     is_default: bool,
     roles_json: &str,
     draft_json: &str,
+    app_id: Option<&str>,
     actor_user_id: Option<&str>,
 ) -> rusqlite::Result<()> {
     let now = now_iso();
     conn.execute(
-        "INSERT INTO dashboard_layouts (id, workspace_id, name, is_default, roles_json, draft_json, published_json, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?7, ?8)",
-        rusqlite::params![id, workspace_id, name, is_default, roles_json, draft_json, now, actor_user_id],
+        "INSERT INTO dashboard_layouts (id, workspace_id, name, is_default, roles_json, draft_json, published_json, app_id, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, ?7, ?8, ?9, ?8, ?9)",
+        rusqlite::params![id, workspace_id, name, is_default, roles_json, draft_json, app_id, now, actor_user_id],
     )?;
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_meta_and_draft(
     conn: &Connection,
     id: &str,
     name: &str,
     roles_json: &str,
     draft_json: &str,
+    app_id: Option<&str>,
     actor_user_id: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE dashboard_layouts SET name = ?1, roles_json = ?2, draft_json = ?3, updated_at = ?4, updated_by = ?5 WHERE id = ?6",
-        rusqlite::params![name, roles_json, draft_json, now_iso(), actor_user_id, id],
+        "UPDATE dashboard_layouts SET name = ?1, roles_json = ?2, draft_json = ?3, app_id = ?4, updated_at = ?5, updated_by = ?6 WHERE id = ?7",
+        rusqlite::params![name, roles_json, draft_json, app_id, now_iso(), actor_user_id, id],
     )?;
     Ok(())
 }

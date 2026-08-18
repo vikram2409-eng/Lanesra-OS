@@ -105,6 +105,7 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
         &conn,
         &ws,
         &BusinessRuleInput {
+            app_id: None,
             entity_type: "Opportunity".into(),
             name: "Require Lead Source when Won".into(),
             description: None,
@@ -140,6 +141,7 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
         &conn,
         &ws,
         &lanesra_core::models::workflow::WorkflowDefinitionInput {
+            app_id: None,
             entity_type: "Opportunity".into(),
             name: "Kick off onboarding when Won".into(),
             description: None,

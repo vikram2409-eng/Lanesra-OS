@@ -52,6 +52,7 @@ fn vendor_object() -> CustomObjectDefinitionInput {
 
 fn status_changed_workflow(entity_type: &str, trigger_status: &str, action: WorkflowActionInput) -> WorkflowDefinitionInput {
     WorkflowDefinitionInput {
+        app_id: None,
         entity_type: entity_type.into(), name: format!("{entity_type} -> {trigger_status}"), description: None,
         trigger_type: "status_changed".into(), trigger_status: Some(trigger_status.into()), trigger_field_key: None, trigger_field_source: "custom".into(),
         trigger_offset_days: 0, match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![action],

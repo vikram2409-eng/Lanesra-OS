@@ -24,6 +24,17 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
+/// Per-app scoped automation - see
+/// `business_rule_service::require_valid_app_id`'s identical doc comment.
+fn require_valid_app_id(conn: &Connection, workspace_id: &str, app_id: Option<&str>) -> AppResult<()> {
+    let Some(app_id) = app_id else { return Ok(()) };
+    let app = super::app_service::get(conn, app_id).map_err(|_| AppError::Validation("App not found".into()))?;
+    if app.workspace_id != workspace_id {
+        return Err(AppError::Validation("App not found".into()));
+    }
+    Ok(())
+}
+
 fn empty_widgets() -> DashboardWidgets {
     DashboardWidgets { widgets: vec![] }
 }
@@ -59,7 +70,7 @@ pub fn list_layouts(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Dash
     if dashboard_layout_repo::count_for_workspace(conn, workspace_id)? == 0 {
         let id = dashboard_layout_repo::new_id();
         let draft_json = serde_json::to_string(&empty_widgets()).expect("DashboardWidgets always serializes");
-        dashboard_layout_repo::create(conn, &id, workspace_id, "Default", true, "[]", &draft_json, None)?;
+        dashboard_layout_repo::create(conn, &id, workspace_id, "Default", true, "[]", &draft_json, None, None)?;
     }
     dashboard_layout_repo::list(conn, workspace_id)?.into_iter().map(hydrate).collect()
 }
@@ -74,10 +85,11 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &DashboardLay
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Layout name is required".into()));
     }
+    require_valid_app_id(conn, workspace_id, input.app_id.as_deref())?;
     let is_default = dashboard_layout_repo::count_for_workspace(conn, workspace_id)? == 0;
     let id = dashboard_layout_repo::new_id();
     let draft_json = serde_json::to_string(&seeded_widgets(&input.initial_kpi_keys)).expect("DashboardWidgets always serializes");
-    dashboard_layout_repo::create(conn, &id, workspace_id, input.name.trim(), is_default, "[]", &draft_json, actor_user_id)?;
+    dashboard_layout_repo::create(conn, &id, workspace_id, input.name.trim(), is_default, "[]", &draft_json, input.app_id.as_deref(), actor_user_id)?;
     get_layout(conn, &id)
 }
 
@@ -86,9 +98,11 @@ pub fn update_layout(conn: &Connection, id: &str, update: &DashboardLayoutUpdate
     if update.name.trim().is_empty() {
         return Err(AppError::Validation("Layout name is required".into()));
     }
+    let existing = get_layout(conn, id)?;
+    require_valid_app_id(conn, &existing.workspace_id, update.app_id.as_deref())?;
     let roles_json = serde_json::to_string(&update.roles).expect("Vec<String> always serializes");
     let draft_json = serde_json::to_string(&update.draft).expect("DashboardWidgets always serializes");
-    dashboard_layout_repo::update_meta_and_draft(conn, id, update.name.trim(), &roles_json, &draft_json, actor_user_id)?;
+    dashboard_layout_repo::update_meta_and_draft(conn, id, update.name.trim(), &roles_json, &draft_json, update.app_id.as_deref(), actor_user_id)?;
     get_layout(conn, id)
 }
 

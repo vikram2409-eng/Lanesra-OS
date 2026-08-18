@@ -201,6 +201,7 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
     business_rule_service::create_rule(
         &conn, &ws,
         &BusinessRuleInput {
+            app_id: None,
             entity_type: vendor.key.clone(),
             name: "Require Contact Email when Inactive".into(),
             description: None,

@@ -1123,6 +1123,11 @@ export interface BusinessRule {
   effective_start_date: string | null;
   effective_end_date: string | null;
   is_protected: boolean;
+  /** Per-app scoped automation: which App Builder app this rule belongs
+   * to, or null for workspace-wide - see migration 0028's own doc comment
+   * for the full rationale. Purely a "which app's Admin screen shows this
+   * by default" tag; evaluation is unaffected either way. */
+  app_id: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -1139,6 +1144,7 @@ export interface BusinessRuleInput {
   priority: number;
   effective_start_date: string | null;
   effective_end_date: string | null;
+  app_id: string | null;
   conditions: BusinessRuleConditionInput[];
   actions: BusinessRuleActionInput[];
 }
@@ -1151,6 +1157,7 @@ export interface BusinessRuleUpdate {
   is_active: boolean;
   effective_start_date: string | null;
   effective_end_date: string | null;
+  app_id: string | null;
   conditions: BusinessRuleConditionInput[];
   actions: BusinessRuleActionInput[];
 }
@@ -1293,6 +1300,8 @@ export interface WorkflowDefinition {
   is_active: boolean;
   is_protected: boolean;
   last_scheduled_run_at: string | null;
+  /** Per-app scoped automation - see `BusinessRule.app_id`'s doc comment. */
+  app_id: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -1312,6 +1321,7 @@ export interface WorkflowDefinitionInput {
   trigger_offset_days: number;
   match_type: MatchType;
   priority: number;
+  app_id: string | null;
   conditions: WorkflowConditionInput[];
   actions: WorkflowActionInput[];
 }
@@ -1326,6 +1336,7 @@ export interface WorkflowDefinitionUpdate {
   match_type: MatchType;
   priority: number;
   is_active: boolean;
+  app_id: string | null;
   conditions: WorkflowConditionInput[];
   actions: WorkflowActionInput[];
 }
@@ -1598,6 +1609,8 @@ export interface DashboardLayout {
   roles: string[];
   draft: DashboardWidgets;
   published: DashboardWidgets | null;
+  /** Per-app scoped automation - see `BusinessRule.app_id`'s doc comment. */
+  app_id: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -1607,12 +1620,14 @@ export interface DashboardLayout {
 export interface DashboardLayoutInput {
   name: string;
   initial_kpi_keys: string[];
+  app_id: string | null;
 }
 
 export interface DashboardLayoutUpdate {
   name: string;
   roles: string[];
   draft: DashboardWidgets;
+  app_id: string | null;
 }
 
 export interface EffectiveDashboard {

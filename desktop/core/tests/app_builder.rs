@@ -120,7 +120,7 @@ fn update_rejects_a_dashboard_from_another_workspace() {
     let (conn2, ws2, admin2) = setup_workspace();
     let foreign_dashboard = dashboard_layout_service::create_layout(
         &conn2, &ws2,
-        &DashboardLayoutInput { name: "Other workspace's dashboard".into(), initial_kpi_keys: vec![] },
+        &DashboardLayoutInput { name: "Other workspace's dashboard".into(), initial_kpi_keys: vec![], app_id: None },
         Some(&admin2),
     )
     .unwrap();
