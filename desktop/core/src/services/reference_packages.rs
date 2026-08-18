@@ -3,10 +3,11 @@
 //! (not shipped as loose files) so they're compiled, testable, and
 //! versioned with the engine they target. The dev spec ("Top 10 Industry
 //! Data Models & Packaged Business Apps") sequences Field Service,
-//! Property Management, Construction & Contractors and Professional
-//! Services first; this module ships all four, proving the foundation
-//! against real content rather than only the synthetic manifests
-//! `industry_data_model.rs`'s tests use.
+//! Property Management, Construction & Contractors, Professional
+//! Services and Dental/Clinic Practice Administration first; this module
+//! ships all five, proving the foundation against real content rather
+//! than only the synthetic manifests `industry_data_model.rs`'s tests
+//! use.
 //!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
@@ -72,6 +73,27 @@
 //!   outstanding tasks that are configured auto-close" needs exactly that
 //!   filter (only the flagged tasks, not every task on the project) and
 //!   is left out for the same reason.
+//! - No time-of-day or timestamp field type - `CUSTOM_FIELD_TYPES` is
+//!   `text`/`number`/`date`/`boolean`/`select`, nothing finer-grained than
+//!   a whole day. Practice Administration's Appointment "date/time" and
+//!   "completion timestamp" are both approximated with a plain date field
+//!   (plus a free-text time-of-day field for the former) rather than a
+//!   real time value - see `practice_admin_manifest_json`'s own doc
+//!   comment.
+//! - A business rule requiring that a relationship link *exists*, not
+//!   just that a field has a value - the `require` action only ever
+//!   targets a field key. Practice Administration's "Appointment must
+//!   have a Patient and Provider" and "a Patient Profile must link to
+//!   exactly one Contact" are both left unenforced by a rule for this
+//!   reason (the relationship definitions' own `is_required` flag still
+//!   records the intent).
+//! - Overlap/conflict detection across a set of sibling records (Practice
+//!   Administration's "block an overlapping Provider appointment") - this
+//!   needs both the cross-record read above *and* scanning every other
+//!   record sharing the same relationship, neither of which the condition
+//!   engine can do; it's not simply a bigger instance of the cross-record
+//!   gap, since even a single related record's field wouldn't be enough
+//!   to answer it.
 
 use serde_json::json;
 
@@ -1398,6 +1420,300 @@ fn professional_services_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Engagement closure and review\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" },
                 { "action_type": "create_task", "params_json": "{\"title\":\"Prepare final invoice\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+// --- lanesra.practice_admin -----------------------------------------------
+
+/// `lanesra.practice_admin` v1.0.0 - the fifth package, sequenced right
+/// after Professional Services per the dev spec. Explicit scope
+/// boundary, straight from the spec: administrative/operational practice
+/// management only - not an EHR/EMR, not a diagnostic charting or
+/// clinical record system. Every text field this package adds is
+/// scheduling/billing-facing, never a clinical note.
+///
+/// "Provider Profile linked to User/Contact" relates to Contact, not
+/// User, for the same reason Professional Services' Resource Assignment
+/// doesn't relate to `User` either - see this module's own doc comment.
+///
+/// Patient's own suggested statuses (Active/Inactive/Archived) happen to
+/// be *exactly* `CUSTOM_RECORD_STATUSES`, the one time in this module a
+/// custom object's built-in status vocabulary needs no select-field
+/// workaround at all - Patient Profile drives its lifecycle straight off
+/// the built-in status/`status_changed` trigger, unlike every stage field
+/// elsewhere in this file.
+pub fn practice_admin_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.practice_admin",
+        "name": "Dental & Clinic Practice Administration",
+        "industry": "Healthcare",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "patient_profile", "singular_label": "Patient Profile", "plural_label": "Patient Profiles", "icon": "🪪", "prefix": "PAT", "digits": 4 },
+            { "key": "provider_profile", "singular_label": "Provider Profile", "plural_label": "Provider Profiles", "icon": "🦷", "prefix": "PROV", "digits": 4 },
+            { "key": "appointment", "singular_label": "Appointment", "plural_label": "Appointments", "icon": "📅", "prefix": "APPT", "digits": 5 },
+            { "key": "treatment_plan", "singular_label": "Treatment Plan", "plural_label": "Treatment Plans", "icon": "📋", "prefix": "TXP", "digits": 4 },
+            { "key": "procedure_item", "singular_label": "Procedure Item", "plural_label": "Procedure Items", "icon": "🔧", "prefix": "PROC", "digits": 5 },
+            { "key": "recall", "singular_label": "Recall", "plural_label": "Recalls", "icon": "🔔", "prefix": "RCL", "digits": 4 },
+            { "key": "insurance_profile", "singular_label": "Insurance Profile", "plural_label": "Insurance Profiles", "icon": "🛡", "prefix": "INS", "digits": 4 }
+        ],
+        "fields": practice_admin_fields(),
+        "relationships": practice_admin_relationships(),
+        "business_rules": practice_admin_business_rules(),
+        "workflows": practice_admin_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "patient_profile",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["communication_preference", "non_clinical_notes"] }
+                            ],
+                            // Indices into `relationships` below: Appointments (2), Treatment Plans (4), Recalls (7), Insurance Profiles (8).
+                            "related": ["2", "4", "7", "8"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Appointments by Stage", "entity_type": "appointment", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Practice Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Practice Administration",
+            "icon": "🦷",
+            "description": "Patients, providers, appointments, treatment plans and recalls for dental offices and small clinics - administrative scheduling and billing, not clinical charting.",
+            "object_keys": [
+                "patient_profile", "provider_profile", "appointment", "treatment_plan", "procedure_item", "recall", "insurance_profile", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // See field_service_manifest_json's own note on mapping the spec's role
+            // names (Practice Admin, Provider, Reception, Billing) onto this build's
+            // actual role set.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "editor" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        // No pure reference/lookup object exists here either - every object is a
+        // live scheduling/billing record.
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn practice_admin_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        patient_profile_fields(),
+        provider_profile_fields(),
+        appointment_fields(),
+        treatment_plan_fields(),
+        procedure_item_fields(),
+        recall_fields(),
+        insurance_profile_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn patient_profile_fields() -> serde_json::Value {
+    json!([
+        { "key": "communication_preference", "entity_type": "patient_profile", "label": "Communication Preference", "field_type": "select", "options": ["Email", "Phone", "SMS", "Mail"], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Email", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "non_clinical_notes", "entity_type": "patient_profile", "label": "Non-Clinical Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Administrative flags only - e.g. wheelchair access, translator needed. Not a clinical record.", "placeholder": null }
+    ])
+}
+
+fn provider_profile_fields() -> serde_json::Value {
+    json!([
+        { "key": "provider_type", "entity_type": "provider_profile", "label": "Provider Type", "field_type": "select", "options": ["Dentist", "Hygienist", "Dental Assistant", "Specialist"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Dentist", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "license_reference", "entity_type": "provider_profile", "label": "License / Reference ID", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": true, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn appointment_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "appointment", "label": "Stage", "field_type": "select", "options": ["Requested", "Confirmed", "Checked In", "In Progress", "Completed", "No Show", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Requested", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "appt_type", "entity_type": "appointment", "label": "Type", "field_type": "select", "options": ["Checkup", "Cleaning", "Filling", "Extraction", "Consultation", "Other"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Checkup", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "appt_date", "entity_type": "appointment", "label": "Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Free text, not a real time value - see this module's own doc comment on the
+        // missing time-of-day field type.
+        { "key": "start_time_text", "entity_type": "appointment", "label": "Start Time", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "e.g. 9:00 AM", "placeholder": null },
+        { "key": "duration_minutes", "entity_type": "appointment", "label": "Duration (minutes)", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "30", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reason", "entity_type": "appointment", "label": "Reason", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Completed by the "Complete appointment" business rule below -
+        // approximates "completion timestamp" with a date, for the same reason as start_time_text.
+        { "key": "completed_date", "entity_type": "appointment", "label": "Completed Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn treatment_plan_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "treatment_plan", "label": "Stage", "field_type": "select", "options": ["Draft", "Presented", "Accepted", "Partially Accepted", "Completed", "Declined"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "plan_date", "entity_type": "treatment_plan", "label": "Plan Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "estimated_amount", "entity_type": "treatment_plan", "label": "Estimated Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn procedure_item_fields() -> serde_json::Value {
+    json!([
+        { "key": "service_code", "entity_type": "procedure_item", "label": "Service Code", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "tooth_site", "entity_type": "procedure_item", "label": "Tooth / Site", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "fee", "entity_type": "procedure_item", "label": "Fee", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "stage", "entity_type": "procedure_item", "label": "Stage", "field_type": "select", "options": ["Planned", "Accepted", "Completed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Planned", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn recall_fields() -> serde_json::Value {
+    json!([
+        { "key": "recall_type", "entity_type": "recall", "label": "Recall Type", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "due_date", "entity_type": "recall", "label": "Due Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Reminder automation isn't available for a custom object's own date fields - see this module's own doc comment.", "placeholder": null },
+        { "key": "stage", "entity_type": "recall", "label": "Stage", "field_type": "select", "options": ["Due", "Contacted", "Scheduled", "Completed", "Deferred"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Due", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn insurance_profile_fields() -> serde_json::Value {
+    json!([
+        { "key": "payer_name", "entity_type": "insurance_profile", "label": "Payer Name", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "member_reference", "entity_type": "insurance_profile", "label": "Member / Reference ID", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related` array
+/// references these relationships by their position.
+fn practice_admin_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "patient_profile", "target_entity_type": "Contact", "relationship_type": "one_to_one", "forward_label": "Contact", "reverse_label": "Patient Profile", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "provider_profile", "target_entity_type": "Contact", "relationship_type": "one_to_one", "forward_label": "Contact", "reverse_label": "Provider Profile", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 2 */ { "source_entity_type": "appointment", "target_entity_type": "patient_profile", "relationship_type": "many_to_one", "forward_label": "Patient", "reverse_label": "Appointments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 3 */ { "source_entity_type": "appointment", "target_entity_type": "provider_profile", "relationship_type": "many_to_one", "forward_label": "Provider", "reverse_label": "Appointments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 4 */ { "source_entity_type": "treatment_plan", "target_entity_type": "patient_profile", "relationship_type": "many_to_one", "forward_label": "Patient", "reverse_label": "Treatment Plans", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 5 */ { "source_entity_type": "treatment_plan", "target_entity_type": "provider_profile", "relationship_type": "many_to_one", "forward_label": "Provider", "reverse_label": "Treatment Plans", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 6 */ { "source_entity_type": "procedure_item", "target_entity_type": "treatment_plan", "relationship_type": "many_to_one", "forward_label": "Treatment Plan", "reverse_label": "Procedure Items", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 7 */ { "source_entity_type": "recall", "target_entity_type": "patient_profile", "relationship_type": "many_to_one", "forward_label": "Patient", "reverse_label": "Recalls", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 8 */ { "source_entity_type": "insurance_profile", "target_entity_type": "patient_profile", "relationship_type": "many_to_one", "forward_label": "Patient", "reverse_label": "Insurance Profiles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 9 */ { "source_entity_type": "appointment", "target_entity_type": "treatment_plan", "relationship_type": "many_to_one", "forward_label": "Treatment Plan", "reverse_label": "Appointments", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 }
+    ])
+}
+
+/// Of the spec's five business rules, only "Complete appointment"
+/// survives as written. The rest all need something this module's own
+/// doc comment already rules out: "Appointment validation"'s Patient/
+/// Provider half and "Patient identity" both need a rule that can require
+/// a relationship link exists, not just a field value (the field half of
+/// "Appointment validation" - start time and duration - is instead
+/// enforced the same way every other package enforces an always-required
+/// field: `required: true` on the field definition itself, see
+/// `appointment_fields`). "Schedule collision" needs interval-overlap
+/// detection across every other appointment sharing a provider.
+/// "Treatment acceptance" needs a count of a treatment plan's own active
+/// Procedure Items - a cross-record aggregate.
+fn practice_admin_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "appointment",
+            "name": "Complete appointment",
+            "description": "A completed appointment must record its completion date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Completed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// "Recall due" (spec: due-date-reached creates a contact task) needs a
+/// `date_reached`-style trigger on a custom object's own date field,
+/// already ruled out by this module's own doc comment. "Appointment
+/// completed marks the related recall complete / creates the next recall"
+/// is left out too - Appointment has no relationship to Recall at all in
+/// this manifest (nothing in the spec's own relationship table connects
+/// them directly), and the "if configured" half would need the
+/// conditional-bulk-update capability this module's own doc comment
+/// already covers is missing. "Treatment accepted" only creates a task,
+/// not a Quote - `create_record` only ever creates a Company or an active
+/// custom object (`is_creatable_entity_type`), never a Quote.
+fn practice_admin_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "appointment",
+            "name": "Appointment confirmation",
+            "description": "A newly requested appointment gets a confirmation task for reception.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Confirm this appointment with the patient\",\"description\":null,\"due_in_days\":0,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "appointment",
+            "name": "No-show follow-up",
+            "description": "A missed appointment gets a follow-up task for reception.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "No Show" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Follow up on missed appointment\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "treatment_plan",
+            "name": "Treatment accepted",
+            "description": "An accepted treatment plan gets a billing-preparation task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Accepted" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Prepare billing/quote for accepted treatment plan\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
         }
     ])
