@@ -203,6 +203,14 @@ function AppEditor({
   const [objectKeys, setObjectKeys] = useState<string[]>(app.object_keys);
   const [dashboardId, setDashboardId] = useState<string | null>(app.dashboard_id);
   const [error, setError] = useState<string | null>(null);
+  // Toggling an object already auto-saves (see `toggleObject`), but that
+  // save was the *only* signal anything happened - no confirmation text
+  // anywhere, so from a user's seat "I checked Contacts and nothing
+  // seems to have happened" reads exactly like there's no way to add an
+  // object at all. This mirrors the object-count line's own state so it
+  // doesn't need a toast library: briefly say what just changed, then
+  // fall back to the persistent "N objects selected" summary.
+  const [justToggled, setJustToggled] = useState<string | null>(null);
 
   const update = useMutation({
     mutationFn: (next: AppDefinitionUpdate) => api.updateApp(app.id, next),
@@ -239,16 +247,20 @@ function AppEditor({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not delete this app"),
   });
 
-  function toggleObject(key: string) {
-    const next = objectKeys.includes(key) ? objectKeys.filter((k) => k !== key) : [...objectKeys, key];
-    setObjectKeys(next);
-    save({ object_keys: next });
-  }
-
   const objectChoices = [
     ...CUSTOM_FIELD_ENTITY_TYPES.map((k) => ({ key: k as string, label: entityTypeLabel(k) })),
     ...customObjects.map((o) => ({ key: o.key, label: o.plural_label })),
   ];
+
+  function toggleObject(key: string) {
+    const adding = !objectKeys.includes(key);
+    const next = adding ? [...objectKeys, key] : objectKeys.filter((k) => k !== key);
+    setObjectKeys(next);
+    save({ object_keys: next });
+    const label = objectChoices.find((c) => c.key === key)?.label ?? key;
+    setJustToggled(`${adding ? "Added" : "Removed"} ${label}`);
+    setTimeout(() => setJustToggled((current) => (current === `${adding ? "Added" : "Removed"} ${label}` ? null : current)), 2500);
+  }
 
   return (
     <div>
@@ -319,10 +331,11 @@ function AppEditor({
 
       <div className="card" style={{ background: "var(--surface-2, transparent)", marginBottom: 16 }}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Objects in this app</div>
-        <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 0 }}>
-          {objectKeys.length === 0
-            ? "Pick at least one object before publishing."
-            : `${objectKeys.length} object${objectKeys.length === 1 ? "" : "s"} selected.`}
+        <p style={{ color: justToggled ? "var(--success, #16a34a)" : "var(--text-muted)", fontSize: 12, marginTop: 0, fontWeight: justToggled ? 600 : 400 }}>
+          {justToggled ??
+            (objectKeys.length === 0
+              ? "Pick at least one object before publishing."
+              : `${objectKeys.length} object${objectKeys.length === 1 ? "" : "s"} selected.`)}
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
           {objectChoices.map((c) => (
