@@ -4,10 +4,10 @@
 //! versioned with the engine they target. The dev spec ("Top 10 Industry
 //! Data Models & Packaged Business Apps") sequences Field Service,
 //! Property Management, Construction & Contractors, Professional
-//! Services, Dental/Clinic Practice Administration and Recruitment &
-//! Staffing first; this module ships all six, proving the foundation
-//! against real content rather than only the synthetic manifests
-//! `industry_data_model.rs`'s tests use.
+//! Services, Dental/Clinic Practice Administration, Recruitment &
+//! Staffing and Real Estate Brokerage first; this module ships all
+//! seven, proving the foundation against real content rather than only
+//! the synthetic manifests `industry_data_model.rs`'s tests use.
 //!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
@@ -2038,6 +2038,348 @@ fn recruitment_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":6,\"target_field_key\":\"stage\",\"target_field_source\":\"custom\",\"value\":\"Placed\",\"copy_from_field_key\":null}" },
                 { "action_type": "create_record", "params_json": "{\"entity_type\":\"placement\",\"relationship_ref\":13,\"name_template\":null}" }
+            ]
+        }
+    ])
+}
+
+/// The seventh package: a lightweight brokerage data model for real-estate
+/// agents and small brokerages managing properties, listings, buyers/
+/// sellers, viewings, offers and transactions.
+///
+/// Key-collision note (see this module's own doc comment): the spec's
+/// "Property" object would collide with Property Management's own
+/// `property` custom object key, and its "Offer" would collide with
+/// Recruitment's `offer` - renamed to `listing_property` and
+/// `purchase_offer` respectively so all packages coexist in one
+/// workspace.
+///
+/// "Agent Profile | Custom extension linked to User" and Listing's
+/// "listing agent" both use the same "no relationship-capable `User`
+/// entity type" workaround this file has used repeatedly (Professional
+/// Services' Resource Assignment, Practice Administration's Provider
+/// Profile, Recruitment's Interview): the linked user is the record's
+/// own built-in `owner_user_id`, not a relationship_definition - so
+/// `agent_profile` carries no relationship of its own at all.
+pub fn real_estate_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.real_estate",
+        "name": "Real Estate Brokerage",
+        "industry": "Real Estate",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "listing_property", "singular_label": "Property", "plural_label": "Properties", "icon": "🏠", "prefix": "PROP", "digits": 4 },
+            { "key": "listing", "singular_label": "Listing", "plural_label": "Listings", "icon": "📋", "prefix": "LST", "digits": 4 },
+            { "key": "showing", "singular_label": "Showing", "plural_label": "Showings", "icon": "👁", "prefix": "SHW", "digits": 5 },
+            { "key": "purchase_offer", "singular_label": "Offer", "plural_label": "Offers", "icon": "🤝", "prefix": "OFFR", "digits": 4 },
+            { "key": "transaction", "singular_label": "Transaction", "plural_label": "Transactions", "icon": "🏆", "prefix": "TXN", "digits": 4 },
+            { "key": "client_role", "singular_label": "Client Role", "plural_label": "Client Roles", "icon": "🔗", "prefix": "ROLE", "digits": 5 },
+            { "key": "agent_profile", "singular_label": "Agent Profile", "plural_label": "Agent Profiles", "icon": "🧑‍💼", "prefix": "AGT", "digits": 3 }
+        ],
+        "fields": real_estate_fields(),
+        "relationships": real_estate_relationships(),
+        "business_rules": real_estate_business_rules(),
+        "workflows": real_estate_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "listing",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["listing_stage", "list_price", "list_date", "end_date"] }
+                            ],
+                            // Indices into `relationships` below: Showings (2), Offers (4), Client Roles (9).
+                            "related": ["2", "4", "9"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Listings by Stage", "entity_type": "listing", "group_by_source": "custom", "group_by_field": "listing_stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Brokerage Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Real Estate Brokerage",
+            "icon": "🏘",
+            "description": "Properties, listings, showings, offers and transactions for real-estate agents and small brokerages.",
+            "object_keys": [
+                "listing_property", "listing", "showing", "purchase_offer", "transaction", "client_role", "agent_profile", "Contact", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // Spec role names (Broker/Admin, Agent, Transaction Coordinator,
+            // Marketing Assistant, Read-only) mapped onto this build's actual
+            // role set - see field_service_manifest_json's own note on this
+            // same mapping.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "viewer" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn real_estate_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        listing_property_fields(),
+        listing_fields(),
+        showing_fields(),
+        purchase_offer_fields(),
+        transaction_fields(),
+        client_role_fields(),
+        agent_profile_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn listing_property_fields() -> serde_json::Value {
+    json!([
+        { "key": "property_type", "entity_type": "listing_property", "label": "Property Type", "field_type": "select", "options": ["House", "Condo", "Townhouse", "Land", "Multi-Family", "Commercial"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "House", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "bedrooms", "entity_type": "listing_property", "label": "Bedrooms", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "bathrooms", "entity_type": "listing_property", "label": "Bathrooms", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "size_sqft", "entity_type": "listing_property", "label": "Size (sq ft)", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "property_stage", "entity_type": "listing_property", "label": "Stage", "field_type": "select", "options": ["Prospect", "Available", "Under Contract", "Sold/Leased", "Off Market"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Prospect", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn listing_fields() -> serde_json::Value {
+    json!([
+        { "key": "listing_stage", "entity_type": "listing", "label": "Stage", "field_type": "select", "options": ["Draft", "Coming Soon", "Active", "Conditional", "Pending", "Closed", "Expired", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "list_price", "entity_type": "listing", "label": "List Price", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "list_date", "entity_type": "listing", "label": "List Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // See this module's own doc comment on the missing date_reached
+        // trigger for custom objects - Listing expiry is checked by an
+        // admin reading this field, not automated.
+        { "key": "end_date", "entity_type": "listing", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn showing_fields() -> serde_json::Value {
+    json!([
+        { "key": "scheduled_date", "entity_type": "showing", "label": "Scheduled Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "outcome", "entity_type": "showing", "label": "Outcome", "field_type": "select", "options": ["Scheduled", "Completed", "Cancelled", "No Show"], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Scheduled", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn purchase_offer_fields() -> serde_json::Value {
+    json!([
+        { "key": "offer_stage", "entity_type": "purchase_offer", "label": "Stage", "field_type": "select", "options": ["Draft", "Submitted", "Countered", "Accepted", "Rejected", "Expired", "Withdrawn"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount", "entity_type": "purchase_offer", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "expiry_date", "entity_type": "purchase_offer", "label": "Expiry Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "conditions_text", "entity_type": "purchase_offer", "label": "Conditions", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn transaction_fields() -> serde_json::Value {
+    json!([
+        { "key": "transaction_status", "entity_type": "transaction", "label": "Status", "field_type": "select", "options": ["Pending", "Conditional", "Firm", "Closing", "Closed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "closing_date", "entity_type": "transaction", "label": "Closing Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "final_price", "entity_type": "transaction", "label": "Final Price", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "commission_summary", "entity_type": "transaction", "label": "Commission Summary", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn client_role_fields() -> serde_json::Value {
+    json!([
+        { "key": "role_type", "entity_type": "client_role", "label": "Role", "field_type": "select", "options": ["Buyer", "Seller", "Landlord", "Tenant"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Buyer", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn agent_profile_fields() -> serde_json::Value {
+    json!([
+        { "key": "license_number", "entity_type": "agent_profile", "label": "License Number", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": true, "help_text": null, "placeholder": null },
+        { "key": "brokerage_name", "entity_type": "agent_profile", "label": "Brokerage", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "license_active", "entity_type": "agent_profile", "label": "License Active", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related`, and the
+/// "Offer accepted"/"Transaction closed" workflows' `update_related_record`/
+/// `create_record` actions, reference these relationships by their
+/// position in this array. Index 7 (Transaction -> Listing) exists purely
+/// to give the "Transaction closed" workflow a direct relationship to
+/// write to - the spec's own model only links Transaction to its
+/// Offer, not to the Listing - the same "add one relationship purely to
+/// support a create_record/update_related_record workflow" pattern
+/// Construction & Contractors, Professional Services and Recruitment all
+/// used for their own extra links.
+///
+/// `client_role` is deliberately scoped to Listing rather than the
+/// spec's broader "Contact/Customer <-> transaction context" - a
+/// relationship_definition names one specific target type, so "buyer
+/// role on this listing" is what's actually buildable; a role's
+/// relevance to the eventual Transaction is reachable transitively via
+/// Listing -> Offer -> Transaction instead of a second direct link.
+fn real_estate_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "listing", "target_entity_type": "listing_property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Listings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "listing_property", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Owner/Seller", "reverse_label": "Properties", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 2 */ { "source_entity_type": "showing", "target_entity_type": "listing", "relationship_type": "many_to_one", "forward_label": "Listing", "reverse_label": "Showings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 3 */ { "source_entity_type": "showing", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Buyer", "reverse_label": "Showings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 4 */ { "source_entity_type": "purchase_offer", "target_entity_type": "listing", "relationship_type": "many_to_one", "forward_label": "Listing", "reverse_label": "Offers", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 5 */ { "source_entity_type": "purchase_offer", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Buyer", "reverse_label": "Offers", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 6 */ { "source_entity_type": "transaction", "target_entity_type": "purchase_offer", "relationship_type": "many_to_one", "forward_label": "Accepted Offer", "reverse_label": "Transaction", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 7 */ { "source_entity_type": "transaction", "target_entity_type": "listing", "relationship_type": "many_to_one", "forward_label": "Listing", "reverse_label": "Transactions", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 8 */ { "source_entity_type": "client_role", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Contact", "reverse_label": "Client Roles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 9 */ { "source_entity_type": "client_role", "target_entity_type": "listing", "relationship_type": "many_to_one", "forward_label": "Listing", "reverse_label": "Client Roles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+    ])
+}
+
+/// The spec's four business rules include two this module's own doc
+/// comment already rules out:
+/// - "Offer acceptance" ("only one accepted active offer per Listing")
+///   needs scanning every sibling Offer on the same Listing - the
+///   overlap/conflict-detection gap.
+/// - "Listing activation"'s "Property" and "agent" requirements are
+///   relationship-existence and owner-field checks respectively, neither
+///   of which a `require` action can target (see this module's own doc
+///   comment) - only its plain-field requirements (price, start date)
+///   are enforced below.
+///
+/// "Offer integrity" (spec: "Offer created -> require Listing, buyer
+/// party, amount and expiry") is re-scoped the same way Recruitment's
+/// "Placement validation" was: a business rule can't gate on "just
+/// created" (only a saved-state condition), so this fires once the offer
+/// leaves Draft instead - by then it should carry real numbers regardless
+/// of whether this is its first save or a later edit. Listing/buyer are
+/// relationship-existence checks, left unenforced by a rule for the same
+/// reason as "Listing activation" above.
+fn real_estate_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "purchase_offer",
+            "name": "Offer integrity",
+            "description": "An offer that has left Draft must record its amount and expiry.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "offer_stage", "operator": "not_equals", "value": "Draft" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "amount", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "expiry_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "listing",
+            "name": "Listing activation",
+            "description": "An active listing must record its price and list date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "listing_stage", "operator": "equals", "value": "Active" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "list_price", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "list_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "transaction",
+            "name": "Transaction close",
+            "description": "A closed transaction must record its closing date and final price.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "transaction_status", "operator": "equals", "value": "Closed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "closing_date", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "final_price", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// "Listing expiry" (spec: end date reached AND still Active sets
+/// Expired and creates a renewal task) needs a `date_reached`-style
+/// trigger on a custom object's own date field, already ruled out by
+/// this module's own doc comment - left out entirely rather than
+/// approximated.
+fn real_estate_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "showing",
+            "name": "Showing scheduled",
+            "description": "A newly created showing gets an agent follow-up task.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Follow up after showing\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "purchase_offer",
+            "name": "Offer accepted",
+            "description": "Accepting an offer moves its listing to Pending and opens a Transaction linked back to the offer.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "offer_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "offer_stage", "operator": "equals", "value": "Accepted" }
+            ],
+            "actions": [
+                { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":4,\"target_field_key\":\"listing_stage\",\"target_field_source\":\"custom\",\"value\":\"Pending\",\"copy_from_field_key\":null}" },
+                { "action_type": "create_record", "params_json": "{\"entity_type\":\"transaction\",\"relationship_ref\":6,\"name_template\":null}" }
+            ]
+        },
+        {
+            "entity_type": "transaction",
+            "name": "Transaction closed",
+            "description": "Closing a transaction closes its listing and opens a post-closing task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "transaction_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "transaction_status", "operator": "equals", "value": "Closed" }
+            ],
+            "actions": [
+                { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":7,\"target_field_key\":\"listing_stage\",\"target_field_source\":\"custom\",\"value\":\"Closed\",\"copy_from_field_key\":null}" },
+                { "action_type": "create_task", "params_json": "{\"title\":\"Post-closing checklist\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
             ]
         }
     ])
