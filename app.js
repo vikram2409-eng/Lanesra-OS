@@ -2397,14 +2397,27 @@ function wireAppEditor(body,app,rerender){
  $('#appDescription').onchange=e=>{app.description=e.target.value.trim();save()};
  body.querySelectorAll('[data-app-object]').forEach(cb=>cb.onchange=()=>{
   const key=cb.dataset.appObject;
-  app.objectKeys=cb.checked?[...app.objectKeys,key]:app.objectKeys.filter(k=>k!==key);
+  const adding=cb.checked;
+  // cb's own <label> text is the object's display label - cheaper than
+  // re-deriving it from appObjectChoices()/activeCustomObjects() here.
+  const label=(cb.closest('label')?.textContent||key).trim();
+  app.objectKeys=adding?[...app.objectKeys,key]:app.objectKeys.filter(k=>k!==key);
   // Bug fix: adding/removing an object on an *already-published* app saved
   // correctly but never refreshed the sidebar's own nav-section filter
   // (only togglePublishApp did), so a newly-added object silently never
   // showed up until something else forced a re-render - looked like the
   // change "didn't take" even though it was saved and no republish is
   // actually required.
+  //
+  // Second bug fix: even after that first fix, the toggle gave zero
+  // *confirmation* of anything happening - no toast, and on a narrow/
+  // mobile viewport the icon-only collapsed sidebar makes a newly-added
+  // nav item easy to miss entirely. From a user's seat this reads
+  // exactly like "there's no way to add an object" even though the save
+  // already happened - so confirm it the same way every other admin
+  // action in this app already does.
   save();renderSidebarNav();rerender();
+  toast(`${adding?'Added':'Removed'} ${label}${adding?' to':' from'} ${app.name}`);
  });
  $('#appDashboard').onchange=e=>{app.dashboardId=e.target.value||null;save()};
  $('#togglePublishApp').onclick=()=>{
