@@ -5,9 +5,10 @@
 //! Data Models & Packaged Business Apps") sequences Field Service,
 //! Property Management, Construction & Contractors, Professional
 //! Services, Dental/Clinic Practice Administration, Recruitment &
-//! Staffing and Real Estate Brokerage first; this module ships all
-//! seven, proving the foundation against real content rather than only
-//! the synthetic manifests `industry_data_model.rs`'s tests use.
+//! Staffing, Real Estate Brokerage and Legal Practice first; this module
+//! ships all eight, proving the foundation against real content rather
+//! than only the synthetic manifests `industry_data_model.rs`'s tests
+//! use.
 //!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
@@ -2380,6 +2381,356 @@ fn real_estate_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":7,\"target_field_key\":\"listing_stage\",\"target_field_source\":\"custom\",\"value\":\"Closed\",\"copy_from_field_key\":null}" },
                 { "action_type": "create_task", "params_json": "{\"title\":\"Post-closing checklist\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+/// The eighth package: a matter-management and administrative billing
+/// model for small law firms - client/matter operations, deadlines, time
+/// and documents, deliberately not jurisdiction-specific court filing or
+/// full trust accounting (spec's own stated v1 scope).
+///
+/// Key-collision note (see this module's own doc comment): the spec's
+/// "Time Entry" and "Expense" would collide with Professional Services'
+/// own `time_entry`/`expense` custom object keys - renamed to
+/// `matter_time_entry`/`matter_expense`.
+pub fn legal_practice_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.legal_practice",
+        "name": "Legal Practice",
+        "industry": "Legal Services",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "matter", "singular_label": "Matter", "plural_label": "Matters", "icon": "⚖", "prefix": "MAT", "digits": 4 },
+            { "key": "matter_party", "singular_label": "Matter Party", "plural_label": "Matter Parties", "icon": "🔗", "prefix": "PTY", "digits": 5 },
+            { "key": "matter_deadline", "singular_label": "Deadline", "plural_label": "Deadlines", "icon": "⏰", "prefix": "DL", "digits": 5 },
+            { "key": "matter_time_entry", "singular_label": "Time Entry", "plural_label": "Time Entries", "icon": "⏱", "prefix": "TE", "digits": 5 },
+            { "key": "matter_expense", "singular_label": "Expense", "plural_label": "Expenses", "icon": "💳", "prefix": "EXP", "digits": 5 },
+            { "key": "trust_summary", "singular_label": "Trust Summary", "plural_label": "Trust Summaries", "icon": "🏦", "prefix": "TRS", "digits": 4 }
+        ],
+        "fields": legal_practice_fields(),
+        "relationships": legal_practice_relationships(),
+        "business_rules": legal_practice_business_rules(),
+        "workflows": legal_practice_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "matter",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["matter_stage", "matter_type", "opened_date", "closed_date"] }
+                            ],
+                            // Indices into `relationships` below: Matter Parties (1),
+                            // Deadlines (3), Time Entries (4), Expenses (5), Invoices (6).
+                            "related": ["1", "3", "4", "5", "6"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Matters by Stage", "entity_type": "matter", "group_by_source": "custom", "group_by_field": "matter_stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Legal Practice Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Legal Practice",
+            "icon": "⚖️",
+            "description": "Matters, parties, deadlines, time and expenses for small law firms.",
+            "object_keys": [
+                "matter", "matter_party", "matter_deadline", "matter_time_entry", "matter_expense", "trust_summary", "Contact", "Invoice", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // Spec role names (Partner/Lawyer, Associate, Paralegal, Practice
+            // Administrator, Billing) mapped onto this build's actual role
+            // set - see field_service_manifest_json's own note on this same
+            // mapping.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "viewer" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn legal_practice_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        matter_fields(),
+        matter_party_fields(),
+        matter_deadline_fields(),
+        matter_time_entry_fields(),
+        matter_expense_fields(),
+        trust_summary_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn matter_fields() -> serde_json::Value {
+    json!([
+        { "key": "matter_stage", "entity_type": "matter", "label": "Stage", "field_type": "select", "options": ["Prospective", "Open", "On Hold", "Closing", "Closed", "Archived"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Prospective", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "matter_type", "entity_type": "matter", "label": "Matter Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "opened_date", "entity_type": "matter", "label": "Opened Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Closed by the "Matter close" business rule below.
+        { "key": "closed_date", "entity_type": "matter", "label": "Closed Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "conflict_reference", "entity_type": "matter", "label": "Conflict Reference", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn matter_party_fields() -> serde_json::Value {
+    json!([
+        { "key": "role_type", "entity_type": "matter_party", "label": "Role", "field_type": "select", "options": ["Client", "Opposing Party", "Witness", "Counsel", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Client", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn matter_deadline_fields() -> serde_json::Value {
+    json!([
+        { "key": "deadline_type", "entity_type": "matter_deadline", "label": "Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // See this module's own doc comment on the missing date_reached
+        // trigger for custom objects - the 7/2/1-day reminder workflow is
+        // left out, but the due date itself is still tracked here.
+        { "key": "due_date", "entity_type": "matter_deadline", "label": "Due Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "deadline_status", "entity_type": "matter_deadline", "label": "Status", "field_type": "select", "options": ["Open", "Completed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Open", "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Completed by the "Deadline complete" business rule below.
+        { "key": "completed_date", "entity_type": "matter_deadline", "label": "Completed Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn matter_time_entry_fields() -> serde_json::Value {
+    json!([
+        { "key": "entry_date", "entity_type": "matter_time_entry", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "hours", "entity_type": "matter_time_entry", "label": "Hours", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Submitted by the "Time entry description" business
+        // rule below.
+        { "key": "description", "entity_type": "matter_time_entry", "label": "Description", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billable", "entity_type": "matter_time_entry", "label": "Billable", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "rate", "entity_type": "matter_time_entry", "label": "Rate", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "time_status", "entity_type": "matter_time_entry", "label": "Status", "field_type": "select", "options": ["Draft", "Submitted", "Approved", "Invoiced", "Rejected"], "required": true, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        // Written by the "Time approved" workflow below.
+        { "key": "billing_status", "entity_type": "matter_time_entry", "label": "Billing Status", "field_type": "select", "options": ["Not Billed", "Eligible", "Billed"], "required": false, "show_in_list": true, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Not Billed", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn matter_expense_fields() -> serde_json::Value {
+    json!([
+        { "key": "expense_date", "entity_type": "matter_expense", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount", "entity_type": "matter_expense", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "category", "entity_type": "matter_expense", "label": "Category", "field_type": "select", "options": ["Filing Fees", "Travel", "Expert Witness", "Copying", "Postage", "Other"], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billable", "entity_type": "matter_expense", "label": "Billable", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "expense_status", "entity_type": "matter_expense", "label": "Status", "field_type": "select", "options": ["Draft", "Submitted", "Approved", "Invoiced", "Rejected"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn trust_summary_fields() -> serde_json::Value {
+    json!([
+        { "key": "balance", "entity_type": "trust_summary", "label": "Balance", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reference", "entity_type": "trust_summary", "label": "Reference", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related` list
+/// references these relationships by their position in this array.
+fn legal_practice_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "matter", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Client", "reverse_label": "Matters", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "matter_party", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Parties", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 2 */ { "source_entity_type": "matter_party", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Contact", "reverse_label": "Matter Roles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 3 */ { "source_entity_type": "matter_deadline", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Deadlines", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 4 */ { "source_entity_type": "matter_time_entry", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Time Entries", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 5 */ { "source_entity_type": "matter_expense", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Expenses", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 6 */ { "source_entity_type": "Invoice", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+    ])
+}
+
+/// The spec's four business rules include two skipped or split for the
+/// reasons this module's own doc comment already documents:
+/// - "Matter close"'s "no open mandatory deadlines unless override" half
+///   needs scanning every sibling Deadline on the same Matter - the
+///   overlap/conflict-detection gap; only the plain-field "require Closed
+///   Date" half is enforced below.
+/// - "Time entry" (spec: hours > 0, Matter Open/Closing, description
+///   required, all in one rule) is split into two rules below - "Matter
+///   Open/Closing" is a cross-record read of a *different* record's field,
+///   left out; the other two checks are independent conditions that can't
+///   share one rule's `conditions` list without accidentally gating each
+///   other (an `all` match would only require the description when hours
+///   was *also* invalid), so they're two separate rules instead, the same
+///   way Field Service split "Completion validation" into per-object
+///   rules.
+/// - "Matter party"'s "require role" is already guaranteed by the field
+///   definition itself (`role_type` is `required: true` with a default),
+///   so no separate rule is needed for it; its "prevent exact duplicate
+///   active party relationship" half is the sibling-scanning gap, left
+///   unenforced.
+fn legal_practice_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "matter",
+            "name": "Matter close",
+            "description": "A closed matter must record its closed date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "matter_stage", "operator": "equals", "value": "Closed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "closed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "matter_time_entry",
+            "name": "Time entry hours",
+            "description": "A submitted time entry must record more than zero hours.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "time_status", "operator": "equals", "value": "Submitted" },
+                { "field_source": "custom", "field_key": "hours", "operator": "less_than", "value": "0.01" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Enter more than zero hours before submitting a time entry." }
+            ]
+        },
+        {
+            "entity_type": "matter_time_entry",
+            "name": "Time entry description",
+            "description": "A submitted time entry must record a description.",
+            "match_type": "all",
+            "priority": 1,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "time_status", "operator": "equals", "value": "Submitted" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "description", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "matter_deadline",
+            "name": "Deadline complete",
+            "description": "A completed deadline must record its completion date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "deadline_status", "operator": "equals", "value": "Completed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// "Deadline approaching" (spec: due in 7/2/1 days creates/notifies owner
+/// tasks) needs a `date_reached`-style trigger on a custom object's own
+/// date field, already ruled out by this module's own doc comment - left
+/// out entirely rather than approximated. "Matter closed"'s "archive open
+/// non-required reminders" half needs a conditional bulk update through a
+/// relationship (only the non-required ones), the same gap Construction &
+/// Contractors' "Project close" workflow hit - only its "create final
+/// billing review task" half is automated below.
+fn legal_practice_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "matter",
+            "name": "New matter",
+            "description": "Opening a matter creates a standard matter-opening checklist task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "matter_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "matter_stage", "operator": "equals", "value": "Open" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Matter opening checklist\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "matter_time_entry",
+            "name": "Time approved",
+            "description": "Approved time is marked eligible for billing.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "time_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "time_status", "operator": "equals", "value": "Approved" }
+            ],
+            "actions": [
+                { "action_type": "update_field", "params_json": "{\"target_field_key\":\"billing_status\",\"target_field_source\":\"custom\",\"value\":\"Eligible\",\"copy_from_field_key\":null}" }
+            ]
+        },
+        {
+            "entity_type": "matter",
+            "name": "Matter closing",
+            "description": "Moving a matter to Closing creates closing checklist tasks.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "matter_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 1,
+            "conditions": [
+                { "field_source": "custom", "field_key": "matter_stage", "operator": "equals", "value": "Closing" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Closing checklist\",\"description\":null,\"due_in_days\":7,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "matter",
+            "name": "Matter closed",
+            "description": "Closing a matter opens a final billing review task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "matter_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 2,
+            "conditions": [
+                { "field_source": "custom", "field_key": "matter_stage", "operator": "equals", "value": "Closed" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Final billing review\",\"description\":null,\"due_in_days\":5,\"assignee_user_id\":null}" }
             ]
         }
     ])
