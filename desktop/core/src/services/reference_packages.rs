@@ -5,10 +5,10 @@
 //! Data Models & Packaged Business Apps") sequences Field Service,
 //! Property Management, Construction & Contractors, Professional
 //! Services, Dental/Clinic Practice Administration, Recruitment &
-//! Staffing, Real Estate Brokerage, Legal Practice and Nonprofit &
-//! Association first; this module ships all nine, proving the
-//! foundation against real content rather than only the synthetic
-//! manifests `industry_data_model.rs`'s tests use.
+//! Staffing, Real Estate Brokerage, Legal Practice, Nonprofit &
+//! Association and Auto Repair / Service Garage first; this module ships
+//! all ten, proving the foundation against real content rather than only
+//! the synthetic manifests `industry_data_model.rs`'s tests use.
 //!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
@@ -102,6 +102,14 @@
 //!   scheduling must be in the future unless already completed" is left
 //!   out for this reason - see `recruitment_business_rules`'s own doc
 //!   comment.
+//! - `create_record`'s `name_template` is a fixed literal string (or, if
+//!   omitted, "Related to {triggering record's name}"), not a per-record
+//!   template that can interpolate the triggering record's own field
+//!   values into the new record. A workflow that both creates a linked
+//!   record *and* copies field values onto it (Auto Repair / Service
+//!   Garage's "Appointment check-in ... copy customer/vehicle [context]")
+//!   can only do the create-and-link half; see `auto_service_workflows`'s
+//!   own doc comment.
 
 use serde_json::json;
 
@@ -3057,6 +3065,399 @@ fn nonprofit_association_workflows() -> serde_json::Value {
             "conditions": [],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Onboarding checklist\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+/// `lanesra.auto_service` v1.0.0 - the tenth and final reference package
+/// this module ships, sequenced right after Nonprofit & Association per
+/// the dev spec. See this module's own doc comment for what's included
+/// and what's deliberately left out.
+///
+/// Key-collision notes (see this module's own doc comment on the
+/// Construction/Professional Services "Project" collision for the first
+/// instance of this): the spec's "Appointment" object would collide with
+/// Field Service's own `appointment` custom object key... actually with
+/// Practice Administration's `appointment` key - renamed to
+/// `vehicle_appointment`. The spec's "Inspection" object would collide
+/// with Construction & Contractors' own `inspection` key - renamed to
+/// `repair_inspection`.
+///
+/// "Customer" (spec: "Customer / Contact / Product / Service / Quote /
+/// Invoice / Task (Core)") is represented the same way Practice
+/// Administration's Patient and Real Estate's Client are - a direct link
+/// to the built-in Contact entity, not Company, since a vehicle owner is
+/// an individual, not a business (Field Service's B2B "Customer" is the
+/// one exception that links to Company instead).
+pub fn auto_service_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.auto_service",
+        "name": "Auto Repair & Service Garage",
+        "industry": "Automotive",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "vehicle", "singular_label": "Vehicle", "plural_label": "Vehicles", "icon": "🚗", "prefix": "VEH", "digits": 5 },
+            { "key": "repair_order", "singular_label": "Repair Order", "plural_label": "Repair Orders", "icon": "🧾", "prefix": "RO", "digits": 5 },
+            { "key": "repair_line", "singular_label": "Repair Line", "plural_label": "Repair Lines", "icon": "📄", "prefix": "RL", "digits": 5 },
+            { "key": "repair_inspection", "singular_label": "Inspection", "plural_label": "Inspections", "icon": "🔎", "prefix": "INSP", "digits": 4 },
+            { "key": "service_recommendation", "singular_label": "Service Recommendation", "plural_label": "Service Recommendations", "icon": "💡", "prefix": "REC", "digits": 4 },
+            { "key": "vehicle_appointment", "singular_label": "Appointment", "plural_label": "Appointments", "icon": "📅", "prefix": "APT", "digits": 5 }
+        ],
+        "fields": auto_service_fields(),
+        "relationships": auto_service_relationships(),
+        "business_rules": auto_service_business_rules(),
+        "workflows": auto_service_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "vehicle",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["make", "model", "year", "vin", "plate", "odometer", "vehicle_stage"] }
+                            ],
+                            // Indices into `relationships` below: Repair
+                            // Orders (2), Appointments (1), Service
+                            // Recommendations (5).
+                            "related": ["2", "1", "5"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Repair Orders by Stage", "entity_type": "repair_order", "group_by_source": "custom", "group_by_field": "ro_stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Service Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Auto Repair & Service Garage",
+            "icon": "🚗",
+            "description": "Vehicles, repair orders, inspections and service recommendations for independent garages and small automotive service centers.",
+            "object_keys": [
+                "vehicle", "repair_order", "repair_line", "repair_inspection", "service_recommendation", "vehicle_appointment",
+                "Contact", "Product", "Quote", "Invoice", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // Spec role names (Shop Admin, Service Advisor, Technician,
+            // Shop Manager, Billing) mapped onto this build's actual role
+            // set - see field_service_manifest_json's own note on this
+            // same mapping.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "viewer" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        "seed_data": []
+    })
+    .to_string()
+}
+
+/// Split into one `json!` array per object, same as every other package
+/// in this module, purely to stay under the `json!` macro's recursion
+/// limit.
+fn auto_service_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        vehicle_fields(),
+        repair_order_fields(),
+        repair_line_fields(),
+        repair_inspection_fields(),
+        service_recommendation_fields(),
+        vehicle_appointment_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn vehicle_fields() -> serde_json::Value {
+    json!([
+        { "key": "make", "entity_type": "vehicle", "label": "Make", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "model", "entity_type": "vehicle", "label": "Model", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "year", "entity_type": "vehicle", "label": "Year", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "1900", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Optional but unique when provided (spec: "VIN optional but
+        // unique if populated") - same shape as Asset's serial_number and
+        // Provider Profile's license_reference.
+        { "key": "vin", "entity_type": "vehicle", "label": "VIN", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": true, "help_text": null, "placeholder": null },
+        { "key": "plate", "entity_type": "vehicle", "label": "License Plate", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "odometer", "entity_type": "vehicle", "label": "Odometer", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 5, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // The custom-status workaround this module's own doc comment
+        // documents - a Vehicle's built-in status is always Active/
+        // Inactive/Archived, so the spec's own Active/Sold-Transferred/
+        // Inactive vocabulary lives here instead.
+        { "key": "vehicle_stage", "entity_type": "vehicle", "label": "Stage", "field_type": "select", "options": ["Active", "Sold or Transferred", "Inactive"], "required": true, "show_in_list": true, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn repair_order_fields() -> serde_json::Value {
+    json!([
+        { "key": "ro_stage", "entity_type": "repair_order", "label": "Stage", "field_type": "select", "options": ["Draft", "Authorized", "In Progress", "Waiting Parts", "Ready", "Completed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "complaint", "entity_type": "repair_order", "label": "Complaint", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "date_in", "entity_type": "repair_order", "label": "Date In", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "odometer_in", "entity_type": "repair_order", "label": "Odometer In", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Must not be less than odometer_in by the "Odometer validation"
+        // business rule below.
+        { "key": "odometer_out", "entity_type": "repair_order", "label": "Odometer Out", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Completed by the "Repair completion" business
+        // rule below.
+        { "key": "completion_date", "entity_type": "repair_order", "label": "Completion Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn repair_line_fields() -> serde_json::Value {
+    json!([
+        { "key": "line_type", "entity_type": "repair_line", "label": "Type", "field_type": "select", "options": ["Labor", "Part", "Service"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Labor", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "line_description", "entity_type": "repair_line", "label": "Description", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "quantity", "entity_type": "repair_line", "label": "Qty", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "1", "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Authorized by the "Authorization" business rule
+        // below.
+        { "key": "price", "entity_type": "repair_line", "label": "Price", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "line_stage", "entity_type": "repair_line", "label": "Stage", "field_type": "select", "options": ["Proposed", "Authorized", "In Progress", "Complete", "Declined"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Proposed", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billable", "entity_type": "repair_line", "label": "Billable", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn repair_inspection_fields() -> serde_json::Value {
+    json!([
+        { "key": "checklist_type", "entity_type": "repair_inspection", "label": "Checklist Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "inspection_outcome", "entity_type": "repair_inspection", "label": "Outcome", "field_type": "select", "options": ["Pass", "Attention", "Fail"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "recommendations", "entity_type": "repair_inspection", "label": "Recommendations", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn service_recommendation_fields() -> serde_json::Value {
+    json!([
+        // Compared against a scheduled follow-up by the spec's
+        // "Recommendation due" workflow - left unenforced, see this
+        // module's own doc comment on date_reached-style triggers on a
+        // custom object's own field.
+        { "key": "recommended_date", "entity_type": "service_recommendation", "label": "Recommended Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "recommended_odometer", "entity_type": "service_recommendation", "label": "Recommended Odometer", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "recommendation_priority", "entity_type": "service_recommendation", "label": "Priority", "field_type": "select", "options": ["Low", "Medium", "High"], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Medium", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "recommendation_status", "entity_type": "service_recommendation", "label": "Status", "field_type": "select", "options": ["Open", "Scheduled", "Completed", "Declined", "Deferred"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Open", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn vehicle_appointment_fields() -> serde_json::Value {
+    json!([
+        { "key": "appt_date", "entity_type": "vehicle_appointment", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // No time-of-day field type - see this module's own doc comment
+        // (same approximation Practice Administration's Appointment uses).
+        { "key": "appt_time", "entity_type": "vehicle_appointment", "label": "Time", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "service_reason", "entity_type": "vehicle_appointment", "label": "Service Reason", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "appt_stage", "entity_type": "vehicle_appointment", "label": "Status", "field_type": "select", "options": ["Requested", "Confirmed", "Checked In", "Completed", "No Show", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Requested", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related` list and
+/// the workflows below reference these relationships by their position
+/// in this array. Relationships 7 and 8 follow the "core entity as the
+/// many/optional side" pattern this module's own doc comment already
+/// established (Construction's Invoice->project, Professional Services'
+/// Invoice->engagement, Legal Practice's Invoice->matter, Nonprofit's
+/// Invoice->membership) for the spec's "Repair Order 0:1 optional Quote/
+/// Invoice". Relationship 9 doesn't come from the spec's own relationship
+/// model at all - it's added purely so the "Appointment check-in" and
+/// "Repair completed" workflows below have something to create/update
+/// through, the same "add a relationship purely to support a workflow
+/// action" pattern used for Construction's Invoice link, Professional
+/// Services' Invoice link, Recruitment's Placement<->Offer and Real
+/// Estate's Transaction<->Listing.
+fn auto_service_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "vehicle", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Owner", "reverse_label": "Vehicles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "vehicle_appointment", "target_entity_type": "vehicle", "relationship_type": "many_to_one", "forward_label": "Vehicle", "reverse_label": "Appointments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 2 */ { "source_entity_type": "repair_order", "target_entity_type": "vehicle", "relationship_type": "many_to_one", "forward_label": "Vehicle", "reverse_label": "Repair Orders", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 3 */ { "source_entity_type": "repair_line", "target_entity_type": "repair_order", "relationship_type": "many_to_one", "forward_label": "Repair Order", "reverse_label": "Lines", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 4 */ { "source_entity_type": "repair_inspection", "target_entity_type": "repair_order", "relationship_type": "many_to_one", "forward_label": "Repair Order", "reverse_label": "Inspections", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 1 },
+        /* 5 */ { "source_entity_type": "service_recommendation", "target_entity_type": "vehicle", "relationship_type": "many_to_one", "forward_label": "Vehicle", "reverse_label": "Service Recommendations", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 6 */ { "source_entity_type": "repair_line", "target_entity_type": "Product", "relationship_type": "many_to_one", "forward_label": "Product / Service", "reverse_label": "Repair Lines", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 7 */ { "source_entity_type": "Quote", "target_entity_type": "repair_order", "relationship_type": "many_to_one", "forward_label": "Repair Order", "reverse_label": "Quotes", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 8 */ { "source_entity_type": "Invoice", "target_entity_type": "repair_order", "relationship_type": "many_to_one", "forward_label": "Repair Order", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 9 */ { "source_entity_type": "repair_order", "target_entity_type": "vehicle_appointment", "relationship_type": "many_to_one", "forward_label": "Originating Appointment", "reverse_label": "Repair Orders", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+    ])
+}
+
+/// Of the spec's four business rules, "Vehicle identity" is dropped
+/// entirely as a rule - its "require owner/customer" half needs a rule
+/// that can require a relationship link exists (this module's own doc
+/// comment's gap, same as Practice Administration's "Patient identity"),
+/// and its "require make/model" half is instead enforced the same way
+/// every other package enforces an always-required field: `required:
+/// true` on the field definition itself (see `vehicle_fields`), needing
+/// no rule at all. "Authorization"'s "unless zero-price permission"
+/// exception is dropped too - there's no permission-aware condition -
+/// leaving a plain "Authorized requires a price" check. "Odometer
+/// validation" is this module's first business rule to use field-to-field
+/// comparison on a *numeric* pair (`less_than` is correct here, unlike
+/// Nonprofit's date-pair "Renewal integrity", which needed
+/// `on_or_before` instead - see that rule's own history in this module).
+fn auto_service_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "repair_order",
+            "name": "Repair completion",
+            "description": "A completed repair order must record its completion date and odometer out reading.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "ro_stage", "operator": "equals", "value": "Completed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "completion_date", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "odometer_out", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "repair_line",
+            "name": "Authorization",
+            "description": "An authorized repair line must record a price.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "line_stage", "operator": "equals", "value": "Authorized" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "price", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "repair_order",
+            "name": "Odometer validation",
+            "description": "Odometer out cannot be less than odometer in.",
+            "match_type": "all",
+            "priority": 1,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "odometer_out", "operator": "less_than", "value": "", "compare_field_source": "custom", "compare_field_key": "odometer_in" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Odometer out cannot be less than odometer in." }
+            ]
+        }
+    ])
+}
+
+/// Of the spec's five workflows, "Recommendation due" is dropped entirely
+/// for the reason this module's own doc comment already documents - it
+/// needs a `date_reached`-style trigger on a custom object's own date/
+/// number field. "Appointment check-in"'s "copy customer/vehicle
+/// [context]" half is dropped for the newly-noted `create_record`
+/// name_template gap this module's own doc comment now documents - only
+/// the create-and-link half runs. "Repair authorized"'s "if no line
+/// assignment" qualifier has no per-line-assignment check to run (a
+/// cross-record read), so the technician assignment task is created
+/// unconditionally, same as Nonprofit's "Program participation" workflow
+/// dropping its own template qualifier for an analogous reason. "Repair
+/// completed"'s "update Vehicle service history" half is dropped for the
+/// accumulating-write gap (same as Construction's "Change approved"),
+/// and its "create/update draft Invoice" half is dropped too -
+/// `create_record`'s `is_creatable_entity_type` check only allows
+/// Company and active custom objects (every other core entity needs a
+/// required relational or line-item field a no-code action can't safely
+/// synthesize, per that function's own doc comment), so Invoice can't be
+/// created this way at all; the Invoice->repair_order relationship above
+/// still lets someone create one by hand and link it through the normal
+/// related-list flow. Only "close appointment" runs, via
+/// `update_related_record` against relationship 9 - a repair order
+/// created some other way (not through check-in) simply has nothing
+/// linked there, so that action is a no-op for it.
+fn auto_service_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "vehicle_appointment",
+            "name": "Appointment check-in",
+            "description": "Checking in an appointment opens a draft repair order for it.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "appt_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "appt_stage", "operator": "equals", "value": "Checked In" }
+            ],
+            "actions": [
+                { "action_type": "create_record", "params_json": "{\"entity_type\":\"repair_order\",\"relationship_ref\":9,\"name_template\":null}" }
+            ]
+        },
+        {
+            "entity_type": "repair_order",
+            "name": "Repair authorized",
+            "description": "Authorizing a repair order creates a technician assignment task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "ro_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "ro_stage", "operator": "equals", "value": "Authorized" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Assign technician\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "repair_order",
+            "name": "Repair completed",
+            "description": "Completing a repair order closes any originating appointment.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "ro_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "ro_stage", "operator": "equals", "value": "Completed" }
+            ],
+            "actions": [
+                { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":9,\"target_field_key\":\"appt_stage\",\"target_field_source\":\"custom\",\"value\":\"Completed\",\"copy_from_field_key\":null}" }
+            ]
+        },
+        {
+            "entity_type": "vehicle_appointment",
+            "name": "No show",
+            "description": "A no-show appointment gets a reschedule task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "appt_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "appt_stage", "operator": "equals", "value": "No Show" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Reschedule appointment\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
         }
     ])
