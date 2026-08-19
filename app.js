@@ -2570,6 +2570,358 @@ const REFERENCE_PACKAGES={
     actions:[{type:'create_task',taskTitle:'Follow up on assigned maintenance request',daysOffset:1}]},
   ],
  },
+ // The remaining eight packages below are reduced mirrors of the desktop
+ // edition's own reference_packages.rs manifests (same package_id,
+ // industry, stage vocabulary and object/field/rule/workflow names) -
+ // not full parity. Two structural limits of this demo's simpler engine
+ // (neither new to this change, both pre-existing) shaped every one of
+ // them the same way the two packages above were already shaped by:
+ // - Workflow rules only ever fire on an *edit* where a watched field's
+ //   value actually changed (see the `wasEdit&&before` guard around
+ //   data.workflowRules execution) - there's no "on record created"
+ //   firing at all, unlike desktop's `record_created` trigger type. Every
+ //   desktop workflow that trigger_type:"record_created" (Real Estate's
+ //   "Showing scheduled", Practice Administration's "Appointment
+ //   confirmation", Nonprofit's "Program participation", Recruitment's
+ //   "Interview scheduled") is left out here rather than shipped broken.
+ // - create_record only knows how to construct the nine built-in record
+ //   types (see executeWorkflowAction's target checks) - it silently
+ //   no-ops for a custom-object target. Every desktop workflow that
+ //   create_record's a custom object (Construction/Professional
+ //   Services' "Opportunity won creates project/engagement", Real
+ //   Estate's "Offer accepted" opening a Transaction, Recruitment's
+ //   "Offer accepted" opening a Placement) keeps only its
+ //   update_related_record half here, the half this demo can actually run.
+ // Desktop's `on_or_after`/`on_or_before` date-comparison operators also
+ // don't exist in this demo's OPERATOR_LABELS - Nonprofit's "Renewal
+ // integrity" (a date-to-date field comparison) is left out for the same
+ // reason, rather than approximated with a numeric operator that would
+ // silently never fire on date strings.
+ construction:{
+  packageId:'lanesra.construction',name:'Construction & Contractors',industry:'Construction',version:'1.0.0',
+  description:'Projects, work packages, change orders and inspections for general contractors and specialty trades.',
+  appIcon:'🏗️',
+  objects:[
+   {key:'project',label:'Project',labelPlural:'Projects',icon:'🏗',prefix:'PROJ',digits:4},
+   {key:'work_package',label:'Work Package',labelPlural:'Work Packages',icon:'📦',prefix:'WP',digits:4},
+   {key:'change_order',label:'Change Order',labelPlural:'Change Orders',icon:'📝',prefix:'CO',digits:4},
+   {key:'inspection',label:'Inspection',labelPlural:'Inspections',icon:'🔎',prefix:'INSP',digits:4},
+  ],
+  fields:[
+   ['project','stage','Stage','select','Lead/Estimating|Awarded|Planning|Active|On Hold|Substantially Complete|Closed|Cancelled'],
+   ['project','start_date','Start Date','date'],['project','actual_end_date','Actual End Date','date'],['project','contract_value','Contract Value','number'],
+   ['work_package','stage','Stage','select','Planned|Ready|In Progress|Blocked|Complete'],
+   ['work_package','trade_scope','Trade / Scope','text'],['work_package','completion_date','Completion Date','date'],
+   ['change_order','stage','Stage','select','Draft|Submitted|Approved|Rejected|Cancelled'],
+   ['change_order','amount','Requested Amount','number'],['change_order','approved_amount','Approved Amount','number'],
+   ['inspection','stage','Stage','select','Planned|Passed|Failed|Reinspection Required'],['inspection','inspection_type','Type','text'],
+  ],
+  relationships:[
+   {source:'work_package',target:'project',relType:'many_to_one',forwardLabel:'Project',reverseLabel:'Work Packages'},
+   {source:'change_order',target:'project',relType:'many_to_one',forwardLabel:'Project',reverseLabel:'Change Orders'},
+   {source:'inspection',target:'project',relType:'many_to_one',forwardLabel:'Project',reverseLabel:'Inspections'},
+  ],
+  rules:[
+   {entity:'project',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Closed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'actual_end_date',value:'',message:''}]},
+   {entity:'change_order',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Approved',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'approved_amount',value:'',message:''}]},
+  ],
+  workflows:[
+   {entity:'inspection',matchType:'all',notify:true,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Failed',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Address failed inspection',daysOffset:2}]},
+   {entity:'project',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Closed',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Final billing review',daysOffset:3}]},
+  ],
+ },
+ professional_services:{
+  packageId:'lanesra.professional_services',name:'Professional Services',industry:'Professional Services',version:'1.0.0',
+  description:'Engagements, milestones, time entries and expenses for consultancies and services firms.',
+  appIcon:'💼',
+  objects:[
+   {key:'engagement',label:'Engagement',labelPlural:'Engagements',icon:'💼',prefix:'ENG',digits:4},
+   {key:'milestone',label:'Milestone',labelPlural:'Milestones',icon:'🚩',prefix:'MS',digits:4},
+   {key:'time_entry',label:'Time Entry',labelPlural:'Time Entries',icon:'⏱',prefix:'TE',digits:5},
+   {key:'expense',label:'Expense',labelPlural:'Expenses',icon:'💳',prefix:'EXP',digits:5},
+  ],
+  fields:[
+   ['engagement','stage','Stage','select','Discovery|Proposed|Active|On Hold|Complete|Cancelled'],['engagement','actual_end_date','Actual End Date','date'],
+   ['milestone','stage','Stage','select','Planned|In Progress|Complete|At Risk'],['milestone','completed_date','Completed Date','date'],
+   ['time_entry','stage','Stage','select','Draft|Submitted|Approved|Rejected'],['time_entry','hours','Hours','number'],
+   ['time_entry','billing_status','Billing Status','select','Not Eligible|Eligible'],
+   ['expense','stage','Stage','select','Draft|Submitted|Approved|Reimbursed'],
+   ['expense','category','Category','text'],['expense','amount','Amount','number'],['expense','date','Date','date'],
+  ],
+  relationships:[
+   {source:'milestone',target:'engagement',relType:'many_to_one',forwardLabel:'Engagement',reverseLabel:'Milestones'},
+   {source:'time_entry',target:'engagement',relType:'many_to_one',forwardLabel:'Engagement',reverseLabel:'Time Entries'},
+   {source:'expense',target:'engagement',relType:'many_to_one',forwardLabel:'Engagement',reverseLabel:'Expenses'},
+  ],
+  rules:[
+   {entity:'engagement',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Complete',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'actual_end_date',value:'',message:''}]},
+   {entity:'time_entry',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Submitted',compareField:null,groupId:null},{fieldKey:'hours',operator:'less_than',value:'0.01',compareField:null,groupId:null}],
+    actions:[{type:'block_save',message:'Enter more than zero hours before submitting a time entry.'}]},
+   {entity:'expense',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Submitted',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'category',value:'',message:''},{type:'require',targetField:'amount',value:'',message:''},{type:'require',targetField:'date',value:'',message:''}]},
+   {entity:'milestone',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Complete',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'completed_date',value:'',message:''}]},
+  ],
+  workflows:[
+   {entity:'time_entry',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Approved',compareField:null,groupId:null}],
+    actions:[{type:'update_field',updateFieldKey:'billing_status',updateValue:'Eligible',updateCopyFrom:''}]},
+   {entity:'engagement',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Complete',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Prepare final invoice',daysOffset:2}]},
+  ],
+ },
+ practice_admin:{
+  packageId:'lanesra.practice_admin',name:'Dental / Clinic Practice Administration',industry:'Practice Administration',version:'1.0.0',
+  description:'Patients, providers, appointments and treatment plans for a small dental or clinic practice.',
+  appIcon:'🦷',
+  objects:[
+   {key:'patient_profile',label:'Patient Profile',labelPlural:'Patient Profiles',icon:'🧑',prefix:'PAT',digits:5},
+   {key:'provider_profile',label:'Provider Profile',labelPlural:'Provider Profiles',icon:'🩺',prefix:'PROV',digits:3},
+   {key:'appointment',label:'Appointment',labelPlural:'Appointments',icon:'📅',prefix:'APT',digits:5},
+   {key:'treatment_plan',label:'Treatment Plan',labelPlural:'Treatment Plans',icon:'📋',prefix:'TX',digits:4},
+  ],
+  fields:[
+   ['provider_profile','specialty','Specialty','text'],
+   ['appointment','stage','Status','select','Requested|Confirmed|Checked In|Completed|No Show|Cancelled'],['appointment','completed_date','Completed Date','date'],
+   ['treatment_plan','stage','Stage','select','Proposed|Accepted|In Progress|Complete|Declined'],
+  ],
+  relationships:[
+   {source:'appointment',target:'patient_profile',relType:'many_to_one',forwardLabel:'Patient',reverseLabel:'Appointments'},
+   {source:'appointment',target:'provider_profile',relType:'many_to_one',forwardLabel:'Provider',reverseLabel:'Appointments'},
+   {source:'treatment_plan',target:'patient_profile',relType:'many_to_one',forwardLabel:'Patient',reverseLabel:'Treatment Plans'},
+  ],
+  rules:[
+   {entity:'appointment',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'completed_date',value:'',message:''}]},
+  ],
+  workflows:[
+   {entity:'appointment',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'No Show',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Follow up on missed appointment',daysOffset:1}]},
+   {entity:'treatment_plan',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Accepted',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Prepare billing/quote for accepted treatment plan',daysOffset:1}]},
+  ],
+ },
+ recruitment:{
+  packageId:'lanesra.recruitment',name:'Recruitment & Staffing',industry:'Recruitment & Staffing',version:'1.0.0',
+  description:'Job requisitions, candidates, applications and offers for a small staffing or recruiting desk.',
+  appIcon:'🧑‍💼',
+  objects:[
+   {key:'job_requisition',label:'Job Requisition',labelPlural:'Job Requisitions',icon:'📋',prefix:'JOB',digits:4},
+   {key:'candidate_profile',label:'Candidate Profile',labelPlural:'Candidate Profiles',icon:'🧑',prefix:'CAND',digits:5},
+   {key:'application',label:'Application',labelPlural:'Applications',icon:'📨',prefix:'APP',digits:5},
+   {key:'offer',label:'Offer',labelPlural:'Offers',icon:'📝',prefix:'OFR',digits:4},
+  ],
+  fields:[
+   ['job_requisition','stage','Stage','select','Draft|Open|On Hold|Filled|Closed|Cancelled'],
+   ['job_requisition','title','Title','text'],['job_requisition','openings','Openings','number'],
+   ['candidate_profile','skills_summary','Skills Summary','text'],['candidate_profile','source','Source','text'],
+   ['application','stage','Stage','select','Sourced|Screening|Submitted|Interview|Offer|Placed|Rejected|Withdrawn'],['application','score','Score','number'],
+   ['offer','amount','Amount','number'],['offer','start_date','Start Date','date'],['offer','stage','Stage','select','Draft|Sent|Accepted|Rejected|Withdrawn'],
+  ],
+  relationships:[
+   {source:'application',target:'candidate_profile',relType:'many_to_one',forwardLabel:'Candidate',reverseLabel:'Applications'},
+   {source:'application',target:'job_requisition',relType:'many_to_one',forwardLabel:'Job',reverseLabel:'Applications'},
+   {source:'offer',target:'application',relType:'many_to_one',forwardLabel:'Application',reverseLabel:'Offers'},
+  ],
+  rules:[
+   {entity:'offer',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Accepted',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'start_date',value:'',message:''}]},
+  ],
+  workflows:[
+   {entity:'application',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Interview',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Schedule interview',daysOffset:1}]},
+   {entity:'offer',matchType:'all',notify:true,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Accepted',compareField:null,groupId:null}],
+    actions:[{type:'update_related_record',relTargetEntity:'application',relTargetField:'stage',relValue:'Placed'}]},
+  ],
+ },
+ real_estate:{
+  packageId:'lanesra.real_estate',name:'Real Estate Brokerage',industry:'Real Estate',version:'1.0.0',
+  description:'Properties, listings, offers and transactions for a small real-estate brokerage.',
+  appIcon:'🏠',
+  objects:[
+   {key:'listing_property',label:'Property',labelPlural:'Properties',icon:'🏠',prefix:'PROP',digits:4},
+   {key:'listing',label:'Listing',labelPlural:'Listings',icon:'📣',prefix:'LST',digits:4},
+   {key:'purchase_offer',label:'Offer',labelPlural:'Offers',icon:'📝',prefix:'OFR',digits:4},
+   {key:'transaction',label:'Transaction',labelPlural:'Transactions',icon:'🤝',prefix:'TXN',digits:4},
+  ],
+  fields:[
+   ['listing_property','property_type','Property Type','text'],
+   ['listing','stage','Stage','select','Draft|Active|Pending|Closed|Expired|Withdrawn'],
+   ['listing','list_price','List Price','number'],['listing','list_date','List Date','date'],
+   ['purchase_offer','stage','Stage','select','Draft|Submitted|Accepted|Rejected|Withdrawn'],
+   ['purchase_offer','amount','Amount','number'],['purchase_offer','expiry_date','Expiry Date','date'],
+   ['transaction','status','Status','select','Open|Pending|Closed|Cancelled'],
+   ['transaction','closing_date','Closing Date','date'],['transaction','final_price','Final Price','number'],
+  ],
+  relationships:[
+   {source:'listing',target:'listing_property',relType:'many_to_one',forwardLabel:'Property',reverseLabel:'Listings'},
+   {source:'purchase_offer',target:'listing',relType:'many_to_one',forwardLabel:'Listing',reverseLabel:'Offers'},
+   {source:'transaction',target:'purchase_offer',relType:'many_to_one',forwardLabel:'Accepted Offer',reverseLabel:'Transaction'},
+   {source:'transaction',target:'listing',relType:'many_to_one',forwardLabel:'Listing',reverseLabel:'Transactions'},
+  ],
+  rules:[
+   {entity:'purchase_offer',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'not_equals',value:'Draft',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'amount',value:'',message:''},{type:'require',targetField:'expiry_date',value:'',message:''}]},
+   {entity:'listing',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Active',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'list_price',value:'',message:''},{type:'require',targetField:'list_date',value:'',message:''}]},
+   {entity:'transaction',matchType:'all',
+    conditions:[{fieldKey:'status',operator:'equals',value:'Closed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'closing_date',value:'',message:''},{type:'require',targetField:'final_price',value:'',message:''}]},
+  ],
+  workflows:[
+   {entity:'purchase_offer',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Accepted',compareField:null,groupId:null}],
+    actions:[{type:'update_related_record',relTargetEntity:'listing',relTargetField:'stage',relValue:'Pending'}]},
+   {entity:'transaction',matchType:'all',notify:false,
+    conditions:[{fieldKey:'status',operator:'equals',value:'Closed',compareField:null,groupId:null}],
+    actions:[{type:'update_related_record',relTargetEntity:'listing',relTargetField:'stage',relValue:'Closed'},{type:'create_task',taskTitle:'Post-closing checklist',daysOffset:2}]},
+  ],
+ },
+ legal_practice:{
+  packageId:'lanesra.legal_practice',name:'Legal Practice',industry:'Legal',version:'1.0.0',
+  description:'Matters, deadlines and time entries for a small law firm.',
+  appIcon:'⚖️',
+  objects:[
+   {key:'matter',label:'Matter',labelPlural:'Matters',icon:'⚖️',prefix:'MTR',digits:4},
+   {key:'matter_time_entry',label:'Time Entry',labelPlural:'Time Entries',icon:'⏱',prefix:'TE',digits:5},
+   {key:'matter_deadline',label:'Deadline',labelPlural:'Deadlines',icon:'⏰',prefix:'DL',digits:4},
+  ],
+  fields:[
+   ['matter','stage','Stage','select','Prospective|Open|On Hold|Closing|Closed|Archived'],['matter','closed_date','Closed Date','date'],
+   ['matter_time_entry','hours','Hours','number'],['matter_time_entry','description','Description','text'],
+   ['matter_time_entry','stage','Status','select','Draft|Submitted|Approved|Invoiced|Rejected'],
+   ['matter_time_entry','billing_status','Billing Status','select','Not Billed|Eligible|Billed'],
+   ['matter_deadline','stage','Status','select','Open|Completed|Cancelled'],['matter_deadline','completed_date','Completed Date','date'],
+  ],
+  relationships:[
+   {source:'matter_time_entry',target:'matter',relType:'many_to_one',forwardLabel:'Matter',reverseLabel:'Time Entries'},
+   {source:'matter_deadline',target:'matter',relType:'many_to_one',forwardLabel:'Matter',reverseLabel:'Deadlines'},
+  ],
+  rules:[
+   {entity:'matter',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Closed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'closed_date',value:'',message:''}]},
+   {entity:'matter_time_entry',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Submitted',compareField:null,groupId:null},{fieldKey:'hours',operator:'less_than',value:'0.01',compareField:null,groupId:null}],
+    actions:[{type:'block_save',message:'Enter more than zero hours before submitting a time entry.'}]},
+   {entity:'matter_time_entry',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Submitted',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'description',value:'',message:''}]},
+   {entity:'matter_deadline',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'completed_date',value:'',message:''}]},
+  ],
+  workflows:[
+   {entity:'matter',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Open',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Matter opening checklist',daysOffset:3}]},
+   {entity:'matter_time_entry',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Approved',compareField:null,groupId:null}],
+    actions:[{type:'update_field',updateFieldKey:'billing_status',updateValue:'Eligible',updateCopyFrom:''}]},
+   {entity:'matter',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Closing',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Closing checklist',daysOffset:7}]},
+   {entity:'matter',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Closed',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Final billing review',daysOffset:5}]},
+  ],
+ },
+ nonprofit_association:{
+  packageId:'lanesra.nonprofit_association',name:'Nonprofit & Association',industry:'Nonprofit',version:'1.0.0',
+  description:'Constituents, memberships and donations for a small nonprofit or association.',
+  appIcon:'🤝',
+  objects:[
+   {key:'constituent_profile',label:'Constituent Profile',labelPlural:'Constituent Profiles',icon:'👤',prefix:'CONST',digits:4},
+   {key:'membership',label:'Membership',labelPlural:'Memberships',icon:'🪪',prefix:'MBR',digits:5},
+   {key:'donation',label:'Donation',labelPlural:'Donations',icon:'💝',prefix:'DON',digits:5},
+  ],
+  fields:[
+   ['membership','stage','Stage','select','Pending|Active|Grace Period|Expired|Cancelled'],
+   ['membership','start_date','Start Date','date'],['membership','end_date','End Date','date'],
+   ['donation','amount','Amount','number'],['donation','stage','Status','select','Pending|Completed|Refunded'],
+  ],
+  relationships:[
+   {source:'membership',target:'constituent_profile',relType:'many_to_one',forwardLabel:'Constituent',reverseLabel:'Memberships'},
+   {source:'donation',target:'constituent_profile',relType:'many_to_one',forwardLabel:'Constituent',reverseLabel:'Donations'},
+  ],
+  rules:[
+   {entity:'membership',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Active',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'start_date',value:'',message:''},{type:'require',targetField:'end_date',value:'',message:''}]},
+   {entity:'donation',matchType:'all',
+    conditions:[{fieldKey:'amount',operator:'less_than',value:'0.01',compareField:null,groupId:null}],
+    actions:[{type:'block_save',message:'Enter a donation amount greater than zero.'}]},
+  ],
+  workflows:[
+   {entity:'donation',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Send donation acknowledgement',daysOffset:3}]},
+  ],
+ },
+ auto_service:{
+  packageId:'lanesra.auto_service',name:'Auto Repair & Service Garage',industry:'Automotive',version:'1.0.0',
+  description:'Vehicles, repair orders and appointments for an independent auto repair garage.',
+  appIcon:'🚗',
+  objects:[
+   {key:'vehicle',label:'Vehicle',labelPlural:'Vehicles',icon:'🚗',prefix:'VEH',digits:5},
+   {key:'repair_order',label:'Repair Order',labelPlural:'Repair Orders',icon:'🧾',prefix:'RO',digits:5},
+   {key:'repair_line',label:'Repair Line',labelPlural:'Repair Lines',icon:'📄',prefix:'RL',digits:5},
+   {key:'vehicle_appointment',label:'Appointment',labelPlural:'Appointments',icon:'📅',prefix:'APT',digits:5},
+  ],
+  fields:[
+   ['vehicle','stage','Stage','select','Active|Sold or Transferred|Inactive'],['vehicle','make','Make','text'],['vehicle','model','Model','text'],
+   ['repair_order','stage','Stage','select','Draft|Authorized|In Progress|Waiting Parts|Ready|Completed|Cancelled'],
+   ['repair_order','odometer_in','Odometer In','number'],['repair_order','odometer_out','Odometer Out','number'],['repair_order','completion_date','Completion Date','date'],
+   ['repair_line','stage','Stage','select','Proposed|Authorized|In Progress|Complete|Declined'],['repair_line','price','Price','number'],
+   ['vehicle_appointment','stage','Status','select','Requested|Confirmed|Checked In|Completed|No Show|Cancelled'],
+  ],
+  relationships:[
+   {source:'repair_order',target:'vehicle',relType:'many_to_one',forwardLabel:'Vehicle',reverseLabel:'Repair Orders'},
+   {source:'repair_line',target:'repair_order',relType:'many_to_one',forwardLabel:'Repair Order',reverseLabel:'Lines'},
+   {source:'vehicle_appointment',target:'vehicle',relType:'many_to_one',forwardLabel:'Vehicle',reverseLabel:'Appointments'},
+  ],
+  rules:[
+   {entity:'repair_order',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'completion_date',value:'',message:''},{type:'require',targetField:'odometer_out',value:'',message:''}]},
+   {entity:'repair_line',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Authorized',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'price',value:'',message:''}]},
+   {entity:'repair_order',matchType:'all',
+    conditions:[{fieldKey:'odometer_out',operator:'less_than',value:'',compareField:'odometer_in',groupId:null}],
+    actions:[{type:'block_save',message:'Odometer out cannot be less than odometer in.'}]},
+  ],
+  workflows:[
+   {entity:'repair_order',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Authorized',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Assign technician',daysOffset:1}]},
+   {entity:'vehicle_appointment',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'No Show',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Reschedule appointment',daysOffset:1}]},
+  ],
+ },
 };
 // Every custom-object key a package would create - used to block importing/
 // installing a package that collides with an object already in this
