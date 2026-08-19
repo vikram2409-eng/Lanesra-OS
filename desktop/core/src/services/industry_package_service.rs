@@ -200,6 +200,7 @@ pub fn reference_package_manifest(key: &str) -> AppResult<String> {
         "real_estate" => Ok(super::reference_packages::real_estate_manifest_json()),
         "legal_practice" => Ok(super::reference_packages::legal_practice_manifest_json()),
         "nonprofit_association" => Ok(super::reference_packages::nonprofit_association_manifest_json()),
+        "auto_service" => Ok(super::reference_packages::auto_service_manifest_json()),
         other => Err(AppError::NotFound(format!("Reference package '{other}'"))),
     }
 }
