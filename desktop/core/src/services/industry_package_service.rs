@@ -199,6 +199,7 @@ pub fn reference_package_manifest(key: &str) -> AppResult<String> {
         "recruitment" => Ok(super::reference_packages::recruitment_manifest_json()),
         "real_estate" => Ok(super::reference_packages::real_estate_manifest_json()),
         "legal_practice" => Ok(super::reference_packages::legal_practice_manifest_json()),
+        "nonprofit_association" => Ok(super::reference_packages::nonprofit_association_manifest_json()),
         other => Err(AppError::NotFound(format!("Reference package '{other}'"))),
     }
 }

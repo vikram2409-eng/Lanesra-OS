@@ -5,10 +5,10 @@
 //! Data Models & Packaged Business Apps") sequences Field Service,
 //! Property Management, Construction & Contractors, Professional
 //! Services, Dental/Clinic Practice Administration, Recruitment &
-//! Staffing, Real Estate Brokerage and Legal Practice first; this module
-//! ships all eight, proving the foundation against real content rather
-//! than only the synthetic manifests `industry_data_model.rs`'s tests
-//! use.
+//! Staffing, Real Estate Brokerage, Legal Practice and Nonprofit &
+//! Association first; this module ships all nine, proving the
+//! foundation against real content rather than only the synthetic
+//! manifests `industry_data_model.rs`'s tests use.
 //!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
@@ -2731,6 +2731,332 @@ fn legal_practice_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Final billing review\",\"description\":null,\"due_in_days\":5,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+/// The ninth package: a constituent, membership, donation and
+/// program-management model for small nonprofits, clubs, chambers,
+/// associations and community organizations.
+pub fn nonprofit_association_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.nonprofit_association",
+        "name": "Nonprofit & Association",
+        "industry": "Nonprofit",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "constituent_profile", "singular_label": "Constituent Profile", "plural_label": "Constituent Profiles", "icon": "👤", "prefix": "CONST", "digits": 4 },
+            { "key": "membership_plan", "singular_label": "Membership Plan", "plural_label": "Membership Plans", "icon": "📇", "prefix": "PLAN", "digits": 3 },
+            { "key": "membership", "singular_label": "Membership", "plural_label": "Memberships", "icon": "🪪", "prefix": "MBR", "digits": 5 },
+            { "key": "donation", "singular_label": "Donation", "plural_label": "Donations", "icon": "💝", "prefix": "DON", "digits": 5 },
+            { "key": "campaign", "singular_label": "Campaign", "plural_label": "Campaigns", "icon": "📣", "prefix": "CAMP", "digits": 4 },
+            { "key": "program", "singular_label": "Program", "plural_label": "Programs", "icon": "📚", "prefix": "PRG", "digits": 4 },
+            { "key": "program_participation", "singular_label": "Program Participation", "plural_label": "Program Participations", "icon": "🔗", "prefix": "PPT", "digits": 5 },
+            { "key": "volunteer_assignment", "singular_label": "Volunteer Assignment", "plural_label": "Volunteer Assignments", "icon": "🙋", "prefix": "VOL", "digits": 5 },
+            { "key": "event", "singular_label": "Event", "plural_label": "Events", "icon": "🎫", "prefix": "EVT", "digits": 4 }
+        ],
+        "fields": nonprofit_association_fields(),
+        "relationships": nonprofit_association_relationships(),
+        "business_rules": nonprofit_association_business_rules(),
+        "workflows": nonprofit_association_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "constituent_profile",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "details",
+                            "title": "Details",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["constituent_type", "engagement_status", "preferences"] }
+                            ],
+                            // Indices into `relationships` below: Memberships (1),
+                            // Donations (3), Program Participations (5).
+                            "related": ["1", "3", "5"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Memberships by Stage", "entity_type": "membership", "group_by_source": "custom", "group_by_field": "membership_stage", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Nonprofit Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Nonprofit & Association",
+            "icon": "🤝",
+            "description": "Constituents, memberships, donations, campaigns, programs, volunteers and events for small nonprofits and associations.",
+            "object_keys": [
+                "constituent_profile", "membership_plan", "membership", "donation", "campaign", "program", "program_participation", "volunteer_assignment", "event", "Contact", "Invoice", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // Spec role names (Executive/Admin, Membership Manager,
+            // Fundraising, Program Coordinator, Volunteer Coordinator)
+            // mapped onto this build's actual role set - see
+            // field_service_manifest_json's own note on this same mapping.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "viewer" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn nonprofit_association_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        constituent_profile_fields(),
+        membership_plan_fields(),
+        membership_fields(),
+        donation_fields(),
+        campaign_fields(),
+        program_fields(),
+        program_participation_fields(),
+        volunteer_assignment_fields(),
+        event_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn constituent_profile_fields() -> serde_json::Value {
+    json!([
+        { "key": "constituent_type", "entity_type": "constituent_profile", "label": "Constituent Type", "field_type": "select", "options": ["Individual", "Organization", "Family", "Business"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Individual", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "engagement_status", "entity_type": "constituent_profile", "label": "Engagement Status", "field_type": "select", "options": ["Prospect", "Active", "Lapsed", "Inactive"], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Prospect", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "preferences", "entity_type": "constituent_profile", "label": "Preferences", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn membership_plan_fields() -> serde_json::Value {
+    json!([
+        { "key": "duration_months", "entity_type": "membership_plan", "label": "Duration (months)", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": "1", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "12", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "fee", "entity_type": "membership_plan", "label": "Fee", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "benefits_summary", "entity_type": "membership_plan", "label": "Benefits Summary", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "plan_active", "entity_type": "membership_plan", "label": "Active", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn membership_fields() -> serde_json::Value {
+    json!([
+        { "key": "membership_stage", "entity_type": "membership", "label": "Stage", "field_type": "select", "options": ["Pending", "Active", "Grace Period", "Expired", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Active by the "Membership activation" business rule below.
+        { "key": "start_date", "entity_type": "membership", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "end_date", "entity_type": "membership", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Blocked-if-earlier-than start_date by the "Renewal integrity"
+        // business rule below.
+        { "key": "renewal_date", "entity_type": "membership", "label": "Renewal Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn donation_fields() -> serde_json::Value {
+    json!([
+        { "key": "donation_date", "entity_type": "donation", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Must be more than zero by the "Donation validation" business rule below.
+        { "key": "amount", "entity_type": "donation", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "donation_type", "entity_type": "donation", "label": "Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "donation_status", "entity_type": "donation", "label": "Status", "field_type": "select", "options": ["Pending", "Completed", "Refunded"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn campaign_fields() -> serde_json::Value {
+    json!([
+        { "key": "goal_amount", "entity_type": "campaign", "label": "Goal Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "campaign_start", "entity_type": "campaign", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "campaign_end", "entity_type": "campaign", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "campaign_status", "entity_type": "campaign", "label": "Status", "field_type": "select", "options": ["Planned", "Active", "Closed"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Planned", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn program_fields() -> serde_json::Value {
+    json!([
+        { "key": "program_start", "entity_type": "program", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "program_end", "entity_type": "program", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "program_status", "entity_type": "program", "label": "Status", "field_type": "select", "options": ["Planned", "Active", "Completed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Planned", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn program_participation_fields() -> serde_json::Value {
+    json!([
+        { "key": "participation_role", "entity_type": "program_participation", "label": "Role", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "participation_status", "entity_type": "program_participation", "label": "Status", "field_type": "select", "options": ["Registered", "Active", "Completed", "Withdrawn"], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Registered", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn volunteer_assignment_fields() -> serde_json::Value {
+    json!([
+        { "key": "assignment_role", "entity_type": "volunteer_assignment", "label": "Role", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "hours", "entity_type": "volunteer_assignment", "label": "Hours", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "assignment_date", "entity_type": "volunteer_assignment", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn event_fields() -> serde_json::Value {
+    json!([
+        { "key": "event_date", "entity_type": "event", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "location", "entity_type": "event", "label": "Location", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Compared against registration counts by the spec's "Capacity
+        // rule" - left unenforced, see this module's own doc comment on
+        // cross-record aggregates.
+        { "key": "capacity", "entity_type": "event", "label": "Capacity", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "event_status", "entity_type": "event", "label": "Status", "field_type": "select", "options": ["Draft", "Open", "Full", "Completed", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: the screen layout's `related` list
+/// references these relationships by their position in this array.
+/// `constituent_profile`'s own link to `Contact` is `is_required: false`
+/// (spec: "1:1 optional") - a Contact only becomes a constituent once an
+/// admin deliberately links the two, matching the spec's "extension/role
+/// to prevent duplicate master records" framing.
+fn nonprofit_association_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "constituent_profile", "target_entity_type": "Contact", "relationship_type": "one_to_one", "forward_label": "Contact", "reverse_label": "Constituent Profile", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "membership", "target_entity_type": "constituent_profile", "relationship_type": "many_to_one", "forward_label": "Constituent", "reverse_label": "Memberships", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 2 */ { "source_entity_type": "membership", "target_entity_type": "membership_plan", "relationship_type": "many_to_one", "forward_label": "Plan", "reverse_label": "Memberships", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 3 */ { "source_entity_type": "donation", "target_entity_type": "constituent_profile", "relationship_type": "many_to_one", "forward_label": "Constituent", "reverse_label": "Donations", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 4 */ { "source_entity_type": "donation", "target_entity_type": "campaign", "relationship_type": "many_to_one", "forward_label": "Campaign", "reverse_label": "Donations", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 5 */ { "source_entity_type": "program_participation", "target_entity_type": "constituent_profile", "relationship_type": "many_to_one", "forward_label": "Constituent", "reverse_label": "Program Participations", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 6 */ { "source_entity_type": "program_participation", "target_entity_type": "program", "relationship_type": "many_to_one", "forward_label": "Program", "reverse_label": "Participants", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 7 */ { "source_entity_type": "volunteer_assignment", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Volunteer", "reverse_label": "Volunteer Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 8 */ { "source_entity_type": "volunteer_assignment", "target_entity_type": "program", "relationship_type": "many_to_one", "forward_label": "Program", "reverse_label": "Volunteer Assignments", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 9 */ { "source_entity_type": "volunteer_assignment", "target_entity_type": "event", "relationship_type": "many_to_one", "forward_label": "Event", "reverse_label": "Volunteer Assignments", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 10 */ { "source_entity_type": "Invoice", "target_entity_type": "membership", "relationship_type": "many_to_one", "forward_label": "Membership", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 }
+    ])
+}
+
+/// The spec's four business rules include one skipped for the reason
+/// this module's own doc comment already documents:
+/// - "Capacity rule" (event registrations >= capacity sets Full or
+///   blocks further registrations) needs counting every registration
+///   linked to the same Event and comparing the count to `capacity` -
+///   the cross-record aggregate gap, same as Recruitment's "Job filled".
+///
+/// "Membership activation" and "Donation validation" both drop their
+/// relationship-existence half (member/plan required; constituent
+/// required) for the reason this module's own doc comment already
+/// documents; "Donation validation"'s amount check needs no stage gate
+/// at all - it's a standalone condition that applies on every save,
+/// same as the constraint that condition IS the check, not a filter for
+/// a separate action. "Renewal integrity" is the second rule in this
+/// module (after Property Management's lease dates) to use field-to-field
+/// comparison (`compare_field_key`) instead of a literal value.
+fn nonprofit_association_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "membership",
+            "name": "Membership activation",
+            "description": "An active membership must record its start and end dates.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "membership_stage", "operator": "equals", "value": "Active" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "start_date", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "end_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "donation",
+            "name": "Donation validation",
+            "description": "A donation must record more than zero.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "amount", "operator": "less_than", "value": "0.01" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Enter a donation amount greater than zero." }
+            ]
+        },
+        {
+            "entity_type": "membership",
+            "name": "Renewal integrity",
+            "description": "A membership's renewal date cannot be earlier than its start date.",
+            "match_type": "all",
+            "priority": 1,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "renewal_date", "operator": "on_or_before", "value": "", "compare_field_source": "custom", "compare_field_key": "start_date" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Renewal date cannot be earlier than the start date." }
+            ]
+        }
+    ])
+}
+
+/// The spec's four workflows include two skipped for reasons this
+/// module's own doc comment already documents - both "Membership
+/// renewal" (30 days before end) and "Membership expired" (end date
+/// passed) need a `date_reached`/`due_overdue`-style trigger on a custom
+/// object's own date field, which the engine doesn't support. "Donation
+/// received"'s "update campaign totals/reporting" half needs an
+/// accumulating write across every donation linked to the same
+/// Campaign, the same gap Construction & Contractors' "Change approved"
+/// workflow hit - only its "create acknowledgement task" half is
+/// automated below. "Program participation"'s "if template configured"
+/// qualifier has no template system to check against, so the task is
+/// created unconditionally on every new participant.
+fn nonprofit_association_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "donation",
+            "name": "Donation received",
+            "description": "A completed donation gets an acknowledgement task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "donation_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "donation_status", "operator": "equals", "value": "Completed" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Send donation acknowledgement\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "program_participation",
+            "name": "Program participation",
+            "description": "A newly registered participant gets an onboarding task.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Onboarding checklist\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
             ]
         }
     ])
