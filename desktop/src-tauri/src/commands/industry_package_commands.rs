@@ -3,7 +3,9 @@ use tauri::State;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::industry_package::{AppInstallRun, AppPackage, ImportPackageInput, InstalledApp, InstalledAppDetail};
+use lanesra_core::models::industry_package::{
+    AppInstallRun, AppPackage, ImportPackageInput, InstalledApp, InstalledAppDetail, WorkspaceArtifact, WorkspaceDependency,
+};
 use lanesra_core::services::industry_package_service;
 
 #[tauri::command]
@@ -70,4 +72,21 @@ pub fn reactivate_installed_app(state: State<AppState>, id: String) -> AppResult
 #[tauri::command]
 pub fn get_reference_package_manifest(key: String) -> AppResult<String> {
     industry_package_service::reference_package_manifest(&key)
+}
+
+/// Every dependency declared by every package imported into this
+/// workspace, satisfied or not - Admin -> Solution Management's
+/// Dependencies tab.
+#[tauri::command]
+pub fn list_package_dependencies(state: State<AppState>) -> AppResult<Vec<WorkspaceDependency>> {
+    let conn = state.conn.lock().unwrap();
+    industry_package_service::list_dependencies_for_workspace(&conn, &require_workspace_id(&conn)?)
+}
+
+/// Every artifact created by every app installed in this workspace -
+/// Admin -> Solution Management's Components tab.
+#[tauri::command]
+pub fn list_package_artifacts_for_workspace(state: State<AppState>) -> AppResult<Vec<WorkspaceArtifact>> {
+    let conn = state.conn.lock().unwrap();
+    industry_package_service::list_artifacts_for_workspace(&conn, &require_workspace_id(&conn)?)
 }

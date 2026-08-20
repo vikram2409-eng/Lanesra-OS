@@ -6,7 +6,7 @@
 use rusqlite::Connection;
 
 use crate::domain::ids::now_iso;
-use crate::models::industry_package::{AppInstallRun, AppPackage, InstalledApp, PackageArtifact, RecommendedPermission};
+use crate::models::industry_package::{AppDependency, AppInstallRun, AppPackage, InstalledApp, PackageArtifact, RecommendedPermission};
 
 // --- app_packages ----------------------------------------------------------
 
@@ -78,11 +78,24 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> rusqlite::Result<
 
 // --- app_dependencies --------------------------------------------------
 
-/// Recorded for future querying (spec 13.2 lists this as its own registry
-/// table) - actual dependency resolution during install reads the
-/// manifest's own `dependencies` list in memory rather than round-
-/// tripping through this table, so there's no corresponding "list" used
-/// on the install path.
+fn map_dependency(row: &rusqlite::Row) -> rusqlite::Result<AppDependency> {
+    Ok(AppDependency {
+        id: row.get("id")?,
+        app_package_id: row.get("app_package_id")?,
+        dependency_package_id: row.get("dependency_package_id")?,
+        version_constraint: row.get("version_constraint")?,
+        is_required: row.get("is_required")?,
+    })
+}
+
+/// Written once per dependency at import time (see
+/// `industry_package_service::import_package`) from the manifest's own
+/// `dependencies` list - actual dependency resolution during install
+/// still reads the manifest in memory rather than round-tripping through
+/// this table (see `industry_package_service::validate`), but this
+/// registry copy is what a Solution Management "Dependencies" view reads
+/// so a package's declared requirements are visible without re-parsing
+/// every stored manifest.
 pub fn insert_dependency(
     conn: &Connection,
     id: &str,
@@ -97,6 +110,35 @@ pub fn insert_dependency(
         rusqlite::params![id, app_package_id, dependency_package_id, version_constraint, is_required],
     )?;
     Ok(())
+}
+
+/// Every dependency row declared by any package ever imported into this
+/// workspace, newest package import first, alongside enough of the
+/// declaring package's own identity (name, version) for a Solution
+/// Management "Dependencies" row to render without a second lookup per
+/// row. Whether each dependency is currently *satisfied* is a
+/// cross-referencing question `industry_package_service` answers, not
+/// this raw join.
+pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(AppDependency, String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT d.id, d.app_package_id, d.dependency_package_id, d.version_constraint, d.is_required,
+                p.package_id AS owner_package_id, p.name AS package_name, p.version AS package_version
+         FROM app_dependencies d
+         JOIN app_packages p ON p.id = d.app_package_id
+         WHERE p.workspace_id = ?1
+         ORDER BY p.imported_at DESC",
+    )?;
+    let rows = stmt
+        .query_map([workspace_id], |row| {
+            Ok((
+                map_dependency(row)?,
+                row.get::<_, String>("owner_package_id")?,
+                row.get::<_, String>("package_name")?,
+                row.get::<_, String>("package_version")?,
+            ))
+        })?
+        .collect();
+    rows
 }
 
 // --- installed_apps ------------------------------------------------------
@@ -226,6 +268,32 @@ pub fn insert_artifact(
 pub fn list_artifacts(conn: &Connection, installed_app_id: &str) -> rusqlite::Result<Vec<PackageArtifact>> {
     let mut stmt = conn.prepare("SELECT * FROM package_artifacts WHERE installed_app_id = ?1 ORDER BY created_at")?;
     let rows = stmt.query_map([installed_app_id], map_artifact)?.collect();
+    rows
+}
+
+/// Every artifact created by every app installed in this workspace,
+/// across every installed app, newest first - alongside enough of the
+/// owning `InstalledApp`'s identity (name, package_id) for a Solution
+/// Management "Components" row to render without a second lookup per
+/// row. This is the "what have I customized beyond what I installed"
+/// view a reported App Builder bug surfaced the need for: grouping by
+/// `artifact_type` and eyeballing `is_locally_customized` here answers it
+/// directly, where before only `get_installed_detail`'s per-app view
+/// existed.
+pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(PackageArtifact, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT a.id, a.installed_app_id, a.artifact_type, a.metadata_id, a.origin_version, a.is_locally_customized, a.created_at,
+                i.name AS installed_app_name, i.package_id AS package_id
+         FROM package_artifacts a
+         JOIN installed_apps i ON i.id = a.installed_app_id
+         WHERE i.workspace_id = ?1
+         ORDER BY a.created_at DESC",
+    )?;
+    let rows = stmt
+        .query_map([workspace_id], |row| {
+            Ok((map_artifact(row)?, row.get::<_, String>("installed_app_name")?, row.get::<_, String>("package_id")?))
+        })?
+        .collect();
     rows
 }
 

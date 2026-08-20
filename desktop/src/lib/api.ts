@@ -71,6 +71,8 @@ import type {
   ImportPackageInput,
   InstalledApp,
   InstalledAppDetail,
+  WorkspaceArtifact,
+  WorkspaceDependency,
   LostReasonBreakdown,
   Notification,
   NumberingOverrideInput,
@@ -374,6 +376,8 @@ export const api = {
   deactivateInstalledApp: (id: string) => call<InstalledApp>("deactivate_installed_app", { id }),
   reactivateInstalledApp: (id: string) => call<InstalledApp>("reactivate_installed_app", { id }),
   getReferencePackageManifest: (key: string) => call<string>("get_reference_package_manifest", { key }),
+  listPackageDependencies: () => call<WorkspaceDependency[]>("list_package_dependencies"),
+  listPackageArtifactsForWorkspace: () => call<WorkspaceArtifact[]>("list_package_artifacts_for_workspace"),
 
   listCustomRecords: (objectKey: string) => call<CustomRecord[]>("list_custom_records", { objectKey }),
   getCustomRecord: (id: string) => call<CustomRecord>("get_custom_record", { id }),

@@ -278,6 +278,52 @@ pub struct PackageArtifact {
     pub created_at: String,
 }
 
+/// A package version's declared dependency on another package, as
+/// actually recorded in the registry - spec 13.2's `app_dependencies`
+/// row shape. Written once at import time (see
+/// `industry_package_service::import_package`) from the manifest's own
+/// `dependencies` list, so a package's declared requirements are visible
+/// to the Solution Management screen without needing that package
+/// installed first, matching the spec's Review step.
+#[derive(Debug, Clone, Serialize)]
+pub struct AppDependency {
+    pub id: String,
+    pub app_package_id: String,
+    pub dependency_package_id: String,
+    pub version_constraint: String,
+    pub is_required: bool,
+}
+
+/// An `AppDependency` alongside enough of its owning package's identity
+/// to render a Solution Management "Dependencies" row without a second
+/// lookup, plus whether the dependency is currently satisfied in this
+/// workspace (an active install of `dependency_package_id` whose version
+/// meets `version_constraint` - the exact check `industry_package_service::validate`
+/// already performs before install, reused here for read-only display).
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceDependency {
+    pub dependency: AppDependency,
+    /// The *declaring* package's own stable `package_id` (not
+    /// `dependency.dependency_package_id`, which is what it depends
+    /// *on*) - lets the frontend join a dependency row back to the
+    /// matching `InstalledApp`/`AppPackage` row without a fragile
+    /// name/version match.
+    pub package_id: String,
+    pub package_name: String,
+    pub package_version: String,
+    pub is_satisfied: bool,
+}
+
+/// A `PackageArtifact` alongside enough of its owning `InstalledApp`'s
+/// identity to render a Solution Management "Components" row without a
+/// second lookup per artifact.
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceArtifact {
+    pub artifact: PackageArtifact,
+    pub installed_app_name: String,
+    pub package_id: String,
+}
+
 pub const APP_INSTALL_RUN_ACTIONS: &[&str] = &["install", "update", "deactivate", "reactivate"];
 pub const APP_INSTALL_RUN_STATUSES: &[&str] = &["running", "succeeded", "failed"];
 

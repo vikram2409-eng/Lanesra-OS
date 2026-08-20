@@ -167,6 +167,8 @@ pub fn run() {
             commands::industry_package_commands::deactivate_installed_app,
             commands::industry_package_commands::reactivate_installed_app,
             commands::industry_package_commands::get_reference_package_manifest,
+            commands::industry_package_commands::list_package_dependencies,
+            commands::industry_package_commands::list_package_artifacts_for_workspace,
             commands::app_commands::list_apps,
             commands::app_commands::create_app,
             commands::app_commands::update_app,

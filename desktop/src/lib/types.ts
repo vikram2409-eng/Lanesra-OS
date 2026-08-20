@@ -1938,3 +1938,33 @@ export interface InstalledAppDetail {
 export interface ImportPackageInput {
   manifest_json: string;
 }
+
+/** A package version's declared dependency on another package, as
+ * recorded in the registry at import time. */
+export interface AppDependency {
+  id: string;
+  app_package_id: string;
+  dependency_package_id: string;
+  version_constraint: string;
+  is_required: boolean;
+}
+
+/** An AppDependency alongside its declaring package's identity and
+ * whether it's currently satisfied in this workspace - Admin > Solution
+ * Management's Dependencies tab. */
+export interface WorkspaceDependency {
+  dependency: AppDependency;
+  package_id: string;
+  package_name: string;
+  package_version: string;
+  is_satisfied: boolean;
+}
+
+/** A PackageArtifact alongside its owning InstalledApp's identity -
+ * Admin > Solution Management's Components tab, the workspace-wide
+ * "what have I customized beyond what I installed" view. */
+export interface WorkspaceArtifact {
+  artifact: PackageArtifact;
+  installed_app_name: string;
+  package_id: string;
+}

@@ -34,7 +34,7 @@ use crate::models::custom_report::CustomReport;
 use crate::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets};
 use crate::models::industry_package::{
     AppInstallRun, AppPackage, ImportPackageInput, IndustryPackageManifest, InstalledApp, InstalledAppDetail,
-    ManifestDashboardWidget, INDUSTRY_PACKAGE_FORMAT_VERSION,
+    ManifestDashboardWidget, WorkspaceArtifact, WorkspaceDependency, INDUSTRY_PACKAGE_FORMAT_VERSION,
 };
 use crate::models::relationship::RelationshipDefinition;
 use crate::models::screen_layout::{LayoutTabs, ScreenLayoutInput, ScreenLayoutUpdate};
@@ -164,7 +164,7 @@ pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPacka
     }
     let id = new_uuid();
     let checksum = checksum_of(&input.manifest_json);
-    Ok(industry_package_repo::insert_package(
+    let package = industry_package_repo::insert_package(
         conn,
         &id,
         workspace_id,
@@ -177,11 +177,53 @@ pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPacka
         &checksum,
         "import",
         actor_user_id,
-    )?)
+    )?;
+    // Recorded now, not deferred to install: a package's declared
+    // dependencies are part of what the spec's Review step shows before
+    // Install is ever offered, and a Solution Management "Dependencies"
+    // view should be able to show every imported package's requirements,
+    // not only installed ones.
+    for dep in &manifest.dependencies {
+        industry_package_repo::insert_dependency(conn, &new_uuid(), &package.id, &dep.package_id, &dep.version_constraint, dep.is_required)?;
+    }
+    Ok(package)
 }
 
 pub fn list_packages(conn: &Connection, workspace_id: &str) -> AppResult<Vec<AppPackage>> {
     Ok(industry_package_repo::list_packages(conn, workspace_id)?)
+}
+
+/// Every dependency declared by every package imported into this
+/// workspace, with `is_satisfied` computed the same way `validate` checks
+/// it before an install: an active install of `dependency_package_id`
+/// whose version meets `version_constraint`. Read-only - this never
+/// blocks anything, it's what the Solution Management "Dependencies" tab
+/// shows.
+pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<WorkspaceDependency>> {
+    let rows = industry_package_repo::list_dependencies_for_workspace(conn, workspace_id)?;
+    rows.into_iter()
+        .map(|(dependency, package_id, package_name, package_version)| {
+            let installed = industry_package_repo::get_installed_app_by_package(conn, workspace_id, &dependency.dependency_package_id)?;
+            let is_satisfied = installed
+                .as_ref()
+                .map(|app| app.status == "active" && version_satisfies(&app.installed_version, &dependency.version_constraint))
+                .unwrap_or(false);
+            Ok(WorkspaceDependency { dependency, package_id, package_name, package_version, is_satisfied })
+        })
+        .collect()
+}
+
+/// Every artifact created by every app installed in this workspace,
+/// across every installed app - the workspace-wide counterpart to
+/// `get_installed_detail`'s per-app artifact list, and the "what have I
+/// customized beyond what I installed" view the Solution Management
+/// "Components" tab exists to answer.
+pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<WorkspaceArtifact>> {
+    let rows = industry_package_repo::list_artifacts_for_workspace(conn, workspace_id)?;
+    Ok(rows
+        .into_iter()
+        .map(|(artifact, installed_app_name, package_id)| WorkspaceArtifact { artifact, installed_app_name, package_id })
+        .collect())
 }
 
 /// Bundled starter manifests (`services::reference_packages`) an admin
