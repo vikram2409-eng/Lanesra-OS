@@ -24,6 +24,8 @@ fn map_package(row: &rusqlite::Row) -> rusqlite::Result<AppPackage> {
         source: row.get("source")?,
         imported_at: row.get("imported_at")?,
         imported_by: row.get("imported_by")?,
+        publisher_id: row.get("publisher_id")?,
+        is_managed: row.get("is_managed")?,
     })
 }
 
@@ -40,14 +42,19 @@ pub fn insert_package(
     manifest_json: &str,
     checksum: &str,
     source: &str,
+    publisher_id: &str,
+    is_managed: bool,
     actor_user_id: Option<&str>,
 ) -> rusqlite::Result<AppPackage> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO app_packages
-            (id, workspace_id, package_id, name, industry, version, min_lanesra_version, manifest_json, checksum, source, imported_at, imported_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-        rusqlite::params![id, workspace_id, package_id, name, industry, version, min_lanesra_version, manifest_json, checksum, source, now, actor_user_id],
+            (id, workspace_id, package_id, name, industry, version, min_lanesra_version, manifest_json, checksum, source, publisher_id, is_managed, imported_at, imported_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        rusqlite::params![
+            id, workspace_id, package_id, name, industry, version, min_lanesra_version, manifest_json, checksum, source, publisher_id, is_managed, now,
+            actor_user_id
+        ],
     )?;
     get_package(conn, id).map(|p| p.expect("just inserted"))
 }

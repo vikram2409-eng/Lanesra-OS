@@ -16,6 +16,7 @@ pub mod numbering_override_repo;
 pub mod opportunity_repo;
 pub mod order_repo;
 pub mod product_repo;
+pub mod publisher_repo;
 pub mod quote_repo;
 pub mod relationship_repo;
 pub mod screen_layout_repo;

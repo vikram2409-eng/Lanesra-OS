@@ -162,6 +162,13 @@ pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPacka
             manifest.package_id, manifest.version
         )));
     }
+    // Every reference package ships namespaced as "lanesra.<name>", and
+    // ensure_defaults (idempotent) guarantees that publisher exists, so
+    // this only ever rejects a hand-authored manifest under an
+    // unregistered namespace - never a bundled starter.
+    super::publisher_service::ensure_defaults(conn, workspace_id)?;
+    let publisher = super::publisher_service::resolve_for_package_id(conn, workspace_id, &manifest.package_id)?;
+
     let id = new_uuid();
     let checksum = checksum_of(&input.manifest_json);
     let package = industry_package_repo::insert_package(
@@ -176,6 +183,8 @@ pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPacka
         &input.manifest_json,
         &checksum,
         "import",
+        &publisher.id,
+        true,
         actor_user_id,
     )?;
     // Recorded now, not deferred to install: a package's declared

@@ -73,6 +73,8 @@ import type {
   InstalledAppDetail,
   WorkspaceArtifact,
   WorkspaceDependency,
+  Publisher,
+  PublisherInput,
   LostReasonBreakdown,
   Notification,
   NumberingOverrideInput,
@@ -378,6 +380,8 @@ export const api = {
   getReferencePackageManifest: (key: string) => call<string>("get_reference_package_manifest", { key }),
   listPackageDependencies: () => call<WorkspaceDependency[]>("list_package_dependencies"),
   listPackageArtifactsForWorkspace: () => call<WorkspaceArtifact[]>("list_package_artifacts_for_workspace"),
+  listPublishers: () => call<Publisher[]>("list_publishers"),
+  createPublisher: (input: PublisherInput) => call<Publisher>("create_publisher", { input }),
 
   listCustomRecords: (objectKey: string) => call<CustomRecord[]>("list_custom_records", { objectKey }),
   getCustomRecord: (id: string) => call<CustomRecord>("get_custom_record", { id }),

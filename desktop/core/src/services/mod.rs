@@ -20,6 +20,7 @@ pub mod numbering_service;
 pub mod opportunity_service;
 pub mod order_service;
 pub mod product_service;
+pub mod publisher_service;
 pub mod quote_service;
 pub mod reference_packages;
 pub mod relationship_service;

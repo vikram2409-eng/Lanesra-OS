@@ -26,6 +26,7 @@ use lanesra_core::models::business_rule::{BusinessRuleInput, BusinessRuleUpdate}
 use lanesra_core::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate};
 use lanesra_core::models::industry_package::ImportPackageInput;
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
+use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate};
@@ -41,6 +42,7 @@ use lanesra_core::services::{
     dashboard_widget_service,
     industry_package_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
+    publisher_service,
     quote_service, relationship_service, report_service, screen_layout_service, search_service, status_transition_service, task_service,
     user_service, workflow_service, workspace_service,
 };
@@ -609,6 +611,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "get_reference_package_manifest" => to_value(industry_package_service::reference_package_manifest(&arg::<String>(args, "key")?)?),
         "list_package_dependencies" => to_value(industry_package_service::list_dependencies_for_workspace(conn, &require_workspace_id(conn)?)?),
         "list_package_artifacts_for_workspace" => to_value(industry_package_service::list_artifacts_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "list_publishers" => to_value(publisher_service::list(conn, &require_workspace_id(conn)?)?),
+        "create_publisher" => {
+            let input: PublisherInput = arg(args, "input")?;
+            to_value(publisher_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
 
         "list_apps" => to_value(app_service::list(conn, &require_workspace_id(conn)?)?),
         "create_app" => {

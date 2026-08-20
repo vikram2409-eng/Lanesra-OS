@@ -1,47 +1,56 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "../../lib/api";
-import type { InstalledApp, WorkspaceArtifact, WorkspaceDependency } from "../../lib/types";
+import { api, ApiError } from "../../lib/api";
+import type { AppPackage, InstalledApp, Publisher, PublisherInput, WorkspaceArtifact, WorkspaceDependency } from "../../lib/types";
 import { artifactTypeLabel } from "./IndustryPackagesAdmin";
 
-type SolutionTab = "packages" | "components" | "dependencies";
+type SolutionTab = "packages" | "components" | "dependencies" | "publishers";
 
 const SOLUTION_TABS: { key: SolutionTab; label: string }[] = [
   { key: "packages", label: "Solution Packages" },
   { key: "components", label: "Components" },
   { key: "dependencies", label: "Dependencies" },
+  { key: "publishers", label: "Publishers" },
 ];
 
 /**
- * Solution Management (Solution Packages & Admin IA design spec, Phase
- * 1): a read-only landing screen answering "what's installed, what did
- * it create, and what does it depend on" - the exact question a reported
- * "can't tell what I've customized beyond what I installed" bug
- * surfaced the need for. Every byte of data here already existed
- * (`app_packages`/`installed_apps`/`package_artifacts`/`app_dependencies`,
- * migration 0027) - this is a new frame on it, not a new registry.
+ * Solution Management (Solution Packages & Admin IA design spec).
+ * Phase 1: a read-only landing screen answering "what's installed, what
+ * did it create, and what does it depend on" - the exact question a
+ * reported "can't tell what I've customized beyond what I installed" bug
+ * surfaced the need for. Every byte of data on the first three tabs
+ * already existed (`app_packages`/`installed_apps`/`package_artifacts`/
+ * `app_dependencies`, migration 0027) - this is a new frame on it, not a
+ * new registry.
+ * Phase 2 adds the fourth tab, Publishers: a real registry (migration
+ * 0029) rather than a stub, since every package_id is namespaced by a
+ * publisher key and import_package now enforces that namespace is
+ * actually registered (see `publisher_service::resolve_for_package_id`).
  *
- * Deliberately not built yet, per the Phase 1 plan: a Publishers tab (no
- * real Publisher entity exists until Phase 2), a Managed/Unmanaged
- * distinction (every row is Managed today - Unmanaged doesn't exist
- * until an admin can package their own customizations), and any
- * write/deploy action (install/deactivate stay on Admin -> App Catalog,
- * the screen that already owns them - this is a browsing surface, not a
- * second copy of that control surface).
+ * Still not built, per the plan's forward roadmap: a real Managed/
+ * Unmanaged distinction (every package row is Managed today - Unmanaged
+ * doesn't exist until an admin can package their own customizations),
+ * component-tagging (attributing hand-built objects/fields/rules to the
+ * auto-seeded `local` publisher), and any write/deploy action beyond
+ * registering a publisher (install/deactivate stay on Admin -> App
+ * Catalog, the screen that already owns them).
  */
 export function SolutionManagementAdmin() {
   const [tab, setTab] = useState<SolutionTab>("packages");
 
   const installed = useQuery({ queryKey: ["installedApps"], queryFn: () => api.listInstalledApps() });
+  const packages = useQuery({ queryKey: ["industryPackages"], queryFn: () => api.listIndustryPackages() });
   const artifacts = useQuery({ queryKey: ["packageArtifactsForWorkspace"], queryFn: () => api.listPackageArtifactsForWorkspace() });
   const dependencies = useQuery({ queryKey: ["packageDependencies"], queryFn: () => api.listPackageDependencies() });
+  const publishers = useQuery({ queryKey: ["publishers"], queryFn: () => api.listPublishers() });
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
-        Every industry app installed in this workspace, what it created, and what it depends on - read-only. Install,
-        deactivate or reactivate an app from <b>Admin → App Catalog</b>; this is where you see the result.
+        Every industry app installed in this workspace, what it created, what it depends on, and who published it -
+        read-only. Install, deactivate or reactivate an app from <b>Admin → App Catalog</b>; this is where you see
+        the result.
       </p>
 
       <div className="tab-row">
@@ -53,25 +62,47 @@ export function SolutionManagementAdmin() {
       </div>
 
       {tab === "packages" && (
-        <SolutionPackagesTab installed={installed.data ?? []} artifacts={artifacts.data ?? []} dependencies={dependencies.data ?? []} loading={installed.isLoading} />
+        <SolutionPackagesTab
+          installed={installed.data ?? []}
+          packages={packages.data ?? []}
+          publishers={publishers.data ?? []}
+          artifacts={artifacts.data ?? []}
+          dependencies={dependencies.data ?? []}
+          loading={installed.isLoading}
+        />
       )}
       {tab === "components" && <ComponentsTab artifacts={artifacts.data ?? []} loading={artifacts.isLoading} />}
       {tab === "dependencies" && <DependenciesTab dependencies={dependencies.data ?? []} loading={dependencies.isLoading} />}
+      {tab === "publishers" && <PublishersTab publishers={publishers.data ?? []} packages={packages.data ?? []} loading={publishers.isLoading} />}
     </div>
   );
 }
 
 function SolutionPackagesTab({
   installed,
+  packages,
+  publishers,
   artifacts,
   dependencies,
   loading,
 }: {
   installed: InstalledApp[];
+  packages: AppPackage[];
+  publishers: Publisher[];
   artifacts: WorkspaceArtifact[];
   dependencies: WorkspaceDependency[];
   loading: boolean;
 }) {
+  const publisherById = new Map(publishers.map((p) => [p.id, p]));
+  // installed_apps doesn't carry publisher_id itself - only the
+  // app_packages row it was installed from does - so join through the
+  // (package_id, version) pair the unique index on app_packages already
+  // guarantees identifies exactly one row.
+  const publisherForApp = (app: InstalledApp): Publisher | undefined => {
+    const pkg = packages.find((p) => p.package_id === app.package_id && p.version === app.installed_version);
+    return pkg?.publisher_id ? publisherById.get(pkg.publisher_id) : undefined;
+  };
+
   return (
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Solution Packages</h3>
@@ -86,6 +117,7 @@ function SolutionPackagesTab({
           <thead>
             <tr>
               <th>Name</th>
+              <th>Publisher</th>
               <th>Type</th>
               <th>Version</th>
               <th>Status</th>
@@ -97,11 +129,13 @@ function SolutionPackagesTab({
             {installed.map((app) => {
               const componentCount = artifacts.filter((a) => a.artifact.installed_app_id === app.id).length;
               const dependencyCount = dependencies.filter((d) => d.package_id === app.package_id).length;
+              const publisher = publisherForApp(app);
               return (
                 <tr key={app.id}>
                   <td>
                     {app.icon} {app.name}
                   </td>
+                  <td>{publisher ? publisher.name : "—"}</td>
                   <td>
                     <span className="badge">Managed</span>
                   </td>
@@ -192,6 +226,123 @@ function ComponentsTab({ artifacts, loading }: { artifacts: WorkspaceArtifact[];
             </tbody>
           </table>
         </>
+      )}
+    </div>
+  );
+}
+
+function PublishersTab({ publishers, packages, loading }: { publishers: Publisher[]; packages: AppPackage[]; loading: boolean }) {
+  const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [input, setInput] = useState<PublisherInput>({ key: "", name: "", description: null });
+  const [error, setError] = useState<string | null>(null);
+
+  const create = useMutation({
+    mutationFn: () => api.createPublisher({ ...input, key: input.key.trim().toLowerCase() }),
+    onSuccess: () => {
+      setError(null);
+      setAdding(false);
+      setInput({ key: "", name: "", description: null });
+      queryClient.invalidateQueries({ queryKey: ["publishers"] });
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not register that publisher"),
+  });
+
+  return (
+    <div className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h3 style={{ marginTop: 0 }}>Publishers</h3>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+            Who a package's namespace belongs to. Every package_id is expected to be "&lt;publisher-key&gt;.&lt;name&gt;" -
+            importing a package under an unregistered key is rejected until its publisher is registered here.
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setAdding((v) => !v)}>
+          {adding ? "Cancel" : "+ Register publisher"}
+        </button>
+      </div>
+
+      {adding && (
+        <form
+          className="form-grid"
+          style={{ marginBottom: 16 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            create.mutate();
+          }}
+        >
+          {error && (
+            <div className="error-banner" style={{ gridColumn: "1 / -1" }}>
+              {error}
+            </div>
+          )}
+          <div className="form-field">
+            <label>Key</label>
+            <input
+              value={input.key}
+              onChange={(e) => setInput({ ...input, key: e.target.value })}
+              placeholder="acme"
+              required
+            />
+          </div>
+          <div className="form-field">
+            <label>Name</label>
+            <input
+              value={input.name}
+              onChange={(e) => setInput({ ...input, name: e.target.value })}
+              placeholder="Acme Corp"
+              required
+            />
+          </div>
+          <div className="form-field full">
+            <label>Description (optional)</label>
+            <input
+              value={input.description ?? ""}
+              onChange={(e) => setInput({ ...input, description: e.target.value || null })}
+            />
+          </div>
+          <div className="form-field full">
+            <button className="btn btn-primary" type="submit" disabled={create.isPending}>
+              {create.isPending ? "Registering..." : "Register publisher"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading && <p>Loading...</p>}
+      {!loading && publishers.length === 0 && <p className="empty-state">No publishers yet.</p>}
+      {publishers.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Packages</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {publishers.map((p) => {
+              const packageCount = packages.filter((pkg) => pkg.publisher_id === p.id).length;
+              return (
+                <tr key={p.id}>
+                  <td>
+                    <code>{p.key}</code>
+                  </td>
+                  <td>{p.name}</td>
+                  <td style={{ color: "var(--text-muted)" }}>{p.description ?? "—"}</td>
+                  <td>{packageCount}</td>
+                  <td>
+                    {p.is_official && <span className="badge">Official</span>}
+                    {p.is_local && <span className="badge">Local</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );

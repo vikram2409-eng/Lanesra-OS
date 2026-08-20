@@ -20,6 +20,7 @@ pub mod numbering_commands;
 pub mod opportunity_commands;
 pub mod order_commands;
 pub mod product_commands;
+pub mod publisher_commands;
 pub mod quote_commands;
 pub mod relationship_commands;
 pub mod report_commands;

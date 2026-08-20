@@ -236,6 +236,16 @@ pub struct AppPackage {
     pub source: String,
     pub imported_at: String,
     pub imported_by: Option<String>,
+    /// The registered `Publisher` whose namespace `package_id` falls
+    /// under (see migration 0029 and `publisher_service`) - `None` only
+    /// for a package imported before that migration ran, never for a
+    /// fresh import (`import_package` always resolves and stamps this).
+    pub publisher_id: Option<String>,
+    /// Every package imported through Admin -> App Catalog is Managed by
+    /// definition in this phase - see migration 0029's own comment for
+    /// why the column exists ahead of Unmanaged packages actually
+    /// shipping.
+    pub is_managed: bool,
 }
 
 pub const INSTALLED_APP_STATUSES: &[&str] = &["active", "deactivated"];

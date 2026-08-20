@@ -1871,6 +1871,8 @@ export interface AppPackage {
   source: string;
   imported_at: string;
   imported_by: string | null;
+  publisher_id: string | null;
+  is_managed: boolean;
 }
 
 export const INSTALLED_APP_STATUSES = ["active", "deactivated"] as const;
@@ -1967,4 +1969,26 @@ export interface WorkspaceArtifact {
   artifact: PackageArtifact;
   installed_app_name: string;
   package_id: string;
+}
+
+/** A registered namespace owner in this workspace - every package_id is
+ * expected to be "<publisher.key>.<name>", enforced at import time. */
+export interface Publisher {
+  id: string;
+  workspace_id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  is_official: boolean;
+  is_local: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface PublisherInput {
+  key: string;
+  name: string;
+  description: string | null;
 }
