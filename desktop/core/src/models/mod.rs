@@ -22,6 +22,7 @@ pub mod relationship;
 pub mod report;
 pub mod quote;
 pub mod screen_layout;
+pub mod solution;
 pub mod solution_component;
 pub mod status_transition;
 pub mod task;

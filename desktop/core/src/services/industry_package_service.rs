@@ -276,7 +276,61 @@ pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> Ap
 pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<String> {
     require_admin(conn, actor_user_id)?;
     let components = super::solution_component_service::list_local(conn, workspace_id)?;
+    let refs: Vec<(String, String)> = components.into_iter().map(|c| (c.artifact_type, c.metadata_id)).collect();
+    let version = format!("1.0.{}", chrono::Utc::now().timestamp());
+    let manifest = build_export_manifest(conn, &refs, "local.workspace_export".to_string(), "Local Workspace Export".to_string(), version)?;
+    serde_json::to_string_pretty(&manifest).map_err(|e| AppError::Validation(format!("could not serialize export: {e}")))
+}
 
+/// A named, scoped export - the Dynamics-365-style "build a solution in
+/// test, export it" half of the workflow `solution_service` exists for.
+/// Reads a Solution's own curated membership (a deliberate, admin-picked
+/// subset - not "everything `local` owns", see `export_local_workspace`'s
+/// own doc comment for that distinction) and reuses the exact same
+/// manifest-building pass this module already uses for the whole-workspace
+/// export, so a Solution's export is importable through the *unmodified*
+/// existing pipeline into a second, separate workspace - "prod" - via the
+/// ordinary Admin → App Catalog → Import → Validate → Install flow. No new
+/// import/install machinery exists for this; the scoping happens entirely
+/// on the export side.
+///
+/// `package_id` is fixed as `"local.solution.<solution id>"` - always
+/// under the reserved `local` namespace (see `export_local_workspace`'s
+/// own doc comment for why that namespace needs no publisher registered
+/// on the importing side) and stable across every export of the same
+/// Solution, so repeated exports become successive versions of one
+/// importable package - listable via the existing `list_package_versions`
+/// / Releases view, and upgradeable in prod via the existing
+/// `plan_update`/`apply_update` pair, exactly like any other package.
+/// `name`/`version` come from the Solution's own admin-set fields, not a
+/// synthetic timestamp like `export_local_workspace` uses - the version is
+/// the number an admin deliberately bumps each time they hand a new
+/// snapshot to prod.
+pub fn export_solution(conn: &Connection, workspace_id: &str, solution_id: &str, actor_user_id: Option<&str>) -> AppResult<String> {
+    require_admin(conn, actor_user_id)?;
+    let solution = super::solution_service::get(conn, workspace_id, solution_id)?;
+    let members = super::solution_service::list_member_refs(conn, solution_id)?;
+    let refs: Vec<(String, String)> = members.into_iter().map(|m| (m.artifact_type, m.metadata_id)).collect();
+    let manifest = build_export_manifest(conn, &refs, format!("local.solution.{}", solution.id), solution.name.clone(), solution.version.clone())?;
+    serde_json::to_string_pretty(&manifest).map_err(|e| AppError::Validation(format!("could not serialize export: {e}")))
+}
+
+/// Shared by `export_local_workspace` and `export_solution` - everything
+/// about turning a list of `(artifact_type, metadata_id)` component
+/// references into an `IndustryPackageManifest` is identical between the
+/// two; only which components go in, and what `package_id`/`name`/
+/// `version` get stamped on the result, differ. See
+/// `export_local_workspace`'s own doc comment for the three deliberate
+/// scope limits every caller of this function inherits (no dashboard/app/
+/// seed_data; a relationship reference this export doesn't own is
+/// dropped; `min_lanesra_version` is stamped as this build's own version).
+fn build_export_manifest(
+    conn: &Connection,
+    components: &[(String, String)],
+    package_id: String,
+    name: String,
+    version: String,
+) -> AppResult<IndustryPackageManifest> {
     let mut objects = Vec::new();
     let mut fields = Vec::new();
     let mut relationships: Vec<crate::models::relationship::RelationshipDefinitionInput> = Vec::new();
@@ -292,10 +346,10 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
     // gathered here so their real id/key can be mapped to an export-local
     // index before screen layouts / workflow actions - which store real
     // ids/keys today, not indices - are rewritten below.
-    for component in &components {
-        match component.artifact_type.as_str() {
+    for (artifact_type, metadata_id) in components {
+        match artifact_type.as_str() {
             "custom_object" => {
-                if let Some(def) = super::custom_object_service::get(conn, &component.metadata_id)? {
+                if let Some(def) = super::custom_object_service::get(conn, metadata_id)? {
                     objects.push(crate::models::industry_package::ManifestObject {
                         key: def.key,
                         definition: crate::models::custom_object::CustomObjectDefinitionInput {
@@ -309,7 +363,7 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
                 }
             }
             "custom_field" => {
-                if let Some(def) = super::custom_field_service::get_definition(conn, &component.metadata_id)? {
+                if let Some(def) = super::custom_field_service::get_definition(conn, metadata_id)? {
                     fields.push(crate::models::industry_package::ManifestField {
                         key: def.key,
                         definition: crate::models::custom_field::CustomFieldDefinitionInput {
@@ -337,7 +391,7 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
                 }
             }
             "relationship_definition" => {
-                if let Some(def) = super::relationship_service::get(conn, &component.metadata_id)? {
+                if let Some(def) = super::relationship_service::get(conn, metadata_id)? {
                     let idx = relationships.len();
                     relationship_key_index.insert(def.key.clone(), idx);
                     relationship_id_index.insert(def.id.clone(), idx);
@@ -355,7 +409,7 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
                 }
             }
             "business_rule" => {
-                if let Some(rule) = super::business_rule_service::get_rule(conn, &component.metadata_id)? {
+                if let Some(rule) = super::business_rule_service::get_rule(conn, metadata_id)? {
                     business_rules.push(crate::models::business_rule::BusinessRuleInput {
                         entity_type: rule.entity_type,
                         name: rule.name,
@@ -397,7 +451,7 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
                 }
             }
             "workflow_definition" => {
-                if let Some(wf) = super::workflow_service::get_rule(conn, &component.metadata_id)? {
+                if let Some(wf) = super::workflow_service::get_rule(conn, metadata_id)? {
                     raw_workflows.push(crate::models::workflow::WorkflowDefinitionInput {
                         entity_type: wf.entity_type,
                         name: wf.name,
@@ -432,7 +486,7 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
                 }
             }
             "screen_layout" => {
-                if let Ok(layout) = super::screen_layout_service::get_layout(conn, &component.metadata_id) {
+                if let Ok(layout) = super::screen_layout_service::get_layout(conn, metadata_id) {
                     let draft = layout.published.unwrap_or(layout.draft);
                     screen_layouts.push(crate::models::industry_package::ManifestScreenLayout {
                         entity_type: layout.entity_type,
@@ -443,7 +497,7 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
                 }
             }
             "custom_report" => {
-                if let Some(report) = super::custom_report_service::get(conn, &component.metadata_id)? {
+                if let Some(report) = super::custom_report_service::get(conn, metadata_id)? {
                     reports.push(crate::models::custom_report::CustomReportInput {
                         name: report.name,
                         entity_type: report.entity_type,
@@ -512,11 +566,10 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
         }
     }
 
-    let version = format!("1.0.{}", chrono::Utc::now().timestamp());
-    let manifest = IndustryPackageManifest {
+    Ok(IndustryPackageManifest {
         format_version: INDUSTRY_PACKAGE_FORMAT_VERSION,
-        package_id: "local.workspace_export".to_string(),
-        name: "Local Workspace Export".to_string(),
+        package_id,
+        name,
         industry: "Custom".to_string(),
         version,
         min_lanesra_version: current_lanesra_version().to_string(),
@@ -532,8 +585,7 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
         numbering_overrides: Vec::new(),
         app: None,
         seed_data: Vec::new(),
-    };
-    serde_json::to_string_pretty(&manifest).map_err(|e| AppError::Validation(format!("could not serialize export: {e}")))
+    })
 }
 
 /// Bundled starter manifests (`services::reference_packages`) an admin

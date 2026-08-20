@@ -2059,3 +2059,52 @@ export interface PackageUpdateDiff {
   screen_layouts_added: number;
   reports_added: number;
 }
+
+// --- Solution Packages & Admin IA design spec, Phase 4: named, scoped
+// Solutions - the Dynamics-365-style "build a solution in test, export it,
+// import it in prod" workflow. See the Rust core's migration 0031 and
+// solution_service for the full design.
+
+/** A named, versioned, admin-curated subset of this workspace's
+ * components - a deliberate, exportable-on-its-own unit, unlike the
+ * all-or-nothing "everything Local Workspace owns" Export button. */
+export interface Solution {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  version: string;
+  publisher_id: string | null;
+  publisher_name: string | null;
+  member_count: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface SolutionInput {
+  name: string;
+  description: string | null;
+  version: string | null;
+  publisher_id: string | null;
+}
+
+export interface SolutionUpdate {
+  name: string;
+  description: string | null;
+  version: string;
+  publisher_id: string | null;
+}
+
+export interface SolutionMemberInput {
+  artifact_type: string;
+  metadata_id: string;
+}
+
+/** A Solution plus its curated members, each resolved to the same display
+ * shape the Components tab uses. */
+export interface SolutionDetail {
+  solution: Solution;
+  members: WorkspaceComponent[];
+}

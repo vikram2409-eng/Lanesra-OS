@@ -8,15 +8,17 @@ import type {
   PackageUpdateDiff,
   Publisher,
   PublisherInput,
+  Solution,
   WorkspaceComponent,
   WorkspaceDependency,
 } from "../../lib/types";
 import { artifactTypeLabel } from "./IndustryPackagesAdmin";
 
-type SolutionTab = "packages" | "components" | "dependencies" | "publishers";
+type SolutionTab = "packages" | "solutions" | "components" | "dependencies" | "publishers";
 
 const SOLUTION_TABS: { key: SolutionTab; label: string }[] = [
   { key: "packages", label: "Solution Packages" },
+  { key: "solutions", label: "Solutions" },
   { key: "components", label: "Components" },
   { key: "dependencies", label: "Dependencies" },
   { key: "publishers", label: "Publishers" },
@@ -58,6 +60,16 @@ function downloadJson(filename: string, content: string): void {
  *     before applying it - replacing the old "reinstalling an installed
  *     package_id is rejected outright" dead end.
  *
+ * Phase 4 adds named, scoped Solutions - the Dynamics-365-style "build a
+ * solution in test, export it, import it in prod" workflow. Where Local
+ * Workspace's Export button (above) is all-or-nothing across everything
+ * the `local` publisher owns, a Solution is a named, versioned,
+ * admin-picked *subset* of components, exportable on its own into the
+ * same manifest format - importable, via the ordinary Admin -> App
+ * Catalog -> Import flow, into a second, separate workspace ("prod"). See
+ * migration 0031's own comment for why "environment" needed no new
+ * modeling: two Lanesra OS instances already are two environments.
+ *
  * Still not built, per the plan's forward roadmap: the full 5-layer
  * extension model and a UI for attributing a specific hand-built
  * component to a publisher other than `local` (registering a publisher
@@ -72,6 +84,7 @@ export function SolutionManagementAdmin() {
   const dependencies = useQuery({ queryKey: ["packageDependencies"], queryFn: () => api.listPackageDependencies() });
   const publishers = useQuery({ queryKey: ["publishers"], queryFn: () => api.listPublishers() });
   const localSummary = useQuery({ queryKey: ["localWorkspaceSummary"], queryFn: () => api.getLocalWorkspaceSummary() });
+  const solutions = useQuery({ queryKey: ["solutions"], queryFn: () => api.listSolutions() });
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -79,7 +92,9 @@ export function SolutionManagementAdmin() {
         Every industry app installed in this workspace, what it created, what it depends on, and who published it -
         plus everything you've built by hand, grouped as your Local Workspace. Install, deactivate or reactivate an
         app from <b>Admin → App Catalog</b>; this is where you see the result, review updates, and export your own
-        customizations.
+        customizations. Building something to ship to another workspace on purpose? Pick exactly what goes in it
+        under <b>Solutions</b> - export it there, then import it in the target workspace the same way any package is
+        imported.
       </p>
 
       <div className="tab-row">
@@ -101,6 +116,7 @@ export function SolutionManagementAdmin() {
           loading={installed.isLoading}
         />
       )}
+      {tab === "solutions" && <SolutionsTab solutions={solutions.data ?? []} allComponents={components.data ?? []} loading={solutions.isLoading} />}
       {tab === "components" && <ComponentsTab components={components.data ?? []} loading={components.isLoading} />}
       {tab === "dependencies" && <DependenciesTab dependencies={dependencies.data ?? []} loading={dependencies.isLoading} />}
       {tab === "publishers" && <PublishersTab publishers={publishers.data ?? []} packages={packages.data ?? []} loading={publishers.isLoading} />}
@@ -374,6 +390,320 @@ function UpdateDiffView({ diff, kindBadgeClass }: { diff: PackageUpdateDiff; kin
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function solutionFilename(name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
+  return `${slug || "solution"}.lanesra.json`;
+}
+
+/** Named, scoped Solutions - the "build in test, export it" half of the
+ * Dynamics-365-style promotion workflow. A Solution is a deliberate
+ * subset of `WorkspaceComponent`s (any of them - hand-built or
+ * package-installed), curated one at a time, exported into the same
+ * manifest format `export_local_workspace` produces, importable
+ * unmodified via Admin -> App Catalog in a second workspace. */
+function SolutionsTab({ solutions, allComponents, loading }: { solutions: Solution[]; allComponents: WorkspaceComponent[]; loading: boolean }) {
+  const queryClient = useQueryClient();
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [openSolutionId, setOpenSolutionId] = useState<string | null>(null);
+
+  const invalidateSolutions = () => queryClient.invalidateQueries({ queryKey: ["solutions"] });
+
+  const create = useMutation({
+    mutationFn: () => api.createSolution({ name: name.trim(), description: description.trim() || null, version: null, publisher_id: null }),
+    onSuccess: (solution) => {
+      setCreating(false);
+      setName("");
+      setDescription("");
+      setCreateError(null);
+      invalidateSolutions();
+      setOpenSolutionId(solution.id);
+    },
+    onError: (err) => setCreateError(err instanceof ApiError ? err.message : "Could not create that solution"),
+  });
+
+  const del = useMutation({
+    mutationFn: (id: string) => api.deleteSolution(id),
+    onSuccess: (_void, id) => {
+      invalidateSolutions();
+      setOpenSolutionId((cur) => (cur === id ? null : cur));
+    },
+  });
+
+  const exportSolution = useMutation({
+    mutationFn: (solution: Solution) => api.exportSolution(solution.id).then((json) => ({ json, solution })),
+    onSuccess: ({ json, solution }) => downloadJson(solutionFilename(solution.name), json),
+  });
+
+  return (
+    <div className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 style={{ marginTop: 0 }}>Solutions</h3>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+            A named, versioned subset of components you deliberately pick - not everything Local Workspace owns.
+            Build one here, add exactly the objects/fields/rules/workflows/screens it needs, then Export and import
+            the file into another workspace's <b>Admin → App Catalog</b> to promote it there.
+          </p>
+        </div>
+        <button className="btn btn-primary" style={{ flexShrink: 0 }} onClick={() => setCreating((v) => !v)}>
+          {creating ? "Cancel" : "+ New solution"}
+        </button>
+      </div>
+
+      {creating && (
+        <form
+          className="form-grid"
+          style={{ marginBottom: 16 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            create.mutate();
+          }}
+        >
+          {createError && (
+            <div className="error-banner" style={{ gridColumn: "1 / -1" }}>
+              {createError}
+            </div>
+          )}
+          <div className="form-field">
+            <label>Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Field Ops Extensions" required />
+          </div>
+          <div className="form-field full">
+            <label>Description (optional)</label>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+          <div className="form-field full">
+            <button className="btn btn-primary" type="submit" disabled={create.isPending || !name.trim()}>
+              {create.isPending ? "Creating..." : "Create solution"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading && <p>Loading...</p>}
+      {!loading && solutions.length === 0 && !creating && (
+        <p className="empty-state">No solutions yet. Create one to start picking exactly what ships to another workspace.</p>
+      )}
+      {solutions.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Version</th>
+              <th>Publisher</th>
+              <th>Components</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {solutions.map((s) => {
+              const open = openSolutionId === s.id;
+              return (
+                <>
+                  <tr key={s.id}>
+                    <td>{s.name}</td>
+                    <td>{s.version}</td>
+                    <td>{s.publisher_name ?? "—"}</td>
+                    <td>{s.member_count}</td>
+                    <td style={{ display: "flex", gap: 6, justifyContent: "flex-end", whiteSpace: "nowrap" }}>
+                      <button className="btn btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => setOpenSolutionId(open ? null : s.id)}>
+                        {open ? "Close" : "Open"}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: 12, padding: "4px 8px" }}
+                        onClick={() => exportSolution.mutate(s)}
+                        disabled={exportSolution.isPending || s.member_count === 0}
+                        title={s.member_count === 0 ? "Add at least one component first" : undefined}
+                      >
+                        Export
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        style={{ fontSize: 12, padding: "4px 8px" }}
+                        onClick={() => {
+                          if (confirm(`Delete solution "${s.name}"? Its curated components themselves are not touched.`)) del.mutate(s.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                  {open && (
+                    <tr key={`${s.id}-detail`}>
+                      <td colSpan={5} style={{ background: "var(--bg-subtle, rgba(0,0,0,0.02))" }}>
+                        <SolutionDetailPanel solution={s} allComponents={allComponents} />
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/** A single Solution's curation surface: rename/re-describe/bump its
+ * version, see what's currently in it, remove a member, and add any other
+ * workspace component (hand-built or package-installed) that isn't in it
+ * yet. */
+function SolutionDetailPanel({ solution, allComponents }: { solution: Solution; allComponents: WorkspaceComponent[] }) {
+  const queryClient = useQueryClient();
+  const detail = useQuery({ queryKey: ["solutionDetail", solution.id], queryFn: () => api.getSolutionDetail(solution.id) });
+  const [editVersion, setEditVersion] = useState(solution.version);
+  const [addFilter, setAddFilter] = useState("");
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["solutionDetail", solution.id] });
+    queryClient.invalidateQueries({ queryKey: ["solutions"] });
+  };
+
+  const saveVersion = useMutation({
+    mutationFn: () =>
+      api.updateSolution(solution.id, { name: solution.name, description: solution.description, version: editVersion.trim() || solution.version, publisher_id: solution.publisher_id }),
+    onSuccess: invalidate,
+  });
+
+  const addMember = useMutation({
+    mutationFn: (c: WorkspaceComponent) => api.addSolutionComponent(solution.id, { artifact_type: c.component.artifact_type, metadata_id: c.component.metadata_id }),
+    onSuccess: invalidate,
+  });
+
+  const removeMember = useMutation({
+    mutationFn: (c: WorkspaceComponent) => api.removeSolutionComponent(solution.id, c.component.artifact_type, c.component.metadata_id),
+    onSuccess: invalidate,
+  });
+
+  const members = detail.data?.members ?? [];
+  const memberKeys = new Set(members.map((c) => `${c.component.artifact_type}:${c.component.metadata_id}`));
+  const candidates = allComponents.filter((c) => !memberKeys.has(`${c.component.artifact_type}:${c.component.metadata_id}`));
+  const needle = addFilter.trim().toLowerCase();
+  const filteredCandidates = needle
+    ? candidates.filter(
+        (c) =>
+          artifactTypeLabel(c.component.artifact_type).toLowerCase().includes(needle) ||
+          c.publisher_name.toLowerCase().includes(needle) ||
+          (c.installed_app_name ?? "").toLowerCase().includes(needle),
+      )
+    : candidates;
+
+  return (
+    <div style={{ padding: "12px 4px", display: "grid", gap: 16 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div className="form-field" style={{ margin: 0 }}>
+          <label style={{ fontSize: 12 }}>Version</label>
+          <input value={editVersion} onChange={(e) => setEditVersion(e.target.value)} style={{ width: 140 }} />
+        </div>
+        <button className="btn btn-secondary" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => saveVersion.mutate()} disabled={saveVersion.isPending || editVersion.trim() === solution.version}>
+          {saveVersion.isPending ? "Saving..." : "Save version"}
+        </button>
+        <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+          Bump this before each Export so repeated promotions become successive releases, listable the same way any package's Releases are.
+        </span>
+      </div>
+
+      <div>
+        <b style={{ fontSize: 13 }}>Curated components ({members.length})</b>
+        {detail.isLoading && <p style={{ margin: "6px 0" }}>Loading...</p>}
+        {!detail.isLoading && members.length === 0 && <p className="empty-state">Nothing curated yet - add components below.</p>}
+        {members.length > 0 && (
+          <table style={{ marginTop: 8, marginBottom: 0 }}>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Publisher</th>
+                <th>Source</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((c) => (
+                <tr key={c.component.id}>
+                  <td>{artifactTypeLabel(c.component.artifact_type)}</td>
+                  <td>
+                    {c.publisher_name}
+                    {c.is_local && (
+                      <span className="badge" style={{ marginLeft: 6 }}>
+                        Local
+                      </span>
+                    )}
+                  </td>
+                  <td>{c.installed_app_name ?? "Hand-built"}</td>
+                  <td>
+                    <button className="btn btn-secondary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => removeMember.mutate(c)} disabled={removeMember.isPending}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div>
+        <b style={{ fontSize: 13 }}>Add a component</b>
+        {candidates.length === 0 ? (
+          <p className="empty-state" style={{ marginTop: 6 }}>
+            Every component in this workspace is already in this solution.
+          </p>
+        ) : (
+          <>
+            <input
+              value={addFilter}
+              onChange={(e) => setAddFilter(e.target.value)}
+              placeholder="Filter by type, publisher or app..."
+              style={{ marginTop: 6, marginBottom: 8, width: "100%", maxWidth: 320 }}
+            />
+            <table style={{ marginBottom: 0 }}>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Publisher</th>
+                  <th>Source</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCandidates.slice(0, 50).map((c) => (
+                  <tr key={c.component.id}>
+                    <td>{artifactTypeLabel(c.component.artifact_type)}</td>
+                    <td>
+                      {c.publisher_name}
+                      {c.is_local && (
+                        <span className="badge" style={{ marginLeft: 6 }}>
+                          Local
+                        </span>
+                      )}
+                    </td>
+                    <td>{c.installed_app_name ?? "Hand-built"}</td>
+                    <td>
+                      <button className="btn btn-primary" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => addMember.mutate(c)} disabled={addMember.isPending}>
+                        + Add
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredCandidates.length > 50 && (
+              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6 }}>
+                {filteredCandidates.length - 50} more match "{addFilter}" - narrow the filter to see them.
+              </p>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

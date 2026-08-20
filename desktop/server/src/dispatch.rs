@@ -30,6 +30,7 @@ use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate};
+use lanesra_core::models::solution::{SolutionInput, SolutionMemberInput, SolutionUpdate};
 use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
@@ -43,7 +44,7 @@ use lanesra_core::services::{
     industry_package_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
     publisher_service,
-    quote_service, relationship_service, report_service, screen_layout_service, search_service, solution_component_service, status_transition_service, task_service,
+    quote_service, relationship_service, report_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
     user_service, workflow_service, workspace_service,
 };
 
@@ -630,6 +631,42 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "create_publisher" => {
             let input: PublisherInput = arg(args, "input")?;
             to_value(publisher_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "list_solutions" => to_value(solution_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "get_solution_detail" => {
+            let id: String = arg(args, "id")?;
+            to_value(solution_service::get_detail(conn, &require_workspace_id(conn)?, &id)?)
+        }
+        "create_solution" => {
+            let input: SolutionInput = arg(args, "input")?;
+            to_value(solution_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_solution" => {
+            let id: String = arg(args, "id")?;
+            let input: SolutionUpdate = arg(args, "input")?;
+            to_value(solution_service::update(conn, &require_workspace_id(conn)?, &id, &input, actor)?)
+        }
+        "delete_solution" => {
+            let id: String = arg(args, "id")?;
+            solution_service::delete(conn, &require_workspace_id(conn)?, &id, actor)?;
+            to_value(())
+        }
+        "add_solution_component" => {
+            let solution_id: String = arg(args, "solutionId")?;
+            let input: SolutionMemberInput = arg(args, "input")?;
+            solution_service::add_component(conn, &require_workspace_id(conn)?, &solution_id, &input, actor)?;
+            to_value(())
+        }
+        "remove_solution_component" => {
+            let solution_id: String = arg(args, "solutionId")?;
+            let artifact_type: String = arg(args, "artifactType")?;
+            let metadata_id: String = arg(args, "metadataId")?;
+            solution_service::remove_component(conn, &require_workspace_id(conn)?, &solution_id, &artifact_type, &metadata_id, actor)?;
+            to_value(())
+        }
+        "export_solution" => {
+            let solution_id: String = arg(args, "solutionId")?;
+            to_value(industry_package_service::export_solution(conn, &require_workspace_id(conn)?, &solution_id, actor)?)
         }
 
         "list_apps" => to_value(app_service::list(conn, &require_workspace_id(conn)?)?),
