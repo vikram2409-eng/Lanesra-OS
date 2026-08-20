@@ -90,6 +90,7 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &ScreenLayout
     let id = screen_layout_repo::new_id();
     let draft_json = serde_json::to_string(&seeded_tabs(&input.initial_fields)).expect("LayoutTabs always serializes");
     screen_layout_repo::create(conn, &id, workspace_id, &input.entity_type, input.name.trim(), is_default, "[]", &draft_json, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "screen_layout", &id, actor_user_id)?;
     get_layout(conn, &id)
 }
 

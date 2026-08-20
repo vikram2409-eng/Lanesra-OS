@@ -18,7 +18,7 @@ use crate::models::workspace::{DashboardKpiPrefs, Workspace, WorkspaceLogo, Work
 use crate::repositories::{audit_repo, user_repo, workspace_repo};
 use crate::services::{
     auth_service, company_service, contact_service, contract_service, invoice_service,
-    opportunity_service, order_service, product_service, quote_service, task_service, user_service,
+    opportunity_service, order_service, product_service, publisher_service, quote_service, task_service, user_service,
 };
 
 /// FR-BRD-02: keeps the stored blob small - a business logo has no reason
@@ -172,6 +172,7 @@ pub fn first_run_setup(conn: &Connection, setup: &WorkspaceSetup) -> AppResult<(
 
     let workspace = workspace_repo::create(conn, setup)?;
     user_repo::ensure_roles_seeded(conn)?;
+    publisher_service::ensure_defaults(conn, &workspace.id)?;
 
     let password_hash = auth_service::hash_password(&setup.admin_password)?;
     let admin_record = user_repo::create(

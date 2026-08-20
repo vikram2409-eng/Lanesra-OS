@@ -350,6 +350,128 @@ fn deactivate_and_reactivate_require_admin() {
     assert!(err.to_string().contains("Administrator"));
 }
 
+/// A second, independent manifest (a different object key, a different
+/// package_id) - used wherever a test needs two distinct installed apps
+/// side by side without the second install colliding with the first's
+/// `svc_ticket` object key.
+fn second_manifest_json(package_id: &str, version: &str) -> String {
+    json!({
+        "format_version": 1,
+        "package_id": package_id,
+        "name": "Second Pack",
+        "industry": "Testing",
+        "version": version,
+        "min_lanesra_version": "0.1.0",
+        "objects": [
+            { "key": "job_order", "singular_label": "Job Order", "plural_label": "Job Orders", "icon": "🧾", "prefix": "JOB", "digits": 4 }
+        ],
+        "app": {
+            "name": "Second App",
+            "icon": "🧾",
+            "description": null,
+            "object_keys": ["job_order"],
+            "use_package_dashboard": false,
+            "publish": true,
+            "recommended_permissions": []
+        }
+    })
+    .to_string()
+}
+
+#[test]
+fn importing_a_manifest_with_dependencies_records_them_in_the_registry() {
+    // Dependency rows are written at import time (not deferred to
+    // install), so a package's declared requirements are visible to
+    // Solution Management even before - or without ever - installing it.
+    let (conn, ws, admin) = setup_workspace();
+    let manifest = json!({
+        "format_version": 1,
+        "package_id": "lanesra.depends_on_core",
+        "name": "Depends On Core",
+        "industry": "Testing",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.1.0",
+        "dependencies": [
+            { "package_id": "lanesra.core_pack", "version_constraint": ">=1.0.0", "is_required": true },
+            { "package_id": "lanesra.optional_pack", "version_constraint": "*", "is_required": false }
+        ]
+    })
+    .to_string();
+    industry_package_service::import_package(&conn, &ws, &ImportPackageInput { manifest_json: manifest }, Some(&admin)).unwrap();
+
+    let deps = industry_package_service::list_dependencies_for_workspace(&conn, &ws).unwrap();
+    assert_eq!(deps.len(), 2);
+    let required = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.core_pack").unwrap();
+    assert_eq!(required.package_id, "lanesra.depends_on_core");
+    assert_eq!(required.package_name, "Depends On Core");
+    assert_eq!(required.package_version, "1.0.0");
+    assert_eq!(required.dependency.version_constraint, ">=1.0.0");
+    assert!(required.dependency.is_required);
+    // Nothing installed yet - unsatisfied either way.
+    assert!(!required.is_satisfied);
+    let optional = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.optional_pack").unwrap();
+    assert!(!optional.dependency.is_required);
+}
+
+#[test]
+fn list_dependencies_for_workspace_reports_satisfied_once_the_dependency_is_installed() {
+    let (conn, ws, admin) = setup_workspace();
+
+    // Install the core package the dependency will point at.
+    let core_input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
+    let core_package = industry_package_service::import_package(&conn, &ws, &core_input, Some(&admin)).unwrap();
+    let core_installed = industry_package_service::install(&conn, &ws, &core_package.id, Some(&admin)).unwrap();
+
+    // Import (not install) a package declaring a dependency on it.
+    let dependent = json!({
+        "format_version": 1,
+        "package_id": "lanesra.depends_on_core",
+        "name": "Depends On Core",
+        "industry": "Testing",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.1.0",
+        "dependencies": [
+            { "package_id": "lanesra.field_service", "version_constraint": ">=1.0.0", "is_required": true }
+        ]
+    })
+    .to_string();
+    industry_package_service::import_package(&conn, &ws, &ImportPackageInput { manifest_json: dependent }, Some(&admin)).unwrap();
+
+    let deps = industry_package_service::list_dependencies_for_workspace(&conn, &ws).unwrap();
+    let row = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.field_service").unwrap();
+    assert!(row.is_satisfied);
+
+    // Deactivating the dependency flips it back to unsatisfied - install()
+    // itself checks `status == "active"`, and this read path mirrors that
+    // exactly.
+    industry_package_service::deactivate(&conn, &core_installed.id, Some(&admin)).unwrap();
+    let deps = industry_package_service::list_dependencies_for_workspace(&conn, &ws).unwrap();
+    let row = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.field_service").unwrap();
+    assert!(!row.is_satisfied);
+}
+
+#[test]
+fn list_artifacts_for_workspace_spans_every_installed_app() {
+    let (conn, ws, admin) = setup_workspace();
+
+    let first_input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
+    let first_package = industry_package_service::import_package(&conn, &ws, &first_input, Some(&admin)).unwrap();
+    let first_installed = industry_package_service::install(&conn, &ws, &first_package.id, Some(&admin)).unwrap();
+
+    let second_input = ImportPackageInput { manifest_json: second_manifest_json("lanesra.second_pack", "1.0.0") };
+    let second_package = industry_package_service::import_package(&conn, &ws, &second_input, Some(&admin)).unwrap();
+    let second_installed = industry_package_service::install(&conn, &ws, &second_package.id, Some(&admin)).unwrap();
+
+    let first_detail = industry_package_service::get_installed_detail(&conn, &first_installed.id).unwrap();
+    let second_detail = industry_package_service::get_installed_detail(&conn, &second_installed.id).unwrap();
+
+    let all = industry_package_service::list_artifacts_for_workspace(&conn, &ws).unwrap();
+    assert_eq!(all.len(), first_detail.artifacts.len() + second_detail.artifacts.len());
+    assert!(all.iter().all(|a| a.installed_app_name == "Field Service" || a.installed_app_name == "Second App"));
+    assert!(all.iter().any(|a| a.package_id == "lanesra.field_service" && a.artifact.artifact_type == "custom_object"));
+    assert!(all.iter().any(|a| a.package_id == "lanesra.second_pack" && a.artifact.artifact_type == "custom_object"));
+}
+
 #[test]
 fn explicit_object_keys_are_never_silently_renamed_on_collision() {
     // industry_package_service reuses custom_object_service::create_with_key,

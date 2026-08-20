@@ -249,6 +249,31 @@ textarea {
   padding: 16px;
 }
 
+/* A generic centered dialog - first used by Solution Management's
+   update-with-diff review step. Deliberately minimal (no other screen in
+   the app has needed a true modal before this - version history/duplicate
+   review etc. all use an inline panel instead). */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.modal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
 .kpi-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

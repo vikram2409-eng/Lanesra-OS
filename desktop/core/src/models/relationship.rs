@@ -25,7 +25,7 @@ pub struct RelationshipDefinition {
     pub updated_by: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelationshipDefinitionInput {
     pub source_entity_type: String,
     pub target_entity_type: String,

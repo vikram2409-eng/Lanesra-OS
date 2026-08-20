@@ -90,6 +90,7 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &DashboardLay
     let id = dashboard_layout_repo::new_id();
     let draft_json = serde_json::to_string(&seeded_widgets(&input.initial_kpi_keys)).expect("DashboardWidgets always serializes");
     dashboard_layout_repo::create(conn, &id, workspace_id, input.name.trim(), is_default, "[]", &draft_json, input.app_id.as_deref(), actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "dashboard_layout", &id, actor_user_id)?;
     get_layout(conn, &id)
 }
 

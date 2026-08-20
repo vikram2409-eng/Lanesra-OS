@@ -17,7 +17,7 @@ pub struct CustomRecord {
     pub archived_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomRecordInput {
     pub object_key: String,
     pub primary_name: String,

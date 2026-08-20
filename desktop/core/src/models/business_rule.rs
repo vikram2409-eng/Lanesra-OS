@@ -78,7 +78,7 @@ pub struct BusinessRuleCondition {
     pub sort_order: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusinessRuleConditionInput {
     pub field_source: String,
     pub field_key: String,
@@ -107,7 +107,7 @@ pub struct BusinessRuleAction {
     pub sort_order: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusinessRuleActionInput {
     pub action_type: String,
     pub target_field_key: Option<String>,
@@ -148,7 +148,7 @@ pub struct BusinessRule {
     pub actions: Vec<BusinessRuleAction>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BusinessRuleInput {
     pub entity_type: String,
     pub name: String,

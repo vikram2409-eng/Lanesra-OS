@@ -107,7 +107,9 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &CustomObjectDefinit
     validate_shape(input)?;
     let key = slugify(conn, workspace_id, &input.singular_label)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(custom_object_repo::create(conn, &id, workspace_id, &key, input, actor_user_id)?)
+    let created = custom_object_repo::create(conn, &id, workspace_id, &key, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "custom_object", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 /// Industry Data Model packages (spec: roadmap "Industry Data Model") need
@@ -138,7 +140,9 @@ pub fn create_with_key(
         return Err(AppError::Validation(format!("An object with key '{key}' already exists in this workspace")));
     }
     let id = crate::domain::ids::new_uuid();
-    Ok(custom_object_repo::create(conn, &id, workspace_id, key, input, actor_user_id)?)
+    let created = custom_object_repo::create(conn, &id, workspace_id, key, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "custom_object", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 /// Any authenticated user can list active object definitions (needed to
@@ -147,6 +151,13 @@ pub fn create_with_key(
 pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResult<Vec<CustomObjectDefinition>> {
     let all = custom_object_repo::list(conn, workspace_id)?;
     Ok(if active_only { all.into_iter().filter(|d| d.is_active).collect() } else { all })
+}
+
+/// Used by `industry_package_service::export_local_workspace` to read a
+/// tagged `solution_components` id back into a full definition - the
+/// `metadata_id` component-tagging stores is this id, not the key.
+pub fn get(conn: &Connection, id: &str) -> AppResult<Option<CustomObjectDefinition>> {
+    Ok(custom_object_repo::get(conn, id)?)
 }
 
 pub fn get_by_key(conn: &Connection, workspace_id: &str, key: &str) -> AppResult<Option<CustomObjectDefinition>> {

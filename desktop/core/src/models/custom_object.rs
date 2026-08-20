@@ -21,7 +21,7 @@ pub struct CustomObjectDefinition {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomObjectDefinitionInput {
     pub singular_label: String,
     pub plural_label: String,

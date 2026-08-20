@@ -89,11 +89,18 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &CustomReportInput, 
         &input.aggregate, input.sum_field_key.as_deref(),
     )?;
     let id = crate::domain::ids::new_uuid();
-    Ok(custom_report_repo::create(conn, &id, workspace_id, input, actor_user_id)?)
+    let created = custom_report_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "custom_report", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<CustomReport>> {
     Ok(custom_report_repo::list(conn, workspace_id)?)
+}
+
+/// See `custom_object_service::get`'s doc comment - same export use case.
+pub fn get(conn: &Connection, id: &str) -> AppResult<Option<CustomReport>> {
+    Ok(custom_report_repo::get(conn, id)?)
 }
 
 pub fn update(conn: &Connection, id: &str, input: &CustomReportUpdate, actor_user_id: Option<&str>) -> AppResult<CustomReport> {

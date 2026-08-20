@@ -15,6 +15,7 @@ import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import { AppsAdmin } from "./AppsAdmin";
 import { IndustryPackagesAdmin } from "./IndustryPackagesAdmin";
+import { SolutionManagementAdmin } from "./SolutionManagementAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -65,7 +66,8 @@ type AdminTab =
   | "kpis"
   | "dashboards"
   | "apps"
-  | "packages";
+  | "packages"
+  | "solutions";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -82,6 +84,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "dashboards", label: "Dashboards" },
   { key: "apps", label: "Apps" },
   { key: "packages", label: "App Catalog" },
+  { key: "solutions", label: "Solution Management" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -90,15 +93,26 @@ function tabLabel(key: AdminTab): string {
 
 // Groups the same tabs above into named categories for the landing page
 // below - purely a presentation grouping, the tab keys and their screens
-// are unchanged. Desktop still has no Integrations tab (a demo-first
-// capability that doesn't exist here), but Screen layouts (Screen/App
-// Builder Phase 1) now ships on both.
+// are unchanged (Solution Management is the one new screen - see
+// SolutionManagementAdmin.tsx). Regrouped along the Solution Packages &
+// Admin IA design spec's domain lines (Workspace / Access / Data Model /
+// Experience / Automation / Apps / Analytics / Solution Management),
+// stopping short of its full 11-domain set: Access & Security,
+// Integrations, Data Management and System either don't have a desktop
+// screen yet (Integrations is demo-only) or need real consolidation work
+// first (Backup & Restore and CSV import/export both live inline inside
+// other screens today, not as standalone tools) - building an empty
+// category that routes nowhere would be worse than leaving it out until
+// that consolidation actually happens.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
-  { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "kpis", "dashboards"] },
+  { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
-  { key: "customization", label: "Customization", icon: "🧩", note: "Extend the data model without code", items: ["objects", "relationships", "fields", "layouts"] },
+  { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields"] },
+  { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
+  { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards"] },
+  { key: "solutions", label: "Solution Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
 ];
 
 /**
@@ -198,6 +212,7 @@ export function AdminPanel() {
       {tab === "dashboards" && <DashboardLayoutsAdmin />}
       {tab === "apps" && <AppsAdmin />}
       {tab === "packages" && <IndustryPackagesAdmin />}
+      {tab === "solutions" && <SolutionManagementAdmin />}
     </div>
   );
 }

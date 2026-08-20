@@ -1871,6 +1871,8 @@ export interface AppPackage {
   source: string;
   imported_at: string;
   imported_by: string | null;
+  publisher_id: string | null;
+  is_managed: boolean;
 }
 
 export const INSTALLED_APP_STATUSES = ["active", "deactivated"] as const;
@@ -1937,4 +1939,172 @@ export interface InstalledAppDetail {
 
 export interface ImportPackageInput {
   manifest_json: string;
+}
+
+/** A package version's declared dependency on another package, as
+ * recorded in the registry at import time. */
+export interface AppDependency {
+  id: string;
+  app_package_id: string;
+  dependency_package_id: string;
+  version_constraint: string;
+  is_required: boolean;
+}
+
+/** An AppDependency alongside its declaring package's identity and
+ * whether it's currently satisfied in this workspace - Admin > Solution
+ * Management's Dependencies tab. */
+export interface WorkspaceDependency {
+  dependency: AppDependency;
+  package_id: string;
+  package_name: string;
+  package_version: string;
+  is_satisfied: boolean;
+}
+
+/** A PackageArtifact alongside its owning InstalledApp's identity -
+ * Admin > Solution Management's Components tab, the workspace-wide
+ * "what have I customized beyond what I installed" view. */
+export interface WorkspaceArtifact {
+  artifact: PackageArtifact;
+  installed_app_name: string;
+  package_id: string;
+}
+
+/** A registered namespace owner in this workspace - every package_id is
+ * expected to be "<publisher.key>.<name>", enforced at import time. */
+export interface Publisher {
+  id: string;
+  workspace_id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  is_official: boolean;
+  is_local: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface PublisherInput {
+  key: string;
+  name: string;
+  description: string | null;
+}
+
+// Solution Packages & Admin IA design spec, Phase 3: component-tagging,
+// the Local Workspace (Unmanaged) grouping, .lanesra export, and
+// update-with-diff. Mirrors core::models::solution_component and the new
+// pieces of core::models::industry_package - see those modules' doc
+// comments for the full design.
+
+/** One component's current owner - the workspace-wide registry every
+ * hand-built and package-installed custom object/field/relationship/
+ * business rule/workflow/screen layout/report shares. */
+export interface SolutionComponent {
+  id: string;
+  workspace_id: string;
+  artifact_type: string;
+  metadata_id: string;
+  publisher_id: string;
+  installed_app_id: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+/** A SolutionComponent joined with its owning publisher's display fields
+ * - Admin > Solution Management's Components tab, now covering both
+ * hand-built and package-installed components (superseding the narrower
+ * WorkspaceArtifact view). */
+export interface WorkspaceComponent {
+  component: SolutionComponent;
+  publisher_key: string;
+  publisher_name: string;
+  is_local: boolean;
+  installed_app_name: string | null;
+}
+
+/** The Managed/Unmanaged distinction's Unmanaged half: a count of
+ * everything still owned by the `local` publisher, broken down by type -
+ * rendered as a synthetic "Local Workspace" row in Solution Packages
+ * without a real app_packages row ever existing for it. */
+export interface LocalWorkspaceSummary {
+  publisher_id: string;
+  component_count: number;
+  components_by_type: [string, number][];
+}
+
+/** One object/field key's change between the installed version and a
+ * newly-imported one - see plan_package_update's own doc comment in the
+ * Rust core for exactly what "modified" means per type. */
+export interface PackageUpdateDiffEntry {
+  key: string;
+  kind: "added" | "modified" | "removed";
+}
+
+/** The update-with-diff review step's output. Relationships/business
+ * rules/workflows/screen layouts/reports have no stable cross-version
+ * identity, so they're summarized as a single added-count rather than a
+ * full per-item diff - see the Rust core's plan_update doc comment. */
+export interface PackageUpdateDiff {
+  package_id: string;
+  from_version: string;
+  to_version: string;
+  objects: PackageUpdateDiffEntry[];
+  fields: PackageUpdateDiffEntry[];
+  relationships_added: number;
+  business_rules_added: number;
+  workflows_added: number;
+  screen_layouts_added: number;
+  reports_added: number;
+}
+
+// --- Solution Packages & Admin IA design spec, Phase 4: named, scoped
+// Solutions - the Dynamics-365-style "build a solution in test, export it,
+// import it in prod" workflow. See the Rust core's migration 0031 and
+// solution_service for the full design.
+
+/** A named, versioned, admin-curated subset of this workspace's
+ * components - a deliberate, exportable-on-its-own unit, unlike the
+ * all-or-nothing "everything Local Workspace owns" Export button. */
+export interface Solution {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  version: string;
+  publisher_id: string | null;
+  publisher_name: string | null;
+  member_count: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface SolutionInput {
+  name: string;
+  description: string | null;
+  version: string | null;
+  publisher_id: string | null;
+}
+
+export interface SolutionUpdate {
+  name: string;
+  description: string | null;
+  version: string;
+  publisher_id: string | null;
+}
+
+export interface SolutionMemberInput {
+  artifact_type: string;
+  metadata_id: string;
+}
+
+/** A Solution plus its curated members, each resolved to the same display
+ * shape the Components tab uses. */
+export interface SolutionDetail {
+  solution: Solution;
+  members: WorkspaceComponent[];
 }
