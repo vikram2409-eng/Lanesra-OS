@@ -43,7 +43,7 @@ use lanesra_core::services::{
     industry_package_service,
     invoice_service, numbering_service, opportunity_service, order_service, product_service,
     publisher_service,
-    quote_service, relationship_service, report_service, screen_layout_service, search_service, status_transition_service, task_service,
+    quote_service, relationship_service, report_service, screen_layout_service, search_service, solution_component_service, status_transition_service, task_service,
     user_service, workflow_service, workspace_service,
 };
 
@@ -611,6 +611,21 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "get_reference_package_manifest" => to_value(industry_package_service::reference_package_manifest(&arg::<String>(args, "key")?)?),
         "list_package_dependencies" => to_value(industry_package_service::list_dependencies_for_workspace(conn, &require_workspace_id(conn)?)?),
         "list_package_artifacts_for_workspace" => to_value(industry_package_service::list_artifacts_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "list_solution_components" => to_value(solution_component_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "get_local_workspace_summary" => to_value(solution_component_service::local_workspace_summary(conn, &require_workspace_id(conn)?)?),
+        "list_package_versions" => {
+            let package_id: String = arg(args, "packageId")?;
+            to_value(industry_package_service::list_package_versions(conn, &require_workspace_id(conn)?, &package_id)?)
+        }
+        "export_local_workspace" => to_value(industry_package_service::export_local_workspace(conn, &require_workspace_id(conn)?, actor)?),
+        "plan_package_update" => {
+            let new_app_package_id: String = arg(args, "newAppPackageId")?;
+            to_value(industry_package_service::plan_update(conn, &require_workspace_id(conn)?, &new_app_package_id)?)
+        }
+        "apply_package_update" => {
+            let new_app_package_id: String = arg(args, "newAppPackageId")?;
+            to_value(industry_package_service::apply_update(conn, &require_workspace_id(conn)?, &new_app_package_id, actor)?)
+        }
         "list_publishers" => to_value(publisher_service::list(conn, &require_workspace_id(conn)?)?),
         "create_publisher" => {
             let input: PublisherInput = arg(args, "input")?;

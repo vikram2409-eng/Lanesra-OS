@@ -157,7 +157,9 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleIn
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, &input.entity_type, input)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(business_rule_repo::create(conn, &id, workspace_id, input, actor_user_id)?)
+    let created = business_rule_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "business_rule", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 /// Any authenticated user can list active rules (the form needs them to
@@ -166,6 +168,11 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleIn
 pub fn list_rules(conn: &Connection, workspace_id: &str, entity_type: &str, active_only: bool) -> AppResult<Vec<BusinessRule>> {
     let all = business_rule_repo::list(conn, workspace_id, entity_type)?;
     Ok(if active_only { all.into_iter().filter(|r| r.is_active).collect() } else { all })
+}
+
+/// See `custom_object_service::get`'s doc comment - same export use case.
+pub fn get_rule(conn: &Connection, id: &str) -> AppResult<Option<BusinessRule>> {
+    Ok(business_rule_repo::get(conn, id)?)
 }
 
 pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {

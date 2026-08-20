@@ -66,7 +66,7 @@ pub struct CustomFieldDefinition {
     pub updated_by: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomFieldDefinitionInput {
     pub entity_type: String,
     pub label: String,

@@ -240,7 +240,9 @@ pub fn create_definition(
     )?;
     let key = slugify(conn, workspace_id, &input.entity_type, &input.label)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?)
+    let created = custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 /// Industry Data Model packages need the same explicit-key determinism as
@@ -273,7 +275,14 @@ pub fn create_definition_with_key(
         )));
     }
     let id = crate::domain::ids::new_uuid();
-    Ok(custom_field_repo::create_definition(conn, &id, workspace_id, key, input, actor_user_id)?)
+    let created = custom_field_repo::create_definition(conn, &id, workspace_id, key, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    Ok(created)
+}
+
+/// See `custom_object_service::get`'s doc comment - same export use case.
+pub fn get_definition(conn: &Connection, id: &str) -> AppResult<Option<CustomFieldDefinition>> {
+    Ok(custom_field_repo::get_definition(conn, id)?)
 }
 
 /// Any authenticated user can list active definitions (needed to render

@@ -19,7 +19,7 @@ pub struct CustomReport {
     pub updated_by: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomReportInput {
     pub name: String,
     pub entity_type: String,

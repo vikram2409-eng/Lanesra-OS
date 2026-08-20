@@ -39,7 +39,7 @@ pub const INDUSTRY_PACKAGE_FORMAT_VERSION: u32 = 1;
 /// exact string, so a silent "_2" suffix on a name collision would
 /// silently break every one of those references instead of failing loud
 /// at install time the way spec 13.3's conflict policy requires.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestObject {
     pub key: String,
     #[serde(flatten)]
@@ -57,7 +57,7 @@ pub struct ManifestObject {
 /// package may extend a core or existing object" allowance; nothing
 /// beyond the field's own key needs to be unique for an extension, only
 /// the (entity_type, key) pair.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestField {
     pub key: String,
     #[serde(flatten)]
@@ -70,7 +70,7 @@ pub struct ManifestField {
 /// since a `RelationshipDefinition`'s key auto-derives from its
 /// source/target labels at install time and isn't something the package
 /// author controls the way `ManifestObject`/`ManifestField` keys are.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestScreenLayout {
     pub entity_type: String,
     pub name: String,
@@ -85,7 +85,7 @@ pub struct ManifestScreenLayout {
 /// report actually exists - the same index-reference reasoning
 /// `ManifestScreenLayout::related` uses for relationships, since neither
 /// has a real id yet at manifest-authoring time.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestDashboard {
     pub name: String,
     pub widgets: Vec<ManifestDashboardWidget>,
@@ -93,7 +93,7 @@ pub struct ManifestDashboard {
     pub publish: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestDashboardWidget {
     pub kind: String,
     pub config: serde_json::Value,
@@ -123,7 +123,7 @@ pub struct RecommendedPermission {
 /// platform yet - there's no saved-view concept built at all - so it's
 /// deliberately not modeled here; see `industry_package_service`'s own
 /// module comment.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestApp {
     pub name: String,
     pub icon: String,
@@ -143,7 +143,7 @@ pub struct ManifestApp {
 /// `IndustryPackageManifest::objects` (seed data for a built-in or
 /// someone else's object is out of scope - this manifest doesn't own
 /// enough of that record's shape to seed it safely).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestSampleRecord {
     pub object_key: String,
     pub record: CustomRecordInput,
@@ -156,7 +156,7 @@ pub struct ManifestSampleRecord {
 /// (any version) or `">=X.Y.Z"` for this foundation phase (see
 /// `industry_package_service::version_satisfies` for the exact, minimal
 /// comparison rule) - a full semver range grammar is future scope.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestDependency {
     pub package_id: String,
     pub version_constraint: String,
@@ -176,7 +176,7 @@ fn default_true() -> bool {
 /// can be relabeled. `format_version` is this *struct's* schema version
 /// (see `INDUSTRY_PACKAGE_FORMAT_VERSION`), not the package's own
 /// `version`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndustryPackageManifest {
     pub format_version: u32,
     pub package_id: String,
@@ -370,4 +370,35 @@ pub struct InstalledAppDetail {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImportPackageInput {
     pub manifest_json: String,
+}
+
+/// One object/field key's change between the currently-installed version
+/// and a newly-imported one - `industry_package_service::plan_update`'s
+/// output. `kind` is `"added"` | `"modified"` | `"removed"`; `key` is the
+/// object's own key, or `"<entity_type>.<key>"` for a field (matching how
+/// a field's identity always needs its entity_type alongside the key
+/// itself - see `ManifestField`'s own doc comment).
+#[derive(Debug, Clone, Serialize)]
+pub struct PackageUpdateDiffEntry {
+    pub key: String,
+    pub kind: String,
+}
+
+/// The update-with-diff preview `industry_package_service::plan_update`
+/// returns before `apply_update` runs - see that pair's own doc comments
+/// for exactly what "added"/"modified" means per component type, and why
+/// relationships/business_rules/workflows/screen_layouts/reports are
+/// summarized as a single added-count rather than a full per-item diff.
+#[derive(Debug, Clone, Serialize)]
+pub struct PackageUpdateDiff {
+    pub package_id: String,
+    pub from_version: String,
+    pub to_version: String,
+    pub objects: Vec<PackageUpdateDiffEntry>,
+    pub fields: Vec<PackageUpdateDiffEntry>,
+    pub relationships_added: i64,
+    pub business_rules_added: i64,
+    pub workflows_added: i64,
+    pub screen_layouts_added: i64,
+    pub reports_added: i64,
 }

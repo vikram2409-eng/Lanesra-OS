@@ -20,7 +20,7 @@ pub struct NumberingOverride {
     pub updated_by: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NumberingOverrideInput {
     pub entity_type: String,
     pub prefix: String,

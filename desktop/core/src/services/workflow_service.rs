@@ -240,7 +240,9 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &WorkflowDefini
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, &input.entity_type, input)?;
     let id = new_uuid();
-    Ok(workflow_repo::create(conn, &id, workspace_id, input, actor_user_id)?)
+    let created = workflow_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "workflow_definition", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 /// Only an Administrator can see (and manage) workflows - nothing
@@ -249,6 +251,11 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &WorkflowDefini
 pub fn list_rules(conn: &Connection, workspace_id: &str, entity_type: &str, actor_user_id: Option<&str>) -> AppResult<Vec<WorkflowDefinition>> {
     require_admin(conn, actor_user_id)?;
     Ok(workflow_repo::list(conn, workspace_id, entity_type)?)
+}
+
+/// See `custom_object_service::get`'s doc comment - same export use case.
+pub fn get_rule(conn: &Connection, id: &str) -> AppResult<Option<WorkflowDefinition>> {
+    Ok(workflow_repo::get(conn, id)?)
 }
 
 pub fn update_rule(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {

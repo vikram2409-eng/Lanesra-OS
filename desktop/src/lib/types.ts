@@ -1992,3 +1992,70 @@ export interface PublisherInput {
   name: string;
   description: string | null;
 }
+
+// Solution Packages & Admin IA design spec, Phase 3: component-tagging,
+// the Local Workspace (Unmanaged) grouping, .lanesra export, and
+// update-with-diff. Mirrors core::models::solution_component and the new
+// pieces of core::models::industry_package - see those modules' doc
+// comments for the full design.
+
+/** One component's current owner - the workspace-wide registry every
+ * hand-built and package-installed custom object/field/relationship/
+ * business rule/workflow/screen layout/report shares. */
+export interface SolutionComponent {
+  id: string;
+  workspace_id: string;
+  artifact_type: string;
+  metadata_id: string;
+  publisher_id: string;
+  installed_app_id: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+/** A SolutionComponent joined with its owning publisher's display fields
+ * - Admin > Solution Management's Components tab, now covering both
+ * hand-built and package-installed components (superseding the narrower
+ * WorkspaceArtifact view). */
+export interface WorkspaceComponent {
+  component: SolutionComponent;
+  publisher_key: string;
+  publisher_name: string;
+  is_local: boolean;
+  installed_app_name: string | null;
+}
+
+/** The Managed/Unmanaged distinction's Unmanaged half: a count of
+ * everything still owned by the `local` publisher, broken down by type -
+ * rendered as a synthetic "Local Workspace" row in Solution Packages
+ * without a real app_packages row ever existing for it. */
+export interface LocalWorkspaceSummary {
+  publisher_id: string;
+  component_count: number;
+  components_by_type: [string, number][];
+}
+
+/** One object/field key's change between the installed version and a
+ * newly-imported one - see plan_package_update's own doc comment in the
+ * Rust core for exactly what "modified" means per type. */
+export interface PackageUpdateDiffEntry {
+  key: string;
+  kind: "added" | "modified" | "removed";
+}
+
+/** The update-with-diff review step's output. Relationships/business
+ * rules/workflows/screen layouts/reports have no stable cross-version
+ * identity, so they're summarized as a single added-count rather than a
+ * full per-item diff - see the Rust core's plan_update doc comment. */
+export interface PackageUpdateDiff {
+  package_id: string;
+  from_version: string;
+  to_version: string;
+  objects: PackageUpdateDiffEntry[];
+  fields: PackageUpdateDiffEntry[];
+  relationships_added: number;
+  business_rules_added: number;
+  workflows_added: number;
+  screen_layouts_added: number;
+  reports_added: number;
+}

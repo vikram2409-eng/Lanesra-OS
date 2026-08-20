@@ -67,7 +67,7 @@ pub struct WorkflowCondition {
     pub sort_order: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowConditionInput {
     pub field_source: String,
     pub field_key: String,
@@ -95,7 +95,7 @@ pub struct WorkflowAction {
     pub sort_order: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowActionInput {
     pub action_type: String,
     pub params_json: String,
@@ -132,7 +132,7 @@ pub struct WorkflowDefinition {
     pub actions: Vec<WorkflowAction>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowDefinitionInput {
     pub entity_type: String,
     pub name: String,

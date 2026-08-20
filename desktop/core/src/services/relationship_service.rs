@@ -76,12 +76,19 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &RelationshipDefinit
     validate_shape(conn, workspace_id, input)?;
     let key = slugify(conn, workspace_id, &input.source_entity_type, &input.target_entity_type)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(relationship_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?)
+    let created = relationship_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "relationship_definition", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResult<Vec<RelationshipDefinition>> {
     let all = relationship_repo::list_definitions(conn, workspace_id)?;
     Ok(if active_only { all.into_iter().filter(|d| d.is_active).collect() } else { all })
+}
+
+/// See `custom_object_service::get`'s doc comment - same export use case.
+pub fn get(conn: &Connection, id: &str) -> AppResult<Option<RelationshipDefinition>> {
+    Ok(relationship_repo::get_definition(conn, id)?)
 }
 
 pub fn update(conn: &Connection, id: &str, input: &RelationshipDefinitionUpdate, actor_user_id: Option<&str>) -> AppResult<RelationshipDefinition> {

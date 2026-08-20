@@ -83,6 +83,17 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> rusqlite::Result<
     rows
 }
 
+/// Every imported version of one specific `package_id`, oldest first -
+/// each row is already an immutable per-version snapshot (its own
+/// `manifest_json`, never mutated once imported), so this alone *is* the
+/// Solution Management "Releases" view for a package: no separate
+/// `solution_releases` table needed, the data was already being kept.
+pub fn list_versions_for_package(conn: &Connection, workspace_id: &str, package_id: &str) -> rusqlite::Result<Vec<AppPackage>> {
+    let mut stmt = conn.prepare("SELECT * FROM app_packages WHERE workspace_id = ?1 AND package_id = ?2 ORDER BY imported_at ASC")?;
+    let rows = stmt.query_map((workspace_id, package_id), map_package)?.collect();
+    rows
+}
+
 // --- app_dependencies --------------------------------------------------
 
 fn map_dependency(row: &rusqlite::Row) -> rusqlite::Result<AppDependency> {
@@ -239,6 +250,19 @@ pub fn set_status(conn: &Connection, id: &str, active: bool, actor_user_id: Opti
             rusqlite::params![now, actor_user_id, id],
         )?;
     }
+    Ok(())
+}
+
+/// Bumps `installed_version` after `industry_package_service::run_update`
+/// successfully applies a newer package version - the one field
+/// `set_status` above doesn't touch, since a deactivate/reactivate never
+/// changes which version is installed.
+pub fn update_installed_version(conn: &Connection, id: &str, version: &str, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+    let now = now_iso();
+    conn.execute(
+        "UPDATE installed_apps SET installed_version = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
+        rusqlite::params![version, now, actor_user_id, id],
+    )?;
     Ok(())
 }
 
