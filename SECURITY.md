@@ -34,3 +34,9 @@ A few things worth knowing given how Lanesra OS is designed:
   that's a legitimate report.
 - Passwords are stored as salted Argon2 hashes; there is no plaintext or
   reversible storage.
+- **Integration Hub** connection secrets (API keys, tokens, passwords) are
+  encrypted at rest with AES-256-GCM, keyed by a master key resolved from
+  `LANESRA_SECRET_MASTER_KEY` or a local key file next to the database —
+  never returned in plaintext once saved. Inbound API client credentials are
+  hashed (SHA-256), the same one-way convention as passwords, and shown in
+  full only once at creation or rotation.
