@@ -12,6 +12,7 @@ pub mod custom_report;
 pub mod dashboard;
 pub mod dashboard_layout;
 pub mod industry_package;
+pub mod integration;
 pub mod invoice;
 pub mod numbering_override;
 pub mod opportunity;

@@ -49,8 +49,8 @@ use crate::models::workflow::{
     TRIGGER_TYPES,
 };
 use crate::repositories::{
-    company_repo, contract_repo, custom_field_repo, custom_record_repo, notification_repo, opportunity_repo,
-    relationship_repo, task_repo, user_repo, workflow_repo,
+    company_repo, contract_repo, custom_field_repo, custom_record_repo, integration_connection_ref_repo, notification_repo,
+    opportunity_repo, relationship_repo, task_repo, user_repo, workflow_repo,
 };
 use crate::services::{builtin_field_service, company_service, custom_object_service, custom_record_service, entity_registry, task_service};
 
@@ -789,6 +789,20 @@ struct AddNotificationParams {
     audience: String,
 }
 
+/// Integration Hub (spec §17): "Call Connector Action". `param_map` maps
+/// each `ConnectorActionParam.name` on the target action to where its
+/// value comes from at execution time - `"field:{key}"` reads a builtin
+/// or custom field off the triggering record (same ctx `set_default_field`
+/// already builds), anything else is used as a literal constant.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct CallConnectorActionParams {
+    connector_id: String,
+    action_key: String,
+    reference_key: String,
+    #[serde(default)]
+    param_map: Vec<(String, String)>,
+}
+
 fn parse_params<T: for<'de> Deserialize<'de>>(action_type: &str, params_json: &str) -> AppResult<T> {
     serde_json::from_str(params_json).map_err(|e| AppError::Validation(format!("Invalid parameters for '{action_type}': {e}")))
 }
@@ -904,6 +918,16 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
             }
             if p.value.is_none() && p.copy_from_field_key.is_none() {
                 return Err(AppError::Validation("Provide a value or a field to copy from".into()));
+            }
+        }
+        "call_connector_action" => {
+            let p: CallConnectorActionParams = parse_params(action_type, params_json)?;
+            let connector = super::connector_service::get(conn, workspace_id, &p.connector_id)?;
+            if !connector.actions.iter().any(|a| a.action_key == p.action_key) {
+                return Err(AppError::Validation(format!("'{}' has no action '{}'", connector.name, p.action_key)));
+            }
+            if integration_connection_ref_repo::get_by_key(conn, workspace_id, &p.reference_key)?.is_none() {
+                return Err(AppError::Validation(format!("Unknown connection reference '{}'", p.reference_key)));
             }
         }
         "add_notification" => {
@@ -1162,6 +1186,39 @@ fn apply_action(
             }
             Ok("sent notification".into())
         }
+        // Integration Hub (spec §17): never calls out synchronously - see
+        // migration 0033's own comment and `connector_execution_service`'s
+        // doc comment for the sync/async boundary this respects. Enqueues
+        // a row `connector_execution_service::drain_pending_actions` (a
+        // real `async fn`) picks up and actually invokes on whatever
+        // cadence already polls for this workspace's async work.
+        "call_connector_action" => {
+            let p: CallConnectorActionParams = parse_params(action_type, params_json)?;
+            let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+            for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
+                ctx.insert(k, v);
+            }
+            let mut resolved_params = serde_json::Map::new();
+            for (param_name, source) in &p.param_map {
+                let value = match source.strip_prefix("field:") {
+                    Some(field_key) => ctx.get(field_key).cloned().unwrap_or_default(),
+                    None => source.clone(),
+                };
+                resolved_params.insert(param_name.clone(), serde_json::Value::String(value));
+            }
+            crate::repositories::integration_pending_action_repo::enqueue(
+                conn,
+                &new_uuid(),
+                workspace_id,
+                &p.connector_id,
+                &p.action_key,
+                &p.reference_key,
+                &serde_json::Value::Object(resolved_params).to_string(),
+                Some(entity_type),
+                Some(entity_id),
+            )?;
+            Ok(format!("queued connector action '{}'", p.action_key))
+        }
         other => Err(AppError::Validation(format!("Unknown action type '{other}'"))),
     }
 }
@@ -1292,6 +1349,11 @@ fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, act
             let p: AddNotificationParams = parse_params(action_type, params_json)?;
             let audience = if p.audience == "all_admins" { "all admins" } else { "the owner" };
             Ok(format!("would notify {audience}: \"{}\"", p.message))
+        }
+        "call_connector_action" => {
+            let p: CallConnectorActionParams = parse_params(action_type, params_json)?;
+            let connector_name = super::connector_service::get(conn, workspace_id, &p.connector_id).map(|c| c.name).unwrap_or_else(|_| "an unknown connector".into());
+            Ok(format!("would queue '{}' on {connector_name} (not actually called in test mode)", p.action_key))
         }
         other => Err(AppError::Validation(format!("Unknown action type '{other}'"))),
     }

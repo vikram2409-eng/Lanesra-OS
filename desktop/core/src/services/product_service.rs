@@ -41,6 +41,7 @@ pub fn create(
         &format!("Created product {}", product.product_number),
         None,
     )?;
+    super::event_hooks::record_created(conn, workspace_id, "Product", &product.id, &product.name, if product.is_active { "active" } else { "inactive" });
     Ok(product)
 }
 
@@ -72,6 +73,7 @@ pub fn update(
         &format!("Updated product {}", product.product_number),
         None,
     )?;
+    super::event_hooks::record_updated(conn, &workspace_id, "Product", id, &product.name, if product.is_active { "active" } else { "inactive" });
     Ok(product)
 }
 
@@ -89,5 +91,6 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
         &format!("Archived product {}", existing.product_number),
         None,
     )?;
+    super::event_hooks::record_archived(conn, &existing.workspace_id, "Product", id, &existing.name);
     Ok(())
 }

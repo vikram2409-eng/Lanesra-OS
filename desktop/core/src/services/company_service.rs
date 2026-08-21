@@ -58,6 +58,7 @@ pub fn create(
         None,
     )?;
     workflow_service::fire_event(conn, workspace_id, "Company", &company.id, None, &company.status, company.owner_user_id.as_deref(), actor_user_id)?;
+    super::event_hooks::record_created(conn, workspace_id, "Company", &company.id, &company.name, &company.status);
     Ok(company)
 }
 
@@ -106,6 +107,7 @@ pub fn update(
     let after_fields = builtin_field_service::field_values(conn, "Company", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
     workflow_service::fire_field_changed(conn, &before.workspace_id, "Company", id, "builtin", &changed, company.owner_user_id.as_deref(), actor_user_id)?;
+    super::event_hooks::record_updated(conn, &before.workspace_id, "Company", id, &company.name, &company.status);
     Ok(company)
 }
 
@@ -123,5 +125,6 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
         &format!("Archived company {}", existing.customer_number),
         None,
     )?;
+    super::event_hooks::record_archived(conn, &existing.workspace_id, "Company", id, &existing.name);
     Ok(())
 }

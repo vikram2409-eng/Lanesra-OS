@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 rusqlite = { version = "0.31", features = ["bundled", "chrono", "uuid", "backup"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -22,3 +23,30 @@ thiserror = "1"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 base64 = "0.22"
 regex = "1"
+
+# Integration Hub - outbound HTTP (Connections/Connectors/webhook delivery/OAuth2
+# token exchange), secrets-at-rest and signing. See
+# services/secret_service.rs / connection_service.rs for how these are used;
+# only the small set of functions that genuinely make a network call are
+# `async fn` - everything else in this crate stays plain sync, as before.
+tokio = { version = "1", features = ["rt", "macros", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+aes-gcm = "0.10"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+# SQL connector (PostgreSQL only - see connection_service's own doc comment
+# for why SQL Server/MySQL share the same abstraction without being wired
+# up this pass).
+tokio-postgres = "0.7"
+# SFTP connector - pure-Rust client *and* server, so the in-process test
+# double needs no system SFTP daemon.
+russh = "0.44"
+russh-sftp = "2"
+async-trait = "0.1"
+# Email/SMTP connector action.
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "builder"] }
+# Data Exchange (spec §12/§13): a real RFC 4180 CSV parser/writer for the
+# generalized import/export wizard - quoted fields, embedded commas and
+# escaped quotes handled correctly, not a naive split(',').
+csv = "1"

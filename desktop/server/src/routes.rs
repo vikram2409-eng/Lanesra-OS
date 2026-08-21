@@ -27,6 +27,8 @@ pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
     let mut router = Router::new()
         .route("/api/health", get(|| async { "ok" }))
         .route("/api/invoke/:command", post(invoke))
+        .merge(crate::api_v1::router())
+        .merge(crate::events_stream::router())
         .fallback_service(static_service)
         .layer(axum::middleware::from_fn_with_state(state.security.clone(), security_headers));
 

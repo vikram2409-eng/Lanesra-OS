@@ -13,6 +13,10 @@ pub const ACTION_TYPES: &[&str] = &[
     // show_error/show_warning) stay business-rule-only - a workflow has no
     // "re-evaluate against the open form" moment for them to apply to.
     "set_default_field", "clear_field",
+    // Integration Hub (spec §17): the one Workflow action that reaches
+    // outside Lanesra itself. See `workflow_service`'s own match arm for
+    // why it enqueues rather than calling out synchronously.
+    "call_connector_action",
 ];
 pub const NOTIFICATION_AUDIENCES: &[&str] = &["owner", "all_admins"];
 
