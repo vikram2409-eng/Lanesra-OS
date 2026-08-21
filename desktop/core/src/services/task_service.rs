@@ -64,6 +64,7 @@ pub fn create(
         None,
     )?;
     workflow_service::fire_event(conn, workspace_id, "Task", &task.id, None, &task.status, task.owner_user_id.as_deref(), actor_user_id)?;
+    super::event_hooks::record_created(conn, workspace_id, "Task", &task.id, &task.title, &task.status);
     Ok(task)
 }
 
@@ -110,6 +111,7 @@ pub fn update(
     let after_fields = builtin_field_service::field_values(conn, "Task", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
     workflow_service::fire_field_changed(conn, workspace_id, "Task", id, "builtin", &changed, task.owner_user_id.as_deref(), actor_user_id)?;
+    super::event_hooks::record_updated(conn, workspace_id, "Task", id, &task.title, &task.status);
     Ok(task)
 }
 
@@ -127,5 +129,6 @@ pub fn archive(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: O
         &format!("Archived task {}", existing.task_number),
         None,
     )?;
+    super::event_hooks::record_archived(conn, workspace_id, "Task", id, &existing.title);
     Ok(())
 }

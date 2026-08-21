@@ -25,6 +25,10 @@ use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate}
 use lanesra_core::models::business_rule::{BusinessRuleInput, BusinessRuleUpdate};
 use lanesra_core::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate};
 use lanesra_core::models::industry_package::ImportPackageInput;
+use lanesra_core::models::integration::{
+    ApiClientInput, ApiListQuery, ConnectionInput, ConnectionRefInput, ConnectionUpdate, ConnectorImportInput, CsvImportInput,
+    ExternalObjectInput, IntegrationJobInput, IntegrationSettingsUpdate, MappingInput, WebhookInput,
+};
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
@@ -37,15 +41,19 @@ use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinition
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
+    api_client_service, api_object_service,
     app_service, audit_service,
-    auth_service, backup_service, business_rule_service, company_service, contact_service, contract_service,
+    auth_service, backup_service, business_rule_service, company_service, connection_ref_service, connection_service, connector_service,
+    contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
-    dashboard_widget_service,
+    dashboard_widget_service, data_exchange_service,
+    external_object_service,
     industry_package_service,
-    invoice_service, numbering_service, opportunity_service, order_service, product_service,
+    integration_job_service, integration_log_service,
+    invoice_service, mapping_service, numbering_service, opportunity_service, order_service, product_service,
     publisher_service,
     quote_service, relationship_service, report_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
-    user_service, workflow_service, workspace_service,
+    user_service, webhook_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -63,10 +71,24 @@ pub(crate) fn to_value<T: serde::Serialize>(value: T) -> AppResult<Value> {
     serde_json::to_value(value).map_err(|e| AppError::Validation(format!("could not serialize response: {e}")))
 }
 
+/// Integration Hub (spec §20): resolves this Team Workspace instance's
+/// secret master key from a key file next to the workspace database -
+/// the same fallback `secret_service::resolve_master_key` documents, and
+/// the same file `job_scheduler`/`events_stream` already read.
+pub(crate) fn resolve_master_key(db_path: &std::path::Path) -> AppResult<[u8; 32]> {
+    let key_file_path = db_path.with_file_name("secret.key");
+    lanesra_core::services::secret_service::resolve_master_key(&key_file_path)
+}
+
 /// Dispatches every command except workspace_status/first_run_setup/login/
 /// logout/current_user, which the HTTP layer handles directly because they
 /// mutate the session cookie.
-pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&str>) -> AppResult<Value> {
+///
+/// `master_key` is needed only by the handful of Integration Hub commands
+/// that encrypt/decrypt a secret (creating/updating a Connection or
+/// Webhook) - computed once per request in `routes.rs` from `state.db_path`,
+/// the same key file `job_scheduler`/`events_stream` already read.
+pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&str>, master_key: &[u8; 32]) -> AppResult<Value> {
     match command {
         "list_companies" => to_value(company_service::list(conn, &require_workspace_id(conn)?)?),
         "get_company" => to_value(company_service::get(conn, &arg::<String>(args, "id")?)?),
@@ -769,6 +791,162 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         // immutably. routes.rs special-cases it before locking the
         // connection, the same way login/logout mutate the session cookie
         // outside this function.
+
+        // --- Integration Hub -------------------------------------------
+        // Genuinely-async admin actions (test_connection,
+        // test_connector_action, test_webhook_delivery,
+        // run_integration_job_now, preview_external_object_records) are
+        // NOT here - this dispatcher is plain sync, called while
+        // `state.conn` is already locked, so they can't `.await` here at
+        // all. They're their own small session-authenticated async route
+        // group instead - see `admin_actions.rs`.
+        "list_connections" => to_value(connection_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "create_connection" => {
+            let input: ConnectionInput = arg(args, "input")?;
+            to_value(connection_service::create(conn, &require_workspace_id(conn)?, master_key, &input, actor)?)
+        }
+        "update_connection" => {
+            let id: String = arg(args, "id")?;
+            let input: ConnectionUpdate = arg(args, "input")?;
+            to_value(connection_service::update(conn, &require_workspace_id(conn)?, master_key, &id, &input, actor)?)
+        }
+        "delete_connection" => {
+            connection_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "list_connection_refs" => to_value(connection_ref_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "create_connection_ref" => {
+            let input: ConnectionRefInput = arg(args, "input")?;
+            to_value(connection_ref_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "bind_connection_ref" => {
+            let id: String = arg(args, "id")?;
+            let connection_id: Option<String> = arg(args, "connectionId")?;
+            to_value(connection_ref_service::bind(conn, &require_workspace_id(conn)?, &id, connection_id.as_deref(), actor)?)
+        }
+        "delete_connection_ref" => {
+            connection_ref_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "preview_connector_import" => {
+            let spec_text: String = arg(args, "specText")?;
+            let spec_format: String = arg(args, "specFormat")?;
+            to_value(connector_service::preview_import(&spec_text, &spec_format)?)
+        }
+        "import_connector" => {
+            let input: ConnectorImportInput = arg(args, "input")?;
+            to_value(connector_service::import(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "list_connectors" => to_value(connector_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "get_connector" => to_value(connector_service::get(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?)?),
+        "delete_connector" => {
+            connector_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "list_api_clients" => to_value(api_client_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "create_api_client" => {
+            let input: ApiClientInput = arg(args, "input")?;
+            to_value(api_client_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "rotate_api_client_secret" => to_value(api_client_service::rotate_secret(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?),
+        "revoke_api_client" => {
+            api_client_service::revoke(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "reactivate_api_client" => {
+            api_client_service::reactivate(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "delete_api_client" => {
+            api_client_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "list_webhooks" => to_value(webhook_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "create_webhook" => {
+            let input: WebhookInput = arg(args, "input")?;
+            to_value(webhook_service::create(conn, &require_workspace_id(conn)?, master_key, &input, actor)?)
+        }
+        "list_webhook_deliveries" => to_value(webhook_service::list_deliveries(conn, &require_workspace_id(conn)?, &arg::<String>(args, "webhookId")?)?),
+        "pause_webhook" => {
+            webhook_service::pause(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "reactivate_webhook" => {
+            webhook_service::reactivate(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "delete_webhook" => {
+            webhook_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "list_mappings" => to_value(mapping_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "create_mapping" => {
+            let input: MappingInput = arg(args, "input")?;
+            to_value(mapping_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "delete_mapping" => {
+            mapping_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "import_csv" => {
+            let input: CsvImportInput = arg(args, "input")?;
+            to_value(data_exchange_service::import_csv(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "export_csv" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let query: ApiListQuery = arg(args, "query")?;
+            to_value(data_exchange_service::export_csv(conn, &require_workspace_id(conn)?, &object_key, &query)?)
+        }
+        "list_integration_object_keys" => to_value(api_object_service::list_object_keys(conn, &require_workspace_id(conn)?)?),
+
+        "list_external_objects" => to_value(external_object_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "create_external_object" => {
+            let input: ExternalObjectInput = arg(args, "input")?;
+            to_value(external_object_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "delete_external_object" => {
+            external_object_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "list_integration_jobs" => to_value(integration_job_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
+        "create_integration_job" => {
+            let input: IntegrationJobInput = arg(args, "input")?;
+            to_value(integration_job_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_integration_job" => {
+            let id: String = arg(args, "id")?;
+            let input: IntegrationJobInput = arg(args, "input")?;
+            let status: String = arg(args, "status")?;
+            to_value(integration_job_service::update(conn, &require_workspace_id(conn)?, &id, &input, &status, actor)?)
+        }
+        "delete_integration_job" => {
+            integration_job_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "list_integration_job_runs" => {
+            let job_id: String = arg(args, "jobId")?;
+            let limit: i64 = arg(args, "limit")?;
+            to_value(integration_job_service::list_runs(conn, &require_workspace_id(conn)?, &job_id, limit)?)
+        }
+
+        "get_integration_overview" => to_value(integration_log_service::overview(conn, &require_workspace_id(conn)?)?),
+        "list_integration_executions" => {
+            let query: integration_log_service::ExecutionQuery = arg(args, "query")?;
+            to_value(integration_log_service::list_executions(conn, &require_workspace_id(conn)?, &query)?)
+        }
+        "get_integration_settings" => to_value(integration_log_service::get_settings(conn, &require_workspace_id(conn)?)?),
+        "update_integration_settings" => {
+            let input: IntegrationSettingsUpdate = arg(args, "input")?;
+            to_value(integration_log_service::update_settings(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "purge_expired_integration_logs" => to_value(integration_log_service::purge_expired(conn, &require_workspace_id(conn)?)?),
 
         other => Err(AppError::Validation(format!("Unknown command '{other}'"))),
     }

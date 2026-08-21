@@ -13,7 +13,7 @@ For anything beyond a small fix, please open an issue first to discuss the appro
 
 1. Fork the repo and create a branch off `main` (`feature/…`, `fix/…`, `docs/…` — whatever describes the change).
 2. Make your change. For the desktop app, match the existing patterns in the file you're editing rather than introducing a new one — this codebase is deliberately consistent about how models/repositories/services/commands are structured.
-3. **Add or update tests.** The desktop app has real integration test coverage (`core/tests/*.rs`, `server/tests/http.rs`) — a change without a test covering it will usually be asked to add one.
+3. **Add or update tests.** The desktop app has real integration test coverage (`core/tests/*.rs`, `server/tests/*.rs`) — a change without a test covering it will usually be asked to add one.
 4. Verify before opening a PR:
    ```bash
    cd desktop

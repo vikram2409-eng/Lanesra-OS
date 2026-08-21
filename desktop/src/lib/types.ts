@@ -2108,3 +2108,419 @@ export interface SolutionDetail {
   solution: Solution;
   members: WorkspaceComponent[];
 }
+
+// --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -
+// mirrors core::models::integration 1:1. See IntegrationHubAdmin.tsx for the
+// admin screens built on these.
+
+export interface Connection {
+  id: string;
+  workspace_id: string;
+  name: string;
+  connection_type: string;
+  base_url: string | null;
+  auth_mode: string;
+  has_secret: boolean;
+  config_json: string;
+  owner_user_id: string | null;
+  status: string;
+  last_test_at: string | null;
+  last_test_status: string | null;
+  last_test_message: string | null;
+  last_failure_at: string | null;
+  credential_expires_at: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface ConnectionInput {
+  name: string;
+  connection_type: string;
+  base_url: string | null;
+  auth_mode: string;
+  secret_value: string | null;
+  config_json: string;
+  owner_user_id: string | null;
+}
+
+export interface ConnectionUpdate {
+  name: string;
+  base_url: string | null;
+  auth_mode: string;
+  secret_value: string | null;
+  config_json: string;
+  owner_user_id: string | null;
+  status: string;
+}
+
+export interface ConnectionTestResult {
+  ok: boolean;
+  latency_ms: number;
+  status_code: number | null;
+  message: string;
+}
+
+export interface ConnectionRef {
+  id: string;
+  workspace_id: string;
+  reference_name: string;
+  reference_key: string;
+  expected_connection_type: string;
+  connection_id: string | null;
+  connection_name: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface ConnectionRefInput {
+  reference_name: string;
+  reference_key: string;
+  expected_connection_type: string;
+  connection_id: string | null;
+}
+
+export interface ApiClient {
+  id: string;
+  workspace_id: string;
+  name: string;
+  client_id: string;
+  status: string;
+  scopes: string[];
+  allowed_cidr: string | null;
+  owner_user_id: string | null;
+  last_used_at: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface ApiClientInput {
+  name: string;
+  scopes: string[];
+  allowed_cidr: string | null;
+  owner_user_id: string | null;
+}
+
+/** Returned exactly once, at creation and at secret rotation - never
+ * recoverable again after this response (spec §8.1). */
+export interface IssuedApiClient {
+  client: ApiClient;
+  api_key: string;
+}
+
+export interface Webhook {
+  id: string;
+  workspace_id: string;
+  name: string;
+  connection_id: string;
+  endpoint_url: string | null;
+  event_types: string[];
+  object_scope: string | null;
+  filter_json: string | null;
+  payload_version: string;
+  has_secret: boolean;
+  retry_policy_json: string;
+  status: string;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface WebhookInput {
+  name: string;
+  connection_id: string;
+  event_types: string[];
+  object_scope: string | null;
+  filter_json: string | null;
+  payload_version: string | null;
+  retry_policy_json: string | null;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  event_id: string;
+  event_type: string;
+  attempt_number: number;
+  status: string;
+  http_status: number | null;
+  duration_ms: number | null;
+  response_snippet: string | null;
+  created_at: string;
+}
+
+export interface FieldMapEntry {
+  source_column: string;
+  target_field: string;
+  transform: string | null;
+  default_value: string | null;
+  constant: string | null;
+}
+
+export interface Mapping {
+  id: string;
+  workspace_id: string;
+  name: string;
+  target_object_key: string;
+  operation: string;
+  match_key: string | null;
+  field_map: FieldMapEntry[];
+  duplicate_policy: string;
+  needs_review: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface MappingInput {
+  name: string;
+  target_object_key: string;
+  operation: string;
+  match_key: string | null;
+  field_map: FieldMapEntry[];
+  duplicate_policy: string;
+}
+
+export interface CsvImportInput {
+  target_object_key: string;
+  csv_text: string;
+  operation: string;
+  match_key: string | null;
+  field_map: FieldMapEntry[];
+  duplicate_policy: string;
+  dry_run: boolean;
+}
+
+export interface CsvRowResult {
+  row_index: number;
+  status: string;
+  record_id: string | null;
+  error: string | null;
+}
+
+export interface CsvImportResult {
+  total_rows: number;
+  successful: number;
+  failed: number;
+  skipped_duplicates: number;
+  row_results: CsvRowResult[];
+  duration_ms: number;
+}
+
+export interface IntegrationExecution {
+  id: string;
+  workspace_id: string;
+  execution_type: string;
+  correlation_id: string | null;
+  ref_id: string | null;
+  direction: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  status: string;
+  http_status: number | null;
+  records_read: number;
+  records_written: number;
+  records_skipped: number;
+  records_failed: number;
+  retry_count: number;
+  error_category: string | null;
+  error_message: string | null;
+  actor_user_id: string | null;
+}
+
+export interface IntegrationExecutionQuery {
+  execution_type?: string | null;
+  status?: string | null;
+  correlation_id?: string | null;
+  limit?: number | null;
+}
+
+export interface IntegrationOverview {
+  active_connections: number;
+  failed_connections: number;
+  api_calls_today: number;
+  failed_webhooks_today: number;
+  jobs_running: number;
+  jobs_failed_today: number;
+}
+
+export interface IntegrationSettings {
+  workspace_id: string;
+  api_rate_limit_per_minute: number;
+  global_rate_limit_per_minute: number;
+  log_retention_days: number;
+  file_retention_days: number;
+  allow_insecure_connections: boolean;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface IntegrationSettingsUpdate {
+  api_rate_limit_per_minute: number;
+  global_rate_limit_per_minute: number;
+  log_retention_days: number;
+  file_retention_days: number;
+  allow_insecure_connections: boolean;
+}
+
+export interface ConnectorActionParam {
+  name: string;
+  location: string;
+  required: boolean;
+  schema_type: string;
+}
+
+export interface ConnectorAction {
+  id: string;
+  connector_id: string;
+  action_key: string;
+  display_name: string;
+  http_method: string;
+  path_template: string;
+  params: ConnectorActionParam[];
+  request_schema_json: string | null;
+  response_schema_json: string | null;
+}
+
+export interface Connector {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  connection_type: string;
+  spec_source: string;
+  publisher_id: string | null;
+  actions: ConnectorAction[];
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface DiscoveredOperation {
+  operation_id: string;
+  http_method: string;
+  path_template: string;
+  summary: string | null;
+  params: ConnectorActionParam[];
+}
+
+export interface OpenApiImportPreview {
+  title: string;
+  version: string;
+  operations: DiscoveredOperation[];
+  warnings: string[];
+}
+
+export interface ConnectorExecutionResult {
+  ok: boolean;
+  status_code: number | null;
+  duration_ms: number;
+  response_body: unknown;
+  message: string;
+}
+
+export interface ConnectorImportInput {
+  name: string;
+  description: string | null;
+  spec_text: string;
+  spec_format: string;
+  selected_operation_ids: string[];
+}
+
+export interface ExternalObject {
+  id: string;
+  workspace_id: string;
+  object_key: string;
+  display_name: string;
+  connection_id: string;
+  resource_path: string;
+  field_map: FieldMapEntry[];
+  cache_ttl_seconds: number | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface ExternalObjectInput {
+  object_key: string;
+  display_name: string;
+  connection_id: string;
+  resource_path: string;
+  field_map: FieldMapEntry[];
+  cache_ttl_seconds: number | null;
+}
+
+export interface ApiFieldMetadata {
+  key: string;
+  label: string;
+  field_type: string;
+  required: boolean;
+  is_custom: boolean;
+}
+
+export interface ApiObjectMetadata {
+  object_key: string;
+  label: string;
+  is_custom: boolean;
+  fields: ApiFieldMetadata[];
+}
+
+export interface ApiListQuery {
+  select?: string[] | null;
+  filter?: unknown;
+  sort?: string[] | null;
+  page?: number | null;
+  page_size?: number | null;
+}
+
+export interface IntegrationJob {
+  id: string;
+  workspace_id: string;
+  name: string;
+  external_object_id: string;
+  target_object_key: string;
+  match_key: string;
+  cursor_field: string | null;
+  cursor_value: string | null;
+  interval_minutes: number;
+  status: string;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface IntegrationJobInput {
+  name: string;
+  external_object_id: string;
+  target_object_key: string;
+  match_key: string;
+  cursor_field: string | null;
+  interval_minutes: number;
+}
+
+export interface IntegrationJobRun {
+  id: string;
+  job_id: string;
+  workspace_id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: string;
+  records_processed: number;
+  records_failed: number;
+  error_message: string | null;
+  cursor_before: string | null;
+  cursor_after: string | null;
+}

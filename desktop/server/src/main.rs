@@ -34,6 +34,14 @@ async fn main() {
         tracing::info!(origins = ?security.allowed_origins, "CORS enabled for the listed origins");
     }
 
+    // Integration Hub (spec §15): recurring Integration Jobs need a real
+    // background scheduler, and this server is the one long-running
+    // process that exists to host one - see `job_scheduler`'s own doc
+    // comment for why it opens its own DB connection rather than
+    // sharing `state.conn`.
+    let key_file_path = data_dir.join("secret.key");
+    lanesra_server::job_scheduler::spawn(db_path.clone(), key_file_path, std::time::Duration::from_secs(60));
+
     let state = ServerState::new(conn, db_path, security);
     let app = build_router(state, frontend_dir);
 

@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 
+use crate::rate_limit::RateLimiter;
 use crate::security::SecurityConfig;
 
 /// Shared across every request. A single mutex-guarded connection is enough
@@ -19,12 +20,15 @@ pub struct ServerState {
     /// Self-hosted internet deployment settings (secure cookies, CORS) -
     /// see `security::SecurityConfig`.
     pub security: SecurityConfig,
+    /// Integration Hub (spec §19): per-API-client inbound rate limiting
+    /// for the `/api/v1` router - see `rate_limit`'s own doc comment.
+    pub rate_limiter: RateLimiter,
 }
 
 pub type SharedState = Arc<ServerState>;
 
 impl ServerState {
     pub fn new(conn: Connection, db_path: PathBuf, security: SecurityConfig) -> SharedState {
-        Arc::new(ServerState { conn: Mutex::new(conn), db_path, security })
+        Arc::new(ServerState { conn: Mutex::new(conn), db_path, security, rate_limiter: RateLimiter::new() })
     }
 }

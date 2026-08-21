@@ -59,6 +59,8 @@ pub fn create(
         None,
     )?;
     workflow_service::fire_event(conn, &workspace_id, "Contact", &contact.id, None, &contact.status, None, actor_user_id)?;
+    let display_name = format!("{} {}", contact.first_name, contact.last_name).trim().to_string();
+    super::event_hooks::record_created(conn, &workspace_id, "Contact", &contact.id, &display_name, &contact.status);
     Ok(contact)
 }
 
@@ -104,6 +106,8 @@ pub fn update(
     let after_fields = builtin_field_service::field_values(conn, "Contact", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
     workflow_service::fire_field_changed(conn, &workspace_id, "Contact", id, "builtin", &changed, None, actor_user_id)?;
+    let display_name = format!("{} {}", contact.first_name, contact.last_name).trim().to_string();
+    super::event_hooks::record_updated(conn, &workspace_id, "Contact", id, &display_name, &contact.status);
     Ok(contact)
 }
 
@@ -121,5 +125,7 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
         &format!("Archived contact {}", existing.contact_number),
         None,
     )?;
+    let display_name = format!("{} {}", existing.first_name, existing.last_name).trim().to_string();
+    super::event_hooks::record_archived(conn, &existing.workspace_id, "Contact", id, &display_name);
     Ok(())
 }
