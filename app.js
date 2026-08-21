@@ -3439,13 +3439,17 @@ function publisherModal(){
   closeModal();toast('Publisher registered');renderAdminTab();
  };
 }
-// ---- Integrations (Phase 5: UI-only simulation) ---------------------------
-// New to the demo (and not on desktop either): scheduled data jobs, exposed
-// API endpoints, and configured external API connections. The static demo
-// has no server, so nothing here makes a real network call or runs on a
-// real schedule - every "run"/"test" is a local simulation against this
-// browser's own demo data, saved to localStorage like everything else,
-// matching the honesty level the rest of this demo already holds to.
+// ---- Integration Hub (UI-only simulation) ---------------------------------
+// Relabeled to match the real Integration Hub the desktop app now ships
+// (Connections, Connection References, Connectors, API Access, Webhooks &
+// Events, Data Exchange, External Objects, Integration Jobs, Logs &
+// Monitoring, Settings - see desktop's IntegrationHubAdmin.tsx) - three
+// representative areas (Connections, API Access, Integration Jobs), not
+// the full ten-screen set. The static demo has no server, so nothing here
+// makes a real network call, encrypts a secret, signs a webhook, or runs
+// on a real schedule - every "run"/"test" is a local simulation against
+// this browser's own demo data, saved to localStorage like everything
+// else, matching the honesty level the rest of this demo already holds to.
 let integrationsSubTab='jobs';
 const JOB_TYPES=['export','import','sync'];
 const JOB_TYPE_LABELS={export:'Export data out',import:'Import data in',sync:'Two-way sync'};
@@ -3455,10 +3459,10 @@ const FORMAT_OPTIONS=['csv','json'];
 const EXTERNAL_AUTH_TYPES=['none','apiKey','bearer'];
 const EXTERNAL_AUTH_LABELS={none:'None',apiKey:'API key',bearer:'Bearer token'};
 function integrationsTab(body){
- const subTabs=[['jobs','Scheduled jobs'],['endpoints','API endpoints'],['external','Consume external APIs']];
+ const subTabs=[['jobs','Integration Jobs'],['endpoints','API Access'],['external','Connections']];
  body.innerHTML=`<div class="panel">
- <h3 style="margin-top:0">Integrations</h3>
- <p class="muted" style="font-size:13px">Schedule data import/export jobs, expose API endpoints for other systems to call, and configure external APIs this workspace would consume. This is a UI-only simulation: everything is saved to this browser and "runs"/"test calls" produce a realistic result against your demo data, but no real network request or scheduled job ever actually fires — there's no server behind the online demo to run one.</p>
+ <h3 style="margin-top:0">Integration Hub</h3>
+ <p class="muted" style="font-size:13px">Schedule recurring data jobs, issue API access for other systems to call in, and configure outbound connections this workspace would use. This is a UI-only simulation: everything is saved to this browser and "runs"/"test calls" produce a realistic result against your demo data, but no real network request, encryption, signature or scheduled job ever actually fires — there's no server behind the online demo to run one. The desktop app's Admin → Integration Hub is the real thing: encrypted Connections, OpenAPI Connectors, hashed API clients, HMAC-signed Webhooks, a generic CSV wizard, External Objects and a real background scheduler.</p>
  <div class="tabs">${subTabs.map(t=>`<button class="tab ${integrationsSubTab===t[0]?'active':''}" data-integrations-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
  <div id="integrationsBody"></div>
  </div>`;
@@ -3472,7 +3476,7 @@ function renderIntegrationsSubTab(){
 }
 function jobsSubTab(body){
  const list=data.integrationJobs||[];
- body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">Scheduled jobs</h3><button class="btn btn-primary" id="addJob">+ New job</button></div>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Entity</th><th>Schedule</th><th>Format</th><th>Status</th><th>Last run</th><th>Actions</th></tr></thead><tbody>${list.map(j=>`<tr><td>${j.name}</td><td>${JOB_TYPE_LABELS[j.type]}</td><td>${entityLabel(j.entityKey)}</td><td>${SCHEDULE_LABELS[j.schedule]}</td><td>${j.format.toUpperCase()}</td><td>${badgeMaybe(j.active?'Active':'Inactive')}</td><td>${j.lastRun?new Date(j.lastRun).toLocaleString():'Never run'}</td><td><div class="actions"><button class="icon-btn" data-run-job="${j.id}">Run now</button><button class="icon-btn" data-history-job="${j.id}">History</button><button class="icon-btn" data-edit-job="${j.id}">Edit</button><button class="icon-btn" data-del-job="${j.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No scheduled jobs yet.</div>'}`;
+ body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">Integration Jobs</h3><button class="btn btn-primary" id="addJob">+ New job</button></div>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Entity</th><th>Schedule</th><th>Format</th><th>Status</th><th>Last run</th><th>Actions</th></tr></thead><tbody>${list.map(j=>`<tr><td>${j.name}</td><td>${JOB_TYPE_LABELS[j.type]}</td><td>${entityLabel(j.entityKey)}</td><td>${SCHEDULE_LABELS[j.schedule]}</td><td>${j.format.toUpperCase()}</td><td>${badgeMaybe(j.active?'Active':'Inactive')}</td><td>${j.lastRun?new Date(j.lastRun).toLocaleString():'Never run'}</td><td><div class="actions"><button class="icon-btn" data-run-job="${j.id}">Run now</button><button class="icon-btn" data-history-job="${j.id}">History</button><button class="icon-btn" data-edit-job="${j.id}">Edit</button><button class="icon-btn" data-del-job="${j.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No scheduled jobs yet.</div>'}`;
  $('#addJob').onclick=()=>jobModal();
  body.querySelectorAll('[data-run-job]').forEach(b=>b.onclick=()=>runIntegrationJob(b.dataset.runJob));
  body.querySelectorAll('[data-history-job]').forEach(b=>b.onclick=()=>jobHistoryModal(b.dataset.historyJob));
@@ -3526,7 +3530,7 @@ function jobHistoryModal(id){
 }
 function endpointsSubTab(body){
  const list=data.apiEndpoints||[];
- body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">API endpoints</h3><button class="btn btn-primary" id="addEndpoint">+ New endpoint</button></div><p class="muted" style="font-size:13px">Expose a read/write endpoint backed by a built-in or custom object. Test call simulates the request/response locally against your demo data — nothing actually leaves your browser.</p>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Method</th><th>Path</th><th>Entity</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead><tbody>${list.map(e=>`<tr><td>${e.name}</td><td><code>${e.method}</code></td><td><code>${e.path}</code></td><td>${entityLabel(e.entityKey)}</td><td>${e.authType==='apiKey'?'API key':'None'}</td><td>${badgeMaybe(e.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-test-endpoint="${e.id}">Test call</button><button class="icon-btn" data-edit-endpoint="${e.id}">Edit</button><button class="icon-btn" data-del-endpoint="${e.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No API endpoints yet.</div>'}`;
+ body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">API Access</h3><button class="btn btn-primary" id="addEndpoint">+ New endpoint</button></div><p class="muted" style="font-size:13px">Expose a read/write endpoint backed by a built-in or custom object. Test call simulates the request/response locally against your demo data — nothing actually leaves your browser. On desktop, API Access issues a real <code>{client_id}.{secret}</code> bearer key (shown once, hashed at rest) against a real generic REST API.</p>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Method</th><th>Path</th><th>Entity</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead><tbody>${list.map(e=>`<tr><td>${e.name}</td><td><code>${e.method}</code></td><td><code>${e.path}</code></td><td>${entityLabel(e.entityKey)}</td><td>${e.authType==='apiKey'?'API key':'None'}</td><td>${badgeMaybe(e.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-test-endpoint="${e.id}">Test call</button><button class="icon-btn" data-edit-endpoint="${e.id}">Edit</button><button class="icon-btn" data-del-endpoint="${e.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No API endpoints yet.</div>'}`;
  $('#addEndpoint').onclick=()=>endpointModal();
  body.querySelectorAll('[data-test-endpoint]').forEach(b=>b.onclick=()=>testEndpointModal(list.find(e=>e.id===b.dataset.testEndpoint)));
  body.querySelectorAll('[data-edit-endpoint]').forEach(b=>b.onclick=()=>endpointModal(list.find(e=>e.id===b.dataset.editEndpoint)));
@@ -3572,7 +3576,7 @@ function testEndpointModal(endpoint){
 }
 function externalSubTab(body){
  const list=data.externalConnections||[];
- body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">Consume external APIs</h3><button class="btn btn-primary" id="addConnection">+ New connection</button></div><p class="muted" style="font-size:13px">Configure an external API this workspace would call. Test request simulates a response shape locally — the online demo can't make outbound network calls, so nothing is actually sent.</p>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Method</th><th>Base URL</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead><tbody>${list.map(c=>`<tr><td>${c.name}</td><td><code>${c.method}</code></td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><code>${c.baseUrl}</code></td><td>${EXTERNAL_AUTH_LABELS[c.authType]}</td><td>${badgeMaybe(c.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-test-conn="${c.id}">Test request</button><button class="icon-btn" data-history-conn="${c.id}">History</button><button class="icon-btn" data-edit-conn="${c.id}">Edit</button><button class="icon-btn" data-del-conn="${c.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No external connections yet.</div>'}`;
+ body.innerHTML=`<div class="panel-head" style="margin-top:16px"><h3 style="margin:0;font-size:16px">Connections</h3><button class="btn btn-primary" id="addConnection">+ New connection</button></div><p class="muted" style="font-size:13px">Configure an external API this workspace would call. Test request simulates a response shape locally — the online demo can't make outbound network calls, so nothing is actually sent. On desktop, a Connection's secret is encrypted at rest (AES-256-GCM) and a real Test Connection call is made.</p>${list.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Method</th><th>Base URL</th><th>Auth</th><th>Status</th><th>Actions</th></tr></thead><tbody>${list.map(c=>`<tr><td>${c.name}</td><td><code>${c.method}</code></td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><code>${c.baseUrl}</code></td><td>${EXTERNAL_AUTH_LABELS[c.authType]}</td><td>${badgeMaybe(c.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-test-conn="${c.id}">Test request</button><button class="icon-btn" data-history-conn="${c.id}">History</button><button class="icon-btn" data-edit-conn="${c.id}">Edit</button><button class="icon-btn" data-del-conn="${c.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No external connections yet.</div>'}`;
  $('#addConnection').onclick=()=>connectionModal();
  body.querySelectorAll('[data-test-conn]').forEach(b=>b.onclick=()=>testConnection(b.dataset.testConn));
  body.querySelectorAll('[data-history-conn]').forEach(b=>b.onclick=()=>connectionHistoryModal(b.dataset.historyConn));
