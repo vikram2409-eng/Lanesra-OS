@@ -22,6 +22,7 @@
 //! here needed to change once it did.
 
 use rusqlite::Connection;
+use serde::Deserialize;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::AppResult;
@@ -70,7 +71,7 @@ pub fn finish(conn: &Connection, execution_id: &str, outcome: &FinishOutcome) {
     );
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct ExecutionQuery {
     pub execution_type: Option<String>,
     pub status: Option<String>,

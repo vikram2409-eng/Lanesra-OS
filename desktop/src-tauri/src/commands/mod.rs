@@ -14,6 +14,7 @@ pub mod dashboard_commands;
 pub mod dashboard_layout_commands;
 pub mod dashboard_widget_commands;
 pub mod industry_package_commands;
+pub mod integration_commands;
 pub mod invoice_commands;
 pub mod notification_commands;
 pub mod numbering_commands;
@@ -48,4 +49,14 @@ pub(crate) fn require_workspace_id(conn: &Connection) -> AppResult<String> {
 
 pub(crate) fn current_actor(state: &AppState) -> Option<String> {
     state.session_user_id.lock().unwrap().clone()
+}
+
+/// Integration Hub (spec §20): resolves this desktop install's secret
+/// master key from a key file next to the workspace database (generated
+/// on first use) - the same fallback `secret_service::resolve_master_key`
+/// already documents, and the same mechanism `lanesra-server`'s `main.rs`
+/// uses for Team Workspace.
+pub(crate) fn resolve_master_key(state: &AppState) -> AppResult<[u8; 32]> {
+    let key_file_path = state.db_path.with_file_name("secret.key");
+    lanesra_core::services::secret_service::resolve_master_key(&key_file_path)
 }

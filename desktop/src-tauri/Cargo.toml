@@ -17,5 +17,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 rusqlite = { version = "0.31", features = ["bundled", "chrono", "uuid"] }
 lanesra-core = { path = "../core" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt"] }
 
 [dev-dependencies]

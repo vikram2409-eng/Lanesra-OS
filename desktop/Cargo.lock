@@ -2467,8 +2467,10 @@ version = "0.11.0"
 dependencies = [
  "lanesra-core",
  "rusqlite",
+ "serde_json",
  "tauri",
  "tauri-build",
+ "tokio",
 ]
 
 [[package]]

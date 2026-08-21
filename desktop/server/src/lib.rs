@@ -1,3 +1,4 @@
+pub mod admin_actions;
 pub mod api_v1;
 pub mod dispatch;
 pub mod events_stream;

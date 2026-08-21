@@ -29,6 +29,7 @@ pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
         .route("/api/invoke/:command", post(invoke))
         .merge(crate::api_v1::router())
         .merge(crate::events_stream::router())
+        .merge(crate::admin_actions::router())
         .fallback_service(static_service)
         .layer(axum::middleware::from_fn_with_state(state.security.clone(), security_headers));
 
@@ -57,8 +58,12 @@ async fn invoke(
         };
     }
 
+    let master_key = match crate::dispatch::resolve_master_key(&state.db_path) {
+        Ok(key) => key,
+        Err(err) => return (jar, Json(json!({"ok": false, "error": err.to_string()}))),
+    };
     let conn = state.conn.lock().unwrap();
-    match handle(&command, &args, &conn, jar.clone(), state.security.trust_proxy_https) {
+    match handle(&command, &args, &conn, jar.clone(), state.security.trust_proxy_https, &master_key) {
         Ok((jar, value)) => (jar, Json(json!({"ok": true, "data": value}))),
         Err(err) => (jar, Json(json!({"ok": false, "error": err}))),
     }
@@ -76,7 +81,7 @@ fn handle_restore(state: &SharedState, args: &Value, jar: CookieJar) -> AppResul
 /// Handles the commands that mutate the session cookie itself; everything
 /// else is delegated to `dispatch`, which only needs read access to the
 /// already-resolved actor. `secure_cookies` is `SecurityConfig::trust_proxy_https`.
-fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar, secure_cookies: bool) -> AppResult<(CookieJar, Value)> {
+fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar, secure_cookies: bool, master_key: &[u8; 32]) -> AppResult<(CookieJar, Value)> {
     match command {
         "workspace_status" => {
             let workspace = lanesra_core::repositories::workspace_repo::get_current(conn)?;
@@ -117,7 +122,7 @@ fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar, secure
             // just the frontend's login screen) must enforce this.
             let actor = current_actor(conn, &jar)
                 .ok_or_else(|| AppError::Validation("Not authenticated - please log in".into()))?;
-            let value = dispatch(command, args, conn, Some(&actor))?;
+            let value = dispatch(command, args, conn, Some(&actor), master_key)?;
             Ok((jar, value))
         }
     }
