@@ -83,6 +83,38 @@ import type {
   SolutionInput,
   SolutionUpdate,
   SolutionMemberInput,
+  Connection,
+  ConnectionInput,
+  ConnectionUpdate,
+  ConnectionTestResult,
+  ConnectionRef,
+  ConnectionRefInput,
+  ApiClient,
+  ApiClientInput,
+  IssuedApiClient,
+  Webhook,
+  WebhookInput,
+  WebhookDelivery,
+  Mapping,
+  MappingInput,
+  CsvImportInput,
+  CsvImportResult,
+  ApiListQuery,
+  ApiObjectMetadata,
+  IntegrationExecution,
+  IntegrationExecutionQuery,
+  IntegrationOverview,
+  IntegrationSettings,
+  IntegrationSettingsUpdate,
+  Connector,
+  ConnectorImportInput,
+  ConnectorExecutionResult,
+  OpenApiImportPreview,
+  ExternalObject,
+  ExternalObjectInput,
+  IntegrationJob,
+  IntegrationJobInput,
+  IntegrationJobRun,
   LostReasonBreakdown,
   Notification,
   NumberingOverrideInput,
@@ -148,15 +180,56 @@ async function httpInvoke<T>(command: string, args?: Record<string, unknown>): P
   return body.data as T;
 }
 
+function normalizeError(err: unknown): never {
+  if (err instanceof ApiError) throw err;
+  if (err && typeof err === "object" && "kind" in err && "message" in err) {
+    throw new ApiError(err as AppErrorPayload);
+  }
+  throw err;
+}
+
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return isTauriRuntime() ? await invoke<T>(command, args) : await httpInvoke<T>(command, args);
   } catch (err) {
-    if (err instanceof ApiError) throw err;
-    if (err && typeof err === "object" && "kind" in err && "message" in err) {
-      throw new ApiError(err as AppErrorPayload);
-    }
-    throw err;
+    normalizeError(err);
+  }
+}
+
+// Integration Hub's five genuinely-async admin actions (Test Connection,
+// Test Action, Test Delivery, Run Now, External Object preview) don't fit
+// the generic `/api/invoke/:command` dispatcher on the server - see
+// `server/src/dispatch.rs`'s own comment on why - so on the server they're
+// their own small route group under `/api/admin/...` instead
+// (`server/src/admin_actions.rs`). Inside Tauri they're an ordinary async
+// command like any other. This is the one place the dual-transport
+// abstraction needs a per-command HTTP path rather than the uniform
+// `/api/invoke/<command>` every other operation uses.
+async function httpAdminAction<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    credentials: "include",
+    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const responseBody = await response.json();
+  if (!responseBody.ok) {
+    throw new ApiError(responseBody.error as AppErrorPayload);
+  }
+  return responseBody.data as T;
+}
+
+async function callAdminAction<T>(
+  tauriCommand: string,
+  tauriArgs: Record<string, unknown>,
+  httpMethod: "GET" | "POST",
+  httpPath: string,
+  httpBody?: unknown,
+): Promise<T> {
+  try {
+    return isTauriRuntime() ? await invoke<T>(tauriCommand, tauriArgs) : await httpAdminAction<T>(httpMethod, httpPath, httpBody);
+  } catch (err) {
+    normalizeError(err);
   }
 }
 
@@ -437,4 +510,78 @@ export const api = {
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>
     call<BackupManifest>("restore_backup", { packageBase64 }),
+
+  // --- Integration Hub -------------------------------------------------------
+  listConnections: () => call<Connection[]>("list_connections"),
+  createConnection: (input: ConnectionInput) => call<Connection>("create_connection", { input }),
+  updateConnection: (id: string, input: ConnectionUpdate) => call<Connection>("update_connection", { id, input }),
+  deleteConnection: (id: string) => call<void>("delete_connection", { id }),
+  testConnection: (id: string) => callAdminAction<ConnectionTestResult>("test_connection", { id }, "POST", `/api/admin/connections/${encodeURIComponent(id)}/test`),
+
+  listConnectionRefs: () => call<ConnectionRef[]>("list_connection_refs"),
+  createConnectionRef: (input: ConnectionRefInput) => call<ConnectionRef>("create_connection_ref", { input }),
+  bindConnectionRef: (id: string, connectionId: string | null) => call<ConnectionRef>("bind_connection_ref", { id, connectionId }),
+  deleteConnectionRef: (id: string) => call<void>("delete_connection_ref", { id }),
+
+  previewConnectorImport: (specText: string, specFormat: string) =>
+    call<OpenApiImportPreview>("preview_connector_import", { specText, specFormat }),
+  importConnector: (input: ConnectorImportInput) => call<Connector>("import_connector", { input }),
+  listConnectors: () => call<Connector[]>("list_connectors"),
+  getConnector: (id: string) => call<Connector>("get_connector", { id }),
+  deleteConnector: (id: string) => call<void>("delete_connector", { id }),
+  testConnectorAction: (connectorId: string, actionKey: string, referenceKey: string, params: unknown) =>
+    callAdminAction<ConnectorExecutionResult>(
+      "test_connector_action",
+      { connectorId, actionKey, referenceKey, params },
+      "POST",
+      `/api/admin/connectors/${encodeURIComponent(connectorId)}/actions/${encodeURIComponent(actionKey)}/test`,
+      { reference_key: referenceKey, params },
+    ),
+
+  listApiClients: () => call<ApiClient[]>("list_api_clients"),
+  createApiClient: (input: ApiClientInput) => call<IssuedApiClient>("create_api_client", { input }),
+  rotateApiClientSecret: (id: string) => call<IssuedApiClient>("rotate_api_client_secret", { id }),
+  revokeApiClient: (id: string) => call<void>("revoke_api_client", { id }),
+  reactivateApiClient: (id: string) => call<void>("reactivate_api_client", { id }),
+  deleteApiClient: (id: string) => call<void>("delete_api_client", { id }),
+
+  listWebhooks: () => call<Webhook[]>("list_webhooks"),
+  createWebhook: (input: WebhookInput) => call<Webhook>("create_webhook", { input }),
+  listWebhookDeliveries: (webhookId: string) => call<WebhookDelivery[]>("list_webhook_deliveries", { webhookId }),
+  pauseWebhook: (id: string) => call<void>("pause_webhook", { id }),
+  reactivateWebhook: (id: string) => call<void>("reactivate_webhook", { id }),
+  deleteWebhook: (id: string) => call<void>("delete_webhook", { id }),
+  testWebhookDelivery: (webhookId: string) =>
+    callAdminAction<void>("test_webhook_delivery", { webhookId }, "POST", `/api/admin/webhooks/${encodeURIComponent(webhookId)}/test`),
+
+  listMappings: () => call<Mapping[]>("list_mappings"),
+  createMapping: (input: MappingInput) => call<Mapping>("create_mapping", { input }),
+  deleteMapping: (id: string) => call<void>("delete_mapping", { id }),
+
+  importCsv: (input: CsvImportInput) => call<CsvImportResult>("import_csv", { input }),
+  exportCsv: (objectKey: string, query: ApiListQuery) => call<string>("export_csv", { objectKey, query }),
+  listIntegrationObjectKeys: () => call<ApiObjectMetadata[]>("list_integration_object_keys"),
+
+  listExternalObjects: () => call<ExternalObject[]>("list_external_objects"),
+  createExternalObject: (input: ExternalObjectInput) => call<ExternalObject>("create_external_object", { input }),
+  deleteExternalObject: (id: string) => call<void>("delete_external_object", { id }),
+  previewExternalObjectRecords: (objectKey: string) =>
+    callAdminAction<unknown[]>("preview_external_object_records", { objectKey }, "GET", `/api/admin/external-objects/${encodeURIComponent(objectKey)}/preview`),
+
+  listIntegrationJobs: () => call<IntegrationJob[]>("list_integration_jobs"),
+  createIntegrationJob: (input: IntegrationJobInput) => call<IntegrationJob>("create_integration_job", { input }),
+  updateIntegrationJob: (id: string, input: IntegrationJobInput, status: string) =>
+    call<IntegrationJob>("update_integration_job", { id, input, status }),
+  deleteIntegrationJob: (id: string) => call<void>("delete_integration_job", { id }),
+  listIntegrationJobRuns: (jobId: string, limit: number) => call<IntegrationJobRun[]>("list_integration_job_runs", { jobId, limit }),
+  runIntegrationJobNow: (id: string) =>
+    callAdminAction<IntegrationJobRun>("run_integration_job_now", { id }, "POST", `/api/admin/jobs/${encodeURIComponent(id)}/run`),
+
+  getIntegrationOverview: () => call<IntegrationOverview>("get_integration_overview"),
+  listIntegrationExecutions: (query: IntegrationExecutionQuery) =>
+    call<IntegrationExecution[]>("list_integration_executions", { query }),
+  getIntegrationSettings: () => call<IntegrationSettings>("get_integration_settings"),
+  updateIntegrationSettings: (input: IntegrationSettingsUpdate) =>
+    call<IntegrationSettings>("update_integration_settings", { input }),
+  purgeExpiredIntegrationLogs: () => call<number>("purge_expired_integration_logs"),
 };

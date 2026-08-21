@@ -16,6 +16,7 @@ import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import { AppsAdmin } from "./AppsAdmin";
 import { IndustryPackagesAdmin } from "./IndustryPackagesAdmin";
 import { SolutionManagementAdmin } from "./SolutionManagementAdmin";
+import { IntegrationHubAdmin } from "./IntegrationHubAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -67,7 +68,8 @@ type AdminTab =
   | "dashboards"
   | "apps"
   | "packages"
-  | "solutions";
+  | "solutions"
+  | "integrations";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -85,6 +87,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "apps", label: "Apps" },
   { key: "packages", label: "App Catalog" },
   { key: "solutions", label: "Solution Management" },
+  { key: "integrations", label: "Integration Hub" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -93,17 +96,17 @@ function tabLabel(key: AdminTab): string {
 
 // Groups the same tabs above into named categories for the landing page
 // below - purely a presentation grouping, the tab keys and their screens
-// are unchanged (Solution Management is the one new screen - see
-// SolutionManagementAdmin.tsx). Regrouped along the Solution Packages &
-// Admin IA design spec's domain lines (Workspace / Access / Data Model /
-// Experience / Automation / Apps / Analytics / Solution Management),
-// stopping short of its full 11-domain set: Access & Security,
-// Integrations, Data Management and System either don't have a desktop
-// screen yet (Integrations is demo-only) or need real consolidation work
-// first (Backup & Restore and CSV import/export both live inline inside
-// other screens today, not as standalone tools) - building an empty
-// category that routes nowhere would be worse than leaving it out until
-// that consolidation actually happens.
+// are unchanged (Solution Management and Integration Hub are the two new
+// screens - see SolutionManagementAdmin.tsx and IntegrationHubAdmin.tsx).
+// Regrouped along the Solution Packages & Admin IA design spec's domain
+// lines (Workspace / Access / Data Model / Experience / Automation / Apps /
+// Analytics / Solution Management / Integrations), stopping short of its
+// full 11-domain set: Data Management and System either don't have a
+// desktop screen yet or need real consolidation work first (Backup &
+// Restore and CSV import/export both still live inline inside other
+// screens too, not only as Integration Hub's standalone Data Exchange
+// tool) - building an empty category that routes nowhere would be worse
+// than leaving it out until that consolidation actually happens.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
@@ -113,6 +116,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
   { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards"] },
   { key: "solutions", label: "Solution Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
+  { key: "integrations", label: "Integrations", icon: "🔌", note: "Connect Lanesra to the outside world", items: ["integrations"] },
 ];
 
 /**
@@ -213,6 +217,7 @@ export function AdminPanel() {
       {tab === "apps" && <AppsAdmin />}
       {tab === "packages" && <IndustryPackagesAdmin />}
       {tab === "solutions" && <SolutionManagementAdmin />}
+      {tab === "integrations" && <IntegrationHubAdmin />}
     </div>
   );
 }
