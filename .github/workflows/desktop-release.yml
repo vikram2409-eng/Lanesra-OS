@@ -55,9 +55,22 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "tag_name=desktop-v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "expected_version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
             echo "tag_name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "expected_version=${GITHUB_REF_NAME#desktop-v}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify tauri.conf.json version matches the release tag
+        shell: bash
+        run: |
+          expected="${{ steps.tag.outputs.expected_version }}"
+          actual=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::Version mismatch: releasing tag/input '$expected' but desktop/src-tauri/tauri.conf.json has '$actual'. The built installer filenames are named from tauri.conf.json, not the tag - bump its \"version\" (and desktop/package.json) to $expected and re-tag before releasing."
+            exit 1
+          fi
+          echo "tauri.conf.json version ($actual) matches release $expected - proceeding."
 
       - name: Build and publish
         uses: tauri-apps/tauri-action@v0
