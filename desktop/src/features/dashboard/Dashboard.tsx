@@ -227,9 +227,10 @@ function DashboardRecordListCard({
   const entityType = widget.config.entity_type as string;
   const mode = widget.config.mode as RecordListMode;
   const limit = (widget.config.limit as number) ?? 5;
+  const savedViewId = (widget.config.saved_view_id as string | undefined) ?? null;
   const q = useQuery({
-    queryKey: ["dashboardRecordList", entityType, mode, limit],
-    queryFn: () => api.runDashboardRecordList(entityType, mode, limit),
+    queryKey: ["dashboardRecordList", entityType, mode, limit, savedViewId],
+    queryFn: () => api.runDashboardRecordList(entityType, mode, limit, savedViewId),
   });
   const rows = q.data ?? [];
 

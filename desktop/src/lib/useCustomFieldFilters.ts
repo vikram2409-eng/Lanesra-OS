@@ -65,6 +65,11 @@ export function useCustomFieldFilters(entityType: string) {
     setFilter,
     clearFilters,
     matches,
+    /** Raw per-record custom field values, keyed by entity id then custom
+     * field key - exposed (in addition to `matches`) so a caller building
+     * a generic sort/group-by (Saved Views) can look up a custom field's
+     * value the same way `matches` itself does internally. */
+    values: values.data ?? {},
     isActive: Object.keys(filters).length > 0,
     isLoading: defs.isLoading || values.isLoading,
   };

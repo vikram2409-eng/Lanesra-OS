@@ -4,12 +4,15 @@
 //! ones ("due_soon"). See `dashboard_widget_service::run`'s own doc
 //! comment for the full scoping rationale.
 
+use std::collections::HashMap;
+
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::company::CompanyInput;
+use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::invoice::{InvoiceInput, InvoiceLineInput, PaymentInput};
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{company_service, dashboard_widget_service, invoice_service, task_service, workspace_service};
+use lanesra_core::services::{company_service, custom_field_service, dashboard_widget_service, invoice_service, task_service, workspace_service};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -83,7 +86,7 @@ fn recent_mode_returns_newest_first_for_any_entity_type() {
     let first = company_service::create(&conn, &ws, &company_input("First Co"), Some(&admin)).unwrap();
     let second = company_service::create(&conn, &ws, &company_input("Second Co"), Some(&admin)).unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 5).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].entity_id, second.id);
@@ -98,7 +101,7 @@ fn recent_mode_is_capped_at_the_max_row_limit_regardless_of_requested_limit() {
         company_service::create(&conn, &ws, &company_input(&format!("Co {i}")), Some(&admin)).unwrap();
     }
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 999).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 999, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 10); // MAX_ROWS, not the requested 999
 }
@@ -111,7 +114,7 @@ fn due_soon_mode_orders_open_tasks_by_nearest_due_date_and_excludes_closed_ones(
     task_service::create(&conn, &ws, &task_input("No due date", "Not Started", None), Some(&admin)).unwrap();
     task_service::create(&conn, &ws, &task_input("Already done", "Completed", Some("2026-08-20")), Some(&admin)).unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Task", "due_soon", 5).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Task", "due_soon", 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].entity_id, soon.id);
@@ -136,7 +139,7 @@ fn due_soon_mode_orders_open_invoices_by_nearest_due_date_and_excludes_paid_ones
     )
     .unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Invoice", "due_soon", 5).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Invoice", "due_soon", 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].entity_id, open.invoice.id);
@@ -147,7 +150,7 @@ fn due_soon_mode_falls_back_to_recent_for_entity_types_with_no_due_date() {
     let (conn, ws, admin) = setup_workspace();
     let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "due_soon", 5).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "due_soon", 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].entity_id, company.id);
@@ -156,6 +159,43 @@ fn due_soon_mode_falls_back_to_recent_for_entity_types_with_no_due_date() {
 #[test]
 fn an_entity_type_with_no_records_yet_returns_an_empty_list_not_an_error() {
     let (conn, ws, _admin) = setup_workspace();
-    let rows = dashboard_widget_service::run(&conn, &ws, "Contact", "recent", 5).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Contact", "recent", 5, &HashMap::new()).unwrap();
     assert!(rows.is_empty());
+}
+
+/// A record-list widget backed by a Saved View narrows to that view's
+/// filters - the same reuse `useSavedViews` gives a list screen, applied
+/// here to a dashboard tile's data source instead.
+#[test]
+fn a_saved_views_filters_narrow_both_recent_and_due_soon_widget_rows() {
+    let (conn, ws, admin) = setup_workspace();
+    let region_def = custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &CustomFieldDefinitionInput {
+            entity_type: "Company".into(), label: "Region".into(), field_type: "text".into(), options: vec![],
+            required: false, show_in_list: true, sort_order: 1, min_value: None, max_value: None, max_length: None,
+            regex_pattern: None, is_searchable: false, is_filterable: true, is_reportable: false, default_value: None,
+            is_unique: false, help_text: None, placeholder: None, is_hidden_by_default: false,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    let west = company_service::create(&conn, &ws, &company_input("West Co"), Some(&admin)).unwrap();
+    let east = company_service::create(&conn, &ws, &company_input("East Co"), Some(&admin)).unwrap();
+    let mut west_values = HashMap::new();
+    west_values.insert(region_def.key.clone(), "West".to_string());
+    custom_field_service::set_entity_values(&conn, "Company", &west.id, &west_values, Some(&admin)).unwrap();
+    let mut east_values = HashMap::new();
+    east_values.insert(region_def.key.clone(), "East".to_string());
+    custom_field_service::set_entity_values(&conn, "Company", &east.id, &east_values, Some(&admin)).unwrap();
+
+    let mut filters = HashMap::new();
+    filters.insert(region_def.key.clone(), "West".to_string());
+
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 5, &filters).unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entity_id, west.id);
 }
