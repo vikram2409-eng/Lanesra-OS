@@ -1586,10 +1586,13 @@ export interface EffectiveLayout {
  * an existing saved Custom Report, run fresh on every render (see
  * `DashboardChartCard` in Dashboard.tsx); a report deleted after being
  * added to a dashboard is simply skipped, not an error. Phase 3 adds
- * `"record_list"`, whose config is `{entity_type, mode, limit}` - a
- * short list of records for one entity type, run fresh via
+ * `"record_list"`, whose config is `{entity_type, mode, limit, saved_view_id?}`
+ * - a short list of records for one entity type, run fresh via
  * `run_dashboard_record_list` (see `dashboard_widget_service` in core
- * for what "recent" vs "due_soon" mean). This layer (like the backend)
+ * for what "recent" vs "due_soon" mean). `saved_view_id`, when set, names
+ * a Saved View (see `SavedView` below) whose filters narrow the widget's
+ * rows - the same reuse a list screen's own `useSavedViews` gets, applied
+ * here to a dashboard tile's data source. This layer (like the backend)
  * never inspects `config` beyond that per-kind shape. */
 export interface DashboardWidget {
   id: string;
@@ -1991,6 +1994,50 @@ export interface PublisherInput {
   key: string;
   name: string;
   description: string | null;
+}
+
+/** Saved Views & Bulk Actions (product backlog): a named, persisted
+ * filter/sort/column/grouping combination for one object_key. `filters` is
+ * the exact {custom_field_key: value} shape useCustomFieldFilters already
+ * produces - a saved view remembers what you already had set, it doesn't
+ * add a new query capability. */
+export interface SavedView {
+  id: string;
+  workspace_id: string;
+  object_key: string;
+  name: string;
+  owner_user_id: string;
+  owner_name: string | null;
+  visibility: "private" | "shared";
+  filters: Record<string, string>;
+  sort_field: string | null;
+  sort_direction: "asc" | "desc";
+  columns: string[] | null;
+  group_by_field: string | null;
+  is_object_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedViewInput {
+  object_key: string;
+  name: string;
+  visibility: "private" | "shared";
+  filters: Record<string, string>;
+  sort_field: string | null;
+  sort_direction: "asc" | "desc";
+  columns: string[] | null;
+  group_by_field: string | null;
+}
+
+/** One record's outcome from a bulk action - bulk operations are
+ * independent per record (see bulk_action_service's own doc comment), so
+ * a call always returns one of these per selected id, never aborting the
+ * rest of the batch on the first failure. */
+export interface BulkActionResult {
+  id: string;
+  ok: boolean;
+  error: string | null;
 }
 
 // Solution Packages & Admin IA design spec, Phase 3: component-tagging,

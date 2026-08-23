@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -14,9 +14,13 @@ import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { TabListCard } from "../../components/TabListCard";
+import { SavedViewBar } from "../../components/SavedViewBar";
+import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
+import { GroupHeaderRow } from "../../components/GroupHeaderRow";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
-import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useSavedViews } from "../../lib/useSavedViews";
+import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { COMPANY_STATUSES, PREFERRED_CONTACT_METHODS, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
 
@@ -111,8 +115,53 @@ export function Companies({
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
-  const fieldFilters = useCustomFieldFilters("Company");
+  const views = useSavedViews("Company");
+  const fieldFilters = views.filters;
   const canWrite = useCanWriteObject("Company");
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+
+  const filteredRows = (companies.data ?? []).filter((c) => fieldFilters.matches(c.id));
+  const selection = useBulkSelection(filteredRows, (c) => c.id);
+
+  function companyFieldValue(row: Company, key: string): string {
+    switch (key) {
+      case "name":
+        return row.name;
+      case "status":
+        return row.status;
+      case "tax_number":
+        return row.tax_number ?? "";
+      default:
+        return fieldFilters.values[row.id]?.[key] ?? "";
+    }
+  }
+
+  const bulkActions: BulkAction[] = [
+    {
+      key: "status",
+      label: "Change status",
+      valueOptions: COMPANY_STATUSES.map((s) => ({ key: s, label: s })),
+      run: (ids, value) => api.bulkChangeStatus("Company", ids, value),
+    },
+    {
+      key: "owner",
+      label: "Reassign owner",
+      valueOptions: (users.data ?? []).map((u) => ({ key: u.id, label: u.display_name })),
+      run: (ids, value) => api.bulkReassignOwner("Company", ids, value),
+    },
+    {
+      key: "tag",
+      label: "Add tag",
+      valuePlaceholder: "Tag name",
+      run: (ids, value) => api.bulkUpdateTags("Company", ids, [value], true),
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      confirmMessage: "Archive {n} selected companies?",
+      run: (ids) => api.bulkArchive("Company", ids),
+    },
+  ];
 
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
@@ -176,19 +225,31 @@ export function Companies({
           onClose={() => setImporting(false)}
         />
       )}
+      <SavedViewBar
+        views={views}
+        fields={[
+          { key: "name", label: "Name" },
+          { key: "status", label: "Status" },
+          { key: "tax_number", label: "Tax number" },
+        ]}
+      />
       <CustomFieldFilterBar filters={fieldFilters} />
+      <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
       {companies.isLoading && <p>Loading...</p>}
       {companies.data && companies.data.length === 0 && (
         <p className="empty-state">No companies yet. Create your first one.</p>
       )}
       {companies.data && companies.data.length > 0 && (() => {
-        const rows = companies.data.filter((c) => fieldFilters.matches(c.id));
-        return rows.length === 0 ? (
+        const groups = views.transform(filteredRows, companyFieldValue);
+        return filteredRows.length === 0 ? (
           <p className="empty-state">No companies match the current filters.</p>
         ) : (
           <table>
             <thead>
               <tr>
+                <th style={{ width: 28 }}>
+                  <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
+                </th>
                 <th>Number</th>
                 <th>Name</th>
                 <th>Status</th>
@@ -196,15 +257,25 @@ export function Companies({
               </tr>
             </thead>
             <tbody>
-              {rows.map((c) => (
-                <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
-                  <td><span className="id-link">{c.customer_number}</span></td>
-                  <td>{c.name}</td>
-                  <td>
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td>{c.tax_number ?? "—"}</td>
-                </tr>
+              {groups.map((group) => (
+                <Fragment key={group.label || "_"}>
+                  {views.groupByField && <GroupHeaderRow label={group.label} colSpan={5} />}
+                  {group.rows.map((c) => (
+                    <tr key={c.id} style={{ cursor: "pointer" }}>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={selection.isSelected(c.id)} onChange={() => selection.toggle(c.id)} />
+                      </td>
+                      <td onClick={() => setView({ mode: "detail", id: c.id })}>
+                        <span className="id-link">{c.customer_number}</span>
+                      </td>
+                      <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.name}</td>
+                      <td onClick={() => setView({ mode: "detail", id: c.id })}>
+                        <StatusBadge status={c.status} />
+                      </td>
+                      <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.tax_number ?? "—"}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>

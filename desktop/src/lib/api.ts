@@ -75,6 +75,9 @@ import type {
   WorkspaceDependency,
   Publisher,
   PublisherInput,
+  SavedView,
+  SavedViewInput,
+  BulkActionResult,
   WorkspaceComponent,
   LocalWorkspaceSummary,
   PackageUpdateDiff,
@@ -434,8 +437,8 @@ export const api = {
   makeDashboardLayoutDefault: (id: string) => call<DashboardLayout>("make_dashboard_layout_default", { id }),
   deleteDashboardLayout: (id: string) => call<void>("delete_dashboard_layout", { id }),
   effectiveDashboardLayout: () => call<EffectiveDashboard>("effective_dashboard_layout"),
-  runDashboardRecordList: (entityType: string, mode: string, limit: number) =>
-    call<RecordListRow[]>("run_dashboard_record_list", { entityType, mode, limit }),
+  runDashboardRecordList: (entityType: string, mode: string, limit: number, savedViewId?: string | null) =>
+    call<RecordListRow[]>("run_dashboard_record_list", { entityType, mode, limit, savedViewId: savedViewId ?? null }),
 
   listApps: () => call<AppDefinition[]>("list_apps"),
   createApp: (input: AppDefinitionInput) => call<AppDefinition>("create_app", { input }),
@@ -463,6 +466,23 @@ export const api = {
   listPackageArtifactsForWorkspace: () => call<WorkspaceArtifact[]>("list_package_artifacts_for_workspace"),
   listPublishers: () => call<Publisher[]>("list_publishers"),
   createPublisher: (input: PublisherInput) => call<Publisher>("create_publisher", { input }),
+  createSavedView: (input: SavedViewInput) => call<SavedView>("create_saved_view", { input }),
+  listSavedViews: (objectKey: string) => call<SavedView[]>("list_saved_views", { objectKey }),
+  updateSavedView: (id: string, input: SavedViewInput) => call<SavedView>("update_saved_view", { id, input }),
+  deleteSavedView: (id: string) => call<void>("delete_saved_view", { id }),
+  setSavedViewDefault: (id: string) => call<SavedView>("set_saved_view_default", { id }),
+  clearSavedViewDefault: (objectKey: string) => call<void>("clear_saved_view_default", { objectKey }),
+  bulkUpdateBuiltinField: (objectKey: string, ids: string[], fieldKey: string, value: string) =>
+    call<BulkActionResult[]>("bulk_update_builtin_field", { objectKey, ids, fieldKey, value }),
+  bulkUpdateCustomField: (objectKey: string, ids: string[], fieldKey: string, value: string) =>
+    call<BulkActionResult[]>("bulk_update_custom_field", { objectKey, ids, fieldKey, value }),
+  bulkReassignOwner: (objectKey: string, ids: string[], ownerUserId: string | null) =>
+    call<BulkActionResult[]>("bulk_reassign_owner", { objectKey, ids, ownerUserId }),
+  bulkChangeStatus: (objectKey: string, ids: string[], newStatus: string) =>
+    call<BulkActionResult[]>("bulk_change_status", { objectKey, ids, newStatus }),
+  bulkUpdateTags: (objectKey: string, ids: string[], tags: string[], add: boolean) =>
+    call<BulkActionResult[]>("bulk_update_tags", { objectKey, ids, tags, add }),
+  bulkArchive: (objectKey: string, ids: string[]) => call<BulkActionResult[]>("bulk_archive", { objectKey, ids }),
   listSolutionComponents: () => call<WorkspaceComponent[]>("list_solution_components"),
   getLocalWorkspaceSummary: () => call<LocalWorkspaceSummary>("get_local_workspace_summary"),
   listPackageVersions: (packageId: string) => call<AppPackage[]>("list_package_versions", { packageId }),

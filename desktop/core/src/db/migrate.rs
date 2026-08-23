@@ -38,6 +38,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (31, include_str!("migrations/0031_solutions.sql")),
     (32, include_str!("migrations/0032_integration_hub.sql")),
     (33, include_str!("migrations/0033_workflow_connector_action.sql")),
+    (34, include_str!("migrations/0034_saved_views.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -101,7 +102,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 33);
+        assert_eq!(version, 34);
 
         let table_count: i64 = conn
             .query_row(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -7,14 +7,19 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { SavedViewBar } from "../../components/SavedViewBar";
+import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
+import { GroupHeaderRow } from "../../components/GroupHeaderRow";
 import type { Prefill } from "../../components/AppShell";
 import {
   CUSTOM_RECORD_STATUSES,
   type CustomFieldValues,
   type CustomObjectDefinition,
+  type CustomRecord,
   type CustomRecordInput,
 } from "../../lib/types";
-import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useSavedViews } from "../../lib/useSavedViews";
+import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
@@ -53,7 +58,8 @@ export function CustomObjectRecords({
     queryFn: () => api.listCustomRecords(definition.key),
   });
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
-  const fieldFilters = useCustomFieldFilters(definition.key);
+  const views = useSavedViews(definition.key);
+  const fieldFilters = views.filters;
   const canWrite = useCanWriteObject(definition.key);
 
   function invalidate() {
@@ -62,6 +68,41 @@ export function CustomObjectRecords({
 
   const ownerName = (id: string | null): string =>
     id ? users.data?.find((u) => u.id === id)?.display_name ?? "—" : "—";
+
+  const filteredRows = (records.data ?? []).filter((r) => fieldFilters.matches(r.id));
+  const selection = useBulkSelection(filteredRows, (r) => r.id);
+
+  function recordFieldValue(row: CustomRecord, key: string): string {
+    switch (key) {
+      case "primary_name":
+        return row.primary_name;
+      case "status":
+        return row.status;
+      default:
+        return fieldFilters.values[row.id]?.[key] ?? "";
+    }
+  }
+
+  const bulkActions: BulkAction[] = [
+    {
+      key: "status",
+      label: "Change status",
+      valueOptions: CUSTOM_RECORD_STATUSES.map((s) => ({ key: s, label: s })),
+      run: (ids, value) => api.bulkChangeStatus(definition.key, ids, value),
+    },
+    {
+      key: "owner",
+      label: "Reassign owner",
+      valueOptions: (users.data ?? []).map((u) => ({ key: u.id, label: u.display_name })),
+      run: (ids, value) => api.bulkReassignOwner(definition.key, ids, value),
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      confirmMessage: `Archive {n} selected ${definition.plural_label.toLowerCase()}?`,
+      run: (ids) => api.bulkArchive(definition.key, ids),
+    },
+  ];
 
   if (view.mode !== "list") {
     return (
@@ -92,19 +133,30 @@ export function CustomObjectRecords({
           + New {definition.singular_label.toLowerCase()}
         </button>
       </div>
+      <SavedViewBar
+        views={views}
+        fields={[
+          { key: "primary_name", label: "Name" },
+          { key: "status", label: "Status" },
+        ]}
+      />
       <CustomFieldFilterBar filters={fieldFilters} />
+      <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
       {records.isLoading && <p>Loading...</p>}
       {records.data && records.data.length === 0 && (
         <p className="empty-state">No {definition.plural_label.toLowerCase()} yet.</p>
       )}
       {records.data && records.data.length > 0 && (() => {
-        const rows = records.data.filter((r) => fieldFilters.matches(r.id));
-        return rows.length === 0 ? (
+        const groups = views.transform(filteredRows, recordFieldValue);
+        return filteredRows.length === 0 ? (
           <p className="empty-state">No {definition.plural_label.toLowerCase()} match the current filters.</p>
         ) : (
         <table>
           <thead>
             <tr>
+              <th style={{ width: 28 }}>
+                <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
+              </th>
               <th>Number</th>
               <th>Name</th>
               <th>Status</th>
@@ -113,25 +165,33 @@ export function CustomObjectRecords({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td>{r.display_number}</td>
-                <td>{r.primary_name}</td>
-                <td>
-                  <span className={`badge${r.status === "Active" ? " badge-success" : ""}`}>{r.status}</span>
-                </td>
-                <td>{ownerName(r.owner_user_id)}</td>
-                <td>
-                  <button
-                    className="btn"
-                    onClick={() => setView({ mode: "edit", id: r.id })}
-                    disabled={!canWrite}
-                    title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
-                  >
-                    Edit
-                  </button>
-                </td>
-              </tr>
+            {groups.map((group) => (
+              <Fragment key={group.label || "_"}>
+                {views.groupByField && <GroupHeaderRow label={group.label} colSpan={6} />}
+                {group.rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <input type="checkbox" checked={selection.isSelected(r.id)} onChange={() => selection.toggle(r.id)} />
+                    </td>
+                    <td>{r.display_number}</td>
+                    <td>{r.primary_name}</td>
+                    <td>
+                      <span className={`badge${r.status === "Active" ? " badge-success" : ""}`}>{r.status}</span>
+                    </td>
+                    <td>{ownerName(r.owner_user_id)}</td>
+                    <td>
+                      <button
+                        className="btn"
+                        onClick={() => setView({ mode: "edit", id: r.id })}
+                        disabled={!canWrite}
+                        title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
           </tbody>
         </table>

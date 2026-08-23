@@ -33,6 +33,7 @@ use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
+use lanesra_core::models::saved_view::SavedViewInput;
 use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate};
 use lanesra_core::models::solution::{SolutionInput, SolutionMemberInput, SolutionUpdate};
 use lanesra_core::models::status_transition::StatusTransitionInput;
@@ -43,7 +44,7 @@ use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
     api_client_service, api_object_service,
     app_service, audit_service,
-    auth_service, backup_service, business_rule_service, company_service, connection_ref_service, connection_service, connector_service,
+    auth_service, backup_service, bulk_action_service, business_rule_service, company_service, connection_ref_service, connection_service, connector_service,
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service, data_exchange_service,
@@ -52,7 +53,7 @@ use lanesra_core::services::{
     integration_job_service, integration_log_service,
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, product_service,
     publisher_service,
-    quote_service, relationship_service, report_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
+    quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
     user_service, webhook_service, workflow_service, workspace_service,
 };
 
@@ -609,7 +610,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let entity_type: String = arg(args, "entityType")?;
             let mode: String = arg(args, "mode")?;
             let limit: i64 = arg(args, "limit")?;
-            to_value(dashboard_widget_service::run(conn, &require_workspace_id(conn)?, &entity_type, &mode, limit)?)
+            let saved_view_id: Option<String> = arg(args, "savedViewId")?;
+            let filters = match &saved_view_id {
+                Some(id) => saved_view_service::get(conn, id)?.map(|v| v.filters).unwrap_or_default(),
+                None => Default::default(),
+            };
+            to_value(dashboard_widget_service::run(conn, &require_workspace_id(conn)?, &entity_type, &mode, limit, &filters)?)
         }
 
         "import_industry_package" => {
@@ -653,6 +659,69 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "create_publisher" => {
             let input: PublisherInput = arg(args, "input")?;
             to_value(publisher_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "create_saved_view" => {
+            let input: SavedViewInput = arg(args, "input")?;
+            to_value(saved_view_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "list_saved_views" => {
+            let object_key: String = arg(args, "objectKey")?;
+            to_value(saved_view_service::list_for_object(conn, &require_workspace_id(conn)?, &object_key, actor)?)
+        }
+        "update_saved_view" => {
+            let id: String = arg(args, "id")?;
+            let input: SavedViewInput = arg(args, "input")?;
+            to_value(saved_view_service::update(conn, &id, &input, actor)?)
+        }
+        "delete_saved_view" => {
+            let id: String = arg(args, "id")?;
+            to_value(saved_view_service::delete(conn, &id, actor)?)
+        }
+        "set_saved_view_default" => {
+            let id: String = arg(args, "id")?;
+            to_value(saved_view_service::set_default(conn, &id, actor)?)
+        }
+        "clear_saved_view_default" => {
+            let object_key: String = arg(args, "objectKey")?;
+            to_value(saved_view_service::clear_default(conn, &require_workspace_id(conn)?, &object_key, actor)?)
+        }
+        "bulk_update_builtin_field" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            let field_key: String = arg(args, "fieldKey")?;
+            let value: String = arg(args, "value")?;
+            to_value(bulk_action_service::bulk_update_builtin_field(conn, &require_workspace_id(conn)?, &object_key, &ids, &field_key, &value, actor)?)
+        }
+        "bulk_update_custom_field" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            let field_key: String = arg(args, "fieldKey")?;
+            let value: String = arg(args, "value")?;
+            to_value(bulk_action_service::bulk_update_custom_field(conn, &object_key, &ids, &field_key, &value, actor)?)
+        }
+        "bulk_reassign_owner" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            let owner_user_id: Option<String> = arg(args, "ownerUserId")?;
+            to_value(bulk_action_service::bulk_reassign_owner(conn, &require_workspace_id(conn)?, &object_key, &ids, owner_user_id.as_deref(), actor)?)
+        }
+        "bulk_change_status" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            let new_status: String = arg(args, "newStatus")?;
+            to_value(bulk_action_service::bulk_change_status(conn, &require_workspace_id(conn)?, &object_key, &ids, &new_status, actor)?)
+        }
+        "bulk_update_tags" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            let tags: Vec<String> = arg(args, "tags")?;
+            let add: bool = arg(args, "add")?;
+            to_value(bulk_action_service::bulk_update_tags(conn, &require_workspace_id(conn)?, &object_key, &ids, &tags, add, actor)?)
+        }
+        "bulk_archive" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            to_value(bulk_action_service::bulk_archive(conn, &require_workspace_id(conn)?, &object_key, &ids, actor)?)
         }
         "list_solutions" => to_value(solution_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
         "get_solution_detail" => {

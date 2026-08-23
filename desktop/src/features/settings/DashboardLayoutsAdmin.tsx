@@ -296,6 +296,14 @@ function LayoutEditor({
     });
   }
 
+  function setRecordListSavedView(id: string, savedViewId: string) {
+    save({
+      widgets: widgets.widgets.map((w) =>
+        w.id === id ? { ...w, config: { ...w.config, saved_view_id: savedViewId || undefined } } : w,
+      ),
+    });
+  }
+
   function removeWidget(id: string) {
     save({ widgets: widgets.widgets.filter((w) => w.id !== id) });
   }
@@ -407,6 +415,9 @@ function LayoutEditor({
           {widgets.widgets.map((w, i) => (
             <span key={w.id} className="badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               {widgetLabel(w, reports)}
+              {w.kind === "record_list" && (
+                <RecordListSavedViewPicker widget={w} onChange={(savedViewId) => setRecordListSavedView(w.id, savedViewId)} />
+              )}
               <button className="link-button" onClick={() => moveWidget(w.id, -1)} disabled={i === 0} title="Move earlier">
                 ↑
               </button>
@@ -520,6 +531,32 @@ function AddRecordListWidget({ onAdd }: { onAdd: (entityType: string, mode: Reco
         + Add record list
       </button>
     </span>
+  );
+}
+
+/** Narrows a record-list widget's rows to one Saved View's filters, reusing
+ * the same views a Companies/Contacts/etc. list screen would offer (see
+ * `useSavedViews`) - a dashboard tile is just another consumer of the same
+ * saved filter, not a second filter-building UI. */
+function RecordListSavedViewPicker({ widget, onChange }: { widget: DashboardWidget; onChange: (savedViewId: string) => void }) {
+  const entityType = widget.config.entity_type as string;
+  const currentId = (widget.config.saved_view_id as string | undefined) ?? "";
+  const views = useQuery({
+    queryKey: ["savedViewsForWidget", entityType],
+    queryFn: () => api.listSavedViews(entityType),
+  });
+
+  if (!views.data || views.data.length === 0) return null;
+
+  return (
+    <select value={currentId} onChange={(e) => onChange(e.target.value)} style={{ fontSize: 12 }} title="Narrow this widget to a saved view">
+      <option value="">All records</option>
+      {views.data.map((v) => (
+        <option key={v.id} value={v.id}>
+          {v.name}
+        </option>
+      ))}
+    </select>
   );
 }
 

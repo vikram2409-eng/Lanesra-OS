@@ -9,6 +9,8 @@ import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { SavedViewBar } from "../../components/SavedViewBar";
+import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import type { Prefill, Section } from "../../components/AppShell";
 import {
   TASK_PRIORITIES,
@@ -19,7 +21,8 @@ import {
   type TaskInput,
   type TaskRelatedType,
 } from "../../lib/types";
-import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useSavedViews } from "../../lib/useSavedViews";
+import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
@@ -104,9 +107,32 @@ export function Tasks({
   }, []);
 
   const tasks = useQuery({ queryKey: ["tasks"], queryFn: () => api.listTasks() });
-  const fieldFilters = useCustomFieldFilters("Task");
+  const views = useSavedViews("Task");
+  const fieldFilters = views.filters;
   const canWrite = useCanWriteObject("Task");
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+  const filteredRows = (tasks.data ?? []).filter((t) => fieldFilters.matches(t.id));
+  const selection = useBulkSelection(filteredRows, (t) => t.id);
+  const bulkActions: BulkAction[] = [
+    {
+      key: "status",
+      label: "Change status",
+      valueOptions: TASK_STATUSES.map((s) => ({ key: s, label: s })),
+      run: (ids, value) => api.bulkChangeStatus("Task", ids, value),
+    },
+    {
+      key: "owner",
+      label: "Reassign owner",
+      valueOptions: (users.data ?? []).map((u) => ({ key: u.id, label: u.display_name })),
+      run: (ids, value) => api.bulkReassignOwner("Task", ids, value),
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      confirmMessage: "Archive {n} selected tasks?",
+      run: (ids) => api.bulkArchive("Task", ids),
+    },
+  ];
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
@@ -178,7 +204,7 @@ export function Tasks({
     );
   }
 
-  const all = (tasks.data ?? []).filter((t) => fieldFilters.matches(t.id));
+  const all = filteredRows;
   const open = all.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const today = todayIso();
   const ownerName = (id: string | null): string =>
@@ -231,7 +257,9 @@ export function Tasks({
         ))}
       </div>
 
+      <SavedViewBar views={views} fields={[]} hideSortGroup />
       <CustomFieldFilterBar filters={fieldFilters} />
+      <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
       {tasks.isLoading && <p>Loading...</p>}
       {groups.every((g) => g.rows.length === 0) && <p className="empty-state">No tasks here.</p>}
       {groups.map(
@@ -242,6 +270,9 @@ export function Tasks({
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: 28 }}>
+                      <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
+                    </th>
                     <th>Number</th>
                     <th>Title</th>
                     <th>Priority</th>
@@ -254,14 +285,17 @@ export function Tasks({
                 </thead>
                 <tbody>
                   {group.rows.map((t) => (
-                    <tr key={t.id} onClick={() => setView({ mode: "detail", id: t.id })} style={{ cursor: "pointer" }}>
-                      <td><span className="id-link">{t.task_number}</span></td>
-                      <td>{t.title}</td>
-                      <td>{t.priority}</td>
-                      <td>{t.status}</td>
-                      <td>{t.due_date ?? "—"}</td>
-                      {!showGroupLabels && <td>{ownerName(t.owner_user_id)}</td>}
-                      <td>{relatedLabel(t) ?? "General"}</td>
+                    <tr key={t.id} style={{ cursor: "pointer" }}>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={selection.isSelected(t.id)} onChange={() => selection.toggle(t.id)} />
+                      </td>
+                      <td onClick={() => setView({ mode: "detail", id: t.id })}><span className="id-link">{t.task_number}</span></td>
+                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.title}</td>
+                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.priority}</td>
+                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.status}</td>
+                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.due_date ?? "—"}</td>
+                      {!showGroupLabels && <td onClick={() => setView({ mode: "detail", id: t.id })}>{ownerName(t.owner_user_id)}</td>}
+                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{relatedLabel(t) ?? "General"}</td>
                       <td>
                         <button
                           className="btn"

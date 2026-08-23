@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -12,10 +12,14 @@ import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { TabListCard } from "../../components/TabListCard";
+import { SavedViewBar } from "../../components/SavedViewBar";
+import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
+import { GroupHeaderRow } from "../../components/GroupHeaderRow";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { formatCents } from "../../lib/money";
-import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useSavedViews } from "../../lib/useSavedViews";
+import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import {
   CONTACT_STATUSES,
@@ -137,9 +141,47 @@ export function Contacts({
   const [importing, setImporting] = useState(false);
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
-  const fieldFilters = useCustomFieldFilters("Contact");
+  const views = useSavedViews("Contact");
+  const fieldFilters = views.filters;
   const canWrite = useCanWriteObject("Contact");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+
+  const filteredRows = (contacts.data ?? []).filter((c) => fieldFilters.matches(c.id));
+  const selection = useBulkSelection(filteredRows, (c) => c.id);
+
+  function contactFieldValue(row: Contact, key: string): string {
+    switch (key) {
+      case "first_name":
+        return row.first_name;
+      case "last_name":
+        return row.last_name;
+      case "status":
+        return row.status;
+      default:
+        return fieldFilters.values[row.id]?.[key] ?? "";
+    }
+  }
+
+  const bulkActions: BulkAction[] = [
+    {
+      key: "status",
+      label: "Change status",
+      valueOptions: CONTACT_STATUSES.map((s) => ({ key: s, label: s })),
+      run: (ids, value) => api.bulkChangeStatus("Contact", ids, value),
+    },
+    {
+      key: "tag",
+      label: "Add tag",
+      valuePlaceholder: "Tag name",
+      run: (ids, value) => api.bulkUpdateTags("Contact", ids, [value], true),
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      confirmMessage: "Archive {n} selected contacts?",
+      run: (ids) => api.bulkArchive("Contact", ids),
+    },
+  ];
 
   useEffect(() => {
     if (prefill?.companyId || prefill?.openId) onPrefillConsumed?.();
@@ -211,19 +253,31 @@ export function Contacts({
           onClose={() => setImporting(false)}
         />
       )}
+      <SavedViewBar
+        views={views}
+        fields={[
+          { key: "first_name", label: "First name" },
+          { key: "last_name", label: "Last name" },
+          { key: "status", label: "Status" },
+        ]}
+      />
       <CustomFieldFilterBar filters={fieldFilters} />
+      <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
       {contacts.isLoading && <p>Loading...</p>}
       {contacts.data && contacts.data.length === 0 && (
         <p className="empty-state">No contacts yet. Create your first one.</p>
       )}
       {contacts.data && contacts.data.length > 0 && (() => {
-        const rows = contacts.data.filter((c) => fieldFilters.matches(c.id));
-        return rows.length === 0 ? (
+        const groups = views.transform(filteredRows, contactFieldValue);
+        return filteredRows.length === 0 ? (
           <p className="empty-state">No contacts match the current filters.</p>
         ) : (
         <table>
           <thead>
             <tr>
+              <th style={{ width: 28 }}>
+                <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
+              </th>
               <th>Number</th>
               <th>Name</th>
               <th>Company</th>
@@ -233,31 +287,41 @@ export function Contacts({
             </tr>
           </thead>
           <tbody>
-            {rows.map((c) => (
-              <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
-                <td><span className="id-link">{c.contact_number}</span></td>
-                <td>
-                  {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
-                </td>
-                <td>{companyNameById.get(c.company_id) ?? "—"}</td>
-                <td>{c.email ?? "—"}</td>
-                <td>
-                  <StatusBadge status={c.status} />
-                </td>
-                <td>
-                  <button
-                    className="btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setView({ mode: "edit", id: c.id });
-                    }}
-                    disabled={!canWrite}
-                    title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
-                  >
-                    Edit
-                  </button>
-                </td>
-              </tr>
+            {groups.map((group) => (
+              <Fragment key={group.label || "_"}>
+                {views.groupByField && <GroupHeaderRow label={group.label} colSpan={7} />}
+                {group.rows.map((c) => (
+                  <tr key={c.id} style={{ cursor: "pointer" }}>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selection.isSelected(c.id)} onChange={() => selection.toggle(c.id)} />
+                    </td>
+                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
+                      <span className="id-link">{c.contact_number}</span>
+                    </td>
+                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
+                      {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
+                    </td>
+                    <td onClick={() => setView({ mode: "detail", id: c.id })}>{companyNameById.get(c.company_id) ?? "—"}</td>
+                    <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.email ?? "—"}</td>
+                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
+                      <StatusBadge status={c.status} />
+                    </td>
+                    <td>
+                      <button
+                        className="btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setView({ mode: "edit", id: c.id });
+                        }}
+                        disabled={!canWrite}
+                        title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
           </tbody>
         </table>

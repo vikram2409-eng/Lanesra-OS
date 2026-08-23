@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -9,8 +9,12 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { SavedViewBar } from "../../components/SavedViewBar";
+import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
+import { GroupHeaderRow } from "../../components/GroupHeaderRow";
 import type { Prefill } from "../../components/AppShell";
-import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
+import { useSavedViews } from "../../lib/useSavedViews";
+import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import {
   OPPORTUNITY_STAGES,
@@ -62,9 +66,46 @@ export function Opportunities({
   );
   const queryClient = useQueryClient();
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
-  const fieldFilters = useCustomFieldFilters("Opportunity");
+  const views = useSavedViews("Opportunity");
+  const fieldFilters = views.filters;
   const canWrite = useCanWriteObject("Opportunity");
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+
+  const filteredRows = (opportunities.data ?? []).filter((o) => fieldFilters.matches(o.id));
+  const selection = useBulkSelection(filteredRows, (o) => o.id);
+
+  function opportunityFieldValue(row: Opportunity, key: string): string {
+    switch (key) {
+      case "name":
+        return row.name;
+      case "stage":
+        return row.stage;
+      default:
+        return fieldFilters.values[row.id]?.[key] ?? "";
+    }
+  }
+
+  const bulkActions: BulkAction[] = [
+    {
+      key: "stage",
+      label: "Change stage",
+      valueOptions: OPPORTUNITY_STAGES.map((s) => ({ key: s, label: s })),
+      run: (ids, value) => api.bulkChangeStatus("Opportunity", ids, value),
+    },
+    {
+      key: "owner",
+      label: "Reassign owner",
+      valueOptions: (users.data ?? []).map((u) => ({ key: u.id, label: u.display_name })),
+      run: (ids, value) => api.bulkReassignOwner("Opportunity", ids, value),
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      confirmMessage: "Archive {n} selected opportunities?",
+      run: (ids) => api.bulkArchive("Opportunity", ids),
+    },
+  ];
 
   // One-shot: this component fully remounts on every navigation into this
   // section, so "on mount" reliably means "just navigated here" - see
@@ -116,19 +157,30 @@ export function Opportunities({
           </button>
         </div>
       </div>
+      <SavedViewBar
+        views={views}
+        fields={[
+          { key: "name", label: "Name" },
+          { key: "stage", label: "Stage" },
+        ]}
+      />
       <CustomFieldFilterBar filters={fieldFilters} />
+      <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
       {opportunities.isLoading && <p>Loading...</p>}
       {opportunities.data && opportunities.data.length === 0 && (
         <p className="empty-state">No opportunities yet.</p>
       )}
       {opportunities.data && opportunities.data.length > 0 && (() => {
-        const rows = opportunities.data.filter((o) => fieldFilters.matches(o.id));
-        return rows.length === 0 ? (
+        const groups = views.transform(filteredRows, opportunityFieldValue);
+        return filteredRows.length === 0 ? (
           <p className="empty-state">No opportunities match the current filters.</p>
         ) : (
         <table>
           <thead>
             <tr>
+              <th style={{ width: 28 }}>
+                <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
+              </th>
               <th>Number</th>
               <th>Name</th>
               <th>Company</th>
@@ -139,25 +191,33 @@ export function Opportunities({
             </tr>
           </thead>
           <tbody>
-            {rows.map((o) => (
-              <tr key={o.id}>
-                <td>{o.opportunity_number}</td>
-                <td>{o.name}</td>
-                <td>{companyNameById.get(o.company_id) ?? "—"}</td>
-                <td>{o.stage}</td>
-                <td>{formatCents(o.value_cents, o.currency_code)}</td>
-                <td>{(o.probability_bp / 100).toFixed(0)}%</td>
-                <td>
-                  <button
-                    className="btn"
-                    onClick={() => setView({ mode: "edit", id: o.id })}
-                    disabled={!canWrite}
-                    title={canWrite ? undefined : "You have view-only access to Opportunities through an app"}
-                  >
-                    Edit
-                  </button>
-                </td>
-              </tr>
+            {groups.map((group) => (
+              <Fragment key={group.label || "_"}>
+                {views.groupByField && <GroupHeaderRow label={group.label} colSpan={8} />}
+                {group.rows.map((o) => (
+                  <tr key={o.id}>
+                    <td>
+                      <input type="checkbox" checked={selection.isSelected(o.id)} onChange={() => selection.toggle(o.id)} />
+                    </td>
+                    <td>{o.opportunity_number}</td>
+                    <td>{o.name}</td>
+                    <td>{companyNameById.get(o.company_id) ?? "—"}</td>
+                    <td>{o.stage}</td>
+                    <td>{formatCents(o.value_cents, o.currency_code)}</td>
+                    <td>{(o.probability_bp / 100).toFixed(0)}%</td>
+                    <td>
+                      <button
+                        className="btn"
+                        onClick={() => setView({ mode: "edit", id: o.id })}
+                        disabled={!canWrite}
+                        title={canWrite ? undefined : "You have view-only access to Opportunities through an app"}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
           </tbody>
         </table>

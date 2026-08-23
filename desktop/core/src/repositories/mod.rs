@@ -32,6 +32,7 @@ pub mod product_repo;
 pub mod publisher_repo;
 pub mod quote_repo;
 pub mod relationship_repo;
+pub mod saved_view_repo;
 pub mod screen_layout_repo;
 pub mod session_repo;
 pub mod solution_component_repo;
