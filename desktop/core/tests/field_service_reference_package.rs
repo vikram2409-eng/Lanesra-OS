@@ -49,7 +49,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = field_service_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.field_service");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 9);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 10);
 }
 
 #[test]
@@ -65,10 +65,10 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 9);
-    assert_eq!(count_of("relationship_definition"), 11);
-    assert_eq!(count_of("business_rule"), 2);
-    assert_eq!(count_of("workflow_definition"), 2);
+    assert_eq!(count_of("custom_object"), 10);
+    assert_eq!(count_of("relationship_definition"), 13);
+    assert_eq!(count_of("business_rule"), 4);
+    assert_eq!(count_of("workflow_definition"), 3);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -199,6 +199,64 @@ fn appointment_completion_rule_requires_actual_times_and_outcome() {
     complete.insert("actual_end".to_string(), "2026-01-15".to_string());
     complete.insert("outcome".to_string(), "Repaired".to_string());
     custom_field_service::set_entity_values(&conn, "service_appointment", &appt.id, &complete, Some(&admin)).unwrap();
+}
+
+#[test]
+fn warranty_claim_resolution_rules_block_an_unresolved_claim_and_allow_a_resolved_one() {
+    let (conn, ws, admin) = setup_workspace();
+    install_field_service(&conn, &ws, &admin);
+
+    let claim = custom_record_service::create(
+        &conn, &ws,
+        &CustomRecordInput { object_key: "warranty_claim".into(), primary_name: "Compressor failure".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        Some(&admin),
+    ).unwrap();
+
+    // Denying a claim with no resolution notes is blocked by "Claim
+    // resolution notes" - the only one of the two rules that applies to
+    // a non-Reimbursed resolution.
+    let mut values = HashMap::new();
+    values.insert("claim_status".to_string(), "Denied".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Resolution Notes"));
+
+    // Providing notes lets the denial through.
+    values.insert("resolution_notes".to_string(), "Out of warranty period".to_string());
+    custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap();
+
+    // Moving to Reimbursed (notes already on file) is blocked by "Claim
+    // reimbursement amount" until an approved amount is recorded too.
+    values.insert("claim_status".to_string(), "Reimbursed".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Amount Approved"));
+
+    values.insert("amount_approved".to_string(), "450".to_string());
+    custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap();
+
+    let stored = custom_field_service::get_entity_values(&conn, &claim.id).unwrap();
+    assert_eq!(stored.get("claim_status").map(String::as_str), Some("Reimbursed"));
+}
+
+#[test]
+fn warranty_claim_submitted_workflow_creates_a_review_task_and_a_notification() {
+    let (conn, ws, admin) = setup_workspace();
+    install_field_service(&conn, &ws, &admin);
+
+    let claim = custom_record_service::create(
+        &conn, &ws,
+        &CustomRecordInput { object_key: "warranty_claim".into(), primary_name: "Compressor failure".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        Some(&admin),
+    ).unwrap();
+
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    let mut values = custom_field_service::get_entity_values(&conn, &claim.id).unwrap();
+    values.insert("claim_status".to_string(), "Submitted".to_string());
+    custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    assert_eq!(after, before + 1, "the 'Warranty claim submitted' workflow should have created a review task");
+
+    let notifications = lanesra_core::repositories::notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap();
+    assert!(notifications.iter().any(|n| n.message.contains("warranty claim was submitted")));
 }
 
 #[test]

@@ -139,7 +139,8 @@ pub fn field_service_manifest_json() -> String {
             { "key": "service_appointment", "singular_label": "Service Appointment", "plural_label": "Service Appointments", "icon": "📅", "prefix": "APT", "digits": 5 },
             { "key": "resource_profile", "singular_label": "Resource Profile", "plural_label": "Resource Profiles", "icon": "🧑‍🔧", "prefix": "RES", "digits": 4 },
             { "key": "skill", "singular_label": "Skill", "plural_label": "Skills", "icon": "🎓", "prefix": "SKL", "digits": 3 },
-            { "key": "service_territory", "singular_label": "Service Territory", "plural_label": "Service Territories", "icon": "🗺", "prefix": "TER", "digits": 3 }
+            { "key": "service_territory", "singular_label": "Service Territory", "plural_label": "Service Territories", "icon": "🗺", "prefix": "TER", "digits": 3 },
+            { "key": "warranty_claim", "singular_label": "Warranty Claim", "plural_label": "Warranty Claims", "icon": "🧾", "prefix": "WC", "digits": 5 }
         ],
         "fields": field_service_fields(),
         "relationships": field_service_relationships(),
@@ -188,7 +189,7 @@ pub fn field_service_manifest_json() -> String {
             "description": "Dispatch, work orders, assets and service appointments for on-site service businesses.",
             "object_keys": [
                 "work_order", "service_appointment", "asset", "service_site", "work_order_line",
-                "work_type", "resource_profile", "skill", "service_territory", "Task"
+                "work_type", "resource_profile", "skill", "service_territory", "warranty_claim", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -243,6 +244,7 @@ fn field_service_fields() -> serde_json::Value {
         resource_profile_fields(),
         skill_fields(),
         service_territory_fields(),
+        warranty_claim_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -333,6 +335,18 @@ fn service_territory_fields() -> serde_json::Value {
     ])
 }
 
+fn warranty_claim_fields() -> serde_json::Value {
+    json!([
+        { "key": "claim_status", "entity_type": "warranty_claim", "label": "Status", "field_type": "select", "options": ["Draft", "Submitted", "Approved", "Denied", "Reimbursed"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount_requested", "entity_type": "warranty_claim", "label": "Amount Requested", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Reimbursed by the "Claim reimbursement amount" business rule below.
+        { "key": "amount_approved", "entity_type": "warranty_claim", "label": "Amount Approved", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "submitted_date", "entity_type": "warranty_claim", "label": "Submitted Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-resolved (Approved/Denied/Reimbursed) by the "Claim resolution notes" business rule below.
+        { "key": "resolution_notes", "entity_type": "warranty_claim", "label": "Resolution Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: `screen_layouts[0].draft`'s `related`
 /// and both `update_related_record` workflow actions reference these
 /// relationships by their position in this array (see this module's own
@@ -349,7 +363,9 @@ fn field_service_relationships() -> serde_json::Value {
         /* 7 */ { "source_entity_type": "resource_profile", "target_entity_type": "skill", "relationship_type": "many_to_many", "forward_label": "Skills", "reverse_label": "Resource Profiles", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
         /* 8 */ { "source_entity_type": "resource_profile", "target_entity_type": "service_territory", "relationship_type": "many_to_many", "forward_label": "Territories", "reverse_label": "Resource Profiles", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 9 */ { "source_entity_type": "work_order", "target_entity_type": "Contract", "relationship_type": "many_to_one", "forward_label": "Contract", "reverse_label": "Work Orders", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
-        /* 10 */ { "source_entity_type": "work_order_line", "target_entity_type": "Product", "relationship_type": "many_to_one", "forward_label": "Product / Service", "reverse_label": "Work Order Lines", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 }
+        /* 10 */ { "source_entity_type": "work_order_line", "target_entity_type": "Product", "relationship_type": "many_to_one", "forward_label": "Product / Service", "reverse_label": "Work Order Lines", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 11 */ { "source_entity_type": "warranty_claim", "target_entity_type": "asset", "relationship_type": "many_to_one", "forward_label": "Asset", "reverse_label": "Warranty Claims", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 12 */ { "source_entity_type": "warranty_claim", "target_entity_type": "work_order", "relationship_type": "many_to_one", "forward_label": "Work Order", "reverse_label": "Warranty Claims", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
     ])
 }
 
@@ -390,6 +406,36 @@ fn field_service_business_rules() -> serde_json::Value {
                 { "action_type": "require", "target_field_key": "actual_start", "target_field_source": "custom", "action_value": null, "message": null },
                 { "action_type": "require", "target_field_key": "actual_end", "target_field_source": "custom", "action_value": null, "message": null },
                 { "action_type": "require", "target_field_key": "outcome", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "warranty_claim",
+            "name": "Claim resolution notes",
+            "description": "A resolved warranty claim must record its resolution notes.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "in_list", "value": "Approved|Denied|Reimbursed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "resolution_notes", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "warranty_claim",
+            "name": "Claim reimbursement amount",
+            "description": "A reimbursed warranty claim must record its approved amount.",
+            "match_type": "all",
+            "priority": 1,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "equals", "value": "Reimbursed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "amount_approved", "target_field_source": "custom", "action_value": null, "message": null }
             ]
         }
     ])
@@ -447,6 +493,25 @@ fn field_service_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":4,\"target_field_key\":\"last_service_date\",\"target_field_source\":\"custom\",\"value\":null,\"copy_from_field_key\":\"completion_date\"}" }
             ]
+        },
+        {
+            "entity_type": "warranty_claim",
+            "name": "Warranty claim submitted",
+            "description": "Submitting a warranty claim opens a review task and lets admins know.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "claim_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "equals", "value": "Submitted" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Review warranty claim\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" },
+                { "action_type": "add_notification", "params_json": "{\"message\":\"A warranty claim was submitted\",\"audience\":\"all_admins\"}" }
+            ]
         }
     ])
 }
@@ -476,7 +541,8 @@ pub fn property_management_manifest_json() -> String {
             { "key": "rent_schedule", "singular_label": "Rent Schedule Entry", "plural_label": "Rent Schedule", "icon": "💰", "prefix": "RENT", "digits": 6 },
             { "key": "maintenance_request", "singular_label": "Maintenance Request", "plural_label": "Maintenance Requests", "icon": "🛠", "prefix": "MR", "digits": 5 },
             { "key": "vendor_assignment", "singular_label": "Vendor Assignment", "plural_label": "Vendor Assignments", "icon": "🧰", "prefix": "VA", "digits": 5 },
-            { "key": "property_document", "singular_label": "Property Document", "plural_label": "Property Documents", "icon": "📄", "prefix": "DOC", "digits": 5 }
+            { "key": "property_document", "singular_label": "Property Document", "plural_label": "Property Documents", "icon": "📄", "prefix": "DOC", "digits": 5 },
+            { "key": "unit_showing", "singular_label": "Unit Showing", "plural_label": "Unit Showings", "icon": "👁", "prefix": "SHW", "digits": 5 }
         ],
         "fields": property_management_fields(),
         "relationships": property_management_relationships(),
@@ -519,7 +585,7 @@ pub fn property_management_manifest_json() -> String {
             "description": "Properties, units, leases, rent schedules and maintenance for residential/commercial property managers.",
             "object_keys": [
                 "property", "unit", "lease", "lease_party", "rent_schedule",
-                "maintenance_request", "vendor_assignment", "property_document", "Task"
+                "maintenance_request", "vendor_assignment", "property_document", "unit_showing", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -553,6 +619,7 @@ fn property_management_fields() -> serde_json::Value {
         maintenance_request_fields(),
         vendor_assignment_fields(),
         property_document_fields(),
+        unit_showing_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -631,6 +698,16 @@ fn property_document_fields() -> serde_json::Value {
     ])
 }
 
+fn unit_showing_fields() -> serde_json::Value {
+    json!([
+        { "key": "showing_stage", "entity_type": "unit_showing", "label": "Stage", "field_type": "select", "options": ["Scheduled", "Completed", "Cancelled", "No Show"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Scheduled", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "scheduled_date", "entity_type": "unit_showing", "label": "Scheduled Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Completed by the "Showing completion" business rule below.
+        { "key": "interest_level", "entity_type": "unit_showing", "label": "Interest Level", "field_type": "select", "options": ["Low", "Medium", "High"], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "showing_notes", "entity_type": "unit_showing", "label": "Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: `screen_layouts[0].draft`'s `related`
 /// and both `update_related_record` workflow actions reference these
 /// relationships by their position in this array.
@@ -646,7 +723,9 @@ fn property_management_relationships() -> serde_json::Value {
         /* 7 */ { "source_entity_type": "maintenance_request", "target_entity_type": "unit", "relationship_type": "many_to_one", "forward_label": "Unit", "reverse_label": "Maintenance Requests", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
         /* 8 */ { "source_entity_type": "vendor_assignment", "target_entity_type": "maintenance_request", "relationship_type": "many_to_one", "forward_label": "Maintenance Request", "reverse_label": "Vendor Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
         /* 9 */ { "source_entity_type": "vendor_assignment", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Vendor", "reverse_label": "Vendor Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
-        /* 10 */ { "source_entity_type": "property_document", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Documents", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 3 }
+        /* 10 */ { "source_entity_type": "property_document", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Documents", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 3 },
+        /* 11 */ { "source_entity_type": "unit_showing", "target_entity_type": "unit", "relationship_type": "many_to_one", "forward_label": "Unit", "reverse_label": "Showings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 12 */ { "source_entity_type": "unit_showing", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Prospect", "reverse_label": "Unit Showings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 }
     ])
 }
 
@@ -685,6 +764,21 @@ fn property_management_business_rules() -> serde_json::Value {
             "actions": [
                 { "action_type": "require", "target_field_key": "resolution", "target_field_source": "custom", "action_value": null, "message": null },
                 { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "unit_showing",
+            "name": "Showing completion",
+            "description": "A completed showing must record the prospect's interest level.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "showing_stage", "operator": "equals", "value": "Completed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "interest_level", "target_field_source": "custom", "action_value": null, "message": null }
             ]
         }
     ])
@@ -753,6 +847,25 @@ fn property_management_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Triage this maintenance request\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
+        },
+        {
+            "entity_type": "unit_showing",
+            "name": "High-interest showing follow-up",
+            "description": "A completed showing where the prospect showed high interest gets an agent follow-up task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "showing_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "showing_stage", "operator": "equals", "value": "Completed" },
+                { "field_source": "custom", "field_key": "interest_level", "operator": "equals", "value": "High" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Follow up with interested prospect\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -787,7 +900,8 @@ pub fn construction_manifest_json() -> String {
             { "key": "work_package", "singular_label": "Work Package", "plural_label": "Work Packages", "icon": "📦", "prefix": "WP", "digits": 4 },
             { "key": "change_order", "singular_label": "Change Order", "plural_label": "Change Orders", "icon": "📝", "prefix": "CO", "digits": 4 },
             { "key": "subcontract_assignment", "singular_label": "Subcontract Assignment", "plural_label": "Subcontract Assignments", "icon": "🤝", "prefix": "SUB", "digits": 4 },
-            { "key": "inspection", "singular_label": "Inspection", "plural_label": "Inspections", "icon": "🔎", "prefix": "INSP", "digits": 4 }
+            { "key": "inspection", "singular_label": "Inspection", "plural_label": "Inspections", "icon": "🔎", "prefix": "INSP", "digits": 4 },
+            { "key": "punch_list_item", "singular_label": "Punch List Item", "plural_label": "Punch List Items", "icon": "📋", "prefix": "PLI", "digits": 4 }
         ],
         "fields": construction_fields(),
         "relationships": construction_relationships(),
@@ -830,7 +944,7 @@ pub fn construction_manifest_json() -> String {
             "icon": "🏗️",
             "description": "Projects, work packages, change orders, subcontractor assignments and inspections for general contractors and specialty trades.",
             "object_keys": [
-                "project", "work_package", "change_order", "subcontract_assignment", "inspection", "Task"
+                "project", "work_package", "change_order", "subcontract_assignment", "inspection", "punch_list_item", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -861,6 +975,7 @@ fn construction_fields() -> serde_json::Value {
         change_order_fields(),
         subcontract_assignment_fields(),
         inspection_fields(),
+        punch_list_item_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -935,6 +1050,17 @@ fn inspection_fields() -> serde_json::Value {
     ])
 }
 
+fn punch_list_item_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "punch_list_item", "label": "Stage", "field_type": "select", "options": ["Open", "In Progress", "Resolved", "Verified", "Won't Fix"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Open", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "description", "entity_type": "punch_list_item", "label": "Description", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "location", "entity_type": "punch_list_item", "label": "Location", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Where on the site this item was found.", "placeholder": null },
+        { "key": "due_date", "entity_type": "punch_list_item", "label": "Due Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Resolved/Verified by the "Punch item resolution" business rule below.
+        { "key": "resolved_date", "entity_type": "punch_list_item", "label": "Resolved Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related` and the
 /// Opportunity-Won workflow's `create_record` action reference these
 /// relationships by their position in this array.
@@ -949,7 +1075,8 @@ fn construction_relationships() -> serde_json::Value {
         /* 6 */ { "source_entity_type": "project", "target_entity_type": "Quote", "relationship_type": "many_to_one", "forward_label": "Quote", "reverse_label": "Projects", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 7 */ { "source_entity_type": "project", "target_entity_type": "Contract", "relationship_type": "many_to_one", "forward_label": "Contract", "reverse_label": "Projects", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
         /* 8 */ { "source_entity_type": "Invoice", "target_entity_type": "project", "relationship_type": "many_to_one", "forward_label": "Project", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
-        /* 9 */ { "source_entity_type": "project", "target_entity_type": "Opportunity", "relationship_type": "many_to_one", "forward_label": "Opportunity", "reverse_label": "Projects", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+        /* 9 */ { "source_entity_type": "project", "target_entity_type": "Opportunity", "relationship_type": "many_to_one", "forward_label": "Opportunity", "reverse_label": "Projects", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 10 */ { "source_entity_type": "punch_list_item", "target_entity_type": "project", "relationship_type": "many_to_one", "forward_label": "Project", "reverse_label": "Punch List Items", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 5 }
     ])
 }
 
@@ -999,6 +1126,21 @@ fn construction_business_rules() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "require", "target_field_key": "completion_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "punch_list_item",
+            "name": "Punch item resolution",
+            "description": "A resolved or verified punch list item must record its resolved date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "in_list", "value": "Resolved|Verified" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "resolved_date", "target_field_source": "custom", "action_value": null, "message": null }
             ]
         }
     ])
@@ -1083,6 +1225,22 @@ fn construction_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Final billing review\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
             ]
+        },
+        {
+            "entity_type": "punch_list_item",
+            "name": "Punch item created",
+            "description": "Logging a new punch list item opens a task to address it.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Address punch list item\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -1128,7 +1286,8 @@ pub fn professional_services_manifest_json() -> String {
             { "key": "resource_assignment", "singular_label": "Resource Assignment", "plural_label": "Resource Assignments", "icon": "🧑‍💻", "prefix": "RA", "digits": 4 },
             { "key": "time_entry", "singular_label": "Time Entry", "plural_label": "Time Entries", "icon": "⏱", "prefix": "TE", "digits": 5 },
             { "key": "expense", "singular_label": "Expense", "plural_label": "Expenses", "icon": "💳", "prefix": "EXP", "digits": 5 },
-            { "key": "deliverable", "singular_label": "Deliverable", "plural_label": "Deliverables", "icon": "📦", "prefix": "DLV", "digits": 4 }
+            { "key": "deliverable", "singular_label": "Deliverable", "plural_label": "Deliverables", "icon": "📦", "prefix": "DLV", "digits": 4 },
+            { "key": "change_request", "singular_label": "Change Request", "plural_label": "Change Requests", "icon": "🔄", "prefix": "CR", "digits": 4 }
         ],
         "fields": professional_services_fields(),
         "relationships": professional_services_relationships(),
@@ -1170,7 +1329,7 @@ pub fn professional_services_manifest_json() -> String {
             "icon": "💼",
             "description": "Engagements, milestones, resourcing, time and expenses for consulting, IT services, agencies and other billable professional-services firms.",
             "object_keys": [
-                "engagement", "milestone", "resource_assignment", "time_entry", "expense", "deliverable", "Task"
+                "engagement", "milestone", "resource_assignment", "time_entry", "expense", "deliverable", "change_request", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -1202,6 +1361,7 @@ fn professional_services_fields() -> serde_json::Value {
         time_entry_fields(),
         expense_fields(),
         deliverable_fields(),
+        change_request_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -1285,6 +1445,17 @@ fn deliverable_fields() -> serde_json::Value {
     ])
 }
 
+fn change_request_fields() -> serde_json::Value {
+    json!([
+        { "key": "stage", "entity_type": "change_request", "label": "Stage", "field_type": "select", "options": ["Draft", "Submitted", "Approved", "Rejected", "Implemented"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "description", "entity_type": "change_request", "label": "Description", "field_type": "text", "options": [], "required": true, "show_in_list": false, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "requested_date", "entity_type": "change_request", "label": "Requested Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "impact_amount", "entity_type": "change_request", "label": "Contract Value Impact", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": "Positive or negative change to the engagement's contract value.", "placeholder": null },
+        // Required-when-Approved/Implemented by the "Change request approval" business rule below.
+        { "key": "approved_date", "entity_type": "change_request", "label": "Approved Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related` and the
 /// Opportunity-Won workflow's `create_record` action reference these
 /// relationships by their position in this array.
@@ -1299,7 +1470,8 @@ fn professional_services_relationships() -> serde_json::Value {
         /* 6 */ { "source_entity_type": "deliverable", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Deliverables", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
         /* 7 */ { "source_entity_type": "engagement", "target_entity_type": "Opportunity", "relationship_type": "many_to_one", "forward_label": "Opportunity", "reverse_label": "Engagements", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 8 */ { "source_entity_type": "engagement", "target_entity_type": "Contract", "relationship_type": "many_to_one", "forward_label": "Contract", "reverse_label": "Engagements", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
-        /* 9 */ { "source_entity_type": "Invoice", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 }
+        /* 9 */ { "source_entity_type": "Invoice", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 10 */ { "source_entity_type": "change_request", "target_entity_type": "engagement", "relationship_type": "many_to_one", "forward_label": "Engagement", "reverse_label": "Change Requests", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 5 }
     ])
 }
 
@@ -1373,6 +1545,21 @@ fn professional_services_business_rules() -> serde_json::Value {
             "actions": [
                 { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
             ]
+        },
+        {
+            "entity_type": "change_request",
+            "name": "Change request approval",
+            "description": "An approved or implemented change request must record its approved date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "in_list", "value": "Approved|Implemented" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "approved_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
         }
     ])
 }
@@ -1437,6 +1624,24 @@ fn professional_services_workflows() -> serde_json::Value {
                 { "action_type": "create_task", "params_json": "{\"title\":\"Engagement closure and review\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" },
                 { "action_type": "create_task", "params_json": "{\"title\":\"Prepare final invoice\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
             ]
+        },
+        {
+            "entity_type": "change_request",
+            "name": "Change request submitted",
+            "description": "Submitting a change request opens a review task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "stage", "operator": "equals", "value": "Submitted" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Review change request\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -1476,7 +1681,8 @@ pub fn practice_admin_manifest_json() -> String {
             { "key": "treatment_plan", "singular_label": "Treatment Plan", "plural_label": "Treatment Plans", "icon": "📋", "prefix": "TXP", "digits": 4 },
             { "key": "procedure_item", "singular_label": "Procedure Item", "plural_label": "Procedure Items", "icon": "🔧", "prefix": "PROC", "digits": 5 },
             { "key": "recall", "singular_label": "Recall", "plural_label": "Recalls", "icon": "🔔", "prefix": "RCL", "digits": 4 },
-            { "key": "insurance_profile", "singular_label": "Insurance Profile", "plural_label": "Insurance Profiles", "icon": "🛡", "prefix": "INS", "digits": 4 }
+            { "key": "insurance_profile", "singular_label": "Insurance Profile", "plural_label": "Insurance Profiles", "icon": "🛡", "prefix": "INS", "digits": 4 },
+            { "key": "billing_claim", "singular_label": "Billing Claim", "plural_label": "Billing Claims", "icon": "🧾", "prefix": "CLM", "digits": 5 }
         ],
         "fields": practice_admin_fields(),
         "relationships": practice_admin_relationships(),
@@ -1518,7 +1724,7 @@ pub fn practice_admin_manifest_json() -> String {
             "icon": "🦷",
             "description": "Patients, providers, appointments, treatment plans and recalls for dental offices and small clinics - administrative scheduling and billing, not clinical charting.",
             "object_keys": [
-                "patient_profile", "provider_profile", "appointment", "treatment_plan", "procedure_item", "recall", "insurance_profile", "Task"
+                "patient_profile", "provider_profile", "appointment", "treatment_plan", "procedure_item", "recall", "insurance_profile", "billing_claim", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -1550,6 +1756,7 @@ fn practice_admin_fields() -> serde_json::Value {
         procedure_item_fields(),
         recall_fields(),
         insurance_profile_fields(),
+        billing_claim_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -1618,6 +1825,19 @@ fn insurance_profile_fields() -> serde_json::Value {
     ])
 }
 
+fn billing_claim_fields() -> serde_json::Value {
+    json!([
+        { "key": "claim_status", "entity_type": "billing_claim", "label": "Status", "field_type": "select", "options": ["Draft", "Submitted", "Paid", "Denied"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "submitted_date", "entity_type": "billing_claim", "label": "Submitted Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "claimed_amount", "entity_type": "billing_claim", "label": "Claimed Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Both required-when-Paid by the "Claim payment" business rule below.
+        { "key": "paid_amount", "entity_type": "billing_claim", "label": "Paid Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "payment_date", "entity_type": "billing_claim", "label": "Payment Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Denied by the "Claim denial notes" business rule below.
+        { "key": "denial_reason", "entity_type": "billing_claim", "label": "Denial Reason", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related` array
 /// references these relationships by their position.
 fn practice_admin_relationships() -> serde_json::Value {
@@ -1631,7 +1851,9 @@ fn practice_admin_relationships() -> serde_json::Value {
         /* 6 */ { "source_entity_type": "procedure_item", "target_entity_type": "treatment_plan", "relationship_type": "many_to_one", "forward_label": "Treatment Plan", "reverse_label": "Procedure Items", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
         /* 7 */ { "source_entity_type": "recall", "target_entity_type": "patient_profile", "relationship_type": "many_to_one", "forward_label": "Patient", "reverse_label": "Recalls", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
         /* 8 */ { "source_entity_type": "insurance_profile", "target_entity_type": "patient_profile", "relationship_type": "many_to_one", "forward_label": "Patient", "reverse_label": "Insurance Profiles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
-        /* 9 */ { "source_entity_type": "appointment", "target_entity_type": "treatment_plan", "relationship_type": "many_to_one", "forward_label": "Treatment Plan", "reverse_label": "Appointments", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 }
+        /* 9 */ { "source_entity_type": "appointment", "target_entity_type": "treatment_plan", "relationship_type": "many_to_one", "forward_label": "Treatment Plan", "reverse_label": "Appointments", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
+        /* 10 */ { "source_entity_type": "billing_claim", "target_entity_type": "patient_profile", "relationship_type": "many_to_one", "forward_label": "Patient", "reverse_label": "Billing Claims", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 11 */ { "source_entity_type": "billing_claim", "target_entity_type": "appointment", "relationship_type": "many_to_one", "forward_label": "Appointment", "reverse_label": "Billing Claims", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 }
     ])
 }
 
@@ -1662,6 +1884,37 @@ fn practice_admin_business_rules() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "billing_claim",
+            "name": "Claim payment",
+            "description": "A paid claim must record its paid amount and payment date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "equals", "value": "Paid" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "paid_amount", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "payment_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "billing_claim",
+            "name": "Claim denial notes",
+            "description": "A denied claim must record its denial reason.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "equals", "value": "Denied" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "denial_reason", "target_field_source": "custom", "action_value": null, "message": null }
             ]
         }
     ])
@@ -1731,6 +1984,24 @@ fn practice_admin_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Prepare billing/quote for accepted treatment plan\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
+        },
+        {
+            "entity_type": "billing_claim",
+            "name": "Billing claim submitted",
+            "description": "Submitting a billing claim opens a task to track it with the payer.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "claim_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "equals", "value": "Submitted" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Track submitted billing claim\",\"description\":null,\"due_in_days\":14,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -1769,7 +2040,8 @@ pub fn recruitment_manifest_json() -> String {
             { "key": "offer", "singular_label": "Offer", "plural_label": "Offers", "icon": "🤝", "prefix": "OFR", "digits": 4 },
             { "key": "placement", "singular_label": "Placement", "plural_label": "Placements", "icon": "✅", "prefix": "PLC", "digits": 4 },
             { "key": "competency", "singular_label": "Skill", "plural_label": "Skills", "icon": "🏅", "prefix": "SKL", "digits": 3 },
-            { "key": "candidate_skill", "singular_label": "Candidate Skill", "plural_label": "Candidate Skills", "icon": "🔗", "prefix": "CSK", "digits": 5 }
+            { "key": "candidate_skill", "singular_label": "Candidate Skill", "plural_label": "Candidate Skills", "icon": "🔗", "prefix": "CSK", "digits": 5 },
+            { "key": "reference_check", "singular_label": "Reference Check", "plural_label": "Reference Checks", "icon": "📞", "prefix": "REF", "digits": 5 }
         ],
         "fields": recruitment_fields(),
         "relationships": recruitment_relationships(),
@@ -1811,7 +2083,7 @@ pub fn recruitment_manifest_json() -> String {
             "icon": "🧑‍💼",
             "description": "Jobs, candidates, applications, interviews, offers and placements for recruiting agencies and SMB talent teams.",
             "object_keys": [
-                "job_requisition", "candidate_profile", "application", "interview", "offer", "placement", "competency", "candidate_skill", "Task"
+                "job_requisition", "candidate_profile", "application", "interview", "offer", "placement", "competency", "candidate_skill", "reference_check", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -1845,6 +2117,7 @@ fn recruitment_fields() -> serde_json::Value {
         placement_fields(),
         competency_fields(),
         candidate_skill_fields(),
+        reference_check_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -1924,6 +2197,16 @@ fn candidate_skill_fields() -> serde_json::Value {
     ])
 }
 
+fn reference_check_fields() -> serde_json::Value {
+    json!([
+        { "key": "check_status", "entity_type": "reference_check", "label": "Status", "field_type": "select", "options": ["Requested", "Completed", "Failed"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Requested", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reference_name", "entity_type": "reference_check", "label": "Reference Name", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Completed/Failed by the "Reference check completion" business rule below.
+        { "key": "completed_date", "entity_type": "reference_check", "label": "Completed Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "notes", "entity_type": "reference_check", "label": "Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related` and the
 /// Offer-Accepted workflow's `update_related_record`/`create_record`
 /// actions reference these relationships by their position in this
@@ -1952,7 +2235,9 @@ fn recruitment_relationships() -> serde_json::Value {
         // relationship connecting its trigger entity (offer) to the entity it creates
         // (placement) - index 7 above (Placement <-> Application) is the spec's own
         // relationship and doesn't connect to Offer at all.
-        /* 13 */ { "source_entity_type": "placement", "target_entity_type": "offer", "relationship_type": "many_to_one", "forward_label": "Offer", "reverse_label": "Placement Draft", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+        /* 13 */ { "source_entity_type": "placement", "target_entity_type": "offer", "relationship_type": "many_to_one", "forward_label": "Offer", "reverse_label": "Placement Draft", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 14 */ { "source_entity_type": "reference_check", "target_entity_type": "candidate_profile", "relationship_type": "many_to_one", "forward_label": "Candidate", "reverse_label": "Reference Checks", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 15 */ { "source_entity_type": "reference_check", "target_entity_type": "application", "relationship_type": "many_to_one", "forward_label": "Application", "reverse_label": "Reference Checks", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 }
     ])
 }
 
@@ -1983,6 +2268,21 @@ fn recruitment_business_rules() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "require", "target_field_key": "start_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "reference_check",
+            "name": "Reference check completion",
+            "description": "A completed or failed reference check must record its completed date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "check_status", "operator": "in_list", "value": "Completed|Failed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
             ]
         }
     ])
@@ -2048,6 +2348,22 @@ fn recruitment_workflows() -> serde_json::Value {
                 { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":6,\"target_field_key\":\"stage\",\"target_field_source\":\"custom\",\"value\":\"Placed\",\"copy_from_field_key\":null}" },
                 { "action_type": "create_record", "params_json": "{\"entity_type\":\"placement\",\"relationship_ref\":13,\"name_template\":null}" }
             ]
+        },
+        {
+            "entity_type": "reference_check",
+            "name": "Reference check requested",
+            "description": "Logging a new reference check opens a task to contact the reference.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Contact reference\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -2086,7 +2402,8 @@ pub fn real_estate_manifest_json() -> String {
             { "key": "purchase_offer", "singular_label": "Offer", "plural_label": "Offers", "icon": "🤝", "prefix": "OFFR", "digits": 4 },
             { "key": "transaction", "singular_label": "Transaction", "plural_label": "Transactions", "icon": "🏆", "prefix": "TXN", "digits": 4 },
             { "key": "client_role", "singular_label": "Client Role", "plural_label": "Client Roles", "icon": "🔗", "prefix": "ROLE", "digits": 5 },
-            { "key": "agent_profile", "singular_label": "Agent Profile", "plural_label": "Agent Profiles", "icon": "🧑‍💼", "prefix": "AGT", "digits": 3 }
+            { "key": "agent_profile", "singular_label": "Agent Profile", "plural_label": "Agent Profiles", "icon": "🧑‍💼", "prefix": "AGT", "digits": 3 },
+            { "key": "commission_disbursement", "singular_label": "Commission Disbursement", "plural_label": "Commission Disbursements", "icon": "💰", "prefix": "DSB", "digits": 5 }
         ],
         "fields": real_estate_fields(),
         "relationships": real_estate_relationships(),
@@ -2128,7 +2445,7 @@ pub fn real_estate_manifest_json() -> String {
             "icon": "🏘",
             "description": "Properties, listings, showings, offers and transactions for real-estate agents and small brokerages.",
             "object_keys": [
-                "listing_property", "listing", "showing", "purchase_offer", "transaction", "client_role", "agent_profile", "Contact", "Task"
+                "listing_property", "listing", "showing", "purchase_offer", "transaction", "client_role", "agent_profile", "commission_disbursement", "Contact", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -2159,6 +2476,7 @@ fn real_estate_fields() -> serde_json::Value {
         transaction_fields(),
         client_role_fields(),
         agent_profile_fields(),
+        commission_disbursement_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -2226,6 +2544,15 @@ fn agent_profile_fields() -> serde_json::Value {
     ])
 }
 
+fn commission_disbursement_fields() -> serde_json::Value {
+    json!([
+        { "key": "disbursement_status", "entity_type": "commission_disbursement", "label": "Status", "field_type": "select", "options": ["Pending", "Paid"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount", "entity_type": "commission_disbursement", "label": "Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Paid by the "Disbursement payment" business rule below.
+        { "key": "paid_date", "entity_type": "commission_disbursement", "label": "Paid Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related`, and the
 /// "Offer accepted"/"Transaction closed" workflows' `update_related_record`/
 /// `create_record` actions, reference these relationships by their
@@ -2254,7 +2581,9 @@ fn real_estate_relationships() -> serde_json::Value {
         /* 6 */ { "source_entity_type": "transaction", "target_entity_type": "purchase_offer", "relationship_type": "many_to_one", "forward_label": "Accepted Offer", "reverse_label": "Transaction", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
         /* 7 */ { "source_entity_type": "transaction", "target_entity_type": "listing", "relationship_type": "many_to_one", "forward_label": "Listing", "reverse_label": "Transactions", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
         /* 8 */ { "source_entity_type": "client_role", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Contact", "reverse_label": "Client Roles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
-        /* 9 */ { "source_entity_type": "client_role", "target_entity_type": "listing", "relationship_type": "many_to_one", "forward_label": "Listing", "reverse_label": "Client Roles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+        /* 9 */ { "source_entity_type": "client_role", "target_entity_type": "listing", "relationship_type": "many_to_one", "forward_label": "Listing", "reverse_label": "Client Roles", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 10 */ { "source_entity_type": "commission_disbursement", "target_entity_type": "transaction", "relationship_type": "many_to_one", "forward_label": "Transaction", "reverse_label": "Commission Disbursements", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 11 */ { "source_entity_type": "commission_disbursement", "target_entity_type": "agent_profile", "relationship_type": "many_to_one", "forward_label": "Agent", "reverse_label": "Commission Disbursements", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 }
     ])
 }
 
@@ -2326,6 +2655,21 @@ fn real_estate_business_rules() -> serde_json::Value {
                 { "action_type": "require", "target_field_key": "closing_date", "target_field_source": "custom", "action_value": null, "message": null },
                 { "action_type": "require", "target_field_key": "final_price", "target_field_source": "custom", "action_value": null, "message": null }
             ]
+        },
+        {
+            "entity_type": "commission_disbursement",
+            "name": "Disbursement payment",
+            "description": "A paid commission disbursement must record its paid date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "disbursement_status", "operator": "equals", "value": "Paid" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "paid_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
         }
     ])
 }
@@ -2390,6 +2734,22 @@ fn real_estate_workflows() -> serde_json::Value {
                 { "action_type": "update_related_record", "params_json": "{\"relationship_ref\":7,\"target_field_key\":\"listing_stage\",\"target_field_source\":\"custom\",\"value\":\"Closed\",\"copy_from_field_key\":null}" },
                 { "action_type": "create_task", "params_json": "{\"title\":\"Post-closing checklist\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
             ]
+        },
+        {
+            "entity_type": "commission_disbursement",
+            "name": "Commission disbursement created",
+            "description": "Logging a new commission disbursement opens a task to process payment.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Process commission disbursement\",\"description\":null,\"due_in_days\":5,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -2418,7 +2778,8 @@ pub fn legal_practice_manifest_json() -> String {
             { "key": "matter_deadline", "singular_label": "Deadline", "plural_label": "Deadlines", "icon": "⏰", "prefix": "DL", "digits": 5 },
             { "key": "matter_time_entry", "singular_label": "Time Entry", "plural_label": "Time Entries", "icon": "⏱", "prefix": "TE", "digits": 5 },
             { "key": "matter_expense", "singular_label": "Expense", "plural_label": "Expenses", "icon": "💳", "prefix": "EXP", "digits": 5 },
-            { "key": "trust_summary", "singular_label": "Trust Summary", "plural_label": "Trust Summaries", "icon": "🏦", "prefix": "TRS", "digits": 4 }
+            { "key": "trust_summary", "singular_label": "Trust Summary", "plural_label": "Trust Summaries", "icon": "🏦", "prefix": "TRS", "digits": 4 },
+            { "key": "conflict_check", "singular_label": "Conflict Check", "plural_label": "Conflict Checks", "icon": "🔍", "prefix": "CFC", "digits": 5 }
         ],
         "fields": legal_practice_fields(),
         "relationships": legal_practice_relationships(),
@@ -2461,7 +2822,7 @@ pub fn legal_practice_manifest_json() -> String {
             "icon": "⚖️",
             "description": "Matters, parties, deadlines, time and expenses for small law firms.",
             "object_keys": [
-                "matter", "matter_party", "matter_deadline", "matter_time_entry", "matter_expense", "trust_summary", "Contact", "Invoice", "Task"
+                "matter", "matter_party", "matter_deadline", "matter_time_entry", "matter_expense", "trust_summary", "conflict_check", "Contact", "Invoice", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -2491,6 +2852,7 @@ fn legal_practice_fields() -> serde_json::Value {
         matter_time_entry_fields(),
         matter_expense_fields(),
         trust_summary_fields(),
+        conflict_check_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -2559,6 +2921,17 @@ fn trust_summary_fields() -> serde_json::Value {
     ])
 }
 
+fn conflict_check_fields() -> serde_json::Value {
+    json!([
+        { "key": "check_status", "entity_type": "conflict_check", "label": "Status", "field_type": "select", "options": ["Pending", "Cleared", "Conflict Found"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "requested_date", "entity_type": "conflict_check", "label": "Requested Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Cleared by the "Conflict check resolution" business rule below.
+        { "key": "cleared_date", "entity_type": "conflict_check", "label": "Cleared Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Conflict-Found by the "Conflict check notes" business rule below.
+        { "key": "resolution_notes", "entity_type": "conflict_check", "label": "Resolution Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related` list
 /// references these relationships by their position in this array.
 fn legal_practice_relationships() -> serde_json::Value {
@@ -2569,7 +2942,8 @@ fn legal_practice_relationships() -> serde_json::Value {
         /* 3 */ { "source_entity_type": "matter_deadline", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Deadlines", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
         /* 4 */ { "source_entity_type": "matter_time_entry", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Time Entries", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
         /* 5 */ { "source_entity_type": "matter_expense", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Expenses", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
-        /* 6 */ { "source_entity_type": "Invoice", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+        /* 6 */ { "source_entity_type": "Invoice", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 7 */ { "source_entity_type": "conflict_check", "target_entity_type": "matter", "relationship_type": "many_to_one", "forward_label": "Matter", "reverse_label": "Conflict Checks", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 5 }
     ])
 }
 
@@ -2654,6 +3028,36 @@ fn legal_practice_business_rules() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "require", "target_field_key": "completed_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "conflict_check",
+            "name": "Conflict check resolution",
+            "description": "A cleared conflict check must record its cleared date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "check_status", "operator": "equals", "value": "Cleared" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "cleared_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "conflict_check",
+            "name": "Conflict check notes",
+            "description": "A conflict check that found a conflict must record resolution notes.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "check_status", "operator": "equals", "value": "Conflict Found" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "resolution_notes", "target_field_source": "custom", "action_value": null, "message": null }
             ]
         }
     ])
@@ -2740,6 +3144,22 @@ fn legal_practice_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Final billing review\",\"description\":null,\"due_in_days\":5,\"assignee_user_id\":null}" }
             ]
+        },
+        {
+            "entity_type": "conflict_check",
+            "name": "Conflict check requested",
+            "description": "Logging a new conflict check opens a task to run it.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Run conflict check\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -2765,7 +3185,8 @@ pub fn nonprofit_association_manifest_json() -> String {
             { "key": "program", "singular_label": "Program", "plural_label": "Programs", "icon": "📚", "prefix": "PRG", "digits": 4 },
             { "key": "program_participation", "singular_label": "Program Participation", "plural_label": "Program Participations", "icon": "🔗", "prefix": "PPT", "digits": 5 },
             { "key": "volunteer_assignment", "singular_label": "Volunteer Assignment", "plural_label": "Volunteer Assignments", "icon": "🙋", "prefix": "VOL", "digits": 5 },
-            { "key": "event", "singular_label": "Event", "plural_label": "Events", "icon": "🎫", "prefix": "EVT", "digits": 4 }
+            { "key": "event", "singular_label": "Event", "plural_label": "Events", "icon": "🎫", "prefix": "EVT", "digits": 4 },
+            { "key": "grant", "singular_label": "Grant", "plural_label": "Grants", "icon": "🏛", "prefix": "GRT", "digits": 4 }
         ],
         "fields": nonprofit_association_fields(),
         "relationships": nonprofit_association_relationships(),
@@ -2808,7 +3229,7 @@ pub fn nonprofit_association_manifest_json() -> String {
             "icon": "🤝",
             "description": "Constituents, memberships, donations, campaigns, programs, volunteers and events for small nonprofits and associations.",
             "object_keys": [
-                "constituent_profile", "membership_plan", "membership", "donation", "campaign", "program", "program_participation", "volunteer_assignment", "event", "Contact", "Invoice", "Task"
+                "constituent_profile", "membership_plan", "membership", "donation", "campaign", "program", "program_participation", "volunteer_assignment", "event", "grant", "Contact", "Invoice", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -2841,6 +3262,7 @@ fn nonprofit_association_fields() -> serde_json::Value {
         program_participation_fields(),
         volunteer_assignment_fields(),
         event_fields(),
+        grant_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -2930,6 +3352,16 @@ fn event_fields() -> serde_json::Value {
     ])
 }
 
+fn grant_fields() -> serde_json::Value {
+    json!([
+        { "key": "grant_status", "entity_type": "grant", "label": "Status", "field_type": "select", "options": ["Applied", "Awarded", "Declined", "Closed"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Applied", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "applied_date", "entity_type": "grant", "label": "Applied Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Both required-when-Awarded by the "Grant award" business rule below.
+        { "key": "awarded_amount", "entity_type": "grant", "label": "Awarded Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "award_date", "entity_type": "grant", "label": "Award Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related` list
 /// references these relationships by their position in this array.
 /// `constituent_profile`'s own link to `Contact` is `is_required: false`
@@ -2948,7 +3380,8 @@ fn nonprofit_association_relationships() -> serde_json::Value {
         /* 7 */ { "source_entity_type": "volunteer_assignment", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Volunteer", "reverse_label": "Volunteer Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
         /* 8 */ { "source_entity_type": "volunteer_assignment", "target_entity_type": "program", "relationship_type": "many_to_one", "forward_label": "Program", "reverse_label": "Volunteer Assignments", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 9 */ { "source_entity_type": "volunteer_assignment", "target_entity_type": "event", "relationship_type": "many_to_one", "forward_label": "Event", "reverse_label": "Volunteer Assignments", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
-        /* 10 */ { "source_entity_type": "Invoice", "target_entity_type": "membership", "relationship_type": "many_to_one", "forward_label": "Membership", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 }
+        /* 10 */ { "source_entity_type": "Invoice", "target_entity_type": "membership", "relationship_type": "many_to_one", "forward_label": "Membership", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 11 */ { "source_entity_type": "grant", "target_entity_type": "constituent_profile", "relationship_type": "many_to_one", "forward_label": "Funder", "reverse_label": "Grants", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 }
     ])
 }
 
@@ -3015,6 +3448,22 @@ fn nonprofit_association_business_rules() -> serde_json::Value {
             "actions": [
                 { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Renewal date cannot be earlier than the start date." }
             ]
+        },
+        {
+            "entity_type": "grant",
+            "name": "Grant award",
+            "description": "An awarded grant must record its awarded amount and award date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "grant_status", "operator": "equals", "value": "Awarded" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "awarded_amount", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "award_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
         }
     ])
 }
@@ -3066,6 +3515,22 @@ fn nonprofit_association_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Onboarding checklist\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
             ]
+        },
+        {
+            "entity_type": "grant",
+            "name": "Grant application submitted",
+            "description": "Logging a new grant application opens a follow-up task.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Follow up on grant application\",\"description\":null,\"due_in_days\":14,\"assignee_user_id\":null}" }
+            ]
         }
     ])
 }
@@ -3105,7 +3570,8 @@ pub fn auto_service_manifest_json() -> String {
             { "key": "repair_line", "singular_label": "Repair Line", "plural_label": "Repair Lines", "icon": "📄", "prefix": "RL", "digits": 5 },
             { "key": "repair_inspection", "singular_label": "Inspection", "plural_label": "Inspections", "icon": "🔎", "prefix": "INSP", "digits": 4 },
             { "key": "service_recommendation", "singular_label": "Service Recommendation", "plural_label": "Service Recommendations", "icon": "💡", "prefix": "REC", "digits": 4 },
-            { "key": "vehicle_appointment", "singular_label": "Appointment", "plural_label": "Appointments", "icon": "📅", "prefix": "APT", "digits": 5 }
+            { "key": "vehicle_appointment", "singular_label": "Appointment", "plural_label": "Appointments", "icon": "📅", "prefix": "APT", "digits": 5 },
+            { "key": "parts_order", "singular_label": "Parts Order", "plural_label": "Parts Orders", "icon": "📦", "prefix": "PO", "digits": 5 }
         ],
         "fields": auto_service_fields(),
         "relationships": auto_service_relationships(),
@@ -3149,7 +3615,7 @@ pub fn auto_service_manifest_json() -> String {
             "icon": "🚗",
             "description": "Vehicles, repair orders, inspections and service recommendations for independent garages and small automotive service centers.",
             "object_keys": [
-                "vehicle", "repair_order", "repair_line", "repair_inspection", "service_recommendation", "vehicle_appointment",
+                "vehicle", "repair_order", "repair_line", "repair_inspection", "service_recommendation", "vehicle_appointment", "parts_order",
                 "Contact", "Product", "Quote", "Invoice", "Task"
             ],
             "use_package_dashboard": true,
@@ -3183,6 +3649,7 @@ fn auto_service_fields() -> serde_json::Value {
         repair_inspection_fields(),
         service_recommendation_fields(),
         vehicle_appointment_fields(),
+        parts_order_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -3268,6 +3735,17 @@ fn vehicle_appointment_fields() -> serde_json::Value {
     ])
 }
 
+fn parts_order_fields() -> serde_json::Value {
+    json!([
+        { "key": "order_status", "entity_type": "parts_order", "label": "Status", "field_type": "select", "options": ["Ordered", "Backordered", "Received", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Ordered", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "part_name", "entity_type": "parts_order", "label": "Part Name", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "vendor_reference", "entity_type": "parts_order", "label": "Vendor / Reference", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "ordered_date", "entity_type": "parts_order", "label": "Ordered Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Received by the "Parts order receipt" business rule below.
+        { "key": "received_date", "entity_type": "parts_order", "label": "Received Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: the screen layout's `related` list and
 /// the workflows below reference these relationships by their position
 /// in this array. Relationships 7 and 8 follow the "core entity as the
@@ -3293,7 +3771,8 @@ fn auto_service_relationships() -> serde_json::Value {
         /* 6 */ { "source_entity_type": "repair_line", "target_entity_type": "Product", "relationship_type": "many_to_one", "forward_label": "Product / Service", "reverse_label": "Repair Lines", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 7 */ { "source_entity_type": "Quote", "target_entity_type": "repair_order", "relationship_type": "many_to_one", "forward_label": "Repair Order", "reverse_label": "Quotes", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 2 },
         /* 8 */ { "source_entity_type": "Invoice", "target_entity_type": "repair_order", "relationship_type": "many_to_one", "forward_label": "Repair Order", "reverse_label": "Invoices", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
-        /* 9 */ { "source_entity_type": "repair_order", "target_entity_type": "vehicle_appointment", "relationship_type": "many_to_one", "forward_label": "Originating Appointment", "reverse_label": "Repair Orders", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+        /* 9 */ { "source_entity_type": "repair_order", "target_entity_type": "vehicle_appointment", "relationship_type": "many_to_one", "forward_label": "Originating Appointment", "reverse_label": "Repair Orders", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 10 */ { "source_entity_type": "parts_order", "target_entity_type": "repair_order", "relationship_type": "many_to_one", "forward_label": "Repair Order", "reverse_label": "Parts Orders", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 5 }
     ])
 }
 
@@ -3357,6 +3836,21 @@ fn auto_service_business_rules() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Odometer out cannot be less than odometer in." }
+            ]
+        },
+        {
+            "entity_type": "parts_order",
+            "name": "Parts order receipt",
+            "description": "A received parts order must record its received date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "order_status", "operator": "equals", "value": "Received" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "received_date", "target_field_source": "custom", "action_value": null, "message": null }
             ]
         }
     ])
@@ -3458,6 +3952,24 @@ fn auto_service_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Reschedule appointment\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "parts_order",
+            "name": "Parts backordered",
+            "description": "A backordered part gets a follow-up task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "order_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "order_status", "operator": "equals", "value": "Backordered" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Follow up on backordered part\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
             ]
         }
     ])

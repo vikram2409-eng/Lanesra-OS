@@ -51,7 +51,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = real_estate_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.real_estate");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 7);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 8);
 }
 
 #[test]
@@ -67,11 +67,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 7);
-    assert_eq!(count_of("custom_field"), 23);
-    assert_eq!(count_of("relationship_definition"), 10);
-    assert_eq!(count_of("business_rule"), 3);
-    assert_eq!(count_of("workflow_definition"), 3);
+    assert_eq!(count_of("custom_object"), 8);
+    assert_eq!(count_of("custom_field"), 26);
+    assert_eq!(count_of("relationship_definition"), 12);
+    assert_eq!(count_of("business_rule"), 4);
+    assert_eq!(count_of("workflow_definition"), 4);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -200,6 +200,32 @@ fn transaction_closed_workflow_closes_the_listing_and_creates_a_task() {
 
     let tasks_after = task_repo::list(&conn, &ws).unwrap();
     assert_eq!(tasks_after.len(), tasks_before + 1, "closing the transaction should create a post-closing task");
+}
+
+#[test]
+fn disbursement_payment_rule_requires_a_paid_date() {
+    let (conn, ws, admin) = setup_workspace();
+    install_real_estate(&conn, &ws, &admin);
+
+    let disbursement = custom_record_service::create(&conn, &ws, &record("commission_disbursement", "Agent commission on 12 Elm St"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("disbursement_status".to_string(), "Paid".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "commission_disbursement", &disbursement.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Paid Date"));
+
+    values.insert("paid_date".to_string(), "2026-09-20".to_string());
+    custom_field_service::set_entity_values(&conn, "commission_disbursement", &disbursement.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn commission_disbursement_created_workflow_creates_a_processing_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_real_estate(&conn, &ws, &admin);
+
+    let tasks_before = task_repo::list(&conn, &ws).unwrap().len();
+    custom_record_service::create(&conn, &ws, &record("commission_disbursement", "Agent commission on 12 Elm St"), Some(&admin)).unwrap();
+    let tasks_after = task_repo::list(&conn, &ws).unwrap();
+    assert_eq!(tasks_after.len(), tasks_before + 1, "the 'Commission disbursement created' workflow should have created a processing task");
 }
 
 #[test]

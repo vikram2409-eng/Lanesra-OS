@@ -51,7 +51,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = recruitment_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.recruitment");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 8);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 9);
 }
 
 #[test]
@@ -67,11 +67,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 8);
-    assert_eq!(count_of("custom_field"), 28);
-    assert_eq!(count_of("relationship_definition"), 14);
-    assert_eq!(count_of("business_rule"), 1);
-    assert_eq!(count_of("workflow_definition"), 3);
+    assert_eq!(count_of("custom_object"), 9);
+    assert_eq!(count_of("custom_field"), 32);
+    assert_eq!(count_of("relationship_definition"), 16);
+    assert_eq!(count_of("business_rule"), 2);
+    assert_eq!(count_of("workflow_definition"), 4);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -156,6 +156,37 @@ fn offer_accepted_workflow_places_the_application_and_drafts_a_placement() {
         linked.iter().any(|r| r.entity_type == "offer" && r.entity_id == offer.id),
         "the drafted placement should be linked back to the accepted offer"
     );
+}
+
+#[test]
+fn reference_check_completion_rule_requires_a_completed_date() {
+    let (conn, ws, admin) = setup_workspace();
+    install_recruitment(&conn, &ws, &admin);
+
+    let check = custom_record_service::create(&conn, &ws, &record("reference_check", "Former manager reference"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("check_status".to_string(), "Completed".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "reference_check", &check.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Completed Date"));
+
+    values.insert("completed_date".to_string(), "2026-08-21".to_string());
+    custom_field_service::set_entity_values(&conn, "reference_check", &check.id, &values, Some(&admin)).unwrap();
+
+    // Failed also requires it - already on file here, proving the rule
+    // doesn't spuriously block a record that already satisfies it.
+    values.insert("check_status".to_string(), "Failed".to_string());
+    custom_field_service::set_entity_values(&conn, "reference_check", &check.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn reference_check_requested_workflow_creates_a_contact_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_recruitment(&conn, &ws, &admin);
+
+    let tasks_before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    custom_record_service::create(&conn, &ws, &record("reference_check", "Former manager reference"), Some(&admin)).unwrap();
+    let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    assert_eq!(tasks_after, tasks_before + 1, "creating a reference check should create a task to contact the reference");
 }
 
 #[test]

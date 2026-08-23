@@ -53,7 +53,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = auto_service_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.auto_service");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 6);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 7);
 }
 
 #[test]
@@ -69,11 +69,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 6);
-    assert_eq!(count_of("custom_field"), 30);
-    assert_eq!(count_of("relationship_definition"), 10);
-    assert_eq!(count_of("business_rule"), 3);
-    assert_eq!(count_of("workflow_definition"), 4);
+    assert_eq!(count_of("custom_object"), 7);
+    assert_eq!(count_of("custom_field"), 35);
+    assert_eq!(count_of("relationship_definition"), 11);
+    assert_eq!(count_of("business_rule"), 4);
+    assert_eq!(count_of("workflow_definition"), 5);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -197,6 +197,41 @@ fn no_show_workflow_creates_a_reschedule_task() {
     custom_field_service::set_entity_values(&conn, "vehicle_appointment", &appt.id, &no_show, Some(&admin)).unwrap();
     let tasks_after = task_repo::list(&conn, &ws).unwrap();
     assert_eq!(tasks_after.len(), tasks_before + 1, "a no-show appointment should create a reschedule task");
+}
+
+#[test]
+fn parts_order_receipt_rule_requires_a_received_date() {
+    let (conn, ws, admin) = setup_workspace();
+    install_auto_service(&conn, &ws, &admin);
+
+    let order = custom_record_service::create(&conn, &ws, &record("parts_order", "Front brake pads order"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("part_name".to_string(), "Front brake pads".to_string());
+    custom_field_service::set_entity_values(&conn, "parts_order", &order.id, &values, Some(&admin)).unwrap();
+
+    values.insert("order_status".to_string(), "Received".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "parts_order", &order.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Received Date"));
+
+    values.insert("received_date".to_string(), "2026-08-21".to_string());
+    custom_field_service::set_entity_values(&conn, "parts_order", &order.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn parts_backordered_workflow_creates_a_follow_up_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_auto_service(&conn, &ws, &admin);
+
+    let order = custom_record_service::create(&conn, &ws, &record("parts_order", "Front brake pads order"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("part_name".to_string(), "Front brake pads".to_string());
+    custom_field_service::set_entity_values(&conn, "parts_order", &order.id, &values, Some(&admin)).unwrap();
+
+    let tasks_before = task_repo::list(&conn, &ws).unwrap().len();
+    values.insert("order_status".to_string(), "Backordered".to_string());
+    custom_field_service::set_entity_values(&conn, "parts_order", &order.id, &values, Some(&admin)).unwrap();
+    let tasks_after = task_repo::list(&conn, &ws).unwrap();
+    assert_eq!(tasks_after.len(), tasks_before + 1, "a backordered part should create a follow-up task");
 }
 
 #[test]

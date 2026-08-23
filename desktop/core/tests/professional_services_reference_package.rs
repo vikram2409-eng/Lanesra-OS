@@ -61,7 +61,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = professional_services_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.professional_services");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 6);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 7);
 }
 
 #[test]
@@ -77,11 +77,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 6);
-    assert_eq!(count_of("custom_field"), 30);
-    assert_eq!(count_of("relationship_definition"), 10);
-    assert_eq!(count_of("business_rule"), 4);
-    assert_eq!(count_of("workflow_definition"), 3);
+    assert_eq!(count_of("custom_object"), 7);
+    assert_eq!(count_of("custom_field"), 35);
+    assert_eq!(count_of("relationship_definition"), 11);
+    assert_eq!(count_of("business_rule"), 5);
+    assert_eq!(count_of("workflow_definition"), 4);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -233,6 +233,46 @@ fn engagement_complete_workflow_creates_two_tasks() {
 
     let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
     assert_eq!(tasks_after, tasks_before + 2, "completing an engagement should create a closure task and an invoice-preparation task");
+}
+
+#[test]
+fn change_request_approval_rule_requires_an_approved_date_when_approved_or_implemented() {
+    let (conn, ws, admin) = setup_workspace();
+    install_professional_services(&conn, &ws, &admin);
+
+    let cr = custom_record_service::create(&conn, &ws, &record("change_request", "Add mobile reporting module"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("description".to_string(), "Client requested a mobile reporting module".to_string());
+    custom_field_service::set_entity_values(&conn, "change_request", &cr.id, &values, Some(&admin)).unwrap();
+
+    values.insert("stage".to_string(), "Approved".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "change_request", &cr.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Approved Date"));
+
+    values.insert("approved_date".to_string(), "2026-08-19".to_string());
+    custom_field_service::set_entity_values(&conn, "change_request", &cr.id, &values, Some(&admin)).unwrap();
+
+    // Implemented also requires it - already on file here, proving the rule
+    // doesn't spuriously block a record that already satisfies it.
+    values.insert("stage".to_string(), "Implemented".to_string());
+    custom_field_service::set_entity_values(&conn, "change_request", &cr.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn change_request_submitted_workflow_creates_a_review_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_professional_services(&conn, &ws, &admin);
+
+    let cr = custom_record_service::create(&conn, &ws, &record("change_request", "Add mobile reporting module"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("description".to_string(), "Client requested a mobile reporting module".to_string());
+    custom_field_service::set_entity_values(&conn, "change_request", &cr.id, &values, Some(&admin)).unwrap();
+
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    values.insert("stage".to_string(), "Submitted".to_string());
+    custom_field_service::set_entity_values(&conn, "change_request", &cr.id, &values, Some(&admin)).unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    assert_eq!(after, before + 1, "the 'Change request submitted' workflow should have created a review task");
 }
 
 #[test]

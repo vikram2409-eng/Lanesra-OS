@@ -52,7 +52,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = construction_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.construction");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 5);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 6);
 }
 
 #[test]
@@ -68,11 +68,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 5);
-    assert_eq!(count_of("custom_field"), 28);
-    assert_eq!(count_of("relationship_definition"), 10);
-    assert_eq!(count_of("business_rule"), 3);
-    assert_eq!(count_of("workflow_definition"), 4);
+    assert_eq!(count_of("custom_object"), 6);
+    assert_eq!(count_of("custom_field"), 33);
+    assert_eq!(count_of("relationship_definition"), 11);
+    assert_eq!(count_of("business_rule"), 4);
+    assert_eq!(count_of("workflow_definition"), 5);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -218,6 +218,40 @@ fn project_close_workflow_creates_a_final_billing_review_task() {
 
     let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
     assert_eq!(tasks_after, tasks_before + 1, "closing a project should create a final billing review task");
+}
+
+#[test]
+fn punch_item_resolution_rule_requires_a_resolved_date_when_resolved_or_verified() {
+    let (conn, ws, admin) = setup_workspace();
+    install_construction(&conn, &ws, &admin);
+
+    let item = custom_record_service::create(&conn, &ws, &record("punch_list_item", "Touch up hallway paint"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("description".to_string(), "Touch up hallway paint".to_string());
+    custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap();
+
+    values.insert("stage".to_string(), "Resolved".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Resolved Date"));
+
+    values.insert("resolved_date".to_string(), "2026-08-12".to_string());
+    custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap();
+
+    // Verified also requires it - already on file here, so this just proves
+    // the rule doesn't spuriously block a record that already satisfies it.
+    values.insert("stage".to_string(), "Verified".to_string());
+    custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn punch_item_created_workflow_creates_an_address_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_construction(&conn, &ws, &admin);
+
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    custom_record_service::create(&conn, &ws, &record("punch_list_item", "Touch up hallway paint"), Some(&admin)).unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    assert_eq!(after, before + 1, "the 'Punch item created' workflow should have created a task");
 }
 
 #[test]
