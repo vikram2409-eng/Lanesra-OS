@@ -12,8 +12,9 @@ Lanesra OS is a free, open-source, self-hostable business application platform f
 
 ## Current status
 
-- Early Access v0.35.0
-- Windows desktop edition (Tauri + Rust + SQLite): the full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), backup/restore, self-service password change, PDF generation/printing, and CSV import/export all working. desktop-v0.11.0 is the latest tagged Early Access Windows installer (.exe/.msi) on GitHub Releases (unsigned); build and run from source is also supported.
+- Early Access v0.36.0
+- Windows desktop edition (Tauri + Rust + SQLite): the full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), backup/restore, self-service password change, PDF generation/printing, and CSV import/export all working. desktop-v0.12.0 is the latest tagged Early Access Windows installer (.exe/.msi) on GitHub Releases (unsigned); build and run from source is also supported.
+- Saved Views & Bulk Actions (desktop and demo): any list screen can save its current filter/sort/group-by combination as a named view (Private/Shared with an admin-settable default on desktop), reuse it as a dashboard record-list widget's data source, and run bulk update-status/reassign-owner/tag/archive operations across a multi-select.
 - Browser-based live demo covers the full no-code platform (Custom Objects, Relationships, Screen/App Builder, Business Rules, Workflow Automation, Dashboards, Reports), the App Catalog (all 10 industry apps), Solution Management (Publishers, Solutions, Components, Dependencies, real export), and an Integration Hub simulation (Overview, Integration Jobs, API Access, Connections, Webhooks & Events) — the demo has no server, so network calls, encryption and signing are simulated locally, not real.
 - Integration Hub (desktop only, real): AES-256-GCM-encrypted Connections, OpenAPI 3.x Connector import, a generic `/api/v1/objects/...` REST API secured by hashed scoped API keys, HMAC-SHA256-signed Webhooks with retry/backoff, a generalized CSV import/export wizard reusing the same record-write path as the API, External Objects, and a real background-scheduled Integration Jobs engine on the Team Workspace server.
 - Solution Management (desktop and demo): Publishers with enforced namespace validation, component-tagging across every admin-configurable artifact, a synthetic "Local Workspace" grouping for hand-built customization, named/versioned Solutions curated one component at a time, real export to a re-importable manifest, and update-with-diff for reviewing Added/Modified/Removed before applying a package update.
@@ -30,6 +31,7 @@ Lanesra OS is a free, open-source, self-hostable business application platform f
 - App Builder (publish a named app with enforced access) and App Catalog (10 install-ready industry apps)
 - Solution Management: Publishers, versioned Solutions, component export/import, update-with-diff
 - Integration Hub: encrypted Connections, OpenAPI Connectors, a generic REST API, HMAC-signed Webhooks, CSV data exchange, scheduled Integration Jobs, unified execution logs
+- Saved Views (named filter/sort/group-by combinations, reusable as a dashboard data source) and Bulk Actions (update status, reassign owner, tag, archive across a multi-select)
 
 ## Product principles
 
