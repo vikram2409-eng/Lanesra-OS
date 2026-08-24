@@ -3,26 +3,27 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import type { AppPackage, InstalledApp, InstalledAppDetail } from "../../lib/types";
+import { PackageDetailsPanel } from "./PackageDetails";
 
 /**
  * Industry Data Model foundations (roadmap "Industry Data Model"): the
  * Admin -> App Catalog screen the dev spec describes as "Admin -> Apps &
- * Industry Models -> App Catalog -> Review -> Validate -> Install". This
- * is deliberately minimal - a way to import a package manifest, validate
- * and install it, and see/deactivate what's installed - since no actual
- * per-industry package (Field Service, Property Management, ...) exists
- * yet to design a richer browsing experience against. Every primitive an
- * install actually touches (Custom Objects, Business Rules, Workflow
- * Automation, Screen/App Builder, Dashboards, Reports, Numbering, App
- * Builder) already has its own Admin screen; this is purely the
- * import/install/deactivate control surface on top, mirroring the Rust
- * core's `industry_package_service`.
+ * Industry Models -> App Catalog -> Review -> Validate -> Install" - a
+ * way to import a package manifest, review its "Details" (see
+ * PackageDetailsPanel below) before committing, install it, and see/
+ * deactivate what's installed. Every primitive an install actually
+ * touches (Custom Objects, Business Rules, Workflow Automation, Screen/
+ * App Builder, Dashboards, Reports, Numbering, App Builder) already has
+ * its own Admin screen; this is purely the import/review/install/
+ * deactivate control surface on top, mirroring the Rust core's
+ * `industry_package_service`.
  */
 export function IndustryPackagesAdmin() {
   const [manifestJson, setManifestJson] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const packages = useQuery({ queryKey: ["industryPackages"], queryFn: () => api.listIndustryPackages() });
@@ -172,22 +173,43 @@ export function IndustryPackagesAdmin() {
             </thead>
             <tbody>
               {packageList.map((p: AppPackage) => (
-                <tr key={p.id}>
-                  <td>{p.name}</td>
-                  <td>{p.industry}</td>
-                  <td>{p.version}</td>
-                  <td>{p.min_lanesra_version}</td>
-                  <td>{new Date(p.imported_at).toLocaleString()}</td>
-                  <td>
-                    {installedPackageIds.has(p.package_id) ? (
-                      <span className="badge">Installed</span>
-                    ) : (
-                      <button className="btn" disabled={install.isPending} onClick={() => install.mutate(p.id)}>
-                        {install.isPending ? "Installing..." : "Install"}
+                <>
+                  <tr key={p.id}>
+                    <td>
+                      <button className="link-button" onClick={() => setPreviewId(previewId === p.id ? null : p.id)}>
+                        {p.name}
                       </button>
-                    )}
-                  </td>
-                </tr>
+                    </td>
+                    <td>{p.industry}</td>
+                    <td>{p.version}</td>
+                    <td>{p.min_lanesra_version}</td>
+                    <td>{new Date(p.imported_at).toLocaleString()}</td>
+                    <td style={{ display: "flex", gap: 6 }}>
+                      <button className="btn" onClick={() => setPreviewId(previewId === p.id ? null : p.id)}>
+                        {previewId === p.id ? "Hide details" : "Details"}
+                      </button>
+                      {installedPackageIds.has(p.package_id) ? (
+                        <span className="badge">Installed</span>
+                      ) : (
+                        <button className="btn btn-primary" disabled={install.isPending} onClick={() => install.mutate(p.id)}>
+                          {install.isPending ? "Installing..." : "Install"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {previewId === p.id && (
+                    <tr>
+                      <td colSpan={6}>
+                        <PackageDetailsPanel manifestJson={p.manifest_json} />
+                        {!installedPackageIds.has(p.package_id) && (
+                          <button className="btn btn-primary" disabled={install.isPending} onClick={() => install.mutate(p.id)}>
+                            {install.isPending ? "Installing..." : "Install this package"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>
