@@ -50,7 +50,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = nonprofit_association_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.nonprofit_association");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 9);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 10);
 }
 
 #[test]
@@ -66,11 +66,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 9);
-    assert_eq!(count_of("custom_field"), 31);
-    assert_eq!(count_of("relationship_definition"), 11);
-    assert_eq!(count_of("business_rule"), 3);
-    assert_eq!(count_of("workflow_definition"), 2);
+    assert_eq!(count_of("custom_object"), 10);
+    assert_eq!(count_of("custom_field"), 35);
+    assert_eq!(count_of("relationship_definition"), 12);
+    assert_eq!(count_of("business_rule"), 4);
+    assert_eq!(count_of("workflow_definition"), 3);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -154,6 +154,33 @@ fn program_participation_workflow_creates_an_onboarding_task() {
     custom_record_service::create(&conn, &ws, &record("program_participation", "Jordan Lee - Reading Program"), Some(&admin)).unwrap();
     let tasks_after = task_repo::list(&conn, &ws).unwrap();
     assert_eq!(tasks_after.len(), tasks_before + 1, "registering a program participant should create an onboarding task");
+}
+
+#[test]
+fn grant_award_rule_requires_amount_and_award_date() {
+    let (conn, ws, admin) = setup_workspace();
+    install_nonprofit(&conn, &ws, &admin);
+
+    let grant = custom_record_service::create(&conn, &ws, &record("grant", "Community Fund grant"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("grant_status".to_string(), "Awarded".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "grant", &grant.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Awarded Amount") || err.to_string().contains("Award Date"));
+
+    values.insert("awarded_amount".to_string(), "25000".to_string());
+    values.insert("award_date".to_string(), "2026-09-01".to_string());
+    custom_field_service::set_entity_values(&conn, "grant", &grant.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn grant_application_submitted_workflow_creates_a_follow_up_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_nonprofit(&conn, &ws, &admin);
+
+    let tasks_before = task_repo::list(&conn, &ws).unwrap().len();
+    custom_record_service::create(&conn, &ws, &record("grant", "Community Fund grant"), Some(&admin)).unwrap();
+    let tasks_after = task_repo::list(&conn, &ws).unwrap();
+    assert_eq!(tasks_after.len(), tasks_before + 1, "logging a new grant should create a follow-up task");
 }
 
 #[test]

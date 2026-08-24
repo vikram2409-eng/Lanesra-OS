@@ -50,7 +50,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = practice_admin_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.practice_admin");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 7);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 8);
 }
 
 #[test]
@@ -66,11 +66,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 7);
-    assert_eq!(count_of("custom_field"), 23);
-    assert_eq!(count_of("relationship_definition"), 10);
-    assert_eq!(count_of("business_rule"), 1);
-    assert_eq!(count_of("workflow_definition"), 3);
+    assert_eq!(count_of("custom_object"), 8);
+    assert_eq!(count_of("custom_field"), 29);
+    assert_eq!(count_of("relationship_definition"), 12);
+    assert_eq!(count_of("business_rule"), 3);
+    assert_eq!(count_of("workflow_definition"), 4);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -162,6 +162,53 @@ fn treatment_accepted_workflow_creates_a_billing_prep_task() {
 
     let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
     assert_eq!(tasks_after, tasks_before + 1, "accepting a treatment plan should create a billing-preparation task");
+}
+
+#[test]
+fn claim_payment_rule_requires_a_paid_amount_and_payment_date() {
+    let (conn, ws, admin) = setup_workspace();
+    install_practice_admin(&conn, &ws, &admin);
+
+    let claim = custom_record_service::create(&conn, &ws, &record("billing_claim", "Cleaning claim"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("claim_status".to_string(), "Paid".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "billing_claim", &claim.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Paid Amount") || err.to_string().contains("Payment Date"));
+
+    values.insert("paid_amount".to_string(), "180".to_string());
+    values.insert("payment_date".to_string(), "2026-08-22".to_string());
+    custom_field_service::set_entity_values(&conn, "billing_claim", &claim.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn claim_denial_notes_rule_requires_a_denial_reason() {
+    let (conn, ws, admin) = setup_workspace();
+    install_practice_admin(&conn, &ws, &admin);
+
+    let claim = custom_record_service::create(&conn, &ws, &record("billing_claim", "Cleaning claim"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("claim_status".to_string(), "Denied".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "billing_claim", &claim.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Denial Reason"));
+
+    values.insert("denial_reason".to_string(), "Missing pre-authorization".to_string());
+    custom_field_service::set_entity_values(&conn, "billing_claim", &claim.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn billing_claim_submitted_workflow_creates_a_tracking_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_practice_admin(&conn, &ws, &admin);
+
+    let claim = custom_record_service::create(&conn, &ws, &record("billing_claim", "Cleaning claim"), Some(&admin)).unwrap();
+    let tasks_before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+
+    let mut values = HashMap::new();
+    values.insert("claim_status".to_string(), "Submitted".to_string());
+    custom_field_service::set_entity_values(&conn, "billing_claim", &claim.id, &values, Some(&admin)).unwrap();
+
+    let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    assert_eq!(tasks_after, tasks_before + 1, "the 'Billing claim submitted' workflow should have created a tracking task");
 }
 
 #[test]

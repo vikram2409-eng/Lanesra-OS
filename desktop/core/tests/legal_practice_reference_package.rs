@@ -51,7 +51,7 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = legal_practice_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.legal_practice");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 6);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 7);
 }
 
 #[test]
@@ -67,11 +67,11 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 6);
-    assert_eq!(count_of("custom_field"), 24);
-    assert_eq!(count_of("relationship_definition"), 7);
-    assert_eq!(count_of("business_rule"), 4);
-    assert_eq!(count_of("workflow_definition"), 4);
+    assert_eq!(count_of("custom_object"), 7);
+    assert_eq!(count_of("custom_field"), 28);
+    assert_eq!(count_of("relationship_definition"), 8);
+    assert_eq!(count_of("business_rule"), 6);
+    assert_eq!(count_of("workflow_definition"), 5);
     assert_eq!(count_of("screen_layout"), 1);
     assert_eq!(count_of("custom_report"), 1);
     assert_eq!(count_of("dashboard_layout"), 1);
@@ -199,6 +199,40 @@ fn matter_closing_and_closed_workflows_create_their_own_tasks() {
     custom_field_service::set_entity_values(&conn, "matter", &matter.id, &closed, Some(&admin)).unwrap();
     let tasks_after_closed = task_repo::list(&conn, &ws).unwrap().len();
     assert_eq!(tasks_after_closed, tasks_after_closing + 1, "closing a matter should create a final billing review task");
+}
+
+#[test]
+fn conflict_check_resolution_and_notes_rules_gate_the_two_terminal_statuses_independently() {
+    let (conn, ws, admin) = setup_workspace();
+    install_legal_practice(&conn, &ws, &admin);
+
+    let check = custom_record_service::create(&conn, &ws, &record("conflict_check", "Conflict check for Smith v. Jones"), Some(&admin)).unwrap();
+
+    // Cleared requires a cleared date - resolution_notes is untouched by this rule.
+    let mut values = HashMap::new();
+    values.insert("check_status".to_string(), "Cleared".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "conflict_check", &check.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Cleared Date"));
+    values.insert("cleared_date".to_string(), "2026-08-22".to_string());
+    custom_field_service::set_entity_values(&conn, "conflict_check", &check.id, &values, Some(&admin)).unwrap();
+
+    // Conflict Found requires resolution notes instead.
+    values.insert("check_status".to_string(), "Conflict Found".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "conflict_check", &check.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Resolution Notes"));
+    values.insert("resolution_notes".to_string(), "Prior representation of opposing party in an unrelated matter".to_string());
+    custom_field_service::set_entity_values(&conn, "conflict_check", &check.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn conflict_check_requested_workflow_creates_a_run_check_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_legal_practice(&conn, &ws, &admin);
+
+    let tasks_before = task_repo::list(&conn, &ws).unwrap().len();
+    custom_record_service::create(&conn, &ws, &record("conflict_check", "Conflict check for Smith v. Jones"), Some(&admin)).unwrap();
+    let tasks_after = task_repo::list(&conn, &ws).unwrap().len();
+    assert_eq!(tasks_after, tasks_before + 1, "creating a conflict check should create a task to run it");
 }
 
 #[test]

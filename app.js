@@ -2721,6 +2721,7 @@ const REFERENCE_PACKAGES={
    {key:'asset',label:'Asset',labelPlural:'Assets',icon:'🔩',prefix:'AST',digits:4},
    {key:'work_order',label:'Work Order',labelPlural:'Work Orders',icon:'🛠️',prefix:'WO',digits:4},
    {key:'service_appointment',label:'Appointment',labelPlural:'Appointments',icon:'📅',prefix:'APT',digits:4},
+   {key:'warranty_claim',label:'Warranty Claim',labelPlural:'Warranty Claims',icon:'🧾',prefix:'WC',digits:5},
   ],
   fields:[
    ['service_site','address','Address','text'],['service_site','city','City','text'],
@@ -2732,11 +2733,15 @@ const REFERENCE_PACKAGES={
    ['service_appointment','appt_stage','Stage','select','Scheduled|En Route|In Progress|Completed|Cancelled'],
    ['service_appointment','actual_start','Actual Start','date'],['service_appointment','actual_end','Actual End','date'],
    ['service_appointment','outcome','Outcome','text'],
+   ['warranty_claim','claim_status','Status','select','Draft|Submitted|Approved|Denied|Reimbursed'],
+   ['warranty_claim','resolution_notes','Resolution Notes','text'],['warranty_claim','amount_approved','Amount Approved','number'],
   ],
   relationships:[
    {source:'work_order',target:'service_site',relType:'many_to_one',forwardLabel:'Service Site',reverseLabel:'Work Orders'},
    {source:'work_order',target:'asset',relType:'many_to_one',forwardLabel:'Asset',reverseLabel:'Work Orders'},
    {source:'service_appointment',target:'work_order',relType:'many_to_one',forwardLabel:'Work Order',reverseLabel:'Appointments'},
+   {source:'warranty_claim',target:'asset',relType:'many_to_one',forwardLabel:'Asset',reverseLabel:'Warranty Claims'},
+   {source:'work_order',target:'Company',relType:'many_to_one',forwardLabel:'Customer',reverseLabel:'Work Orders'},
   ],
   rules:[
    {entity:'work_order',matchType:'all',
@@ -2745,11 +2750,20 @@ const REFERENCE_PACKAGES={
    {entity:'service_appointment',matchType:'all',
     conditions:[{fieldKey:'appt_stage',operator:'equals',value:'Completed',compareField:null,groupId:null},{fieldKey:'actual_start',operator:'is_empty',value:'',compareField:null,groupId:'g1'},{fieldKey:'actual_end',operator:'is_empty',value:'',compareField:null,groupId:'g1'},{fieldKey:'outcome',operator:'is_empty',value:'',compareField:null,groupId:'g1'}],
     actions:[{type:'block_save',message:'Enter actual start/end times and an outcome before marking an appointment Completed.'}]},
+   {entity:'warranty_claim',matchType:'all',
+    conditions:[{fieldKey:'claim_status',operator:'in_list',value:'Approved|Denied|Reimbursed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'resolution_notes',value:'',message:''}]},
+   {entity:'warranty_claim',matchType:'all',
+    conditions:[{fieldKey:'claim_status',operator:'equals',value:'Reimbursed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'amount_approved',value:'',message:''}]},
   ],
   workflows:[
    {entity:'work_order',matchType:'all',notify:true,
     conditions:[{fieldKey:'wo_stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
     actions:[{type:'update_related_record',relTargetEntity:'asset',relTargetField:'last_service_status',relValue:'Serviced'},{type:'create_task',taskTitle:'Review completed work order',daysOffset:1}]},
+   {entity:'warranty_claim',matchType:'all',notify:true,
+    conditions:[{fieldKey:'claim_status',operator:'equals',value:'Submitted',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Review warranty claim',daysOffset:2}]},
   ],
  },
  property_management:{
@@ -2761,6 +2775,7 @@ const REFERENCE_PACKAGES={
    {key:'unit',label:'Unit',labelPlural:'Units',icon:'🚪',prefix:'UNIT',digits:4},
    {key:'lease',label:'Lease',labelPlural:'Leases',icon:'📄',prefix:'LSE',digits:4},
    {key:'maintenance_request',label:'Maintenance Request',labelPlural:'Maintenance Requests',icon:'🔧',prefix:'MNT',digits:4},
+   {key:'unit_showing',label:'Unit Showing',labelPlural:'Unit Showings',icon:'👁',prefix:'SHW',digits:5},
   ],
   fields:[
    ['property','address','Address','text'],['property','city','City','text'],
@@ -2769,16 +2784,23 @@ const REFERENCE_PACKAGES={
    ['lease','start_date','Start Date','date'],['lease','end_date','End Date','date'],['lease','monthly_rent','Monthly Rent','number'],
    ['maintenance_request','mr_stage','Stage','select','New|Assigned|In Progress|Closed'],
    ['maintenance_request','description','Description','text'],['maintenance_request','resolution','Resolution','text'],['maintenance_request','completed_date','Completed Date','date'],
+   ['unit_showing','showing_stage','Stage','select','Scheduled|Completed|Cancelled|No Show'],
+   ['unit_showing','interest_level','Interest Level','select','Low|Medium|High'],
   ],
   relationships:[
    {source:'unit',target:'property',relType:'many_to_one',forwardLabel:'Property',reverseLabel:'Units'},
    {source:'lease',target:'unit',relType:'many_to_one',forwardLabel:'Unit',reverseLabel:'Leases'},
    {source:'maintenance_request',target:'unit',relType:'many_to_one',forwardLabel:'Unit',reverseLabel:'Maintenance Requests'},
+   {source:'unit_showing',target:'unit',relType:'many_to_one',forwardLabel:'Unit',reverseLabel:'Showings'},
+   {source:'property',target:'Company',relType:'many_to_one',forwardLabel:'Owner',reverseLabel:'Properties'},
   ],
   rules:[
    {entity:'maintenance_request',matchType:'all',
     conditions:[{fieldKey:'mr_stage',operator:'equals',value:'Closed',compareField:null,groupId:null},{fieldKey:'resolution',operator:'is_empty',value:'',compareField:null,groupId:'g1'},{fieldKey:'completed_date',operator:'is_empty',value:'',compareField:null,groupId:'g1'}],
     actions:[{type:'block_save',message:'Enter a resolution and completed date before closing a maintenance request.'}]},
+   {entity:'unit_showing',matchType:'all',
+    conditions:[{fieldKey:'showing_stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'interest_level',value:'',message:''}]},
   ],
   workflows:[
    {entity:'lease',matchType:'all',notify:false,
@@ -2790,6 +2812,9 @@ const REFERENCE_PACKAGES={
    {entity:'maintenance_request',matchType:'all',notify:true,
     conditions:[{fieldKey:'mr_stage',operator:'equals',value:'Assigned',compareField:null,groupId:null}],
     actions:[{type:'create_task',taskTitle:'Follow up on assigned maintenance request',daysOffset:1}]},
+   {entity:'unit_showing',matchType:'all',notify:false,
+    conditions:[{fieldKey:'showing_stage',operator:'equals',value:'Completed',compareField:null,groupId:null},{fieldKey:'interest_level',operator:'equals',value:'High',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Follow up with interested prospect',daysOffset:1}]},
   ],
  },
  // The remaining eight packages below are reduced mirrors of the desktop
@@ -2828,6 +2853,7 @@ const REFERENCE_PACKAGES={
    {key:'work_package',label:'Work Package',labelPlural:'Work Packages',icon:'📦',prefix:'WP',digits:4},
    {key:'change_order',label:'Change Order',labelPlural:'Change Orders',icon:'📝',prefix:'CO',digits:4},
    {key:'inspection',label:'Inspection',labelPlural:'Inspections',icon:'🔎',prefix:'INSP',digits:4},
+   {key:'punch_list_item',label:'Punch List Item',labelPlural:'Punch List Items',icon:'📋',prefix:'PLI',digits:4},
   ],
   fields:[
    ['project','stage','Stage','select','Lead/Estimating|Awarded|Planning|Active|On Hold|Substantially Complete|Closed|Cancelled'],
@@ -2837,11 +2863,15 @@ const REFERENCE_PACKAGES={
    ['change_order','stage','Stage','select','Draft|Submitted|Approved|Rejected|Cancelled'],
    ['change_order','amount','Requested Amount','number'],['change_order','approved_amount','Approved Amount','number'],
    ['inspection','stage','Stage','select','Planned|Passed|Failed|Reinspection Required'],['inspection','inspection_type','Type','text'],
+   ['punch_list_item','stage','Stage','select','Open|In Progress|Resolved|Verified|Won\'t Fix'],
+   ['punch_list_item','description','Description','text'],['punch_list_item','resolved_date','Resolved Date','date'],
   ],
   relationships:[
    {source:'work_package',target:'project',relType:'many_to_one',forwardLabel:'Project',reverseLabel:'Work Packages'},
    {source:'change_order',target:'project',relType:'many_to_one',forwardLabel:'Project',reverseLabel:'Change Orders'},
    {source:'inspection',target:'project',relType:'many_to_one',forwardLabel:'Project',reverseLabel:'Inspections'},
+   {source:'punch_list_item',target:'project',relType:'many_to_one',forwardLabel:'Project',reverseLabel:'Punch List Items'},
+   {source:'project',target:'Company',relType:'many_to_one',forwardLabel:'Customer',reverseLabel:'Projects'},
   ],
   rules:[
    {entity:'project',matchType:'all',
@@ -2850,7 +2880,14 @@ const REFERENCE_PACKAGES={
    {entity:'change_order',matchType:'all',
     conditions:[{fieldKey:'stage',operator:'equals',value:'Approved',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'approved_amount',value:'',message:''}]},
+   {entity:'punch_list_item',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'in_list',value:'Resolved|Verified',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'resolved_date',value:'',message:''}]},
   ],
+  // Punch List Item's own "Punch item created" workflow desktop ships is
+  // trigger_type:"record_created" - left out here, same reasoning as
+  // every other record_created workflow in this file (see this const's
+  // own doc comment above).
   workflows:[
    {entity:'inspection',matchType:'all',notify:true,
     conditions:[{fieldKey:'stage',operator:'equals',value:'Failed',compareField:null,groupId:null}],
@@ -2869,6 +2906,7 @@ const REFERENCE_PACKAGES={
    {key:'milestone',label:'Milestone',labelPlural:'Milestones',icon:'🚩',prefix:'MS',digits:4},
    {key:'time_entry',label:'Time Entry',labelPlural:'Time Entries',icon:'⏱',prefix:'TE',digits:5},
    {key:'expense',label:'Expense',labelPlural:'Expenses',icon:'💳',prefix:'EXP',digits:5},
+   {key:'change_request',label:'Change Request',labelPlural:'Change Requests',icon:'🔄',prefix:'CR',digits:4},
   ],
   fields:[
    ['engagement','stage','Stage','select','Discovery|Proposed|Active|On Hold|Complete|Cancelled'],['engagement','actual_end_date','Actual End Date','date'],
@@ -2877,11 +2915,14 @@ const REFERENCE_PACKAGES={
    ['time_entry','billing_status','Billing Status','select','Not Eligible|Eligible'],
    ['expense','stage','Stage','select','Draft|Submitted|Approved|Reimbursed'],
    ['expense','category','Category','text'],['expense','amount','Amount','number'],['expense','date','Date','date'],
+   ['change_request','stage','Stage','select','Draft|Submitted|Approved|Rejected|Implemented'],['change_request','approved_date','Approved Date','date'],
   ],
   relationships:[
    {source:'milestone',target:'engagement',relType:'many_to_one',forwardLabel:'Engagement',reverseLabel:'Milestones'},
    {source:'time_entry',target:'engagement',relType:'many_to_one',forwardLabel:'Engagement',reverseLabel:'Time Entries'},
    {source:'expense',target:'engagement',relType:'many_to_one',forwardLabel:'Engagement',reverseLabel:'Expenses'},
+   {source:'change_request',target:'engagement',relType:'many_to_one',forwardLabel:'Engagement',reverseLabel:'Change Requests'},
+   {source:'engagement',target:'Company',relType:'many_to_one',forwardLabel:'Customer',reverseLabel:'Engagements'},
   ],
   rules:[
    {entity:'engagement',matchType:'all',
@@ -2896,6 +2937,9 @@ const REFERENCE_PACKAGES={
    {entity:'milestone',matchType:'all',
     conditions:[{fieldKey:'stage',operator:'equals',value:'Complete',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'completed_date',value:'',message:''}]},
+   {entity:'change_request',matchType:'all',
+    conditions:[{fieldKey:'stage',operator:'in_list',value:'Approved|Implemented',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'approved_date',value:'',message:''}]},
   ],
   workflows:[
    {entity:'time_entry',matchType:'all',notify:false,
@@ -2904,6 +2948,9 @@ const REFERENCE_PACKAGES={
    {entity:'engagement',matchType:'all',notify:false,
     conditions:[{fieldKey:'stage',operator:'equals',value:'Complete',compareField:null,groupId:null}],
     actions:[{type:'create_task',taskTitle:'Prepare final invoice',daysOffset:2}]},
+   {entity:'change_request',matchType:'all',notify:false,
+    conditions:[{fieldKey:'stage',operator:'equals',value:'Submitted',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Review change request',daysOffset:2}]},
   ],
  },
  practice_admin:{
@@ -2915,21 +2962,32 @@ const REFERENCE_PACKAGES={
    {key:'provider_profile',label:'Provider Profile',labelPlural:'Provider Profiles',icon:'🩺',prefix:'PROV',digits:3},
    {key:'appointment',label:'Appointment',labelPlural:'Appointments',icon:'📅',prefix:'APT',digits:5},
    {key:'treatment_plan',label:'Treatment Plan',labelPlural:'Treatment Plans',icon:'📋',prefix:'TX',digits:4},
+   {key:'billing_claim',label:'Billing Claim',labelPlural:'Billing Claims',icon:'🧾',prefix:'CLM',digits:5},
   ],
   fields:[
    ['provider_profile','specialty','Specialty','text'],
    ['appointment','stage','Status','select','Requested|Confirmed|Checked In|Completed|No Show|Cancelled'],['appointment','completed_date','Completed Date','date'],
    ['treatment_plan','stage','Stage','select','Proposed|Accepted|In Progress|Complete|Declined'],
+   ['billing_claim','claim_status','Status','select','Draft|Submitted|Paid|Denied'],
+   ['billing_claim','paid_amount','Paid Amount','number'],['billing_claim','payment_date','Payment Date','date'],['billing_claim','denial_reason','Denial Reason','text'],
   ],
   relationships:[
    {source:'appointment',target:'patient_profile',relType:'many_to_one',forwardLabel:'Patient',reverseLabel:'Appointments'},
    {source:'appointment',target:'provider_profile',relType:'many_to_one',forwardLabel:'Provider',reverseLabel:'Appointments'},
    {source:'treatment_plan',target:'patient_profile',relType:'many_to_one',forwardLabel:'Patient',reverseLabel:'Treatment Plans'},
+   {source:'billing_claim',target:'patient_profile',relType:'many_to_one',forwardLabel:'Patient',reverseLabel:'Billing Claims'},
+   {source:'patient_profile',target:'Contact',relType:'many_to_one',forwardLabel:'Contact',reverseLabel:'Patient Profile'},
   ],
   rules:[
    {entity:'appointment',matchType:'all',
     conditions:[{fieldKey:'stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'completed_date',value:'',message:''}]},
+   {entity:'billing_claim',matchType:'all',
+    conditions:[{fieldKey:'claim_status',operator:'equals',value:'Paid',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'paid_amount',value:'',message:''},{type:'require',targetField:'payment_date',value:'',message:''}]},
+   {entity:'billing_claim',matchType:'all',
+    conditions:[{fieldKey:'claim_status',operator:'equals',value:'Denied',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'denial_reason',value:'',message:''}]},
   ],
   workflows:[
    {entity:'appointment',matchType:'all',notify:false,
@@ -2938,6 +2996,9 @@ const REFERENCE_PACKAGES={
    {entity:'treatment_plan',matchType:'all',notify:false,
     conditions:[{fieldKey:'stage',operator:'equals',value:'Accepted',compareField:null,groupId:null}],
     actions:[{type:'create_task',taskTitle:'Prepare billing/quote for accepted treatment plan',daysOffset:1}]},
+   {entity:'billing_claim',matchType:'all',notify:false,
+    conditions:[{fieldKey:'claim_status',operator:'equals',value:'Submitted',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Track submitted billing claim',daysOffset:14}]},
   ],
  },
  recruitment:{
@@ -2949,6 +3010,7 @@ const REFERENCE_PACKAGES={
    {key:'candidate_profile',label:'Candidate Profile',labelPlural:'Candidate Profiles',icon:'🧑',prefix:'CAND',digits:5},
    {key:'application',label:'Application',labelPlural:'Applications',icon:'📨',prefix:'APP',digits:5},
    {key:'offer',label:'Offer',labelPlural:'Offers',icon:'📝',prefix:'OFR',digits:4},
+   {key:'reference_check',label:'Reference Check',labelPlural:'Reference Checks',icon:'📞',prefix:'REF',digits:5},
   ],
   fields:[
    ['job_requisition','stage','Stage','select','Draft|Open|On Hold|Filled|Closed|Cancelled'],
@@ -2956,17 +3018,26 @@ const REFERENCE_PACKAGES={
    ['candidate_profile','skills_summary','Skills Summary','text'],['candidate_profile','source','Source','text'],
    ['application','stage','Stage','select','Sourced|Screening|Submitted|Interview|Offer|Placed|Rejected|Withdrawn'],['application','score','Score','number'],
    ['offer','amount','Amount','number'],['offer','start_date','Start Date','date'],['offer','stage','Stage','select','Draft|Sent|Accepted|Rejected|Withdrawn'],
+   ['reference_check','check_status','Status','select','Requested|Completed|Failed'],['reference_check','completed_date','Completed Date','date'],
   ],
   relationships:[
    {source:'application',target:'candidate_profile',relType:'many_to_one',forwardLabel:'Candidate',reverseLabel:'Applications'},
    {source:'application',target:'job_requisition',relType:'many_to_one',forwardLabel:'Job',reverseLabel:'Applications'},
    {source:'offer',target:'application',relType:'many_to_one',forwardLabel:'Application',reverseLabel:'Offers'},
+   {source:'reference_check',target:'candidate_profile',relType:'many_to_one',forwardLabel:'Candidate',reverseLabel:'Reference Checks'},
+   {source:'job_requisition',target:'Company',relType:'many_to_one',forwardLabel:'Customer',reverseLabel:'Job Requisitions'},
   ],
   rules:[
    {entity:'offer',matchType:'all',
     conditions:[{fieldKey:'stage',operator:'equals',value:'Accepted',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'start_date',value:'',message:''}]},
+   {entity:'reference_check',matchType:'all',
+    conditions:[{fieldKey:'check_status',operator:'in_list',value:'Completed|Failed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'completed_date',value:'',message:''}]},
   ],
+  // Reference Check's own "Reference check requested" workflow desktop
+  // ships is trigger_type:"record_created" - left out here, same reasoning
+  // as every other record_created workflow in this file.
   workflows:[
    {entity:'application',matchType:'all',notify:false,
     conditions:[{fieldKey:'stage',operator:'equals',value:'Interview',compareField:null,groupId:null}],
@@ -2985,6 +3056,7 @@ const REFERENCE_PACKAGES={
    {key:'listing',label:'Listing',labelPlural:'Listings',icon:'📣',prefix:'LST',digits:4},
    {key:'purchase_offer',label:'Offer',labelPlural:'Offers',icon:'📝',prefix:'OFR',digits:4},
    {key:'transaction',label:'Transaction',labelPlural:'Transactions',icon:'🤝',prefix:'TXN',digits:4},
+   {key:'commission_disbursement',label:'Commission Disbursement',labelPlural:'Commission Disbursements',icon:'💰',prefix:'DSB',digits:5},
   ],
   fields:[
    ['listing_property','property_type','Property Type','text'],
@@ -2994,12 +3066,15 @@ const REFERENCE_PACKAGES={
    ['purchase_offer','amount','Amount','number'],['purchase_offer','expiry_date','Expiry Date','date'],
    ['transaction','status','Status','select','Open|Pending|Closed|Cancelled'],
    ['transaction','closing_date','Closing Date','date'],['transaction','final_price','Final Price','number'],
+   ['commission_disbursement','disbursement_status','Status','select','Pending|Paid'],['commission_disbursement','paid_date','Paid Date','date'],
   ],
   relationships:[
    {source:'listing',target:'listing_property',relType:'many_to_one',forwardLabel:'Property',reverseLabel:'Listings'},
    {source:'purchase_offer',target:'listing',relType:'many_to_one',forwardLabel:'Listing',reverseLabel:'Offers'},
    {source:'transaction',target:'purchase_offer',relType:'many_to_one',forwardLabel:'Accepted Offer',reverseLabel:'Transaction'},
    {source:'transaction',target:'listing',relType:'many_to_one',forwardLabel:'Listing',reverseLabel:'Transactions'},
+   {source:'commission_disbursement',target:'transaction',relType:'many_to_one',forwardLabel:'Transaction',reverseLabel:'Commission Disbursements'},
+   {source:'listing_property',target:'Contact',relType:'many_to_one',forwardLabel:'Owner/Seller',reverseLabel:'Properties'},
   ],
   rules:[
    {entity:'purchase_offer',matchType:'all',
@@ -3011,7 +3086,13 @@ const REFERENCE_PACKAGES={
    {entity:'transaction',matchType:'all',
     conditions:[{fieldKey:'status',operator:'equals',value:'Closed',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'closing_date',value:'',message:''},{type:'require',targetField:'final_price',value:'',message:''}]},
+   {entity:'commission_disbursement',matchType:'all',
+    conditions:[{fieldKey:'disbursement_status',operator:'equals',value:'Paid',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'paid_date',value:'',message:''}]},
   ],
+  // Commission Disbursement's own "Commission disbursement created"
+  // workflow desktop ships is trigger_type:"record_created" - left out
+  // here, same reasoning as every other record_created workflow in this file.
   workflows:[
    {entity:'purchase_offer',matchType:'all',notify:false,
     conditions:[{fieldKey:'stage',operator:'equals',value:'Accepted',compareField:null,groupId:null}],
@@ -3029,6 +3110,7 @@ const REFERENCE_PACKAGES={
    {key:'matter',label:'Matter',labelPlural:'Matters',icon:'⚖️',prefix:'MTR',digits:4},
    {key:'matter_time_entry',label:'Time Entry',labelPlural:'Time Entries',icon:'⏱',prefix:'TE',digits:5},
    {key:'matter_deadline',label:'Deadline',labelPlural:'Deadlines',icon:'⏰',prefix:'DL',digits:4},
+   {key:'conflict_check',label:'Conflict Check',labelPlural:'Conflict Checks',icon:'🔍',prefix:'CFC',digits:5},
   ],
   fields:[
    ['matter','stage','Stage','select','Prospective|Open|On Hold|Closing|Closed|Archived'],['matter','closed_date','Closed Date','date'],
@@ -3036,10 +3118,14 @@ const REFERENCE_PACKAGES={
    ['matter_time_entry','stage','Status','select','Draft|Submitted|Approved|Invoiced|Rejected'],
    ['matter_time_entry','billing_status','Billing Status','select','Not Billed|Eligible|Billed'],
    ['matter_deadline','stage','Status','select','Open|Completed|Cancelled'],['matter_deadline','completed_date','Completed Date','date'],
+   ['conflict_check','check_status','Status','select','Pending|Cleared|Conflict Found'],
+   ['conflict_check','cleared_date','Cleared Date','date'],['conflict_check','resolution_notes','Resolution Notes','text'],
   ],
   relationships:[
    {source:'matter_time_entry',target:'matter',relType:'many_to_one',forwardLabel:'Matter',reverseLabel:'Time Entries'},
    {source:'matter_deadline',target:'matter',relType:'many_to_one',forwardLabel:'Matter',reverseLabel:'Deadlines'},
+   {source:'conflict_check',target:'matter',relType:'many_to_one',forwardLabel:'Matter',reverseLabel:'Conflict Checks'},
+   {source:'matter',target:'Contact',relType:'many_to_one',forwardLabel:'Client',reverseLabel:'Matters'},
   ],
   rules:[
    {entity:'matter',matchType:'all',
@@ -3054,7 +3140,16 @@ const REFERENCE_PACKAGES={
    {entity:'matter_deadline',matchType:'all',
     conditions:[{fieldKey:'stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'completed_date',value:'',message:''}]},
+   {entity:'conflict_check',matchType:'all',
+    conditions:[{fieldKey:'check_status',operator:'equals',value:'Cleared',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'cleared_date',value:'',message:''}]},
+   {entity:'conflict_check',matchType:'all',
+    conditions:[{fieldKey:'check_status',operator:'equals',value:'Conflict Found',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'resolution_notes',value:'',message:''}]},
   ],
+  // Conflict Check's own "Conflict check requested" workflow desktop
+  // ships is trigger_type:"record_created" - left out here, same
+  // reasoning as every other record_created workflow in this file.
   workflows:[
    {entity:'matter',matchType:'all',notify:false,
     conditions:[{fieldKey:'stage',operator:'equals',value:'Open',compareField:null,groupId:null}],
@@ -3078,15 +3173,20 @@ const REFERENCE_PACKAGES={
    {key:'constituent_profile',label:'Constituent Profile',labelPlural:'Constituent Profiles',icon:'👤',prefix:'CONST',digits:4},
    {key:'membership',label:'Membership',labelPlural:'Memberships',icon:'🪪',prefix:'MBR',digits:5},
    {key:'donation',label:'Donation',labelPlural:'Donations',icon:'💝',prefix:'DON',digits:5},
+   {key:'grant',label:'Grant',labelPlural:'Grants',icon:'🏛',prefix:'GRT',digits:4},
   ],
   fields:[
    ['membership','stage','Stage','select','Pending|Active|Grace Period|Expired|Cancelled'],
    ['membership','start_date','Start Date','date'],['membership','end_date','End Date','date'],
    ['donation','amount','Amount','number'],['donation','stage','Status','select','Pending|Completed|Refunded'],
+   ['grant','grant_status','Status','select','Applied|Awarded|Declined|Closed'],
+   ['grant','awarded_amount','Awarded Amount','number'],['grant','award_date','Award Date','date'],
   ],
   relationships:[
    {source:'membership',target:'constituent_profile',relType:'many_to_one',forwardLabel:'Constituent',reverseLabel:'Memberships'},
    {source:'donation',target:'constituent_profile',relType:'many_to_one',forwardLabel:'Constituent',reverseLabel:'Donations'},
+   {source:'grant',target:'constituent_profile',relType:'many_to_one',forwardLabel:'Funder',reverseLabel:'Grants'},
+   {source:'constituent_profile',target:'Contact',relType:'many_to_one',forwardLabel:'Contact',reverseLabel:'Constituent Profile'},
   ],
   rules:[
    {entity:'membership',matchType:'all',
@@ -3095,7 +3195,13 @@ const REFERENCE_PACKAGES={
    {entity:'donation',matchType:'all',
     conditions:[{fieldKey:'amount',operator:'less_than',value:'0.01',compareField:null,groupId:null}],
     actions:[{type:'block_save',message:'Enter a donation amount greater than zero.'}]},
+   {entity:'grant',matchType:'all',
+    conditions:[{fieldKey:'grant_status',operator:'equals',value:'Awarded',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'awarded_amount',value:'',message:''},{type:'require',targetField:'award_date',value:'',message:''}]},
   ],
+  // Grant's own "Grant application submitted" workflow desktop ships is
+  // trigger_type:"record_created" - left out here, same reasoning as
+  // every other record_created workflow in this file.
   workflows:[
    {entity:'donation',matchType:'all',notify:false,
     conditions:[{fieldKey:'stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
@@ -3111,6 +3217,7 @@ const REFERENCE_PACKAGES={
    {key:'repair_order',label:'Repair Order',labelPlural:'Repair Orders',icon:'🧾',prefix:'RO',digits:5},
    {key:'repair_line',label:'Repair Line',labelPlural:'Repair Lines',icon:'📄',prefix:'RL',digits:5},
    {key:'vehicle_appointment',label:'Appointment',labelPlural:'Appointments',icon:'📅',prefix:'APT',digits:5},
+   {key:'parts_order',label:'Parts Order',labelPlural:'Parts Orders',icon:'📦',prefix:'PO',digits:5},
   ],
   fields:[
    ['vehicle','stage','Stage','select','Active|Sold or Transferred|Inactive'],['vehicle','make','Make','text'],['vehicle','model','Model','text'],
@@ -3118,11 +3225,15 @@ const REFERENCE_PACKAGES={
    ['repair_order','odometer_in','Odometer In','number'],['repair_order','odometer_out','Odometer Out','number'],['repair_order','completion_date','Completion Date','date'],
    ['repair_line','stage','Stage','select','Proposed|Authorized|In Progress|Complete|Declined'],['repair_line','price','Price','number'],
    ['vehicle_appointment','stage','Status','select','Requested|Confirmed|Checked In|Completed|No Show|Cancelled'],
+   ['parts_order','order_status','Status','select','Ordered|Backordered|Received|Cancelled'],
+   ['parts_order','part_name','Part Name','text'],['parts_order','received_date','Received Date','date'],
   ],
   relationships:[
    {source:'repair_order',target:'vehicle',relType:'many_to_one',forwardLabel:'Vehicle',reverseLabel:'Repair Orders'},
    {source:'repair_line',target:'repair_order',relType:'many_to_one',forwardLabel:'Repair Order',reverseLabel:'Lines'},
    {source:'vehicle_appointment',target:'vehicle',relType:'many_to_one',forwardLabel:'Vehicle',reverseLabel:'Appointments'},
+   {source:'parts_order',target:'repair_order',relType:'many_to_one',forwardLabel:'Repair Order',reverseLabel:'Parts Orders'},
+   {source:'vehicle',target:'Contact',relType:'many_to_one',forwardLabel:'Owner',reverseLabel:'Vehicles'},
   ],
   rules:[
    {entity:'repair_order',matchType:'all',
@@ -3134,6 +3245,9 @@ const REFERENCE_PACKAGES={
    {entity:'repair_order',matchType:'all',
     conditions:[{fieldKey:'odometer_out',operator:'less_than',value:'',compareField:'odometer_in',groupId:null}],
     actions:[{type:'block_save',message:'Odometer out cannot be less than odometer in.'}]},
+   {entity:'parts_order',matchType:'all',
+    conditions:[{fieldKey:'order_status',operator:'equals',value:'Received',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'received_date',value:'',message:''}]},
   ],
   workflows:[
    {entity:'repair_order',matchType:'all',notify:false,
@@ -3142,6 +3256,9 @@ const REFERENCE_PACKAGES={
    {entity:'vehicle_appointment',matchType:'all',notify:false,
     conditions:[{fieldKey:'stage',operator:'equals',value:'No Show',compareField:null,groupId:null}],
     actions:[{type:'create_task',taskTitle:'Reschedule appointment',daysOffset:1}]},
+   {entity:'parts_order',matchType:'all',notify:false,
+    conditions:[{fieldKey:'order_status',operator:'equals',value:'Backordered',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Follow up on backordered part',daysOffset:3}]},
   ],
  },
 };
@@ -3435,6 +3552,99 @@ function setInstalledAppActive(installedId,activate){
  renderSidebarNav();
  save();toast(activate?'App reactivated':'App deactivated');
 }
+// ---- App Catalog "Details" preview (before Install) ------------------------
+// Mirrors desktop's PackageDetailsPanel: a plain-language read of what a
+// reference package builds, how it connects to existing data, and its
+// automation - built entirely off a REFERENCE_PACKAGES entry, before
+// anything is installed. Deliberately its own field-label resolver rather
+// than fieldLabelFor/conditionFieldsFor, which read data.customFields -
+// already-installed fields this package hasn't created yet.
+function isBuiltinPackageEntity(entityKey){return APP_OBJECT_TYPES.includes(entityKey)}
+function packageObjectLabel(pkg,entityKey){
+ if(isBuiltinPackageEntity(entityKey))return APP_OBJECT_TYPE_LABELS[entityKey]||entityKey;
+ const o=pkg.objects.find(o=>o.key===entityKey);
+ return o?o.labelPlural:entityKey;
+}
+function packageFieldLabel(pkg,entityKey,fieldKey){
+ if(!fieldKey)return '';
+ const f=pkg.fields.find(f=>f[0]===entityKey&&f[1]===fieldKey);
+ return f?f[2]:fieldKey;
+}
+function packageDescribeCondition(pkg,entityKey,c){
+ return `${packageFieldLabel(pkg,entityKey,c.fieldKey)} ${OPERATOR_LABELS[c.operator]||'is'}${operatorNeedsValue(c.operator)?' '+(c.compareField?packageFieldLabel(pkg,entityKey,c.compareField):badgeMaybe(c.value)):''}`;
+}
+function packageDescribeConditions(pkg,entityKey,conditions,matchType){
+ if(!conditions||!conditions.length)return 'always';
+ const units=groupConditionUnits(conditions);
+ const parts=units.map(u=>u.kind==='single'?packageDescribeCondition(pkg,entityKey,conditions[u.index]):`(${u.indices.map(i=>packageDescribeCondition(pkg,entityKey,conditions[i])).join(' OR ')})`);
+ return parts.join(matchType==='any'?' OR ':' AND ');
+}
+function packageDescribeRuleAction(pkg,entityKey,a){
+ const target=a.targetField?packageFieldLabel(pkg,entityKey,a.targetField):'';
+ switch(a.type){
+  case 'require':return `require ${target}`;
+  case 'hide':return `hide ${target}`;
+  case 'show':return `show ${target}`;
+  case 'lock':return `lock ${target}`;
+  case 'editable':return `unlock ${target}`;
+  case 'set_default':return `default ${target} to "${a.value||''}"`;
+  case 'set_value':return `set ${target} to "${a.value||''}"`;
+  case 'clear_value':return `clear ${target}`;
+  case 'restrict_choices':return `restrict ${target} to ${(a.value||'').split(LIST_SEPARATOR).filter(Boolean).join(', ')||'no options'}`;
+  case 'block_save':return `block save: "${a.message||''}"`;
+  case 'show_error':return `show error: "${a.message||''}"`;
+  case 'show_warning':return `show warning: "${a.message||''}"`;
+  default:return a.type;
+ }
+}
+function packageDescribeWorkflowAction(pkg,entityKey,a){
+ if(a.type==='create_record')return `create a new ${a.recordTargetEntity?packageObjectLabel(pkg,a.recordTargetEntity):'record'}`;
+ if(a.type==='update_related_record')return `set ${packageFieldLabel(pkg,a.relTargetEntity,a.relTargetField)} = "${a.relValue||''}" on the related ${packageObjectLabel(pkg,a.relTargetEntity)}`;
+ if(a.type==='update_field'||a.type==='set_default_field'||a.type==='clear_field'){
+  if(!a.updateFieldKey)return 'set a field on this record';
+  if(a.type==='clear_field')return `clear ${packageFieldLabel(pkg,entityKey,a.updateFieldKey)}`;
+  const prefix=a.type==='set_default_field'?'default ':'set ';
+  const suffix=a.type==='set_default_field'?' (only if currently empty)':'';
+  return a.updateCopyFrom?`${prefix}${packageFieldLabel(pkg,entityKey,a.updateFieldKey)} = value copied from ${packageFieldLabel(pkg,entityKey,a.updateCopyFrom)}${suffix}`:`${prefix}${packageFieldLabel(pkg,entityKey,a.updateFieldKey)} = "${a.updateValue||''}"${suffix}`;
+ }
+ return `create task "${a.taskTitle||''}" (${a.daysOffset?`due ${a.daysOffset} day(s) later`:'due same day'})`;
+}
+// Builds the whole expanded-row preview for one package - see this
+// section's own doc comment above for what it deliberately reuses vs.
+// resolves fresh from the manifest.
+function packageDetailsHtml(pkg){
+ const builtinRelationships=pkg.relationships.filter(r=>isBuiltinPackageEntity(r.source)||isBuiltinPackageEntity(r.target));
+ const internalRelationships=pkg.relationships.filter(r=>!isBuiltinPackageEntity(r.source)&&!isBuiltinPackageEntity(r.target));
+ const fieldsByEntity=k=>pkg.fields.filter(f=>f[0]===k);
+ const objectsHtml=pkg.objects.map(o=>{
+  const n=fieldsByEntity(o.key).length;
+  return `<li>${o.icon} <strong>${o.labelPlural}</strong> (${n} custom field${n===1?'':'s'}, IDs like ${o.prefix}-${'0'.repeat(o.digits)})</li>`;
+ }).join('');
+ const internalRelHtml=internalRelationships.length?`<ul class="muted" style="margin:8px 0 0;padding-left:18px;font-size:12px;display:grid;gap:2px">${internalRelationships.map(r=>`<li>${packageObjectLabel(pkg,r.source)} → ${packageObjectLabel(pkg,r.target)} (${r.forwardLabel})</li>`).join('')}</ul>`:'';
+ const builtinRelHtml=builtinRelationships.length?`<section><h4 style="margin-bottom:6px">How it connects to your existing data</h4><ul style="margin:0;padding-left:18px;font-size:13px;display:grid;gap:4px">${builtinRelationships.map(r=>{
+  const sourceIsBuiltin=isBuiltinPackageEntity(r.source);
+  const newObj=sourceIsBuiltin?r.target:r.source;
+  const existing=sourceIsBuiltin?r.source:r.target;
+  return `<li>${packageObjectLabel(pkg,newObj)} link${sourceIsBuiltin?'s from':'s to'} your existing <strong>${APP_OBJECT_TYPE_LABELS[existing]||existing}</strong> (${r.forwardLabel})</li>`;
+ }).join('')}</ul></section>`:'';
+ const rulesHtml=pkg.rules.map(r=>`<li><strong>${packageObjectLabel(pkg,r.entity)}:</strong> when ${packageDescribeConditions(pkg,r.entity,r.conditions,r.matchType)}, ${r.actions.map(a=>packageDescribeRuleAction(pkg,r.entity,a)).join('; ')}.</li>`).join('');
+ const workflowsHtml=pkg.workflows.map(w=>`<li>When ${packageObjectLabel(pkg,w.entity)}'s conditions are met (${packageDescribeConditions(pkg,w.entity,w.conditions,w.matchType)}), ${w.actions.map(a=>packageDescribeWorkflowAction(pkg,w.entity,a)).join(' and ')}${w.notify?' and admins are notified':''}.</li>`).join('');
+ const automationHtml=(pkg.rules.length||pkg.workflows.length)?`<section><h4 style="margin-bottom:6px">Automation, in plain language</h4><ul style="margin:0;padding-left:18px;font-size:13px;display:grid;gap:6px">${rulesHtml}${workflowsHtml}</ul></section>`:'';
+ const linkedBuiltins=[...new Set(builtinRelationships.flatMap(r=>[r.source,r.target]).filter(isBuiltinPackageEntity))].map(k=>APP_OBJECT_TYPE_LABELS[k]||k);
+ const guidance=[];
+ if(linkedBuiltins.length)guidance.push(`This package links its new objects into your existing ${linkedBuiltins.join(', ')} - install it once you have real records there, not before, so the first ${packageObjectLabel(pkg,pkg.objects[0]?.key||'')} you create has something real to connect to.`);
+ guidance.push('Object names, ID prefixes and picklist options match this package\'s own defaults - rename fields, adjust numbering, or add/remove select options from Custom Objects after installing to match how your team actually talks about the work.');
+ guidance.push('It installs as its own App with its own rules and workflows (see Admin → Apps) - nobody\'s permissions change automatically, review who should see it after installing.');
+ guidance.push('Every rule and workflow here only reads and writes fields on the record that actually changed - a process that needs to check other linked records first (an overlap check, a running total) still needs a person to enforce it for now.');
+ return `<div style="padding:8px 0;display:grid;gap:16px">
+ <p class="muted" style="font-size:13px;margin-top:0">${pkg.description}</p>
+ <section><h4 style="margin-bottom:6px">What this builds</h4><ul style="margin:0;padding-left:18px;font-size:13px;display:grid;gap:4px">${objectsHtml}</ul>${internalRelHtml}</section>
+ ${builtinRelHtml}
+ ${automationHtml}
+ <section><h4 style="margin-bottom:6px">Fitting this to your organization</h4><ul class="muted" style="margin:0;padding-left:18px;font-size:13px;display:grid;gap:4px">${guidance.map(g=>`<li>${g}</li>`).join('')}</ul></section>
+ </div>`;
+}
+let previewPackageKey=null;
 function packagesTab(body){
  const catalogKeys=Object.keys(REFERENCE_PACKAGES).filter(k=>!(data.appPackages||[]).some(p=>p.key===k)&&!(data.installedApps||[]).some(a=>a.key===k));
  const imported=data.appPackages||[];
@@ -3445,11 +3655,17 @@ function packagesTab(body){
  ${catalogKeys.length?`<div style="display:flex;gap:12px;flex-wrap:wrap">${catalogKeys.map(k=>{const p=REFERENCE_PACKAGES[k];return `<div class="panel" style="flex:1;min-width:240px;background:var(--surface-alt,#f7f8fc)"><div style="font-weight:700">${p.appIcon} ${p.name}</div><p class="muted" style="font-size:12px">${p.description}</p><p class="muted" style="font-size:12px">${p.objects.length} objects · ${p.fields.length} fields · ${p.relationships.length} relationships · ${p.rules.length} rules · ${p.workflows.length} workflows</p><button class="btn btn-secondary" data-import="${k}">Import</button></div>`}).join('')}</div>`:'<div class="empty">Every starter package has been imported or installed.</div>'}
  </div>
  <div class="panel"><h3 style="margin-top:0">Imported packages</h3>
- ${imported.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Package</th><th>Industry</th><th>Version</th><th>Imported</th><th></th></tr></thead><tbody>${imported.map(p=>`<tr><td>${REFERENCE_PACKAGES[p.key]?.appIcon||''} ${p.name}</td><td>${p.industry}</td><td>${p.version}</td><td>${new Date(p.importedAt).toLocaleString()}</td><td><div class="actions"><button class="btn btn-primary" data-install="${p.key}">Install</button><button class="icon-btn" data-discard="${p.key}">Discard</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing imported yet.</div>'}
+ <p class="muted" style="font-size:13px">Review a package's "Details" before installing - what it builds, how it connects to your existing Companies/Contacts, and its automation in plain language.</p>
+ ${imported.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Package</th><th>Industry</th><th>Version</th><th>Imported</th><th></th></tr></thead><tbody>${imported.map(p=>{
+   const pkg=REFERENCE_PACKAGES[p.key];
+   const open=previewPackageKey===p.key;
+   return `<tr><td>${pkg?.appIcon||''} ${p.name}</td><td>${p.industry}</td><td>${p.version}</td><td>${new Date(p.importedAt).toLocaleString()}</td><td><div class="actions"><button class="icon-btn" data-preview="${p.key}">${open?'Hide details':'Details'}</button><button class="btn btn-primary" data-install="${p.key}">Install</button><button class="icon-btn" data-discard="${p.key}">Discard</button></div></td></tr>${open&&pkg?`<tr><td colspan="5" style="background:var(--surface-alt,#f7f8fc)">${packageDetailsHtml(pkg)}<button class="btn btn-primary" data-install="${p.key}" style="margin-top:4px">Install this package</button></td></tr>`:''}`;
+  }).join('')}</tbody></table></div>`:'<div class="empty">Nothing imported yet.</div>'}
  </div>
  <div class="panel"><h3 style="margin-top:0">Installed apps</h3>
  ${installed.length?`<div class="table-wrap"><table class="table"><thead><tr><th>App</th><th>Industry</th><th>Version</th><th>Creates</th><th>Status</th><th></th></tr></thead><tbody>${installed.map(a=>`<tr><td>${REFERENCE_PACKAGES[a.key]?.appIcon||''} ${a.name}</td><td>${a.industry}</td><td>${a.version}</td><td>${(a.objectKeys||[]).length} object${(a.objectKeys||[]).length===1?'':'s'}</td><td>${badgeMaybe(a.status==='active'?'Active':'Inactive')}</td><td>${a.status==='active'?`<button class="btn btn-secondary" data-deactivate="${a.id}">Deactivate</button>`:`<button class="btn btn-secondary" data-reactivate="${a.id}">Reactivate</button>`}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing installed yet.</div>'}
  </div>`;
+ body.querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>{previewPackageKey=previewPackageKey===b.dataset.preview?null:b.dataset.preview;renderAdminTab()});
  body.querySelectorAll('[data-import]').forEach(b=>b.onclick=()=>{importPackage(b.dataset.import);renderAdminTab()});
  body.querySelectorAll('[data-discard]').forEach(b=>b.onclick=()=>{data.appPackages=(data.appPackages||[]).filter(p=>p.key!==b.dataset.discard);save();toast('Removed from catalog');renderAdminTab()});
  body.querySelectorAll('[data-install]').forEach(b=>b.onclick=()=>{installReferencePackage(b.dataset.install);renderAdminTab()});
