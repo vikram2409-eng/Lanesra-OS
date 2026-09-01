@@ -76,7 +76,7 @@ pub fn get_reference_package_manifest(key: String) -> AppResult<String> {
 }
 
 /// Every dependency declared by every package imported into this
-/// workspace, satisfied or not - Admin -> Solution Management's
+/// workspace, satisfied or not - Admin -> Deployment Management's
 /// Dependencies tab.
 #[tauri::command]
 pub fn list_package_dependencies(state: State<AppState>) -> AppResult<Vec<WorkspaceDependency>> {
@@ -85,7 +85,7 @@ pub fn list_package_dependencies(state: State<AppState>) -> AppResult<Vec<Worksp
 }
 
 /// Every artifact created by every app installed in this workspace -
-/// Admin -> Solution Management's Components tab.
+/// Admin -> Deployment Management's Components tab.
 #[tauri::command]
 pub fn list_package_artifacts_for_workspace(state: State<AppState>) -> AppResult<Vec<WorkspaceArtifact>> {
     let conn = state.conn.lock().unwrap();
@@ -101,7 +101,7 @@ pub fn list_solution_components(state: State<AppState>) -> AppResult<Vec<Workspa
     solution_component_service::list_for_workspace(&conn, &require_workspace_id(&conn)?)
 }
 
-/// The Managed/Unmanaged distinction's Unmanaged half - a count of
+/// The Packaged/Custom distinction's Custom half - a count of
 /// everything still owned by the `local` publisher, for the synthetic
 /// "Local Workspace" row in Solution Packages.
 #[tauri::command]
@@ -110,7 +110,7 @@ pub fn get_local_workspace_summary(state: State<AppState>) -> AppResult<LocalWor
     solution_component_service::local_workspace_summary(&conn, &require_workspace_id(&conn)?)
 }
 
-/// Every imported version of one package - Solution Management's
+/// Every imported version of one package - Deployment Management's
 /// Releases view.
 #[tauri::command]
 pub fn list_package_versions(state: State<AppState>, package_id: String) -> AppResult<Vec<AppPackage>> {

@@ -37,7 +37,7 @@ function downloadJson(filename: string, content: string): void {
 }
 
 /**
- * Solution Management (Solution Packages & Admin IA design spec).
+ * Deployment Management (Solution Packages & Admin IA design spec).
  * Phase 1: a read-only landing screen answering "what's installed, what
  * did it create, and what does it depend on". Phase 2 added a real
  * Publisher registry with enforced namespace validation. Phase 3 (this
@@ -47,7 +47,7 @@ function downloadJson(filename: string, content: string): void {
  *     hand-built customization is visible here too, not just what an
  *     install created.
  *   - A synthetic "Local Workspace" row in Solution Packages, the
- *     Managed/Unmanaged distinction's Unmanaged half - everything tagged
+ *     Packaged/Custom distinction's Custom half - everything tagged
  *     to the `local` publisher, with a real Export action that builds a
  *     re-importable manifest (no fake `app_packages` row ever created for
  *     it).
@@ -75,7 +75,7 @@ function downloadJson(filename: string, content: string): void {
  * component to a publisher other than `local` (registering a publisher
  * doesn't yet let you *reassign* an existing component to it).
  */
-export function SolutionManagementAdmin() {
+export function DeploymentManagementAdmin() {
   const [tab, setTab] = useState<SolutionTab>("packages");
 
   const installed = useQuery({ queryKey: ["installedApps"], queryFn: () => api.listInstalledApps() });
@@ -205,7 +205,7 @@ function SolutionPackagesTab({
                     </td>
                     <td>{publisher ? publisher.name : "—"}</td>
                     <td>
-                      <span className="badge">Managed</span>
+                      <span className="badge">Packaged</span>
                     </td>
                     <td>{app.installed_version}</td>
                     <td>
@@ -239,7 +239,7 @@ function SolutionPackagesTab({
                 <td>🧩 Local Workspace</td>
                 <td>local</td>
                 <td>
-                  <span className="badge">Unmanaged</span>
+                  <span className="badge">Custom</span>
                 </td>
                 <td>—</td>
                 <td>—</td>

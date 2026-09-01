@@ -189,7 +189,7 @@ pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPacka
     )?;
     // Recorded now, not deferred to install: a package's declared
     // dependencies are part of what the spec's Review step shows before
-    // Install is ever offered, and a Solution Management "Dependencies"
+    // Install is ever offered, and a Deployment Management "Dependencies"
     // view should be able to show every imported package's requirements,
     // not only installed ones.
     for dep in &manifest.dependencies {
@@ -203,7 +203,7 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> AppResult<Vec<App
 }
 
 /// Every imported version of one `package_id`, oldest first - the
-/// Solution Management "Releases" view for a package. See
+/// Deployment Management "Releases" view for a package. See
 /// `industry_package_repo::list_versions_for_package`'s own comment for
 /// why this needed no new table: each `app_packages` row already is an
 /// immutable version snapshot.
@@ -215,7 +215,7 @@ pub fn list_package_versions(conn: &Connection, workspace_id: &str, package_id: 
 /// workspace, with `is_satisfied` computed the same way `validate` checks
 /// it before an install: an active install of `dependency_package_id`
 /// whose version meets `version_constraint`. Read-only - this never
-/// blocks anything, it's what the Solution Management "Dependencies" tab
+/// blocks anything, it's what the Deployment Management "Dependencies" tab
 /// shows.
 pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<WorkspaceDependency>> {
     let rows = industry_package_repo::list_dependencies_for_workspace(conn, workspace_id)?;
@@ -234,7 +234,7 @@ pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) ->
 /// Every artifact created by every app installed in this workspace,
 /// across every installed app - the workspace-wide counterpart to
 /// `get_installed_detail`'s per-app artifact list, and the "what have I
-/// customized beyond what I installed" view the Solution Management
+/// customized beyond what I installed" view the Deployment Management
 /// "Components" tab exists to answer.
 pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<WorkspaceArtifact>> {
     let rows = industry_package_repo::list_artifacts_for_workspace(conn, workspace_id)?;
@@ -244,7 +244,7 @@ pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> Ap
         .collect())
 }
 
-/// The Managed/Unmanaged distinction's other deliverable: a real,
+/// The Packaged/Custom distinction's other deliverable: a real,
 /// re-importable `.lanesra`-style manifest built from everything this
 /// workspace's `local` publisher currently owns - the reverse of
 /// `run_install`, reusing the exact same `IndustryPackageManifest` shape

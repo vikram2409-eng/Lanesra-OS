@@ -39,10 +39,10 @@ pub struct WorkspaceComponent {
     pub installed_app_name: Option<String>,
 }
 
-/// The Managed/Unmanaged distinction's other half: every workspace has
-/// exactly one implicit Unmanaged "package" - whatever's tagged to the
+/// The Packaged/Custom distinction's other half: every workspace has
+/// exactly one implicit Custom "package" - whatever's tagged to the
 /// `local` publisher - shown in the Solution Packages list as a synthetic
-/// row alongside real installed (Managed) packages, without ever writing
+/// row alongside real installed (Packaged) packages, without ever writing
 /// a fake `app_packages` row for it. `components_by_type` powers the same
 /// per-type breakdown the Components tab shows, one level up.
 #[derive(Debug, Clone, Serialize)]

@@ -241,9 +241,9 @@ pub struct AppPackage {
     /// for a package imported before that migration ran, never for a
     /// fresh import (`import_package` always resolves and stamps this).
     pub publisher_id: Option<String>,
-    /// Every package imported through Admin -> App Catalog is Managed by
+    /// Every package imported through Admin -> App Catalog is Packaged by
     /// definition in this phase - see migration 0029's own comment for
-    /// why the column exists ahead of Unmanaged packages actually
+    /// why the column exists ahead of Custom packages actually
     /// shipping.
     pub is_managed: bool,
 }
@@ -293,7 +293,7 @@ pub struct PackageArtifact {
 /// row shape. Written once at import time (see
 /// `industry_package_service::import_package`) from the manifest's own
 /// `dependencies` list, so a package's declared requirements are visible
-/// to the Solution Management screen without needing that package
+/// to the Deployment Management screen without needing that package
 /// installed first, matching the spec's Review step.
 #[derive(Debug, Clone, Serialize)]
 pub struct AppDependency {
@@ -305,7 +305,7 @@ pub struct AppDependency {
 }
 
 /// An `AppDependency` alongside enough of its owning package's identity
-/// to render a Solution Management "Dependencies" row without a second
+/// to render a Deployment Management "Dependencies" row without a second
 /// lookup, plus whether the dependency is currently satisfied in this
 /// workspace (an active install of `dependency_package_id` whose version
 /// meets `version_constraint` - the exact check `industry_package_service::validate`
@@ -325,7 +325,7 @@ pub struct WorkspaceDependency {
 }
 
 /// A `PackageArtifact` alongside enough of its owning `InstalledApp`'s
-/// identity to render a Solution Management "Components" row without a
+/// identity to render a Deployment Management "Components" row without a
 /// second lookup per artifact.
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkspaceArtifact {

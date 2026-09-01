@@ -5,7 +5,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Try the demo](https://img.shields.io/badge/try%20it-online%20demo-4f7cff)](https://lanesraos.com/demo)
 
-Modern, open-source business application platform — a complete CRM out of the box, a no-code admin panel that lets you reshape the workspace itself (your own record types, relationships, screens, business rules and automations, not just the fixed CRM fields), Solution Management to package and promote your customizations between workspaces, and an Integration Hub to connect it to everything else you run. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
+Modern, open-source business application platform — a complete CRM out of the box, a no-code admin panel that lets you reshape the workspace itself (your own record types, relationships, screens, business rules and automations, not just the fixed CRM fields), Deployment Management to package and promote your customizations between workspaces, and an Integration Hub to connect it to everything else you run. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
 
 **[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
@@ -20,7 +20,7 @@ Modern, open-source business application platform — a complete CRM out of the 
 - **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
 - **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
 - **App Catalog** — install one of 10 ready-made industry apps (Field Service, Property Management, Construction, Professional Services, Practice Administration, Recruitment, Real Estate, Legal Practice, Nonprofit & Association, Auto Repair) with a validated, backed-up, transactional install
-- **Solution Management** — a Publisher registry, named/versioned Solutions curated from any component you've built, real export/import between workspaces, and update-with-diff — package and promote your customizations the way a real software vendor would
+- **Deployment Management** — a Publisher registry, named/versioned Solutions curated from any component you've built, real export/import between workspaces, and update-with-diff — package and promote your customizations the way a real software vendor would
 - **Integration Hub** — AES-256-GCM-encrypted Connections (REST/SFTP/PostgreSQL/OData/SMTP), OpenAPI-imported Connectors usable as Workflow Automation actions, a generic REST API with hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a generalized CSV data-exchange wizard, and scheduled Integration Jobs
 
 **The core CRM:**

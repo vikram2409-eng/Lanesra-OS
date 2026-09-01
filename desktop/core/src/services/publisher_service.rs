@@ -129,7 +129,7 @@ pub fn resolve_for_package_id(conn: &Connection, workspace_id: &str, package_id:
     })?;
     publisher_repo::get_by_key(conn, workspace_id, key)?.ok_or_else(|| {
         AppError::Validation(format!(
-            "'{key}' isn't a registered publisher in this workspace yet - register it under Admin → Solution Management → Publishers before importing a package under that namespace"
+            "'{key}' isn't a registered publisher in this workspace yet - register it under Admin → Deployment Management → Publishers before importing a package under that namespace"
         ))
     })
 }

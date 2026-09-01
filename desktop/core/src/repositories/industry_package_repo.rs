@@ -86,7 +86,7 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> rusqlite::Result<
 /// Every imported version of one specific `package_id`, oldest first -
 /// each row is already an immutable per-version snapshot (its own
 /// `manifest_json`, never mutated once imported), so this alone *is* the
-/// Solution Management "Releases" view for a package: no separate
+/// Deployment Management "Releases" view for a package: no separate
 /// `solution_releases` table needed, the data was already being kept.
 pub fn list_versions_for_package(conn: &Connection, workspace_id: &str, package_id: &str) -> rusqlite::Result<Vec<AppPackage>> {
     let mut stmt = conn.prepare("SELECT * FROM app_packages WHERE workspace_id = ?1 AND package_id = ?2 ORDER BY imported_at ASC")?;
@@ -111,7 +111,7 @@ fn map_dependency(row: &rusqlite::Row) -> rusqlite::Result<AppDependency> {
 /// `dependencies` list - actual dependency resolution during install
 /// still reads the manifest in memory rather than round-tripping through
 /// this table (see `industry_package_service::validate`), but this
-/// registry copy is what a Solution Management "Dependencies" view reads
+/// registry copy is what a Deployment Management "Dependencies" view reads
 /// so a package's declared requirements are visible without re-parsing
 /// every stored manifest.
 pub fn insert_dependency(

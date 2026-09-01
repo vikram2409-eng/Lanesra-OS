@@ -1,5 +1,5 @@
 //! Solution Packages & Admin IA design spec, Phase 3: component-tagging,
-//! the Local Workspace (Unmanaged) grouping, `.lanesra` manifest export,
+//! the Local Workspace (Custom) grouping, `.lanesra` manifest export,
 //! and update-with-diff (`plan_update`/`apply_update`) - see
 //! `industry_package_service`'s own module doc comment and migration
 //! 0030's comment for the full design.

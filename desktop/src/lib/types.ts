@@ -1966,7 +1966,7 @@ export interface WorkspaceDependency {
 }
 
 /** A PackageArtifact alongside its owning InstalledApp's identity -
- * Admin > Solution Management's Components tab, the workspace-wide
+ * Admin > Deployment Management's Components tab, the workspace-wide
  * "what have I customized beyond what I installed" view. */
 export interface WorkspaceArtifact {
   artifact: PackageArtifact;
@@ -2041,7 +2041,7 @@ export interface BulkActionResult {
 }
 
 // Solution Packages & Admin IA design spec, Phase 3: component-tagging,
-// the Local Workspace (Unmanaged) grouping, .lanesra export, and
+// the Local Workspace (Custom) grouping, .lanesra export, and
 // update-with-diff. Mirrors core::models::solution_component and the new
 // pieces of core::models::industry_package - see those modules' doc
 // comments for the full design.
@@ -2061,7 +2061,7 @@ export interface SolutionComponent {
 }
 
 /** A SolutionComponent joined with its owning publisher's display fields
- * - Admin > Solution Management's Components tab, now covering both
+ * - Admin > Deployment Management's Components tab, now covering both
  * hand-built and package-installed components (superseding the narrower
  * WorkspaceArtifact view). */
 export interface WorkspaceComponent {
@@ -2072,7 +2072,7 @@ export interface WorkspaceComponent {
   installed_app_name: string | null;
 }
 
-/** The Managed/Unmanaged distinction's Unmanaged half: a count of
+/** The Packaged/Custom distinction's Custom half: a count of
  * everything still owned by the `local` publisher, broken down by type -
  * rendered as a synthetic "Local Workspace" row in Solution Packages
  * without a real app_packages row ever existing for it. */
