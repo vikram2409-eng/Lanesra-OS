@@ -382,7 +382,7 @@ fn second_manifest_json(package_id: &str, version: &str) -> String {
 fn importing_a_manifest_with_dependencies_records_them_in_the_registry() {
     // Dependency rows are written at import time (not deferred to
     // install), so a package's declared requirements are visible to
-    // Solution Management even before - or without ever - installing it.
+    // Deployment Management even before - or without ever - installing it.
     let (conn, ws, admin) = setup_workspace();
     let manifest = json!({
         "format_version": 1,

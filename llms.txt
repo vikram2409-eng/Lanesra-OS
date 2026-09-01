@@ -1,13 +1,13 @@
 # Lanesra OS
 
-Lanesra OS is a free, open-source, self-hostable business application platform for small and mid-size organizations. It ships as a complete CRM out of the box, gives any organization the same no-code platform to build its own use-case-specific app on top, offers 10 ready-made industry apps to install instead of building from scratch, includes Solution Management to package and promote customizations across environments, and ships an Integration Hub to connect it to every other system a business already runs.
+Lanesra OS is a free, open-source, self-hostable business application platform for small and mid-size organizations. It ships as a complete CRM out of the box, gives any organization the same no-code platform to build its own use-case-specific app on top, offers 10 ready-made industry apps to install instead of building from scratch, includes Deployment Management to package and promote customizations across environments, and ships an Integration Hub to connect it to every other system a business already runs.
 
 ## What it is, in five layers
 
 1. **Core CRM** — Companies, Contacts, Opportunities, Products, Quotes, Orders, Invoices, Contracts and Tasks, connected in one flexible sales lifecycle (Company → Opportunity → Quote → Order → Invoice), with dashboards, reports and global search.
 2. **No-code platform primitives** — Custom Objects (entirely new record types, no code), Custom Relationships (any two record types, any cardinality), Screen/App Builder (named layouts by role, Draft → Publish), Business Rules (multi-condition AND/OR, 10 operators), Workflow Automation (7 trigger types, 8+ action types), custom Dashboards and Reports. An Administrator reshapes the workspace from a settings screen — no developer required.
 3. **App Builder & App Catalog** — group any set of objects, screens and a dashboard into a named, publishable app with role/user-based access, or install one of 10 ready-made industry apps (Field Service, Property Management, Construction & Contractors, Professional Services, Practice Administration, Recruitment & Staffing, Real Estate Brokerage, Legal Practice, Nonprofit & Association Management, Auto Repair & Service Garage) in a few clicks, each validated, backed up and installed transactionally.
-4. **Solution Management** — a Publisher registry with namespace validation, named/versioned Solutions (a curated subset of components), export/import between workspaces, and update-with-diff for reviewing and applying a newer package version — the same "build in test, promote to production" pattern enterprise platforms use, without enterprise licensing.
+4. **Deployment Management** — a Publisher registry with namespace validation, named/versioned Solutions (a curated subset of components), export/import between workspaces, and update-with-diff for reviewing and applying a newer package version — the same "build in test, promote to production" pattern enterprise platforms use, without enterprise licensing.
 5. **Integration Hub** — encrypted Connections (REST, SFTP, PostgreSQL, OData, SMTP), OpenAPI-imported Connectors usable as Workflow Automation actions, a generic REST API with hashed/scoped API keys, HMAC-signed outbound Webhooks with retry, a CSV data-exchange wizard, read-only External Objects, and scheduled Integration Jobs for recurring sync — desktop-only today.
 
 ## Current status
@@ -15,9 +15,9 @@ Lanesra OS is a free, open-source, self-hostable business application platform f
 - Early Access v0.36.0
 - Windows desktop edition (Tauri + Rust + SQLite): the full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), backup/restore, self-service password change, PDF generation/printing, and CSV import/export all working. desktop-v0.12.0 is the latest tagged Early Access Windows installer (.exe/.msi) on GitHub Releases (unsigned); build and run from source is also supported.
 - Saved Views & Bulk Actions (desktop and demo): any list screen can save its current filter/sort/group-by combination as a named view (Private/Shared with an admin-settable default on desktop), reuse it as a dashboard record-list widget's data source, and run bulk update-status/reassign-owner/tag/archive operations across a multi-select.
-- Browser-based live demo covers the full no-code platform (Custom Objects, Relationships, Screen/App Builder, Business Rules, Workflow Automation, Dashboards, Reports), the App Catalog (all 10 industry apps), Solution Management (Publishers, Solutions, Components, Dependencies, real export), and an Integration Hub simulation (Overview, Integration Jobs, API Access, Connections, Webhooks & Events) — the demo has no server, so network calls, encryption and signing are simulated locally, not real.
+- Browser-based live demo covers the full no-code platform (Custom Objects, Relationships, Screen/App Builder, Business Rules, Workflow Automation, Dashboards, Reports), the App Catalog (all 10 industry apps), Deployment Management (Publishers, Solutions, Components, Dependencies, real export), and an Integration Hub simulation (Overview, Integration Jobs, API Access, Connections, Webhooks & Events) — the demo has no server, so network calls, encryption and signing are simulated locally, not real.
 - Integration Hub (desktop only, real): AES-256-GCM-encrypted Connections, OpenAPI 3.x Connector import, a generic `/api/v1/objects/...` REST API secured by hashed scoped API keys, HMAC-SHA256-signed Webhooks with retry/backoff, a generalized CSV import/export wizard reusing the same record-write path as the API, External Objects, and a real background-scheduled Integration Jobs engine on the Team Workspace server.
-- Solution Management (desktop and demo): Publishers with enforced namespace validation, component-tagging across every admin-configurable artifact, a synthetic "Local Workspace" grouping for hand-built customization, named/versioned Solutions curated one component at a time, real export to a re-importable manifest, and update-with-diff for reviewing Added/Modified/Removed before applying a package update.
+- Deployment Management (desktop and demo): Publishers with enforced namespace validation, component-tagging across every admin-configurable artifact, a synthetic "Local Workspace" grouping for hand-built customization, named/versioned Solutions curated one component at a time, real export to a re-importable manifest, and update-with-diff for reviewing Added/Modified/Removed before applying a package update.
 - Industry Data Model & App Catalog: a versioned package format (objects, fields, relationships, business rules, workflows, screens, reports, a dashboard, optional sample data) installs a ready-to-use vertical app into an existing workspace, reusing the workspace's existing Company/Contact/Task records instead of creating a parallel data model.
 - Team Workspace server: can be exposed on the open internet on an organization's own domain (still self-hosted, never a Lanesra-run SaaS), with opt-in TLS-aware cookies, CORS and always-on security headers.
 
@@ -29,7 +29,7 @@ Lanesra OS is a free, open-source, self-hostable business application platform f
 - Business Rules and Workflow Automation across any built-in or custom field
 - Screen/App Builder (named layouts by role) and custom Dashboards (KPI/chart/record-list widgets)
 - App Builder (publish a named app with enforced access) and App Catalog (10 install-ready industry apps)
-- Solution Management: Publishers, versioned Solutions, component export/import, update-with-diff
+- Deployment Management: Publishers, versioned Solutions, component export/import, update-with-diff
 - Integration Hub: encrypted Connections, OpenAPI Connectors, a generic REST API, HMAC-signed Webhooks, CSV data exchange, scheduled Integration Jobs, unified execution logs
 - Saved Views (named filter/sort/group-by combinations, reusable as a dashboard data source) and Bulk Actions (update status, reassign owner, tag, archive across a multi-select)
 
@@ -48,7 +48,7 @@ Lanesra OS is a free, open-source, self-hostable business application platform f
 - Can I self-host it instead of a cloud CRM? Yes — desktop runs fully offline on local SQLite; Team Workspace lets a small team share one instance on their own infrastructure.
 - Is it just a CRM? No — the same platform underneath the CRM builds any business app, no code, or installs one of 10 ready-made industry apps.
 - Does it have a REST API and webhooks? Yes — the Integration Hub's generic REST API, OpenAPI connectors and HMAC-signed webhooks (desktop edition).
-- How do I promote customizations from test to production? Solution Management: curate a named, versioned Solution, export it, import it into another workspace.
+- How do I promote customizations from test to production? Deployment Management: curate a named, versioned Solution, export it, import it into another workspace.
 
 ## Important pages
 

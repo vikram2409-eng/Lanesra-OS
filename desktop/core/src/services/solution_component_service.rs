@@ -66,7 +66,7 @@ pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Ve
 }
 
 /// Every component still owned by this workspace's `local` publisher -
-/// the "Local Workspace" Unmanaged grouping's contents and what
+/// the "Local Workspace" Custom grouping's contents and what
 /// `industry_package_service::export_local_workspace` reads back into a
 /// manifest.
 pub fn list_local(conn: &Connection, workspace_id: &str) -> AppResult<Vec<SolutionComponent>> {
@@ -76,11 +76,11 @@ pub fn list_local(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Soluti
     Ok(solution_component_repo::list_for_publisher(conn, workspace_id, &local.id)?)
 }
 
-/// The Managed/Unmanaged distinction's Unmanaged half, made visible
+/// The Packaged/Custom distinction's Custom half, made visible
 /// without ever writing a fake `app_packages` row: a count of everything
 /// still owned by `local`, broken down by type - what the Solution
 /// Packages tab renders as a synthetic "Local Workspace" row alongside
-/// real installed (Managed) packages. An empty summary (a workspace that
+/// real installed (Packaged) packages. An empty summary (a workspace that
 /// has only ever installed reference packages, never built anything by
 /// hand) is a legitimate, common result, not an error.
 pub fn local_workspace_summary(conn: &Connection, workspace_id: &str) -> AppResult<LocalWorkspaceSummary> {

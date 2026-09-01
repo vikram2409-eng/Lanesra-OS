@@ -249,7 +249,7 @@ textarea {
   padding: 16px;
 }
 
-/* A generic centered dialog - first used by Solution Management's
+/* A generic centered dialog - first used by Deployment Management's
    update-with-diff review step. Deliberately minimal (no other screen in
    the app has needed a true modal before this - version history/duplicate
    review etc. all use an inline panel instead). */

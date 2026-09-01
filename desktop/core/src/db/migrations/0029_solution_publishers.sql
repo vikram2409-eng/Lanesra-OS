@@ -21,7 +21,7 @@
 --     comment for what "component-tagging" (attributing hand-built
 --     things to this publisher) still needs, deferred to a later phase.
 -- An admin can register further publishers of their own (Admin ->
--- Solution Management -> Publishers) once they want to package and
+-- Deployment Management -> Publishers) once they want to package and
 -- namespace their own customizations - export itself is still future
 -- scope, but the registry needs to exist before that can.
 CREATE TABLE publishers (
@@ -43,10 +43,13 @@ CREATE TABLE publishers (
 );
 CREATE UNIQUE INDEX idx_publishers_workspace_key ON publishers(workspace_id, key);
 
--- Which publisher declared a package, and whether it's Managed - every
--- package imported through Admin -> App Catalog is Managed by
+-- Which publisher declared a package, and whether it's Packaged (what the
+-- `is_managed` column still spells the original Managed/Unmanaged way -
+-- Deployment Management's user-facing terms are Packaged/Custom, but the
+-- column itself predates that rename and isn't renamed retroactively) -
+-- every package imported through Admin -> App Catalog is Packaged by
 -- definition in this phase (a versioned release from a registered
--- publisher, installed through the transactional pipeline); Unmanaged
+-- publisher, installed through the transactional pipeline); Custom
 -- packages (an admin's own local customizations, wrapped as a package)
 -- are still future scope - is_managed exists now so that distinction has
 -- a column ready rather than needing a third migration once it ships.

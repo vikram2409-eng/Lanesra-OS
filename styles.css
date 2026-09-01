@@ -134,6 +134,7 @@
 .flow-map strong{font-size:28px}.flow-map>span{color:#6366f1;font-size:30px}.flow-map em{font-size:12px;color:#6366f1;font-style:normal;font-weight:800;margin-left:6px;text-transform:uppercase;letter-spacing:.05em}
 .compare-wrap{overflow-x:auto}.compare-table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;min-width:760px}
 .compare-table th,.compare-table td{padding:18px;border-bottom:1px solid var(--line);text-align:left}.compare-table th{background:#f8fafc;font-size:13px;text-transform:uppercase;letter-spacing:.04em}.compare-table tr:last-child td{border-bottom:0}.compare-table .lanesra-col{background:#eef2ff;color:#3730a3;font-weight:800}.compare-note{font-size:13px;color:#64748b;line-height:1.6;margin-top:18px}
+.compare-table .compare-group-row td{background:#f8fafc;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:10px 18px}
 .download-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.download-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px}.download-card.featured{border-color:#a5b4fc;box-shadow:0 18px 50px rgba(79,70,229,.10)}.download-card h2{font-size:30px;margin:24px 0 12px}.download-card p{color:#64748b;line-height:1.7;min-height:82px}.download-card .btn[disabled]{opacity:.65;cursor:not-allowed}.download-checks{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:24px 0}.download-checks span{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;color:#334155;font-weight:700}
 
 @media(max-width:900px){
@@ -349,7 +350,7 @@ details.rm-cat[open]{box-shadow:0 10px 30px rgba(17,24,39,.06)}
 details.rm-cat summary{list-style:none;cursor:pointer;padding:19px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-weight:750;font-size:15px;color:var(--text)}
 details.rm-cat summary::-webkit-details-marker{display:none}
 details.rm-cat summary:hover{background:#fafafd}
-details.rm-cat summary h3.rm-cat-label{display:flex;align-items:center;gap:13px;margin:0;font:inherit;font-weight:inherit}
+details.rm-cat summary h4.rm-cat-label{display:flex;align-items:center;gap:13px;margin:0;font:inherit;font-weight:inherit}
 details.rm-cat summary .rm-cat-icon{width:36px;height:36px;border-radius:11px;background:#e6f5ee;color:var(--success);display:grid;place-items:center;font-size:16px;flex-shrink:0}
 details.rm-cat summary .rm-cat-count{font-size:12px;font-weight:800;color:var(--success);background:#e6f5ee;padding:4px 10px;border-radius:999px;font-family:ui-monospace,"SF Mono",Consolas,monospace}
 details.rm-cat summary .rm-chevron{width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:.2s ease;flex-shrink:0;margin-right:3px}
@@ -357,6 +358,29 @@ details.rm-cat[open] summary .rm-chevron{transform:rotate(-135deg)}
 details.rm-cat .rm-cat-body{padding:2px 24px 8px;border-top:1px solid var(--line)}
 details.rm-cat .backlog-shipped-item{padding:15px 0}
 details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
+
+/* Pillar layer: a handful of top-level groupings sit above the category
+   list, each with its own heading/blurb and quick-nav entry in
+   .rm-pillar-nav above the search box - the actual navigability fix, so
+   a category is found by "what kind of thing is this" first, "which
+   specific feature" second, instead of scanning 7 same-weight
+   accordions to find the right one. */
+.rm-pillar{margin:0 0 40px}
+.rm-pillar:last-child{margin-bottom:0}
+.rm-pillar-head{margin-bottom:16px}
+.rm-pillar-head h3{display:flex;align-items:center;gap:12px;font-size:20px;margin:0 0 6px;font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif;letter-spacing:-.01em;color:var(--text)}
+.rm-pillar-icon{width:34px;height:34px;border-radius:10px;background:var(--accent-soft,#eef2ff);color:var(--brand);display:grid;place-items:center;font-size:16px;flex-shrink:0}
+.rm-pillar-head p{margin:0 0 0 46px;font-size:13.5px;color:var(--muted);line-height:1.6;max-width:620px}
+
+.rm-pillar-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+.rm-pillar-nav-item{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 15px;text-decoration:none;transition:.15s ease}
+.rm-pillar-nav-item:hover{border-color:var(--brand);box-shadow:0 8px 22px rgba(79,70,229,.1);transform:translateY(-1px)}
+.rm-pillar-nav-icon{width:34px;height:34px;border-radius:10px;background:var(--accent-soft,#eef2ff);color:var(--brand);display:grid;place-items:center;font-size:15px;flex-shrink:0}
+.rm-pillar-nav-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rm-pillar-nav-title{font-size:12.5px;font-weight:750;color:var(--text);line-height:1.3}
+.rm-pillar-nav-count{font-size:11px;color:var(--success);font-weight:700}
+@media(max-width:720px){.rm-pillar-nav{grid-template-columns:1fr 1fr}.rm-pillar-head p{margin-left:0}}
+@media(max-width:460px){.rm-pillar-nav{grid-template-columns:1fr}}
 
 /* "Just shipped" spotlight strip in the hero - a live pointer to the
    newest shipped category, not a static banner someone forgets to update:
@@ -408,4 +432,10 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 .honesty-note p{margin:0;color:#78350f;line-height:1.7;font-size:14.5px}
 .honesty-note p+p{margin-top:10px}
 .honesty-note a{color:#92400e;font-weight:700}
-@media(max-width:720px){.app-examples{grid-template-columns:1fr}.platform-arrow{display:none}}
+.platform-layers{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:26px}
+.platform-layer-card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 8px 30px rgba(17,24,39,.04)}
+.platform-layer-icon{width:38px;height:38px;border-radius:11px;background:#eef2ff;color:#4338ca;display:grid;place-items:center;font-size:17px;margin-bottom:14px}
+.platform-layer-card .eyebrow{margin-bottom:6px}
+.platform-layer-card h3{margin:0 0 8px;font-size:20px}
+.platform-layer-card p{color:#475569;margin:0;line-height:1.65;font-size:14px}
+@media(max-width:720px){.app-examples{grid-template-columns:1fr}.platform-arrow{display:none}.platform-layers{grid-template-columns:1fr}}

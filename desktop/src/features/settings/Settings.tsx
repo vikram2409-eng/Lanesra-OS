@@ -15,7 +15,7 @@ import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import { AppsAdmin } from "./AppsAdmin";
 import { IndustryPackagesAdmin } from "./IndustryPackagesAdmin";
-import { SolutionManagementAdmin } from "./SolutionManagementAdmin";
+import { DeploymentManagementAdmin } from "./DeploymentManagementAdmin";
 import { IntegrationHubAdmin } from "./IntegrationHubAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
@@ -86,7 +86,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "dashboards", label: "Dashboards" },
   { key: "apps", label: "Apps" },
   { key: "packages", label: "App Catalog" },
-  { key: "solutions", label: "Solution Management" },
+  { key: "solutions", label: "Deployment Management" },
   { key: "integrations", label: "Integration Hub" },
 ];
 
@@ -96,11 +96,11 @@ function tabLabel(key: AdminTab): string {
 
 // Groups the same tabs above into named categories for the landing page
 // below - purely a presentation grouping, the tab keys and their screens
-// are unchanged (Solution Management and Integration Hub are the two new
-// screens - see SolutionManagementAdmin.tsx and IntegrationHubAdmin.tsx).
+// are unchanged (Deployment Management and Integration Hub are the two new
+// screens - see DeploymentManagementAdmin.tsx and IntegrationHubAdmin.tsx).
 // Regrouped along the Solution Packages & Admin IA design spec's domain
 // lines (Workspace / Access / Data Model / Experience / Automation / Apps /
-// Analytics / Solution Management / Integrations), stopping short of its
+// Analytics / Deployment Management / Integrations), stopping short of its
 // full 11-domain set: Data Management and System either don't have a
 // desktop screen yet or need real consolidation work first (Backup &
 // Restore and CSV import/export both still live inline inside other
@@ -115,7 +115,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
   { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards"] },
-  { key: "solutions", label: "Solution Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
+  { key: "solutions", label: "Deployment Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
   { key: "integrations", label: "Integrations", icon: "🔌", note: "Connect Lanesra to the outside world", items: ["integrations"] },
 ];
 
@@ -216,7 +216,7 @@ export function AdminPanel() {
       {tab === "dashboards" && <DashboardLayoutsAdmin />}
       {tab === "apps" && <AppsAdmin />}
       {tab === "packages" && <IndustryPackagesAdmin />}
-      {tab === "solutions" && <SolutionManagementAdmin />}
+      {tab === "solutions" && <DeploymentManagementAdmin />}
       {tab === "integrations" && <IntegrationHubAdmin />}
     </div>
   );

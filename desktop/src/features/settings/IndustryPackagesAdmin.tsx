@@ -320,7 +320,7 @@ function InstalledAppDetailPanel({ detail }: { detail: InstalledAppDetail }) {
   );
 }
 
-/** Shared with SolutionManagementAdmin.tsx's Components tab - same
+/** Shared with DeploymentManagementAdmin.tsx's Components tab - same
  * artifact_type vocabulary, same display labels. */
 export function artifactTypeLabel(type: string): string {
   const labels: Record<string, string> = {
