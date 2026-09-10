@@ -1,5 +1,8 @@
 pub mod activity_repo;
+pub mod ai_agent_pending_run_repo;
+pub mod ai_agent_pipeline_repo;
 pub mod ai_agent_repo;
+pub mod ai_agent_run_repo;
 pub mod ai_settings_repo;
 pub mod app_definition_repo;
 pub mod audit_repo;

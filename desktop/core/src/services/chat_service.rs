@@ -236,6 +236,14 @@ fn admin_tools() -> Vec<ToolSpec> {
             "Create a reusable Skill an Agent can attach and load on demand. Arguments match AiSkillInput: name, description (what a model sees before deciding to use it), instructions_md (the full content, only loaded when used).",
             object_schema(),
         ),
+        tool("list_ai_agent_pipelines", "List Agent Pipelines (an ordered chain of Agents) defined in this workspace.", object_schema()),
+        tool(
+            "create_ai_agent_pipeline",
+            "Create an Agent Pipeline. Arguments match AiAgentPipelineInput: name, description, steps (array of {agent_id, input_template} in order - input_template may reference {{previous_output}} for step 2+, or {{trigger_input}} for step 1).",
+            object_schema(),
+        ),
+        tool("run_ai_agent", "Run a single AI Agent once with the given input and return its final answer. Arguments: agent_id, input.", object_schema()),
+        tool("run_ai_agent_pipeline", "Run an Agent Pipeline once with the given trigger input and return the overall result. Arguments: pipeline_id, input.", object_schema()),
     ]
 }
 
@@ -269,7 +277,7 @@ fn to_val<T: serde::Serialize>(r: AppResult<T>) -> AppResult<Value> {
 }
 
 #[allow(clippy::too_many_lines)]
-fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Option<&str>, master_key: &[u8; 32], name: &str, arguments: &Value) -> AppResult<Value> {
+async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Option<&str>, master_key: &[u8; 32], name: &str, arguments: &Value) -> AppResult<Value> {
     use crate::models::business_rule::BusinessRuleInput;
     use crate::models::custom_field::CustomFieldDefinitionInput;
     use crate::models::custom_object::CustomObjectDefinitionInput;
@@ -435,6 +443,21 @@ fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Option<&str
             let input: crate::models::ai_agent::AiSkillInput = from_args(arguments)?;
             to_val(super::ai_agent_service::create_skill(conn, workspace_id, &input, actor))
         }
+        "list_ai_agent_pipelines" => to_val(super::ai_orchestration_service::list_pipelines(conn, workspace_id, true)),
+        "create_ai_agent_pipeline" => {
+            let input: crate::models::ai_agent_pipeline::AiAgentPipelineInput = from_args(arguments)?;
+            to_val(super::ai_orchestration_service::create_pipeline(conn, workspace_id, &input, actor))
+        }
+        "run_ai_agent" => {
+            let agent_id = required_str(arguments, "agent_id")?;
+            let input = required_str(arguments, "input")?;
+            to_val(super::ai_orchestration_service::run_manual(conn, workspace_id, master_key, "agent", agent_id, input, actor).await)
+        }
+        "run_ai_agent_pipeline" => {
+            let pipeline_id = required_str(arguments, "pipeline_id")?;
+            let input = required_str(arguments, "input")?;
+            to_val(super::ai_orchestration_service::run_manual(conn, workspace_id, master_key, "pipeline", pipeline_id, input, actor).await)
+        }
         other => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
     }
 }
@@ -564,7 +587,7 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
                 let persisted_assistant = redact_secret_tool_calls(&raw_assistant);
                 appended.push(chat_repo::append_message(conn, &conversation.id, "assistant", None, Some(&persisted_assistant), None)?);
                 for call in calls {
-                    let result = execute_tool(conn, workspace_id, master_key, Some(user_id), mode, &call);
+                    let result = execute_tool(conn, workspace_id, master_key, Some(user_id), mode, &call).await;
                     let content = match result {
                         Ok(value) => value.to_string(),
                         Err(e) => format!("Error: {e}"),
@@ -577,10 +600,10 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
     Err(AppError::Validation("This is taking more steps than expected - try asking again, or break the request into smaller parts.".into()))
 }
 
-fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, mode: &str, call: &RequestedToolCall) -> AppResult<Value> {
+async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, mode: &str, call: &RequestedToolCall) -> AppResult<Value> {
     match mode {
         "records" => dispatch_record_tool(conn, workspace_id, &call.name, &call.arguments),
-        "admin" => dispatch_admin_tool(conn, workspace_id, actor, master_key, &call.name, &call.arguments),
+        "admin" => dispatch_admin_tool(conn, workspace_id, actor, master_key, &call.name, &call.arguments).await,
         other => Err(AppError::Validation(format!("Unknown chat mode '{other}'"))),
     }
 }
@@ -783,7 +806,7 @@ fn execute_agent_tool<'a>(
             }
             other => match tool_source(other) {
                 Some("record") => dispatch_record_tool(conn, workspace_id, other, &call.arguments),
-                Some("admin") => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments),
+                Some("admin") => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
                 _ => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
             },
         }
@@ -808,6 +831,21 @@ pub struct AgentRunOutcome {
 /// `send_agent_message`). Entirely in-memory - see this section's own
 /// doc comment for why persistence is the caller's job, not this
 /// function's.
+/// Convenience wrapper over `run_agent_once` for a caller that only ever
+/// needs a single fresh input - Phase 6b's Pipeline/Trigger runs, which
+/// aren't a multi-turn conversation and never seed more than one message.
+pub async fn run_agent_once_with_text(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    agent: &AiAgentDefinition,
+    input_text: &str,
+) -> AppResult<AgentRunOutcome> {
+    let seed = vec![synthetic_message("user", Some(input_text), None, None)];
+    run_agent_once(conn, workspace_id, master_key, actor, agent, seed).await
+}
+
 pub async fn run_agent_once(
     conn: &Connection,
     workspace_id: &str,

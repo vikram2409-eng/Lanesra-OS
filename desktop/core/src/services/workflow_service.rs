@@ -49,8 +49,8 @@ use crate::models::workflow::{
     TRIGGER_TYPES,
 };
 use crate::repositories::{
-    company_repo, contract_repo, custom_field_repo, custom_record_repo, integration_connection_ref_repo, notification_repo,
-    opportunity_repo, relationship_repo, task_repo, user_repo, workflow_repo,
+    ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, company_repo, contract_repo, custom_field_repo, custom_record_repo,
+    integration_connection_ref_repo, notification_repo, opportunity_repo, relationship_repo, task_repo, user_repo, workflow_repo,
 };
 use crate::services::{builtin_field_service, company_service, custom_object_service, custom_record_service, entity_registry, task_service};
 
@@ -803,6 +803,19 @@ struct CallConnectorActionParams {
     param_map: Vec<(String, String)>,
 }
 
+/// AI & Agentic Layer, Phase 6b: "Run AI Agent". `input_template` uses
+/// the same `field:{key}` substitution `CallConnectorActionParams.
+/// param_map` already established, on one template string instead of a
+/// param map - resolved against the triggering record's fields, same as
+/// `call_connector_action`'s own `ctx` below.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct RunAiAgentParams {
+    target_type: String, // 'agent' | 'pipeline'
+    target_id: String,
+    #[serde(default)]
+    input_template: String,
+}
+
 fn parse_params<T: for<'de> Deserialize<'de>>(action_type: &str, params_json: &str) -> AppResult<T> {
     serde_json::from_str(params_json).map_err(|e| AppError::Validation(format!("Invalid parameters for '{action_type}': {e}")))
 }
@@ -928,6 +941,20 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
             }
             if integration_connection_ref_repo::get_by_key(conn, workspace_id, &p.reference_key)?.is_none() {
                 return Err(AppError::Validation(format!("Unknown connection reference '{}'", p.reference_key)));
+            }
+        }
+        "run_ai_agent" => {
+            let p: RunAiAgentParams = parse_params(action_type, params_json)?;
+            if !crate::models::ai_agent_pipeline::TRIGGER_TARGET_TYPES.contains(&p.target_type.as_str()) {
+                return Err(AppError::Validation(format!("Invalid target type '{}'", p.target_type)));
+            }
+            let exists = match p.target_type.as_str() {
+                "agent" => ai_agent_repo::get(conn, &p.target_id)?.map(|a| a.workspace_id == workspace_id && a.is_active).unwrap_or(false),
+                "pipeline" => ai_agent_pipeline_repo::get(conn, &p.target_id)?.map(|pl| pl.workspace_id == workspace_id && pl.is_active).unwrap_or(false),
+                _ => false,
+            };
+            if !exists {
+                return Err(AppError::Validation(format!("The selected {} does not exist", p.target_type)));
             }
         }
         "add_notification" => {
@@ -1219,6 +1246,34 @@ fn apply_action(
             )?;
             Ok(format!("queued connector action '{}'", p.action_key))
         }
+        // AI & Agentic Layer, Phase 6b: same enqueue-not-inline shape as
+        // call_connector_action just above, for the same reason - see
+        // this action type's own doc comment on `RunAiAgentParams`.
+        // `ai_orchestration_service::drain_pending_runs` is the async
+        // drain.
+        "run_ai_agent" => {
+            let p: RunAiAgentParams = parse_params(action_type, params_json)?;
+            let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+            for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
+                ctx.insert(k, v);
+            }
+            let resolved_input = match p.input_template.strip_prefix("field:") {
+                Some(field_key) => ctx.get(field_key).cloned().unwrap_or_default(),
+                None => p.input_template.clone(),
+            };
+            ai_agent_pending_run_repo::enqueue(
+                conn,
+                &new_uuid(),
+                workspace_id,
+                &p.target_type,
+                &p.target_id,
+                &resolved_input,
+                Some("workflow"),
+                Some(entity_type),
+                Some(entity_id),
+            )?;
+            Ok(format!("queued {} run", p.target_type))
+        }
         other => Err(AppError::Validation(format!("Unknown action type '{other}'"))),
     }
 }
@@ -1354,6 +1409,15 @@ fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, act
             let p: CallConnectorActionParams = parse_params(action_type, params_json)?;
             let connector_name = super::connector_service::get(conn, workspace_id, &p.connector_id).map(|c| c.name).unwrap_or_else(|_| "an unknown connector".into());
             Ok(format!("would queue '{}' on {connector_name} (not actually called in test mode)", p.action_key))
+        }
+        "run_ai_agent" => {
+            let p: RunAiAgentParams = parse_params(action_type, params_json)?;
+            let name = match p.target_type.as_str() {
+                "agent" => ai_agent_repo::get(conn, &p.target_id)?.map(|a| a.name).unwrap_or_else(|| "an unknown agent".into()),
+                "pipeline" => ai_agent_pipeline_repo::get(conn, &p.target_id)?.map(|pl| pl.name).unwrap_or_else(|| "an unknown pipeline".into()),
+                other => other.to_string(),
+            };
+            Ok(format!("would queue '{name}' to run (not actually run in test mode)"))
         }
         other => Err(AppError::Validation(format!("Unknown action type '{other}'"))),
     }

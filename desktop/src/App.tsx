@@ -128,10 +128,20 @@ function Ready({
   // Lanesra is open (no OS-level background scheduler in Personal
   // Workspace) - once on load so anything missed while closed fires
   // promptly, then on a 5-minute interval for the rest of the session.
+  // AI & Agentic Layer, Phase 6b: the same interval also drains
+  // whatever's queued for the AI Agent Foundry (a due schedule Trigger,
+  // a run_ai_agent workflow action) and, incidentally, Integration Hub's
+  // own long-unwired call_connector_action queue - see
+  // drain_pending_async_work's own doc comment. Kept as a second call,
+  // not folded into runScheduledWorkflows, since that one stays
+  // deliberately sync (scheduled workflow triggers never make a network
+  // call) while this one is genuinely async.
   useEffect(() => {
     api.runScheduledWorkflows().catch(() => {});
+    api.drainPendingAsyncWork().catch(() => {});
     const interval = setInterval(() => {
       api.runScheduledWorkflows().catch(() => {});
+      api.drainPendingAsyncWork().catch(() => {});
     }, 5 * 60_000);
     return () => clearInterval(interval);
   }, []);

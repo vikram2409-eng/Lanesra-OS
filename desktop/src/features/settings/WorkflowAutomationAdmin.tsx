@@ -52,12 +52,13 @@ const ACTION_LABELS: Record<WorkflowActionType, string> = {
   create_reminder: "Create reminder",
   set_default_field: "Set default value",
   clear_field: "Clear a field",
+  run_ai_agent: "Run AI agent",
 };
 
 const ACTION_ICONS: Record<WorkflowActionType, string> = {
   create_task: "📋", create_reminder: "⏰", update_field: "✏️", assign_owner: "👤",
   create_record: "➕", update_related_record: "🔗", add_notification: "🔔",
-  set_default_field: "🔧", clear_field: "🧹",
+  set_default_field: "🔧", clear_field: "🧹", run_ai_agent: "🤖",
 };
 
 const TRIGGER_ICONS: Record<TriggerType, string> = {
@@ -92,6 +93,11 @@ function defaultParamsFor(actionType: WorkflowActionType, customFieldKey: string
     case "set_default_field": return { target_field_key: customFieldKey, target_field_source: "custom", value: "", copy_from_field_key: null };
     // No value needed - clear_field always writes empty.
     case "clear_field": return { target_field_key: customFieldKey, target_field_source: "custom" };
+    // Never run inline - enqueued for ai_orchestration_service::drain_pending_runs.
+    // input_template may be a literal string or "field:<key>" to resolve
+    // from the triggering record - same convention call_connector_action's
+    // param_map already uses, see RunAiAgentParams.
+    case "run_ai_agent": return { target_type: "agent", target_id: "", input_template: "" };
   }
 }
 
@@ -145,7 +151,7 @@ function targetFieldLabel(entityType: string, p: Record<string, unknown>, labelB
     : labelByKey.get(String(p.target_field_key)) ?? String(p.target_field_key);
 }
 
-function describeAction(entityType: string, a: WorkflowActionInput, labelByKey: Map<string, string>): string {
+function describeAction(entityType: string, a: WorkflowActionInput, labelByKey: Map<string, string>, agentNameById: Map<string, string> = new Map()): string {
   try {
     const p = JSON.parse(a.params_json) as Record<string, unknown>;
     switch (a.action_type) {
@@ -158,6 +164,10 @@ function describeAction(entityType: string, a: WorkflowActionInput, labelByKey: 
       case "create_record": return `create a new ${p.entity_type}${p.relationship_definition_id ? " and link it" : ""}`;
       case "update_related_record": return `set ${p.target_field_key} on linked record${p.value ? ` = "${p.value}"` : p.copy_from_field_key ? ` = {${p.copy_from_field_key}}` : ""}`;
       case "add_notification": return `notify ${p.audience === "all_admins" ? "all admins" : "owner"}: "${p.message}"`;
+      case "run_ai_agent": {
+        const name = agentNameById.get(String(p.target_id)) ?? "(none selected)";
+        return `run ${p.target_type === "pipeline" ? "pipeline" : "agent"} "${name}"${p.input_template ? ` with "${p.input_template}"` : ""}`;
+      }
       default: return a.action_type;
     }
   } catch {
@@ -201,6 +211,15 @@ export function WorkflowAutomationAdmin() {
   const defs = useQuery({ queryKey: ["customFieldDefinitions", entityType, "all"], queryFn: () => api.listCustomFieldDefinitions(entityType, false) });
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
   const relationshipDefs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
+  // AI & Agentic Layer, Phase 6b: "Run AI agent" action's own target
+  // pickers - active agents/pipelines only, same "active only" convention
+  // every other action's dropdown (users, relationships) already follows.
+  const aiAgents = useQuery({ queryKey: ["aiAgents", "active"], queryFn: () => api.listAiAgents(true) });
+  const aiAgentPipelines = useQuery({ queryKey: ["aiAgentPipelines", "active"], queryFn: () => api.listAiAgentPipelines(true) });
+  const agentNameById = new Map<string, string>([
+    ...(aiAgents.data ?? []).map((a): [string, string] => [a.id, a.name]),
+    ...(aiAgentPipelines.data ?? []).map((p): [string, string] => [p.id, p.name]),
+  ]);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["workflowRules"] });
@@ -255,6 +274,7 @@ export function WorkflowAutomationAdmin() {
         <WorkflowHistoryPanel
           entityType={entityType}
           customFields={activeDefs}
+          agentNameById={agentNameById}
           workflowId={historyWorkflow.id}
           workflowName={historyWorkflow.name}
           onDone={() => {
@@ -271,6 +291,8 @@ export function WorkflowAutomationAdmin() {
           customObjects={customObjects.data ?? []}
           users={users.data ?? []}
           relationshipDefs={relationshipDefs.data ?? []}
+          aiAgents={aiAgents.data ?? []}
+          aiAgentPipelines={aiAgentPipelines.data ?? []}
           apps={appList}
           initial={{
             entity_type: entityType, name: "", description: null, trigger_type: "status_changed",
@@ -294,6 +316,8 @@ export function WorkflowAutomationAdmin() {
           customObjects={customObjects.data ?? []}
           users={users.data ?? []}
           relationshipDefs={relationshipDefs.data ?? []}
+          aiAgents={aiAgents.data ?? []}
+          aiAgentPipelines={aiAgentPipelines.data ?? []}
           apps={appList}
           initial={{
             entity_type: entityType, name: editing.name, description: editing.description, trigger_type: editing.trigger_type,
@@ -347,7 +371,7 @@ export function WorkflowAutomationAdmin() {
                   {w.trigger_status ? ` "${w.trigger_status}"` : ""}
                   {w.trigger_field_key ? ` (${w.trigger_field_key})` : ""}
                 </td>
-                <td>{w.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</td>
+                <td>{w.actions.map((a) => describeAction(entityType, a, labelByKey, agentNameById)).join("; ")}</td>
                 <td>{w.app_id ? appList.find((a) => a.id === w.app_id)?.name ?? "—" : <span style={{ color: "var(--text-muted)" }}>Workspace-wide</span>}</td>
                 <td>
                   <span className={`badge${w.is_active ? " badge-success" : ""}`}>{w.is_active ? "Active" : "Inactive"}</span>
@@ -471,6 +495,8 @@ function ActionEditor({
   customObjects,
   users,
   relationshipDefs,
+  aiAgents,
+  aiAgentPipelines,
   action,
   onChange,
   onRemove,
@@ -480,6 +506,8 @@ function ActionEditor({
   customObjects: { key: string; plural_label: string }[];
   users: { id: string; display_name: string; is_active: boolean }[];
   relationshipDefs: { id: string; source_entity_type: string; target_entity_type: string; forward_label: string; reverse_label: string }[];
+  aiAgents: { id: string; name: string }[];
+  aiAgentPipelines: { id: string; name: string }[];
   action: WorkflowActionInput;
   onChange: (a: WorkflowActionInput) => void;
   onRemove: () => void;
@@ -685,6 +713,32 @@ function ActionEditor({
           </select>
         </div>
       )}
+
+      {action.action_type === "run_ai_agent" && (() => {
+        const targetType = String(params.target_type ?? "agent");
+        const options = targetType === "pipeline" ? aiAgentPipelines : aiAgents;
+        return (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <select
+              value={targetType}
+              onChange={(e) => setParams({ ...params, target_type: e.target.value, target_id: "" })}
+            >
+              <option value="agent">AI Agent</option>
+              <option value="pipeline">Pipeline</option>
+            </select>
+            <select value={String(params.target_id ?? "")} onChange={(e) => setParams({ ...params, target_id: e.target.value })} required>
+              <option value="">Select {targetType}...</option>
+              {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <input
+              placeholder='Input (or "field:key" to use a record field)'
+              value={String(params.input_template ?? "")}
+              onChange={(e) => setParams({ ...params, input_template: e.target.value })}
+              style={{ minWidth: 240 }}
+            />
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -695,6 +749,8 @@ function WorkflowForm({
   customObjects,
   users,
   relationshipDefs,
+  aiAgents,
+  aiAgentPipelines,
   apps,
   initial,
   submitLabel,
@@ -708,6 +764,8 @@ function WorkflowForm({
   customObjects: { key: string; plural_label: string }[];
   users: { id: string; display_name: string; is_active: boolean }[];
   relationshipDefs: { id: string; source_entity_type: string; target_entity_type: string; forward_label: string; reverse_label: string }[];
+  aiAgents: { id: string; name: string }[];
+  aiAgentPipelines: { id: string; name: string }[];
   apps: AppDefinition[];
   initial: WorkflowDefinitionInput & { is_active?: boolean };
   submitLabel: string;
@@ -737,6 +795,7 @@ function WorkflowForm({
 
   const dateFields = dateFieldsFor(entityType);
   const labelByKey = new Map(customFields.map((f) => [f.key, f.label]));
+  const agentNameById = new Map<string, string>([...aiAgents.map((a): [string, string] => [a.id, a.name]), ...aiAgentPipelines.map((p): [string, string] => [p.id, p.name])]);
 
   function updateConditionAt(i: number, next: WorkflowConditionInput) {
     setConditions(conditions.map((c, idx) => (idx === i ? next : c)));
@@ -1029,7 +1088,7 @@ function WorkflowForm({
               </div>
               {editSection !== "actions" ? (
                 <p style={{ color: "var(--text-muted)", fontSize: 13, margin: 0 }}>
-                  {actions.length === 0 ? "No actions yet." : actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}
+                  {actions.length === 0 ? "No actions yet." : actions.map((a) => describeAction(entityType, a, labelByKey, agentNameById)).join("; ")}
                 </p>
               ) : (
                 <>
@@ -1041,6 +1100,8 @@ function WorkflowForm({
                       customObjects={customObjects}
                       users={users}
                       relationshipDefs={relationshipDefs}
+                      aiAgents={aiAgents}
+                      aiAgentPipelines={aiAgentPipelines}
                       action={a}
                       onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
                       onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
@@ -1121,7 +1182,7 @@ function WorkflowForm({
                         <span className="workflow-action-icon">{ACTION_ICONS[a.action_type]}</span>
                         <div>
                           <div className="workflow-action-title">{ACTION_LABELS[a.action_type]}</div>
-                          <div className="workflow-action-subtitle">{describeAction(entityType, a, labelByKey)}</div>
+                          <div className="workflow-action-subtitle">{describeAction(entityType, a, labelByKey, agentNameById)}</div>
                         </div>
                       </div>
                     ))}
@@ -1157,6 +1218,7 @@ function WorkflowForm({
 function WorkflowHistoryPanel({
   entityType,
   customFields,
+  agentNameById,
   workflowId,
   workflowName,
   onDone,
@@ -1164,6 +1226,7 @@ function WorkflowHistoryPanel({
 }: {
   entityType: string;
   customFields: { key: string; label: string }[];
+  agentNameById: Map<string, string>;
   workflowId: string;
   workflowName: string;
   onDone: () => void;
@@ -1206,7 +1269,7 @@ function WorkflowHistoryPanel({
                 {v.snapshot.trigger_status ? ` "${v.snapshot.trigger_status}"` : ""}
                 {v.snapshot.trigger_field_key ? ` (${v.snapshot.trigger_field_key})` : ""}
                 {" → "}
-                {v.snapshot.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}
+                {v.snapshot.actions.map((a) => describeAction(entityType, a, labelByKey, agentNameById)).join("; ")}
               </div>
               <button className="btn" type="button" disabled={restore.isPending} onClick={() => restore.mutate(v.id)}>
                 Restore this version
