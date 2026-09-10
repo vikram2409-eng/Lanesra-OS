@@ -95,7 +95,12 @@ pub(crate) fn authorize(state: &SharedState, headers: &HeaderMap, required_scope
 /// Takes the connection the caller already holds - `state.conn` is a
 /// plain (non-reentrant) `std::sync::Mutex`, so this must never lock it
 /// again itself, or every handler below would deadlock on its own lock.
-fn logged<T>(conn: &rusqlite::Connection, workspace_id: &str, result: Result<T, AppError>) -> Result<T, AppError> {
+///
+/// `pub(crate)`, not private: `mcp.rs`'s `POST /mcp` handler reuses this
+/// exact helper too, the same execution log either surface writes to -
+/// same reasoning as `integration_commands.rs`'s `run_with_own_connection`
+/// being loosened to `pub(crate)` in phase 1, rather than duplicating it.
+pub(crate) fn logged<T>(conn: &rusqlite::Connection, workspace_id: &str, result: Result<T, AppError>) -> Result<T, AppError> {
     let execution_id = integration_log_service::start(conn, workspace_id, "api_call", None, None, "inbound", None);
     match &result {
         Ok(_) => integration_log_service::finish(conn, &execution_id, &FinishOutcome { status: "success".into(), records_written: 1, ..Default::default() }),

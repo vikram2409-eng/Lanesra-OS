@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "src-tauri", "server"]
+members = ["core", "src-tauri", "server", "cli"]
 
 [profile.release]
 # Not panic = "abort": the server binary must not take the whole process

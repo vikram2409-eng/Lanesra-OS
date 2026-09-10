@@ -1,0 +1,24 @@
+[package]
+name = "lanesra-cli"
+version = "0.11.0"
+description = "Lanesra OS CLI - a thin wrapper around a Team Workspace server's /api/v1 REST API for scriptable local workflows"
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "lanesra_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lanesra"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+# Blocking, not async - this is a one-shot CLI invocation, not a long-lived
+# process; no reason to pull in a tokio runtime for it (see server/core's
+# own async reqwest, used for a genuinely different reason - a long-lived
+# process holding other connections open concurrently).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde_json = "1"

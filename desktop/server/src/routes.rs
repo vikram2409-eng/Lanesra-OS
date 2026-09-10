@@ -30,6 +30,7 @@ pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
         .merge(crate::api_v1::router())
         .merge(crate::events_stream::router())
         .merge(crate::admin_actions::router())
+        .merge(crate::mcp::router())
         .fallback_service(static_service)
         .layer(axum::middleware::from_fn_with_state(state.security.clone(), security_headers));
 
