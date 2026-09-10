@@ -5,6 +5,7 @@ pub mod app_definition;
 pub mod audit;
 pub mod backup;
 pub mod business_rule;
+pub mod chat;
 pub mod company;
 pub mod contact;
 pub mod contract;

@@ -41,6 +41,7 @@ use rusqlite::Connection;
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::ai::{AiSettings, AiSettingsInput, AiTestResult, AI_PROVIDERS};
+use crate::models::chat::ChatMessage;
 use crate::repositories::{ai_settings_repo, integration_secret_repo};
 
 const DEFAULT_ANTHROPIC_BASE_URL: &str = "https://api.anthropic.com";
@@ -238,6 +239,268 @@ async fn complete_openai_compatible(base_url: Option<&str>, model: &str, api_key
         .and_then(|t| t.as_str())
         .map(|s| s.to_string())
         .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))
+}
+
+// --- AI & Agentic Layer, Phase 5 (LLM Chat Assistant): tool-calling ---
+//
+// `complete` above is one request, one response - enough for Phase 4's
+// single JSON directive. A real chat agent needs a genuine back-and-
+// forth: the model asks to call one or more tools, the caller executes
+// them and feeds the results back, and this repeats until the model
+// answers in plain text instead. `complete_with_tools` is one round of
+// that exchange; `services::chat_service::send_message` owns the loop
+// itself (execute the requested tools, persist the results, call this
+// again) and the tool tables both chat modes use.
+//
+// `history` is the persisted `ChatMessage` row list for a conversation,
+// straight from `chat_repo::list_messages` - the provider-specific
+// request shape is rebuilt from those rows fresh on every call, rather
+// than this module owning any conversation state of its own. A `role:
+// "assistant"` row's `tool_calls` field, when present, holds that
+// provider's own raw response content verbatim (Anthropic's full
+// `content` block array, or an OpenAI-compatible `tool_calls` array) -
+// captured once when the response first arrived and echoed straight
+// back unchanged, since each provider expects its own prior turns
+// exactly as it produced them, not reconstructed from scratch.
+
+/// One tool the model may call. `input_schema` follows the same loose,
+/// prose-friendly convention `server/src/mcp.rs`'s own tool definitions
+/// already use - a `{"type": "object"}` schema whose `description`
+/// tells the model the target Rust struct's real shape, not a
+/// hand-authored per-field schema for every admin input type.
+#[derive(Debug, Clone)]
+pub struct ToolSpec {
+    pub name: String,
+    pub description: String,
+    pub input_schema: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub struct RequestedToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
+}
+
+#[derive(Debug, Clone)]
+pub enum CompletionOutcome {
+    Text(String),
+    ToolCalls { raw_assistant: serde_json::Value, calls: Vec<RequestedToolCall> },
+}
+
+/// Same settings/secret resolution as `complete`, then one tool-calling
+/// completion call per provider. No admin gate here either - see
+/// `complete`'s own doc comment; `chat_service::send_message` decides
+/// its own access model per mode (any authenticated user for records,
+/// Administrator for admin).
+pub async fn complete_with_tools(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    system_prompt: &str,
+    tools: &[ToolSpec],
+    history: &[ChatMessage],
+) -> AppResult<CompletionOutcome> {
+    let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
+    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?
+        .ok_or_else(|| AppError::Validation("Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into()))?;
+    let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
+    let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
+
+    match settings.provider.as_str() {
+        "anthropic" => complete_anthropic_with_tools(settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, tools, history).await,
+        "openai_compatible" => complete_openai_with_tools(settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, tools, history).await,
+        other => Err(AppError::Validation(format!("No tool-calling completion implemented for provider '{other}'"))),
+    }
+}
+
+fn anthropic_tools_json(tools: &[ToolSpec]) -> Vec<serde_json::Value> {
+    tools.iter().map(|t| serde_json::json!({"name": t.name, "description": t.description, "input_schema": t.input_schema})).collect()
+}
+
+/// Every consecutive `role: "tool"` row answering one assistant turn's
+/// requested calls must land in a single Anthropic user message (one
+/// `tool_result` block per call) - not one message per result, which
+/// the API rejects.
+fn anthropic_messages_json(history: &[ChatMessage]) -> Vec<serde_json::Value> {
+    let mut messages = Vec::new();
+    let mut i = 0;
+    while i < history.len() {
+        let m = &history[i];
+        match m.role.as_str() {
+            "assistant" => {
+                let content = m.tool_calls.clone().unwrap_or_else(|| serde_json::json!([{"type": "text", "text": m.content.clone().unwrap_or_default()}]));
+                messages.push(serde_json::json!({"role": "assistant", "content": content}));
+                i += 1;
+            }
+            "tool" => {
+                let mut blocks = Vec::new();
+                while i < history.len() && history[i].role == "tool" {
+                    let t = &history[i];
+                    blocks.push(serde_json::json!({
+                        "type": "tool_result",
+                        "tool_use_id": t.tool_call_id.clone().unwrap_or_default(),
+                        "content": t.content.clone().unwrap_or_default(),
+                    }));
+                    i += 1;
+                }
+                messages.push(serde_json::json!({"role": "user", "content": blocks}));
+            }
+            _ => {
+                messages.push(serde_json::json!({"role": "user", "content": m.content.clone().unwrap_or_default()}));
+                i += 1;
+            }
+        }
+    }
+    messages
+}
+
+async fn complete_anthropic_with_tools(
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    system_prompt: &str,
+    tools: &[ToolSpec],
+    history: &[ChatMessage],
+) -> AppResult<CompletionOutcome> {
+    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
+    let model = if model.trim().is_empty() { DEFAULT_ANTHROPIC_MODEL } else { model };
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
+    let body = serde_json::json!({
+        "model": model, "max_tokens": 2048, "system": system_prompt,
+        "tools": anthropic_tools_json(tools),
+        "messages": anthropic_messages_json(history),
+    });
+    let response = client
+        .post(format!("{}/v1/messages", base.trim_end_matches('/')))
+        .header("x-api-key", api_key)
+        .header("anthropic-version", ANTHROPIC_VERSION)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+    }
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let content = value.get("content").cloned().unwrap_or(serde_json::Value::Null);
+    let blocks = content.as_array().cloned().unwrap_or_default();
+    let calls: Vec<RequestedToolCall> = blocks
+        .iter()
+        .filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
+        .filter_map(|b| {
+            Some(RequestedToolCall {
+                id: b.get("id")?.as_str()?.to_string(),
+                name: b.get("name")?.as_str()?.to_string(),
+                arguments: b.get("input").cloned().unwrap_or(serde_json::json!({})),
+            })
+        })
+        .collect();
+    if !calls.is_empty() {
+        return Ok(CompletionOutcome::ToolCalls { raw_assistant: content, calls });
+    }
+    let text_reply = blocks.iter().filter_map(|b| b.get("text").and_then(|t| t.as_str())).collect::<Vec<_>>().join("\n");
+    Ok(CompletionOutcome::Text(text_reply))
+}
+
+fn openai_tools_json(tools: &[ToolSpec]) -> Vec<serde_json::Value> {
+    tools
+        .iter()
+        .map(|t| serde_json::json!({"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.input_schema}}))
+        .collect()
+}
+
+fn openai_messages_json(system_prompt: &str, history: &[ChatMessage]) -> Vec<serde_json::Value> {
+    let mut messages = vec![serde_json::json!({"role": "system", "content": system_prompt})];
+    for m in history {
+        match m.role.as_str() {
+            "assistant" => {
+                let mut msg = serde_json::json!({"role": "assistant", "content": m.content});
+                if let Some(tool_calls) = &m.tool_calls {
+                    msg["tool_calls"] = tool_calls.clone();
+                }
+                messages.push(msg);
+            }
+            "tool" => messages.push(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": m.tool_call_id.clone().unwrap_or_default(),
+                "content": m.content.clone().unwrap_or_default(),
+            })),
+            _ => messages.push(serde_json::json!({"role": "user", "content": m.content.clone().unwrap_or_default()})),
+        }
+    }
+    messages
+}
+
+async fn complete_openai_with_tools(
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    system_prompt: &str,
+    tools: &[ToolSpec],
+    history: &[ChatMessage],
+) -> AppResult<CompletionOutcome> {
+    let base = base_url
+        .filter(|u| !u.trim().is_empty())
+        .ok_or_else(|| AppError::Validation("An OpenAI-compatible provider needs a base URL".into()))?;
+    if model.trim().is_empty() {
+        return Err(AppError::Validation("An OpenAI-compatible provider needs a model name configured".into()));
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
+    let body = serde_json::json!({
+        "model": model,
+        "messages": openai_messages_json(system_prompt, history),
+        "tools": openai_tools_json(tools),
+        "max_tokens": 2048,
+    });
+    let response = client
+        .post(format!("{}/chat/completions", base.trim_end_matches('/')))
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+    }
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let message = value
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .cloned()
+        .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))?;
+    if let Some(tool_calls_value) = message.get("tool_calls").filter(|v| v.is_array()) {
+        let calls: Vec<RequestedToolCall> = tool_calls_value
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|c| {
+                let function = c.get("function")?;
+                let arguments_str = function.get("arguments")?.as_str()?;
+                Some(RequestedToolCall {
+                    id: c.get("id")?.as_str()?.to_string(),
+                    name: function.get("name")?.as_str()?.to_string(),
+                    arguments: serde_json::from_str(arguments_str).unwrap_or(serde_json::json!({})),
+                })
+            })
+            .collect();
+        if !calls.is_empty() {
+            return Ok(CompletionOutcome::ToolCalls { raw_assistant: tool_calls_value.clone(), calls });
+        }
+    }
+    let text_reply = message.get("content").and_then(|c| c.as_str()).unwrap_or_default().to_string();
+    Ok(CompletionOutcome::Text(text_reply))
 }
 
 async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> AppResult<String> {

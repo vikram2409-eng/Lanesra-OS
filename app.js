@@ -321,8 +321,8 @@ function ensureAdminData(){
  Object.values(data.numberingOverrides||{}).forEach(o=>{if(!o.createdAt)stampCreate(o)});
  save();
 }
-const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓',reports:'▥'};
-const labels={dashboard:'Dashboard',companies:'Companies',contacts:'Contacts',pipeline:'Sales Pipeline',products:'Products',quotes:'Quotes',orders:'Orders',invoices:'Invoices',contracts:'Contracts',tasks:'Tasks',reports:'Reports'};
+const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓',reports:'▥',assistant:'💬'};
+const labels={dashboard:'Dashboard',companies:'Companies',contacts:'Contacts',pipeline:'Sales Pipeline',products:'Products',quotes:'Quotes',orders:'Orders',invoices:'Invoices',contracts:'Contracts',tasks:'Tasks',reports:'Reports',assistant:'Assistant'};
 // Admin extensibility: an admin-defined Custom Object (data.customObjects)
 // gets its own sidebar entry, list/create/edit screens and record array
 // (data[key]) exactly like a built-in entity - all it needs is an entry in
@@ -432,7 +432,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -453,6 +453,7 @@ const ADMIN_CATEGORIES=[
  {key:'solutions',label:'Deployment Management',icon:'🗂',note:"What's installed, what it created, and who published it",items:['solutions']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
+ {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
 ];
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -946,6 +947,7 @@ function renderView(){
  if(current==='dashboard') return dashboard();
  if(current==='pipeline') return pipeline();
  if(current==='reports') return reportsPage();
+ if(current==='assistant') return assistantPage();
  if(current==='admin') return adminPage();
  if(detailRecord&&detailRecord.type===current)return detailRecord.type==='companies'?companyDetail(detailRecord.id):detailRecord.type==='contacts'?contactDetail(detailRecord.id):genericRecordDetail(detailRecord.type,detailRecord.id);
  // Admin-defined Custom Objects reuse the exact same generic tablePage +
@@ -2053,7 +2055,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -2697,7 +2699,7 @@ function activeApp(){const app=ensureApps().find(a=>a.id===activeAppId);return (
 // Structural sections an active app never hides - Dashboard and Reports
 // aren't object-specific, and Admin is a fixed button outside this list
 // entirely (see renderSidebarNav) so it's never filtered either.
-const APP_STRUCTURAL_SECTIONS=new Set(['dashboard','reports']);
+const APP_STRUCTURAL_SECTIONS=new Set(['dashboard','reports','assistant']);
 function navSections(){
  const app=activeApp();
  if(!app)return Object.keys(labels);
@@ -4718,6 +4720,90 @@ function mcpTestModal(){
  modal('Test connection: MCP',body);
  $('[data-close]').onclick=closeModal;
 }
+
+// ---- AI & Agentic Layer, Phase 5 mirror ------------------------------------
+// A lightweight simulated chat UI for both the records-mode assistant (any
+// user, main nav "Assistant") and the admin-mode assistant (Admin -> Admin
+// Assistant) - same "real shape, no real wire" honesty convention as
+// llmMcpTab/mcpSubTab above, not a client-side reimplementation of the real
+// edition's multi-round tool-calling loop (core::services::chat_service). A
+// company-name lookup or an entity count in records mode still runs a real
+// query against this demo's own data (mirroring askReportTab's own keyword
+// match above); everything else - and all of admin mode, since "really
+// create a business rule via chat" needs that real tool-calling loop - is a
+// canned, clearly-labeled reply pointing at the matching Admin tab to do it
+// by hand here, never a fabricated "done!" response.
+function chatSimReplyRecords(text){
+ const lower=text.toLowerCase();
+ const company=(data.companies||[]).find(c=>c.name&&lower.includes(c.name.toLowerCase()));
+ if(company){
+  return `Found it: <b>${company.name}</b> - ${company.industry||'no industry set'}, ${company.city||'no city set'}, owned by ${company.owner||'unassigned'}, status ${company.status}. (Simulated: matched a real company name in your message and looked it up in this demo's own data - the real edition's assistant can also create or update a record like this one, which this static demo can't honestly simulate.)`;
+ }
+ const matchKey=allEntityTypeKeys().find(k=>lower.includes(k.toLowerCase())||lower.includes(entityLabel(k).toLowerCase()));
+ if(matchKey){
+  const statusField=transitionFieldFor(matchKey);
+  const rows=runCustomReport({entityKey:matchKey,groupBySource:'builtin',groupByField:statusField,aggregate:'count',sumFieldKey:''});
+  const total=rows.reduce((s,r)=>s+r.value,0);
+  return `${total} ${entityLabel(matchKey).toLowerCase()} record${total===1?'':'s'} total${rows.length?', by '+(statusField==='stage'?'stage':'status')+': '+rows.map(r=>`${r.group} (${r.value})`).join(', '):''}. (Simulated: matched "${entityLabel(matchKey)}" in your message and counted real demo records - a keyword match, not a real LLM call.)`;
+ }
+ return `This static demo can't make a real LLM call, so it only understands a couple of shapes: a company's name (try "tell me about Acme"), or an object name to count (try "how many opportunities?"). The real desktop/Team Workspace edition understands anything, and can create or update records too, not just look them up.`;
+}
+const ADMIN_CHAT_TOPICS=[
+ [['business rule'],'rules','Business rules'],
+ [['workflow'],'workflow','Workflow automation'],
+ [['integration','connection','webhook'],'integrations','Integrations'],
+ [['custom field'],'fields','Custom fields'],
+ [['custom object'],'objects','Custom Objects'],
+ [['relationship'],'relationships','Relationships'],
+ [['status transition','transition'],'transitions','Status transitions'],
+ [['dashboard'],'dashboards','Dashboards'],
+ [['app'],'apps','Apps'],
+ [['user','invite'],'users','Users & roles'],
+ [['numbering'],'numbering','Numbering'],
+];
+function chatSimReplyAdmin(text){
+ const lower=text.toLowerCase();
+ const hit=ADMIN_CHAT_TOPICS.find(t=>t[0].some(k=>lower.includes(k)));
+ if(hit){
+  return `The real desktop/Team Workspace edition's admin assistant can build this for you directly - it calls the same create function the ${hit[2]} screen's own form does, for real. This static demo has no server to run that tool-calling loop from, so head to Admin &rarr; ${hit[2]} to build it by hand instead. (Simulated: matched "${hit[0][0]}" in your message.)`;
+ }
+ return `This static demo can't make a real LLM call or run its tool-calling loop, so it only recognizes a few admin topics by keyword - try mentioning "business rule", "workflow", "integration", "custom field", or another admin area by name. The real edition's admin assistant understands anything, and actually creates what you ask for.`;
+}
+function ensureChatSim(){if(!data.chatSim)data.chatSim={records:[],admin:[]}}
+function chatSimPanel(mode,body){
+ ensureChatSim();
+ const msgs=data.chatSim[mode];
+ const placeholder=mode==='admin'?'e.g. help me set up a business rule...':'e.g. tell me about Acme, or how many opportunities?';
+ const emptyNote=mode==='admin'
+  ?"Ask for help building a business rule, a workflow, an integration, or anything else in the admin surface. This demo simulates the reply with a keyword match and points you at the real screen - the desktop/Team Workspace edition's admin assistant actually creates it for you."
+  :"Ask about your records - try a company name, or \"how many opportunities?\". This demo simulates the reply with a keyword match against real demo data - the desktop/Team Workspace edition's assistant actually understands anything, and can create or update records too.";
+ body.innerHTML=`<div class="panel" style="display:flex;flex-direction:column;height:65vh">
+ <div id="chatSimLog" style="flex:1;overflow-y:auto;padding:4px">
+  ${msgs.length?msgs.map(m=>`<div style="display:flex;justify-content:${m.role==='user'?'flex-end':'flex-start'};margin-bottom:8px"><div style="max-width:80%;padding:8px 12px;border-radius:10px;white-space:pre-wrap;font-size:14px;${m.role==='user'?'background:var(--accent,#2563eb);color:#fff':'background:rgba(127,127,127,0.15)'}">${m.text}</div></div>`).join(''):`<p class="empty">${emptyNote}</p>`}
+ </div>
+ <form id="chatSimForm" style="display:flex;gap:8px;margin-top:8px">
+  <input id="chatSimInput" style="flex:1" placeholder="${placeholder}">
+  <button class="btn btn-primary" type="submit">Send</button>
+ </form>
+ </div>`;
+ const log=$('#chatSimLog'); if(log)log.scrollTop=log.scrollHeight;
+ $('#chatSimForm').onsubmit=e=>{
+  e.preventDefault();
+  const input=$('#chatSimInput');
+  const text=input.value.trim();
+  if(!text)return;
+  msgs.push({role:'user',text});
+  msgs.push({role:'assistant',text:(mode==='admin'?chatSimReplyAdmin:chatSimReplyRecords)(text)});
+  save();
+  chatSimPanel(mode,body);
+ };
+}
+function assistantPage(){
+ document.title='Assistant — Lanesra OS Demo';
+ $('#view').innerHTML=`<div class="page-head"><div><h1>Assistant</h1><p class="muted">Chat to find and work with your records.</p></div></div><div id="assistantBody"></div>`;
+ chatSimPanel('records',$('#assistantBody'));
+}
+function chatAssistantTab(body){chatSimPanel('admin',body)}
 
 // ---- Multi-condition (+ OR group) editor, shared by the Business Rules
 // and Workflow Automation builders (second Admin Automation & Customization
