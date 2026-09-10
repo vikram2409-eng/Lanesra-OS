@@ -2219,6 +2219,19 @@ export interface ActivityInput {
   occurred_at: string;
 }
 
+// --- AI & Agentic Layer, Phase 4 - Agent Actions. Natural-language
+// reporting is the only action built so far - mirrors core::models::agent
+// 1:1. See Reports.tsx's AskReportPanel.
+
+export interface NlReportQuery {
+  question: string;
+}
+
+export interface NlReportResult {
+  report: CustomReportInput;
+  rows: CustomReportRow[];
+}
+
 // --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -
 // mirrors core::models::integration 1:1. See IntegrationHubAdmin.tsx for the
 // admin screens built on these.

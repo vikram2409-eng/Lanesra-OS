@@ -6,6 +6,8 @@ import type {
   AiSettings,
   AiSettingsInput,
   AiTestResult,
+  NlReportQuery,
+  NlReportResult,
   AppDefinition,
   AppDefinitionInput,
   AppDefinitionUpdate,
@@ -252,6 +254,8 @@ export const api = {
   getAiSettings: () => call<AiSettings>("get_ai_settings"),
   saveAiSettings: (input: AiSettingsInput) => call<AiSettings>("save_ai_settings", { input }),
   testAiKey: () => callAdminAction<AiTestResult>("test_ai_key", {}, "POST", "/api/admin/ai/test"),
+  askReport: (query: NlReportQuery) =>
+    callAdminAction<NlReportResult>("ask_report", { query }, "POST", "/api/admin/agent/ask-report", { question: query.question }),
 
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),

@@ -28,11 +28,11 @@
 //!   OpenAI-compatible convention every one of those servers implements
 //!   for free (no generation cost).
 //!
-//! Deliberately **not** built here: any actual chat-completion wrapper.
-//! This phase only proves a key works and stores it - the later
-//! Agent Actions item (meeting-prep briefings, follow-up capture, record
-//! hygiene, natural-language reporting) is what makes real calls against
-//! it, once the Activity Timeline item also exists for it to draw on.
+//! Deliberately **not** built in Phase 1: any actual chat-completion
+//! wrapper - that phase only proved a key works and stored it. Phase 4
+//! (Agent Actions) added the generic `complete` primitive below once
+//! natural-language reporting needed one; see `complete`'s own doc
+//! comment.
 
 use std::time::{Duration, Instant};
 
@@ -137,6 +137,107 @@ pub async fn test_key(conn: &Connection, workspace_id: &str, master_key: &[u8; 3
     };
     ai_settings_repo::set_test_result(conn, workspace_id, if test_result.ok { "connected" } else { "failed" }, &test_result.message)?;
     Ok(test_result)
+}
+
+/// AI & Agentic Layer, Phase 4 (Agent Actions): the generic completion
+/// primitive this module's own doc comment above said Phase 1 wouldn't
+/// build - now something needs it (`agent_service::ask_report`, and
+/// later meeting-prep/commitment-capture/hygiene actions once those are
+/// scoped). Resolves the stored settings/secret exactly like `test_key`
+/// does, then makes a real completion call - not the 1-token
+/// connectivity probe `test_anthropic`/`test_openai_compatible` make.
+///
+/// No admin gate here: *configuring* the key is admin-only
+/// (`save_settings`), but *using* an already-configured key to answer a
+/// question needs no more privilege than viewing an existing report's
+/// numbers already does (`custom_report_service::run`) - the caller
+/// decides its own access model, same as every other read-mostly
+/// service function in this codebase.
+pub async fn complete(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], system_prompt: &str, user_message: &str) -> AppResult<String> {
+    let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
+    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?
+        .ok_or_else(|| AppError::Validation("Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into()))?;
+    let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
+    let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
+
+    match settings.provider.as_str() {
+        "anthropic" => complete_anthropic(settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, user_message).await,
+        "openai_compatible" => complete_openai_compatible(settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, user_message).await,
+        other => Err(AppError::Validation(format!("No completion implemented for provider '{other}'"))),
+    }
+}
+
+async fn complete_anthropic(base_url: Option<&str>, model: &str, api_key: &str, system_prompt: &str, user_message: &str) -> AppResult<String> {
+    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
+    let model = if model.trim().is_empty() { DEFAULT_ANTHROPIC_MODEL } else { model };
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
+    let body = serde_json::json!({
+        "model": model, "max_tokens": 1024, "system": system_prompt,
+        "messages": [{"role": "user", "content": user_message}],
+    });
+    let response = client
+        .post(format!("{}/v1/messages", base.trim_end_matches('/')))
+        .header("x-api-key", api_key)
+        .header("anthropic-version", ANTHROPIC_VERSION)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+    }
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    value
+        .get("content")
+        .and_then(|c| c.get(0))
+        .and_then(|b| b.get("text"))
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))
+}
+
+async fn complete_openai_compatible(base_url: Option<&str>, model: &str, api_key: &str, system_prompt: &str, user_message: &str) -> AppResult<String> {
+    let base = base_url
+        .filter(|u| !u.trim().is_empty())
+        .ok_or_else(|| AppError::Validation("An OpenAI-compatible provider needs a base URL".into()))?;
+    if model.trim().is_empty() {
+        return Err(AppError::Validation("An OpenAI-compatible provider needs a model name configured".into()));
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
+        "max_tokens": 1024,
+    });
+    let response = client
+        .post(format!("{}/chat/completions", base.trim_end_matches('/')))
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+    }
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    value
+        .get("choices")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("message"))
+        .and_then(|m| m.get("content"))
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))
 }
 
 async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> AppResult<String> {

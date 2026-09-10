@@ -14,7 +14,9 @@ import {
   type CustomFieldEntityType,
   type CustomReport,
   type CustomReportInput,
+  type CustomReportRow,
   type LostReasonBreakdown,
+  type NlReportResult,
   type ReportAggregate,
   type ReportGroupBySource,
   type RevenueByMonth,
@@ -22,7 +24,7 @@ import {
   type WinRateByOwner,
 } from "../../lib/types";
 
-type ReportKey = "revenue" | "winRate" | "lostReasons" | "arAging" | "salesByOwner" | "custom";
+type ReportKey = "revenue" | "winRate" | "lostReasons" | "arAging" | "salesByOwner" | "custom" | "ask";
 
 const REPORTS: { key: ReportKey; label: string }[] = [
   { key: "revenue", label: "Revenue by month" },
@@ -31,6 +33,7 @@ const REPORTS: { key: ReportKey; label: string }[] = [
   { key: "arAging", label: "AR aging" },
   { key: "salesByOwner", label: "Sales by owner" },
   { key: "custom", label: "Custom reports" },
+  { key: "ask", label: "Ask a question" },
 ];
 
 function todayIso(): string {
@@ -61,7 +64,7 @@ export function Reports({ isAdmin }: { isAdmin: boolean }) {
         ))}
       </div>
 
-      {active !== "arAging" && active !== "custom" && (
+      {active !== "arAging" && active !== "custom" && active !== "ask" && (
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", marginBottom: 16 }}>
           <div className="form-field">
             <label>From</label>
@@ -88,6 +91,7 @@ export function Reports({ isAdmin }: { isAdmin: boolean }) {
       {active === "arAging" && <ArAgingReport asOfDate={asOfDate} />}
       {active === "salesByOwner" && <SalesByOwnerReport range={range} />}
       {active === "custom" && <CustomReportsPanel isAdmin={isAdmin} />}
+      {active === "ask" && <AskReportPanel />}
     </div>
   );
 }
@@ -631,6 +635,111 @@ function CustomReportRunner({ report }: { report: CustomReport }) {
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+/**
+ * AI & Agentic Layer, Phase 4 (Agent Actions): a plain-English question
+ * translated by the workspace's own configured LLM into the exact
+ * report shape `CustomReportsPanel` already runs - not a new reporting
+ * engine, a thin translation layer in front of the one that already
+ * exists (`core::services::agent_service::ask_report`). Requires an AI
+ * key configured under Admin -> LLM & MCP -> LLM first; the error
+ * message from a missing one comes back the same way any other AI &
+ * Agentic Layer feature's does.
+ */
+function AskReportPanel() {
+  const [question, setQuestion] = useState("");
+  const [result, setResult] = useState<NlReportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const ask = useMutation({
+    mutationFn: () => api.askReport({ question }),
+    onSuccess: (data) => {
+      setResult(data);
+      setError(null);
+      setSaved(false);
+    },
+    onError: (err) => {
+      setResult(null);
+      setError(err instanceof ApiError ? err.message : "Could not answer that question");
+    },
+  });
+
+  const save = useMutation({
+    mutationFn: () => api.createCustomReport(result!.report),
+    onSuccess: () => setSaved(true),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this report"),
+  });
+
+  const rows: CustomReportRow[] = result?.rows ?? [];
+  const max = Math.max(0, ...rows.map((r) => r.value));
+
+  return (
+    <div className="card">
+      <h3 style={{ marginTop: 0 }}>Ask a question</h3>
+      <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+        Ask in plain English - your configured LLM translates it into a group-by-and-count-or-sum report (the same
+        shape Custom Reports above builds by hand) and runs it live. It can't do anything a custom report can't:
+        one object, one group-by field, count or sum - no filters, date ranges, or joins.
+      </p>
+
+      <form
+        style={{ display: "flex", gap: 8, marginBottom: 16 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          ask.mutate();
+        }}
+      >
+        <input
+          style={{ flex: 1 }}
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="e.g. how many open opportunities by stage?"
+        />
+        <button className="btn btn-primary" type="submit" disabled={ask.isPending || !question.trim()}>
+          {ask.isPending ? "Asking..." : "Ask"}
+        </button>
+      </form>
+
+      {error && <div className="error-banner">{error}</div>}
+
+      {result && (
+        <>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            Understood as: <b>{result.report.aggregate === "sum" ? `Sum of ${result.report.sum_field_key}` : "Count"}</b> of{" "}
+            <b>{entityTypeLabel(result.report.entity_type)}</b> grouped by <b>{result.report.group_by_field}</b>.{" "}
+            <button className="btn btn-secondary" type="button" onClick={() => save.mutate()} disabled={save.isPending || saved}>
+              {saved ? "Saved" : save.isPending ? "Saving..." : "Save as report"}
+            </button>
+          </p>
+          {rows.length === 0 && <p className="empty-state">No data yet.</p>}
+          {rows.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Group</th>
+                  <th></th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.group}>
+                    <td>{r.group}</td>
+                    <td>
+                      <Bar value={r.value} max={max} />
+                    </td>
+                    <td>{result.report.aggregate === "sum" ? r.value.toLocaleString() : r.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod agent;
 pub mod ai;
 pub mod app_definition;
 pub mod audit;

@@ -33,7 +33,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use lanesra_core::domain::AppError;
-use lanesra_core::services::{ai_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service};
+use lanesra_core::models::agent::NlReportQuery;
+use lanesra_core::services::{agent_service, ai_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service};
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
 use crate::session::current_actor;
@@ -42,6 +43,7 @@ use crate::state::SharedState;
 pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/api/admin/ai/test", post(test_ai_key))
+        .route("/api/admin/agent/ask-report", post(ask_report))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -115,6 +117,19 @@ async fn test_ai_key(State(state): State<SharedState>, jar: CookieJar) -> Result
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move { ai_service::test_key(&conn, &workspace_id, &master_key, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct AskReportBody {
+    question: String,
+}
+
+async fn ask_report(State(state): State<SharedState>, jar: CookieJar, Json(body): Json<AskReportBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, _actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let query = NlReportQuery { question: body.question };
+    let data = run_with_own_connection(db_path, move |conn| async move { agent_service::ask_report(&conn, &workspace_id, &master_key, &query).await }).await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 
