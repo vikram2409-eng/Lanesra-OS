@@ -282,6 +282,11 @@ function ensureAdminData(){
  // server here to encrypt it server-side the way the real desktop
  // edition's secret_service does.
  if(!data.aiSettings)data.aiSettings={provider:'anthropic',model:'',baseUrl:'',apiKey:'',status:'unconfigured',lastTestMessage:''};
+ // AI & Agentic Layer, Phase 2 mirror - see mcpSubTab's own comment. A
+ // demo-only key in the same "demo_"+uid() shape apiEndpoints already
+ // uses, not a real credential - there's no server here to authenticate
+ // one against.
+ if(!data.aiSettings.mcpDemoKey)data.aiSettings.mcpDemoKey='demo_'+uid()+uid();
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
  (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
  (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
@@ -441,7 +446,7 @@ const ADMIN_CATEGORIES=[
  {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards']},
  {key:'solutions',label:'Deployment Management',icon:'🗂',note:"What's installed, what it created, and who published it",items:['solutions']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
- {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and (once built) the MCP server that lets agents work with your data',items:['ai']},
+ {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
 ];
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -4482,17 +4487,29 @@ function wireConditionPicker(form,fieldSelect,dynamicWrap,condFields,valueFieldN
  });
 }
 
-// ---- AI & Agentic Layer, Phase 1 mirror -----------------------------------
+// ---- AI & Agentic Layer, Phase 1 & 2 mirror --------------------------------
 // A lightweight preview of the desktop edition's Admin -> LLM & MCP screen
 // (AiSettingsAdmin.tsx) - what a real workspace gets, not a built feature of
 // its own. The demo has no server, so there's nowhere to encrypt a key at
-// rest the way secret_service.rs does and no real provider to call - Test
-// key below is a labeled simulation, the same honesty convention every
-// other "Test"/"Run"/"Test request" button in this demo already follows
-// (see integrationsTab's own comment). MCP itself isn't built on either
-// platform yet - that tab says so plainly rather than faking a working one.
+// rest the way secret_service.rs does, no real provider to call, and no
+// listening socket to expose a real POST /mcp endpoint from - Test key and
+// Test connection below are both labeled simulations, the same honesty
+// convention every other "Test"/"Run"/"Test request" button in this demo
+// already follows (see integrationsTab's own comment). The 7 tools and the
+// JSON-RPC shape shown are real - they mirror server/src/mcp.rs exactly -
+// only the network call itself is simulated, the same "real shape, no real
+// wire" convention testEndpointModal already uses for API Access.
 let llmMcpSubTab='llm';
 const AI_PROVIDERS=[['anthropic','Anthropic'],['openai_compatible','OpenAI-compatible (OpenAI, or a self-hosted server)']];
+const MCP_TOOLS=[
+ ['list_objects','metadata.read','List every built-in and custom object this workspace exposes'],
+ ['get_object_metadata','metadata.read',"An object's label and custom field definitions"],
+ ['list_records','objects.read','List records for an object, paginated, with optional filter/sort'],
+ ['get_record','objects.read','Get a single record by id'],
+ ['create_record','objects.write','Create a record (Company, Contact, Product, Task, or a custom object)'],
+ ['update_record','objects.write',"Update a record's fields by id"],
+ ['archive_record','objects.write','Archive (soft-delete) a record by id'],
+];
 function llmMcpTab(body){
  const subTabs=[['llm','LLM'],['mcp','MCP Server']];
  body.innerHTML=`<div class="panel">
@@ -4543,7 +4560,35 @@ function llmSubTab(body){
  };
 }
 function mcpSubTab(body){
- body.innerHTML=`<div style="margin-top:16px" class="empty">Not built yet, on either platform. <b>MCP Server &amp; CLI</b> is the next item on the AI &amp; Agentic Layer backlog: exposing every built-in and custom object over the Model Context Protocol through the same generic, permission-checked object API Integration Hub's REST API already uses, so any MCP-capable agent (Claude, or your own) reads/writes Lanesra records under the identical rules a human's UI action goes through. See the product backlog for the current build order.</div>`;
+ // Real on the desktop/Team Workspace edition (a POST /mcp endpoint,
+ // server/src/mcp.rs, exposing the 7 MCP_TOOLS below). This tab previews
+ // its shape with real content - the endpoint URL, demo key and tool list
+ // mirror the real thing exactly - but Test connection is a labeled
+ // simulation, the same convention testEndpointModal already uses:
+ // there's no server here to actually speak JSON-RPC to.
+ const s=data.aiSettings;
+ body.innerHTML=`<div style="margin-top:16px;max-width:640px">
+ <p class="muted" style="font-size:13px">A single <code>POST /mcp</code> endpoint exposing 7 tools over the Model Context Protocol - the same generic, permission-checked object dispatcher the REST API already wraps, authenticated with the same scoped API-client key (no separate MCP credential). Endpoint, key and tools below mirror the real desktop/Team Workspace edition; Test connection simulates the JSON-RPC exchange locally against your demo data - this static demo has no server to actually speak MCP from.</p>
+ <div class="field full"><label>Endpoint (demo)</label><input readonly value="https://demo.lanesraos.com/mcp"></div>
+ <div class="field full"><label>Demo API key</label><input readonly value="${s.mcpDemoKey}"></div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Tool</th><th>Scope</th><th>What it does</th></tr></thead><tbody>${MCP_TOOLS.map(t=>`<tr><td><code>${t[0]}</code></td><td><code>${t[1]}</code></td><td style="font-size:13px">${t[2]}</td></tr>`).join('')}</tbody></table></div>
+ <div style="margin-top:12px"><button class="btn btn-secondary" id="mcpTestBtn">Test connection</button></div>
+ </div>`;
+ $('#mcpTestBtn').onclick=()=>mcpTestModal();
+}
+function mcpTestModal(){
+ const sample=(data.companies||[]).slice(0,2).map(c=>({id:c.id,name:c.name,status:c.status}));
+ const initReq={jsonrpc:'2.0',id:1,method:'initialize',params:{}};
+ const initResp={jsonrpc:'2.0',id:1,result:{protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'lanesra-mcp',version:'0.11.0'}}};
+ const callReq={jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'list_records',arguments:{object_key:'Company',page_size:2}}};
+ const callResp={jsonrpc:'2.0',id:2,result:{content:[{type:'text',text:JSON.stringify({records:sample,total:(data.companies||[]).length,page:1,page_size:2})}],isError:false}};
+ const pre=(label,req,resp)=>`<div style="margin-top:12px"><strong>${label}</strong><pre style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;overflow:auto;font-size:12px;max-height:280px">${JSON.stringify(req,null,2)}\n\n→\n\n${JSON.stringify(resp,null,2)}</pre></div>`;
+ const body=`<p class="muted" style="font-size:13px">Simulated locally against your demo data - the real JSON-RPC shape server/src/mcp.rs returns, but no real request was made; there's no server here to make one from.</p>
+ ${pre('1. initialize',initReq,initResp)}
+ ${pre('2. tools/call → list_records(Company)',callReq,callResp)}
+ <div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`;
+ modal('Test connection: MCP',body);
+ $('[data-close]').onclick=closeModal;
 }
 
 // ---- Multi-condition (+ OR group) editor, shared by the Business Rules
