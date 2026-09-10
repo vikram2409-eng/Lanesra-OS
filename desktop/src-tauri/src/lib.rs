@@ -225,6 +225,8 @@ pub fn run() {
             commands::ai_commands::get_ai_settings,
             commands::ai_commands::save_ai_settings,
             commands::ai_commands::test_ai_key,
+            commands::activity_commands::log_activity,
+            commands::activity_commands::list_activities,
             commands::integration_commands::list_connections,
             commands::integration_commands::create_connection,
             commands::integration_commands::update_connection,

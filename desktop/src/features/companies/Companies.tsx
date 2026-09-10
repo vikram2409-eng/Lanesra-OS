@@ -13,6 +13,7 @@ import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
@@ -718,6 +719,7 @@ function CompanyDetail({
           </div>
           <RelatedRecordsCard entityType="Company" entityId={id} />
           <AuditTrail entityType="Company" entityId={id} />
+          <ActivityTimeline entityType="Company" entityId={id} />
         </div>
       )}
 

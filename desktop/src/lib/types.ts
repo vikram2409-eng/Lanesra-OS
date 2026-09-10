@@ -2187,6 +2187,38 @@ export interface AiTestResult {
   message: string;
 }
 
+// --- AI & Agentic Layer, Phase 3 - the Unified Activity Timeline's
+// generic log (core::models::activity), distinct from AuditEvent below
+// (what this workspace's own users changed, not what happened around a
+// record from outside the CRM). See ActivityTimeline.tsx.
+
+export interface Activity {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  entity_id: string;
+  channel: string;
+  direction: string | null;
+  subject: string | null;
+  body: string;
+  participants: string | null;
+  occurred_at: string;
+  source: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ActivityInput {
+  entity_type: string;
+  entity_id: string;
+  channel: string;
+  direction: string | null;
+  subject: string | null;
+  body: string;
+  participants: string | null;
+  occurred_at: string;
+}
+
 // --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -
 // mirrors core::models::integration 1:1. See IntegrationHubAdmin.tsx for the
 // admin screens built on these.

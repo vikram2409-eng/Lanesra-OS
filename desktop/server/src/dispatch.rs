@@ -9,6 +9,7 @@ use serde_json::Value;
 
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
+use lanesra_core::models::activity::ActivityInput;
 use lanesra_core::models::ai::AiSettingsInput;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
@@ -43,6 +44,7 @@ use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinition
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
+    activity_service,
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
@@ -310,6 +312,19 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let entity_type: String = arg(args, "entityType")?;
             let entity_id: String = arg(args, "entityId")?;
             to_value(audit_service::list_for_entity(conn, &entity_type, &entity_id)?)
+        }
+
+        // --- AI & Agentic Layer, Phase 3: Unified Activity Timeline -----
+        // Both plain sync - logging a manually-recorded interaction makes
+        // no network call.
+        "log_activity" => {
+            let input: ActivityInput = arg(args, "input")?;
+            to_value(activity_service::log_activity(conn, &input, actor)?)
+        }
+        "list_activities" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let entity_id: String = arg(args, "entityId")?;
+            to_value(activity_service::list_for_entity(conn, &entity_type, &entity_id)?)
         }
 
         "update_workspace" => {

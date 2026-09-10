@@ -1,3 +1,4 @@
+pub mod activity_repo;
 pub mod ai_settings_repo;
 pub mod app_definition_repo;
 pub mod audit_repo;

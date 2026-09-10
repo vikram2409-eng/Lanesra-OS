@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AccessibleApp,
+  Activity,
+  ActivityInput,
   AiSettings,
   AiSettingsInput,
   AiTestResult,
@@ -322,6 +324,10 @@ export const api = {
   globalSearch: (query: string) => call<SearchResult[]>("global_search", { query }),
   listAuditEvents: (entityType: string, entityId: string) =>
     call<AuditEvent[]>("list_audit_events", { entityType, entityId }),
+
+  logActivity: (input: ActivityInput) => call<Activity>("log_activity", { input }),
+  listActivities: (entityType: string, entityId: string) =>
+    call<Activity[]>("list_activities", { entityType, entityId }),
 
   listContracts: () => call<Contract[]>("list_contracts"),
   listContractsByCompany: (companyId: string) =>
