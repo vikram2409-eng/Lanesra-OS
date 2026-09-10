@@ -509,3 +509,140 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
  .persona-grid{grid-template-columns:1fr}
  .bento{grid-template-columns:1fr}
 }
+
+/* ===================================================================
+   Dark Mode Redesign v2 - "Developer-First Dark Mode," public marketing
+   site only. Every public page's render function (landing/platformPage/
+   comparePage/principlesPage/downloadPage/releasesPage/roadmapPage,
+   publicNav/publicFooter) now wraps its output in a `.site-dark` div.
+   This same stylesheet also styles the CRM demo (/demo, Admin, and
+   every .sidebar/.topbar/.table/.modal/.kanban/.builder-family/.tab screen
+   under it) - which shares several class *names* with the public site
+   (.btn-primary/.btn-secondary/.badge in particular). Scoping every
+   override below under `.site-dark` - rather than redefining :root or
+   those shared class names directly - is what keeps the demo app
+   exactly as it was: nothing here can ever apply outside a `.site-dark`
+   wrapper, and the demo app never renders one. Selectors already purely
+   var()-based (most of the site: .eyebrow, .muted, borders using
+   var(--line), etc.) already retheme for free once --brand/--line/--text
+   are redeclared here; this block only needs to touch the rest - the
+   spots with a literal hex color instead of a token. */
+.site-dark{--bg:#0A0A0A;--panel:#111318;--text:#EDEDED;--muted:#9aa0aa;--line:#2a2d33;--brand:#00E5FF;--brand2:#00FF66;--ink:#000;--ink-soft:#14171c;--ink-line:rgba(255,255,255,.08);--ink-muted:#9aa0aa;--surface-alt:#0d0f13;--accent-soft:rgba(0,229,255,.12);--shadow:0 20px 60px rgba(0,0,0,.55);--shadow-lift:0 24px 60px -14px rgba(0,229,255,.2);--font-mono:ui-monospace,"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;background:var(--bg);color:var(--text);min-height:100vh}
+
+.site-dark .btn-primary{color:#04121a;box-shadow:0 10px 30px rgba(0,229,255,.28)}
+.site-dark .btn-secondary{background:transparent;border-color:var(--line);color:var(--text)}
+.site-dark .btn-secondary:hover{border-color:var(--brand);color:var(--brand)}
+.site-dark .badge{background:var(--accent-soft);color:var(--brand)}
+.site-dark .landing-nav{background:rgba(10,10,10,.78);border-bottom:1px solid var(--line)}
+.site-dark .brand-mark{color:#04121a}
+.site-dark .nav-links{color:var(--muted)}
+.site-dark .menu-toggle{background:var(--panel);border-color:var(--line);color:var(--text)}
+.site-dark .mobile-drawer{background:#0d0f13;border-color:var(--line);box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.site-dark .mobile-drawer a{color:var(--text)}
+.site-dark .mobile-drawer a:hover{background:rgba(255,255,255,.06);color:var(--brand)}
+.site-dark .mobile-drawer hr{border-top-color:var(--line)}
+
+/* Hero + the new terminal-window mock (replaces .mock on the home page) */
+.site-dark .hero{background:radial-gradient(circle at 82% 8%,rgba(0,229,255,.10),transparent 34%),radial-gradient(circle at 8% 30%,rgba(0,255,102,.06),transparent 32%),radial-gradient(circle at 50% 95%,rgba(0,229,255,.05),transparent 40%)}
+.site-dark .hero p{color:var(--muted)}
+.site-dark .trust-row{color:var(--muted)}
+.terminal-window{background:#0d0f13;border:1px solid var(--line);border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden;font-family:var(--font-mono)}
+.terminal-top{height:40px;background:#14171c;display:flex;align-items:center;padding:0 14px;gap:7px;border-bottom:1px solid var(--line)}
+.terminal-top .dot{width:9px;height:9px;border-radius:50%;background:#30343b}
+.terminal-body{padding:22px;font-size:13px;line-height:2;color:#d7f7ff}
+.terminal-body .prompt{color:var(--brand2);font-weight:700}
+.terminal-body .muted-line{color:var(--muted)}
+.terminal-body .ok{color:var(--brand2)}
+.terminal-body .cursor{display:inline-block;width:8px;height:14px;background:var(--brand2);vertical-align:middle;animation:tcursor 1s step-end infinite}
+@keyframes tcursor{50%{opacity:0}}
+
+/* Glass cards - one shared treatment for every card-shaped component on the public site */
+.site-dark .feature-card,.site-dark .persona-card,.site-dark .bento-tile,.site-dark .choice-card,.site-dark .principle-card,.site-dark .download-card,.site-dark .app-example-card,.site-dark .platform-layer-card,.site-dark .trust-card,.site-dark .timeline-content,.site-dark details.rm-cat,.site-dark .rm-hero-card,.site-dark .rm-empty,.site-dark .backlog-card,.site-dark .backlog-callout,.site-dark .rm-pillar-nav-item,.site-dark .rm-stat,.site-dark .rm-idea-chip,.site-dark .rm-filter-chip,.site-dark .rm-search-input,.site-dark .platform-primitive,.site-dark .roadmap-columns>div{background:rgba(255,255,255,.03);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-color:var(--line);color:var(--text)}
+.site-dark .feature-card:hover,.site-dark .persona-card:hover,.site-dark .bento-tile:hover,.site-dark .choice-card:not(.dark):hover,.site-dark .principle-card:hover,.site-dark .download-card:hover,.site-dark .app-example-card:hover,.site-dark .platform-layer-card:hover,.site-dark .trust-card:hover,.site-dark .timeline-content:hover,.site-dark .rm-pillar-nav-item:hover,.site-dark .rm-stat:hover{border-color:#3a3f47;box-shadow:var(--shadow-lift)}
+.site-dark .feature-icon,.site-dark .persona-icon,.site-dark .bento-icon,.site-dark .platform-layer-icon,.site-dark .platform-primitive .n,.site-dark .rm-pillar-icon,.site-dark .rm-pillar-nav-icon{background:var(--accent-soft);color:var(--brand)}
+.site-dark .feature-card h3,.site-dark .persona-card h3,.site-dark .bento-tile h3,.site-dark .principle-card h2,.site-dark .download-card h2,.site-dark .app-example-card h3,.site-dark .platform-layer-card h3{color:var(--text)}
+.site-dark .feature-card p,.site-dark .persona-card p,.site-dark .bento-tile p,.site-dark .principle-card p,.site-dark .download-card p,.site-dark .app-example-card .tagline,.site-dark .app-example-card .example-detail,.site-dark .platform-layer-card p,.site-dark .trust-card p{color:var(--muted)}
+.site-dark .bento-list li{color:#c7ccd6}
+.site-dark .built-from span{background:var(--accent-soft);color:var(--brand)}
+.site-dark .choice-card.dark{background:#000;border:1px solid var(--line)}
+.site-dark .cta{background:linear-gradient(135deg,#0d0f13,#001b23);border:1px solid var(--line)}
+.site-dark .bento-tile.on-dark{background:#001a1f;border-color:rgba(0,229,255,.18)}
+.site-dark .bento-tile.on-dark .bento-icon{background:rgba(0,255,102,.14);color:var(--brand2)}
+.site-dark .section-dark{background:#000}
+.site-dark .maintenance{background:#000}
+.site-dark .fact-tile{background:rgba(255,255,255,.03)}
+.site-dark .footer{background:transparent}
+.site-dark .footer-grid strong{color:var(--text)}
+.site-dark .footer-grid a{color:var(--muted)}
+.site-dark .maker-card{background:#000;border:1px solid var(--line)}
+.site-dark .page-hero{background:radial-gradient(circle at 80% 15%,rgba(0,229,255,.10),transparent 30%),#000;border-bottom:1px solid var(--line)}
+.site-dark .page-hero p{color:var(--muted)}
+.site-dark .timeline:before{background:var(--line)}
+.site-dark .timeline-dot{border-color:#0A0A0A;background:#4a4f58;box-shadow:0 0 0 2px var(--line)}
+.site-dark .timeline-item.done .timeline-dot{background:var(--brand);box-shadow:0 0 0 2px var(--brand)}
+.site-dark .timeline-item.current .timeline-dot{background:var(--brand2);box-shadow:0 0 0 5px rgba(0,255,102,.15)}
+.site-dark .timeline-date{color:var(--muted)}
+.site-dark .timeline-content p{color:var(--muted)}
+.site-dark .roadmap-board{background:#000}
+.site-dark .roadmap-row{color:var(--muted);border-bottom-color:var(--line)}
+.site-dark .roadmap-row.done{color:var(--brand2)}
+.site-dark .roadmap-row.active{color:var(--brand)}
+.site-dark .release{border-bottom-color:var(--line)}
+.site-dark .release-meta{color:var(--muted)}
+.site-dark .release ul{color:var(--muted)}
+.site-dark .flow-map{background:rgba(255,255,255,.03);border-color:var(--line)}
+.site-dark .flow-map>span,.site-dark .flow-map em{color:var(--brand)}
+.site-dark .principle-card>span{color:var(--brand)}
+.site-dark .principle{background:rgba(255,255,255,.03);border-color:var(--line)}
+.site-dark .principle p{color:var(--muted)}
+.site-dark .compare-table{background:#000;border-color:var(--line)}
+.site-dark .compare-table th{background:#0d0f13;color:var(--muted);border-bottom-color:var(--line)}
+.site-dark .compare-table td{border-bottom-color:var(--line);color:var(--text)}
+.site-dark .compare-table tr:hover td{background:rgba(255,255,255,.03)}
+.site-dark .compare-table .lanesra-col{background:var(--accent-soft);color:var(--brand)}
+.site-dark .compare-table tr:hover .lanesra-col{background:rgba(0,229,255,.18)}
+.site-dark .compare-table .compare-group-row td{background:#0d0f13;color:var(--muted)}
+.site-dark .compare-note{color:var(--muted)}
+.site-dark .download-card.featured{border-color:var(--brand);box-shadow:0 18px 50px rgba(0,229,255,.14)}
+.site-dark .download-checks span{background:rgba(255,255,255,.03);border-color:var(--line);color:var(--text)}
+.site-dark .honesty-note{background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.35);border-left-color:#d97706}
+.site-dark .honesty-note h3{color:#fbbf24}
+.site-dark .honesty-note p{color:#fde9c8}
+.site-dark .honesty-note a{color:#fbbf24}
+.site-dark .backlog-callout h3{color:var(--text)}
+.site-dark .backlog-callout p{color:var(--muted)}
+.site-dark .backlog-callout code{background:rgba(255,255,255,.06);color:var(--text)}
+.site-dark .backlog-card-head h3{color:var(--text)}
+.site-dark .backlog-tag{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--muted)}
+.site-dark .backlog-tag.planned-tag{background:rgba(217,119,6,.12);border-color:rgba(217,119,6,.4);color:#fbbf24}
+.site-dark .backlog-tag.proposed-tag{background:rgba(0,229,255,.1);border-color:rgba(0,229,255,.3);color:var(--brand)}
+.site-dark .backlog-card p.ask{color:var(--muted)}
+.site-dark .backlog-solution{background:var(--accent-soft);border-color:rgba(0,229,255,.3)}
+.site-dark .backlog-solution ul{color:var(--text)}
+.site-dark .backlog-shipped-item .d{color:var(--muted)}
+.site-dark .rm-section-head p{color:var(--muted)}
+.site-dark .rm-hero-card{background:linear-gradient(155deg,#0d0f13,#001b23)}
+.site-dark .rm-hero-card p{color:var(--muted)}
+.site-dark details.rm-cat summary{color:var(--text)}
+.site-dark details.rm-cat summary:hover{background:rgba(255,255,255,.03)}
+.site-dark details.rm-cat .rm-cat-body{border-top-color:var(--line)}
+.site-dark .rm-cat-icon{background:rgba(0,255,102,.12);color:var(--brand2)}
+.site-dark .rm-cat-count{background:rgba(0,255,102,.12);color:var(--brand2)}
+.site-dark .rm-chevron{border-color:var(--muted)}
+.site-dark .rm-pillar-head h3{color:var(--text)}
+.site-dark .rm-pillar-nav-title{color:var(--text)}
+.site-dark .rm-spotlight{background:linear-gradient(120deg,rgba(0,229,255,.1),rgba(0,255,102,.08));border-color:rgba(0,229,255,.25)}
+.site-dark .rm-spotlight-title{color:var(--text)}
+.site-dark .rm-subnav{background:rgba(10,10,10,.9);border-bottom-color:var(--line)}
+.site-dark .rm-subnav a:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.site-dark .platform-primitive{color:var(--text)}
+.site-dark .platform-arrow{color:var(--muted)}
+
+/* Code tabs - the feature deep-dive's Persona & Actions/Memory/Delegation switcher */
+.code-tabs{background:#0d0f13;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.code-tabs-nav{display:flex;gap:2px;background:#14171c;padding:8px 8px 0}
+.code-tab-btn{background:transparent;border:0;border-radius:8px 8px 0 0;padding:10px 16px;font-family:var(--font-mono);font-size:12.5px;color:var(--muted);cursor:pointer}
+.code-tab-btn.active{background:#0d0f13;color:var(--brand)}
+.code-tab-body{padding:24px;font-family:var(--font-mono);font-size:13px;line-height:1.9;color:#d7f7ff;white-space:pre-wrap;overflow-x:auto}
+.code-tab-body .c{color:var(--muted)}
+.code-tab-body .k{color:var(--brand2)}
