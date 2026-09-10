@@ -4959,7 +4959,7 @@ function chatAssistantTab(body){chatSimPanel('admin',body)}
 // edition's Foundry a static, no-server demo can honestly simulate;
 // multi-agent delegation needs the real tool-calling loop this demo has
 // never reimplemented (see askReportTab's own comment on the same limit).
-const DEMO_RECORD_ACTIONS=['list_objects','get_object_metadata','list_records','get_record','create_record','update_record','archive_record'];
+const DEMO_RECORD_ACTIONS=['list_objects','get_object_metadata','list_records','get_record','create_record','update_record','archive_record','search_records'];
 const DEMO_ADMIN_ACTIONS=['list_business_rules','create_business_rule','list_workflows','create_workflow','list_custom_objects','create_custom_object','list_users','create_user'];
 const DEMO_ALL_ACTIONS=[...DEMO_RECORD_ACTIONS,...DEMO_ADMIN_ACTIONS];
 function aiAgentsTab(body){
@@ -4986,10 +4986,40 @@ function aiAgentsTab(body){
  });
  body.querySelectorAll('[data-memory-agent]').forEach(b=>b.onclick=()=>{
   const a=agents.find(x=>x.id===b.dataset.memoryAgent);
-  const wrap=$('#agentMemoryWrap');
-  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>${a.icon} ${a.name}'s memory</h4><p class="muted" style="font-size:13px">A living document this agent "reads" every run - edit it directly here (the real desktop/Team Workspace edition lets the agent revise it itself too, via its own update_memory tool).</p><textarea id="agentMemoryInput" style="width:100%;min-height:160px;font-family:monospace">${a.memoryMd||''}</textarea><div style="margin-top:8px"><button class="btn btn-primary" id="saveAgentMemory">Save memory</button></div></div>`;
-  $('#saveAgentMemory').onclick=()=>{a.memoryMd=$('#agentMemoryInput').value;save();toast('Memory saved')};
+  renderAgentMemoryPanel(a,$('#agentMemoryWrap'));
  });
+}
+// AI & Agentic Layer, Phase 7b: mirrors ai_agent_repo::update_memory's
+// snapshot-before-overwrite behavior - a prior, non-empty, actually-
+// different memoryMd is pushed onto a.memoryHistory (most-recent-first)
+// before being replaced, so this static demo can honestly show the same
+// "what has this agent learned over time" audit trail the real desktop/
+// Team Workspace edition now keeps server-side.
+function renderAgentMemoryPanel(a,wrap){
+ const history=a.memoryHistory||[];
+ wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>${a.icon} ${a.name}'s memory</h4><p class="muted" style="font-size:13px">A living document this agent "reads" every run - edit it directly here (the real desktop/Team Workspace edition lets the agent revise it itself too, via its own update_memory tool).</p><textarea id="agentMemoryInput" style="width:100%;min-height:160px;font-family:monospace">${a.memoryMd||''}</textarea><div style="margin-top:8px"><button class="btn btn-primary" id="saveAgentMemory">Save memory</button> <button class="btn btn-secondary" id="toggleMemoryHistory">${history.length?`Show memory history (${history.length})`:'No memory history yet'}</button></div><div id="agentMemoryHistoryList" hidden style="margin-top:10px"></div></div>`;
+ $('#saveAgentMemory').onclick=()=>{
+  const next=$('#agentMemoryInput').value;
+  const prev=a.memoryMd||'';
+  if(prev&&prev!==next){
+   a.memoryHistory=a.memoryHistory||[];
+   a.memoryHistory.unshift({memoryMd:prev,changedBy:'admin',createdAt:new Date().toISOString()});
+  }
+  a.memoryMd=next;
+  save();
+  toast('Memory saved');
+  renderAgentMemoryPanel(a,wrap);
+ };
+ const historyBtn=$('#toggleMemoryHistory');
+ if(history.length)historyBtn.onclick=()=>{
+  const list=$('#agentMemoryHistoryList');
+  const open=list.hasAttribute('hidden');
+  if(open){
+   list.innerHTML=history.map(h=>`<div class="panel" style="margin-bottom:8px"><div class="muted" style="font-size:12px;margin-bottom:6px">${new Date(h.createdAt).toLocaleString()} · changed by ${h.changedBy==='agent'?'the agent itself':h.changedBy}</div><pre style="margin:0;white-space:pre-wrap;font-family:monospace;font-size:12px">${h.memoryMd}</pre></div>`).join('');
+   list.removeAttribute('hidden');
+  } else list.setAttribute('hidden','');
+ };
+ else historyBtn.disabled=true;
 }
 function aiAgentModal(agent){
  const isEdit=!!agent;

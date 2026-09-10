@@ -89,6 +89,11 @@ fn record_tools() -> Vec<ToolSpec> {
         ),
         tool("update_record", "Update a record's fields by id. Arguments: object_key, id, data (only the fields being changed).", object_schema()),
         tool("archive_record", "Archive (soft-delete) a record by id. Arguments: object_key, id.", object_schema()),
+        tool(
+            "search_records",
+            "Ranked full-text search across Custom Object records - finds records by relevance to free text, not just exact-match filters. Arguments: query (required), object_key (optional, scopes to one custom object), limit (optional, max 25). Built-in objects (Company, Contact, ...) aren't covered - use list_records for those.",
+            object_schema(),
+        ),
     ]
 }
 
@@ -133,6 +138,13 @@ fn dispatch_record_tool(conn: &Connection, workspace_id: &str, name: &str, argum
             let key = required_str(arguments, "object_key")?;
             let id = required_str(arguments, "id")?;
             api_object_service::archive_record(conn, workspace_id, key, id, None).map(|_| json!({"archived": true}))
+        }
+        "search_records" => {
+            let query = required_str(arguments, "query")?;
+            let object_key = arguments.get("object_key").and_then(Value::as_str);
+            let limit = arguments.get("limit").and_then(Value::as_i64).unwrap_or(10);
+            let hits = crate::services::search_service::search_custom_records(conn, workspace_id, query, object_key, limit)?;
+            serde_json::to_value(hits).map_err(ser_err)
         }
         other => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
     }
@@ -779,7 +791,7 @@ fn execute_agent_tool<'a>(
         match call.name.as_str() {
             "update_memory" => {
                 let content = required_str(&call.arguments, "content")?;
-                ai_agent_repo::update_memory(conn, &agent.id, content).map_err(AppError::from)?;
+                ai_agent_repo::update_memory(conn, &agent.id, content, "agent").map_err(AppError::from)?;
                 Ok(json!({"memory_updated": true}))
             }
             "use_skill" => {

@@ -1088,6 +1088,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let input: AiAgentMemoryUpdate = arg(args, "input")?;
             to_value(ai_agent_service::set_memory(conn, &id, &input.memory_md, actor)?)
         }
+        "list_ai_agent_memory_history" => {
+            let id: String = arg(args, "id")?;
+            to_value(ai_agent_service::list_memory_history(conn, &id, actor)?)
+        }
         "list_ai_skills" => {
             let active_only: bool = arg(args, "activeOnly")?;
             to_value(ai_agent_service::list_skills(conn, &require_workspace_id(conn)?, active_only)?)
