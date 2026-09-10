@@ -11,6 +11,7 @@ import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
@@ -691,6 +692,7 @@ function ContactDetail({
           </div>
           <RelatedRecordsCard entityType="Contact" entityId={id} />
           <AuditTrail entityType="Contact" entityId={id} />
+          <ActivityTimeline entityType="Contact" entityId={id} />
         </div>
       )}
 

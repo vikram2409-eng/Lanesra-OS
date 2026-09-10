@@ -9,6 +9,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { GroupHeaderRow } from "../../components/GroupHeaderRow";
@@ -452,6 +453,7 @@ function OpportunityForm({
         </div>
       </form>
       {opportunityId && <AuditTrail entityType="Opportunity" entityId={opportunityId} />}
+      {opportunityId && <ActivityTimeline entityType="Opportunity" entityId={opportunityId} />}
     </div>
   );
 }

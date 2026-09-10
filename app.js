@@ -287,6 +287,12 @@ function ensureAdminData(){
  // uses, not a real credential - there's no server here to authenticate
  // one against.
  if(!data.aiSettings.mcpDemoKey)data.aiSettings.mcpDemoKey='demo_'+uid()+uid();
+ // AI & Agentic Layer, Phase 3: the Unified Activity Timeline's log -
+ // unlike the LLM/MCP tabs above, logging a manual interaction is
+ // genuinely functional here too (no external call to simulate), so
+ // this is real data, not a labeled simulation - see
+ // activityTimelineHtml's own comment.
+ if(!data.activities)data.activities=[];
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
  (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
  (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
@@ -1492,6 +1498,80 @@ function detail360Header(breadcrumbLabel,title,eyebrow,metaHtml,auditHtml){
   <button class="btn btn-secondary" id="editDetailRecord">Edit</button>
  </div>`;
 }
+
+// AI & Agentic Layer, Phase 3: the Unified Activity Timeline's card -
+// every email/call/message logged against a Company, Contact or
+// Opportunity, distinct from the auditByline above (what changed on the
+// record, not what happened around it - mirrors desktop's
+// ActivityTimeline.tsx / core::services::activity_service, scoped to
+// exactly the same three entity types). Every entry here is genuinely
+// real data, not a simulation - manual logging makes no external call,
+// unlike the LLM/MCP tabs. Uses plain `<div>` fields (not a nested
+// `<form>`) since this card also renders inside the Opportunity edit
+// modal's own `<form id="recordForm">` - nested forms are invalid HTML
+// and the outer form would swallow a real one anyway.
+const ACTIVITY_CHANNELS=[['email','Email'],['call','Call'],['message','Message']];
+function activityNowForInput(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
+function activityTimelineHtml(entityType,entityId){
+ const items=(data.activities||[]).filter(a=>a.entityType===entityType&&a.entityId===entityId).slice().sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
+ return `<div class="panel" data-activity-panel="${entityType}:${entityId}">
+  <div class="panel-head"><h3 style="margin:0;font-size:16px">Interactions</h3><button type="button" class="btn btn-secondary" data-toggle-log-activity>+ Log an interaction</button></div>
+  <div data-log-activity-fields class="form-grid" style="display:none;margin:12px 0">
+   <div class="field"><label>Channel</label><select data-activity-channel>${ACTIVITY_CHANNELS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
+   <div class="field" data-activity-direction-field><label>Direction</label><select data-activity-direction><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select></div>
+   <div class="field full"><label>Subject</label><input data-activity-subject placeholder="Following up on pricing"></div>
+   <div class="field"><label>When</label><input data-activity-occurred type="datetime-local" value="${activityNowForInput()}"></div>
+   <div class="field"><label>Participants</label><input data-activity-participants placeholder="jane@acme.com"></div>
+   <div class="field full"><label>Notes</label><textarea data-activity-body rows="3"></textarea></div>
+   <div class="field full"><button type="button" class="btn btn-primary" data-log-activity-submit>Log interaction</button></div>
+  </div>
+  <div data-activity-list>${items.length?items.map(activityItemHtml).join(''):'<div class="empty">No interactions logged yet.</div>'}</div>
+ </div>`;
+}
+function activityItemHtml(a){
+ return `<div style="padding:8px 0;border-bottom:1px solid var(--border,#eee);font-size:13px">
+  <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span class="badge">${a.channel}</span>${a.direction?`<span class="muted" style="font-size:11px">${a.direction}</span>`:''}${a.subject?`<strong>${a.subject}</strong>`:''}</div>
+  <div style="margin-top:4px">${a.body}</div>
+  <div class="muted" style="font-size:11px;margin-top:4px">${a.participants?a.participants+' · ':''}${new Date(a.occurredAt).toLocaleString()}</div>
+ </div>`;
+}
+/** Wires every `[data-activity-panel]` found under `root` - the
+ * +Log/Cancel toggle, hiding Direction for a call (calls have no
+ * direction, matching activity_service's own validation), and the
+ * submit button that pushes into `data.activities` and re-renders just
+ * that one panel in place, without a full page re-render. */
+function wireActivityTimelines(root){
+ root.querySelectorAll('[data-activity-panel]').forEach(panel=>{
+  const [entityType,entityId]=panel.dataset.activityPanel.split(':');
+  const fields=panel.querySelector('[data-log-activity-fields]');
+  const channelSelect=panel.querySelector('[data-activity-channel]');
+  const directionField=panel.querySelector('[data-activity-direction-field]');
+  const syncDirection=()=>{directionField.style.display=channelSelect.value==='call'?'none':''};
+  channelSelect.onchange=syncDirection; syncDirection();
+  panel.querySelector('[data-toggle-log-activity]').onclick=()=>{fields.style.display=fields.style.display==='none'?'':'none'};
+  panel.querySelector('[data-log-activity-submit]').onclick=()=>{
+   const body=panel.querySelector('[data-activity-body]').value.trim();
+   const occurred=panel.querySelector('[data-activity-occurred]').value;
+   if(!body)return alert('Notes are required.');
+   if(!occurred)return alert('When is required.');
+   data.activities.unshift({
+    id:uid(), entityType, entityId,
+    channel:channelSelect.value,
+    direction:channelSelect.value==='call'?null:panel.querySelector('[data-activity-direction]').value,
+    subject:panel.querySelector('[data-activity-subject]').value.trim()||null,
+    body,
+    participants:panel.querySelector('[data-activity-participants]').value.trim()||null,
+    occurredAt:new Date(occurred).toISOString(),
+    source:'manual',
+    createdAt:new Date().toISOString(),
+   });
+   save(); toast('Interaction logged');
+   const parent=panel.parentElement;
+   panel.outerHTML=activityTimelineHtml(entityType,entityId);
+   wireActivityTimelines(parent||document);
+  };
+ });
+}
 function wireDetail360Nav(editHandler){
  document.querySelector('[data-clear-filter]')?.addEventListener('click',()=>{current='dashboard';viewFilter=null;detailRecord=null;renderView()});
  $('[data-back-list]').onclick=()=>{detailRecord=null;renderView()};
@@ -1521,9 +1601,11 @@ function companyDetail(id){
    ${relatedCardHtml('Contracts',contracts,'contracts',x=>x.number,x=>x.status)}
    ${relatedCardHtml('Tasks',tasks,'tasks',x=>x.title,x=>x.status)}
    ${customRelatedCardsHtml('companies',id)}
+   ${activityTimelineHtml('Company',id)}
   </div>
  </div>`;
  wireDetail360Nav(()=>recordModal('companies',fieldsFor('companies',companyFields),c));
+ wireActivityTimelines($('#view'));
 }
 function contactDetail(id){
  const c=byId('contacts',id);
@@ -1544,9 +1626,11 @@ function contactDetail(id){
    ${relatedCardHtml('Contracts',contracts,'contracts',x=>x.number,x=>x.status)}
    ${relatedCardHtml('Tasks',tasks,'tasks',x=>x.title,x=>x.status)}
    ${customRelatedCardsHtml('contacts',id)}
+   ${activityTimelineHtml('Contact',id)}
   </div>
  </div>`;
  wireDetail360Nav(()=>recordModal('contacts',fieldsFor('contacts',contactFields),c));
+ wireActivityTimelines($('#view'));
 }
 // ---- Generic record detail pages for Products/Quotes/Orders/Invoices/
 // Contracts/Tasks (v0.25 round) - Companies/Contacts keep their existing
@@ -1675,8 +1759,15 @@ function recordModal(key,fields,record={}){
  // entities that have no separate detail view (opportunities, custom
  // object records).
  const auditHtml=(record.id&&!DETAIL_PAGE_ENTITIES.has(key))?auditByline(record):'';
- const form=`<form id="recordForm">${auditHtml}${tabsHtml}${panelsHtml}${isDoc?lineItemsHtml(record.items||[]):''}<div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}`;
+ // AI & Agentic Layer, Phase 3: Opportunity has no dedicated detail page
+ // (unlike Company/Contact's companyDetail/contactDetail above), so its
+ // Interactions card lives here instead - a sibling of the form, not
+ // inside it, since its own "Log interaction" button is independent of
+ // this modal's "Save record" submit.
+ const activityHtml=(key==='opportunities'&&record.id)?activityTimelineHtml('Opportunity',record.id):'';
+ const form=`<form id="recordForm">${auditHtml}${tabsHtml}${panelsHtml}${isDoc?lineItemsHtml(record.items||[]):''}<div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Save record</button></div></form>${record.id?'<div id="relatedRecordsPanel"></div>':''}${activityHtml}`;
  modal(record.id?'Edit record':'Create record',form); $('[data-close]').onclick=closeModal;
+ if(activityHtml)wireActivityTimelines(document.getElementById('modal'));
  document.querySelectorAll('[data-form-tab]').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('[data-form-panel]').forEach(p=>p.style.display=p.dataset.formPanel===b.dataset.formTab?'':'none');
   document.querySelectorAll('[data-form-tab]').forEach(x=>x.classList.toggle('active',x===b));
