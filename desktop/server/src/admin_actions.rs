@@ -34,7 +34,9 @@ use serde_json::{json, Value};
 
 use lanesra_core::domain::AppError;
 use lanesra_core::models::agent::NlReportQuery;
-use lanesra_core::services::{agent_service, ai_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service};
+use lanesra_core::services::{
+    agent_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service,
+};
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
 use crate::session::current_actor;
@@ -44,6 +46,7 @@ pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/api/admin/ai/test", post(test_ai_key))
         .route("/api/admin/agent/ask-report", post(ask_report))
+        .route("/api/admin/chat/:mode/send", post(send_chat_message))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -130,6 +133,26 @@ async fn ask_report(State(state): State<SharedState>, jar: CookieJar, Json(body)
     let db_path = state.db_path.clone();
     let query = NlReportQuery { question: body.question };
     let data = run_with_own_connection(db_path, move |conn| async move { agent_service::ask_report(&conn, &workspace_id, &master_key, &query).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct SendChatMessageBody {
+    text: String,
+}
+
+async fn send_chat_message(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(mode): Path<String>,
+    Json(body): Json<SendChatMessageBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        chat_service::send_message(&conn, &workspace_id, &master_key, &actor, &mode, &body.text).await
+    })
+    .await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 

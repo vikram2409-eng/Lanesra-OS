@@ -7,6 +7,7 @@ pub mod auth_commands;
 pub mod backup_commands;
 pub mod bulk_action_commands;
 pub mod business_rule_commands;
+pub mod chat_commands;
 pub mod company_commands;
 pub mod contact_commands;
 pub mod contract_commands;

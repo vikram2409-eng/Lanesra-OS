@@ -2232,6 +2232,21 @@ export interface NlReportResult {
   rows: CustomReportRow[];
 }
 
+// --- AI & Agentic Layer, Phase 5 - LLM Chat Assistant. Mirrors
+// core::models::chat 1:1. See ChatPanel.tsx.
+
+export type ChatMode = "records" | "admin";
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls: unknown;
+  tool_call_id: string | null;
+  created_at: string;
+}
+
 // --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -
 // mirrors core::models::integration 1:1. See IntegrationHubAdmin.tsx for the
 // admin screens built on these.

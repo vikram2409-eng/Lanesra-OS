@@ -8,6 +8,8 @@ import type {
   AiTestResult,
   NlReportQuery,
   NlReportResult,
+  ChatMessage,
+  ChatMode,
   AppDefinition,
   AppDefinitionInput,
   AppDefinitionUpdate,
@@ -256,6 +258,15 @@ export const api = {
   testAiKey: () => callAdminAction<AiTestResult>("test_ai_key", {}, "POST", "/api/admin/ai/test"),
   askReport: (query: NlReportQuery) =>
     callAdminAction<NlReportResult>("ask_report", { query }, "POST", "/api/admin/agent/ask-report", { question: query.question }),
+
+  // AI & Agentic Layer, Phase 5 - LLM Chat Assistant. `sendChatMessage` is
+  // genuinely async (it may call out to an LLM provider through several
+  // tool-calling rounds), so like `askReport` it goes through
+  // `callAdminAction` rather than the generic `/api/invoke` dispatcher.
+  // `getChatHistory` is a plain read.
+  sendChatMessage: (mode: ChatMode, text: string) =>
+    callAdminAction<ChatMessage[]>("send_chat_message", { mode, text }, "POST", `/api/admin/chat/${encodeURIComponent(mode)}/send`, { text }),
+  getChatHistory: (mode: ChatMode) => call<ChatMessage[]>("get_chat_history", { mode }),
 
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),

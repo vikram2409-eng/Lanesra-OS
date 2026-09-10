@@ -48,7 +48,7 @@ use lanesra_core::services::{
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
-    auth_service, backup_service, bulk_action_service, business_rule_service, company_service, connection_ref_service, connection_service, connector_service,
+    auth_service, backup_service, bulk_action_service, business_rule_service, chat_service, company_service, connection_ref_service, connection_service, connector_service,
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service, data_exchange_service,
@@ -1044,6 +1044,19 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(integration_log_service::update_settings(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
         "purge_expired_integration_logs" => to_value(integration_log_service::purge_expired(conn, &require_workspace_id(conn)?)?),
+
+        // Sending a chat message is genuinely async (it may call out to an
+        // LLM provider) so it can't go through this plain-sync dispatcher -
+        // see `server/src/admin_actions.rs`'s `send_chat_message` route and
+        // the Tauri `chat_commands::send_chat_message` command instead.
+        // Reading history back is plain sync and belongs here like any
+        // other read.
+        "get_chat_history" => {
+            let mode: String = arg(args, "mode")?;
+            let workspace_id = require_workspace_id(conn)?;
+            let user_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(chat_service::get_history(conn, &workspace_id, user_id, &mode)?)
+        }
 
         other => Err(AppError::Validation(format!("Unknown command '{other}'"))),
     }

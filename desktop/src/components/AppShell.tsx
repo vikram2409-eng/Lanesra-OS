@@ -21,6 +21,7 @@ export type Section =
   | "contracts"
   | "tasks"
   | "reports"
+  | "assistant"
   | "admin"
   | "account"
   | `custom:${string}`;
@@ -94,6 +95,11 @@ const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   { section: "contracts", label: "Contracts" },
   { section: "tasks", label: "Tasks" },
   { section: "reports", label: "Reports" },
+  // AI & Agentic Layer, Phase 5: any signed-in user can chat with the
+  // records-mode assistant (look up and act on records). The separate
+  // admin-mode assistant lives inside the Admin panel instead, alongside
+  // every other admin-only capability - see ADMIN_CATEGORIES in Settings.tsx.
+  { section: "assistant", label: "Assistant" },
   // Users lives inside the Admin panel now, alongside branding, custom
   // fields, business rules, workflow automation, numbering and Dashboard
   // KPIs - one nav item for every administrator-facing capability.

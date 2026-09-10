@@ -228,6 +228,8 @@ pub fn run() {
             commands::activity_commands::log_activity,
             commands::activity_commands::list_activities,
             commands::agent_commands::ask_report,
+            commands::chat_commands::send_chat_message,
+            commands::chat_commands::get_chat_history,
             commands::integration_commands::list_connections,
             commands::integration_commands::create_connection,
             commands::integration_commands::update_connection,

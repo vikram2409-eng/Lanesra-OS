@@ -18,6 +18,7 @@ import { IndustryPackagesAdmin } from "./IndustryPackagesAdmin";
 import { DeploymentManagementAdmin } from "./DeploymentManagementAdmin";
 import { IntegrationHubAdmin } from "./IntegrationHubAdmin";
 import { AiSettingsAdmin } from "./AiSettingsAdmin";
+import { ChatPanel } from "../../components/ChatPanel";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -71,7 +72,8 @@ type AdminTab =
   | "packages"
   | "solutions"
   | "integrations"
-  | "ai";
+  | "ai"
+  | "assistant";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -91,6 +93,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "solutions", label: "Deployment Management" },
   { key: "integrations", label: "Integration Hub" },
   { key: "ai", label: "LLM & MCP" },
+  { key: "assistant", label: "Admin Assistant" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -127,6 +130,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "solutions", label: "Deployment Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
   { key: "integrations", label: "Integrations", icon: "🔌", note: "Connect Lanesra to the outside world", items: ["integrations"] },
   { key: "ai", label: "LLM & MCP", icon: "✦", note: "Bring your own LLM key, and (once built) the MCP server that lets agents work with your data", items: ["ai"] },
+  { key: "assistant", label: "Admin Assistant", icon: "💬", note: "Chat to build workflows, business rules, integrations and the rest of the admin surface", items: ["assistant"] },
 ];
 
 /**
@@ -229,6 +233,7 @@ export function AdminPanel() {
       {tab === "solutions" && <DeploymentManagementAdmin />}
       {tab === "integrations" && <IntegrationHubAdmin />}
       {tab === "ai" && <AiSettingsAdmin />}
+      {tab === "assistant" && <ChatPanel mode="admin" />}
     </div>
   );
 }

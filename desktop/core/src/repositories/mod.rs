@@ -3,6 +3,7 @@ pub mod ai_settings_repo;
 pub mod app_definition_repo;
 pub mod audit_repo;
 pub mod business_rule_repo;
+pub mod chat_repo;
 pub mod company_repo;
 pub mod contact_repo;
 pub mod contract_repo;
