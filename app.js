@@ -275,6 +275,13 @@ function ensureAdminData(){
  if(!data.externalConnections)data.externalConnections=[];
  // Integration Hub demo, Webhooks & Events - see webhooksSubTab's own comment.
  if(!data.webhooks)data.webhooks=[];
+ // AI & Agentic Layer, Phase 1 mirror - see llmSubTab's own comment. Only
+ // ever lives in this browser's own localStorage, exactly like every
+ // other "secret-shaped" field the demo already handles this way
+ // (externalConnections' authValue, apiEndpoints' key) - there's no
+ // server here to encrypt it server-side the way the real desktop
+ // edition's secret_service does.
+ if(!data.aiSettings)data.aiSettings={provider:'anthropic',model:'',baseUrl:'',apiKey:'',status:'unconfigured',lastTestMessage:''};
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
  (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
  (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
@@ -414,13 +421,16 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
 // "Workspace", and a new Deployment Management category. Integrations
 // stays its own category (demo-only, no desktop equivalent) rather than
-// folding into anything else.
+// folding into anything else. LLM & MCP is its own category too, deliberately
+// not folded into Integrations - matches the desktop edition's own
+// Settings.tsx ADMIN_CATEGORIES, which keeps the same separation for the
+// same reason (see AiSettingsAdmin.tsx's doc comment).
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users']},
@@ -431,6 +441,7 @@ const ADMIN_CATEGORIES=[
  {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards']},
  {key:'solutions',label:'Deployment Management',icon:'🗂',note:"What's installed, what it created, and who published it",items:['solutions']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
+ {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and (once built) the MCP server that lets agents work with your data',items:['ai']},
 ];
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -1909,7 +1920,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -4469,6 +4480,70 @@ function wireConditionPicker(form,fieldSelect,dynamicWrap,condFields,valueFieldN
    render(fieldSelect.value,operator,'',e.target.value==='field'?(condFields[0]?.[0]??''):null);
   }
  });
+}
+
+// ---- AI & Agentic Layer, Phase 1 mirror -----------------------------------
+// A lightweight preview of the desktop edition's Admin -> LLM & MCP screen
+// (AiSettingsAdmin.tsx) - what a real workspace gets, not a built feature of
+// its own. The demo has no server, so there's nowhere to encrypt a key at
+// rest the way secret_service.rs does and no real provider to call - Test
+// key below is a labeled simulation, the same honesty convention every
+// other "Test"/"Run"/"Test request" button in this demo already follows
+// (see integrationsTab's own comment). MCP itself isn't built on either
+// platform yet - that tab says so plainly rather than faking a working one.
+let llmMcpSubTab='llm';
+const AI_PROVIDERS=[['anthropic','Anthropic'],['openai_compatible','OpenAI-compatible (OpenAI, or a self-hosted server)']];
+function llmMcpTab(body){
+ const subTabs=[['llm','LLM'],['mcp','MCP Server']];
+ body.innerHTML=`<div class="panel">
+ <h3 style="margin-top:0">LLM &amp; MCP</h3>
+ <p class="muted" style="font-size:13px">Bring your own LLM provider key - Lanesra is self-hosted with no subscription or seat charges, so there's no billing surface to meter AI usage through. This tab is a preview: it shows what the real desktop/Team Workspace edition's Admin → LLM &amp; MCP screen looks like and lets you try the shape of it, but nothing here makes a real call to any provider - this static demo has no server to make one from, and whatever you enter is saved to this browser only.</p>
+ <div class="tabs">${subTabs.map(t=>`<button class="tab ${llmMcpSubTab===t[0]?'active':''}" data-llmmcp-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
+ <div id="llmMcpBody"></div>
+ </div>`;
+ body.querySelectorAll('[data-llmmcp-tab]').forEach(b=>b.onclick=()=>{llmMcpSubTab=b.dataset.llmmcpTab;renderLlmMcpSubTab()});
+ renderLlmMcpSubTab();
+}
+function renderLlmMcpSubTab(){
+ document.querySelectorAll('[data-llmmcp-tab]').forEach(b=>b.classList.toggle('active',b.dataset.llmmcpTab===llmMcpSubTab));
+ const body=$('#llmMcpBody');
+ ({llm:llmSubTab,mcp:mcpSubTab}[llmMcpSubTab])(body);
+}
+function llmSubTab(body){
+ const s=data.aiSettings;
+ body.innerHTML=`<div style="margin-top:16px;max-width:520px">
+ <form id="aiSettingsForm" class="form-grid">
+  <div class="field"><label>Provider</label><select name="provider" id="aiProviderSelect">${AI_PROVIDERS.map(p=>`<option value="${p[0]}" ${s.provider===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select></div>
+  <div class="field"><label>Model</label><input name="model" value="${s.model}" placeholder="${s.provider==='anthropic'?'claude-haiku-4-5-20251001 (default if left blank)':'e.g. gpt-4o, llama3.1'}"></div>
+  ${s.provider==='openai_compatible'||s.baseUrl?`<div class="field full" id="aiBaseUrlWrap"><label id="aiBaseUrlLabel">${s.provider==='openai_compatible'?'Base URL (required)':'Base URL override (optional)'}</label><input name="baseUrl" value="${s.baseUrl}" placeholder="${s.provider==='openai_compatible'?'http://localhost:11434/v1':'https://api.anthropic.com'}"></div>`:''}
+  <div class="field full"><label>${s.apiKey?'API key (leave blank to keep the current one)':'API key'}</label><input name="apiKey" type="password" placeholder="${s.apiKey?'Stored in this browser - unchanged unless you enter a new one':'sk-...'}"></div>
+  <div class="field full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+   <button class="btn btn-primary" type="submit">Save</button>
+   <button class="btn btn-secondary" type="button" id="testAiKey" ${s.apiKey?'':'disabled'}>Test key</button>
+   <span class="badge${s.status==='connected'?' badge-success':s.status==='failed'?' badge-danger':''}">${s.status}</span>
+  </div>
+ </form>
+ ${s.lastTestMessage?`<p class="muted" style="font-size:13px;margin-top:8px">${s.lastTestMessage}</p>`:''}
+ ${!s.apiKey?'<div class="empty" style="margin-top:12px">No key configured yet - save one above, then Test key to see the shape of what the real edition proves.</div>':''}
+ </div>`;
+ $('#aiProviderSelect').onchange=e=>{s.provider=e.target.value;save();renderLlmMcpSubTab()};
+ $('#aiSettingsForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  s.provider=fd.provider;s.model=fd.model||'';s.baseUrl=fd.baseUrl||'';
+  if(fd.apiKey)s.apiKey=fd.apiKey;
+  s.status='unconfigured';s.lastTestMessage='';
+  save();toast('AI settings saved');renderLlmMcpSubTab();
+ };
+ $('#testAiKey').onclick=()=>{
+  if(!s.apiKey)return;
+  s.status='connected';
+  s.lastTestMessage='Simulated: this looks like a well-formed key. The real desktop/Team Workspace edition makes an actual call to your configured provider to verify it - this demo has no server to make one from.';
+  save();renderLlmMcpSubTab();
+ };
+}
+function mcpSubTab(body){
+ body.innerHTML=`<div style="margin-top:16px" class="empty">Not built yet, on either platform. <b>MCP Server &amp; CLI</b> is the next item on the AI &amp; Agentic Layer backlog: exposing every built-in and custom object over the Model Context Protocol through the same generic, permission-checked object API Integration Hub's REST API already uses, so any MCP-capable agent (Claude, or your own) reads/writes Lanesra records under the identical rules a human's UI action goes through. See the product backlog for the current build order.</div>`;
 }
 
 // ---- Multi-condition (+ OR group) editor, shared by the Business Rules

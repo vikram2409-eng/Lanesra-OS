@@ -9,6 +9,7 @@ use serde_json::Value;
 
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
+use lanesra_core::models::ai::AiSettingsInput;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
 use lanesra_core::models::contract::ContractInput;
@@ -42,6 +43,7 @@ use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinition
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, workspace_repo};
 use lanesra_core::services::{
+    ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
     auth_service, backup_service, bulk_action_service, business_rule_service, company_service, connection_ref_service, connection_service, connector_service,
@@ -860,6 +862,17 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         // immutably. routes.rs special-cases it before locking the
         // connection, the same way login/logout mutate the session cookie
         // outside this function.
+
+        // --- AI & Agentic Layer, Phase 1 --------------------------------
+        // "test_ai_key" is genuinely async (a real outbound provider call)
+        // and NOT here for the same reason Integration Hub's test_connection
+        // isn't - see this dispatcher's own Integration Hub comment below.
+        // It's its own route in admin_actions.rs instead.
+        "get_ai_settings" => to_value(ai_service::get_settings(conn, &require_workspace_id(conn)?)?),
+        "save_ai_settings" => {
+            let input: AiSettingsInput = arg(args, "input")?;
+            to_value(ai_service::save_settings(conn, &require_workspace_id(conn)?, master_key, &input, actor)?)
+        }
 
         // --- Integration Hub -------------------------------------------
         // Genuinely-async admin actions (test_connection,

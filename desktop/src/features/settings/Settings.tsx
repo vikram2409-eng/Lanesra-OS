@@ -17,6 +17,7 @@ import { AppsAdmin } from "./AppsAdmin";
 import { IndustryPackagesAdmin } from "./IndustryPackagesAdmin";
 import { DeploymentManagementAdmin } from "./DeploymentManagementAdmin";
 import { IntegrationHubAdmin } from "./IntegrationHubAdmin";
+import { AiSettingsAdmin } from "./AiSettingsAdmin";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
 // Caps the logo at 240px on its longest side and re-encodes it as PNG via
@@ -69,7 +70,8 @@ type AdminTab =
   | "apps"
   | "packages"
   | "solutions"
-  | "integrations";
+  | "integrations"
+  | "ai";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -88,6 +90,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "packages", label: "App Catalog" },
   { key: "solutions", label: "Deployment Management" },
   { key: "integrations", label: "Integration Hub" },
+  { key: "ai", label: "LLM & MCP" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -97,11 +100,17 @@ function tabLabel(key: AdminTab): string {
 // Groups the same tabs above into named categories for the landing page
 // below - purely a presentation grouping, the tab keys and their screens
 // are unchanged (Deployment Management and Integration Hub are the two new
-// screens - see DeploymentManagementAdmin.tsx and IntegrationHubAdmin.tsx).
+// screens - see DeploymentManagementAdmin.tsx and IntegrationHubAdmin.tsx.
+// LLM & MCP is a third, newer still - see AiSettingsAdmin.tsx and this
+// repo's backlog's "AI & Agentic Layer" item for why it exists on its own
+// rather than folded into Integrations: it's a genuinely different kind of
+// connection (a model provider, not an external system), and everything
+// downstream of it - the Activity Timeline, agent actions - is its own
+// separate build, not yet part of this admin category set).
 // Regrouped along the Solution Packages & Admin IA design spec's domain
 // lines (Workspace / Access / Data Model / Experience / Automation / Apps /
-// Analytics / Deployment Management / Integrations), stopping short of its
-// full 11-domain set: Data Management and System either don't have a
+// Analytics / Deployment Management / Integrations / LLM & MCP), stopping
+// short of its full 11-domain set: Data Management and System either don't have a
 // desktop screen yet or need real consolidation work first (Backup &
 // Restore and CSV import/export both still live inline inside other
 // screens too, not only as Integration Hub's standalone Data Exchange
@@ -117,6 +126,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards"] },
   { key: "solutions", label: "Deployment Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
   { key: "integrations", label: "Integrations", icon: "🔌", note: "Connect Lanesra to the outside world", items: ["integrations"] },
+  { key: "ai", label: "LLM & MCP", icon: "✦", note: "Bring your own LLM key, and (once built) the MCP server that lets agents work with your data", items: ["ai"] },
 ];
 
 /**
@@ -218,6 +228,7 @@ export function AdminPanel() {
       {tab === "packages" && <IndustryPackagesAdmin />}
       {tab === "solutions" && <DeploymentManagementAdmin />}
       {tab === "integrations" && <IntegrationHubAdmin />}
+      {tab === "ai" && <AiSettingsAdmin />}
     </div>
   );
 }

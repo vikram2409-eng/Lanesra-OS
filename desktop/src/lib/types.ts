@@ -2156,6 +2156,37 @@ export interface SolutionDetail {
   members: WorkspaceComponent[];
 }
 
+// --- AI & Agentic Layer, Phase 1 - mirrors core::models::ai 1:1. See
+// AiSettingsAdmin.tsx for the admin screen built on these. Every later
+// agent feature (an MCP server, the Activity Timeline, agent actions)
+// depends on this - see ai_service.rs's own doc comment for why.
+
+export interface AiSettings {
+  workspace_id: string;
+  provider: string;
+  base_url: string | null;
+  model: string;
+  has_key: boolean;
+  status: string;
+  last_test_message: string | null;
+  last_tested_at: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiSettingsInput {
+  provider: string;
+  base_url: string | null;
+  model: string;
+  api_key: string | null;
+}
+
+export interface AiTestResult {
+  ok: boolean;
+  latency_ms: number;
+  message: string;
+}
+
 // --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -
 // mirrors core::models::integration 1:1. See IntegrationHubAdmin.tsx for the
 // admin screens built on these.

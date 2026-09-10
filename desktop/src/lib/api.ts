@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AccessibleApp,
+  AiSettings,
+  AiSettingsInput,
+  AiTestResult,
   AppDefinition,
   AppDefinitionInput,
   AppDefinitionUpdate,
@@ -243,6 +246,10 @@ export const api = {
   setWorkspaceLogo: (input: WorkspaceLogo) => call<Workspace>("set_workspace_logo", { input }),
   clearWorkspaceLogo: () => call<Workspace>("clear_workspace_logo"),
   setDashboardKpis: (prefs: DashboardKpiPrefs) => call<Workspace>("set_dashboard_kpis", { prefs }),
+
+  getAiSettings: () => call<AiSettings>("get_ai_settings"),
+  saveAiSettings: (input: AiSettingsInput) => call<AiSettings>("save_ai_settings", { input }),
+  testAiKey: () => callAdminAction<AiTestResult>("test_ai_key", {}, "POST", "/api/admin/ai/test"),
 
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),

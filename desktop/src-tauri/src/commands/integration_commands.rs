@@ -40,8 +40,10 @@ use lanesra_core::services::{
 /// throwaway `current_thread` runtime and driving it with `block_on` -
 /// which has no such requirement - sidesteps the problem entirely,
 /// exactly like `lanesra-server`'s `job_scheduler` does for the same
-/// reason.
-async fn run_with_own_connection<T, F, Fut>(db_path: PathBuf, f: F) -> AppResult<T>
+/// reason. `pub(crate)` so other command modules with their own
+/// genuinely-async operation (e.g. `ai_commands::test_ai_key`) reuse this
+/// instead of duplicating it.
+pub(crate) async fn run_with_own_connection<T, F, Fut>(db_path: PathBuf, f: F) -> AppResult<T>
 where
     T: Send + 'static,
     F: FnOnce(rusqlite::Connection) -> Fut + Send + 'static,

@@ -33,7 +33,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use lanesra_core::domain::AppError;
-use lanesra_core::services::{connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service};
+use lanesra_core::services::{ai_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service};
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
 use crate::session::current_actor;
@@ -41,6 +41,7 @@ use crate::state::SharedState;
 
 pub fn router() -> Router<SharedState> {
     Router::new()
+        .route("/api/admin/ai/test", post(test_ai_key))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -108,6 +109,13 @@ where
     .await
     .map_err(|e| err_json(StatusCode::INTERNAL_SERVER_ERROR, &format!("background task panicked: {e}")))?
     .map_err(app_err)
+}
+
+async fn test_ai_key(State(state): State<SharedState>, jar: CookieJar) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { ai_service::test_key(&conn, &workspace_id, &master_key, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 
 async fn test_connection(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
