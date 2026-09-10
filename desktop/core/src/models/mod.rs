@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod app_definition;
 pub mod audit;
 pub mod backup;

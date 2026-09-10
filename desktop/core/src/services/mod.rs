@@ -1,3 +1,4 @@
+pub mod ai_service;
 pub mod app_service;
 pub mod audit_service;
 pub mod auth_service;
