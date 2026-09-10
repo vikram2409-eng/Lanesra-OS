@@ -1125,7 +1125,7 @@ function reportsPage(){
  document.title='Reports — Lanesra OS Demo';
  if(!reportsTo)reportsTo=new Date().toISOString().slice(0,10);
  if(!reportsAsOf)reportsAsOf=new Date().toISOString().slice(0,10);
- const tabs=[['revenue','Revenue by month'],['winRate','Win rate by owner'],['lostReasons','Lost reasons'],['arAging','AR aging'],['salesByOwner','Sales by owner'],['custom','Custom reports']];
+ const tabs=[['revenue','Revenue by month'],['winRate','Win rate by owner'],['lostReasons','Lost reasons'],['arAging','AR aging'],['salesByOwner','Sales by owner'],['custom','Custom reports'],['ask','Ask a question']];
  $('#view').innerHTML=`<div class="page-head"><div><h1>Reports</h1><p class="muted">Beyond the dashboard's KPI tiles — revenue, pipeline outcomes, aging receivables, sales by owner, and admin-built custom reports.</p></div></div><div class="tabs">${tabs.map(t=>`<button class="tab ${reportsTab===t[0]?'active':''}" data-report-tab="${t[0]}">${t[1]}</button>`).join('')}</div><div id="reportsBody"></div>`;
  document.querySelectorAll('[data-report-tab]').forEach(b=>b.onclick=()=>{reportsTab=b.dataset.reportTab;renderReportsTab()});
  renderReportsTab();
@@ -1133,7 +1133,7 @@ function reportsPage(){
 function renderReportsTab(){
  document.querySelectorAll('[data-report-tab]').forEach(b=>b.classList.toggle('active',b.dataset.reportTab===reportsTab));
  const body=$('#reportsBody');
- ({revenue:revenueReportTab,winRate:winRateReportTab,lostReasons:lostReasonsReportTab,arAging:arAgingReportTab,salesByOwner:salesByOwnerReportTab,custom:customReportsTab}[reportsTab])(body);
+ ({revenue:revenueReportTab,winRate:winRateReportTab,lostReasons:lostReasonsReportTab,arAging:arAgingReportTab,salesByOwner:salesByOwnerReportTab,custom:customReportsTab,ask:askReportTab}[reportsTab])(body);
 }
 function rangeControlsHtml(){return `<div class="form-grid" style="grid-template-columns:repeat(3,max-content);align-items:end;margin-bottom:16px"><div class="field"><label>From</label><input type="date" id="reportsFromInput" value="${reportsFrom}"></div><div class="field"><label>To</label><input type="date" id="reportsToInput" value="${reportsTo}"></div><div class="field"><button class="btn btn-secondary" type="button" id="reportsClearRange">Clear range</button></div></div>`}
 function wireRangeControls(rerender){
@@ -1231,6 +1231,43 @@ function customReportModal(){
   toast('Custom report created');
   customReportsTab($('#reportsBody'));
  };
+}
+// AI & Agentic Layer, Phase 4 (Agent Actions): natural-language reporting.
+// On the real desktop/Team Workspace edition, the workspace's configured
+// LLM translates a plain-English question into the same group-by-and-
+// count-or-sum shape customReportsTab already builds by hand, and runs it
+// live (core::services::agent_service::ask_report). This static demo has
+// no server to make that LLM call from, so Ask below is a simple keyword
+// match - find an object name in the question, count real demo records by
+// status - clearly labeled as a simulation, not real natural-language
+// understanding, the same honesty convention every other "Test"/"Ask"
+// button in this demo already follows.
+function askReportTab(body){
+ body.innerHTML=`<div class="panel">
+  <h3 style="margin-top:0">Ask a question</h3>
+  <p class="muted" style="font-size:13px">The real desktop/Team Workspace edition asks your configured LLM to translate this into the same report shape Custom Reports above builds by hand, and runs it live. This static demo has no server to make that call from - Ask below is a simple keyword match (finds an object name in your question, counts real demo records by status), not real natural-language understanding.</p>
+  <form id="askReportForm" style="display:flex;gap:8px;margin-bottom:16px">
+   <input id="askReportInput" style="flex:1" placeholder="e.g. how many opportunities?">
+   <button class="btn btn-primary" type="submit">Ask</button>
+  </form>
+  <div id="askReportResult"></div>
+ </div>`;
+ $('#askReportForm').onsubmit=e=>{e.preventDefault();renderAskReportResult($('#askReportInput').value.trim())};
+}
+function renderAskReportResult(question){
+ const box=$('#askReportResult'); if(!box)return;
+ if(!question){box.innerHTML='';return}
+ const lower=question.toLowerCase();
+ const matchKey=allEntityTypeKeys().find(k=>lower.includes(k.toLowerCase())||lower.includes(entityLabel(k).toLowerCase()));
+ if(!matchKey){
+  box.innerHTML='<div class="empty">Couldn\'t match an object name in that question (companies, contacts, opportunities, ...) - this keyword match is deliberately simple. The real edition would ask your configured LLM here instead.</div>';
+  return;
+ }
+ const statusField=transitionFieldFor(matchKey);
+ const rows=runCustomReport({entityKey:matchKey,groupBySource:'builtin',groupByField:statusField,aggregate:'count',sumFieldKey:''});
+ const max=Math.max(0,...rows.map(r=>r.value));
+ const statusLabel=statusField==='stage'?'Stage':'Status';
+ box.innerHTML=`<p class="muted" style="font-size:13px">Simulated: matched "${entityLabel(matchKey)}" in your question and counted real demo records by ${statusLabel} - a simple keyword match, not a real LLM call.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max)}</td><td>${r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}`;
 }
 // Phase 5 Customer/Contact 360, generalized in the v0.25 round: a
 // company/contact reference anywhere in a list becomes a clickable link

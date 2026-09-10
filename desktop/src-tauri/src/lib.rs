@@ -227,6 +227,7 @@ pub fn run() {
             commands::ai_commands::test_ai_key,
             commands::activity_commands::log_activity,
             commands::activity_commands::list_activities,
+            commands::agent_commands::ask_report,
             commands::integration_commands::list_connections,
             commands::integration_commands::create_connection,
             commands::integration_commands::update_connection,

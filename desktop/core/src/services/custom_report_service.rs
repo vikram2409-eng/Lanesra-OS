@@ -82,6 +82,41 @@ fn validate_shape(
     Ok(())
 }
 
+/// AI & Agentic Layer, Phase 4: validates and runs a report shape
+/// without persisting it - `agent_service::ask_report` uses this so a
+/// natural-language question can produce a live result before anyone
+/// decides to save it as a real `CustomReport`. Reuses `validate_shape`
+/// directly, so the LLM's output goes through the identical validation
+/// a human's manual report creation already goes through - not a
+/// separately-checked path. No admin gate, same as `run` itself:
+/// previewing needs no more privilege than viewing an existing report's
+/// numbers already does.
+pub fn preview(conn: &Connection, workspace_id: &str, input: &CustomReportInput) -> AppResult<Vec<CustomReportRow>> {
+    validate_shape(
+        conn, workspace_id, &input.entity_type, &input.name, &input.group_by_source, &input.group_by_field,
+        &input.aggregate, input.sum_field_key.as_deref(),
+    )?;
+    // id/timestamps are never read by run()'s own logic - only
+    // workspace_id/entity_type/group_by_*/aggregate/sum_field_key are,
+    // so a synthetic, never-persisted CustomReport reuses run() exactly
+    // rather than duplicating its execution logic.
+    let synthetic = CustomReport {
+        id: String::new(),
+        workspace_id: workspace_id.to_string(),
+        name: input.name.clone(),
+        entity_type: input.entity_type.clone(),
+        group_by_source: input.group_by_source.clone(),
+        group_by_field: input.group_by_field.clone(),
+        aggregate: input.aggregate.clone(),
+        sum_field_key: input.sum_field_key.clone(),
+        created_at: String::new(),
+        created_by: None,
+        updated_at: String::new(),
+        updated_by: None,
+    };
+    run(conn, &synthetic)
+}
+
 pub fn create(conn: &Connection, workspace_id: &str, input: &CustomReportInput, actor_user_id: Option<&str>) -> AppResult<CustomReport> {
     require_admin(conn, actor_user_id)?;
     validate_shape(
