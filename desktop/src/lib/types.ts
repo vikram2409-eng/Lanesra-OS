@@ -2247,6 +2247,60 @@ export interface ChatMessage {
   created_at: string;
 }
 
+// --- AI & Agentic Layer, Phase 6 - the AI Agent Foundry. Mirrors
+// core::models::ai_agent 1:1. See AiAgentsAdmin.tsx/AiSkillsAdmin.tsx.
+
+export interface AiAgentDefinition {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  system_prompt: string;
+  memory_md: string;
+  action_names: string[];
+  delegate_agent_ids: string[];
+  skill_ids: string[];
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiAgentInput {
+  name: string;
+  description: string | null;
+  icon: string;
+  system_prompt: string;
+  action_names: string[];
+  delegate_agent_ids: string[];
+  skill_ids: string[];
+}
+
+export interface AiAgentMemoryUpdate {
+  memory_md: string;
+}
+
+export interface AiSkill {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  instructions_md: string;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiSkillInput {
+  name: string;
+  description: string;
+  instructions_md: string;
+}
+
 // --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -
 // mirrors core::models::integration 1:1. See IntegrationHubAdmin.tsx for the
 // admin screens built on these.

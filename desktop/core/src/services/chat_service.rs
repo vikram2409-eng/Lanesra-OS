@@ -40,12 +40,15 @@
 //! plain text - capped at `MAX_ROUNDS` (a runaway-cost/loop guard, not a
 //! real limit any legitimate exchange needs).
 
+use std::cell::Cell;
+
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
 use crate::domain::{AppError, AppResult};
+use crate::models::ai_agent::AiAgentDefinition;
 use crate::models::chat::ChatMessage;
-use crate::repositories::chat_repo;
+use crate::repositories::{ai_agent_repo, chat_repo};
 use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
 use crate::services::api_object_service;
 
@@ -221,7 +224,44 @@ fn admin_tools() -> Vec<ToolSpec> {
             object_schema(),
         ),
         tool("list_connectors", "List Integration Hub Connectors (OpenAPI-imported external APIs). Read-only - importing one needs an uploaded spec file, not chat.", object_schema()),
+        tool("list_ai_agents", "List AI Agent Foundry agents defined in this workspace.", object_schema()),
+        tool(
+            "create_ai_agent",
+            "Create a named AI Agent. Arguments match AiAgentInput: name, description, icon (an emoji), system_prompt (its persona/instructions), action_names (array of tool names this agent may call - any name from this very tool list, e.g. 'list_records','create_record','list_business_rules'; including any admin-catalog name makes the agent Administrator-only), delegate_agent_ids (array of other active agent ids it may call via delegate_to_agent), skill_ids (array of ai_skills ids to attach - see list_ai_skills).",
+            object_schema(),
+        ),
+        tool("list_ai_skills", "List the AI Agent Foundry's reusable Skills library.", object_schema()),
+        tool(
+            "create_ai_skill",
+            "Create a reusable Skill an Agent can attach and load on demand. Arguments match AiSkillInput: name, description (what a model sees before deciding to use it), instructions_md (the full content, only loaded when used).",
+            object_schema(),
+        ),
     ]
+}
+
+/// AI & Agentic Layer, Phase 6: which of the two fixed catalogs above a
+/// tool name belongs to - the AI Agent Foundry's per-agent `action_names`
+/// checklist is picked straight from these names, not a third catalog, so
+/// a named Agent's own tool routing (`dispatch_agent_tool`) needs to know
+/// which dispatcher a given name goes to instead of assuming one fixed
+/// `mode`. Returns `None` for an unknown name (rejected at
+/// `ai_agent_service`'s validation, before it ever reaches here).
+pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
+    if record_tools().iter().any(|t| t.name == name) {
+        Some("record")
+    } else if admin_tools().iter().any(|t| t.name == name) {
+        Some("admin")
+    } else {
+        None
+    }
+}
+
+/// An Agent needs Administrator the moment any one of its own
+/// `action_names` resolves to an admin-catalog tool - checked once before
+/// its loop starts, the same `mode == "admin"` gate `send_message` already
+/// has, just keyed off a computed set instead of a literal mode string.
+pub(crate) fn agent_requires_admin(action_names: &[String]) -> bool {
+    action_names.iter().any(|n| tool_source(n) == Some("admin"))
 }
 
 fn to_val<T: serde::Serialize>(r: AppResult<T>) -> AppResult<Value> {
@@ -385,6 +425,16 @@ fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Option<&str
             to_val(super::workspace_service::update(conn, &update, actor))
         }
         "list_connectors" => to_val(super::connector_service::list_for_workspace(conn, workspace_id)),
+        "list_ai_agents" => to_val(super::ai_agent_service::list(conn, workspace_id, true)),
+        "create_ai_agent" => {
+            let input: crate::models::ai_agent::AiAgentInput = from_args(arguments)?;
+            to_val(super::ai_agent_service::create(conn, workspace_id, &input, actor))
+        }
+        "list_ai_skills" => to_val(super::ai_agent_service::list_skills(conn, workspace_id, true)),
+        "create_ai_skill" => {
+            let input: crate::models::ai_agent::AiSkillInput = from_args(arguments)?;
+            to_val(super::ai_agent_service::create_skill(conn, workspace_id, &input, actor))
+        }
         other => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
     }
 }
@@ -485,7 +535,7 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
         require_admin(conn, Some(user_id))?;
     }
     let tools = tools_for_mode(mode)?;
-    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode)?;
+    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode, "")?;
 
     let mut appended = Vec::new();
     appended.push(chat_repo::append_message(conn, &conversation.id, "user", Some(text), None, None)?);
@@ -536,6 +586,312 @@ fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], ac
 }
 
 pub fn get_history(conn: &Connection, workspace_id: &str, user_id: &str, mode: &str) -> AppResult<Vec<ChatMessage>> {
-    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode)?;
+    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode, "")?;
+    Ok(chat_repo::list_messages(conn, &conversation.id)?)
+}
+
+// === AI & Agentic Layer, Phase 6: the AI Agent Foundry =====================
+//
+// A named `AiAgentDefinition` (`ai_agent_service.rs` owns its CRUD) is a
+// persona layered over a per-agent checklist of individual tool names
+// (`action_names`, picked straight from `record_tools()`/`admin_tools()`
+// above - see `tool_source`), persistent Memory, a Skills library, and
+// delegation to other agents (hierarchy). `run_agent_once` is the one
+// shared tool-calling-loop core: it works entirely over an in-memory
+// `Vec<ChatMessage>` (no `chat_repo` persistence of its own), so both
+// `send_agent_message` below (persists the result into a real
+// conversation, same as `send_message`) and, from Phase 6b, a Pipeline
+// step or a Trigger-fired run (records only a step summary, not a full
+// transcript) can reuse it without forcing one persistence shape on both.
+
+thread_local! {
+    // Bounds Agent-to-Agent delegation depth - the exact same RAII-guard
+    // shape `workflow_service::MAX_WORKFLOW_DEPTH`/`DepthGuard` already
+    // uses for its own recursion (self-referential workflow chains). A
+    // depth guard, not full cycle detection at save time, is the actual
+    // safety net that matters here (see migration 0038's own comment).
+    static AGENT_DELEGATION_DEPTH: Cell<u8> = const { Cell::new(0) };
+}
+const MAX_DELEGATION_DEPTH: u8 = 4;
+
+struct DelegationDepthGuard;
+impl DelegationDepthGuard {
+    fn enter() -> Option<DelegationDepthGuard> {
+        let depth = AGENT_DELEGATION_DEPTH.with(Cell::get);
+        if depth >= MAX_DELEGATION_DEPTH {
+            return None;
+        }
+        AGENT_DELEGATION_DEPTH.with(|d| d.set(depth + 1));
+        Some(DelegationDepthGuard)
+    }
+}
+impl Drop for DelegationDepthGuard {
+    fn drop(&mut self) {
+        AGENT_DELEGATION_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    }
+}
+
+/// A message this loop produced itself, never persisted - `id`/
+/// `conversation_id`/`created_at` are meaningless placeholders; only
+/// `role`/`content`/`tool_calls`/`tool_call_id` matter, since those are
+/// all `ai_service::complete_with_tools`'s own message-building functions
+/// ever read from a `ChatMessage`.
+fn synthetic_message(role: &str, content: Option<&str>, tool_calls: Option<&Value>, tool_call_id: Option<&str>) -> ChatMessage {
+    ChatMessage {
+        id: String::new(),
+        conversation_id: String::new(),
+        role: role.to_string(),
+        content: content.map(String::from),
+        tool_calls: tool_calls.cloned(),
+        tool_call_id: tool_call_id.map(String::from),
+        created_at: String::new(),
+    }
+}
+
+/// This agent's own tool list: whichever of its `action_names` actually
+/// resolve to a real tool (an unknown name was already rejected at
+/// `ai_agent_service` validation, but a name can also go stale if the
+/// tool it named is later removed from the fixed catalogs - silently
+/// dropped here rather than erroring, same "the agent still works, just
+/// with one fewer action" tolerance a removed custom field's rules
+/// already get), plus the always-available `update_memory`, plus
+/// `use_skill`/`delegate_to_agent` only when this agent actually has
+/// skills/delegates attached (no point offering a tool with nothing
+/// behind it).
+fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<ToolSpec>> {
+    let all_record = record_tools();
+    let all_admin = admin_tools();
+    let mut tools: Vec<ToolSpec> = agent
+        .action_names
+        .iter()
+        .filter_map(|name| all_record.iter().chain(all_admin.iter()).find(|t| &t.name == name).cloned())
+        .collect();
+
+    tools.push(tool(
+        "update_memory",
+        "Overwrite your own persistent memory with the complete updated document (not a diff - write the whole thing each time, including what you're keeping from before). Arguments: content.",
+        object_schema(),
+    ));
+
+    if !agent.skill_ids.is_empty() {
+        let mut names = Vec::new();
+        for skill_id in &agent.skill_ids {
+            if let Some(skill) = ai_agent_repo::get_skill(conn, skill_id).map_err(AppError::from)? {
+                names.push(skill.name);
+            }
+        }
+        tools.push(tool(
+            "use_skill",
+            &format!("Load the full instructions for one of your attached skills. Arguments: name (one of: {}).", names.join(", ")),
+            object_schema(),
+        ));
+    }
+
+    if !agent.delegate_agent_ids.is_empty() {
+        let mut names = Vec::new();
+        for delegate_id in &agent.delegate_agent_ids {
+            if let Some(delegate) = ai_agent_repo::get(conn, delegate_id).map_err(AppError::from)? {
+                if delegate.is_active {
+                    names.push(delegate.name);
+                }
+            }
+        }
+        tools.push(tool(
+            "delegate_to_agent",
+            &format!(
+                "Delegate a task to one of your sub-agents and get its final answer back. Arguments: agent_name (one of: {}), input (the task or question to give it).",
+                names.join(", ")
+            ),
+            object_schema(),
+        ));
+    }
+
+    Ok(tools)
+}
+
+/// This agent's persona, plus its persistent Memory (if it's written
+/// anything yet) and a short name+description catalog of its attached
+/// Skills - the same "short description up front, full content only on
+/// demand via use_skill" shape this session's own Skill tool uses.
+fn agent_system_prompt(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<String> {
+    let mut prompt = agent.system_prompt.clone();
+    if !agent.memory_md.trim().is_empty() {
+        prompt.push_str("\n\nYour persistent memory from prior runs (revise it with update_memory whenever something worth remembering happens):\n\n");
+        prompt.push_str(&agent.memory_md);
+    }
+    if !agent.skill_ids.is_empty() {
+        prompt.push_str("\n\nSkills available to you - call use_skill by name when one is relevant:\n");
+        for skill_id in &agent.skill_ids {
+            if let Some(skill) = ai_agent_repo::get_skill(conn, skill_id).map_err(AppError::from)? {
+                prompt.push_str(&format!("- {}: {}\n", skill.name, skill.description));
+            }
+        }
+    }
+    Ok(prompt)
+}
+
+/// Dispatches one requested tool call for a named Agent - the three
+/// Foundry-specific tools directly, anything else routed to whichever of
+/// `dispatch_record_tool`/`dispatch_admin_tool` `tool_source` says it
+/// belongs to (an Agent mixes freely from both catalogs, unlike the fixed
+/// `"records"`/`"admin"` assistants above). `delegate_to_agent` is the
+/// one genuinely recursive case - boxed since `run_agent_once` calling
+/// this calling `run_agent_once` again is otherwise an infinitely-sized
+/// future.
+fn execute_agent_tool<'a>(
+    conn: &'a Connection,
+    workspace_id: &'a str,
+    master_key: &'a [u8; 32],
+    actor: Option<&'a str>,
+    agent: &'a AiAgentDefinition,
+    call: &'a RequestedToolCall,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = AppResult<Value>> + 'a>> {
+    Box::pin(async move {
+        match call.name.as_str() {
+            "update_memory" => {
+                let content = required_str(&call.arguments, "content")?;
+                ai_agent_repo::update_memory(conn, &agent.id, content).map_err(AppError::from)?;
+                Ok(json!({"memory_updated": true}))
+            }
+            "use_skill" => {
+                let skill_name = required_str(&call.arguments, "name")?;
+                for skill_id in &agent.skill_ids {
+                    if let Some(skill) = ai_agent_repo::get_skill(conn, skill_id).map_err(AppError::from)? {
+                        if skill.name == skill_name {
+                            return Ok(json!({"instructions": skill.instructions_md}));
+                        }
+                    }
+                }
+                Err(AppError::Validation(format!("'{skill_name}' isn't one of this agent's attached skills")))
+            }
+            "delegate_to_agent" => {
+                let agent_name = required_str(&call.arguments, "agent_name")?;
+                let input = required_str(&call.arguments, "input")?;
+                let mut target = None;
+                for delegate_id in &agent.delegate_agent_ids {
+                    if let Some(candidate) = ai_agent_repo::get(conn, delegate_id).map_err(AppError::from)? {
+                        if candidate.name == agent_name && candidate.is_active {
+                            target = Some(candidate);
+                            break;
+                        }
+                    }
+                }
+                let target = target.ok_or_else(|| AppError::Validation(format!("'{agent_name}' isn't one of this agent's delegate sub-agents")))?;
+                let seed = vec![synthetic_message("user", Some(input), None, None)];
+                let outcome = run_agent_once(conn, workspace_id, master_key, actor, &target, seed).await?;
+                Ok(json!({"answer": outcome.final_text}))
+            }
+            other => match tool_source(other) {
+                Some("record") => dispatch_record_tool(conn, workspace_id, other, &call.arguments),
+                Some("admin") => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments),
+                _ => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
+            },
+        }
+    })
+}
+
+/// What `run_agent_once` produced - `produced` is every message the loop
+/// generated (assistant/tool turns), in order, NOT including
+/// `seed_history` - the caller decides whether to persist all of them
+/// (`send_agent_message` does) or just log a summary (a Pipeline/Trigger
+/// run, Phase 6b).
+pub struct AgentRunOutcome {
+    pub final_text: String,
+    pub produced: Vec<ChatMessage>,
+}
+
+/// The tool-calling loop, run once against a single `AiAgentDefinition`,
+/// starting from `seed_history` (which already includes whatever prior
+/// conversation and the newest user turn belong in context - an empty
+/// history plus one seed message for a one-shot Pipeline/Trigger run, or
+/// a full persisted conversation plus the newest message for
+/// `send_agent_message`). Entirely in-memory - see this section's own
+/// doc comment for why persistence is the caller's job, not this
+/// function's.
+pub async fn run_agent_once(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    agent: &AiAgentDefinition,
+    seed_history: Vec<ChatMessage>,
+) -> AppResult<AgentRunOutcome> {
+    let _depth_guard = DelegationDepthGuard::enter()
+        .ok_or_else(|| AppError::Validation("Delegation depth limit reached - simplify this agent's delegation chain".into()))?;
+    if agent_requires_admin(&agent.action_names) {
+        require_admin(conn, actor)?;
+    }
+    let tools = agent_tools(conn, agent)?;
+    let system_prompt = agent_system_prompt(conn, agent)?;
+
+    let mut history = seed_history;
+    let mut produced = Vec::new();
+
+    for _round in 0..MAX_ROUNDS {
+        let outcome = ai_service::complete_with_tools(conn, workspace_id, master_key, &system_prompt, &tools, &history).await?;
+        match outcome {
+            CompletionOutcome::Text(text) => {
+                produced.push(synthetic_message("assistant", Some(&text), None, None));
+                return Ok(AgentRunOutcome { final_text: text, produced });
+            }
+            CompletionOutcome::ToolCalls { raw_assistant, calls } => {
+                let persisted_assistant = redact_secret_tool_calls(&raw_assistant);
+                let assistant_msg = synthetic_message("assistant", None, Some(&persisted_assistant), None);
+                history.push(assistant_msg.clone());
+                produced.push(assistant_msg);
+                for call in calls {
+                    let result = execute_agent_tool(conn, workspace_id, master_key, actor, agent, &call).await;
+                    let content = match result {
+                        Ok(value) => value.to_string(),
+                        Err(e) => format!("Error: {e}"),
+                    };
+                    let tool_msg = synthetic_message("tool", Some(&content), None, Some(&call.id));
+                    history.push(tool_msg.clone());
+                    produced.push(tool_msg);
+                }
+            }
+        }
+    }
+    Err(AppError::Validation("This is taking more steps than expected - try asking again, or break the request into smaller parts.".into()))
+}
+
+/// Chatting with one specific named Agent - the third `chat_conversations`
+/// mode alongside `send_message`'s fixed `"records"`/`"admin"`. A close
+/// structural sibling of `send_message` (same "persist the user's message,
+/// run the loop, persist what it produced" shape), not a forced
+/// abstraction over it - see this section's own doc comment.
+pub async fn send_agent_message(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], user_id: &str, agent_id: &str, text: &str) -> AppResult<Vec<ChatMessage>> {
+    if text.trim().is_empty() {
+        return Err(AppError::Validation("Say something first".into()));
+    }
+    let agent = ai_agent_repo::get(conn, agent_id).map_err(AppError::from)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    if !agent.is_active {
+        return Err(AppError::Validation("This agent has been deactivated".into()));
+    }
+    if agent_requires_admin(&agent.action_names) {
+        require_admin(conn, Some(user_id))?;
+    }
+
+    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, "agent", agent_id)?;
+    let mut appended = Vec::new();
+    appended.push(chat_repo::append_message(conn, &conversation.id, "user", Some(text), None, None)?);
+
+    let history = chat_repo::list_messages(conn, &conversation.id)?;
+    let outcome = run_agent_once(conn, workspace_id, master_key, Some(user_id), &agent, history).await?;
+    for msg in outcome.produced {
+        appended.push(chat_repo::append_message(
+            conn,
+            &conversation.id,
+            &msg.role,
+            msg.content.as_deref(),
+            msg.tool_calls.as_ref(),
+            msg.tool_call_id.as_deref(),
+        )?);
+    }
+    Ok(appended)
+}
+
+pub fn get_agent_history(conn: &Connection, workspace_id: &str, user_id: &str, agent_id: &str) -> AppResult<Vec<ChatMessage>> {
+    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, "agent", agent_id)?;
     Ok(chat_repo::list_messages(conn, &conversation.id)?)
 }

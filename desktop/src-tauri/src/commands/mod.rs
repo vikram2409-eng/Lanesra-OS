@@ -1,5 +1,6 @@
 pub mod activity_commands;
 pub mod agent_commands;
+pub mod ai_agent_commands;
 pub mod ai_commands;
 pub mod app_commands;
 pub mod audit_commands;

@@ -18,7 +18,7 @@ import { Contracts } from "./features/contracts/Contracts";
 import { Tasks } from "./features/tasks/Tasks";
 import { Reports } from "./features/reports/Reports";
 import { AdminPanel } from "./features/settings/Settings";
-import { ChatPanel } from "./components/ChatPanel";
+import { AssistantPage } from "./features/assistant/AssistantPage";
 import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
 import { api } from "./lib/api";
@@ -187,7 +187,7 @@ function Ready({
           />
         )}
         {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
-        {section === "assistant" && <ChatPanel mode="records" />}
+        {section === "assistant" && <AssistantPage user={user} />}
         {section === "admin" && <AdminPanel />}
         {section === "account" && <Account user={user} />}
         {activeCustomObject && (

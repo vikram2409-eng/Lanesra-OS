@@ -9,6 +9,7 @@ fn map_conversation(row: &rusqlite::Row) -> rusqlite::Result<ChatConversation> {
         workspace_id: row.get("workspace_id")?,
         user_id: row.get("user_id")?,
         mode: row.get("mode")?,
+        agent_id: row.get("agent_id")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -27,11 +28,17 @@ fn map_message(row: &rusqlite::Row) -> rusqlite::Result<ChatMessage> {
     })
 }
 
-/// One conversation per (user, mode) - reused across visits rather than
-/// recreated each time (see `chat_service`'s own doc comment).
-pub fn get_or_create_conversation(conn: &Connection, workspace_id: &str, user_id: &str, mode: &str) -> rusqlite::Result<ChatConversation> {
+/// One conversation per (user, mode, agent_id) - reused across visits
+/// rather than recreated each time (see `chat_service`'s own doc
+/// comment). `agent_id` is `""` for the fixed `"records"`/`"admin"`
+/// modes, and a real `ai_agents.id` for `"agent"` mode.
+pub fn get_or_create_conversation(conn: &Connection, workspace_id: &str, user_id: &str, mode: &str, agent_id: &str) -> rusqlite::Result<ChatConversation> {
     let existing = conn
-        .query_row("SELECT * FROM chat_conversations WHERE user_id = ?1 AND mode = ?2", (user_id, mode), map_conversation)
+        .query_row(
+            "SELECT * FROM chat_conversations WHERE user_id = ?1 AND mode = ?2 AND agent_id = ?3",
+            (user_id, mode, agent_id),
+            map_conversation,
+        )
         .optional()?;
     if let Some(conversation) = existing {
         return Ok(conversation);
@@ -39,10 +46,18 @@ pub fn get_or_create_conversation(conn: &Connection, workspace_id: &str, user_id
     let id = new_uuid();
     let now = now_iso();
     conn.execute(
-        "INSERT INTO chat_conversations (id, workspace_id, user_id, mode, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
-        (&id, workspace_id, user_id, mode, &now),
+        "INSERT INTO chat_conversations (id, workspace_id, user_id, mode, agent_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        (&id, workspace_id, user_id, mode, agent_id, &now),
     )?;
-    Ok(ChatConversation { id, workspace_id: workspace_id.to_string(), user_id: user_id.to_string(), mode: mode.to_string(), created_at: now.clone(), updated_at: now })
+    Ok(ChatConversation {
+        id,
+        workspace_id: workspace_id.to_string(),
+        user_id: user_id.to_string(),
+        mode: mode.to_string(),
+        agent_id: agent_id.to_string(),
+        created_at: now.clone(),
+        updated_at: now,
+    })
 }
 
 pub fn list_messages(conn: &Connection, conversation_id: &str) -> rusqlite::Result<Vec<ChatMessage>> {

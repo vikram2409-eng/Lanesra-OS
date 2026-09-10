@@ -10,6 +10,11 @@ import type {
   NlReportResult,
   ChatMessage,
   ChatMode,
+  AiAgentDefinition,
+  AiAgentInput,
+  AiAgentMemoryUpdate,
+  AiSkill,
+  AiSkillInput,
   AppDefinition,
   AppDefinitionInput,
   AppDefinitionUpdate,
@@ -267,6 +272,22 @@ export const api = {
   sendChatMessage: (mode: ChatMode, text: string) =>
     callAdminAction<ChatMessage[]>("send_chat_message", { mode, text }, "POST", `/api/admin/chat/${encodeURIComponent(mode)}/send`, { text }),
   getChatHistory: (mode: ChatMode) => call<ChatMessage[]>("get_chat_history", { mode }),
+
+  // AI & Agentic Layer, Phase 6 - the AI Agent Foundry. sendAgentMessage
+  // is genuinely async (same reasoning as sendChatMessage above); every
+  // other Agent/Skill operation is a plain CRUD read/write.
+  sendAgentMessage: (agentId: string, text: string) =>
+    callAdminAction<ChatMessage[]>("send_agent_message", { agentId, text }, "POST", `/api/admin/chat/agent/${encodeURIComponent(agentId)}/send`, { text }),
+  getAgentChatHistory: (agentId: string) => call<ChatMessage[]>("get_agent_chat_history", { agentId }),
+  listAiAgents: (activeOnly: boolean) => call<AiAgentDefinition[]>("list_ai_agents", { activeOnly }),
+  createAiAgent: (input: AiAgentInput) => call<AiAgentDefinition>("create_ai_agent", { input }),
+  updateAiAgent: (id: string, input: AiAgentInput) => call<AiAgentDefinition>("update_ai_agent", { id, input }),
+  setAiAgentActive: (id: string, isActive: boolean) => call<AiAgentDefinition>("set_ai_agent_active", { id, isActive }),
+  setAiAgentMemory: (id: string, input: AiAgentMemoryUpdate) => call<AiAgentDefinition>("set_ai_agent_memory", { id, input }),
+  listAiSkills: (activeOnly: boolean) => call<AiSkill[]>("list_ai_skills", { activeOnly }),
+  createAiSkill: (input: AiSkillInput) => call<AiSkill>("create_ai_skill", { input }),
+  updateAiSkill: (id: string, input: AiSkillInput) => call<AiSkill>("update_ai_skill", { id, input }),
+  setAiSkillActive: (id: string, isActive: boolean) => call<AiSkill>("set_ai_skill_active", { id, isActive }),
 
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),
