@@ -282,6 +282,10 @@ function ensureAdminData(){
  // server here to encrypt it server-side the way the real desktop
  // edition's secret_service does.
  if(!data.aiSettings)data.aiSettings={provider:'anthropic',model:'',baseUrl:'',apiKey:'',status:'unconfigured',lastTestMessage:''};
+ // AI & Agentic Layer, Phase 7a mirror - see gatewaySubTab's own comment.
+ if(data.aiSettings.dailyTokenBudget===undefined)data.aiSettings.dailyTokenBudget=null;
+ if(!data.aiProviders)data.aiProviders=[];
+ if(!data.aiGatewayFailoverEvents)data.aiGatewayFailoverEvents=[];
  // AI & Agentic Layer, Phase 2 mirror - see mcpSubTab's own comment. A
  // demo-only key in the same "demo_"+uid() shape apiEndpoints already
  // uses, not a real credential - there's no server here to authenticate
@@ -4652,7 +4656,12 @@ function wireConditionPicker(form,fieldSelect,dynamicWrap,condFields,valueFieldN
 // only the network call itself is simulated, the same "real shape, no real
 // wire" convention testEndpointModal already uses for API Access.
 let llmMcpSubTab='llm';
-const AI_PROVIDERS=[['anthropic','Anthropic'],['openai_compatible','OpenAI-compatible (OpenAI, or a self-hosted server)']];
+const AI_PROVIDERS=[['anthropic','Anthropic'],['openai_compatible','OpenAI-compatible (OpenAI, Groq, Mistral, Ollama, vLLM, llama.cpp, ...)'],['google_gemini','Google Gemini']];
+// AI & Agentic Layer, Phase 7a mirror - the sensitive-data classes an
+// agent's forced-air-gap list can name, hand-mirrored from
+// dlp_service::CLASSES, the same "hardcoded mirror of the server's own
+// catalog" convention MCP_TOOLS/DEMO_ADMIN_ACTIONS already use.
+const DLP_CLASSES=[['ssn','Social Security Number'],['credit_card','Credit card number'],['bank_account','Bank account / routing number'],['phone','Phone number'],['email','Email address']];
 const MCP_TOOLS=[
  ['list_objects','metadata.read','List every built-in and custom object this workspace exposes'],
  ['get_object_metadata','metadata.read',"An object's label and custom field definitions"],
@@ -4663,7 +4672,7 @@ const MCP_TOOLS=[
  ['archive_record','objects.write','Archive (soft-delete) a record by id'],
 ];
 function llmMcpTab(body){
- const subTabs=[['llm','LLM'],['mcp','MCP Server']];
+ const subTabs=[['llm','LLM'],['gateway','Gateway'],['mcp','MCP Server']];
  body.innerHTML=`<div class="panel">
  <h3 style="margin-top:0">LLM &amp; MCP</h3>
  <p class="muted" style="font-size:13px">Bring your own LLM provider key - Lanesra is self-hosted with no subscription or seat charges, so there's no billing surface to meter AI usage through. This tab is a preview: it shows what the real desktop/Team Workspace edition's Admin → LLM &amp; MCP screen looks like and lets you try the shape of it, but nothing here makes a real call to any provider - this static demo has no server to make one from, and whatever you enter is saved to this browser only.</p>
@@ -4676,7 +4685,7 @@ function llmMcpTab(body){
 function renderLlmMcpSubTab(){
  document.querySelectorAll('[data-llmmcp-tab]').forEach(b=>b.classList.toggle('active',b.dataset.llmmcpTab===llmMcpSubTab));
  const body=$('#llmMcpBody');
- ({llm:llmSubTab,mcp:mcpSubTab}[llmMcpSubTab])(body);
+ ({llm:llmSubTab,gateway:gatewaySubTab,mcp:mcpSubTab}[llmMcpSubTab])(body);
 }
 function llmSubTab(body){
  const s=data.aiSettings;
@@ -4710,6 +4719,75 @@ function llmSubTab(body){
   s.lastTestMessage='Simulated: this looks like a well-formed key. The real desktop/Team Workspace edition makes an actual call to your configured provider to verify it - this demo has no server to make one from.';
   save();renderLlmMcpSubTab();
  };
+}
+// AI & Agentic Layer, Phase 7a mirror - the Unified AI Gateway. Named
+// provider CRUD, the System-tier daily token budget, and a Gateway
+// health view of recent failovers all mirror the real shape
+// (core::models::ai's AiProvider/AiGatewayFailoverEvent), but - like
+// llmSubTab/mcpSubTab above - nothing here dispatches through a real
+// tiered failover: this demo's agent runs (chatSimReplyRecords and
+// friends) are already a labeled simulation with no provider call to
+// fail over from, so the health table stays honestly empty rather than
+// fabricating failover events that never happened.
+function gatewaySubTab(body){
+ const providers=data.aiProviders||[];
+ const s=data.aiSettings;
+ body.innerHTML=`<div style="margin-top:16px;display:grid;gap:16px">
+ <div class="panel" style="max-width:520px">
+  <h4 style="margin-top:0">System token budget</h4>
+  <p class="muted" style="font-size:13px;margin-top:0">The top of the Gateway's System → Agent → User token-budget hierarchy - applies to every agent run in this workspace. Demo-only: no real run ever spends a token here, so there's nothing to enforce this against yet.</p>
+  <div style="display:flex;gap:8px;align-items:center">
+   <input type="number" min="1" id="dailyBudgetInput" style="max-width:160px" value="${s.dailyTokenBudget??''}" placeholder="Unlimited">
+   <button class="btn btn-secondary" id="saveDailyBudget">Save</button>
+  </div>
+ </div>
+ <div class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+   <div><h4 style="margin:0">AI providers</h4><p class="muted" style="font-size:13px;margin:4px 0 0">Named provider connections, beyond the single LLM tab default above - an agent's Model Routing (AI Agents → Routing) picks one of these per tier (primary/fallback/local air-gapped).</p></div>
+   <button class="btn btn-primary" id="addAiProvider">+ New provider</button>
+  </div>
+  <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Provider</th><th>Model</th><th>Key</th><th>Status</th><th></th></tr></thead><tbody>
+  ${providers.map(p=>`<tr><td>${p.name}</td><td>${p.provider}</td><td>${p.model}</td><td>${p.apiKey?'Configured':'—'}</td><td><span class="badge${p.isActive?' badge-success':''}">${p.isActive?'Active':'Inactive'}</span></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-secondary" data-edit-provider="${p.id}">Edit</button><button class="btn btn-secondary" data-toggle-provider="${p.id}">${p.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}
+  </tbody></table></div>
+  ${providers.length===0?'<div class="empty">No named providers yet - agents without one use the plain LLM tab default.</div>':''}
+ </div>
+ <div class="panel">
+  <h4 style="margin-top:0">Gateway health</h4>
+  <p class="muted" style="font-size:13px;margin-top:0">Recent dispatches that didn't end up served by an agent's primary tier. Demo-only: this static demo has no real provider dispatch to fail over from, so this stays empty rather than showing fabricated events.</p>
+  <div class="empty">No failovers recorded yet.</div>
+ </div>
+ </div>`;
+ $('#saveDailyBudget').onclick=()=>{
+  const v=$('#dailyBudgetInput').value;
+  s.dailyTokenBudget=v===''?null:Number(v);
+  save();toast('Budget saved');
+ };
+ $('#addAiProvider').onclick=()=>aiProviderModal();
+ body.querySelectorAll('[data-edit-provider]').forEach(b=>b.onclick=()=>aiProviderModal(providers.find(p=>p.id===b.dataset.editProvider)));
+ body.querySelectorAll('[data-toggle-provider]').forEach(b=>b.onclick=()=>{const p=providers.find(x=>x.id===b.dataset.toggleProvider);p.isActive=!p.isActive;save();renderLlmMcpSubTab()});
+}
+function aiProviderModal(provider){
+ const isEdit=!!provider;
+ const body=`<form id="aiProviderForm" class="form-grid">
+ <div class="field"><label>Name</label><input name="name" value="${provider?.name||''}" placeholder="e.g. Self-hosted Ollama" required></div>
+ <div class="field"><label>Provider</label><select name="provider" id="aiProviderModalSelect">${AI_PROVIDERS.map(p=>`<option value="${p[0]}" ${(provider?.provider||'anthropic')===p[0]?'selected':''}>${p[1]}</option>`).join('')}</select></div>
+ <div class="field"><label>Model</label><input name="model" value="${provider?.model||''}" placeholder="e.g. gpt-4o, llama3.1, gemini-1.5-pro"></div>
+ <div class="field full"><label>Base URL (optional, required for OpenAI-compatible)</label><input name="baseUrl" value="${provider?.baseUrl||''}" placeholder="http://localhost:11434/v1"></div>
+ <div class="field full"><label>${provider?.apiKey?'API key (leave blank to keep the current one)':'API key'}</label><input name="apiKey" type="password" placeholder="${provider?.apiKey?'Stored in this browser - unchanged unless you enter a new one':'sk-...'}"></div>
+ <div class="modal-actions">${isEdit?'<button type="button" class="btn btn-secondary" data-delete-provider>Delete</button>':''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary" type="submit">${isEdit?'Save':'Create'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${provider.name}`:'New provider',body);
+ $('[data-close]').onclick=closeModal;
+ $('#aiProviderForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  const obj=isEdit?provider:{id:'aip_'+uid(),isActive:true};
+  obj.name=fd.name;obj.provider=fd.provider;obj.model=fd.model||'';obj.baseUrl=fd.baseUrl||'';
+  if(fd.apiKey)obj.apiKey=fd.apiKey;
+  if(!isEdit)data.aiProviders.push(obj);
+  save();closeModal();renderLlmMcpSubTab();toast(isEdit?'Provider saved':'Provider created');
+ };
+ if(isEdit)$('[data-delete-provider]').onclick=()=>{data.aiProviders=data.aiProviders.filter(p=>p.id!==provider.id);save();closeModal();renderLlmMcpSubTab()};
 }
 function mcpSubTab(body){
  // Real on the desktop/Team Workspace edition (a POST /mcp endpoint,
@@ -4858,13 +4936,15 @@ function aiAgentsTab(body){
  body.innerHTML=`<div class="panel">
  <div class="panel-head"><h3>AI Agents</h3><button class="btn btn-primary" id="addAgent">+ New agent</button></div>
  <p class="muted" style="font-size:13px">Each agent is a persona layered over a set of actions it can take, with its own persistent memory and attached skills - real, structured data in this browser; chatting with one simulates the reply with a keyword match, since this static demo has no server to run a real tool-calling loop from.</p>
- <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
  <div id="agentChatWrap"></div>
  <div id="agentMemoryWrap"></div>
+ <div id="agentRoutingWrap"></div>
  </div>`;
  $('#addAgent').onclick=()=>aiAgentModal();
  body.querySelectorAll('[data-edit-agent]').forEach(b=>b.onclick=()=>aiAgentModal(agents.find(a=>a.id===b.dataset.editAgent)));
  body.querySelectorAll('[data-toggle-agent]').forEach(b=>b.onclick=()=>{const a=agents.find(x=>x.id===b.dataset.toggleAgent);a.isActive=!a.isActive;save();renderView()});
+ body.querySelectorAll('[data-routing-agent]').forEach(b=>b.onclick=()=>aiAgentRoutingPanel(agents.find(x=>x.id===b.dataset.routingAgent),$('#agentRoutingWrap')));
  body.querySelectorAll('[data-chat-agent]').forEach(b=>b.onclick=()=>{
   const a=agents.find(x=>x.id===b.dataset.chatAgent);
   ensureChatSim();
@@ -4904,6 +4984,47 @@ function aiAgentModal(agent){
   save();closeModal();renderView();
  };
  if(isEdit)$('[data-delete-agent]').onclick=()=>{data.aiAgents=data.aiAgents.filter(a=>a.id!==agent.id);save();closeModal();renderView()};
+}
+// AI & Agentic Layer, Phase 7a mirror - an agent's optional Gateway
+// routing policy, the same "real, structured data in this browser, no
+// real dispatch" convention aiAgentsTab's own comment already states for
+// Memory. With no policy this agent uses the plain LLM tab default,
+// unchanged - matching the real edition's `model_routing: None` rule.
+function aiAgentRoutingPanel(agent,wrap){
+ const providers=data.aiProviders||[];
+ const r=agent.modelRouting||{primaryProviderId:'',fallbackProviderId:'',localFallbackProviderId:'',temperature:'',maxTokens:'',dailyTokenBudget:'',forceAirGappedFor:[]};
+ const providerOptions=(selected)=>`<option value="">— Workspace default —</option>${providers.map(p=>`<option value="${p.id}" ${selected===p.id?'selected':''}>${p.name} (${p.provider})</option>`).join('')}`;
+ wrap.innerHTML=`<div class="panel" style="margin-top:16px">
+ <h4 style="margin-top:0">${agent.icon} ${agent.name}'s model routing</h4>
+ <p class="muted" style="font-size:13px">With no routing policy this agent uses the workspace's plain LLM tab default. Turning this on lets it try a named provider first, fail over to another, and - for sensitive data classes checked below - route straight to a local/air-gapped provider instead of the cloud.</p>
+ <label style="font-size:13px;display:block;margin-bottom:8px"><input type="checkbox" id="routingEnabled" ${agent.modelRouting?'checked':''}> Configure a routing policy for this agent</label>
+ <div id="routingFields" style="${agent.modelRouting?'':'display:none'}" class="form-grid">
+  <div class="field"><label>Primary provider</label><select name="primaryProviderId">${providerOptions(r.primaryProviderId)}</select></div>
+  <div class="field"><label>Fallback provider</label><select name="fallbackProviderId">${providerOptions(r.fallbackProviderId)}</select></div>
+  <div class="field"><label>Local / air-gapped fallback</label><select name="localFallbackProviderId">${providerOptions(r.localFallbackProviderId)}</select></div>
+  <div class="field"><label>Temperature (optional)</label><input type="number" min="0" max="2" step="0.1" name="temperature" value="${r.temperature??''}"></div>
+  <div class="field"><label>Max tokens (optional)</label><input type="number" min="1" name="maxTokens" value="${r.maxTokens??''}"></div>
+  <div class="field"><label>Daily token budget (optional)</label><input type="number" min="1" name="dailyTokenBudget" value="${r.dailyTokenBudget??''}"></div>
+  <div class="field full"><label>Force air-gapped routing for</label>${DLP_CLASSES.map(([k,l])=>`<label style="font-size:13px;margin-right:12px"><input type="checkbox" class="agRoutingClass" value="${k}" ${(r.forceAirGappedFor||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
+ </div>
+ <div style="margin-top:12px"><button class="btn btn-primary" id="saveRouting">Save routing</button></div>
+ </div>`;
+ $('#routingEnabled').onchange=e=>{$('#routingFields').style.display=e.target.checked?'':'none'};
+ $('#saveRouting').onclick=()=>{
+  if(!$('#routingEnabled').checked){agent.modelRouting=null;save();toast('Routing cleared');wrap.innerHTML='';return}
+  const el=n=>wrap.querySelector(`[name="${n}"]`);
+  const num=v=>v===''?null:Number(v);
+  agent.modelRouting={
+   primaryProviderId:el('primaryProviderId').value||null,
+   fallbackProviderId:el('fallbackProviderId').value||null,
+   localFallbackProviderId:el('localFallbackProviderId').value||null,
+   temperature:num(el('temperature').value),
+   maxTokens:num(el('maxTokens').value),
+   dailyTokenBudget:num(el('dailyTokenBudget').value),
+   forceAirGappedFor:Array.from(wrap.querySelectorAll('.agRoutingClass:checked')).map(c=>c.value),
+  };
+  save();toast('Routing saved');
+ };
 }
 function chatSimAgentReply(agent,text){
  const actionNames=agent.actionNames||[];

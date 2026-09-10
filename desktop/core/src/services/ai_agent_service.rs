@@ -11,8 +11,9 @@
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
+use crate::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiSkill, AiSkillInput};
-use crate::repositories::ai_agent_repo;
+use crate::repositories::{ai_agent_repo, ai_provider_repo, ai_token_usage_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -104,6 +105,53 @@ pub fn set_memory(conn: &Connection, id: &str, memory_md: &str, actor_user_id: O
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     ai_agent_repo::update_memory(conn, id, memory_md)?;
     Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
+}
+
+fn validate_routing(conn: &Connection, workspace_id: &str, routing: &AiAgentModelRouting) -> AppResult<()> {
+    for provider_id in [&routing.primary_provider_id, &routing.fallback_provider_id, &routing.local_fallback_provider_id].into_iter().flatten() {
+        let provider = ai_provider_repo::get(conn, provider_id)?.ok_or_else(|| AppError::Validation("Selected AI provider does not exist".into()))?;
+        if provider.workspace_id != workspace_id {
+            return Err(AppError::Validation("Selected AI provider does not exist".into()));
+        }
+    }
+    for class in &routing.force_air_gapped_for {
+        if !super::dlp_service::CLASSES.contains(&class.as_str()) {
+            return Err(AppError::Validation(format!("'{class}' isn't a recognized sensitive-data class")));
+        }
+    }
+    if let Some(t) = routing.temperature {
+        if !(0.0..=2.0).contains(&t) {
+            return Err(AppError::Validation("Temperature must be between 0 and 2".into()));
+        }
+    }
+    Ok(())
+}
+
+/// Phase 7a: an agent's Gateway routing policy - its own admin action,
+/// not part of the main create/update form payload, the same "own action,
+/// not folded into the main form" shape `set_memory` above already
+/// established. `routing: None` clears the policy entirely, returning
+/// this agent to the plain pre-7a workspace-default behavior - see
+/// `ai_agent_repo::set_routing`'s own "full overwrite" doc comment.
+pub fn set_model_routing(conn: &Connection, id: &str, workspace_id: &str, routing: Option<AiAgentModelRouting>, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+    require_admin(conn, actor_user_id)?;
+    ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    if let Some(r) = &routing {
+        validate_routing(conn, workspace_id, r)?;
+    }
+    ai_agent_repo::set_routing(conn, id, routing.as_ref())?;
+    Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
+}
+
+/// The Agent tier's real usage-vs-budget snapshot - shown alongside this
+/// agent's Model Routing settings, same "any authenticated user can see
+/// the numbers" reasoning `ai_service::token_usage_today` already
+/// documents for the System tier.
+pub fn token_usage_today(conn: &Connection, id: &str, workspace_id: &str) -> AppResult<AiTokenUsageSummary> {
+    let agent = ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    let (input_tokens, output_tokens) = ai_token_usage_repo::today_totals_for_agent(conn, workspace_id, id)?;
+    let daily_token_budget = agent.model_routing.and_then(|r| r.daily_token_budget);
+    Ok(AiTokenUsageSummary { today_input_tokens: input_tokens, today_output_tokens: output_tokens, daily_token_budget })
 }
 
 // --- Skills -----------------------------------------------------------

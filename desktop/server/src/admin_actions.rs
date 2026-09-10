@@ -35,7 +35,8 @@ use serde_json::{json, Value};
 use lanesra_core::domain::AppError;
 use lanesra_core::models::agent::NlReportQuery;
 use lanesra_core::services::{
-    agent_service, ai_orchestration_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service,
+    agent_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service, integration_job_service,
+    webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -45,6 +46,7 @@ use crate::state::SharedState;
 pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/api/admin/ai/test", post(test_ai_key))
+        .route("/api/admin/ai-providers/:id/test", post(test_ai_provider_key))
         .route("/api/admin/agent/ask-report", post(ask_report))
         .route("/api/admin/chat/:mode/send", post(send_chat_message))
         .route("/api/admin/chat/agent/:agent_id/send", post(send_agent_chat_message))
@@ -125,6 +127,13 @@ async fn test_ai_key(State(state): State<SharedState>, jar: CookieJar) -> Result
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move { ai_service::test_key(&conn, &workspace_id, &master_key, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn test_ai_provider_key(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (_workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { ai_provider_service::test_key(&conn, &id, &master_key, Some(&actor)).await }).await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 

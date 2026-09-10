@@ -11,7 +11,7 @@ use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id, resolve_master_key};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::ai::{AiSettings, AiSettingsInput, AiTestResult};
+use lanesra_core::models::ai::{AiDailyTokenBudgetInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary};
 use lanesra_core::services::ai_service;
 
 #[tauri::command]
@@ -38,4 +38,18 @@ pub async fn test_ai_key(state: State<'_, AppState>) -> AppResult<AiTestResult> 
     };
     let actor = current_actor(&state);
     run_with_own_connection(db_path, move |conn| async move { ai_service::test_key(&conn, &workspace_id, &master_key, actor.as_deref()).await }).await
+}
+
+/// Phase 7a: the "System" tier of the Gateway's budget hierarchy.
+#[tauri::command]
+pub fn set_ai_daily_token_budget(state: State<AppState>, input: AiDailyTokenBudgetInput) -> AppResult<AiSettings> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    ai_service::set_daily_token_budget(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn get_ai_token_usage_summary(state: State<AppState>) -> AppResult<AiTokenUsageSummary> {
+    let conn = state.conn.lock().unwrap();
+    ai_service::token_usage_today(&conn, &require_workspace_id(&conn)?)
 }

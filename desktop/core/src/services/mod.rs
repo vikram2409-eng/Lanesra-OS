@@ -1,7 +1,9 @@
 pub mod activity_service;
 pub mod agent_service;
 pub mod ai_agent_service;
+pub mod ai_gateway_service;
 pub mod ai_orchestration_service;
+pub mod ai_provider_service;
 pub mod ai_service;
 pub mod app_service;
 pub mod audit_service;
@@ -34,6 +36,7 @@ pub mod connection_service;
 pub mod connector_execution_service;
 pub mod connector_service;
 pub mod data_exchange_service;
+pub mod dlp_service;
 pub mod postgres_service;
 pub mod sftp_service;
 pub mod smtp_service;

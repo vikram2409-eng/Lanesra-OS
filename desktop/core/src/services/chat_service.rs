@@ -48,7 +48,8 @@ use serde_json::{json, Value};
 use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent::AiAgentDefinition;
 use crate::models::chat::ChatMessage;
-use crate::repositories::{ai_agent_repo, chat_repo};
+use crate::repositories::{ai_agent_repo, ai_token_usage_repo, chat_repo};
+use crate::services::ai_gateway_service;
 use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
 use crate::services::api_object_service;
 
@@ -565,7 +566,12 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
 
     for _round in 0..MAX_ROUNDS {
         let history = chat_repo::list_messages(conn, &conversation.id)?;
-        let outcome = ai_service::complete_with_tools(conn, workspace_id, master_key, system_prompt(mode), &tools, &history).await?;
+        let (outcome, usage) = ai_service::complete_with_tools(conn, workspace_id, master_key, system_prompt(mode), &tools, &history).await?;
+        // Phase 7a: recorded for Gateway health-view visibility even on
+        // this plain (no-agent) path - agent_id "" is the same "not an
+        // agent run" sentinel `ai_token_usage_repo`'s own doc comment
+        // describes, matching `chat_conversations.agent_id`'s convention.
+        let _ = ai_token_usage_repo::increment(conn, workspace_id, "", user_id, usage.input_tokens, usage.output_tokens);
         match outcome {
             CompletionOutcome::Text(text) => {
                 appended.push(chat_repo::append_message(conn, &conversation.id, "assistant", Some(&text), None, None)?);
@@ -866,7 +872,15 @@ pub async fn run_agent_once(
     let mut produced = Vec::new();
 
     for _round in 0..MAX_ROUNDS {
-        let outcome = ai_service::complete_with_tools(conn, workspace_id, master_key, &system_prompt, &tools, &history).await?;
+        // Phase 7a: every agent run goes through the Gateway, not
+        // straight to `ai_service::complete_with_tools` - it resolves
+        // this agent's `model_routing` policy (primary/fallback/
+        // local_fallback failover, System/Agent budget ceilings, DLP
+        // forced air-gapping) and records real token usage itself; an
+        // agent with no routing configured gets exactly its pre-7a
+        // behavior back (see `ai_gateway_service`'s own doc comment).
+        let gateway_outcome = ai_gateway_service::dispatch(conn, workspace_id, master_key, agent, actor, &system_prompt, &tools, &history).await?;
+        let outcome = gateway_outcome.outcome;
         match outcome {
             CompletionOutcome::Text(text) => {
                 produced.push(synthetic_message("assistant", Some(&text), None, None));

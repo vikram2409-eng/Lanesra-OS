@@ -6,6 +6,7 @@
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::now_iso;
+use crate::models::ai::AiAgentModelRouting;
 use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiSkill, AiSkillInput};
 
 fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
@@ -22,6 +23,7 @@ fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
         // Filled in by `hydrate` - not a column on this table.
         delegate_agent_ids: Vec::new(),
         skill_ids: Vec::new(),
+        model_routing: None,
         is_active: row.get("is_active")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
@@ -45,7 +47,52 @@ pub fn list_skill_ids(conn: &Connection, agent_id: &str) -> rusqlite::Result<Vec
 fn hydrate(conn: &Connection, mut agent: AiAgentDefinition) -> rusqlite::Result<AiAgentDefinition> {
     agent.delegate_agent_ids = list_delegate_ids(conn, &agent.id)?;
     agent.skill_ids = list_skill_ids(conn, &agent.id)?;
+    agent.model_routing = get_routing(conn, &agent.id)?;
     Ok(agent)
+}
+
+// --- Phase 7a: per-agent Gateway routing policy ----------------------------
+
+fn map_routing_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentModelRouting> {
+    let force_air_gapped_for_json: String = row.get("force_air_gapped_for_json")?;
+    Ok(AiAgentModelRouting {
+        primary_provider_id: row.get("primary_provider_id")?,
+        fallback_provider_id: row.get("fallback_provider_id")?,
+        local_fallback_provider_id: row.get("local_fallback_provider_id")?,
+        temperature: row.get("temperature")?,
+        max_tokens: row.get("max_tokens")?,
+        daily_token_budget: row.get("daily_token_budget")?,
+        force_air_gapped_for: serde_json::from_str(&force_air_gapped_for_json).unwrap_or_default(),
+    })
+}
+
+pub fn get_routing(conn: &Connection, agent_id: &str) -> rusqlite::Result<Option<AiAgentModelRouting>> {
+    conn.query_row("SELECT * FROM ai_agent_routing WHERE agent_id = ?1", [agent_id], map_routing_row).optional()
+}
+
+/// A full overwrite (delete-then-insert, or NULL-everything if `routing`
+/// is `None`) - same "no merge logic, the caller sends the complete
+/// document" shape `update_memory` already uses for `memory_md`.
+pub fn set_routing(conn: &Connection, agent_id: &str, routing: Option<&AiAgentModelRouting>) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM ai_agent_routing WHERE agent_id = ?1", [agent_id])?;
+    if let Some(r) = routing {
+        let force_air_gapped_for_json = serde_json::to_string(&r.force_air_gapped_for).unwrap_or_else(|_| "[]".into());
+        conn.execute(
+            "INSERT INTO ai_agent_routing (agent_id, primary_provider_id, fallback_provider_id, local_fallback_provider_id, temperature, max_tokens, daily_token_budget, force_air_gapped_for_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![
+                agent_id,
+                r.primary_provider_id,
+                r.fallback_provider_id,
+                r.local_fallback_provider_id,
+                r.temperature,
+                r.max_tokens,
+                r.daily_token_budget,
+                force_air_gapped_for_json,
+            ],
+        )?;
+    }
+    Ok(())
 }
 
 fn replace_delegates(conn: &Connection, agent_id: &str, delegate_ids: &[String]) -> rusqlite::Result<()> {

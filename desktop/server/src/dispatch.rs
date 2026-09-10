@@ -10,7 +10,7 @@ use serde_json::Value;
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
-use lanesra_core::models::ai::AiSettingsInput;
+use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiProviderInput, AiSettingsInput};
 use lanesra_core::models::ai_agent::{AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
 use lanesra_core::models::company::CompanyInput;
@@ -50,7 +50,7 @@ use lanesra_core::services::{
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
-    ai_agent_service, ai_orchestration_service,
+    ai_agent_service, ai_gateway_service, ai_orchestration_service, ai_provider_service,
     auth_service, backup_service, bulk_action_service, business_rule_service, chat_service, company_service, connection_ref_service, connection_service, connector_service,
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
@@ -1159,6 +1159,48 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let target_id: String = arg(args, "targetId")?;
             let limit: i64 = arg(args, "limit")?;
             to_value(ai_orchestration_service::list_runs(conn, &target_type, &target_id, limit)?)
+        }
+
+        // AI & Agentic Layer, Phase 7a: the Unified AI Gateway - named
+        // provider CRUD, an agent's routing policy, and the Gateway
+        // health view's read-only data. `test_ai_provider_key` is
+        // genuinely async (a real outbound call), so it's its own route
+        // in `admin_actions.rs`, same as `test_ai_key` above.
+        "list_ai_providers" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(ai_provider_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_ai_provider" => {
+            let input: AiProviderInput = arg(args, "input")?;
+            to_value(ai_provider_service::create(conn, &require_workspace_id(conn)?, master_key, &input, actor)?)
+        }
+        "update_ai_provider" => {
+            let id: String = arg(args, "id")?;
+            let input: AiProviderInput = arg(args, "input")?;
+            to_value(ai_provider_service::update(conn, &id, &require_workspace_id(conn)?, master_key, &input, actor)?)
+        }
+        "set_ai_provider_active" => {
+            let id: String = arg(args, "id")?;
+            let is_active: bool = arg(args, "isActive")?;
+            to_value(ai_provider_service::set_active(conn, &id, is_active, actor)?)
+        }
+        "set_ai_agent_model_routing" => {
+            let id: String = arg(args, "id")?;
+            let routing: Option<AiAgentModelRouting> = arg(args, "routing")?;
+            to_value(ai_agent_service::set_model_routing(conn, &id, &require_workspace_id(conn)?, routing, actor)?)
+        }
+        "get_ai_agent_token_usage" => {
+            let id: String = arg(args, "id")?;
+            to_value(ai_agent_service::token_usage_today(conn, &id, &require_workspace_id(conn)?)?)
+        }
+        "set_ai_daily_token_budget" => {
+            let input: AiDailyTokenBudgetInput = arg(args, "input")?;
+            to_value(ai_service::set_daily_token_budget(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "get_ai_token_usage_summary" => to_value(ai_service::token_usage_today(conn, &require_workspace_id(conn)?)?),
+        "list_ai_gateway_failover_events" => {
+            let limit: i64 = arg(args, "limit")?;
+            to_value(ai_gateway_service::recent_failover_events(conn, &require_workspace_id(conn)?, limit)?)
         }
 
         other => Err(AppError::Validation(format!("Unknown command '{other}'"))),

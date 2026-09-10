@@ -5,7 +5,19 @@ import { api, ApiError } from "../../lib/api";
 import { ChatPanel } from "../../components/ChatPanel";
 import { AiTriggersPanel } from "./AiTriggersPanel";
 import { agentRequiresAdmin } from "../../lib/aiAgents";
-import type { AiAgentDefinition, AiAgentInput, AiSkill } from "../../lib/types";
+import type { AiAgentDefinition, AiAgentInput, AiAgentModelRouting, AiProvider, AiSkill } from "../../lib/types";
+
+// Phase 7a: the DLP classes an agent's forced-air-gap list can name -
+// hand-mirrored from `dlp_service::CLASSES`, the same "hardcoded mirror
+// of the server's own catalog" convention every other tool/action list on
+// this page already follows.
+const DLP_CLASSES: [string, string][] = [
+  ["ssn", "Social Security Number"],
+  ["credit_card", "Credit card number"],
+  ["bank_account", "Bank account / routing number"],
+  ["phone", "Phone number"],
+  ["email", "Email address"],
+];
 
 // AI & Agentic Layer, Phase 6: the AI Agent Foundry's Agents tab.
 // `action_names` is a per-tool checklist, hand-mirrored from
@@ -73,13 +85,16 @@ export function AiAgentsAdmin() {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["aiAgents"], queryFn: () => api.listAiAgents(false) });
   const skillsQuery = useQuery({ queryKey: ["aiSkills"], queryFn: () => api.listAiSkills(true) });
+  const providersQuery = useQuery({ queryKey: ["aiProviders"], queryFn: () => api.listAiProviders(true) });
   const agents = agentsQuery.data ?? [];
   const skills = skillsQuery.data ?? [];
+  const providers = providersQuery.data ?? [];
 
   const [editing, setEditing] = useState<AiAgentDefinition | null>(null);
   const [creating, setCreating] = useState(false);
   const [chatWith, setChatWith] = useState<AiAgentDefinition | null>(null);
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
+  const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
   const [triggersFor, setTriggersFor] = useState<AiAgentDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,6 +130,14 @@ export function AiAgentsAdmin() {
       setMemoryFor(null);
       invalidate();
     },
+  });
+  const saveRouting = useMutation({
+    mutationFn: ({ id, routing }: { id: string; routing: AiAgentModelRouting | null }) => api.setAiAgentModelRouting(id, routing),
+    onSuccess: () => {
+      setRoutingFor(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this agent's routing"),
   });
 
   return (
@@ -171,6 +194,9 @@ export function AiAgentsAdmin() {
                       <button className="btn btn-secondary" onClick={() => setMemoryFor(a)}>
                         Memory
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setRoutingFor(a)}>
+                        Routing{a.model_routing && <span className="badge badge-success" style={{ marginLeft: 4 }}>on</span>}
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setTriggersFor(triggersFor?.id === a.id ? null : a)}>
                         Triggers
                       </button>
@@ -224,6 +250,16 @@ export function AiAgentsAdmin() {
         />
       )}
 
+      {routingFor && (
+        <ModelRoutingEditor
+          agent={routingFor}
+          providers={providers}
+          onCancel={() => setRoutingFor(null)}
+          onSave={(routing) => saveRouting.mutate({ id: routingFor.id, routing })}
+          pending={saveRouting.isPending}
+        />
+      )}
+
       {triggersFor && (
         <div className="card" style={{ marginTop: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -274,6 +310,147 @@ function MemoryEditor({
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <button className="btn btn-primary" onClick={() => onSave(value)} disabled={pending}>
           {pending ? "Saving..." : "Save memory"}
+        </button>
+        <button className="btn btn-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phase 7a: an agent's optional Gateway routing policy - primary/
+ * fallback/local_fallback provider tiers, temperature/max_tokens
+ * overrides, its own daily token budget, and which sensitive-data classes
+ * force it straight to `local_fallback`. Enabling routing at all starts
+ * every tier at "workspace default" (`null`), matching the backend's own
+ * "None means the workspace default, not skip" rule - see
+ * `AiAgentModelRouting`'s own doc comment in `core::models::ai`.
+ */
+function ModelRoutingEditor({
+  agent,
+  providers,
+  onCancel,
+  onSave,
+  pending,
+}: {
+  agent: AiAgentDefinition;
+  providers: AiProvider[];
+  onCancel: () => void;
+  onSave: (routing: AiAgentModelRouting | null) => void;
+  pending: boolean;
+}) {
+  const [enabled, setEnabled] = useState(agent.model_routing !== null);
+  const [routing, setRouting] = useState<AiAgentModelRouting>(
+    agent.model_routing ?? {
+      primary_provider_id: null,
+      fallback_provider_id: null,
+      local_fallback_provider_id: null,
+      temperature: null,
+      max_tokens: null,
+      daily_token_budget: null,
+      force_air_gapped_for: [],
+    },
+  );
+  const usage = useQuery({ queryKey: ["aiAgentTokenUsage", agent.id], queryFn: () => api.getAiAgentTokenUsage(agent.id) });
+
+  function toggleClass(name: string) {
+    setRouting((prev) => ({
+      ...prev,
+      force_air_gapped_for: prev.force_air_gapped_for.includes(name) ? prev.force_air_gapped_for.filter((c) => c !== name) : [...prev.force_air_gapped_for, name],
+    }));
+  }
+
+  function providerSelect(label: string, value: string | null, onChange: (v: string | null) => void) {
+    return (
+      <div className="field">
+        <label>{label}</label>
+        <select value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+          <option value="">— Workspace default —</option>
+          {providers.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name} ({p.provider})
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ marginTop: 0 }}>
+        {agent.icon} {agent.name}'s model routing
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        With no routing policy this agent uses the workspace's plain LLM &amp; MCP → LLM settings, unchanged. Turning
+        this on lets it try a named provider first, fail over to another, and - for sensitive data classes below -
+        route straight to a local/air-gapped provider instead of the cloud, regardless of the normal order.
+      </p>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Configure a routing policy for this agent
+      </label>
+
+      {enabled && (
+        <div className="form-grid">
+          {providerSelect("Primary provider", routing.primary_provider_id, (v) => setRouting({ ...routing, primary_provider_id: v }))}
+          {providerSelect("Fallback provider", routing.fallback_provider_id, (v) => setRouting({ ...routing, fallback_provider_id: v }))}
+          {providerSelect("Local / air-gapped fallback", routing.local_fallback_provider_id, (v) => setRouting({ ...routing, local_fallback_provider_id: v }))}
+          <div className="field">
+            <label>Temperature (optional)</label>
+            <input
+              type="number"
+              min={0}
+              max={2}
+              step={0.1}
+              value={routing.temperature ?? ""}
+              onChange={(e) => setRouting({ ...routing, temperature: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+          </div>
+          <div className="field">
+            <label>Max tokens (optional)</label>
+            <input
+              type="number"
+              min={1}
+              value={routing.max_tokens ?? ""}
+              onChange={(e) => setRouting({ ...routing, max_tokens: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+          </div>
+          <div className="field">
+            <label>Daily token budget (optional)</label>
+            <input
+              type="number"
+              min={1}
+              value={routing.daily_token_budget ?? ""}
+              onChange={(e) => setRouting({ ...routing, daily_token_budget: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+            {usage.data && (
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>
+                Used today: {usage.data.today_input_tokens + usage.data.today_output_tokens} tokens
+              </p>
+            )}
+          </div>
+          <div className="field full">
+            <label>Force air-gapped routing for</label>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+              If a run's outbound payload matches any class checked here, it's sent straight to the local/air-gapped
+              fallback above, never the cloud primary/fallback - checked before every dispatch.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {DLP_CLASSES.map(([key, label]) => (
+                <label key={key} style={{ fontSize: 13 }}>
+                  <input type="checkbox" checked={routing.force_air_gapped_for.includes(key)} onChange={() => toggleClass(key)} /> {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button className="btn btn-primary" onClick={() => onSave(enabled ? routing : null)} disabled={pending}>
+          {pending ? "Saving..." : "Save routing"}
         </button>
         <button className="btn btn-secondary" onClick={onCancel}>
           Cancel
