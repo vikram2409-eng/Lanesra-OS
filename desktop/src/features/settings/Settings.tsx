@@ -20,6 +20,7 @@ import { IntegrationHubAdmin } from "./IntegrationHubAdmin";
 import { AiSettingsAdmin } from "./AiSettingsAdmin";
 import { AiAgentsAdmin } from "./AiAgentsAdmin";
 import { AiSkillsAdmin } from "./AiSkillsAdmin";
+import { AiAgentPipelinesAdmin } from "./AiAgentPipelinesAdmin";
 import { ChatPanel } from "../../components/ChatPanel";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
@@ -77,7 +78,8 @@ type AdminTab =
   | "ai"
   | "assistant"
   | "aiAgents"
-  | "aiSkills";
+  | "aiSkills"
+  | "aiAgentPipelines";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -100,6 +102,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "assistant", label: "Admin Assistant" },
   { key: "aiAgents", label: "AI Agents" },
   { key: "aiSkills", label: "Skills" },
+  { key: "aiAgentPipelines", label: "Orchestration" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -142,7 +145,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
     label: "AI Agent Foundry",
     icon: "🏭",
     note: "Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other",
-    items: ["aiAgents", "aiSkills"],
+    items: ["aiAgents", "aiSkills", "aiAgentPipelines"],
   },
 ];
 
@@ -249,6 +252,7 @@ export function AdminPanel() {
       {tab === "assistant" && <ChatPanel mode="admin" />}
       {tab === "aiAgents" && <AiAgentsAdmin />}
       {tab === "aiSkills" && <AiSkillsAdmin />}
+      {tab === "aiAgentPipelines" && <AiAgentPipelinesAdmin />}
     </div>
   );
 }

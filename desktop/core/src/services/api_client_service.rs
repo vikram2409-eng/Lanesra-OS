@@ -26,6 +26,10 @@ pub const VALID_SCOPES: &[&str] = &[
     "events.read",
     "admin.integration.read",
     "admin.integration.manage",
+    // AI & Agentic Layer, Phase 6b: the inbound webhook Trigger
+    // (server/src/agent_v1.rs) - call an Agent or Pipeline and get its
+    // answer back.
+    "agents.trigger",
 ];
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {

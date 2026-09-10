@@ -15,6 +15,12 @@ import type {
   AiAgentMemoryUpdate,
   AiSkill,
   AiSkillInput,
+  AiAgentPipeline,
+  AiAgentPipelineInput,
+  AiAgentTrigger,
+  AiAgentTriggerInput,
+  AiAgentTargetType,
+  AiAgentRun,
   AppDefinition,
   AppDefinitionInput,
   AppDefinitionUpdate,
@@ -289,6 +295,22 @@ export const api = {
   updateAiSkill: (id: string, input: AiSkillInput) => call<AiSkill>("update_ai_skill", { id, input }),
   setAiSkillActive: (id: string, isActive: boolean) => call<AiSkill>("set_ai_skill_active", { id, isActive }),
 
+  // AI & Agentic Layer, Phase 6b - orchestration. run_ai_agent/
+  // run_ai_agent_pipeline are genuinely async (same reasoning as
+  // sendChatMessage above); everything else is plain CRUD/reads.
+  listAiAgentPipelines: (activeOnly: boolean) => call<AiAgentPipeline[]>("list_ai_agent_pipelines", { activeOnly }),
+  createAiAgentPipeline: (input: AiAgentPipelineInput) => call<AiAgentPipeline>("create_ai_agent_pipeline", { input }),
+  updateAiAgentPipeline: (id: string, input: AiAgentPipelineInput) => call<AiAgentPipeline>("update_ai_agent_pipeline", { id, input }),
+  setAiAgentPipelineActive: (id: string, isActive: boolean) => call<AiAgentPipeline>("set_ai_agent_pipeline_active", { id, isActive }),
+  createAiAgentTrigger: (input: AiAgentTriggerInput) => call<AiAgentTrigger>("create_ai_agent_trigger", { input }),
+  listAiAgentTriggers: (targetType: AiAgentTargetType, targetId: string) => call<AiAgentTrigger[]>("list_ai_agent_triggers", { targetType, targetId }),
+  setAiAgentTriggerActive: (id: string, isActive: boolean) => call<void>("set_ai_agent_trigger_active", { id, isActive }),
+  deleteAiAgentTrigger: (id: string) => call<void>("delete_ai_agent_trigger", { id }),
+  listAiAgentRuns: (targetType: AiAgentTargetType, targetId: string, limit: number) => call<AiAgentRun[]>("list_ai_agent_runs", { targetType, targetId, limit }),
+  runAiAgent: (id: string, input: string) => callAdminAction<AiAgentRun>("run_ai_agent", { id, input }, "POST", `/api/admin/ai-agents/${encodeURIComponent(id)}/run`, { input }),
+  runAiAgentPipeline: (id: string, input: string) =>
+    callAdminAction<AiAgentRun>("run_ai_agent_pipeline", { id, input }, "POST", `/api/admin/ai-agent-pipelines/${encodeURIComponent(id)}/run`, { input }),
+
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),
   currentUser: () => call<User | null>("current_user"),
@@ -436,6 +458,10 @@ export const api = {
     call<WorkflowDefinition>("update_workflow_rule", { id, input }),
   listWorkflowRuns: (workflowId: string) => call<WorkflowRun[]>("list_workflow_runs", { workflowId }),
   runScheduledWorkflows: () => call<number>("run_scheduled_workflows"),
+  // AI & Agentic Layer, Phase 6b: desktop-only - the Team Workspace
+  // server drains its own equivalent queue automatically from
+  // job_scheduler.rs's background tick, so this is a no-op over HTTP.
+  drainPendingAsyncWork: (): Promise<void> => (isTauriRuntime() ? invoke<void>("drain_pending_async_work") : Promise.resolve()),
   testWorkflows: (entityType: string, context: Record<string, string>) =>
     call<WorkflowTestResult>("test_workflows", { entityType, context }),
   duplicateWorkflowRule: (id: string) => call<WorkflowDefinition>("duplicate_workflow_rule", { id }),

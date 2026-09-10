@@ -7,6 +7,19 @@
 //! instead (see `workflow_service::run_scheduled`'s own doc comment for
 //! why Personal Workspace never gets an OS-level scheduler).
 //!
+//! Also the one place two other queues get drained, both following the
+//! same "enqueue now, run for real later" shape Integration Jobs itself
+//! doesn't need but two *workflow actions* do (a record save must never
+//! block on a real outbound call):
+//! `connector_execution_service::drain_pending_actions` (Workflow
+//! Automation's `call_connector_action` - present since migration 0033,
+//! but never actually wired into any poll loop until now, so it's been
+//! silently non-functional; an incidental fix, not new scope) and
+//! `ai_orchestration_service::drain_pending_runs` (AI & Agentic Layer,
+//! Phase 6b's `run_ai_agent` workflow action, plus schedule/webhook
+//! Triggers - `enqueue_due_schedules` is what actually enqueues a due
+//! schedule Trigger, right before the drain that runs it).
+//!
 //! Runs on its **own dedicated OS thread with its own single-threaded
 //! Tokio runtime**, not `tokio::spawn`ed onto axum's shared
 //! multi-threaded one - a real bug caught only by actually compiling
@@ -30,7 +43,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use lanesra_core::services::{integration_job_service, secret_service};
+use lanesra_core::services::{ai_orchestration_service, connector_execution_service, integration_job_service, secret_service};
 
 /// Spawns the scheduler loop on its own OS thread and returns
 /// immediately - call once from `main`, after the primary workspace
@@ -77,6 +90,22 @@ async fn tick(conn: &rusqlite::Connection, key_file_path: &std::path::Path) -> R
         return Ok(());
     };
     let master_key = secret_service::resolve_master_key(key_file_path).map_err(|e| e.to_string())?;
-    integration_job_service::run_due(conn, &workspace.id, &master_key).await.map_err(|e| e.to_string())?;
+
+    // Each step runs independently - one queue's failure must never
+    // block the others, same "log and move on" resilience
+    // `integration_job_service::run_due` itself already gives each
+    // individual due job.
+    if let Err(e) = integration_job_service::run_due(conn, &workspace.id, &master_key).await {
+        tracing::error!(error = %e, "Integration Jobs run_due failed");
+    }
+    if let Err(e) = connector_execution_service::drain_pending_actions(conn, &workspace.id, &master_key, 50).await {
+        tracing::error!(error = %e, "drain_pending_actions (call_connector_action) failed");
+    }
+    if let Err(e) = ai_orchestration_service::enqueue_due_schedules(conn, &workspace.id) {
+        tracing::error!(error = %e, "enqueue_due_schedules (AI Agent Foundry schedule triggers) failed");
+    }
+    if let Err(e) = ai_orchestration_service::drain_pending_runs(conn, &workspace.id, &master_key, 50).await {
+        tracing::error!(error = %e, "drain_pending_runs (AI Agent Foundry) failed");
+    }
     Ok(())
 }

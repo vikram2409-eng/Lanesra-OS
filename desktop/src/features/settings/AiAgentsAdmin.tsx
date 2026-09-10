@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { ChatPanel } from "../../components/ChatPanel";
+import { AiTriggersPanel } from "./AiTriggersPanel";
 import { agentRequiresAdmin } from "../../lib/aiAgents";
 import type { AiAgentDefinition, AiAgentInput, AiSkill } from "../../lib/types";
 
@@ -79,6 +80,7 @@ export function AiAgentsAdmin() {
   const [creating, setCreating] = useState(false);
   const [chatWith, setChatWith] = useState<AiAgentDefinition | null>(null);
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
+  const [triggersFor, setTriggersFor] = useState<AiAgentDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function invalidate() {
@@ -169,6 +171,9 @@ export function AiAgentsAdmin() {
                       <button className="btn btn-secondary" onClick={() => setMemoryFor(a)}>
                         Memory
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setTriggersFor(triggersFor?.id === a.id ? null : a)}>
+                        Triggers
+                      </button>
                       <button className="btn btn-secondary" onClick={() => toggleActive.mutate({ id: a.id, isActive: !a.is_active })}>
                         {a.is_active ? "Deactivate" : "Reactivate"}
                       </button>
@@ -217,6 +222,24 @@ export function AiAgentsAdmin() {
           onSave={(memory_md) => saveMemory.mutate({ id: memoryFor.id, memory_md })}
           pending={saveMemory.isPending}
         />
+      )}
+
+      {triggersFor && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0 }}>
+              {triggersFor.icon} {triggersFor.name}'s triggers
+            </h3>
+            <button className="btn btn-secondary" onClick={() => setTriggersFor(null)}>
+              Close
+            </button>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            Runs unattended (schedule or webhook) have no human actor - see this agent's own Actions: only a record-only agent can run this
+            way, unless the trigger runs with a real Administrator behind it.
+          </p>
+          <AiTriggersPanel targetType="agent" targetId={triggersFor.id} />
+        </div>
       )}
     </div>
   );

@@ -1233,6 +1233,11 @@ export const WORKFLOW_ACTION_TYPES = [
   // editable/restrict_choices/block_save/show_error/show_warning) stay
   // business-rule-only.
   "set_default_field", "clear_field",
+  // AI & Agentic Layer, Phase 6b: fires an AI Agent or Pipeline - never
+  // run inline (the workflow engine fires synchronously inside a record
+  // save), always enqueued for `ai_orchestration_service::drain_pending_runs`
+  // to pick up. See `RunAiAgentParams` in workflow_service.rs.
+  "run_ai_agent",
 ] as const;
 export type WorkflowActionType = (typeof WORKFLOW_ACTION_TYPES)[number];
 export const NOTIFICATION_AUDIENCES = ["owner", "all_admins"] as const;
@@ -2299,6 +2304,90 @@ export interface AiSkillInput {
   name: string;
   description: string;
   instructions_md: string;
+}
+
+// --- AI & Agentic Layer, Phase 6b - orchestration on top of Phase 6a's
+// Agents. Mirrors core::models::ai_agent_pipeline 1:1. See
+// AiAgentPipelinesAdmin.tsx / AiTriggersPanel.tsx.
+
+export interface PipelineStep {
+  id: string;
+  agent_id: string;
+  step_order: number;
+  input_template: string;
+}
+
+export interface PipelineStepInput {
+  agent_id: string;
+  input_template: string;
+}
+
+export interface AiAgentPipeline {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  steps: PipelineStep[];
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiAgentPipelineInput {
+  name: string;
+  description: string | null;
+  steps: PipelineStepInput[];
+}
+
+export type AiAgentTargetType = "agent" | "pipeline";
+export type AiAgentTriggerType = "schedule" | "webhook";
+
+export interface AiAgentTrigger {
+  id: string;
+  workspace_id: string;
+  target_type: AiAgentTargetType;
+  target_id: string;
+  trigger_type: AiAgentTriggerType;
+  interval_minutes: number | null;
+  is_active: boolean;
+  last_run_at: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface AiAgentTriggerInput {
+  target_type: AiAgentTargetType;
+  target_id: string;
+  trigger_type: AiAgentTriggerType;
+  interval_minutes: number | null;
+}
+
+export interface AiAgentRunStep {
+  id: string;
+  run_id: string;
+  agent_id: string;
+  step_order: number;
+  input_text: string;
+  output_text: string | null;
+  error: string | null;
+  tool_calls_count: number;
+}
+
+export interface AiAgentRun {
+  id: string;
+  workspace_id: string;
+  target_type: AiAgentTargetType;
+  target_id: string;
+  status: "succeeded" | "failed";
+  error: string | null;
+  triggered_by: string | null;
+  source_entity_type: string | null;
+  source_entity_id: string | null;
+  started_at: string;
+  finished_at: string | null;
+  steps: AiAgentRunStep[];
 }
 
 // --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -

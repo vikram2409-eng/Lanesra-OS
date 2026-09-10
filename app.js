@@ -296,6 +296,11 @@ function ensureAdminData(){
  // AI & Agentic Layer, Phase 6 mirror - see aiAgentsTab's own comment.
  if(!data.aiAgents)data.aiAgents=[];
  if(!data.aiSkills)data.aiSkills=[];
+ // AI & Agentic Layer, Phase 6b mirror - see aiAgentPipelinesTab's own
+ // comment. Triggers (schedule/webhook) aren't mirrored - both need a real
+ // server-side clock/listener this static demo doesn't have; only the
+ // manual "Run" and the new Workflow Automation action are simulated.
+ if(!data.aiAgentPipelines)data.aiAgentPipelines=[];
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
  (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
  (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
@@ -435,7 +440,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -457,7 +462,7 @@ const ADMIN_CATEGORIES=[
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
- {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills']},
+ {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines']},
 ];
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -2059,7 +2064,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -4950,6 +4955,108 @@ function aiSkillModal(skill){
  if(isEdit)$('[data-delete-skill]').onclick=()=>{data.aiSkills=data.aiSkills.filter(s=>s.id!==skill.id);save();closeModal();renderView()};
 }
 
+// ---- AI & Agentic Layer, Phase 6b mirror: Orchestration -------------------
+// Pipelines chain agents in a fixed, admin-authored order - step N's input
+// may reference {{previous_output}} (step N-1's answer) or {{trigger_input}}
+// (what a Run/workflow call supplied), same substitution the real desktop
+// edition's `input_template` uses. Deliberately simpler than delegation:
+// linear and deterministic, not the model's own dynamic choice. Triggers
+// (schedule/webhook) aren't mirrored here - see ensureAdminData's comment.
+function resolveAiTemplate(template,previousOutput,triggerInput){
+ return (template||'').split('{{previous_output}}').join(previousOutput||'').split('{{trigger_input}}').join(triggerInput||'');
+}
+/** Runs every step in order, feeding each one's resolved input through the
+ * same chatSimAgentReply a manual Chat message uses, and records the run
+ * (capped at the most recent 20) - real, structured history, even though
+ * each step's "answer" is the same keyword-matched simulation. */
+function runAiAgentPipelineNow(pipeline,triggerInput){
+ let previousOutput='';
+ const steps=(pipeline.steps||[]).map(step=>{
+  const agent=(data.aiAgents||[]).find(a=>a.id===step.agentId);
+  const input=resolveAiTemplate(step.inputTemplate,previousOutput,triggerInput);
+  const output=agent?chatSimAgentReply(agent,input):'(this step\'s agent was deleted)';
+  previousOutput=output;
+  return {agentId:step.agentId,agentName:agent?agent.name:'(deleted agent)',input,output};
+ });
+ const run={id:uid(),startedAt:new Date().toISOString(),triggerInput:triggerInput||'',steps,finalOutput:previousOutput};
+ pipeline.runs=pipeline.runs||[];
+ pipeline.runs.unshift(run);
+ if(pipeline.runs.length>20)pipeline.runs.length=20;
+ save();
+ return run;
+}
+function aiAgentPipelinesTab(body){
+ const pipelines=data.aiAgentPipelines||[];
+ const agents=data.aiAgents||[];
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>Orchestration</h3><button class="btn btn-primary" id="addPipeline" ${agents.length?'':'disabled'}>+ New pipeline</button></div>
+ <p class="muted" style="font-size:13px">A Pipeline runs a fixed, ordered chain of agents - step 2 can reference step 1's answer via <code>{{previous_output}}</code>, and (when fired from a workflow) the trigger's own input via <code>{{trigger_input}}</code>. Deterministic and admin-authored, unlike an agent's own dynamic delegation.</p>
+ ${agents.length?'':'<p class="empty-state">Create at least one AI Agent first.</p>'}
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Steps</th><th>Status</th><th>Actions</th></tr></thead><tbody>${pipelines.map(p=>`<tr><td><b>${p.name}</b>${p.description?`<br><small class="muted">${p.description}</small>`:''}</td><td>${(p.steps||[]).map(s=>agents.find(a=>a.id===s.agentId)?.name||'(deleted)').join(' → ')||'—'}</td><td>${badgeMaybe(p.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-run-pipeline="${p.id}" ${p.isActive&&(p.steps||[]).length?'':'disabled'}>Run</button><button class="icon-btn" data-edit-pipeline="${p.id}">Edit</button><button class="icon-btn" data-toggle-pipeline="${p.id}">${p.isActive?'Deactivate':'Reactivate'}</button><button class="icon-btn" data-del-pipeline="${p.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${pipelines.length?'':'<div class="empty">No pipelines yet</div>'}</div>
+ <div id="pipelineRunWrap"></div>
+ </div>`;
+ $('#addPipeline').onclick=()=>aiAgentPipelineModal();
+ body.querySelectorAll('[data-edit-pipeline]').forEach(b=>b.onclick=()=>aiAgentPipelineModal(pipelines.find(p=>p.id===b.dataset.editPipeline)));
+ body.querySelectorAll('[data-toggle-pipeline]').forEach(b=>b.onclick=()=>{const p=pipelines.find(x=>x.id===b.dataset.togglePipeline);p.isActive=!p.isActive;save();renderView()});
+ body.querySelectorAll('[data-del-pipeline]').forEach(b=>b.onclick=()=>{data.aiAgentPipelines=data.aiAgentPipelines.filter(p=>p.id!==b.dataset.delPipeline);save();renderView()});
+ body.querySelectorAll('[data-run-pipeline]').forEach(b=>b.onclick=()=>{
+  const p=pipelines.find(x=>x.id===b.dataset.runPipeline);
+  const input=prompt(`Input for "${p.name}" (used where a step references {{trigger_input}}):`,'')||'';
+  const run=runAiAgentPipelineNow(p,input);
+  const wrap=$('#pipelineRunWrap');
+  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name}</h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b><br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}</div>`;
+ });
+}
+function mountPipelineStepsEditor(container,agents,initialSteps){
+ let steps=(initialSteps&&initialSteps.length?initialSteps:[{agentId:agents[0]?.id||'',inputTemplate:'{{trigger_input}}'}]).map(s=>({...s}));
+ function syncFromDom(){
+  const form=container.closest('form');
+  steps=steps.map((s,idx)=>({agentId:form.elements[`pstep${idx}_agentId`]?.value||'',inputTemplate:form.elements[`pstep${idx}_inputTemplate`]?.value||''}));
+ }
+ function render(){
+  container.innerHTML=steps.map((s,idx)=>`<div class="builder-row-card" style="align-items:flex-start">
+   <span class="muted" style="font-size:12px;min-width:16px">${idx+1}.</span>
+   <select name="pstep${idx}_agentId">${agents.map(a=>`<option value="${a.id}" ${a.id===s.agentId?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select>
+   <input name="pstep${idx}_inputTemplate" value="${s.inputTemplate||''}" placeholder="{{trigger_input}}, {{previous_output}}, or literal text" style="min-width:220px">
+   <button type="button" class="icon-btn" data-pstep-up="${idx}" ${idx===0?'disabled':''}>↑</button>
+   <button type="button" class="icon-btn" data-pstep-down="${idx}" ${idx===steps.length-1?'disabled':''}>↓</button>
+   <button type="button" class="builder-row-remove" data-pstep-remove="${idx}" title="Remove step">✕</button>
+  </div>`).join('')+`<button type="button" class="btn" data-pstep-add>+ Add step</button>`;
+  wire();
+ }
+ function wire(){
+  container.querySelector('[data-pstep-add]').onclick=()=>{syncFromDom();steps.push({agentId:agents[0]?.id||'',inputTemplate:'{{previous_output}}'});render()};
+  container.querySelectorAll('[data-pstep-remove]').forEach(b=>b.onclick=()=>{syncFromDom();steps.splice(Number(b.dataset.pstepRemove),1);render()});
+  container.querySelectorAll('[data-pstep-up]').forEach(b=>b.onclick=()=>{syncFromDom();const i=Number(b.dataset.pstepUp);[steps[i-1],steps[i]]=[steps[i],steps[i-1]];render()});
+  container.querySelectorAll('[data-pstep-down]').forEach(b=>b.onclick=()=>{syncFromDom();const i=Number(b.dataset.pstepDown);[steps[i+1],steps[i]]=[steps[i],steps[i+1]];render()});
+ }
+ render();
+ return {getSteps:()=>{syncFromDom();return steps}};
+}
+function aiAgentPipelineModal(pipeline){
+ const isEdit=!!pipeline;
+ const agents=data.aiAgents||[];
+ const body=`<form id="pipelineForm" class="form-grid">
+ <div class="field full"><label>Name</label><input name="name" value="${pipeline?.name||''}" required></div>
+ <div class="field full"><label>Description (optional)</label><input name="description" value="${pipeline?.description||''}"></div>
+ <div class="field full"><label>Steps</label><div id="pipelineSteps"></div></div>
+ <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-pipeline>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save pipeline':'Create pipeline'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${pipeline.name}`:'New pipeline',body);
+ $('[data-close]').onclick=closeModal;
+ const stepsEditor=mountPipelineStepsEditor($('#pipelineSteps'),agents,pipeline?.steps||[]);
+ $('#pipelineForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const steps=stepsEditor.getSteps().filter(s=>s.agentId);
+  const obj={name:fd.get('name'),description:fd.get('description')||'',steps};
+  if(isEdit)Object.assign(pipeline,obj);
+  else{obj.id='pln_'+uid();obj.isActive=true;obj.runs=[];data.aiAgentPipelines.push(obj)}
+  save();closeModal();renderView();
+ };
+ if(isEdit)$('[data-delete-pipeline]').onclick=()=>{data.aiAgentPipelines=data.aiAgentPipelines.filter(p=>p.id!==pipeline.id);save();closeModal();renderView()};
+}
+
 // ---- Multi-condition (+ OR group) editor, shared by the Business Rules
 // and Workflow Automation builders (second Admin Automation & Customization
 // addendum round). Mounted into a container element already inside a
@@ -5161,6 +5268,10 @@ function describeWorkflowAction(a,entityKey){
   const suffix=a.type==='set_default_field'?' (only if currently empty)':'';
   return a.updateCopyFrom?`${prefix}${fieldLabelFor(entityKey,a.updateFieldKey)} = value copied from ${fieldLabelFor(entityKey,a.updateCopyFrom)}${suffix}`:`${prefix}${fieldLabelFor(entityKey,a.updateFieldKey)} = "${a.updateValue||''}"${suffix}`;
  }
+ if(a.type==='run_ai_agent'){
+  const target=a.targetType==='pipeline'?(data.aiAgentPipelines||[]).find(p=>p.id===a.targetId):(data.aiAgents||[]).find(x=>x.id===a.targetId);
+  return `run ${a.targetType==='pipeline'?'pipeline':'agent'} "${target?target.name:'(none selected)'}"${a.inputTemplate?` with "${a.inputTemplate}"`:''}`;
+ }
  return `create task "${a.taskTitle||''}" (${a.daysOffset?`due ${a.daysOffset} day(s) later`:'due same day'})`;
 }
 // Every other entity type reachable from `entityKey` through an active,
@@ -5286,6 +5397,29 @@ function executeWorkflowAction(a,key,record){
   record[a.updateFieldKey]=value;
   return a.type==='set_default_field'?`set default ${fieldLabelFor(key,a.updateFieldKey)} = "${value}"`:`set ${fieldLabelFor(key,a.updateFieldKey)} = "${value}" on this record`;
  }
+ // AI & Agentic Layer, Phase 6b: "Run AI agent" - unlike the real desktop
+ // edition (which enqueues for an async drain, since a workflow fires
+ // synchronously inside a record save), this static demo has no
+ // background job to enqueue for, so it runs the agent/pipeline
+ // immediately - same "labeled simulation, honest about what it is"
+ // convention as chatSimAgentReply itself, just triggered by a save
+ // instead of a click. "field:<key>" pulls from the record that fired it,
+ // same param_map convention call_connector_action already established.
+ if(a.type==='run_ai_agent'){
+  const isPipeline=a.targetType==='pipeline';
+  const target=isPipeline?(data.aiAgentPipelines||[]).find(p=>p.id===a.targetId&&p.isActive):(data.aiAgents||[]).find(x=>x.id===a.targetId&&x.isActive);
+  if(!target)return null;
+  const resolvedInput=(a.inputTemplate||'').startsWith('field:')?String(record[a.inputTemplate.slice(6)]??''):(a.inputTemplate||'');
+  if(isPipeline){
+   runAiAgentPipelineNow(target,resolvedInput);
+   return `ran pipeline "${target.name}"`;
+  }
+  ensureChatSim();
+  if(!data.chatSim.agents[target.id])data.chatSim.agents[target.id]=[];
+  data.chatSim.agents[target.id].push({role:'user',text:resolvedInput||'(triggered by workflow)'});
+  data.chatSim.agents[target.id].push({role:'assistant',text:chatSimAgentReply(target,resolvedInput||'')});
+  return `ran agent "${target.name}"`;
+ }
  // create_task (default, and the only action type older saved data has)
  if(!a.taskTitle)return null;
  const due=new Date();due.setDate(due.getDate()+Number(a.daysOffset||0));
@@ -5318,9 +5452,9 @@ function workflowTab(body){
  body.querySelectorAll('[data-history-wf]').forEach(b=>b.onclick=()=>ruleHistoryModal('workflowRules',b.dataset.historyWf,wfEntity,(entityKey,a)=>describeWorkflowAction(a,entityKey)));
  body.querySelectorAll('[data-del-wf]').forEach(b=>b.onclick=()=>{data.workflowRules=data.workflowRules.filter(r=>r.id!==b.dataset.delWf);save();toast('Workflow rule deleted');renderAdminTab()});
 }
-const WORKFLOW_ACTION_TYPES=['create_task','create_record','update_related_record','update_field','set_default_field','clear_field'];
-const WORKFLOW_ACTION_LABELS={create_task:'Create a task',create_record:'Create a new record',update_related_record:'Update a related record',update_field:'Update this record',set_default_field:'Set default value',clear_field:'Clear a field'};
-const WORKFLOW_ACTION_ICONS={create_task:'📋',create_record:'➕',update_related_record:'🔗',update_field:'✏️',set_default_field:'🔧',clear_field:'🧹'};
+const WORKFLOW_ACTION_TYPES=['create_task','create_record','update_related_record','update_field','set_default_field','clear_field','run_ai_agent'];
+const WORKFLOW_ACTION_LABELS={create_task:'Create a task',create_record:'Create a new record',update_related_record:'Update a related record',update_field:'Update this record',set_default_field:'Set default value',clear_field:'Clear a field',run_ai_agent:'Run AI agent'};
+const WORKFLOW_ACTION_ICONS={create_task:'📋',create_record:'➕',update_related_record:'🔗',update_field:'✏️',set_default_field:'🔧',clear_field:'🧹',run_ai_agent:'🤖'};
 // One workflow action row - create_task/create_record/update_related_record
 // are unchanged from Phase 3's action expansion; update_field/
 // set_default_field/clear_field (the last two new in the second addendum
@@ -5342,6 +5476,12 @@ function workflowActionRowHtml(entityKey,a,idx,recordTargets,relTargets){
   bodyHtml=`<select name="wact${idx}_relTargetEntity">${relTargets.map(t=>`<option value="${t}" ${t===a.relTargetEntity?'selected':''}>${entityLabel(t)}</option>`).join('')}</select>
    <select name="wact${idx}_relTargetField">${relOtherFields.map(f=>`<option value="${f[0]}" ${f[0]===a.relTargetField?'selected':''}>${f[1]}</option>`).join('')}</select>
    <input name="wact${idx}_relValue" value="${a.relValue||''}" placeholder="New value" style="width:160px">`;
+ }else if(type==='run_ai_agent'){
+  const targetType=a.targetType==='pipeline'?'pipeline':'agent';
+  const options=targetType==='pipeline'?(data.aiAgentPipelines||[]):(data.aiAgents||[]);
+  bodyHtml=`<select name="wact${idx}_targetType" data-wact-target-type="${idx}"><option value="agent" ${targetType==='agent'?'selected':''}>AI Agent</option><option value="pipeline" ${targetType==='pipeline'?'selected':''}>Pipeline</option></select>
+   <select name="wact${idx}_targetId">${options.map(o=>`<option value="${o.id}" ${o.id===a.targetId?'selected':''}>${o.name}</option>`).join('')}</select>
+   <input name="wact${idx}_inputTemplate" value="${a.inputTemplate||''}" placeholder='Input (or "field:key")' style="min-width:200px">`;
  }else{ // update_field / set_default_field / clear_field
   const isClear=type==='clear_field';
   bodyHtml=`<select name="wact${idx}_updateFieldKey">${actionableFields.map(f=>`<option value="${f[0]}" ${f[0]===a.updateFieldKey?'selected':''}>${f[1]}</option>`).join('')}</select>
@@ -5352,7 +5492,7 @@ function workflowActionRowHtml(entityKey,a,idx,recordTargets,relTargets){
  }
  return `<div class="builder-row-card" style="align-items:flex-start">
   <span style="font-size:15px">${WORKFLOW_ACTION_ICONS[type]||''}</span>
-  <select name="wact${idx}_type" data-wact-type="${idx}">${WORKFLOW_ACTION_TYPES.filter(t=>t!=='update_related_record'||relTargets.length).map(t=>`<option value="${t}" ${t===type?'selected':''}>${WORKFLOW_ACTION_LABELS[t]}</option>`).join('')}</select>
+  <select name="wact${idx}_type" data-wact-type="${idx}">${WORKFLOW_ACTION_TYPES.filter(t=>(t!=='update_related_record'||relTargets.length)&&(t!=='run_ai_agent'||(data.aiAgents||[]).length||(data.aiAgentPipelines||[]).length)).map(t=>`<option value="${t}" ${t===type?'selected':''}>${WORKFLOW_ACTION_LABELS[t]}</option>`).join('')}</select>
   <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${bodyHtml}</span>
   <button type="button" class="builder-row-remove" data-wact-remove="${idx}" title="Remove action">✕</button>
  </div>`;
@@ -5361,6 +5501,7 @@ function emptyWorkflowAction(type,entityKey,recordTargets,relTargets){
  if(type==='create_record')return {type,recordTargetEntity:recordTargets[0]||'',recordNameTemplate:''};
  if(type==='update_related_record')return {type,relTargetEntity:relTargets[0]||'',relTargetField:'',relValue:''};
  if(type==='update_field'||type==='set_default_field'||type==='clear_field')return {type,updateFieldKey:actionableFieldsFor(entityKey)[0]?.[0]||'',updateValue:'',updateCopyFrom:''};
+ if(type==='run_ai_agent')return {type,targetType:'agent',targetId:(data.aiAgents||[])[0]?.id||'',inputTemplate:''};
  return {type:'create_task',taskTitle:'',daysOffset:0};
 }
 /** Mounts a self-contained multi-action editor into `container` (must
@@ -5377,6 +5518,7 @@ function mountWorkflowActionsEditor(container,entityKey,initialActions){
    if(type==='create_task')return {type,taskTitle:g('taskTitle')||'',daysOffset:Number(g('daysOffset')||0)};
    if(type==='create_record')return {type,recordTargetEntity:g('recordTargetEntity')||'',recordNameTemplate:g('recordNameTemplate')||''};
    if(type==='update_related_record')return {type,relTargetEntity:g('relTargetEntity')||'',relTargetField:g('relTargetField')||'',relValue:g('relValue')||''};
+   if(type==='run_ai_agent')return {type,targetType:g('targetType')||'agent',targetId:g('targetId')||'',inputTemplate:g('inputTemplate')||''};
    const copyFrom=g('updateCopyFrom')||'';
    return {type,updateFieldKey:g('updateFieldKey')||'',updateValue:copyFrom?'':(g('updateValue')||''),updateCopyFrom:copyFrom};
   });
@@ -5392,6 +5534,7 @@ function mountWorkflowActionsEditor(container,entityKey,initialActions){
    form.elements[`wact${idx}_recordTargetEntity`]?.addEventListener('change',()=>{syncFromDom();render()});
    form.elements[`wact${idx}_relTargetEntity`]?.addEventListener('change',()=>{syncFromDom();actions[idx].relTargetField='';render()});
    form.elements[`wact${idx}_updateCopyFrom`]?.addEventListener('change',()=>{syncFromDom();render()});
+   form.elements[`wact${idx}_targetType`]?.addEventListener('change',()=>{syncFromDom();actions[idx].targetId='';render()});
   });
   container.querySelector('[data-wact-add]').onclick=()=>{syncFromDom();actions.push(emptyWorkflowAction('create_task',entityKey,recordTargets,relTargets));render()};
   container.querySelectorAll('[data-wact-remove]').forEach(b=>b.onclick=()=>{syncFromDom();actions.splice(Number(b.dataset.wactRemove),1);render()});

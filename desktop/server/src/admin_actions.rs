@@ -35,7 +35,7 @@ use serde_json::{json, Value};
 use lanesra_core::domain::AppError;
 use lanesra_core::models::agent::NlReportQuery;
 use lanesra_core::services::{
-    agent_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service,
+    agent_service, ai_orchestration_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service, integration_job_service, webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -48,6 +48,8 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/agent/ask-report", post(ask_report))
         .route("/api/admin/chat/:mode/send", post(send_chat_message))
         .route("/api/admin/chat/agent/:agent_id/send", post(send_agent_chat_message))
+        .route("/api/admin/ai-agents/:id/run", post(run_ai_agent_manual))
+        .route("/api/admin/ai-agent-pipelines/:id/run", post(run_ai_agent_pipeline_manual))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -97,8 +99,10 @@ fn authorize(state: &SharedState, jar: &CookieJar) -> Result<(String, String, [u
 /// `rusqlite::Connection` opened from `db_path` - to completion on a
 /// blocking-pool thread with its own single-threaded Tokio runtime. See
 /// this module's own doc comment for why a plain `.await` doesn't work
-/// here.
-async fn run_with_own_connection<T, F, Fut>(db_path: PathBuf, f: F) -> Result<T, (StatusCode, Json<Value>)>
+/// here. `pub(crate)`, not private: `agent_v1.rs`'s webhook Trigger route
+/// reuses this exact helper too - same reasoning as `api_v1.rs`'s own
+/// `logged` being `pub(crate)` for `mcp.rs` to reuse.
+pub(crate) async fn run_with_own_connection<T, F, Fut>(db_path: PathBuf, f: F) -> Result<T, (StatusCode, Json<Value>)>
 where
     T: Send + 'static,
     F: FnOnce(rusqlite::Connection) -> Fut + Send + 'static,
@@ -167,6 +171,32 @@ async fn send_agent_chat_message(
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
         chat_service::send_agent_message(&conn, &workspace_id, &master_key, &actor, &agent_id, &body.text).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct RunAiAgentBody {
+    #[serde(default)]
+    input: String,
+}
+
+async fn run_ai_agent_manual(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(body): Json<RunAiAgentBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_orchestration_service::run_manual(&conn, &workspace_id, &master_key, "agent", &id, &body.input, Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn run_ai_agent_pipeline_manual(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(body): Json<RunAiAgentBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_orchestration_service::run_manual(&conn, &workspace_id, &master_key, "pipeline", &id, &body.input, Some(&actor)).await
     })
     .await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))

@@ -12,6 +12,7 @@ use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpda
 use lanesra_core::models::activity::ActivityInput;
 use lanesra_core::models::ai::AiSettingsInput;
 use lanesra_core::models::ai_agent::{AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
+use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
 use lanesra_core::models::contract::ContractInput;
@@ -49,7 +50,7 @@ use lanesra_core::services::{
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
-    ai_agent_service,
+    ai_agent_service, ai_orchestration_service,
     auth_service, backup_service, bulk_action_service, business_rule_service, chat_service, company_service, connection_ref_service, connection_service, connector_service,
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
@@ -1110,6 +1111,54 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let workspace_id = require_workspace_id(conn)?;
             let user_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
             to_value(chat_service::get_agent_history(conn, &workspace_id, user_id, &agent_id)?)
+        }
+
+        // AI & Agentic Layer, Phase 6b: Pipeline/Trigger CRUD and run
+        // history are plain sync; `run_manual`/the webhook Trigger route
+        // are genuinely async (see `admin_actions.rs`/`agent_v1.rs`).
+        "list_ai_agent_pipelines" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(ai_orchestration_service::list_pipelines(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_ai_agent_pipeline" => {
+            let input: AiAgentPipelineInput = arg(args, "input")?;
+            to_value(ai_orchestration_service::create_pipeline(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_ai_agent_pipeline" => {
+            let id: String = arg(args, "id")?;
+            let input: AiAgentPipelineInput = arg(args, "input")?;
+            to_value(ai_orchestration_service::update_pipeline(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "set_ai_agent_pipeline_active" => {
+            let id: String = arg(args, "id")?;
+            let is_active: bool = arg(args, "isActive")?;
+            to_value(ai_orchestration_service::set_pipeline_active(conn, &id, is_active, actor)?)
+        }
+        "create_ai_agent_trigger" => {
+            let input: AiAgentTriggerInput = arg(args, "input")?;
+            to_value(ai_orchestration_service::create_trigger(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "list_ai_agent_triggers" => {
+            let target_type: String = arg(args, "targetType")?;
+            let target_id: String = arg(args, "targetId")?;
+            to_value(ai_orchestration_service::list_triggers(conn, &target_type, &target_id)?)
+        }
+        "set_ai_agent_trigger_active" => {
+            let id: String = arg(args, "id")?;
+            let is_active: bool = arg(args, "isActive")?;
+            ai_orchestration_service::set_trigger_active(conn, &id, is_active, actor)?;
+            Ok(Value::Null)
+        }
+        "delete_ai_agent_trigger" => {
+            let id: String = arg(args, "id")?;
+            ai_orchestration_service::delete_trigger(conn, &id, actor)?;
+            Ok(Value::Null)
+        }
+        "list_ai_agent_runs" => {
+            let target_type: String = arg(args, "targetType")?;
+            let target_id: String = arg(args, "targetId")?;
+            let limit: i64 = arg(args, "limit")?;
+            to_value(ai_orchestration_service::list_runs(conn, &target_type, &target_id, limit)?)
         }
 
         other => Err(AppError::Validation(format!("Unknown command '{other}'"))),

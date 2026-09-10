@@ -17,6 +17,11 @@ pub const ACTION_TYPES: &[&str] = &[
     // outside Lanesra itself. See `workflow_service`'s own match arm for
     // why it enqueues rather than calling out synchronously.
     "call_connector_action",
+    // AI & Agentic Layer, Phase 6b: runs an AI Agent Foundry Agent or
+    // Pipeline - the same enqueue-not-inline shape `call_connector_action`
+    // already established, for the same reason (an LLM call has no
+    // business blocking a record save).
+    "run_ai_agent",
 ];
 pub const NOTIFICATION_AUDIENCES: &[&str] = &["owner", "all_admins"];
 
