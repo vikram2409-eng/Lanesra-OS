@@ -4,10 +4,18 @@
 //! only; create/list tools over most of the admin configuration
 //! surface). See `services::chat_service`'s own doc comment for the
 //! tool-calling loop and the full tool catalog.
+//!
+//! Phase 6 adds a third mode, `"agent"` - chatting with one specific
+//! named `AiAgentDefinition` from the Foundry instead of a fixed
+//! persona. `agent_id` is `""` for `"records"`/`"admin"` (kept as a real
+//! empty string, not `NULL`, so the conversation-identity unique index
+//! still enforces "one row per (user, mode, agent_id)" correctly - SQLite
+//! treats `NULL`s in a unique index as distinct from each other, which
+//! would silently break that invariant for the two fixed modes).
 
 use serde::{Deserialize, Serialize};
 
-pub const CHAT_MODES: &[&str] = &["records", "admin"];
+pub const CHAT_MODES: &[&str] = &["records", "admin", "agent"];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatConversation {
@@ -15,6 +23,7 @@ pub struct ChatConversation {
     pub workspace_id: String,
     pub user_id: String,
     pub mode: String,
+    pub agent_id: String,
     pub created_at: String,
     pub updated_at: String,
 }

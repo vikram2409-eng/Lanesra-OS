@@ -293,6 +293,9 @@ function ensureAdminData(){
  // this is real data, not a labeled simulation - see
  // activityTimelineHtml's own comment.
  if(!data.activities)data.activities=[];
+ // AI & Agentic Layer, Phase 6 mirror - see aiAgentsTab's own comment.
+ if(!data.aiAgents)data.aiAgents=[];
+ if(!data.aiSkills)data.aiSkills=[];
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
  (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
  (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
@@ -432,7 +435,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -454,6 +457,7 @@ const ADMIN_CATEGORIES=[
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
+ {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills']},
 ];
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -2055,7 +2059,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -4769,7 +4773,7 @@ function chatSimReplyAdmin(text){
  }
  return `This static demo can't make a real LLM call or run its tool-calling loop, so it only recognizes a few admin topics by keyword - try mentioning "business rule", "workflow", "integration", "custom field", or another admin area by name. The real edition's admin assistant understands anything, and actually creates what you ask for.`;
 }
-function ensureChatSim(){if(!data.chatSim)data.chatSim={records:[],admin:[]}}
+function ensureChatSim(){if(!data.chatSim)data.chatSim={records:[],admin:[]};if(!data.chatSim.agents)data.chatSim.agents={}}
 function chatSimPanel(mode,body){
  ensureChatSim();
  const msgs=data.chatSim[mode];
@@ -4798,12 +4802,153 @@ function chatSimPanel(mode,body){
   chatSimPanel(mode,body);
  };
 }
+let assistantSelectedAgentId='';
 function assistantPage(){
  document.title='Assistant — Lanesra OS Demo';
- $('#view').innerHTML=`<div class="page-head"><div><h1>Assistant</h1><p class="muted">Chat to find and work with your records.</p></div></div><div id="assistantBody"></div>`;
- chatSimPanel('records',$('#assistantBody'));
+ // AI & Agentic Layer, Phase 6: any active agent that doesn't need an
+ // admin action shows here too, alongside the default general assistant -
+ // same picker the real desktop/Team Workspace edition's Assistant page
+ // has. isActive/actionNames use Phase 6's exact field names since this
+ // demo's aiAgents array mirrors ai_agents 1:1 in shape (just camelCase).
+ const usable=(data.aiAgents||[]).filter(a=>a.isActive&&!(a.actionNames||[]).some(n=>DEMO_ADMIN_ACTIONS.includes(n)));
+ if(!usable.some(a=>a.id===assistantSelectedAgentId))assistantSelectedAgentId='';
+ $('#view').innerHTML=`<div class="page-head"><div><h1>Assistant</h1><p class="muted">Chat to find and work with your records.</p></div>${usable.length?`<label style="display:flex;align-items:center;gap:8px;font-size:13px">Talking to<select id="assistantAgentSelect"><option value="">General assistant</option>${usable.map(a=>`<option value="${a.id}" ${a.id===assistantSelectedAgentId?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select></label>`:''}</div><div id="assistantBody"></div>`;
+ if(usable.length)$('#assistantAgentSelect').onchange=e=>{assistantSelectedAgentId=e.target.value;assistantPage()};
+ const agent=usable.find(a=>a.id===assistantSelectedAgentId);
+ if(agent)chatSimAgentPanel(agent,$('#assistantBody'));
+ else chatSimPanel('records',$('#assistantBody'));
 }
 function chatAssistantTab(body){chatSimPanel('admin',body)}
+
+// ---- AI & Agentic Layer, Phase 6 mirror ------------------------------------
+// A lightweight simulated AI Agent Foundry - named agents (persona + an
+// action checklist + persistent memory + attached skills) and a reusable
+// Skills library, mirroring core::models::ai_agent. Same "real shape, no
+// real wire" honesty convention as chatSimPanel above - a "Chat" button
+// on an agent row replays a keyword-matched canned reply flavored by
+// that agent's own persona and granted actions, not a real multi-agent
+// LLM exchange. Delegation/hierarchy and Orchestration Pipelines aren't
+// mirrored here - Actions/Memory/Skills are the part of the real desktop
+// edition's Foundry a static, no-server demo can honestly simulate;
+// multi-agent delegation needs the real tool-calling loop this demo has
+// never reimplemented (see askReportTab's own comment on the same limit).
+const DEMO_RECORD_ACTIONS=['list_objects','get_object_metadata','list_records','get_record','create_record','update_record','archive_record'];
+const DEMO_ADMIN_ACTIONS=['list_business_rules','create_business_rule','list_workflows','create_workflow','list_custom_objects','create_custom_object','list_users','create_user'];
+const DEMO_ALL_ACTIONS=[...DEMO_RECORD_ACTIONS,...DEMO_ADMIN_ACTIONS];
+function aiAgentsTab(body){
+ const agents=data.aiAgents||[];
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>AI Agents</h3><button class="btn btn-primary" id="addAgent">+ New agent</button></div>
+ <p class="muted" style="font-size:13px">Each agent is a persona layered over a set of actions it can take, with its own persistent memory and attached skills - real, structured data in this browser; chatting with one simulates the reply with a keyword match, since this static demo has no server to run a real tool-calling loop from.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
+ <div id="agentChatWrap"></div>
+ <div id="agentMemoryWrap"></div>
+ </div>`;
+ $('#addAgent').onclick=()=>aiAgentModal();
+ body.querySelectorAll('[data-edit-agent]').forEach(b=>b.onclick=()=>aiAgentModal(agents.find(a=>a.id===b.dataset.editAgent)));
+ body.querySelectorAll('[data-toggle-agent]').forEach(b=>b.onclick=()=>{const a=agents.find(x=>x.id===b.dataset.toggleAgent);a.isActive=!a.isActive;save();renderView()});
+ body.querySelectorAll('[data-chat-agent]').forEach(b=>b.onclick=()=>{
+  const a=agents.find(x=>x.id===b.dataset.chatAgent);
+  ensureChatSim();
+  if(!data.chatSim.agents[a.id])data.chatSim.agents[a.id]=[];
+  const wrap=$('#agentChatWrap');
+  wrap.innerHTML=`<h4>${a.icon} Chat with ${a.name}</h4><div id="agentChatHost"></div>`;
+  chatSimAgentPanel(a,$('#agentChatHost'));
+ });
+ body.querySelectorAll('[data-memory-agent]').forEach(b=>b.onclick=()=>{
+  const a=agents.find(x=>x.id===b.dataset.memoryAgent);
+  const wrap=$('#agentMemoryWrap');
+  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>${a.icon} ${a.name}'s memory</h4><p class="muted" style="font-size:13px">A living document this agent "reads" every run - edit it directly here (the real desktop/Team Workspace edition lets the agent revise it itself too, via its own update_memory tool).</p><textarea id="agentMemoryInput" style="width:100%;min-height:160px;font-family:monospace">${a.memoryMd||''}</textarea><div style="margin-top:8px"><button class="btn btn-primary" id="saveAgentMemory">Save memory</button></div></div>`;
+  $('#saveAgentMemory').onclick=()=>{a.memoryMd=$('#agentMemoryInput').value;save();toast('Memory saved')};
+ });
+}
+function aiAgentModal(agent){
+ const isEdit=!!agent;
+ const body=`<form id="agentForm" class="form-grid">
+ <div class="field"><label>Name</label><input name="name" value="${agent?.name||''}" required></div>
+ <div class="field"><label>Icon</label><select name="icon">${['🤖','🧠','🛠️','📊','📥','🔎'].map(i=>`<option value="${i}" ${agent?.icon===i?'selected':''}>${i}</option>`).join('')}</select></div>
+ <div class="field full"><label>Description (optional)</label><input name="description" value="${agent?.description||''}"></div>
+ <div class="field full"><label>Persona / instructions</label><textarea name="systemPrompt" style="width:100%;min-height:80px" required>${agent?.systemPrompt||''}</textarea></div>
+ <div class="field full"><label>Actions</label><select name="actionNames" multiple style="min-height:120px">${DEMO_ALL_ACTIONS.map(n=>`<option value="${n}" ${(agent?.actionNames||[]).includes(n)?'selected':''}>${n}</option>`).join('')}</select><small class="field-help">Ctrl/Cmd-click to select several. Any admin action makes this agent Administrator-only in the real edition.</small></div>
+ <div class="field full"><label>Skills</label><select name="skillIds" multiple>${(data.aiSkills||[]).map(s=>`<option value="${s.id}" ${(agent?.skillIds||[]).includes(s.id)?'selected':''}>${s.name}</option>`).join('')}</select></div>
+ <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-agent>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save agent':'Create agent'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${agent.name}`:'New agent',body);
+ $('[data-close]').onclick=closeModal;
+ $('#agentForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const actionNames=Array.from(e.target.elements.actionNames.selectedOptions).map(o=>o.value);
+  const skillIds=Array.from(e.target.elements.skillIds.selectedOptions).map(o=>o.value);
+  const obj={name:fd.get('name'),icon:fd.get('icon'),description:fd.get('description')||'',systemPrompt:fd.get('systemPrompt'),actionNames,skillIds};
+  if(isEdit)Object.assign(agent,obj);
+  else{obj.id='agt_'+uid();obj.isActive=true;obj.memoryMd='';obj.delegateAgentIds=[];data.aiAgents.push(obj)}
+  save();closeModal();renderView();
+ };
+ if(isEdit)$('[data-delete-agent]').onclick=()=>{data.aiAgents=data.aiAgents.filter(a=>a.id!==agent.id);save();closeModal();renderView()};
+}
+function chatSimAgentReply(agent,text){
+ const actionNames=agent.actionNames||[];
+ const usesRecords=actionNames.some(n=>DEMO_RECORD_ACTIONS.includes(n));
+ const usesAdmin=actionNames.some(n=>DEMO_ADMIN_ACTIONS.includes(n));
+ let base;
+ if(usesRecords)base=chatSimReplyRecords(text);
+ else if(usesAdmin)base=chatSimReplyAdmin(text);
+ else base="This agent has no actions granted, so it can only talk in persona - it can't look anything up or take action.";
+ const persona=(agent.systemPrompt||'').slice(0,80);
+ return `${base} (Simulated as "${agent.name}"${persona?` - persona: "${persona}${(agent.systemPrompt||'').length>80?'...':''}"`:''})`;
+}
+function chatSimAgentPanel(agent,body){
+ ensureChatSim();
+ const msgs=data.chatSim.agents[agent.id];
+ body.innerHTML=`<div class="panel" style="display:flex;flex-direction:column;height:50vh">
+ <div id="agentChatLog" style="flex:1;overflow-y:auto;padding:4px">
+  ${msgs.length?msgs.map(m=>`<div style="display:flex;justify-content:${m.role==='user'?'flex-end':'flex-start'};margin-bottom:8px"><div style="max-width:80%;padding:8px 12px;border-radius:10px;white-space:pre-wrap;font-size:14px;${m.role==='user'?'background:var(--accent,#2563eb);color:#fff':'background:rgba(127,127,127,0.15)'}">${m.text}</div></div>`).join(''):`<p class="empty">Say hello to ${agent.name}.</p>`}
+ </div>
+ <form id="agentChatForm" style="display:flex;gap:8px;margin-top:8px">
+  <input id="agentChatInput" style="flex:1" placeholder="Message ${agent.name}...">
+  <button class="btn btn-primary" type="submit">Send</button>
+ </form>
+ </div>`;
+ const log=$('#agentChatLog'); if(log)log.scrollTop=log.scrollHeight;
+ $('#agentChatForm').onsubmit=e=>{
+  e.preventDefault();
+  const input=$('#agentChatInput');
+  const text=input.value.trim();
+  if(!text)return;
+  msgs.push({role:'user',text});
+  msgs.push({role:'assistant',text:chatSimAgentReply(agent,text)});
+  save();
+  chatSimAgentPanel(agent,body);
+ };
+}
+function aiSkillsTab(body){
+ const arr=data.aiSkills||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Skills</h3><button class="btn btn-primary" id="addSkill">+ New skill</button></div><p class="muted" style="font-size:13px">A reusable library any agent can attach - only name and description are shown to an agent up front; full instructions load only when it "uses" the skill.</p><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(s=>`<tr><td><b>${s.name}</b></td><td style="font-size:13px" class="muted">${s.description}</td><td>${badgeMaybe(s.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-skill="${s.id}">Edit</button><button class="icon-btn" data-del-skill="${s.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No skills yet</div>'}</div></div>`;
+ $('#addSkill').onclick=()=>aiSkillModal();
+ body.querySelectorAll('[data-edit-skill]').forEach(b=>b.onclick=()=>aiSkillModal(arr.find(s=>s.id===b.dataset.editSkill)));
+ body.querySelectorAll('[data-del-skill]').forEach(b=>b.onclick=()=>{data.aiSkills=data.aiSkills.filter(s=>s.id!==b.dataset.delSkill);save();renderView()});
+}
+function aiSkillModal(skill){
+ const isEdit=!!skill;
+ const body=`<form id="skillForm" class="form-grid">
+ <div class="field full"><label>Name</label><input name="name" value="${skill?.name||''}" required></div>
+ <div class="field full"><label>Description</label><input name="description" value="${skill?.description||''}" required></div>
+ <div class="field full"><label>Instructions</label><textarea name="instructionsMd" style="width:100%;min-height:120px" required>${skill?.instructionsMd||''}</textarea></div>
+ <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-skill>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save skill':'Create skill'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${skill.name}`:'New skill',body);
+ $('[data-close]').onclick=closeModal;
+ $('#skillForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const obj={name:fd.get('name'),description:fd.get('description'),instructionsMd:fd.get('instructionsMd')};
+  if(isEdit)Object.assign(skill,obj);
+  else{obj.id='skl_'+uid();obj.isActive=true;data.aiSkills.push(obj)}
+  save();closeModal();renderView();
+ };
+ if(isEdit)$('[data-delete-skill]').onclick=()=>{data.aiSkills=data.aiSkills.filter(s=>s.id!==skill.id);save();closeModal();renderView()};
+}
 
 // ---- Multi-condition (+ OR group) editor, shared by the Business Rules
 // and Workflow Automation builders (second Admin Automation & Customization

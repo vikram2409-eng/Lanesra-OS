@@ -47,6 +47,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/ai/test", post(test_ai_key))
         .route("/api/admin/agent/ask-report", post(ask_report))
         .route("/api/admin/chat/:mode/send", post(send_chat_message))
+        .route("/api/admin/chat/agent/:agent_id/send", post(send_agent_chat_message))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -151,6 +152,21 @@ async fn send_chat_message(
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
         chat_service::send_message(&conn, &workspace_id, &master_key, &actor, &mode, &body.text).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn send_agent_chat_message(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(agent_id): Path<String>,
+    Json(body): Json<SendChatMessageBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        chat_service::send_agent_message(&conn, &workspace_id, &master_key, &actor, &agent_id, &body.text).await
     })
     .await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))

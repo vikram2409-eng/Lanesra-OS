@@ -11,6 +11,10 @@ import type { ChatMessage, ChatMode } from "../lib/types";
 // `chat_service` uses server-side, and which (user, mode) conversation this
 // screen reads/appends to.
 //
+// Phase 6 adds a third addressing shape, `{agentId}` - chatting with one
+// specific named AI Agent from the Foundry instead of a fixed persona.
+// `resolveTarget` below is the one place that distinguishes the two.
+//
 // A tool call round trip is rendered as a small muted "used <tool>" line,
 // expandable to the raw JSON result - not as raw provider JSON inline -
 // so a multi-round exchange still reads like a conversation.
@@ -71,18 +75,25 @@ function ToolCallLine({ name, result }: { name: string; result?: string }) {
   );
 }
 
-export function ChatPanel({ mode }: { mode: ChatMode }) {
+export type ChatTarget = { mode: ChatMode } | { agentId: string };
+
+export function ChatPanel(target: ChatTarget) {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const historyKey = ["chatHistory", mode];
-  const history = useQuery({ queryKey: historyKey, queryFn: () => api.getChatHistory(mode) });
+  const isAgent = "agentId" in target;
+  const mode: ChatMode | "agent" = isAgent ? "agent" : target.mode;
+  const historyKey = isAgent ? ["chatHistory", "agent", target.agentId] : ["chatHistory", target.mode];
+  const history = useQuery({
+    queryKey: historyKey,
+    queryFn: () => (isAgent ? api.getAgentChatHistory(target.agentId) : api.getChatHistory(target.mode)),
+  });
   const messages = history.data ?? [];
 
   const send = useMutation({
-    mutationFn: (message: string) => api.sendChatMessage(mode, message),
+    mutationFn: (message: string) => (isAgent ? api.sendAgentMessage(target.agentId, message) : api.sendChatMessage(target.mode, message)),
     onSuccess: (appended) => {
       setError(null);
       setText("");
@@ -113,7 +124,9 @@ export function ChatPanel({ mode }: { mode: ChatMode }) {
           <p className="empty-state">
             {mode === "admin"
               ? "Ask for help building a business rule, a workflow, an integration, or anything else in the admin surface - it can create these for real, same as the forms."
-              : "Ask about your records, or ask it to create or update one - it can look things up and take action."}
+              : mode === "agent"
+                ? "Say hello - this agent has its own persona, actions and memory, configured in AI Agent Foundry."
+                : "Ask about your records, or ask it to create or update one - it can look things up and take action."}
           </p>
         )}
         {messages.map((m) => {
@@ -166,7 +179,7 @@ export function ChatPanel({ mode }: { mode: ChatMode }) {
           style={{ flex: 1 }}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={mode === "admin" ? "e.g. create a business rule that..." : "e.g. find the company named..."}
+          placeholder={mode === "admin" ? "e.g. create a business rule that..." : mode === "agent" ? "Message this agent..." : "e.g. find the company named..."}
           disabled={send.isPending}
         />
         <button className="btn btn-primary" type="submit" disabled={send.isPending || !text.trim()}>

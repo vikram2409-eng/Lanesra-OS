@@ -18,6 +18,8 @@ import { IndustryPackagesAdmin } from "./IndustryPackagesAdmin";
 import { DeploymentManagementAdmin } from "./DeploymentManagementAdmin";
 import { IntegrationHubAdmin } from "./IntegrationHubAdmin";
 import { AiSettingsAdmin } from "./AiSettingsAdmin";
+import { AiAgentsAdmin } from "./AiAgentsAdmin";
+import { AiSkillsAdmin } from "./AiSkillsAdmin";
 import { ChatPanel } from "../../components/ChatPanel";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
@@ -73,7 +75,9 @@ type AdminTab =
   | "solutions"
   | "integrations"
   | "ai"
-  | "assistant";
+  | "assistant"
+  | "aiAgents"
+  | "aiSkills";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -94,6 +98,8 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "integrations", label: "Integration Hub" },
   { key: "ai", label: "LLM & MCP" },
   { key: "assistant", label: "Admin Assistant" },
+  { key: "aiAgents", label: "AI Agents" },
+  { key: "aiSkills", label: "Skills" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -131,6 +137,13 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "integrations", label: "Integrations", icon: "🔌", note: "Connect Lanesra to the outside world", items: ["integrations"] },
   { key: "ai", label: "LLM & MCP", icon: "✦", note: "Bring your own LLM key, and (once built) the MCP server that lets agents work with your data", items: ["ai"] },
   { key: "assistant", label: "Admin Assistant", icon: "💬", note: "Chat to build workflows, business rules, integrations and the rest of the admin surface", items: ["assistant"] },
+  {
+    key: "ai-agent-foundry",
+    label: "AI Agent Foundry",
+    icon: "🏭",
+    note: "Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other",
+    items: ["aiAgents", "aiSkills"],
+  },
 ];
 
 /**
@@ -234,6 +247,8 @@ export function AdminPanel() {
       {tab === "integrations" && <IntegrationHubAdmin />}
       {tab === "ai" && <AiSettingsAdmin />}
       {tab === "assistant" && <ChatPanel mode="admin" />}
+      {tab === "aiAgents" && <AiAgentsAdmin />}
+      {tab === "aiSkills" && <AiSkillsAdmin />}
     </div>
   );
 }

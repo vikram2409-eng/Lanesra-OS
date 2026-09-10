@@ -11,6 +11,7 @@ use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
 use lanesra_core::models::ai::AiSettingsInput;
+use lanesra_core::models::ai_agent::{AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
 use lanesra_core::models::contract::ContractInput;
@@ -48,6 +49,7 @@ use lanesra_core::services::{
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
+    ai_agent_service,
     auth_service, backup_service, bulk_action_service, business_rule_service, chat_service, company_service, connection_ref_service, connection_service, connector_service,
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
@@ -1056,6 +1058,58 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let workspace_id = require_workspace_id(conn)?;
             let user_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
             to_value(chat_service::get_history(conn, &workspace_id, user_id, &mode)?)
+        }
+
+        // AI & Agentic Layer, Phase 6: the AI Agent Foundry's plain-sync
+        // CRUD - `send_agent_message` is genuinely async (it may call an
+        // LLM provider), so it lives in `admin_actions.rs` instead, same
+        // reasoning as `send_chat_message`'s own note there.
+        "list_ai_agents" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(ai_agent_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_ai_agent" => {
+            let input: AiAgentInput = arg(args, "input")?;
+            to_value(ai_agent_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_ai_agent" => {
+            let id: String = arg(args, "id")?;
+            let input: AiAgentInput = arg(args, "input")?;
+            to_value(ai_agent_service::update(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "set_ai_agent_active" => {
+            let id: String = arg(args, "id")?;
+            let is_active: bool = arg(args, "isActive")?;
+            to_value(ai_agent_service::set_active(conn, &id, is_active, actor)?)
+        }
+        "set_ai_agent_memory" => {
+            let id: String = arg(args, "id")?;
+            let input: AiAgentMemoryUpdate = arg(args, "input")?;
+            to_value(ai_agent_service::set_memory(conn, &id, &input.memory_md, actor)?)
+        }
+        "list_ai_skills" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(ai_agent_service::list_skills(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_ai_skill" => {
+            let input: AiSkillInput = arg(args, "input")?;
+            to_value(ai_agent_service::create_skill(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_ai_skill" => {
+            let id: String = arg(args, "id")?;
+            let input: AiSkillInput = arg(args, "input")?;
+            to_value(ai_agent_service::update_skill(conn, &id, &input, actor)?)
+        }
+        "set_ai_skill_active" => {
+            let id: String = arg(args, "id")?;
+            let is_active: bool = arg(args, "isActive")?;
+            to_value(ai_agent_service::set_skill_active(conn, &id, is_active, actor)?)
+        }
+        "get_agent_chat_history" => {
+            let agent_id: String = arg(args, "agentId")?;
+            let workspace_id = require_workspace_id(conn)?;
+            let user_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(chat_service::get_agent_history(conn, &workspace_id, user_id, &agent_id)?)
         }
 
         other => Err(AppError::Validation(format!("Unknown command '{other}'"))),
