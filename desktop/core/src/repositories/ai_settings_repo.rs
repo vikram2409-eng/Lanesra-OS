@@ -19,6 +19,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiSettings> {
         status: row.get("status")?,
         last_test_message: row.get("last_test_message")?,
         last_tested_at: row.get("last_tested_at")?,
+        daily_token_budget: row.get("daily_token_budget")?,
         updated_at: row.get("updated_at")?,
         updated_by: row.get("updated_by")?,
     })
@@ -84,5 +85,14 @@ pub fn set_test_result(conn: &Connection, workspace_id: &str, status: &str, mess
         "UPDATE ai_settings SET status = ?1, last_test_message = ?2, last_tested_at = ?3 WHERE workspace_id = ?4",
         rusqlite::params![status, message, now_iso(), workspace_id],
     )?;
+    Ok(())
+}
+
+/// Phase 7a: the "System" tier of the Gateway's token-budget hierarchy -
+/// its own setter, not folded into `update`, since it's an independent
+/// admin dial edited from the new Gateway health view, not the LLM
+/// provider form.
+pub fn set_daily_token_budget(conn: &Connection, workspace_id: &str, daily_token_budget: Option<i64>) -> rusqlite::Result<()> {
+    conn.execute("UPDATE ai_settings SET daily_token_budget = ?1 WHERE workspace_id = ?2", rusqlite::params![daily_token_budget, workspace_id])?;
     Ok(())
 }

@@ -8,6 +8,7 @@ use tauri::State;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiAgentMemoryUpdate, AiSkill, AiSkillInput};
 use lanesra_core::services::ai_agent_service;
 
@@ -42,6 +43,22 @@ pub fn set_ai_agent_active(state: State<AppState>, id: String, is_active: bool) 
 pub fn set_ai_agent_memory(state: State<AppState>, id: String, input: AiAgentMemoryUpdate) -> AppResult<AiAgentDefinition> {
     let conn = state.conn.lock().unwrap();
     ai_agent_service::set_memory(&conn, &id, &input.memory_md, current_actor(&state).as_deref())
+}
+
+/// Phase 7a: an agent's Gateway routing policy - `routing: None` clears
+/// it, returning this agent to the plain workspace-default behavior.
+#[tauri::command]
+pub fn set_ai_agent_model_routing(state: State<AppState>, id: String, routing: Option<AiAgentModelRouting>) -> AppResult<AiAgentDefinition> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    ai_agent_service::set_model_routing(&conn, &id, &workspace_id, routing, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn get_ai_agent_token_usage(state: State<AppState>, id: String) -> AppResult<AiTokenUsageSummary> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    ai_agent_service::token_usage_today(&conn, &id, &workspace_id)
 }
 
 #[tauri::command]

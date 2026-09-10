@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
-import type { AiSettingsInput } from "../../lib/types";
+import type { AiProvider, AiProviderInput, AiSettingsInput } from "../../lib/types";
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -10,12 +10,14 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 
 const PROVIDERS: { key: string; label: string }[] = [
   { key: "anthropic", label: "Anthropic" },
-  { key: "openai_compatible", label: "OpenAI-compatible (OpenAI, or a self-hosted server)" },
+  { key: "openai_compatible", label: "OpenAI-compatible (OpenAI, Groq, Mistral, Ollama, vLLM, llama.cpp, ...)" },
+  { key: "google_gemini", label: "Google Gemini" },
 ];
 
-type AiSubTab = "llm" | "mcp";
+type AiSubTab = "llm" | "gateway" | "mcp";
 const AI_SUB_TABS: { key: AiSubTab; label: string }[] = [
   { key: "llm", label: "LLM" },
+  { key: "gateway", label: "Gateway" },
   { key: "mcp", label: "MCP Server" },
 ];
 
@@ -67,6 +69,7 @@ export function AiSettingsAdmin() {
         ))}
       </div>
       {tab === "llm" && <LlmTab />}
+      {tab === "gateway" && <GatewayTab />}
       {tab === "mcp" && <McpTab />}
     </div>
   );
@@ -170,6 +173,283 @@ function LlmTab() {
 
       {testResult && <p style={{ fontSize: 13, marginTop: 8, color: testResult.startsWith("Failed") ? "var(--danger, #dc2626)" : "var(--success, #059669)" }}>{testResult}</p>}
       {!settings.data?.has_key && <p className="empty-state" style={{ marginTop: 12 }}>No key configured yet - save one above, then Test key to prove it works.</p>}
+    </div>
+  );
+}
+
+function emptyProviderInput(): AiProviderInput {
+  return { name: "", provider: "anthropic", base_url: null, model: "", api_key: null };
+}
+
+/**
+ * Phase 7a: the Unified AI Gateway's admin surface - named provider
+ * connections an agent's Model Routing (AiAgentsAdmin.tsx -> Routing) can
+ * pick per tier, the System-tier daily token budget, and a small health
+ * view of recent failover events (a run that didn't end up served by its
+ * primary tier - see `ai_gateway_service`'s own doc comment).
+ */
+function GatewayTab() {
+  const queryClient = useQueryClient();
+  const providersQuery = useQuery({ queryKey: ["aiProviders"], queryFn: () => api.listAiProviders(false) });
+  const usageQuery = useQuery({ queryKey: ["aiTokenUsageSummary"], queryFn: () => api.getAiTokenUsageSummary() });
+  const failoverQuery = useQuery({ queryKey: ["aiGatewayFailoverEvents"], queryFn: () => api.listAiGatewayFailoverEvents(25) });
+  const providers = providersQuery.data ?? [];
+
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<AiProvider | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  function invalidateProviders() {
+    queryClient.invalidateQueries({ queryKey: ["aiProviders"] });
+  }
+
+  const create = useMutation({
+    mutationFn: (input: AiProviderInput) => api.createAiProvider(input),
+    onSuccess: () => {
+      setCreating(false);
+      setError(null);
+      invalidateProviders();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create this provider"),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: AiProviderInput }) => api.updateAiProvider(id, input),
+    onSuccess: () => {
+      setEditing(null);
+      setError(null);
+      invalidateProviders();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this provider"),
+  });
+  const toggleActive = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.setAiProviderActive(id, isActive),
+    onSuccess: invalidateProviders,
+  });
+  const test = useMutation({
+    mutationFn: (id: string) => api.testAiProviderKey(id),
+    onSuccess: (result, id) => setTestResults((prev) => ({ ...prev, [id]: result.ok ? `Valid (${result.latency_ms}ms)` : `Failed: ${result.message}` })),
+    onError: (err, id) => setTestResults((prev) => ({ ...prev, [id]: apiErrorMessage(err, "Test failed") })),
+  });
+  const saveBudget = useMutation({
+    mutationFn: (daily_token_budget: number | null) => api.setAiDailyTokenBudget({ daily_token_budget }),
+    onSuccess: () => {
+      setBudgetDraft(null);
+      queryClient.invalidateQueries({ queryKey: ["aiTokenUsageSummary"] });
+    },
+  });
+
+  const budget = usageQuery.data?.daily_token_budget ?? null;
+  const budgetValue = budgetDraft !== null ? budgetDraft : budget === null ? "" : String(budget);
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <div className="card" style={{ maxWidth: 560 }}>
+        <h3 style={{ marginTop: 0 }}>System token budget</h3>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+          The top of the Gateway's System → Agent → User token-budget hierarchy - applies to every agent run in this
+          workspace, on top of whatever daily budget an individual agent's own Routing settings might add.
+        </p>
+        {usageQuery.data && (
+          <p style={{ fontSize: 13 }}>
+            Used today: <b>{usageQuery.data.today_input_tokens + usageQuery.data.today_output_tokens}</b> tokens
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="number"
+            min={1}
+            style={{ maxWidth: 160 }}
+            value={budgetValue}
+            placeholder="Unlimited"
+            onChange={(e) => setBudgetDraft(e.target.value)}
+          />
+          <button
+            className="btn btn-secondary"
+            disabled={saveBudget.isPending}
+            onClick={() => saveBudget.mutate(budgetValue === "" ? null : Number(budgetValue))}
+          >
+            {saveBudget.isPending ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <h3 style={{ margin: 0 }}>AI providers</h3>
+            <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "4px 0 0" }}>
+              Named provider connections, beyond the single LLM tab default above - an agent's Model Routing (AI
+              Agents → Routing) picks one of these per tier (primary/fallback/local air-gapped).
+            </p>
+          </div>
+          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            + New provider
+          </button>
+        </div>
+        {error && <div className="error-banner">{error}</div>}
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Key</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {providers.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.name}</td>
+                  <td>{p.provider}</td>
+                  <td>{p.model}</td>
+                  <td>{p.has_key ? "Configured" : "—"}</td>
+                  <td>
+                    <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      <button className="btn btn-secondary" onClick={() => setEditing(p)}>
+                        Edit
+                      </button>
+                      <button className="btn btn-secondary" onClick={() => test.mutate(p.id)} disabled={!p.has_key || test.isPending}>
+                        Test
+                      </button>
+                      <button className="btn btn-secondary" onClick={() => toggleActive.mutate({ id: p.id, isActive: !p.is_active })}>
+                        {p.is_active ? "Deactivate" : "Reactivate"}
+                      </button>
+                      {testResults[p.id] && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{testResults[p.id]}</span>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {providers.length === 0 && <div className="empty-state">No named providers yet - agents without one use the plain LLM tab default.</div>}
+        </div>
+      </div>
+
+      {(creating || editing) && (
+        <AiProviderForm
+          initial={editing ?? undefined}
+          onCancel={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+          onSubmit={(input) => (editing ? update.mutate({ id: editing.id, input }) : create.mutate(input))}
+          pending={create.isPending || update.isPending}
+        />
+      )}
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Gateway health</h3>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+          Recent dispatches that didn't end up served by an agent's primary tier - a real failover, or forced
+          air-gapped routing because the outbound payload matched a sensitive-data class.
+        </p>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Served by</th>
+                <th>Reason</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(failoverQuery.data ?? []).map((ev) => (
+                <tr key={ev.id}>
+                  <td>{ev.agent_name}</td>
+                  <td>
+                    <span className="badge">{ev.served_by}</span>
+                  </td>
+                  <td style={{ fontSize: 13 }}>{ev.reason}</td>
+                  <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{ev.created_at}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(failoverQuery.data ?? []).length === 0 && <div className="empty-state">No failovers recorded yet.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AiProviderForm({
+  initial,
+  onCancel,
+  onSubmit,
+  pending,
+}: {
+  initial?: AiProvider;
+  onCancel: () => void;
+  onSubmit: (input: AiProviderInput) => void;
+  pending: boolean;
+}) {
+  const [input, setInput] = useState<AiProviderInput>(
+    initial ? { name: initial.name, provider: initial.provider, base_url: initial.base_url, model: initial.model, api_key: null } : emptyProviderInput(),
+  );
+
+  return (
+    <div className="card" style={{ maxWidth: 560 }}>
+      <h3 style={{ marginTop: 0 }}>{initial ? `Edit ${initial.name}` : "New provider"}</h3>
+      <form
+        className="form-grid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit(input);
+        }}
+      >
+        <div className="form-field">
+          <label>Name</label>
+          <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} placeholder="e.g. Self-hosted Ollama" required />
+        </div>
+        <div className="form-field">
+          <label>Provider</label>
+          <select value={input.provider} onChange={(e) => setInput({ ...input, provider: e.target.value })}>
+            {PROVIDERS.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Model</label>
+          <input value={input.model} onChange={(e) => setInput({ ...input, model: e.target.value })} placeholder="e.g. gpt-4o, llama3.1, gemini-1.5-pro" />
+        </div>
+        <div className="form-field full">
+          <label>{input.provider === "openai_compatible" ? "Base URL (required)" : "Base URL override (optional)"}</label>
+          <input
+            value={input.base_url ?? ""}
+            onChange={(e) => setInput({ ...input, base_url: e.target.value || null })}
+            placeholder={input.provider === "openai_compatible" ? "http://localhost:11434/v1" : ""}
+          />
+        </div>
+        <div className="form-field full">
+          <label>{initial?.has_key ? "API key (leave blank to keep the current one)" : "API key"}</label>
+          <input
+            type="password"
+            value={input.api_key ?? ""}
+            onChange={(e) => setInput({ ...input, api_key: e.target.value || null })}
+            placeholder={initial?.has_key ? "Stored - unchanged unless you enter a new one" : "sk-..."}
+          />
+        </div>
+        <div className="form-field full" style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={pending}>
+            {pending ? "Saving..." : initial ? "Save provider" : "Create provider"}
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

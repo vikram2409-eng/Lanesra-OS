@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::models::ai::AiAgentModelRouting;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct AiAgentDefinition {
     pub id: String,
@@ -31,6 +33,14 @@ pub struct AiAgentDefinition {
     /// injected into its system prompt; `instructions_md` is loaded only
     /// when the model calls `use_skill`.
     pub skill_ids: Vec<String>,
+    /// Phase 7a: the Gateway's optional per-agent routing policy - `None`
+    /// means this agent still dispatches straight through the workspace's
+    /// single `ai_settings` default, exactly as every agent did before
+    /// this phase. Populated by `ai_agent_repo::get_routing`, edited
+    /// separately via `ai_agent_service::set_model_routing` - the same
+    /// "its own admin action, not part of the main create/update form
+    /// payload" shape `memory_md`/`set_memory` already established.
+    pub model_routing: Option<AiAgentModelRouting>,
     pub is_active: bool,
     pub created_at: String,
     pub created_by: Option<String>,

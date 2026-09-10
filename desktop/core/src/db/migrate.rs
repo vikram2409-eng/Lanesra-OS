@@ -45,6 +45,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (38, include_str!("migrations/0038_ai_agent_foundry.sql")),
     (39, include_str!("migrations/0039_chat_agent_mode.sql")),
     (40, include_str!("migrations/0040_ai_agent_orchestration.sql")),
+    (41, include_str!("migrations/0041_ai_gateway.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -108,7 +109,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 40);
+        assert_eq!(version, 41);
 
         let table_count: i64 = conn
             .query_row(

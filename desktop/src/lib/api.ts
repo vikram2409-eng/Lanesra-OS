@@ -6,6 +6,12 @@ import type {
   AiSettings,
   AiSettingsInput,
   AiTestResult,
+  AiProvider,
+  AiProviderInput,
+  AiAgentModelRouting,
+  AiDailyTokenBudgetInput,
+  AiGatewayFailoverEvent,
+  AiTokenUsageSummary,
   NlReportQuery,
   NlReportResult,
   ChatMessage,
@@ -267,6 +273,22 @@ export const api = {
   getAiSettings: () => call<AiSettings>("get_ai_settings"),
   saveAiSettings: (input: AiSettingsInput) => call<AiSettings>("save_ai_settings", { input }),
   testAiKey: () => callAdminAction<AiTestResult>("test_ai_key", {}, "POST", "/api/admin/ai/test"),
+
+  // AI & Agentic Layer, Phase 7a - the Unified AI Gateway. Named provider
+  // CRUD/test mirrors LLM's own get/save/test shape above; the routing
+  // policy and budget/health reads are plain CRUD/reads.
+  listAiProviders: (activeOnly: boolean) => call<AiProvider[]>("list_ai_providers", { activeOnly }),
+  createAiProvider: (input: AiProviderInput) => call<AiProvider>("create_ai_provider", { input }),
+  updateAiProvider: (id: string, input: AiProviderInput) => call<AiProvider>("update_ai_provider", { id, input }),
+  setAiProviderActive: (id: string, isActive: boolean) => call<AiProvider>("set_ai_provider_active", { id, isActive }),
+  testAiProviderKey: (id: string) =>
+    callAdminAction<AiTestResult>("test_ai_provider_key", { id }, "POST", `/api/admin/ai-providers/${encodeURIComponent(id)}/test`),
+  setAiAgentModelRouting: (id: string, routing: AiAgentModelRouting | null) => call<AiAgentDefinition>("set_ai_agent_model_routing", { id, routing }),
+  getAiAgentTokenUsage: (id: string) => call<AiTokenUsageSummary>("get_ai_agent_token_usage", { id }),
+  setAiDailyTokenBudget: (input: AiDailyTokenBudgetInput) => call<AiSettings>("set_ai_daily_token_budget", { input }),
+  getAiTokenUsageSummary: () => call<AiTokenUsageSummary>("get_ai_token_usage_summary"),
+  listAiGatewayFailoverEvents: (limit: number) => call<AiGatewayFailoverEvent[]>("list_ai_gateway_failover_events", { limit }),
+
   askReport: (query: NlReportQuery) =>
     callAdminAction<NlReportResult>("ask_report", { query }, "POST", "/api/admin/agent/ask-report", { question: query.question }),
 

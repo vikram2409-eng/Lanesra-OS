@@ -2175,6 +2175,8 @@ export interface AiSettings {
   status: string;
   last_test_message: string | null;
   last_tested_at: string | null;
+  /** Phase 7a: the Gateway's System-tier daily token budget - `null` is unlimited. */
+  daily_token_budget: number | null;
   updated_at: string;
   updated_by: string | null;
 }
@@ -2190,6 +2192,61 @@ export interface AiTestResult {
   ok: boolean;
   latency_ms: number;
   message: string;
+}
+
+// --- AI & Agentic Layer, Phase 7a - the Unified AI Gateway. Mirrors the
+// new pieces of core::models::ai 1:1. See AiGatewayAdmin.tsx.
+
+export interface AiProvider {
+  id: string;
+  workspace_id: string;
+  name: string;
+  provider: string;
+  base_url: string | null;
+  model: string;
+  has_key: boolean;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiProviderInput {
+  name: string;
+  provider: string;
+  base_url: string | null;
+  model: string;
+  api_key: string | null;
+}
+
+export interface AiAgentModelRouting {
+  primary_provider_id: string | null;
+  fallback_provider_id: string | null;
+  local_fallback_provider_id: string | null;
+  temperature: number | null;
+  max_tokens: number | null;
+  daily_token_budget: number | null;
+  force_air_gapped_for: string[];
+}
+
+export interface AiDailyTokenBudgetInput {
+  daily_token_budget: number | null;
+}
+
+export interface AiGatewayFailoverEvent {
+  id: string;
+  agent_id: string;
+  agent_name: string;
+  served_by: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface AiTokenUsageSummary {
+  today_input_tokens: number;
+  today_output_tokens: number;
+  daily_token_budget: number | null;
 }
 
 // --- AI & Agentic Layer, Phase 3 - the Unified Activity Timeline's
@@ -2266,6 +2323,8 @@ export interface AiAgentDefinition {
   action_names: string[];
   delegate_agent_ids: string[];
   skill_ids: string[];
+  /** Phase 7a: `null` means this agent still dispatches through the plain workspace default. */
+  model_routing: AiAgentModelRouting | null;
   is_active: boolean;
   created_at: string;
   created_by: string | null;
