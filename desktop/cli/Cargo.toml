@@ -1,6 +1,6 @@
 [package]
 name = "lanesra-cli"
-version = "0.11.0"
+version = "0.13.0"
 description = "Lanesra OS CLI - a thin wrapper around a Team Workspace server's /api/v1 REST API for scriptable local workflows"
 license = "MIT"
 edition = "2021"
