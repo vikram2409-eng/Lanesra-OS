@@ -557,6 +557,49 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           },
         ],
       },
+      {
+        slug: "workspace-essentials",
+        title: "Workspace essentials: users, business profile, numbering, KPIs & the Admin Assistant",
+        summary:
+          "The five admin screens every workspace touches early: user accounts and roles, business profile and logo, built-in ID formats, the classic Dashboard KPI picker, and the standalone Admin Assistant chat.",
+        sections: [
+          {
+            heading: "Users & roles — Admin → Access → Users",
+            bodyHtml:
+              "<p>Only an Administrator can create, edit or deactivate an account. A new user needs a username, a display name, a password (minimum 8 characters) and at least one of five roles: Administrator, Manager, Sales, Finance, ReadOnly - a user can hold several at once. Editing an account changes display name, roles and an Active toggle; a separate password-reset form on the same screen lets an Administrator set a new password without knowing the old one.</p>",
+          },
+          {
+            heading: "The last-Administrator guard",
+            bodyHtml:
+              "<p>The workspace can never lock itself out of its own admin surface: removing the Administrator role from an account, or deactivating it, is rejected outright if it would leave zero active Administrators - the save fails instead of silently succeeding and orphaning the workspace. Changing any other active Administrator while at least one more remains works normally.</p>",
+          },
+          {
+            heading: "Backup & restore lives here too",
+            bodyHtml:
+              "<p>The bottom of the Users screen carries whole-workspace Backup &amp; restore: Export backup downloads every company, contact, product, opportunity, quote, order, invoice, contract, task and user as one .lanesra file; Restore from file replaces everything currently in the workspace with a chosen backup, after a confirmation dialog spelling out exactly what's about to be overwritten. A restore reloads the app afterward rather than patching every screen's cached data in place.</p>",
+          },
+          {
+            heading: "Business profile & logo — Admin → Workspace → Business profile",
+            bodyHtml:
+              "<p>Business name, legal name, address, phone, currency code, default tax rate, locale and timezone live on one form (Business name and Currency are required; the rest is optional). These feed the print preview on quotes, orders and invoices, and the tax rate seeds new line items. A separate Logo card uploads a PNG/JPEG (resized client-side) shown next to the business name on that same print preview, with one-click removal.</p>",
+          },
+          {
+            heading: "ID / number formats for built-in objects — Admin → Workspace → Numbering",
+            bodyHtml:
+              "<p>Every built-in entity - Company, Contact, Opportunity, Product, Quote, Order, Invoice, Contract, Task - gets its own configurable prefix and zero-padded digit width (1-10), the same mechanism as Custom Objects' own numbering, just fixed to the 9 built-in ones here. Changing a format never resets or renumbers anything already issued - the sequence continues, reformatted going forward. A customized format shows a Custom badge and a Reset to default option.</p>",
+          },
+          {
+            heading: "Dashboard KPIs (classic picker) — Admin → Analytics → Dashboard KPIs",
+            bodyHtml:
+              "<p>Distinct from the newer Dashboards widget system: this is the simple on/off picker for the fixed KPI tiles atop the main Dashboard - Open pipeline value, Won revenue, Outstanding invoices, Overdue invoices, Quotes awaiting response, Contracts renewing soon, Open tasks. Unchecking every tile resets to \"show all, default order\" rather than showing nothing. Reordering the selected tiles isn't exposed yet in this picker - it's on the backlog - though the stored preference is already an ordered list under the hood.</p>",
+          },
+          {
+            heading: "The Admin Assistant — Admin → Admin Assistant",
+            bodyHtml:
+              "<p>A second mode of the same chat component that powers the records-facing Assistant (see the Agentic AI Foundry category's first article) - here scoped to the admin surface and restricted to Administrators. Ask it to build a business rule, a workflow, an integration connection, or anything else this Admin panel exposes, in plain English; it has its own tool set and system prompt server-side and can create these for real, the same as filling out the forms by hand, with its own separate conversation history.</p>",
+          },
+        ],
+      },
     ],
   },
 ];

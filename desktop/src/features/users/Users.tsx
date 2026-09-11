@@ -6,7 +6,7 @@ import { ROLES, type NewUser, type UserUpdate } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
-export function Users() {
+export function Users({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
   const [view, setView] = useState<View>({ mode: "list" });
   const queryClient = useQueryClient();
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
@@ -44,9 +44,14 @@ export function Users() {
     <div>
       <div className="toolbar">
         <h2 style={{ margin: 0 }}>Users</h2>
-        <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
-          + New user
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => onOpenHelp("workspace-essentials")}>
+            📖 Help
+          </button>
+          <button className="btn btn-primary" onClick={() => setView({ mode: "create" })}>
+            + New user
+          </button>
+        </div>
       </div>
       {users.isLoading && <p>Loading...</p>}
       {users.data && (
