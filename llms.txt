@@ -33,11 +33,11 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - Deployment Management: Publishers, versioned Solutions, component export/import, update-with-diff
 - Integration Hub: encrypted Connections, OpenAPI Connectors, a generic REST API, HMAC-signed Webhooks, CSV data exchange, scheduled Integration Jobs, unified execution logs
 - Saved Views (named filter/sort/group-by combinations, reusable as a dashboard data source) and Bulk Actions (update status, reassign owner, tag, archive across a multi-select)
-- AI Agent Foundry: named agents with persona, Actions, Memory (with real change history), Skills, and delegation
+- AI Agent Foundry: named agents with persona, Actions, Memory (with real change history), Skills, guardrails, and delegation, with declarative export/import of an agent or Skill as part of a Solution
 - Unified AI Gateway: multi-provider routing (Anthropic/OpenAI-compatible/Gemini/local), automatic failover, token budgets, DLP-triggered air-gapping
-- Orchestration: deterministic Pipelines, schedule/webhook/workflow-fired runs, one unified run history
-- Native Model Context Protocol server & CLI, and a Chat Assistant with real tool access
-- Ranked full-text search over Custom Object records (SQLite FTS5, lexical relevance), plus optional semantic (embedding-based) search via the workspace's own configured provider (desktop only, no bundled vector database)
+- Orchestration: deterministic Pipelines (sequential, consensus, peer-review) with human-in-the-loop approval gates and OTLP tracing, schedule/webhook/workflow-fired runs, a real Evaluation Harness, one unified run history
+- Native Model Context Protocol server & CLI, and a Chat Assistant with real tool access, including an agent context primer (relationship metadata, get_related_records, get_platform_overview)
+- Ranked full-text search over Custom Object records (SQLite FTS5, lexical relevance), plus optional semantic (embedding-based) Vector Search via the workspace's own configured provider (desktop only, no bundled vector database)
 
 ## Product principles
 

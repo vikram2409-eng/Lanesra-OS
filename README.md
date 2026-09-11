@@ -26,10 +26,12 @@ Modern, open-source, AI-native business application platform — a complete CRM 
 **AI & Agentic Layer:**
 
 - **Unified AI Gateway** — bring your own key (Anthropic, an OpenAI-compatible endpoint, Google Gemini, or a fully local/air-gapped model via Ollama), no markup or reselling; automatic primary → fallback → local-fallback failover, per-agent and per-workspace daily token budgets, and forced air-gapping the moment a request touches a sensitive data class you configure
-- **AI Agent Foundry** — named, admin-defined AI Agents: a persona layered over a per-tool Actions checklist, a persistent Memory document the agent revises itself, a shared Skills library, and delegation to other agents (depth-guarded against runaway recursion)
-- **Orchestration** — chain agents into a deterministic Pipeline; fire it manually, on a schedule, from an authenticated webhook, or as a new Workflow Automation action — every run lands in one unified history
+- **AI Agent Foundry** — named, admin-defined AI Agents: a persona layered over a per-tool Actions checklist, a persistent Memory document the agent revises itself, a shared Skills library, operational guardrails, and delegation to other agents (depth-guarded against runaway recursion); export/import an agent or Skill as part of a Solution, exactly like a Custom Object
+- **Orchestration** — chain agents into a deterministic Pipeline (sequential, consensus, or a peer-review loop); fire it manually, on a schedule, from an authenticated webhook, or as a new Workflow Automation action, with human-in-the-loop approval gates at any topology's own resume point and OTLP tracing on every run — every run lands in one unified history
+- **Evaluation Harness** — a named Suite of golden test cases, each graded by an LLM-as-judge call against an Agent or Pipeline's real response, not a brittle exact-match
 - **Native Model Context Protocol server & CLI** — exposes your Custom Objects, records and business logic to Claude Desktop, an IDE agent, or any MCP-capable client over JSON-RPC 2.0, authenticated with the same scoped API keys the REST API already uses
-- **Chat Assistant** — a conversational assistant with real tool access to your records, and, for an Administrator, to the admin configuration surface itself
+- **Chat Assistant** — a conversational assistant with real tool access to your records, and, for an Administrator, to the admin configuration surface itself, including an agent context primer (relationship metadata and a live platform overview) so an agent understands how your own workspace is actually built
+- **Context Layer & Vector Search** — real change history for an agent's own Memory, ranked full-text search over Custom Object records (SQLite FTS5), and optional embeddings-based semantic search via your own already-configured provider — no bundled vector database
 
 **The core CRM:**
 

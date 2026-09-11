@@ -673,12 +673,6 @@ docker run -p 8080:8080 -v lanesra-data:/data \
 - The Approval Framework, Data Quality Center, and Form Builder sections
   of the v1.3 spec - each is its own substantial subsystem, out of scope
   for the phases done so far
-- A declarative export/import format for AI Agents/Skills as part of a
-  Solution (today a Solution's components are objects/fields/
-  relationships/rules/workflows/screens/reports - not yet an agent's
-  persona/memory/skills/delegation), a formal evaluation harness for
-  agent runs, and OpenTelemetry-style distributed tracing of a run's
-  prompt construction/model dispatch/tool execution/guardrail checks
 - Making session auto-lock's 15-minute timeout admin-configurable
 - A nicer inline banner for non-blocking business-rule `show_message`
   actions - currently a plain `alert()` (see `src/lib/ruleMessages.ts`)
@@ -686,7 +680,7 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   `nsis`/`msi`, which need a Windows build host - see below; a GitHub
   Actions workflow at `.github/workflows/desktop-release.yml` now builds
   and drafts a release automatically on a `desktop-v*` tag push - the
-  v0.1.0 Early Access build is already published, just unsigned)
+  desktop-v0.13.0 Early Access build is already published, just unsigned)
 
 ## Running it
 
