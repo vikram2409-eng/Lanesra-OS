@@ -29,4 +29,9 @@
   <url><loc>https://lanesraos.com/help/review-before-you-install</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/after-install-what-changed</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/deactivate-reactivate-safety</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/solution-packages-overview</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/releases-and-updates</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/solutions-curate-and-promote</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/components-and-dependencies</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/publishers-and-namespaces</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 </urlset>

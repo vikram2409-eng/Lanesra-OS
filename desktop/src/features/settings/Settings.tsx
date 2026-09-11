@@ -271,7 +271,7 @@ export function AdminPanel() {
       {tab === "dashboards" && <DashboardLayoutsAdmin />}
       {tab === "apps" && <AppsAdmin />}
       {tab === "packages" && <IndustryPackagesAdmin onOpenHelp={openHelpTopic} />}
-      {tab === "solutions" && <DeploymentManagementAdmin />}
+      {tab === "solutions" && <DeploymentManagementAdmin onOpenHelp={openHelpTopic} />}
       {tab === "integrations" && <IntegrationHubAdmin />}
       {tab === "ai" && <AiSettingsAdmin />}
       {tab === "assistant" && <ChatPanel mode="admin" />}

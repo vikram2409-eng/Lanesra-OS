@@ -704,7 +704,136 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           {
             heading: "Coming from Deployment Management",
             bodyHtml:
-              "<p>An installed package's version history and update-with-diff live in Deployment Management - a separate Help category, not yet written, that also covers Solutions, Publishers and export/import between workspaces.</p>",
+              "<p>An installed package's version history and update-with-diff live in Deployment Management - see Releases and updating an installed package in that category, which also covers Solutions, Publishers and export/import between workspaces.</p>",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    key: "deployment-management",
+    label: "Deployment Management",
+    icon: "◈",
+    blurb:
+      "See everything installed, what it created and depends on, curate a named Solution of exactly what you want to ship, and register the Publishers who own each package namespace - the way a real software vendor packages and promotes an update.",
+    topics: [
+      {
+        slug: "solution-packages-overview",
+        title: "Solution Packages: what's installed, what it created",
+        summary: "The landing tab - every installed app, its Publisher and component/dependency counts, plus your own hand-built Local Workspace.",
+        sections: [
+          {
+            heading: "One table, two kinds of rows",
+            bodyHtml:
+              '<p>The <b>Solution Packages</b> tab lists every installed app - name, Publisher, Type (always "Packaged"), installed Version, active/inactive Status, and live Components/Dependencies counts. Alongside sits one synthetic row, 🧩 Local Workspace ("local" publisher, type "Custom") - everything you\'ve built by hand rather than installed.</p>',
+          },
+          {
+            heading: "Export your own customizations",
+            bodyHtml:
+              "<p>Local Workspace's Export button downloads everything the local publisher owns as one re-importable manifest - the all-or-nothing counterpart to a Solution's deliberately-curated subset. No fake package row is created for it; it's generated on demand.</p>",
+          },
+          {
+            heading: "Where installs actually happen",
+            bodyHtml:
+              "<p>This tab is read-and-review only - installing, deactivating or reactivating an app happens from App Catalog (see the Industry Data Model category). Come here afterward to see the result.</p>",
+          },
+        ],
+      },
+      {
+        slug: "releases-and-updates",
+        title: "Releases and updating an installed package",
+        summary: "Every imported version of a package, and update-with-diff's real per-field Added/Modified/Removed preview.",
+        sections: [
+          {
+            heading: "Releases: every version you've imported",
+            bodyHtml:
+              "<p>Click Releases on any installed app's row to see every version of that package_id you've ever imported, oldest first - each an immutable snapshot already sitting in the workspace's own package history.</p>",
+          },
+          {
+            heading: '"Update available"',
+            bodyHtml:
+              "<p>Import a newer version of an already-installed package from App Catalog the same way you'd import any package, then return here - an Update button appears automatically, offering the newest imported version that isn't the one currently installed.</p>",
+          },
+          {
+            heading: "Review before you apply",
+            bodyHtml:
+              '<p>A real diff, not a guess: every object and field key gets an individual Added, Modified or Removed badge. Everything else - relationships, business rules, workflows, screen layouts, reports - shows as a summarized count ("3 new business rules") rather than a per-item breakdown.</p>',
+          },
+          {
+            heading: "Applying an update",
+            bodyHtml:
+              "<p>Apply update runs inside the same validated, safety-backed, single-transaction machinery as an original install - replacing what used to be a dead end where reinstalling an already-installed package_id was simply rejected.</p>",
+          },
+        ],
+      },
+      {
+        slug: "solutions-curate-and-promote",
+        title: "Solutions: curate exactly what ships",
+        summary: "Name a versioned, deliberately-picked subset of components, export it, and import it into another workspace.",
+        sections: [
+          {
+            heading: "Not everything - exactly what you pick",
+            bodyHtml:
+              "<p>+ New solution asks only for a Name and an optional Description. Unlike Local Workspace's all-or-nothing Export, a Solution starts empty - add exactly the objects, fields, rules, workflows and screens it needs (filterable by type, publisher or source app), and remove any you change your mind about.</p>",
+          },
+          {
+            heading: "Version it like a real release",
+            bodyHtml:
+              "<p>Open a Solution to edit its Version field directly. Bump it before each Export so repeated promotions become successive, listable releases - the same Releases view any installed package already gets.</p>",
+          },
+          {
+            heading: "Export, then import like any package",
+            bodyHtml:
+              '<p>Export (disabled until the Solution has at least one component) downloads the same manifest format every package uses. Promote it to another workspace through the ordinary App Catalog import flow there - two Lanesra OS workspaces already are two separate environments, so promoting a Solution to "prod" is just exporting from one and importing into the other.</p>',
+          },
+          {
+            heading: "Deleting a Solution",
+            bodyHtml:
+              "<p>Delete removes the Solution definition itself - the curated list and version history - without touching any of the actual components it referenced.</p>",
+          },
+        ],
+      },
+      {
+        slug: "components-and-dependencies",
+        title: "Components & Dependencies",
+        summary: "Every custom object/field/relationship/rule/workflow/screen/report and who owns it, plus every declared dependency.",
+        sections: [
+          {
+            heading: "Components: everything, tagged with an owner",
+            bodyHtml:
+              '<p>Lists every custom object, field, relationship, business rule, workflow, screen layout and report - filterable by publisher, source app, type or id - whether an installed package created it or you built it by hand. Each row shows its Publisher (a Local badge for hand-built ones) and Source (the installed app, or "Hand-built").</p>',
+          },
+          {
+            heading: "Why this is one list",
+            bodyHtml:
+              "<p>This is the same underlying data both Solution Packages' component counts and a Solution's own \"Add a component\" picker draw from - one real inventory rather than several views that could drift apart.</p>",
+          },
+          {
+            heading: "Dependencies: what a package needs",
+            bodyHtml:
+              "<p>Lists every dependency declared by any imported package - which package it depends on, the version constraint, Required/Optional, and a live Satisfied/Unsatisfied status computed against what's actually installed.</p>",
+          },
+        ],
+      },
+      {
+        slug: "publishers-and-namespaces",
+        title: "Publishers: namespace ownership",
+        summary: "Who a package_id belongs to, and why importing an unregistered publisher's package is rejected until they're registered.",
+        sections: [
+          {
+            heading: "A package_id has an owner",
+            bodyHtml:
+              "<p>Every package's package_id is expected to be shaped &lt;publisher-key&gt;.&lt;name&gt; (bundled reference packages all use lanesra.*). Publishers is the registry of which keys are claimed - importing under an unregistered key is rejected outright, naming exactly what needs registering first.</p>",
+          },
+          {
+            heading: "Registering one",
+            bodyHtml:
+              "<p>+ Register publisher takes a Key (lowercased automatically), a display Name, and an optional Description. Two publishers are seeded automatically and can't be un-registered: lanesra (Official - owns every bundled reference package) and local (the implicit home for hand-built work).</p>",
+          },
+          {
+            heading: "What the table shows",
+            bodyHtml:
+              "<p>Each row shows key, name, description, and a live count of imported packages belonging to it, plus Official/Local badges for the two seeded ones. Registering a publisher only unblocks importing packages under its key - it doesn't retroactively reassign anything already built.</p>",
           },
         ],
       },
