@@ -334,6 +334,8 @@ export function artifactTypeLabel(type: string): string {
     custom_report: "report",
     numbering_override: "numbering override",
     custom_record: "seed record",
+    ai_agent: "AI agent",
+    ai_skill: "AI skill",
   };
   return labels[type] ?? type;
 }

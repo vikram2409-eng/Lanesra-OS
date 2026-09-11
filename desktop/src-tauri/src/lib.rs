@@ -246,6 +246,7 @@ pub fn run() {
             commands::ai_agent_commands::set_ai_agent_active,
             commands::ai_agent_commands::set_ai_agent_memory,
             commands::ai_agent_commands::list_ai_agent_memory_history,
+            commands::ai_agent_commands::set_ai_agent_guardrails,
             commands::ai_agent_commands::list_ai_skills,
             commands::ai_agent_commands::create_ai_skill,
             commands::ai_agent_commands::update_ai_skill,

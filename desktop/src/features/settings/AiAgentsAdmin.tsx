@@ -95,6 +95,7 @@ export function AiAgentsAdmin() {
   const [creating, setCreating] = useState(false);
   const [chatWith, setChatWith] = useState<AiAgentDefinition | null>(null);
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
+  const [guardrailsFor, setGuardrailsFor] = useState<AiAgentDefinition | null>(null);
   const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
   const [triggersFor, setTriggersFor] = useState<AiAgentDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +130,13 @@ export function AiAgentsAdmin() {
     mutationFn: ({ id, memory_md }: { id: string; memory_md: string }) => api.setAiAgentMemory(id, { memory_md }),
     onSuccess: () => {
       setMemoryFor(null);
+      invalidate();
+    },
+  });
+  const saveGuardrails = useMutation({
+    mutationFn: ({ id, guardrails_md }: { id: string; guardrails_md: string }) => api.setAiAgentGuardrails(id, { guardrails_md }),
+    onSuccess: () => {
+      setGuardrailsFor(null);
       invalidate();
     },
   });
@@ -195,6 +203,9 @@ export function AiAgentsAdmin() {
                       <button className="btn btn-secondary" onClick={() => setMemoryFor(a)}>
                         Memory
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setGuardrailsFor(a)}>
+                        Guardrails
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setRoutingFor(a)}>
                         Routing{a.model_routing && <span className="badge badge-success" style={{ marginLeft: 4 }}>on</span>}
                       </button>
@@ -248,6 +259,15 @@ export function AiAgentsAdmin() {
           onCancel={() => setMemoryFor(null)}
           onSave={(memory_md) => saveMemory.mutate({ id: memoryFor.id, memory_md })}
           pending={saveMemory.isPending}
+        />
+      )}
+
+      {guardrailsFor && (
+        <GuardrailsEditor
+          agent={guardrailsFor}
+          onCancel={() => setGuardrailsFor(null)}
+          onSave={(guardrails_md) => saveGuardrails.mutate({ id: guardrailsFor.id, guardrails_md })}
+          pending={saveGuardrails.isPending}
         />
       )}
 
@@ -358,6 +378,52 @@ function MemoryHistoryPanel({ agentId }: { agentId: string }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Phase 7c: an agent's operational-boundary statement - injected into its
+ * system prompt alongside persona/memory (advisory/prompted, not
+ * independently code-enforced; the one guard this phase does enforce in
+ * code, consecutive-identical-tool-call loop detection, needs no editable
+ * field here).
+ */
+function GuardrailsEditor({
+  agent,
+  onCancel,
+  onSave,
+  pending,
+}: {
+  agent: AiAgentDefinition;
+  onCancel: () => void;
+  onSave: (guardrailsMd: string) => void;
+  pending: boolean;
+}) {
+  const [value, setValue] = useState(agent.guardrails_md);
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ marginTop: 0 }}>
+        {agent.icon} {agent.name}'s guardrails
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        An operational-boundary statement included in this agent's system prompt - the model is instructed to respect it, but it is not
+        independently enforced. Loop detection (the same tool called 3 times in a row with identical inputs) is enforced in code
+        regardless of what's written here.
+      </p>
+      <textarea
+        style={{ width: "100%", minHeight: 160, fontFamily: "ui-monospace, monospace", fontSize: 13 }}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button className="btn btn-primary" onClick={() => onSave(value)} disabled={pending}>
+          {pending ? "Saving..." : "Save guardrails"}
+        </button>
+        <button className="btn btn-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

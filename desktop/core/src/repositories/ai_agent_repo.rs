@@ -19,6 +19,7 @@ fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
         icon: row.get("icon")?,
         system_prompt: row.get("system_prompt")?,
         memory_md: row.get("memory_md")?,
+        guardrails_md: row.get("guardrails_md")?,
         action_names: serde_json::from_str(&action_names_json).unwrap_or_default(),
         // Filled in by `hydrate` - not a column on this table.
         delegate_agent_ids: Vec::new(),
@@ -194,6 +195,15 @@ pub fn list_memory_history(conn: &Connection, agent_id: &str) -> rusqlite::Resul
         Ok(AiAgentMemorySnapshot { id: r.get(0)?, agent_id: r.get(1)?, memory_md: r.get(2)?, changed_by: r.get(3)?, created_at: r.get(4)? })
     })?;
     rows.collect()
+}
+
+/// Phase 7c: the agent's operational-boundary statement - a full
+/// overwrite, same "no merge logic, no history" shape `set_routing`
+/// already uses (unlike `memory_md`, this isn't self-revised by the agent
+/// at runtime, so there's no audit-trail need for it yet).
+pub fn set_guardrails(conn: &Connection, id: &str, guardrails_md: &str) -> rusqlite::Result<()> {
+    conn.execute("UPDATE ai_agents SET guardrails_md = ?1 WHERE id = ?2", (guardrails_md, id))?;
+    Ok(())
 }
 
 // --- Skills ---------------------------------------------------------------

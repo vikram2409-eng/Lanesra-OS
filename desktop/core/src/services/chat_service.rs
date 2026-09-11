@@ -760,6 +760,10 @@ fn agent_system_prompt(conn: &Connection, agent: &AiAgentDefinition) -> AppResul
         prompt.push_str("\n\nYour persistent memory from prior runs (revise it with update_memory whenever something worth remembering happens):\n\n");
         prompt.push_str(&agent.memory_md);
     }
+    if !agent.guardrails_md.trim().is_empty() {
+        prompt.push_str("\n\nOperational guardrails (must not be violated):\n\n");
+        prompt.push_str(&agent.guardrails_md);
+    }
     if !agent.skill_ids.is_empty() {
         prompt.push_str("\n\nSkills available to you - call use_skill by name when one is relevant:\n");
         for skill_id in &agent.skill_ids {
@@ -882,6 +886,16 @@ pub async fn run_agent_once(
 
     let mut history = seed_history;
     let mut produced = Vec::new();
+    // Phase 7c: loop-detection guardrail (`guardrails.md`'s own "if the
+    // same skill is invoked 3 times with identical parameters, terminate
+    // the loop and escalate" example) - tracks only the case of a round
+    // requesting exactly one tool call identical in name+arguments to the
+    // previous two; a round with zero or multiple calls, or a call that
+    // varies at all, resets the streak. Checked *before* executing the
+    // would-be 3rd repeat, not after, so a runaway destructive call never
+    // actually runs a third time.
+    let mut repeat_streak: u8 = 0;
+    let mut last_call: Option<(String, Value)> = None;
 
     for _round in 0..MAX_ROUNDS {
         // Phase 7a: every agent run goes through the Gateway, not
@@ -899,6 +913,25 @@ pub async fn run_agent_once(
                 return Ok(AgentRunOutcome { final_text: text, produced });
             }
             CompletionOutcome::ToolCalls { raw_assistant, calls } => {
+                match calls.first().filter(|_| calls.len() == 1) {
+                    Some(only_call) if last_call.as_ref().is_some_and(|(n, a)| *n == only_call.name && *a == only_call.arguments) => {
+                        repeat_streak += 1;
+                        if repeat_streak >= 3 {
+                            return Err(AppError::Validation(format!(
+                                "This agent tried to call '{}' with the same input 3 times in a row - stopping to avoid a runaway loop. Escalate to a human if this keeps happening.",
+                                only_call.name
+                            )));
+                        }
+                    }
+                    Some(only_call) => {
+                        repeat_streak = 1;
+                        last_call = Some((only_call.name.clone(), only_call.arguments.clone()));
+                    }
+                    None => {
+                        repeat_streak = 0;
+                        last_call = None;
+                    }
+                }
                 let persisted_assistant = redact_secret_tool_calls(&raw_assistant);
                 let assistant_msg = synthetic_message("assistant", None, Some(&persisted_assistant), None);
                 history.push(assistant_msg.clone());

@@ -164,6 +164,47 @@ pub struct ManifestDependency {
     pub is_required: bool,
 }
 
+/// Phase 7c: a reusable Skills-library entry, exported/imported by
+/// `name` (not id, which isn't stable across workspaces) - see
+/// `ManifestAiAgent`'s own doc comment for why every AI Foundry
+/// reference in this manifest works this way.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestAiSkill {
+    pub name: String,
+    pub description: String,
+    pub instructions_md: String,
+}
+
+/// Phase 7c: an AI Agent Foundry agent, exported/imported as part of a
+/// Solution - persona, seed Memory, Guardrails, and its Actions/Skills/
+/// delegate selections. `skill_names`/`delegate_names` reference other
+/// entries **by name** rather than by id: an id is only ever meaningful
+/// within the workspace that minted it, while a name is what a package
+/// author actually writes down and what stays stable across an export/
+/// import round-trip into a different workspace - the same reasoning
+/// `ManifestObject`'s own doc comment gives for using an explicit `key`
+/// instead of a database id. Deliberately NOT included here: `model_
+/// routing` (Phase 7a's Gateway policy - which providers exist, and their
+/// ids, is workspace-specific runtime configuration, not a portable
+/// agent definition) and memory/guardrails history (Phase 7b/7c's audit
+/// trails - a fresh install has no history yet, by definition).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestAiAgent {
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: String,
+    pub system_prompt: String,
+    #[serde(default)]
+    pub memory_md: String,
+    #[serde(default)]
+    pub guardrails_md: String,
+    pub action_names: Vec<String>,
+    #[serde(default)]
+    pub skill_names: Vec<String>,
+    #[serde(default)]
+    pub delegate_names: Vec<String>,
+}
+
 fn default_true() -> bool {
     true
 }
@@ -215,6 +256,15 @@ pub struct IndustryPackageManifest {
     pub app: Option<ManifestApp>,
     #[serde(default)]
     pub seed_data: Vec<ManifestSampleRecord>,
+    /// Phase 7c. Order matters on install: skills are created before
+    /// agents (an agent's `skill_names` must already exist), and agents
+    /// are created in manifest order so an earlier agent can be a later
+    /// agent's `delegate_names` target - see `industry_package_service::
+    /// run_install`'s own comment on this pass.
+    #[serde(default)]
+    pub ai_skills: Vec<ManifestAiSkill>,
+    #[serde(default)]
+    pub ai_agents: Vec<ManifestAiAgent>,
 }
 
 // --- Registry read models -------------------------------------------------

@@ -64,7 +64,15 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor
     require_admin(conn, actor_user_id)?;
     validate_agent_input(conn, workspace_id, None, input)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(ai_agent_repo::create(conn, &id, workspace_id, input, actor_user_id)?)
+    let created = ai_agent_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
+    // Phase 7c: makes this agent a Solution-addable component the moment
+    // it's created, same "every component-creating service function tags
+    // itself to 'local'" convention `custom_object_service::create`/
+    // `business_rule_service::create_rule` already follow - a package
+    // install's own retag pass corrects this afterward for an agent that
+    // came from a package instead of an admin's own hand.
+    super::solution_component_service::tag_local(conn, workspace_id, "ai_agent", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
@@ -104,6 +112,16 @@ pub fn set_memory(conn: &Connection, id: &str, memory_md: &str, actor_user_id: O
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     ai_agent_repo::update_memory(conn, id, memory_md, actor_user_id.unwrap_or("admin"))?;
+    Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
+}
+
+/// Phase 7c: an agent's operational-boundary statement - its own admin
+/// action, same "not part of the main create/update form payload" shape
+/// `set_memory` above already established.
+pub fn set_guardrails(conn: &Connection, id: &str, guardrails_md: &str, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+    require_admin(conn, actor_user_id)?;
+    ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    ai_agent_repo::set_guardrails(conn, id, guardrails_md)?;
     Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
 }
 
@@ -182,7 +200,9 @@ pub fn create_skill(conn: &Connection, workspace_id: &str, input: &AiSkillInput,
     require_admin(conn, actor_user_id)?;
     validate_skill_input(input)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(ai_agent_repo::create_skill(conn, &id, workspace_id, input, actor_user_id)?)
+    let created = ai_agent_repo::create_skill(conn, &id, workspace_id, input, actor_user_id)?;
+    super::solution_component_service::tag_local(conn, workspace_id, "ai_skill", &created.id, actor_user_id)?;
+    Ok(created)
 }
 
 pub fn update_skill(conn: &Connection, id: &str, input: &AiSkillInput, actor_user_id: Option<&str>) -> AppResult<AiSkill> {

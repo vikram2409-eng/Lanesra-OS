@@ -11,7 +11,7 @@ use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiProviderInput, AiSettingsInput};
-use lanesra_core::models::ai_agent::{AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
+use lanesra_core::models::ai_agent::{AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
@@ -1091,6 +1091,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_ai_agent_memory_history" => {
             let id: String = arg(args, "id")?;
             to_value(ai_agent_service::list_memory_history(conn, &id, actor)?)
+        }
+        "set_ai_agent_guardrails" => {
+            let id: String = arg(args, "id")?;
+            let input: AiAgentGuardrailsUpdate = arg(args, "input")?;
+            to_value(ai_agent_service::set_guardrails(conn, &id, &input.guardrails_md, actor)?)
         }
         "list_ai_skills" => {
             let active_only: bool = arg(args, "activeOnly")?;

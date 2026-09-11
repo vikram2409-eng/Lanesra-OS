@@ -2320,6 +2320,8 @@ export interface AiAgentDefinition {
   icon: string;
   system_prompt: string;
   memory_md: string;
+  /** Phase 7c: an operational-boundary statement injected into this agent's system prompt - advisory/prompted, not independently enforced. */
+  guardrails_md: string;
   action_names: string[];
   delegate_agent_ids: string[];
   skill_ids: string[];
@@ -2355,6 +2357,10 @@ export interface AiAgentMemorySnapshot {
   memory_md: string;
   changed_by: string;
   created_at: string;
+}
+
+export interface AiAgentGuardrailsUpdate {
+  guardrails_md: string;
 }
 
 export interface AiSkill {
