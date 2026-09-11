@@ -2398,11 +2398,21 @@ export interface PipelineStepInput {
   input_template: string;
 }
 
+// AI & Agentic Layer, Phase 7d: three orchestration topologies -
+// "sequential" (the original, still the default - each step chains via
+// {{previous_output}}), "consensus" (every step but the last is a
+// candidate run independently; the last synthesizes them via a new
+// {{candidate_outputs}} placeholder), and "peer_review" (exactly two
+// steps - a drafter and a reviewer - looping until the reviewer approves
+// or a round cap is hit). See ai_orchestration_service::run_internal.
+export type PipelineTopology = "sequential" | "consensus" | "peer_review";
+
 export interface AiAgentPipeline {
   id: string;
   workspace_id: string;
   name: string;
   description: string | null;
+  topology: PipelineTopology;
   steps: PipelineStep[];
   is_active: boolean;
   created_at: string;
@@ -2414,6 +2424,7 @@ export interface AiAgentPipeline {
 export interface AiAgentPipelineInput {
   name: string;
   description: string | null;
+  topology: PipelineTopology;
   steps: PipelineStepInput[];
 }
 
@@ -2464,6 +2475,68 @@ export interface AiAgentRun {
   started_at: string;
   finished_at: string | null;
   steps: AiAgentRunStep[];
+}
+
+// --- AI & Agentic Layer, Phase 7d - a real Evaluation Harness: a named
+// Suite of golden test Cases (an input plus a plain-English success
+// criteria) run against one Agent or Pipeline, graded by an LLM-as-judge
+// call. Mirrors core::models::ai_eval 1:1. See AiEvalSuitesAdmin.tsx.
+
+export interface AiEvalCase {
+  id: string;
+  case_order: number;
+  input_text: string;
+  success_criteria: string;
+}
+
+export interface AiEvalCaseInput {
+  input_text: string;
+  success_criteria: string;
+}
+
+export interface AiEvalSuite {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  target_type: AiAgentTargetType;
+  target_id: string;
+  cases: AiEvalCase[];
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiEvalSuiteInput {
+  name: string;
+  description: string | null;
+  target_type: AiAgentTargetType;
+  target_id: string;
+  cases: AiEvalCaseInput[];
+}
+
+export interface AiEvalCaseResult {
+  id: string;
+  case_id: string;
+  input_text: string;
+  success_criteria: string;
+  actual_output: string | null;
+  passed: boolean;
+  judge_reasoning: string | null;
+  error: string | null;
+}
+
+export interface AiEvalRun {
+  id: string;
+  suite_id: string;
+  workspace_id: string;
+  status: string;
+  passed_count: number;
+  failed_count: number;
+  started_at: string;
+  finished_at: string | null;
+  results: AiEvalCaseResult[];
 }
 
 // --- Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0) -

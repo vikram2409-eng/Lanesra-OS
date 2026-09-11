@@ -11,6 +11,25 @@ use serde::{Deserialize, Serialize};
 pub const TRIGGER_TARGET_TYPES: &[&str] = &["agent", "pipeline"];
 pub const TRIGGER_TYPES: &[&str] = &["schedule", "webhook"];
 
+/// AI & Agentic Layer, Phase 7d: three orchestration topologies a
+/// Pipeline's `steps` can mean.
+/// - `sequential` (the original, still the default): each step chains
+///   into the next via `{{previous_output}}`, exactly as before this
+///   phase.
+/// - `consensus`: every step but the last is a "candidate" - each runs
+///   independently against the pipeline's own input (never chained to
+///   each other), and the last step is the "synthesizer", which can
+///   reference every candidate's answer via a new `{{candidate_outputs}}`
+///   placeholder.
+/// - `peer_review`: exactly two steps - a drafter and a reviewer -
+///   looping (drafter drafts, reviewer critiques, drafter revises from
+///   that critique, ...) until the reviewer's answer starts with
+///   "APPROVED" or `MAX_PEER_REVIEW_ROUNDS` is reached.
+///
+/// See `services::ai_orchestration_service::run_internal` for the actual
+/// execution split.
+pub const PIPELINE_TOPOLOGIES: &[&str] = &["sequential", "consensus", "peer_review"];
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PipelineStep {
     pub id: String,
@@ -35,6 +54,7 @@ pub struct AiAgentPipeline {
     pub workspace_id: String,
     pub name: String,
     pub description: Option<String>,
+    pub topology: String,
     pub steps: Vec<PipelineStep>,
     pub is_active: bool,
     pub created_at: String,
@@ -47,10 +67,16 @@ pub struct AiAgentPipeline {
 pub struct AiAgentPipelineInput {
     pub name: String,
     pub description: Option<String>,
+    #[serde(default = "default_topology")]
+    pub topology: String,
     /// Replace-all-on-update, same convention every other ordered list
     /// in this codebase (business rule conditions, workflow actions)
     /// already uses.
     pub steps: Vec<PipelineStepInput>,
+}
+
+fn default_topology() -> String {
+    "sequential".to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]

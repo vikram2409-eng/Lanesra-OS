@@ -29,6 +29,9 @@ import type {
   AiAgentTriggerInput,
   AiAgentTargetType,
   AiAgentRun,
+  AiEvalSuite,
+  AiEvalSuiteInput,
+  AiEvalRun,
   AppDefinition,
   AppDefinitionInput,
   AppDefinitionUpdate,
@@ -336,6 +339,16 @@ export const api = {
   runAiAgent: (id: string, input: string) => callAdminAction<AiAgentRun>("run_ai_agent", { id, input }, "POST", `/api/admin/ai-agents/${encodeURIComponent(id)}/run`, { input }),
   runAiAgentPipeline: (id: string, input: string) =>
     callAdminAction<AiAgentRun>("run_ai_agent_pipeline", { id, input }, "POST", `/api/admin/ai-agent-pipelines/${encodeURIComponent(id)}/run`, { input }),
+  // AI & Agentic Layer, Phase 7d - Eval Suite CRUD/history is plain
+  // CRUD/reads; `runAiEvalSuite` makes a real judge-model call per case,
+  // so it's the same admin-action shape as `runAiAgentPipeline` above.
+  listAiEvalSuites: () => call<AiEvalSuite[]>("list_ai_eval_suites"),
+  getAiEvalSuite: (id: string) => call<AiEvalSuite | null>("get_ai_eval_suite", { id }),
+  createAiEvalSuite: (input: AiEvalSuiteInput) => call<AiEvalSuite>("create_ai_eval_suite", { input }),
+  updateAiEvalSuite: (id: string, input: AiEvalSuiteInput) => call<AiEvalSuite>("update_ai_eval_suite", { id, input }),
+  deleteAiEvalSuite: (id: string) => call<void>("delete_ai_eval_suite", { id }),
+  listAiEvalRuns: (suiteId: string, limit: number) => call<AiEvalRun[]>("list_ai_eval_runs", { suiteId, limit }),
+  runAiEvalSuite: (id: string) => callAdminAction<AiEvalRun>("run_ai_eval_suite", { id }, "POST", `/api/admin/ai-eval-suites/${encodeURIComponent(id)}/run`),
 
   login: (credentials: Credentials) => call<User>("login", { credentials }),
   logout: () => call<void>("logout"),

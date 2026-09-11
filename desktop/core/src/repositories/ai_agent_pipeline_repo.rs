@@ -13,6 +13,7 @@ fn map_pipeline_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentPipeline> {
         workspace_id: row.get("workspace_id")?,
         name: row.get("name")?,
         description: row.get("description")?,
+        topology: row.get("topology")?,
         steps: Vec::new(), // filled in by `hydrate`
         is_active: row.get("is_active")?,
         created_at: row.get("created_at")?,
@@ -51,9 +52,9 @@ fn replace_steps(conn: &Connection, pipeline_id: &str, steps: &[crate::models::a
 pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentPipelineInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentPipeline> {
     let now = now_iso();
     conn.execute(
-        "INSERT INTO ai_agent_pipelines (id, workspace_id, name, description, is_active, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?5, ?6)",
-        (id, workspace_id, &input.name, &input.description, &now, actor_user_id),
+        "INSERT INTO ai_agent_pipelines (id, workspace_id, name, description, topology, is_active, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?6, ?7)",
+        (id, workspace_id, &input.name, &input.description, &input.topology, &now, actor_user_id),
     )?;
     replace_steps(conn, id, &input.steps)?;
     get(conn, id).map(|p| p.expect("just inserted"))
@@ -62,8 +63,8 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentPi
 pub fn update(conn: &Connection, id: &str, input: &AiAgentPipelineInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentPipeline> {
     let now = now_iso();
     conn.execute(
-        "UPDATE ai_agent_pipelines SET name = ?1, description = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?5",
-        (&input.name, &input.description, &now, actor_user_id, id),
+        "UPDATE ai_agent_pipelines SET name = ?1, description = ?2, topology = ?3, updated_at = ?4, updated_by = ?5 WHERE id = ?6",
+        (&input.name, &input.description, &input.topology, &now, actor_user_id, id),
     )?;
     replace_steps(conn, id, &input.steps)?;
     get(conn, id).map(|p| p.expect("just updated"))

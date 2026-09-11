@@ -3,6 +3,7 @@ pub mod ai_agent_pending_run_repo;
 pub mod ai_agent_pipeline_repo;
 pub mod ai_agent_repo;
 pub mod ai_agent_run_repo;
+pub mod ai_eval_repo;
 pub mod ai_gateway_failover_repo;
 pub mod ai_provider_repo;
 pub mod ai_settings_repo;

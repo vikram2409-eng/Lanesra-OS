@@ -22,7 +22,7 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::ai_agent_pipeline::{AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentTrigger, AiAgentTriggerInput, TRIGGER_TARGET_TYPES, TRIGGER_TYPES};
+use crate::models::ai_agent_pipeline::{AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentTrigger, AiAgentTriggerInput, PIPELINE_TOPOLOGIES, TRIGGER_TARGET_TYPES, TRIGGER_TYPES};
 use crate::repositories::{ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, ai_agent_run_repo};
 use crate::services::chat_service;
 
@@ -34,8 +34,20 @@ fn validate_pipeline_input(conn: &Connection, workspace_id: &str, input: &AiAgen
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Pipeline name is required".into()));
     }
+    if !PIPELINE_TOPOLOGIES.contains(&input.topology.as_str()) {
+        return Err(AppError::Validation(format!("Invalid topology '{}'", input.topology)));
+    }
     if input.steps.is_empty() {
         return Err(AppError::Validation("A pipeline needs at least one step".into()));
+    }
+    match input.topology.as_str() {
+        "consensus" if input.steps.len() < 2 => {
+            return Err(AppError::Validation("A consensus pipeline needs at least one candidate step plus a synthesizer step".into()));
+        }
+        "peer_review" if input.steps.len() != 2 => {
+            return Err(AppError::Validation("A peer-review pipeline needs exactly two steps - a drafter and a reviewer".into()));
+        }
+        _ => {}
     }
     for step in &input.steps {
         let agent = ai_agent_repo::get(conn, &step.agent_id)?.ok_or_else(|| AppError::Validation("Selected agent does not exist".into()))?;
@@ -76,7 +88,10 @@ pub fn set_pipeline_active(conn: &Connection, id: &str, is_active: bool, actor_u
 
 // --- Triggers ---------------------------------------------------------
 
-fn validate_target_exists(conn: &Connection, workspace_id: &str, target_type: &str, target_id: &str) -> AppResult<()> {
+/// `pub(crate)` so `ai_eval_service` (Phase 7d) can validate an Eval
+/// Suite's own agent/pipeline target with the identical rule, rather
+/// than duplicating it.
+pub(crate) fn validate_target_exists(conn: &Connection, workspace_id: &str, target_type: &str, target_id: &str) -> AppResult<()> {
     if !TRIGGER_TARGET_TYPES.contains(&target_type) {
         return Err(AppError::Validation(format!("Invalid target type '{target_type}'")));
     }
@@ -122,9 +137,130 @@ pub fn delete_trigger(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
 
 const PREVIOUS_OUTPUT_PLACEHOLDER: &str = "{{previous_output}}";
 const TRIGGER_INPUT_PLACEHOLDER: &str = "{{trigger_input}}";
+/// Consensus topology only - resolved into every candidate step's final
+/// answer, numbered, on the synthesizer step's own `input_template`.
+const CANDIDATE_OUTPUTS_PLACEHOLDER: &str = "{{candidate_outputs}}";
+/// Peer-review topology only - a reviewer's answer approves the current
+/// draft by starting with this marker (case-insensitive); anything else
+/// is treated as feedback for another drafting round.
+const PEER_REVIEW_APPROVAL_MARKER: &str = "APPROVED";
+/// A drafter/reviewer exchange this many rounds without approval fails
+/// the run rather than looping forever - the same "stop and surface
+/// distinctly" guard Phase 7c's loop-detection already established for a
+/// single agent's own tool-calling loop.
+const MAX_PEER_REVIEW_ROUNDS: u8 = 3;
 
 fn resolve_template(template: &str, previous_output: &str, trigger_input: &str) -> String {
     template.replace(PREVIOUS_OUTPUT_PLACEHOLDER, previous_output).replace(TRIGGER_INPUT_PLACEHOLDER, trigger_input)
+}
+
+/// Runs one agent against `input_text`, appends the one
+/// `ai_agent_run_steps` row this step gets regardless of topology, and
+/// returns its final text - the single place every topology's execution
+/// funnels through, so a missing agent or a provider error is recorded
+/// identically everywhere.
+#[allow(clippy::too_many_arguments)]
+async fn run_step(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    run_id: &str,
+    agent_id: &str,
+    step_order: i64,
+    input_text: &str,
+    missing_agent_msg: &str,
+) -> AppResult<String> {
+    let agent = match ai_agent_repo::get(conn, agent_id)? {
+        Some(a) => a,
+        None => {
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(missing_agent_msg), 0)?;
+            return Err(AppError::Validation(missing_agent_msg.to_string()));
+        }
+    };
+    match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, input_text).await {
+        Ok(outcome) => {
+            let tool_calls = outcome.produced.iter().filter(|m| m.role == "tool").count() as i64;
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, Some(&outcome.final_text), None, tool_calls)?;
+            Ok(outcome.final_text)
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(&msg), 0)?;
+            Err(AppError::Validation(msg))
+        }
+    }
+}
+
+/// The original (and still default) topology: a fixed chain, each step's
+/// `{{previous_output}}` resolving to the prior step's answer.
+async fn run_sequential(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, steps: Vec<(String, String)>, trigger_input: &str) -> AppResult<()> {
+    let mut previous_output = String::new();
+    for (step_order, (agent_id, template)) in steps.into_iter().enumerate() {
+        let input_text = resolve_template(&template, &previous_output, trigger_input);
+        let msg = format!("Step {} names an agent that no longer exists", step_order + 1);
+        previous_output = run_step(conn, workspace_id, master_key, actor, run_id, &agent_id, step_order as i64, &input_text, &msg).await?;
+    }
+    Ok(())
+}
+
+/// Every step but the last ("candidates") runs independently against the
+/// same trigger input - never chained to each other, since there is no
+/// single "previous" among peers. The last step ("synthesizer") can then
+/// reference every candidate's answer via `{{candidate_outputs}}`.
+/// `validate_pipeline_input` already guarantees at least 2 steps for this
+/// topology.
+async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, mut steps: Vec<(String, String)>, trigger_input: &str) -> AppResult<()> {
+    let (synth_agent_id, synth_template) = steps.pop().expect("validate_pipeline_input guarantees >= 2 steps for consensus");
+    let synth_step_order = steps.len() as i64;
+
+    let mut candidate_texts = Vec::with_capacity(steps.len());
+    for (step_order, (agent_id, template)) in steps.into_iter().enumerate() {
+        let input_text = resolve_template(&template, "", trigger_input);
+        let msg = format!("Candidate {} names an agent that no longer exists", step_order + 1);
+        let output = run_step(conn, workspace_id, master_key, actor, run_id, &agent_id, step_order as i64, &input_text, &msg).await?;
+        candidate_texts.push(format!("Candidate {}: {}", step_order + 1, output));
+    }
+
+    let candidate_outputs = candidate_texts.join("\n\n");
+    let input_text = resolve_template(&synth_template, "", trigger_input).replace(CANDIDATE_OUTPUTS_PLACEHOLDER, &candidate_outputs);
+    let msg = "The synthesizer step names an agent that no longer exists".to_string();
+    run_step(conn, workspace_id, master_key, actor, run_id, &synth_agent_id, synth_step_order, &input_text, &msg).await?;
+    Ok(())
+}
+
+/// Exactly two steps - a drafter and a reviewer - looping: the reviewer's
+/// answer becomes the drafter's `{{previous_output}}` for the next round
+/// (feedback to revise from), and the drafter's own latest answer becomes
+/// the reviewer's `{{previous_output}}` (the draft to critique).
+/// Approved the moment the reviewer's answer starts with "APPROVED"
+/// (case-insensitive); fails clearly, rather than looping forever, once
+/// `MAX_PEER_REVIEW_ROUNDS` is reached without approval.
+/// `validate_pipeline_input` already guarantees exactly 2 steps for this
+/// topology.
+async fn run_peer_review(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, steps: Vec<(String, String)>, trigger_input: &str) -> AppResult<()> {
+    let (drafter_id, drafter_template) = steps[0].clone();
+    let (reviewer_id, reviewer_template) = steps[1].clone();
+
+    let mut review_feedback = String::new();
+    let mut step_order: i64 = 0;
+    for _ in 0..MAX_PEER_REVIEW_ROUNDS {
+        let draft_input = resolve_template(&drafter_template, &review_feedback, trigger_input);
+        let draft = run_step(conn, workspace_id, master_key, actor, run_id, &drafter_id, step_order, &draft_input, "The drafter step names an agent that no longer exists").await?;
+        step_order += 1;
+
+        let review_input = resolve_template(&reviewer_template, &draft, trigger_input);
+        let review = run_step(conn, workspace_id, master_key, actor, run_id, &reviewer_id, step_order, &review_input, "The reviewer step names an agent that no longer exists").await?;
+        step_order += 1;
+
+        if review.trim_start().to_uppercase().starts_with(PEER_REVIEW_APPROVAL_MARKER) {
+            return Ok(());
+        }
+        review_feedback = review;
+    }
+    Err(AppError::Validation(format!(
+        "Peer review did not reach approval after {MAX_PEER_REVIEW_ROUNDS} rounds - see the reviewer's latest feedback in the run steps above."
+    )))
 }
 
 /// A manual "Run Now" (the admin action route, and the admin chat
@@ -177,17 +313,17 @@ async fn run_internal(
     source_entity_type: Option<&str>,
     source_entity_id: Option<&str>,
 ) -> AppResult<AiAgentRun> {
-    let steps: Vec<(String, String)> = match target_type {
+    let (topology, steps): (String, Vec<(String, String)>) = match target_type {
         "agent" => {
             let agent = ai_agent_repo::get(conn, target_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
-            vec![(agent.id, TRIGGER_INPUT_PLACEHOLDER.to_string())]
+            ("sequential".to_string(), vec![(agent.id, TRIGGER_INPUT_PLACEHOLDER.to_string())])
         }
         "pipeline" => {
             let pipeline = ai_agent_pipeline_repo::get(conn, target_id)?.ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
             if pipeline.steps.is_empty() {
                 return Err(AppError::Validation("This pipeline has no steps".into()));
             }
-            pipeline.steps.into_iter().map(|s| (s.agent_id, s.input_template)).collect()
+            (pipeline.topology.clone(), pipeline.steps.into_iter().map(|s| (s.agent_id, s.input_template)).collect())
         }
         other => return Err(AppError::Validation(format!("Unknown target type '{other}'"))),
     };
@@ -195,36 +331,17 @@ async fn run_internal(
     let run_id = new_uuid();
     ai_agent_run_repo::start_run(conn, &run_id, workspace_id, target_type, target_id, triggered_by, source_entity_type, source_entity_id)?;
 
-    let mut previous_output = String::new();
-    let mut overall_error: Option<String> = None;
-    for (step_order, (agent_id, template)) in steps.into_iter().enumerate() {
-        let input_text = resolve_template(&template, &previous_output, trigger_input);
-        let agent = match ai_agent_repo::get(conn, &agent_id)? {
-            Some(a) => a,
-            None => {
-                let msg = format!("Step {} names an agent that no longer exists", step_order + 1);
-                ai_agent_run_repo::append_run_step(conn, &run_id, &agent_id, step_order as i64, &input_text, None, Some(&msg), 0)?;
-                overall_error = Some(msg);
-                break;
-            }
-        };
-        match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, &input_text).await {
-            Ok(outcome) => {
-                let tool_calls = outcome.produced.iter().filter(|m| m.role == "tool").count() as i64;
-                ai_agent_run_repo::append_run_step(conn, &run_id, &agent_id, step_order as i64, &input_text, Some(&outcome.final_text), None, tool_calls)?;
-                previous_output = outcome.final_text;
-            }
-            Err(e) => {
-                let msg = e.to_string();
-                ai_agent_run_repo::append_run_step(conn, &run_id, &agent_id, step_order as i64, &input_text, None, Some(&msg), 0)?;
-                overall_error = Some(msg);
-                break;
-            }
-        }
-    }
+    let result = match topology.as_str() {
+        "consensus" => run_consensus(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await,
+        "peer_review" => run_peer_review(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await,
+        _ => run_sequential(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await,
+    };
 
-    let status = if overall_error.is_some() { "failed" } else { "succeeded" };
-    ai_agent_run_repo::finish_run(conn, &run_id, status, overall_error.as_deref())?;
+    let (status, error_text) = match &result {
+        Ok(()) => ("succeeded", None),
+        Err(e) => ("failed", Some(e.to_string())),
+    };
+    ai_agent_run_repo::finish_run(conn, &run_id, status, error_text.as_deref())?;
     Ok(ai_agent_run_repo::get_run(conn, &run_id)?.expect("just finished"))
 }
 

@@ -3,6 +3,7 @@ pub mod agent;
 pub mod ai;
 pub mod ai_agent;
 pub mod ai_agent_pipeline;
+pub mod ai_eval;
 pub mod app_definition;
 pub mod audit;
 pub mod backup;

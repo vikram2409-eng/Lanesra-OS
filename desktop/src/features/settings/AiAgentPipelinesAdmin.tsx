@@ -10,7 +10,19 @@ import type { AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, PipelineStepInp
 // delegate_to_agent tool - see chat_service.rs's own doc comment on why
 // both exist), plus each Pipeline's Triggers and its run history.
 function emptyInput(): AiAgentPipelineInput {
-  return { name: "", description: "", steps: [] };
+  return { name: "", description: "", topology: "sequential", steps: [] };
+}
+
+const TOPOLOGY_LABELS: Record<AiAgentPipeline["topology"], string> = {
+  sequential: "Sequential",
+  consensus: "Consensus",
+  peer_review: "Peer review",
+};
+
+function stepRoleLabel(topology: AiAgentPipelineInput["topology"], i: number, total: number): string {
+  if (topology === "consensus") return i === total - 1 ? "Synthesizer" : `Candidate ${i + 1}`;
+  if (topology === "peer_review") return i === 0 ? "Drafter" : "Reviewer";
+  return `Step ${i + 1}`;
 }
 
 export function AiAgentPipelinesAdmin() {
@@ -57,6 +69,19 @@ export function AiAgentPipelinesAdmin() {
     return a ? `${a.icon} ${a.name}` : "(deleted agent)";
   }
 
+  function stepsSummary(p: AiAgentPipeline): string {
+    const names = p.steps.map((s) => agentName(s.agent_id));
+    if (p.topology === "consensus" && names.length > 0) {
+      const synth = names[names.length - 1];
+      const candidates = names.slice(0, -1);
+      return `${candidates.join(" + ")} → ${synth}`;
+    }
+    if (p.topology === "peer_review" && names.length === 2) {
+      return `${names[0]} ⇄ ${names[1]}`;
+    }
+    return names.join(" → ");
+  }
+
   return (
     <div>
       <div className="card">
@@ -89,9 +114,12 @@ export function AiAgentPipelinesAdmin() {
                 <tr key={p.id}>
                   <td>
                     <b>{p.name}</b>
+                    <div style={{ marginTop: 2 }}>
+                      <span className="badge">{TOPOLOGY_LABELS[p.topology]}</span>
+                    </div>
                     {p.description && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{p.description}</div>}
                   </td>
-                  <td>{p.steps.map((s) => agentName(s.agent_id)).join(" → ")}</td>
+                  <td>{stepsSummary(p)}</td>
                   <td>
                     <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>
                   </td>
@@ -209,13 +237,13 @@ function AiAgentPipelineForm({
 }) {
   const [input, setInput] = useState<AiAgentPipelineInput>(
     initial
-      ? { name: initial.name, description: initial.description, steps: initial.steps.map((s) => ({ agent_id: s.agent_id, input_template: s.input_template })) }
+      ? { name: initial.name, description: initial.description, topology: initial.topology, steps: initial.steps.map((s) => ({ agent_id: s.agent_id, input_template: s.input_template })) }
       : emptyInput(),
   );
 
   function addStep() {
     if (agents.length === 0) return;
-    setInput((prev) => ({ ...prev, steps: [...prev.steps, { agent_id: agents[0].id, input_template: prev.steps.length === 0 ? "{{trigger_input}}" : "{{previous_output}}" }] }));
+    setInput((prev) => ({ ...prev, steps: [...prev.steps, { agent_id: agents[0].id, input_template: prev.steps.length === 0 || prev.topology === "consensus" ? "{{trigger_input}}" : "{{previous_output}}" }] }));
   }
   function updateStep(i: number, patch: Partial<PipelineStepInput>) {
     setInput((prev) => ({ ...prev, steps: prev.steps.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
@@ -252,11 +280,32 @@ function AiAgentPipelineForm({
           <input value={input.description ?? ""} onChange={(e) => setInput({ ...input, description: e.target.value || null })} />
         </div>
         <div className="field full">
+          <label>Topology</label>
+          <select value={input.topology} onChange={(e) => setInput({ ...input, topology: e.target.value as AiAgentPipelineInput["topology"] })}>
+            <option value="sequential">Sequential - a fixed chain, each step sees the prior step's answer</option>
+            <option value="consensus">Consensus - every step but the last runs independently; the last synthesizes them all</option>
+            <option value="peer_review">Peer review - exactly 2 steps: a drafter and a reviewer, looping until approved</option>
+          </select>
+          {input.topology === "consensus" && (
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>
+              Every step above the last is a candidate (runs on <code>{"{{trigger_input}}"}</code> only); the last step is the synthesizer and can
+              reference every candidate's answer via <code>{"{{candidate_outputs}}"}</code>.
+            </p>
+          )}
+          {input.topology === "peer_review" && (
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>
+              Exactly 2 steps: step 1 is the drafter (its <code>{"{{previous_output}}"}</code> is the reviewer's latest feedback, empty on round 1),
+              step 2 is the reviewer (its <code>{"{{previous_output}}"}</code> is the latest draft). The reviewer approves by starting its answer with
+              "APPROVED"; up to 3 rounds before giving up.
+            </p>
+          )}
+        </div>
+        <div className="field full">
           <label>Steps</label>
           {input.steps.length === 0 && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No steps yet.</p>}
           {input.steps.map((step, i) => (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{i + 1}.</span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)", minWidth: 90 }}>{stepRoleLabel(input.topology, i, input.steps.length)}</span>
               <select value={step.agent_id} onChange={(e) => updateStep(i, { agent_id: e.target.value })}>
                 {agents.map((a) => (
                   <option key={a.id} value={a.id}>
