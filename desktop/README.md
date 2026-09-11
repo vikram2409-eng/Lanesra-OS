@@ -591,24 +591,86 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   password before the app is usable again - reuses the existing `login`
   command rather than a separate "unlock" concept. See
   `src/components/SessionLock.tsx`.
+- **Global search** (spec §5.3/§9.3): a lightweight, case-insensitive
+  substring search across every core entity's natural display fields, plus
+  any custom field an admin has flagged `is_searchable` - not a full-text
+  engine (no ranking/tokenization beyond which table a match came from);
+  see `core/src/services/search_service.rs`.
+- **Screen/App Builder**: named layouts (per entity, by role) with tabbed,
+  multi-column field sections and Draft → Publish, driving both the
+  create/edit form and the read-only detail view; custom-relationship
+  related-lists can be placed on a specific tab.
+- **Dashboard customization**: named dashboard layouts (KPI, chart and
+  record-list widgets) assigned to roles, Draft → Publish, alongside the
+  original fixed 7-tile KPI picker.
+- **App Builder**: an Administrator groups any set of objects, their
+  published screens, and one dashboard into a named, publishable app with
+  its own icon, granted to roles or individual users as Viewer or Editor,
+  enforced server-side on every write including status-lifecycle actions.
+- **App Catalog** (10 industry apps): Field Service, Property Management,
+  Construction & Contractors, Professional Services, Practice
+  Administration, Recruitment & Staffing, Real Estate Brokerage, Legal
+  Practice, Nonprofit & Association Management, and Auto Repair & Service
+  Garage - each a versioned package manifest (objects, fields,
+  relationships, business rules, workflows, screens, reports, an optional
+  dashboard) installed with pre-install validation, an automatic safety
+  backup, and a transactional, rollback-safe install that reuses the
+  workspace's existing Company/Contact/Task records instead of creating a
+  parallel data model.
+- **Deployment Management**: a Publisher registry with enforced namespace
+  validation, component-tagging across every admin-configurable artifact
+  (a synthetic "Local Workspace" grouping shows everything built by hand),
+  named/versioned Solutions curated one component at a time, real
+  export/import between workspaces, and update-with-diff (a real per-key
+  Added/Modified/Removed diff for objects/fields, a summarized
+  added-count for everything else) before a package update is applied.
+- **Integration Hub**: AES-256-GCM-encrypted Connections (REST, SFTP,
+  PostgreSQL, OData, SMTP), OpenAPI 3.x Connectors usable as a Workflow
+  Automation action, a generic `/api/v1/objects/...` REST API secured by
+  hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a
+  generalized CSV Data Exchange wizard, read-only External Objects, and
+  Integration Jobs run by a real background scheduler on the Team
+  Workspace server (mTLS is the one deliberate, named gap).
+- **Saved Views & Bulk Actions**: any filterable list screen can save its
+  current filter/sort/group-by as a named view (Private/Shared, with an
+  admin-settable default), reuse it as a dashboard record-list widget's
+  data source, and run bulk update-status/reassign-owner/tag/archive
+  operations across a multi-select.
+- **AI & Agentic Layer**: a bring-your-own-key Chat Assistant and a native
+  Model Context Protocol server & CLI (JSON-RPC 2.0, same scoped API keys
+  as the REST API); an AI Agent Foundry for named, admin-defined agents -
+  persona, a per-tool Actions checklist, persistent Memory (with real
+  change history - every prior value is snapshotted before being
+  overwritten, whether by the agent's own `update_memory` tool or an
+  admin's direct edit), a shared Skills library, and depth-guarded
+  delegation to other agents; Orchestration - deterministic Pipelines,
+  fired manually, on a schedule, from an authenticated webhook, or as a
+  new Workflow Automation action, every run landing in one unified
+  history; a Unified AI Gateway - named AI Providers, per-agent
+  primary/fallback/local-fallback model routing with automatic failover,
+  real token-usage accounting against System/Agent daily budgets, and
+  DLP-driven forced air-gapping the moment a request touches a configured
+  sensitive-data class; and a `search_records` tool giving agents ranked
+  full-text search over Custom Object records via a SQLite FTS5 index -
+  `bm25()` lexical relevance, deliberately not embeddings or a vector
+  database. See `core/src/services/chat_service.rs`,
+  `ai_agent_service.rs`, `ai_gateway_service.rs`, `search_service.rs`,
+  `server/src/mcp.rs`.
 
 ## What's deferred to a later phase
 
 - Custom fields as extra columns on list screens, and in CSV import/export
-- Global search / list-view filtering (spec §5.3/§9.3, Ctrl+K) - this
-  build has no such feature anywhere yet, which is why the new
-  `is_searchable`/`is_filterable` custom field flags (see above) are
-  stored as forward-looking metadata rather than wired to real behavior.
-  Building it would also give those two flags their first actual use.
-- A no-code screen/layout designer for custom (or built-in) object forms -
-  the largest single remaining piece of the admin extensibility spec,
-  intentionally tackled last
 - A full drag-and-drop report/dashboard builder beyond the simple
   group-by-and-aggregate report builder, and reordering Dashboard KPI tiles
-- The Approval Framework, Data Quality Center, Form Builder, Application
-  Builder, and AI Boundary sections of the v1.3 spec - each is its own
-  substantial subsystem, out of scope for the admin-extensibility phases
-  (relationships/business rules/workflow/polish) done so far
+- The Approval Framework, Data Quality Center, and Form Builder sections
+  of the v1.3 spec - each is its own substantial subsystem, out of scope
+  for the phases done so far
+- A declarative export/import format for AI Agents/Skills as part of a
+  Solution (today a Solution's components are objects/fields/
+  relationships/rules/workflows/screens/reports - not yet an agent's
+  persona/memory/skills/delegation), a formal evaluation harness for
+  agent runs, and OpenTelemetry-style distributed tracing of a run's
+  prompt construction/model dispatch/tool execution/guardrail checks
 - Making session auto-lock's 15-minute timeout admin-configurable
 - A nicer inline banner for non-blocking business-rule `show_message`
   actions - currently a plain `alert()` (see `src/lib/ruleMessages.ts`)
@@ -636,19 +698,15 @@ To type-check and build the frontend only:
 npm run build
 ```
 
-To build/test the Rust backend on its own:
+To build/test the Rust backend on its own (from the `desktop/` workspace root):
 
 ```bash
-cd src-tauri
-cargo test     # unit tests (money, numbering, migrations, auth) +
-               # integration tests: tests/lifecycle.rs (full company ->
-               # opportunity -> quote -> order -> invoice -> payment flow,
-               # foreign key enforcement, cross-company relationship
-               # validation), tests/contracts_and_tasks.rs (contract
-               # numbering/renewal alerts, task relationship validation
-               # and open/overdue counts), and tests/user_management.rs
-               # (admin-only authorization, last-administrator guard,
-               # password reset)
+cargo test --workspace   # every crate: lanesra-core's 60+ integration test
+                         # files (one per shipped feature area - money,
+                         # numbering, the full sales lifecycle, every
+                         # admin-extensibility phase, App Catalog, Deployment
+                         # Management, Integration Hub, the AI & Agentic
+                         # Layer, ...), plus lanesra-server's HTTP tests
 ```
 
 Producing the actual signed Windows `.exe`/`.msi` installer requires a
