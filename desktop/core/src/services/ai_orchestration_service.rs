@@ -49,6 +49,15 @@ fn validate_pipeline_input(conn: &Connection, workspace_id: &str, input: &AiAgen
         }
         _ => {}
     }
+    // Phase 7e: a human-approval gate pauses and resumes at a specific
+    // step index in a fixed chain - a shape "sequential" alone has.
+    // Consensus's candidates run independently (pausing mid-way has no
+    // single well-defined resume point) and peer_review already has its
+    // own bounded-loop stop condition; both are out of scope for this
+    // pass.
+    if input.topology != "sequential" && input.steps.iter().any(|s| s.requires_approval) {
+        return Err(AppError::Validation("Human-approval gates are only supported on sequential pipelines".into()));
+    }
     for step in &input.steps {
         let agent = ai_agent_repo::get(conn, &step.agent_id)?.ok_or_else(|| AppError::Validation("Selected agent does not exist".into()))?;
         if agent.workspace_id != workspace_id || !agent.is_active {
@@ -155,10 +164,11 @@ fn resolve_template(template: &str, previous_output: &str, trigger_input: &str) 
 }
 
 /// Runs one agent against `input_text`, appends the one
-/// `ai_agent_run_steps` row this step gets regardless of topology, and
-/// returns its final text - the single place every topology's execution
-/// funnels through, so a missing agent or a provider error is recorded
-/// identically everywhere.
+/// `ai_agent_run_steps` row this step gets regardless of topology
+/// (timed - `started_at`/`finished_at` are this phase's basic tracing
+/// primitive, see `run_to_otlp_json`), and returns its final text - the
+/// single place every topology's execution funnels through, so a missing
+/// agent or a provider error is recorded identically everywhere.
 #[allow(clippy::too_many_arguments)]
 async fn run_step(
     conn: &Connection,
@@ -171,37 +181,66 @@ async fn run_step(
     input_text: &str,
     missing_agent_msg: &str,
 ) -> AppResult<String> {
+    let started_at = crate::domain::ids::now_iso();
     let agent = match ai_agent_repo::get(conn, agent_id)? {
         Some(a) => a,
         None => {
-            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(missing_agent_msg), 0)?;
+            let finished_at = crate::domain::ids::now_iso();
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(missing_agent_msg), 0, &started_at, &finished_at)?;
             return Err(AppError::Validation(missing_agent_msg.to_string()));
         }
     };
     match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, input_text).await {
         Ok(outcome) => {
+            let finished_at = crate::domain::ids::now_iso();
             let tool_calls = outcome.produced.iter().filter(|m| m.role == "tool").count() as i64;
-            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, Some(&outcome.final_text), None, tool_calls)?;
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, Some(&outcome.final_text), None, tool_calls, &started_at, &finished_at)?;
             Ok(outcome.final_text)
         }
         Err(e) => {
+            let finished_at = crate::domain::ids::now_iso();
             let msg = e.to_string();
-            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(&msg), 0)?;
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(&msg), 0, &started_at, &finished_at)?;
             Err(AppError::Validation(msg))
         }
     }
 }
 
+/// What a topology's execution actually did - `run_internal` (a fresh
+/// run) and `approve_pending_step` (resuming one) both act on this the
+/// same way. Only `run_sequential_from` can ever produce `Paused` -
+/// consensus/peer_review always resolve to `Completed` or `Err`.
+enum RunOutcome {
+    Completed,
+    Paused { resume_at_step: i64, previous_output: String },
+}
+
 /// The original (and still default) topology: a fixed chain, each step's
-/// `{{previous_output}}` resolving to the prior step's answer.
-async fn run_sequential(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, steps: Vec<(String, String)>, trigger_input: &str) -> AppResult<()> {
-    let mut previous_output = String::new();
-    for (step_order, (agent_id, template)) in steps.into_iter().enumerate() {
-        let input_text = resolve_template(&template, &previous_output, trigger_input);
+/// `{{previous_output}}` resolving to the prior step's answer - except a
+/// step flagged `requires_approval` (Phase 7e), which pauses the run
+/// right there instead of continuing into the next step automatically.
+/// `start_index`/`previous_output` let `approve_pending_step` resume a
+/// paused run from exactly where it left off, reusing this same loop.
+async fn run_sequential_from(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    run_id: &str,
+    steps: &[(String, String, bool)],
+    start_index: usize,
+    mut previous_output: String,
+    trigger_input: &str,
+) -> AppResult<RunOutcome> {
+    for (step_order, (agent_id, template, requires_approval)) in steps.iter().enumerate().skip(start_index) {
+        let input_text = resolve_template(template, &previous_output, trigger_input);
         let msg = format!("Step {} names an agent that no longer exists", step_order + 1);
-        previous_output = run_step(conn, workspace_id, master_key, actor, run_id, &agent_id, step_order as i64, &input_text, &msg).await?;
+        previous_output = run_step(conn, workspace_id, master_key, actor, run_id, agent_id, step_order as i64, &input_text, &msg).await?;
+        if *requires_approval {
+            return Ok(RunOutcome::Paused { resume_at_step: (step_order + 1) as i64, previous_output });
+        }
     }
-    Ok(())
+    Ok(RunOutcome::Completed)
 }
 
 /// Every step but the last ("candidates") runs independently against the
@@ -209,13 +248,14 @@ async fn run_sequential(conn: &Connection, workspace_id: &str, master_key: &[u8;
 /// single "previous" among peers. The last step ("synthesizer") can then
 /// reference every candidate's answer via `{{candidate_outputs}}`.
 /// `validate_pipeline_input` already guarantees at least 2 steps for this
-/// topology.
-async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, mut steps: Vec<(String, String)>, trigger_input: &str) -> AppResult<()> {
-    let (synth_agent_id, synth_template) = steps.pop().expect("validate_pipeline_input guarantees >= 2 steps for consensus");
+/// topology (and rejects `requires_approval` on any of them - see this
+/// module's own doc comment on `RunOutcome`).
+async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, mut steps: Vec<(String, String, bool)>, trigger_input: &str) -> AppResult<()> {
+    let (synth_agent_id, synth_template, _) = steps.pop().expect("validate_pipeline_input guarantees >= 2 steps for consensus");
     let synth_step_order = steps.len() as i64;
 
     let mut candidate_texts = Vec::with_capacity(steps.len());
-    for (step_order, (agent_id, template)) in steps.into_iter().enumerate() {
+    for (step_order, (agent_id, template, _)) in steps.into_iter().enumerate() {
         let input_text = resolve_template(&template, "", trigger_input);
         let msg = format!("Candidate {} names an agent that no longer exists", step_order + 1);
         let output = run_step(conn, workspace_id, master_key, actor, run_id, &agent_id, step_order as i64, &input_text, &msg).await?;
@@ -238,9 +278,9 @@ async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 
 /// `MAX_PEER_REVIEW_ROUNDS` is reached without approval.
 /// `validate_pipeline_input` already guarantees exactly 2 steps for this
 /// topology.
-async fn run_peer_review(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, steps: Vec<(String, String)>, trigger_input: &str) -> AppResult<()> {
-    let (drafter_id, drafter_template) = steps[0].clone();
-    let (reviewer_id, reviewer_template) = steps[1].clone();
+async fn run_peer_review(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, steps: Vec<(String, String, bool)>, trigger_input: &str) -> AppResult<()> {
+    let (drafter_id, drafter_template, _) = steps[0].clone();
+    let (reviewer_id, reviewer_template, _) = steps[1].clone();
 
     let mut review_feedback = String::new();
     let mut step_order: i64 = 0;
@@ -313,36 +353,80 @@ async fn run_internal(
     source_entity_type: Option<&str>,
     source_entity_id: Option<&str>,
 ) -> AppResult<AiAgentRun> {
-    let (topology, steps): (String, Vec<(String, String)>) = match target_type {
+    let (topology, steps): (String, Vec<(String, String, bool)>) = match target_type {
         "agent" => {
             let agent = ai_agent_repo::get(conn, target_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
-            ("sequential".to_string(), vec![(agent.id, TRIGGER_INPUT_PLACEHOLDER.to_string())])
+            ("sequential".to_string(), vec![(agent.id, TRIGGER_INPUT_PLACEHOLDER.to_string(), false)])
         }
         "pipeline" => {
             let pipeline = ai_agent_pipeline_repo::get(conn, target_id)?.ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
             if pipeline.steps.is_empty() {
                 return Err(AppError::Validation("This pipeline has no steps".into()));
             }
-            (pipeline.topology.clone(), pipeline.steps.into_iter().map(|s| (s.agent_id, s.input_template)).collect())
+            (pipeline.topology.clone(), pipeline.steps.into_iter().map(|s| (s.agent_id, s.input_template, s.requires_approval)).collect())
         }
         other => return Err(AppError::Validation(format!("Unknown target type '{other}'"))),
     };
 
     let run_id = new_uuid();
-    ai_agent_run_repo::start_run(conn, &run_id, workspace_id, target_type, target_id, triggered_by, source_entity_type, source_entity_id)?;
+    ai_agent_run_repo::start_run(conn, &run_id, workspace_id, target_type, target_id, triggered_by, source_entity_type, source_entity_id, trigger_input)?;
 
     let result = match topology.as_str() {
-        "consensus" => run_consensus(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await,
-        "peer_review" => run_peer_review(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await,
-        _ => run_sequential(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await,
+        "consensus" => run_consensus(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await.map(|()| RunOutcome::Completed),
+        "peer_review" => run_peer_review(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await.map(|()| RunOutcome::Completed),
+        _ => run_sequential_from(conn, workspace_id, master_key, actor, &run_id, &steps, 0, String::new(), trigger_input).await,
     };
+    finalize_run(conn, &run_id, result)
+}
 
-    let (status, error_text) = match &result {
-        Ok(()) => ("succeeded", None),
-        Err(e) => ("failed", Some(e.to_string())),
-    };
-    ai_agent_run_repo::finish_run(conn, &run_id, status, error_text.as_deref())?;
-    Ok(ai_agent_run_repo::get_run(conn, &run_id)?.expect("just finished"))
+/// Shared by a fresh run (`run_internal`) and a resumed one
+/// (`approve_pending_step`) - applies whichever `RunOutcome` the
+/// execution produced to the run row, then returns it fully hydrated.
+fn finalize_run(conn: &Connection, run_id: &str, result: AppResult<RunOutcome>) -> AppResult<AiAgentRun> {
+    match result {
+        Ok(RunOutcome::Completed) => ai_agent_run_repo::finish_run(conn, run_id, "succeeded", None)?,
+        Ok(RunOutcome::Paused { resume_at_step, previous_output }) => ai_agent_run_repo::pause_for_approval(conn, run_id, resume_at_step, &previous_output)?,
+        Err(e) => ai_agent_run_repo::finish_run(conn, run_id, "failed", Some(&e.to_string()))?,
+    }
+    Ok(ai_agent_run_repo::get_run(conn, run_id)?.expect("just finished or paused"))
+}
+
+/// Human-in-the-loop (Phase 7e): approves the step a run is currently
+/// paused on and resumes execution from the next one - optionally with
+/// `edited_output` standing in for that step's own real output as the
+/// next step's `{{previous_output}}`, the same "approve, or approve with
+/// changes" latitude a real reviewer needs. Re-reads the pipeline fresh
+/// (not a frozen copy from when the run paused) - an edit to the
+/// pipeline in the meantime takes effect on resume, the same way a
+/// changed Business Rule takes effect on its next evaluation rather than
+/// being pinned to whatever existed when a record was first opened.
+pub async fn approve_pending_step(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], run_id: &str, edited_output: Option<&str>, actor_user_id: Option<&str>) -> AppResult<AiAgentRun> {
+    require_admin(conn, actor_user_id)?;
+    let run = ai_agent_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.status != "awaiting_approval" {
+        return Err(AppError::Validation("This run is not awaiting approval".into()));
+    }
+    let pipeline = ai_agent_pipeline_repo::get(conn, &run.target_id)?.ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
+    let steps: Vec<(String, String, bool)> = pipeline.steps.into_iter().map(|s| (s.agent_id, s.input_template, s.requires_approval)).collect();
+    let start_index = run.paused_at_step_order.unwrap_or(0) as usize;
+    let previous_output = edited_output.map(str::to_string).unwrap_or_else(|| run.resume_previous_output.clone().unwrap_or_default());
+
+    let result = run_sequential_from(conn, workspace_id, master_key, actor_user_id, run_id, &steps, start_index, previous_output, &run.trigger_input).await;
+    finalize_run(conn, run_id, result)
+}
+
+/// Human-in-the-loop (Phase 7e): rejects a paused run outright - `reason`
+/// is stored as the run's own error, the same field a genuine execution
+/// failure already uses, so a rejected run reads the same way a failed
+/// one does everywhere it's shown.
+pub fn reject_pending_run(conn: &Connection, run_id: &str, reason: &str, actor_user_id: Option<&str>) -> AppResult<AiAgentRun> {
+    require_admin(conn, actor_user_id)?;
+    let run = ai_agent_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.status != "awaiting_approval" {
+        return Err(AppError::Validation("This run is not awaiting approval".into()));
+    }
+    ai_agent_run_repo::finish_run(conn, run_id, "rejected", Some(reason))?;
+    Ok(ai_agent_run_repo::get_run(conn, run_id)?.expect("just updated"))
 }
 
 /// The one enqueue point for a genuinely-async trigger firing from a
@@ -397,4 +481,93 @@ pub async fn drain_pending_runs(conn: &Connection, workspace_id: &str, master_ke
 
 pub fn list_runs(conn: &Connection, target_type: &str, target_id: &str, limit: i64) -> AppResult<Vec<AiAgentRun>> {
     Ok(ai_agent_run_repo::list_runs_for_target(conn, target_type, target_id, limit)?)
+}
+
+// --- Observability (Phase 7e) ---------------------------------------------
+
+/// A deterministic 32-hex-char id from a seed string - `sha2` (already a
+/// dependency, used elsewhere for HMAC signing) rather than a new
+/// dependency just for this. Same seed always yields the same id, so a
+/// re-export of the same run produces byte-identical span/trace ids.
+fn hex_id_32(seed: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(seed.as_bytes());
+    digest.iter().take(16).map(|b| format!("{b:02x}")).collect()
+}
+
+/// Same idea, truncated to 16 hex chars - OTLP span ids are 8 bytes,
+/// trace ids are 16.
+fn hex_id_16(seed: &str) -> String {
+    hex_id_32(seed)[..16].to_string()
+}
+
+fn unix_nanos(rfc3339: &str) -> i64 {
+    chrono::DateTime::parse_from_rfc3339(rfc3339).ok().and_then(|dt| dt.timestamp_nanos_opt()).unwrap_or(0)
+}
+
+/// Renders one run as an OTLP-shaped trace (the standard `resourceSpans`
+/// JSON wire format - see the "Explicitly deferred" note in this phase's
+/// PR body for why this stops at *shaping* the trace rather than also
+/// pushing it to a configured collector): one root span for the whole
+/// run, one child span per step, both timed from this phase's new
+/// `started_at`/`finished_at` columns. Trace/span ids are deterministic
+/// (`hex_id_32`/`hex_id_16` above), not random, so re-exporting the same
+/// already-finished run is idempotent.
+pub fn run_to_otlp_json(run: &AiAgentRun) -> serde_json::Value {
+    let trace_id = hex_id_32(&run.id);
+    let root_span_id = hex_id_16(&format!("{}:root", run.id));
+    let root_start = unix_nanos(&run.started_at);
+    let root_end = run.finished_at.as_deref().map(unix_nanos).unwrap_or(root_start);
+
+    let mut spans = vec![serde_json::json!({
+        "traceId": trace_id,
+        "spanId": root_span_id,
+        "name": format!("{} run", run.target_type),
+        "startTimeUnixNano": root_start.to_string(),
+        "endTimeUnixNano": root_end.to_string(),
+        "attributes": [
+            {"key": "lanesra.run_id", "value": {"stringValue": run.id}},
+            {"key": "lanesra.target_type", "value": {"stringValue": run.target_type}},
+            {"key": "lanesra.target_id", "value": {"stringValue": run.target_id}},
+            {"key": "lanesra.status", "value": {"stringValue": run.status}},
+            {"key": "lanesra.triggered_by", "value": {"stringValue": run.triggered_by.clone().unwrap_or_default()}},
+        ],
+    })];
+
+    for step in &run.steps {
+        let span_id = hex_id_16(&format!("{}:{}", run.id, step.step_order));
+        let start = step.started_at.as_deref().map(unix_nanos).unwrap_or(root_start);
+        let end = step.finished_at.as_deref().map(unix_nanos).unwrap_or(start);
+        spans.push(serde_json::json!({
+            "traceId": trace_id,
+            "spanId": span_id,
+            "parentSpanId": root_span_id,
+            "name": format!("step {}: agent {}", step.step_order + 1, step.agent_id),
+            "startTimeUnixNano": start.to_string(),
+            "endTimeUnixNano": end.to_string(),
+            "attributes": [
+                {"key": "lanesra.agent_id", "value": {"stringValue": step.agent_id}},
+                {"key": "lanesra.step_order", "value": {"intValue": step.step_order.to_string()}},
+                {"key": "lanesra.tool_calls_count", "value": {"intValue": step.tool_calls_count.to_string()}},
+                {"key": "lanesra.error", "value": {"stringValue": step.error.clone().unwrap_or_default()}},
+            ],
+        }));
+    }
+
+    serde_json::json!({
+        "resourceSpans": [{
+            "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "lanesra-os"}}]},
+            "scopeSpans": [{
+                "scope": {"name": "lanesra_core.ai_orchestration_service"},
+                "spans": spans,
+            }],
+        }],
+    })
+}
+
+/// No admin gate - exporting an already-visible run's own trace needs no
+/// more privilege than `list_runs` (which has none) already grants.
+pub fn export_run_as_otlp(conn: &Connection, run_id: &str) -> AppResult<serde_json::Value> {
+    let run = ai_agent_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    Ok(run_to_otlp_json(&run))
 }

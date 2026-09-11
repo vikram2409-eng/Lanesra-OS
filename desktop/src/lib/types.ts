@@ -2391,11 +2391,17 @@ export interface PipelineStep {
   agent_id: string;
   step_order: number;
   input_template: string;
+  // Phase 7e (Human-in-the-loop): pauses the run right after this step
+  // (status "awaiting_approval") until an Administrator approves
+  // (optionally editing the output) or rejects it. Sequential topology
+  // only.
+  requires_approval: boolean;
 }
 
 export interface PipelineStepInput {
   agent_id: string;
   input_template: string;
+  requires_approval: boolean;
 }
 
 // AI & Agentic Layer, Phase 7d: three orchestration topologies -
@@ -2460,6 +2466,10 @@ export interface AiAgentRunStep {
   output_text: string | null;
   error: string | null;
   tool_calls_count: number;
+  // Phase 7e: real wall-clock timing for this step's agent call - null
+  // only for a step recorded before this phase's migration.
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 export interface AiAgentRun {
@@ -2467,13 +2477,17 @@ export interface AiAgentRun {
   workspace_id: string;
   target_type: AiAgentTargetType;
   target_id: string;
-  status: "succeeded" | "failed";
+  status: "succeeded" | "failed" | "awaiting_approval" | "rejected";
   error: string | null;
   triggered_by: string | null;
   source_entity_type: string | null;
   source_entity_id: string | null;
+  trigger_input: string;
   started_at: string;
   finished_at: string | null;
+  // Phase 7e: set only while status === "awaiting_approval".
+  paused_at_step_order: number | null;
+  resume_previous_output: string | null;
   steps: AiAgentRunStep[];
 }
 

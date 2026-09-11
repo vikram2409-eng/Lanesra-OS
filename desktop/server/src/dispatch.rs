@@ -1171,6 +1171,17 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(ai_orchestration_service::list_runs(conn, &target_type, &target_id, limit)?)
         }
 
+        // AI & Agentic Layer, Phase 7e: rejecting a paused run and
+        // exporting its trace are both plain sync; `approve_ai_agent_
+        // pending_step` (resumes real agent execution) is genuinely
+        // async, so it's its own route in `admin_actions.rs`.
+        "reject_ai_agent_pending_run" => {
+            let id: String = arg(args, "id")?;
+            let reason: String = arg(args, "reason")?;
+            to_value(ai_orchestration_service::reject_pending_run(conn, &id, &reason, actor)?)
+        }
+        "export_ai_agent_run_otlp" => to_value(ai_orchestration_service::export_run_as_otlp(conn, &arg::<String>(args, "id")?)?),
+
         // AI & Agentic Layer, Phase 7d: Eval Suite CRUD and run history
         // are plain sync; `run_suite` (a real judge-model call per case)
         // is genuinely async, so it's its own route in `admin_actions.rs`,

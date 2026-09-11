@@ -53,6 +53,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/ai-agents/:id/run", post(run_ai_agent_manual))
         .route("/api/admin/ai-agent-pipelines/:id/run", post(run_ai_agent_pipeline_manual))
         .route("/api/admin/ai-eval-suites/:id/run", post(run_ai_eval_suite))
+        .route("/api/admin/ai-agent-runs/:id/approve", post(approve_ai_agent_pending_step))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -216,6 +217,29 @@ async fn run_ai_eval_suite(State(state): State<SharedState>, jar: CookieJar, Pat
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move { ai_eval_service::run_suite(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct ApprovePendingStepBody {
+    /// `None`/empty keeps the paused-on step's own real output as the
+    /// next step's `{{previous_output}}`; a value overrides it.
+    #[serde(default)]
+    edited_output: Option<String>,
+}
+
+async fn approve_ai_agent_pending_step(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<ApprovePendingStepBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_orchestration_service::approve_pending_step(&conn, &workspace_id, &master_key, &id, body.edited_output.as_deref(), Some(&actor)).await
+    })
+    .await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 

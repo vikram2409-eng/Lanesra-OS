@@ -24,7 +24,13 @@ fn map_pipeline_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentPipeline> {
 }
 
 fn map_step_row(row: &rusqlite::Row) -> rusqlite::Result<PipelineStep> {
-    Ok(PipelineStep { id: row.get("id")?, agent_id: row.get("agent_id")?, step_order: row.get("step_order")?, input_template: row.get("input_template")? })
+    Ok(PipelineStep {
+        id: row.get("id")?,
+        agent_id: row.get("agent_id")?,
+        step_order: row.get("step_order")?,
+        input_template: row.get("input_template")?,
+        requires_approval: row.get("requires_approval")?,
+    })
 }
 
 pub fn list_steps(conn: &Connection, pipeline_id: &str) -> rusqlite::Result<Vec<PipelineStep>> {
@@ -42,8 +48,8 @@ fn replace_steps(conn: &Connection, pipeline_id: &str, steps: &[crate::models::a
     conn.execute("DELETE FROM ai_agent_pipeline_steps WHERE pipeline_id = ?1", [pipeline_id])?;
     for (i, step) in steps.iter().enumerate() {
         conn.execute(
-            "INSERT INTO ai_agent_pipeline_steps (id, pipeline_id, agent_id, step_order, input_template) VALUES (?1, ?2, ?3, ?4, ?5)",
-            (crate::domain::ids::new_uuid(), pipeline_id, &step.agent_id, i as i64, &step.input_template),
+            "INSERT INTO ai_agent_pipeline_steps (id, pipeline_id, agent_id, step_order, input_template, requires_approval) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (crate::domain::ids::new_uuid(), pipeline_id, &step.agent_id, i as i64, &step.input_template, step.requires_approval),
         )?;
     }
     Ok(())

@@ -339,6 +339,14 @@ export const api = {
   runAiAgent: (id: string, input: string) => callAdminAction<AiAgentRun>("run_ai_agent", { id, input }, "POST", `/api/admin/ai-agents/${encodeURIComponent(id)}/run`, { input }),
   runAiAgentPipeline: (id: string, input: string) =>
     callAdminAction<AiAgentRun>("run_ai_agent_pipeline", { id, input }, "POST", `/api/admin/ai-agent-pipelines/${encodeURIComponent(id)}/run`, { input }),
+  // AI & Agentic Layer, Phase 7e (Human-in-the-loop) - rejecting a paused
+  // run and exporting its trace are plain CRUD/reads; approving one
+  // resumes real agent execution, so it's the same admin-action shape as
+  // runAiAgentPipeline above.
+  rejectAiAgentPendingRun: (id: string, reason: string) => call<AiAgentRun>("reject_ai_agent_pending_run", { id, reason }),
+  exportAiAgentRunOtlp: (id: string) => call<unknown>("export_ai_agent_run_otlp", { id }),
+  approveAiAgentPendingStep: (id: string, editedOutput: string | null) =>
+    callAdminAction<AiAgentRun>("approve_ai_agent_pending_step", { id, editedOutput }, "POST", `/api/admin/ai-agent-runs/${encodeURIComponent(id)}/approve`, { edited_output: editedOutput }),
   // AI & Agentic Layer, Phase 7d - Eval Suite CRUD/history is plain
   // CRUD/reads; `runAiEvalSuite` makes a real judge-model call per case,
   // so it's the same admin-action shape as `runAiAgentPipeline` above.

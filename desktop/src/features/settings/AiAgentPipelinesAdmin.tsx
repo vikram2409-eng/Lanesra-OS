@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { AiTriggersPanel } from "./AiTriggersPanel";
-import type { AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, PipelineStepInput } from "../../lib/types";
+import type { AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentRunStep, PipelineStepInput } from "../../lib/types";
 
 // AI & Agentic Layer, Phase 6b: Orchestration - a deterministic, ordered
 // Pipeline of Agents (complementary to an Agent's own dynamic
@@ -23,6 +23,21 @@ function stepRoleLabel(topology: AiAgentPipelineInput["topology"], i: number, to
   if (topology === "consensus") return i === total - 1 ? "Synthesizer" : `Candidate ${i + 1}`;
   if (topology === "peer_review") return i === 0 ? "Drafter" : "Reviewer";
   return `Step ${i + 1}`;
+}
+
+function runStatusBadgeClass(status: string): string {
+  if (status === "succeeded") return " badge-success";
+  if (status === "awaiting_approval") return " badge-warning";
+  return " badge-danger";
+}
+
+// Phase 7e: real wall-clock duration for a step, from its started_at/
+// finished_at columns - null for a step recorded before that migration.
+function stepDuration(s: AiAgentRunStep): string | null {
+  if (!s.started_at || !s.finished_at) return null;
+  const ms = new Date(s.finished_at).getTime() - new Date(s.started_at).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
 export function AiAgentPipelinesAdmin() {
@@ -164,18 +179,45 @@ export function AiAgentPipelinesAdmin() {
 
 function PipelineDetail({ pipeline, agentName }: { pipeline: AiAgentPipeline; agentName: (id: string) => string }) {
   const [input, setInput] = useState("");
-  const [result, setResult] = useState<AiAgentRun | null>(null);
+  const [activeRun, setActiveRun] = useState<AiAgentRun | null>(null);
+  const [editedOutput, setEditedOutput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [otlpJson, setOtlpJson] = useState<string | null>(null);
   const runsQuery = useQuery({ queryKey: ["aiAgentRuns", "pipeline", pipeline.id], queryFn: () => api.listAiAgentRuns("pipeline", pipeline.id, 10) });
+
+  function reviewRun(r: AiAgentRun) {
+    setActiveRun(r);
+    setEditedOutput(r.resume_previous_output ?? "");
+    setError(null);
+  }
 
   const run = useMutation({
     mutationFn: () => api.runAiAgentPipeline(pipeline.id, input),
     onSuccess: (r) => {
-      setResult(r);
-      setError(null);
+      reviewRun(r);
       runsQuery.refetch();
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not run this pipeline"),
+  });
+  const approve = useMutation({
+    mutationFn: () => api.approveAiAgentPendingStep(activeRun!.id, editedOutput.trim() ? editedOutput : null),
+    onSuccess: (r) => {
+      reviewRun(r);
+      runsQuery.refetch();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not approve this step"),
+  });
+  const reject = useMutation({
+    mutationFn: (reason: string) => api.rejectAiAgentPendingRun(activeRun!.id, reason),
+    onSuccess: (r) => {
+      reviewRun(r);
+      runsQuery.refetch();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not reject this run"),
+  });
+  const viewOtlp = useMutation({
+    mutationFn: (runId: string) => api.exportAiAgentRunOtlp(runId),
+    onSuccess: (data) => setOtlpJson(JSON.stringify(data, null, 2)),
   });
 
   return (
@@ -189,19 +231,58 @@ function PipelineDetail({ pipeline, agentName }: { pipeline: AiAgentPipeline; ag
         </button>
       </div>
       {error && <div className="error-banner">{error}</div>}
-      {result && (
+      {activeRun && (
         <div style={{ marginBottom: 12 }}>
           <p style={{ fontSize: 13 }}>
-            Result: <span className={`badge${result.status === "succeeded" ? " badge-success" : " badge-danger"}`}>{result.status}</span>
+            Result: <span className={`badge${runStatusBadgeClass(activeRun.status)}`}>{activeRun.status}</span>
           </p>
-          {result.steps.map((s) => (
+          {activeRun.steps.map((s) => (
             <div key={s.id} style={{ fontSize: 13, borderTop: "1px dashed var(--border, #ddd)", padding: "6px 0" }}>
               <b>{agentName(s.agent_id)}</b>
+              {stepDuration(s) && <span style={{ color: "var(--text-muted)" }}> ({stepDuration(s)})</span>}
               <div style={{ color: "var(--text-muted)" }}>in: {s.input_text}</div>
               {s.output_text && <div>out: {s.output_text}</div>}
               {s.error && <div style={{ color: "var(--large, #b23b3b)" }}>error: {s.error}</div>}
             </div>
           ))}
+          {activeRun.status === "awaiting_approval" && (
+            <div className="panel" style={{ marginTop: 8 }}>
+              <p style={{ fontSize: 13, margin: "0 0 6px" }}>
+                Paused for approval before step {(activeRun.paused_at_step_order ?? 0) + 1} of {pipeline.steps.length}. Edit the output below before
+                continuing, or leave it as-is to approve unchanged.
+              </p>
+              <textarea style={{ width: "100%", minHeight: 80 }} value={editedOutput} onChange={(e) => setEditedOutput(e.target.value)} />
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <button className="btn btn-primary" onClick={() => approve.mutate()} disabled={approve.isPending}>
+                  {approve.isPending ? "Approving..." : "Approve & continue"}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  disabled={reject.isPending}
+                  onClick={() => {
+                    const reason = window.prompt("Reason for rejecting this run?") ?? "";
+                    reject.mutate(reason);
+                  }}
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          )}
+          <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => viewOtlp.mutate(activeRun.id)}>
+            View OTLP trace
+          </button>
+        </div>
+      )}
+      {otlpJson && (
+        <div className="panel" style={{ marginTop: 8, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <b style={{ fontSize: 13 }}>OTLP trace JSON</b>
+            <button className="icon-btn" onClick={() => setOtlpJson(null)}>
+              ✕
+            </button>
+          </div>
+          <pre style={{ maxHeight: 240, overflow: "auto", fontSize: 11 }}>{otlpJson}</pre>
         </div>
       )}
 
@@ -211,10 +292,15 @@ function PipelineDetail({ pipeline, agentName }: { pipeline: AiAgentPipeline; ag
         <b style={{ fontSize: 13 }}>Recent runs</b>
         {(runsQuery.data ?? []).length === 0 && <p style={{ color: "var(--text-muted)", fontSize: 13 }}>No runs yet.</p>}
         {(runsQuery.data ?? []).map((r) => (
-          <div key={r.id} style={{ fontSize: 12, display: "flex", gap: 8, padding: "3px 0" }}>
-            <span className={`badge${r.status === "succeeded" ? " badge-success" : " badge-danger"}`}>{r.status}</span>
+          <div key={r.id} style={{ fontSize: 12, display: "flex", gap: 8, padding: "3px 0", alignItems: "center" }}>
+            <span className={`badge${runStatusBadgeClass(r.status)}`}>{r.status}</span>
             <span>{r.triggered_by ?? "manual"}</span>
             <span style={{ color: "var(--text-muted)" }}>{new Date(r.started_at).toLocaleString()}</span>
+            {r.status === "awaiting_approval" && (
+              <button className="icon-btn" onClick={() => reviewRun(r)}>
+                Review
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -237,13 +323,21 @@ function AiAgentPipelineForm({
 }) {
   const [input, setInput] = useState<AiAgentPipelineInput>(
     initial
-      ? { name: initial.name, description: initial.description, topology: initial.topology, steps: initial.steps.map((s) => ({ agent_id: s.agent_id, input_template: s.input_template })) }
+      ? {
+          name: initial.name,
+          description: initial.description,
+          topology: initial.topology,
+          steps: initial.steps.map((s) => ({ agent_id: s.agent_id, input_template: s.input_template, requires_approval: s.requires_approval })),
+        }
       : emptyInput(),
   );
 
   function addStep() {
     if (agents.length === 0) return;
-    setInput((prev) => ({ ...prev, steps: [...prev.steps, { agent_id: agents[0].id, input_template: prev.steps.length === 0 || prev.topology === "consensus" ? "{{trigger_input}}" : "{{previous_output}}" }] }));
+    setInput((prev) => ({
+      ...prev,
+      steps: [...prev.steps, { agent_id: agents[0].id, input_template: prev.steps.length === 0 || prev.topology === "consensus" ? "{{trigger_input}}" : "{{previous_output}}", requires_approval: false }],
+    }));
   }
   function updateStep(i: number, patch: Partial<PipelineStepInput>) {
     setInput((prev) => ({ ...prev, steps: prev.steps.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
@@ -319,6 +413,12 @@ function AiAgentPipelineForm({
                 onChange={(e) => updateStep(i, { input_template: e.target.value })}
                 placeholder={i === 0 ? "{{trigger_input}}" : "{{previous_output}}"}
               />
+              {input.topology === "sequential" && (
+                <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }} title="Pause the run here for an Administrator to approve or reject before continuing">
+                  <input type="checkbox" checked={step.requires_approval} onChange={(e) => updateStep(i, { requires_approval: e.target.checked })} />
+                  Needs approval
+                </label>
+              )}
               <button type="button" className="icon-btn" onClick={() => moveStep(i, -1)} disabled={i === 0}>
                 ↑
               </button>

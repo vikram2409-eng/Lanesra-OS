@@ -149,8 +149,8 @@ async fn pipeline_crud_is_administrator_gated_and_validates_its_steps() {
     let input = AiAgentPipelineInput {
         name: "Two Step".into(), description: Some("A demo pipeline".into()), topology: "sequential".into(),
         steps: vec![
-            PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into() },
-            PipelineStepInput { agent_id: a2.id.clone(), input_template: "{{previous_output}}".into() },
+            PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: a2.id.clone(), input_template: "{{previous_output}}".into(), requires_approval: false },
         ],
     };
     let denied = ai_orchestration_service::create_pipeline(&conn, &ws, &input, Some(&rep));
@@ -160,7 +160,7 @@ async fn pipeline_crud_is_administrator_gated_and_validates_its_steps() {
     assert_eq!(pipeline.steps.len(), 2);
 
     // A step naming a nonexistent agent is rejected.
-    let bad = AiAgentPipelineInput { name: "Bad".into(), description: None, topology: "sequential".into(), steps: vec![PipelineStepInput { agent_id: "not-a-real-id".into(), input_template: "hi".into() }] };
+    let bad = AiAgentPipelineInput { name: "Bad".into(), description: None, topology: "sequential".into(), steps: vec![PipelineStepInput { agent_id: "not-a-real-id".into(), input_template: "hi".into(), requires_approval: false }] };
     assert!(ai_orchestration_service::create_pipeline(&conn, &ws, &bad, Some(&admin)).is_err());
 
     let renamed = AiAgentPipelineInput { name: "Two Step (renamed)".into(), ..input };
@@ -184,8 +184,8 @@ async fn a_manual_pipeline_run_feeds_step_ones_real_output_into_step_two() {
         &AiAgentPipelineInput {
             name: "Summarize then translate".into(), description: None, topology: "sequential".into(),
             steps: vec![
-                PipelineStepInput { agent_id: summarizer.id.clone(), input_template: "{{trigger_input}}".into() },
-                PipelineStepInput { agent_id: translator.id.clone(), input_template: "Translate: {{previous_output}}".into() },
+                PipelineStepInput { agent_id: summarizer.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+                PipelineStepInput { agent_id: translator.id.clone(), input_template: "Translate: {{previous_output}}".into(), requires_approval: false },
             ],
         },
         Some(&admin),

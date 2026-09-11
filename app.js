@@ -5178,9 +5178,10 @@ function resolveAiTemplate(template,previousOutput,triggerInput){
  return (template||'').split('{{previous_output}}').join(previousOutput||'').split('{{trigger_input}}').join(triggerInput||'');
 }
 function simStep(step,input){
+ const startedAt=new Date().toISOString();
  const agent=(data.aiAgents||[]).find(a=>a.id===step.agentId);
  const output=agent?chatSimAgentReply(agent,input):'(this step\'s agent was deleted)';
- return {agentId:step.agentId,agentName:agent?agent.name:'(deleted agent)',input,output};
+ return {agentId:step.agentId,agentName:agent?agent.name:'(deleted agent)',input,output,startedAt,finishedAt:new Date().toISOString()};
 }
 /** AI & Agentic Layer, Phase 7d mirror - three topologies, same as
  * ai_orchestration_service::run_internal. "sequential" (default, and the
@@ -5197,6 +5198,7 @@ function runAiAgentPipelineNow(pipeline,triggerInput){
  const topology=pipeline.topology||'sequential';
  let steps=[];
  let finalOutput='';
+ let runStatus='succeeded';
  if(topology==='consensus'&&(pipeline.steps||[]).length>=2){
   const candidateSteps=pipeline.steps.slice(0,-1);
   const synthStep=pipeline.steps[pipeline.steps.length-1];
@@ -5221,19 +5223,34 @@ function runAiAgentPipelineNow(pipeline,triggerInput){
   }
  }else{
   let previousOutput='';
-  steps=(pipeline.steps||[]).map(step=>{
+  for(const step of (pipeline.steps||[])){
    const result=simStep(step,resolveAiTemplate(step.inputTemplate,previousOutput,triggerInput));
+   steps.push(result);
    previousOutput=result.output;
-   return result;
-  });
+   // AI & Agentic Layer, Phase 7e (Human-in-the-loop) mirror: the demo
+   // has no real pause-and-resume-later state machine (a real approval
+   // could come from a separate request much later; a browser confirm()
+   // dialog resolves synchronously, in the same call, so it fits the
+   // demo's simpler execution model without needing one) - approving or
+   // rejecting is decided right here, immediately.
+   if(step.requiresApproval&&!confirm(`Approve this step's output before continuing?\n\n${result.output}`)){
+    runStatus='rejected';
+    break;
+   }
+  }
   finalOutput=previousOutput;
  }
- const run={id:uid(),startedAt:new Date().toISOString(),triggerInput:triggerInput||'',steps,finalOutput};
+ const run={id:uid(),startedAt:new Date().toISOString(),triggerInput:triggerInput||'',steps,finalOutput,status:runStatus};
  pipeline.runs=pipeline.runs||[];
  pipeline.runs.unshift(run);
  if(pipeline.runs.length>20)pipeline.runs.length=20;
  save();
  return run;
+}
+function stepDurationMs(s){
+ if(!s.startedAt||!s.finishedAt)return null;
+ const ms=new Date(s.finishedAt).getTime()-new Date(s.startedAt).getTime();
+ return Number.isFinite(ms)&&ms>=0?ms:null;
 }
 function pipelineTopologyLabel(topology){
  return {sequential:'Sequential',consensus:'Consensus',peer_review:'Peer review'}[topology||'sequential']||'Sequential';
@@ -5252,7 +5269,7 @@ function aiAgentPipelinesTab(body){
  <div class="panel-head"><h3>Orchestration</h3><button class="btn btn-primary" id="addPipeline" ${agents.length?'':'disabled'}>+ New pipeline</button></div>
  <p class="muted" style="font-size:13px">A Pipeline runs agents under one of three topologies - <b>Sequential</b> (a fixed chain, step 2 can reference step 1's answer via <code>{{previous_output}}</code>), <b>Consensus</b> (every step but the last runs independently; the last synthesizes them via <code>{{candidate_outputs}}</code>), or <b>Peer review</b> (exactly 2 steps - a drafter and a reviewer - looping until approved). Any step can reference the trigger's own input via <code>{{trigger_input}}</code>. Deterministic and admin-authored, unlike an agent's own dynamic delegation.</p>
  ${agents.length?'':'<p class="empty-state">Create at least one AI Agent first.</p>'}
- <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Topology</th><th>Steps</th><th>Status</th><th>Actions</th></tr></thead><tbody>${pipelines.map(p=>`<tr><td><b>${p.name}</b>${p.description?`<br><small class="muted">${p.description}</small>`:''}</td><td>${badgeMaybe(pipelineTopologyLabel(p.topology))}</td><td>${pipelineStepsSummary(p,agents)}</td><td>${badgeMaybe(p.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-run-pipeline="${p.id}" ${p.isActive&&(p.steps||[]).length?'':'disabled'}>Run</button><button class="icon-btn" data-edit-pipeline="${p.id}">Edit</button><button class="icon-btn" data-toggle-pipeline="${p.id}">${p.isActive?'Deactivate':'Reactivate'}</button><button class="icon-btn" data-del-pipeline="${p.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${pipelines.length?'':'<div class="empty">No pipelines yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Topology</th><th>Steps</th><th>Status</th><th>Actions</th></tr></thead><tbody>${pipelines.map(p=>`<tr><td><b>${p.name}</b>${p.description?`<br><small class="muted">${p.description}</small>`:''}</td><td><span class="badge">${pipelineTopologyLabel(p.topology)}</span></td><td>${pipelineStepsSummary(p,agents)}</td><td>${badgeMaybe(p.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-run-pipeline="${p.id}" ${p.isActive&&(p.steps||[]).length?'':'disabled'}>Run</button><button class="icon-btn" data-edit-pipeline="${p.id}">Edit</button><button class="icon-btn" data-toggle-pipeline="${p.id}">${p.isActive?'Deactivate':'Reactivate'}</button><button class="icon-btn" data-del-pipeline="${p.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${pipelines.length?'':'<div class="empty">No pipelines yet</div>'}</div>
  <div id="pipelineRunWrap"></div>
  </div>`;
  $('#addPipeline').onclick=()=>aiAgentPipelineModal();
@@ -5264,20 +5281,26 @@ function aiAgentPipelinesTab(body){
   const input=prompt(`Input for "${p.name}" (used where a step references {{trigger_input}}):`,'')||'';
   const run=runAiAgentPipelineNow(p,input);
   const wrap=$('#pipelineRunWrap');
-  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name}</h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b><br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}</div>`;
+  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name} <span class="badge">${run.status}</span></h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b>${stepDurationMs(s)!==null?` <small class="muted">(${stepDurationMs(s)}ms)</small>`:''}<br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}</div>`;
  });
 }
-function mountPipelineStepsEditor(container,agents,initialSteps){
- let steps=(initialSteps&&initialSteps.length?initialSteps:[{agentId:agents[0]?.id||'',inputTemplate:'{{trigger_input}}'}]).map(s=>({...s}));
+function mountPipelineStepsEditor(container,agents,initialSteps,getTopology){
+ let steps=(initialSteps&&initialSteps.length?initialSteps:[{agentId:agents[0]?.id||'',inputTemplate:'{{trigger_input}}',requiresApproval:false}]).map(s=>({...s}));
  function syncFromDom(){
   const form=container.closest('form');
-  steps=steps.map((s,idx)=>({agentId:form.elements[`pstep${idx}_agentId`]?.value||'',inputTemplate:form.elements[`pstep${idx}_inputTemplate`]?.value||''}));
+  steps=steps.map((s,idx)=>({
+   agentId:form.elements[`pstep${idx}_agentId`]?.value||'',
+   inputTemplate:form.elements[`pstep${idx}_inputTemplate`]?.value||'',
+   requiresApproval:!!form.elements[`pstep${idx}_requiresApproval`]?.checked,
+  }));
  }
  function render(){
+  const sequential=getTopology()==='sequential';
   container.innerHTML=steps.map((s,idx)=>`<div class="builder-row-card" style="align-items:flex-start">
    <span class="muted" style="font-size:12px;min-width:16px">${idx+1}.</span>
    <select name="pstep${idx}_agentId">${agents.map(a=>`<option value="${a.id}" ${a.id===s.agentId?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select>
    <input name="pstep${idx}_inputTemplate" value="${s.inputTemplate||''}" placeholder="{{trigger_input}}, {{previous_output}}, or literal text" style="min-width:220px">
+   ${sequential?`<label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap" title="Pause the run here for approval before continuing"><input type="checkbox" name="pstep${idx}_requiresApproval" ${s.requiresApproval?'checked':''}>Needs approval</label>`:''}
    <button type="button" class="icon-btn" data-pstep-up="${idx}" ${idx===0?'disabled':''}>↑</button>
    <button type="button" class="icon-btn" data-pstep-down="${idx}" ${idx===steps.length-1?'disabled':''}>↓</button>
    <button type="button" class="builder-row-remove" data-pstep-remove="${idx}" title="Remove step">✕</button>
@@ -5285,13 +5308,13 @@ function mountPipelineStepsEditor(container,agents,initialSteps){
   wire();
  }
  function wire(){
-  container.querySelector('[data-pstep-add]').onclick=()=>{syncFromDom();steps.push({agentId:agents[0]?.id||'',inputTemplate:'{{previous_output}}'});render()};
+  container.querySelector('[data-pstep-add]').onclick=()=>{syncFromDom();steps.push({agentId:agents[0]?.id||'',inputTemplate:'{{previous_output}}',requiresApproval:false});render()};
   container.querySelectorAll('[data-pstep-remove]').forEach(b=>b.onclick=()=>{syncFromDom();steps.splice(Number(b.dataset.pstepRemove),1);render()});
   container.querySelectorAll('[data-pstep-up]').forEach(b=>b.onclick=()=>{syncFromDom();const i=Number(b.dataset.pstepUp);[steps[i-1],steps[i]]=[steps[i],steps[i-1]];render()});
   container.querySelectorAll('[data-pstep-down]').forEach(b=>b.onclick=()=>{syncFromDom();const i=Number(b.dataset.pstepDown);[steps[i+1],steps[i]]=[steps[i],steps[i+1]];render()});
  }
  render();
- return {getSteps:()=>{syncFromDom();return steps}};
+ return {getSteps:()=>{syncFromDom();return steps},rerender:()=>{syncFromDom();render()}};
 }
 function aiAgentPipelineModal(pipeline){
  const isEdit=!!pipeline;
@@ -5309,7 +5332,8 @@ function aiAgentPipelineModal(pipeline){
  </form>`;
  modal(isEdit?`Edit ${pipeline.name}`:'New pipeline',body);
  $('[data-close]').onclick=closeModal;
- const stepsEditor=mountPipelineStepsEditor($('#pipelineSteps'),agents,pipeline?.steps||[]);
+ const stepsEditor=mountPipelineStepsEditor($('#pipelineSteps'),agents,pipeline?.steps||[],()=>$('#pipelineForm').elements['topology'].value);
+ $('#pipelineForm').elements['topology'].onchange=()=>stepsEditor.rerender();
  $('#pipelineForm').onsubmit=e=>{
   e.preventDefault();
   const fd=new FormData(e.target);
@@ -5317,6 +5341,7 @@ function aiAgentPipelineModal(pipeline){
   const topology=fd.get('topology')||'sequential';
   if(topology==='consensus'&&steps.length<2)return alert('A consensus pipeline needs at least one candidate step plus a synthesizer step.');
   if(topology==='peer_review'&&steps.length!==2)return alert('A peer-review pipeline needs exactly two steps - a drafter and a reviewer.');
+  if(topology!=='sequential')steps.forEach(s=>{s.requiresApproval=false});
   const obj={name:fd.get('name'),description:fd.get('description')||'',topology,steps};
   if(isEdit)Object.assign(pipeline,obj);
   else{obj.id='pln_'+uid();obj.isActive=true;obj.runs=[];data.aiAgentPipelines.push(obj)}

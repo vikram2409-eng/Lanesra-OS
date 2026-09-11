@@ -105,7 +105,7 @@ async fn pipeline_crud_rejects_the_wrong_step_count_for_consensus_and_peer_revie
 
     let one_step = |topology: &str| AiAgentPipelineInput {
         name: "Bad".into(), description: None, topology: topology.into(),
-        steps: vec![PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into() }],
+        steps: vec![PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false }],
     };
     let consensus_err = ai_orchestration_service::create_pipeline(&conn, &ws, &one_step("consensus"), Some(&admin)).unwrap_err();
     assert!(consensus_err.to_string().contains("consensus"), "{consensus_err}");
@@ -128,9 +128,9 @@ async fn a_consensus_run_gives_every_candidate_the_same_trigger_input_and_synthe
         &AiAgentPipelineInput {
             name: "Consensus vote".into(), description: None, topology: "consensus".into(),
             steps: vec![
-                PipelineStepInput { agent_id: candidate_a.id.clone(), input_template: "{{trigger_input}}".into() },
-                PipelineStepInput { agent_id: candidate_b.id.clone(), input_template: "{{trigger_input}}".into() },
-                PipelineStepInput { agent_id: synthesizer.id.clone(), input_template: "Question: {{trigger_input}}\n\nAnswers:\n{{candidate_outputs}}".into() },
+                PipelineStepInput { agent_id: candidate_a.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+                PipelineStepInput { agent_id: candidate_b.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+                PipelineStepInput { agent_id: synthesizer.id.clone(), input_template: "Question: {{trigger_input}}\n\nAnswers:\n{{candidate_outputs}}".into(), requires_approval: false },
             ],
         },
         Some(&admin),
@@ -180,8 +180,8 @@ async fn peer_review_approves_on_the_first_round_when_the_reviewer_says_so() {
         &AiAgentPipelineInput {
             name: "Draft and review".into(), description: None, topology: "peer_review".into(),
             steps: vec![
-                PipelineStepInput { agent_id: drafter.id.clone(), input_template: "Draft: {{trigger_input}}. Feedback so far: {{previous_output}}".into() },
-                PipelineStepInput { agent_id: reviewer.id.clone(), input_template: "Review this draft: {{previous_output}}".into() },
+                PipelineStepInput { agent_id: drafter.id.clone(), input_template: "Draft: {{trigger_input}}. Feedback so far: {{previous_output}}".into(), requires_approval: false },
+                PipelineStepInput { agent_id: reviewer.id.clone(), input_template: "Review this draft: {{previous_output}}".into(), requires_approval: false },
             ],
         },
         Some(&admin),
@@ -211,8 +211,8 @@ async fn peer_review_feeds_the_reviewers_feedback_back_into_the_next_draft_and_g
         &AiAgentPipelineInput {
             name: "Never satisfied".into(), description: None, topology: "peer_review".into(),
             steps: vec![
-                PipelineStepInput { agent_id: drafter.id.clone(), input_template: "{{trigger_input}} | prior feedback: {{previous_output}}".into() },
-                PipelineStepInput { agent_id: reviewer.id.clone(), input_template: "critique: {{previous_output}}".into() },
+                PipelineStepInput { agent_id: drafter.id.clone(), input_template: "{{trigger_input}} | prior feedback: {{previous_output}}".into(), requires_approval: false },
+                PipelineStepInput { agent_id: reviewer.id.clone(), input_template: "critique: {{previous_output}}".into(), requires_approval: false },
             ],
         },
         Some(&admin),
