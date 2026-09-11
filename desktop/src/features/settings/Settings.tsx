@@ -259,7 +259,7 @@ export function AdminPanel() {
       )}
       {tab === "profile" && !workspace.data && <p>Loading...</p>}
 
-      {tab === "objects" && <CustomObjectsAdmin />}
+      {tab === "objects" && <CustomObjectsAdmin onOpenHelp={openHelpTopic} />}
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}

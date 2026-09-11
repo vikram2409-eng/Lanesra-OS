@@ -283,7 +283,277 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           {
             heading: "What comes next",
             bodyHtml:
-              "<p>This category covers the AI &amp; Agentic Layer end to end. Core CRM &amp; No-Code Platform, App Catalog, Deployment Management and Integration Hub are the named next Help categories - not built yet, planned.</p>",
+              "<p>This category covers the AI &amp; Agentic Layer end to end. Core CRM &amp; No-Code Platform is alongside it in this same list; App Catalog, Deployment Management and Integration Hub are the named next Help categories - not built yet, planned.</p>",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    key: "core-crm-no-code",
+    label: "Core CRM & No-Code Platform",
+    icon: "🧩",
+    blurb:
+      "Run the built-in sales lifecycle, then reshape the workspace itself - your own record types and relationships, admin-defined fields, conditional business rules, workflow automation, drag-and-drop screen layouts, and your own published app with its own dashboard.",
+    topics: [
+      {
+        slug: "core-crm-sales-lifecycle",
+        title: "The core CRM: companies, contacts & the sales lifecycle",
+        summary: "The connected record model, the flexible Company → Quote → Order → Invoice path, and where things live.",
+        sections: [
+          {
+            heading: "The connected record model",
+            bodyHtml:
+              '<p>Everything hangs off a <b>Company</b>: its Contacts, its Opportunities, and every Quote, Order, Invoice, Contract and Task that references it. A Company\'s own "360" detail page surfaces every one of those linked records in one place.</p>',
+          },
+          {
+            heading: "The flexible path",
+            bodyHtml:
+              "<p>The full lifecycle is Company → Contact → Opportunity → Quote → Order → Invoice, with Products &amp; Services and Contracts attaching along the way and Tasks trackable against any of them. A <b>direct-quote</b> or <b>direct-order</b> shortcut skips straight from a Company to a Quote or Order when there was no formal Opportunity - the full pipeline isn't a mandatory gate.</p>",
+          },
+          {
+            heading: "Line items & money math",
+            bodyHtml:
+              "<p>Quotes, Orders, Invoices and Contracts carry real line items against Products &amp; Services with computed totals. Money is integer cents internally, not floating-point - the class of rounding drift a spreadsheet accumulates over enough rows can't happen here.</p>",
+          },
+          {
+            heading: "Data integrity, automatic",
+            bodyHtml:
+              "<p>A duplicate-name/email warning fires before creating a Company or Contact that looks like one that already exists (a warning, not a hard block), and every object gets gap-free, sequential numbering - an admin sets the ID format per object, the same prefix/digit-width mechanism Custom Objects exposes for your own record types.</p>",
+          },
+          {
+            heading: "Finding things",
+            bodyHtml:
+              '<p>Every ID anywhere is a hyperlink to its record. The Dashboard has clickable, filterable KPIs; global search resolves straight to a match. Company and Contact each get a "360" page - full field overview plus every linked record, one click away.</p>',
+          },
+          {
+            heading: "Reports & data safety",
+            bodyHtml:
+              "<p>Beyond the Dashboard: a fixed Reports gallery (revenue by month, win rate, AR aging, sales by owner) plus a Custom Reports builder - any object, group by status/stage or a Reportable field, count or sum, CSV export. Whole-workspace backup/restore and CSV import/export round out data safety.</p>",
+          },
+          {
+            heading: "Next: make it yours",
+            bodyHtml:
+              "<p>The rest of this category - Custom Objects, Custom Relationships, Custom Fields, Business Rules, Workflow Automation, Screen Builder, App Builder &amp; Dashboards - is how an admin reshapes the workspace without writing code.</p>",
+          },
+        ],
+      },
+      {
+        slug: "custom-objects",
+        title: "Custom Objects: your own record types",
+        summary: "Define a whole new business object at runtime - its own icon, ID format and sidebar entry - no code change.",
+        sections: [
+          {
+            heading: "Why Custom Objects",
+            bodyHtml:
+              "<p>The 9 built-in entities cover the common sales lifecycle, but real businesses usually need something outside it - Vendors, Assets, Projects. A Custom Object is a genuinely new record type that plugs into every other admin tool exactly like a built-in one - not a smaller, separate feature set.</p>",
+          },
+          {
+            heading: "Create one — Data Model → Custom Objects",
+            bodyHtml:
+              '<table><thead><tr><th>Field</th><th>Example</th></tr></thead><tbody><tr><td>Singular name</td><td>Vendor</td></tr><tr><td>Plural name</td><td>Vendors</td></tr><tr><td>Icon</td><td>from a provided set</td></tr><tr><td>Record-number prefix &amp; digit width</td><td><code>VEN</code> + 6 → <code>VEN-000001</code></td></tr></tbody></table><p>Same numbering mechanism every built-in object already uses, just admin-configurable here.</p>',
+          },
+          {
+            heading: "What you get automatically",
+            bodyHtml:
+              "<p>A new sidebar entry appears immediately, and the object works through the platform's existing machinery straight away: Custom Fields, Custom Relationships, Business Rules, Workflow Automation, Screen Builder, App Builder - all the same tools, no separate onboarding per object.</p>",
+          },
+          {
+            heading: "Deactivate vs. delete",
+            bodyHtml:
+              "<p>Delete is blocked outright while any records exist - no accidental data loss path. Deactivate is always safe and reversible: hides the object from navigation without touching a record.</p>",
+          },
+        ],
+      },
+      {
+        slug: "custom-relationships",
+        title: "Custom Relationships: connecting any two objects",
+        summary: "One-to-one, many-to-one or many-to-many links between any two record types, with automatic related-records panels.",
+        sections: [
+          {
+            heading: "Connect any two objects — Data Model → Relationships",
+            bodyHtml:
+              '<p>Pick a Source (the "many"/owning side) and a Target - either can be built-in or Custom.</p><table><thead><tr><th>Cardinality</th><th>Meaning</th></tr></thead><tbody><tr><td>Many-to-one</td><td>Many source records, one target each</td></tr><tr><td>One-to-one</td><td>Exactly one on each side</td></tr><tr><td>Many-to-many</td><td>Either side links to several of the other</td></tr></tbody></table>',
+          },
+          {
+            heading: "Forward & reverse labels",
+            bodyHtml:
+              '<p>A <b>Forward label</b> (shown on the source, e.g. "Primary Vendor") and a <b>Reverse label</b> (shown on the target, e.g. "Companies supplied") let the relationship read naturally from both directions.</p>',
+          },
+          {
+            heading: "On delete: Restrict or Archive",
+            bodyHtml:
+              "<table><thead><tr><th>Behavior</th><th>Effect</th></tr></thead><tbody><tr><td>Restrict</td><td>Blocks archiving a linked record until unlinked</td></tr><tr><td>Archive</td><td>Drops the link automatically, keeps both records</td></tr></tbody></table>",
+          },
+          {
+            heading: "Two more options",
+            bodyHtml:
+              '<p><b>Show as a related list on both records</b> - an automatic related-records panel on each side. <b>Source record should have a target linked</b> - makes the link itself required.</p>',
+          },
+          {
+            heading: "Where it shows up",
+            bodyHtml:
+              "<p>Every linked record gets a \"Related records\" panel with inline Link/Unlink, both directions - the same lookup an AI Agent's <code>get_related_records</code> tool uses (see the Agentic AI Foundry category's Context Layer article).</p>",
+          },
+        ],
+      },
+      {
+        slug: "custom-fields",
+        title: "Custom Fields: types, validation & capability flags",
+        summary: "Five field types, min/max/length/regex validation, and the Searchable/Filterable/Reportable flags.",
+        sections: [
+          {
+            heading: "Field types — Data Model → Custom fields",
+            bodyHtml:
+              "<table><thead><tr><th>Type</th><th>Notes</th></tr></thead><tbody><tr><td>Text</td><td>Optional max length + regex pattern</td></tr><tr><td>Number</td><td>Optional min/max</td></tr><tr><td>Date</td><td>&nbsp;</td></tr><tr><td>Yes/No</td><td>Boolean</td></tr><tr><td>Select</td><td>A comma-separated option list</td></tr></tbody></table><p>Same builder for a built-in entity or a Custom Object.</p>",
+          },
+          {
+            heading: "Validation",
+            bodyHtml:
+              "<p>Text: maximum length and a regex pattern. Number: minimum and maximum. Both enforced at save time, on top of a plain Required toggle every type carries.</p>",
+          },
+          {
+            heading: "The capability flags",
+            bodyHtml:
+              "<table><thead><tr><th>Flag</th><th>Plugs into</th></tr></thead><tbody><tr><td>Searchable</td><td>Global search results</td></tr><tr><td>Filterable</td><td>List-view filters</td></tr><tr><td>Reportable</td><td>Custom Reports group-by (on by default)</td></tr><tr><td>Unique</td><td>Rejects a duplicate value (not on Yes/No)</td></tr><tr><td>Hidden by default</td><td>Omitted from a layout unless Screen Builder places it</td></tr></tbody></table>",
+          },
+          {
+            heading: "Default, placeholder & help text",
+            bodyHtml:
+              "<p>Default value fills an empty save automatically; placeholder text shows inside an empty input; help text renders under the field - three independent settings for a self-explanatory form.</p>",
+          },
+          {
+            heading: "Changing a field later",
+            bodyHtml:
+              "<p>Deactivating a field an active Business Rule or Workflow still reads or writes shows a dependency warning first, naming exactly which ones.</p>",
+          },
+        ],
+      },
+      {
+        slug: "business-rules",
+        title: "Business Rules: conditions, effects & status transitions",
+        summary: "AND/OR logic across 12 operators, validation and field-behavior effects, priority, and restricting status changes.",
+        sections: [
+          {
+            heading: "The condition/effect model — Automation → Business rules",
+            bodyHtml:
+              "<p>IF (conditions, AND or OR, plus one level of nested OR-groups) THEN (any number of effects) - evaluated live in the form and enforced again server-side on save, so it can't be bypassed by skipping the UI.</p>",
+          },
+          {
+            heading: "Conditions: 12 operators",
+            bodyHtml:
+              "<p>equals · does not equal · contains · does not contain · starts with · ends with · is one of · is not one of · is empty · is not empty · is greater than · is less than.</p>",
+          },
+          {
+            heading: "Effects",
+            bodyHtml:
+              "<table><thead><tr><th>Group</th><th>Effects</th></tr></thead><tbody><tr><td>Validation</td><td>Require · Block save (with message) · Show error · Show warning</td></tr><tr><td>Field behavior</td><td>Show/Hide · Read-only/Editable · Set value · Clear value · Set default · Restrict choices</td></tr></tbody></table>",
+          },
+          {
+            heading: "Priority & effective-date windows",
+            bodyHtml:
+              "<p>When two active rules disagree on the same field, the higher-priority one wins. An optional effective start/end date window lets a rule apply only during a period, without manually toggling it.</p>",
+          },
+          {
+            heading: "Status Transitions",
+            bodyHtml:
+              '<p>A separate, narrower tool in the same Automation area: which status/stage changes are allowed, with a wildcard "Any status" start and a per-rule active toggle. No active rules leaves the field unrestricted; re-saving the same status is never blocked.</p>',
+          },
+          {
+            heading: "Test rule before activating",
+            bodyHtml:
+              "<p>A dry-run Test rule mode shows exactly what a rule would do against hypothetical values - without touching real data.</p>",
+          },
+        ],
+      },
+      {
+        slug: "workflow-automation",
+        title: "Workflow Automation: triggers & actions",
+        summary: "7 trigger types, actions from creating a task to running an AI Agent, and the same condition engine as Business Rules.",
+        sections: [
+          {
+            heading: "Triggers — Automation → Workflow automation",
+            bodyHtml:
+              "<table><thead><tr><th>Trigger</th><th>Fires when</th></tr></thead><tbody><tr><td>Record created</td><td>A new record is saved</td></tr><tr><td>Record updated</td><td>Any field changes</td></tr><tr><td>Status/stage reaches</td><td>A specific value is set</td></tr><tr><td>Custom field changed</td><td>A specific field changes</td></tr><tr><td>Date reached</td><td>A date field hits today (with an offset)</td></tr><tr><td>Due/overdue</td><td>A due date passes uncompleted</td></tr><tr><td>Recurring schedule</td><td>Every N days</td></tr></tbody></table>",
+          },
+          {
+            heading: "Extra conditions",
+            bodyHtml:
+              "<p>Beyond the trigger, a workflow carries the same AND/OR condition engine Business Rules uses (including nested OR-groups), so a trigger can be narrowed without a second mechanism to learn.</p>",
+          },
+          {
+            heading: "Actions",
+            bodyHtml:
+              "<p>Create a task/reminder (due/remind-in days, assignee), update or clear a field (fixed value or copied from another field), set a default only if empty, assign an owner, create a new linked record or update one on an existing link, notify the owner or all admins, or <b>Run AI agent</b> - firing an Agent or Pipeline run from a business event (see Orchestration in the Agentic AI Foundry category).</p>",
+          },
+          {
+            heading: "Test workflow before activating",
+            bodyHtml:
+              "<p>Test workflow shows what an active workflow would do against hypothetical values - no real task, notification, or data touched.</p>",
+          },
+        ],
+      },
+      {
+        slug: "screen-app-builder",
+        title: "Screen Builder: designing create/edit and detail layouts",
+        summary: "Tabs of field sections, role-based assignment, and a draft-until-published model that also drives the detail view.",
+        sections: [
+          {
+            heading: "Tabs, sections & columns — Experience → Screen layouts",
+            bodyHtml:
+              "<p>A layout is named tabs, each holding field sections in 1-3 columns, any field able to span full width. Anything no tab claims still shows in an always-visible spot rather than disappearing.</p>",
+          },
+          {
+            heading: "Assign by role, with a required Default",
+            bodyHtml:
+              "<p>Whichever roles a user has, the first published layout naming one wins; every object needs one Default as the fallback - the same resolution rule Dashboards use.</p>",
+          },
+          {
+            heading: "Nothing changes until Publish",
+            bodyHtml:
+              '<p>Edits only touch the draft - the live form keeps its last-published version until Publish. An "Unpublished changes" badge shows drift; Revert draft discards unpublished edits.</p>',
+          },
+          {
+            heading: "Placing a related list on a tab",
+            bodyHtml:
+              "<p>A Custom Relationship's related-records list can be placed on a specific tab instead of always appearing in a fixed spot.</p>",
+          },
+          {
+            heading: "Drives the detail view too",
+            bodyHtml:
+              "<p>A published layout also renders the record's read-only Overview, so a field you've placed is visible there too. Preview shows the draft rendered before you publish.</p>",
+          },
+        ],
+      },
+      {
+        slug: "apps-dashboards",
+        title: "App Builder & Dashboards: publishing your own app",
+        summary: "Group objects into a named app with access grants and a sidebar switcher, and build role-assigned dashboards.",
+        sections: [
+          {
+            heading: "App Builder — Admin → Apps",
+            bodyHtml:
+              "<p>An app is a named, iconed group of already-existing objects plus a layout scope and an optional dashboard. Every primitive it assembles already exists elsewhere in Admin - App Builder packages and scopes, it doesn't duplicate.</p>",
+          },
+          {
+            heading: "Draft, Publish, and access grants",
+            bodyHtml:
+              "<p>An app starts Draft and is invisible until Publish. Once published, Administrators always see every app; everyone else needs a grant - to a role or one person - at Viewer or Editor level. Zero grants means genuinely invisible to everyone but Administrators.</p>",
+          },
+          {
+            heading: "Editor is a real security boundary",
+            bodyHtml:
+              "<p>Once an object is in a published app, every create/update/archive/status action on it needs at least Editor access to some app containing it, checked server-side - not only by which button is visible. The strongest matching grant wins; a person-specific grant beats their role's.</p>",
+          },
+          {
+            heading: "Dashboards — Admin → Dashboards",
+            bodyHtml:
+              "<table><thead><tr><th>Widget</th><th>Shows</th></tr></thead><tbody><tr><td>KPI tile</td><td>A single number from the standard KPI catalog</td></tr><tr><td>Chart</td><td>An existing saved Custom Report as a bar chart</td></tr><tr><td>Record list</td><td>An object's most recent (or soonest-due) records, click to jump to one</td></tr></tbody></table><p>Same named-layout/role-assignment/required-Default/draft-until-Publish model as Screen Builder.</p>",
+          },
+          {
+            heading: "App-scoped automation",
+            bodyHtml:
+              "<p>A rule, workflow or dashboard created in an app context is tagged with the app that owns it, and both builders offer an App filter - so an app's own automation stays visibly contained as you build more.</p>",
           },
         ],
       },
