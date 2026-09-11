@@ -18,7 +18,7 @@ import { PackageDetailsPanel } from "./PackageDetails";
  * deactivate control surface on top, mirroring the Rust core's
  * `industry_package_service`.
  */
-export function IndustryPackagesAdmin() {
+export function IndustryPackagesAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
   const [manifestJson, setManifestJson] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -97,7 +97,12 @@ export function IndustryPackagesAdmin() {
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Import a package</h3>
+        <div className="toolbar">
+          <h3 style={{ margin: 0 }}>Import a package</h3>
+          <button className="btn btn-secondary" onClick={() => onOpenHelp("install-an-industry-app")}>
+            📖 Help
+          </button>
+        </div>
         <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
           Paste a Lanesra industry app package manifest (JSON), or load a bundled starter below to review first.
           Importing only adds it to this workspace's local catalog for review - nothing is created until you

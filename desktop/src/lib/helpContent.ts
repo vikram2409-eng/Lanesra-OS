@@ -559,4 +559,155 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       },
     ],
   },
+  {
+    key: "industry-data-model",
+    label: "Industry Data Model",
+    icon: "⬢",
+    blurb:
+      "Install a complete, ready-made industry app - or review one in plain language before you commit - built from a versioned package manifest that reuses your existing Companies and Contacts instead of creating a parallel database.",
+    topics: [
+      {
+        slug: "install-an-industry-app",
+        title: "Installing an industry app",
+        summary: "Import a manifest or load a bundled starter, review it, install it, and see it in Installed apps.",
+        sections: [
+          {
+            heading: "The flow: Import → Review → Install",
+            bodyHtml:
+              "<p>This tab has three panels: <b>Import a package</b>, <b>Imported packages</b>, and <b>Installed apps</b>. Importing - pasting a manifest or clicking a bundled starter - only adds it to this workspace's local catalog for review. Nothing is created until you click Install.</p>",
+          },
+          {
+            heading: "The 10 bundled starters",
+            bodyHtml:
+              "<p>One click each loads a ready-to-review manifest: Field Service, Property Management, Construction &amp; Contractors, Professional Services, Practice Administration, Recruitment &amp; Staffing, Real Estate Brokerage, Legal Practice, Nonprofit &amp; Association Management, and Auto Repair &amp; Service Garage. Loading a starter just fills the Import box - you still choose whether to Import and Install it.</p>",
+          },
+          {
+            heading: "Review before you commit",
+            bodyHtml:
+              "<p>An imported package shows its name, industry, version and minimum required Lanesra version. Click <b>Details</b> for a full plain-language preview before installing (see <b>Reading a package's Details</b>, next in this list).</p>",
+          },
+          {
+            heading: "Installing",
+            bodyHtml:
+              "<p>Click Install from the table row or the open Details panel. A successful install moves the app into Installed apps with a status badge, and - if the package defines one - a new sidebar entry via the same App Builder mechanism a hand-built app uses.</p>",
+          },
+          {
+            heading: "Installing more than one",
+            bodyHtml:
+              "<p>An already-installed package shows an \"Installed\" badge instead of an Install button - re-installing the identical package is blocked, but different industry packages can be installed side by side in the same workspace, each tracked and deactivatable independently.</p>",
+          },
+        ],
+      },
+      {
+        slug: "the-package-manifest",
+        title: "The package manifest",
+        summary: "What a package contains - objects, fields, relationships, business rules, workflows, seed data and recommended permissions.",
+        sections: [
+          {
+            heading: "One JSON document",
+            bodyHtml:
+              "<p>A manifest is plain JSON: <code>format_version</code>, a globally-unique <code>package_id</code> (e.g. <code>lanesra.field_service</code>), a display <code>name</code>, an <code>industry</code> label, a semantic <code>version</code>, and a <code>min_lanesra_version</code> your workspace must meet.</p>",
+          },
+          {
+            heading: "What it can define",
+            bodyHtml:
+              "<table><thead><tr><th>Section</th><th>Same shape as</th></tr></thead><tbody><tr><td><code>objects</code></td><td>Custom Objects (key, labels, icon, ID prefix &amp; digits)</td></tr><tr><td><code>fields</code></td><td>Custom Fields (entity, label, type, options, required)</td></tr><tr><td><code>relationships</code></td><td>Custom Relationships (source/target, cardinality, labels)</td></tr><tr><td><code>business_rules</code></td><td>Business Rules (conditions + actions)</td></tr><tr><td><code>workflows</code></td><td>Workflow Automation (trigger + conditions + actions)</td></tr><tr><td><code>seed_data</code></td><td>Starter records created at install, if any</td></tr><tr><td><code>app</code></td><td>An App Builder definition - name, icon, description, and recommended_permissions (informational only)</td></tr></tbody></table>",
+          },
+          {
+            heading: "Why this matters",
+            bodyHtml:
+              "<p>Because a package is just data in the same shape the platform already understands, installing one doesn't create a parallel data model - everything it creates shows up in the same Admin screens as anything built by hand, editable the same way afterward.</p>",
+          },
+        ],
+      },
+      {
+        slug: "review-before-you-install",
+        title: "Reading a package's Details",
+        summary: "The four-part plain-language preview before you commit to installing.",
+        sections: [
+          {
+            heading: "What this builds",
+            bodyHtml: "<p>Every object, field and relationship the package defines, rendered as plain sentences instead of raw JSON.</p>",
+          },
+          {
+            heading: "How it connects to your existing data",
+            bodyHtml: "<p>Which of your built-in entities the package's new objects link into, and how.</p>",
+          },
+          {
+            heading: "Automation, in plain language",
+            bodyHtml:
+              "<p>Every rule and workflow the package would create, in the identical wording the real Business Rules and Workflow Automation builders use - so it reads the same once you open those screens after installing.</p>",
+          },
+          {
+            heading: "Fitting this to your organization",
+            bodyHtml:
+              "<p>Generated guidance: whether it links into built-ins you should have real records in first; whether it ships starter records; a reminder that names/prefixes/options are just defaults you can adjust after installing; how many permission grants need your review; and that every rule/workflow only reacts to the record that changed - a multi-record check still needs a person.</p>",
+          },
+          {
+            heading: "Costs nothing to open",
+            bodyHtml: "<p>Details is generated entirely from the manifest already imported - opening it doesn't touch your workspace or commit to anything.</p>",
+          },
+        ],
+      },
+      {
+        slug: "after-install-what-changed",
+        title: "After install: what changed, and fitting it to your team",
+        summary: "The per-install artifact breakdown, why permissions are never auto-granted, and adjusting defaults afterward.",
+        sections: [
+          {
+            heading: "What this install created",
+            bodyHtml:
+              "<p>Expand an installed app to see a count of every artifact it created, grouped by type - objects, fields, relationships, rules, workflows, screens, dashboards, reports, numbering overrides, seed records, and (if included) AI agents or skills.</p>",
+          },
+          {
+            heading: "Permissions are never auto-granted",
+            bodyHtml:
+              "<p>A package can list recommended role → access-level pairs, but installing never changes anyone's access on its own - these are for you to review and apply by hand from Users or Apps, the same explicit-grant model every app already uses.</p>",
+          },
+          {
+            heading: "It becomes a real, editable app",
+            bodyHtml:
+              "<p>If defined, install also publishes a genuine App Builder app - its own icon, sidebar entry, the same Draft/Publish and Viewer/Editor model any hand-built app uses. It's not a special installed mode - it's an ordinary app you can extend.</p>",
+          },
+          {
+            heading: "Making it yours",
+            bodyHtml:
+              "<p>Object names, ID prefixes and picklist options are defaults, not permanent - adjust them from Custom Objects/Custom Fields exactly as you would for anything hand-built. A rule or workflow the package created is a real row too - edit, deactivate, or delete it like any other.</p>",
+          },
+        ],
+      },
+      {
+        slug: "deactivate-reactivate-safety",
+        title: "Deactivate, reactivate & install safety",
+        summary: "What Deactivate/Reactivate do, and the validation, automatic backup and transactional rollback behind every install.",
+        sections: [
+          {
+            heading: "Deactivate vs. Reactivate",
+            bodyHtml:
+              "<p>Deactivating flips an app's status without deleting anything it created - objects, records, rules and workflows stay exactly as they are. Reactivate flips it back. Neither substitutes for actually removing what an install created - there's no destructive uninstall today, a known gap, not silently missing.</p>",
+          },
+          {
+            heading: "Validated before anything runs",
+            bodyHtml:
+              "<p>Every install re-validates the manifest - your workspace's version against min_lanesra_version, and every object/field key checked for collisions against what already exists - before a single row is written.</p>",
+          },
+          {
+            heading: "A real safety backup, every time",
+            bodyHtml:
+              "<p>Immediately before installing, the same whole-workspace backup mechanism behind Backup &amp; Restore runs automatically and its path is recorded against this install attempt - a real recovery point, not just a promise.</p>",
+          },
+          {
+            heading: "One atomic transaction",
+            bodyHtml:
+              "<p>The entire install runs inside a single database transaction. A collision or failure caught partway through rolls back cleanly, as if it never started.</p>",
+          },
+          {
+            heading: "Coming from Deployment Management",
+            bodyHtml:
+              "<p>An installed package's version history and update-with-diff live in Deployment Management - a separate Help category, not yet written, that also covers Solutions, Publishers and export/import between workspaces.</p>",
+          },
+        ],
+      },
+    ],
+  },
 ];
