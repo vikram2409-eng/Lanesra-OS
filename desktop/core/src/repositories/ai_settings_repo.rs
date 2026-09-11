@@ -21,6 +21,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiSettings> {
         last_tested_at: row.get("last_tested_at")?,
         daily_token_budget: row.get("daily_token_budget")?,
         otlp_endpoint: row.get("otlp_endpoint")?,
+        embedding_model: row.get("embedding_model")?,
         updated_at: row.get("updated_at")?,
         updated_by: row.get("updated_by")?,
     })
@@ -102,5 +103,12 @@ pub fn set_daily_token_budget(conn: &Connection, workspace_id: &str, daily_token
 /// independent admin dial, not folded into `update`.
 pub fn set_otlp_endpoint(conn: &Connection, workspace_id: &str, otlp_endpoint: Option<&str>) -> rusqlite::Result<()> {
     conn.execute("UPDATE ai_settings SET otlp_endpoint = ?1 WHERE workspace_id = ?2", rusqlite::params![otlp_endpoint, workspace_id])?;
+    Ok(())
+}
+
+/// Phase 7g: same shape as `set_otlp_endpoint` above - its own
+/// independent admin dial, not folded into `update`.
+pub fn set_embedding_model(conn: &Connection, workspace_id: &str, embedding_model: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute("UPDATE ai_settings SET embedding_model = ?1 WHERE workspace_id = ?2", rusqlite::params![embedding_model, workspace_id])?;
     Ok(())
 }

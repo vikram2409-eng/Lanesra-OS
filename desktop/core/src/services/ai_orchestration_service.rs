@@ -50,13 +50,27 @@ fn validate_pipeline_input(conn: &Connection, workspace_id: &str, input: &AiAgen
         _ => {}
     }
     // Phase 7e: a human-approval gate pauses and resumes at a specific
-    // step index in a fixed chain - a shape "sequential" alone has.
-    // Consensus's candidates run independently (pausing mid-way has no
-    // single well-defined resume point) and peer_review already has its
-    // own bounded-loop stop condition; both are out of scope for this
-    // pass.
-    if input.topology != "sequential" && input.steps.iter().any(|s| s.requires_approval) {
-        return Err(AppError::Validation("Human-approval gates are only supported on sequential pipelines".into()));
+    // step index. "sequential" allows it on any step - there's always
+    // exactly one well-defined next step. Phase 7g extends this to the
+    // one step each of the other two topologies has a well-defined pause
+    // point for: consensus's candidates run independently (pausing
+    // mid-way has no single "next" step among peers), but its last
+    // (synthesizer) step is a normal single resume point once every
+    // candidate has already run; peer_review's drafter is mid-loop
+    // rather than a resumable checkpoint, but its reviewer step already
+    // is the loop's own decision point.
+    match input.topology.as_str() {
+        "sequential" => {}
+        "consensus" => {
+            let last = input.steps.len() - 1;
+            if input.steps.iter().enumerate().any(|(i, s)| s.requires_approval && i != last) {
+                return Err(AppError::Validation("On a consensus pipeline, a human-approval gate is only supported on the last (synthesizer) step".into()));
+            }
+        }
+        "peer_review" if input.steps[0].requires_approval => {
+            return Err(AppError::Validation("On a peer-review pipeline, a human-approval gate is only supported on the second (reviewer) step".into()));
+        }
+        _ => {}
     }
     for step in &input.steps {
         let agent = ai_agent_repo::get(conn, &step.agent_id)?.ok_or_else(|| AppError::Validation("Selected agent does not exist".into()))?;
@@ -208,8 +222,10 @@ async fn run_step(
 
 /// What a topology's execution actually did - `run_internal` (a fresh
 /// run) and `approve_pending_step` (resuming one) both act on this the
-/// same way. Only `run_sequential_from` can ever produce `Paused` -
-/// consensus/peer_review always resolve to `Completed` or `Err`.
+/// same way. `run_sequential_from`, `run_consensus`, and
+/// `run_peer_review_from` can each produce `Paused`, at whichever single
+/// point their own topology has a well-defined resume step (see
+/// `validate_pipeline_input`'s own doc comment).
 enum RunOutcome {
     Completed,
     Paused { resume_at_step: i64, previous_output: String },
@@ -248,10 +264,15 @@ async fn run_sequential_from(
 /// single "previous" among peers. The last step ("synthesizer") can then
 /// reference every candidate's answer via `{{candidate_outputs}}`.
 /// `validate_pipeline_input` already guarantees at least 2 steps for this
-/// topology (and rejects `requires_approval` on any of them - see this
-/// module's own doc comment on `RunOutcome`).
-async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, mut steps: Vec<(String, String, bool)>, trigger_input: &str) -> AppResult<()> {
-    let (synth_agent_id, synth_template, _) = steps.pop().expect("validate_pipeline_input guarantees >= 2 steps for consensus");
+/// topology. Phase 7g: if the synthesizer step is flagged
+/// `requires_approval`, pauses right there - after every candidate has
+/// run, before the synthesizer does - with the joined `candidate_outputs`
+/// (exactly the text `{{candidate_outputs}}` would otherwise resolve to)
+/// as the resumable value; `run_consensus_synthesizer` below is the
+/// shared tail end both this function and `approve_pending_step` run once
+/// that's settled.
+async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, mut steps: Vec<(String, String, bool)>, trigger_input: &str) -> AppResult<RunOutcome> {
+    let (synth_agent_id, synth_template, synth_requires_approval) = steps.pop().expect("validate_pipeline_input guarantees >= 2 steps for consensus");
     let synth_step_order = steps.len() as i64;
 
     let mut candidate_texts = Vec::with_capacity(steps.len());
@@ -263,10 +284,34 @@ async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 
     }
 
     let candidate_outputs = candidate_texts.join("\n\n");
-    let input_text = resolve_template(&synth_template, "", trigger_input).replace(CANDIDATE_OUTPUTS_PLACEHOLDER, &candidate_outputs);
+    if synth_requires_approval {
+        return Ok(RunOutcome::Paused { resume_at_step: synth_step_order, previous_output: candidate_outputs });
+    }
+    run_consensus_synthesizer(conn, workspace_id, master_key, actor, run_id, &synth_agent_id, &synth_template, synth_step_order, &candidate_outputs, trigger_input).await
+}
+
+/// Runs just the synthesizer step of a consensus pipeline against an
+/// already-resolved `candidate_outputs` string - the shared tail end of
+/// both a fresh, unapproved-gate run (`run_consensus` above, called
+/// inline) and an approved resume (`approve_pending_step`, where
+/// `candidate_outputs` may be an admin's edited text rather than the
+/// candidates' own joined answers).
+async fn run_consensus_synthesizer(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    run_id: &str,
+    synth_agent_id: &str,
+    synth_template: &str,
+    synth_step_order: i64,
+    candidate_outputs: &str,
+    trigger_input: &str,
+) -> AppResult<RunOutcome> {
+    let input_text = resolve_template(synth_template, "", trigger_input).replace(CANDIDATE_OUTPUTS_PLACEHOLDER, candidate_outputs);
     let msg = "The synthesizer step names an agent that no longer exists".to_string();
-    run_step(conn, workspace_id, master_key, actor, run_id, &synth_agent_id, synth_step_order, &input_text, &msg).await?;
-    Ok(())
+    run_step(conn, workspace_id, master_key, actor, run_id, synth_agent_id, synth_step_order, &input_text, &msg).await?;
+    Ok(RunOutcome::Completed)
 }
 
 /// Exactly two steps - a drafter and a reviewer - looping: the reviewer's
@@ -278,13 +323,42 @@ async fn run_consensus(conn: &Connection, workspace_id: &str, master_key: &[u8; 
 /// `MAX_PEER_REVIEW_ROUNDS` is reached without approval.
 /// `validate_pipeline_input` already guarantees exactly 2 steps for this
 /// topology.
-async fn run_peer_review(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, run_id: &str, steps: Vec<(String, String, bool)>, trigger_input: &str) -> AppResult<()> {
+///
+/// Phase 7g: if the reviewer step is flagged `requires_approval`, pauses
+/// after every round's reviewer verdict - before it's checked for the
+/// "APPROVED" marker - with the verdict itself as the resumable value, so
+/// an admin can edit a reviewer's feedback (or force approval by editing
+/// it to start with "APPROVED") before it's acted on. `start_step_order`/
+/// `review_override` let `approve_pending_step` resume from exactly the
+/// round it paused on, reusing this same loop - and, with both at their
+/// defaults (`0`/`None`), this is also how a fresh run starts.
+async fn run_peer_review_from(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    run_id: &str,
+    steps: Vec<(String, String, bool)>,
+    start_step_order: i64,
+    review_override: Option<String>,
+    trigger_input: &str,
+) -> AppResult<RunOutcome> {
     let (drafter_id, drafter_template, _) = steps[0].clone();
-    let (reviewer_id, reviewer_template, _) = steps[1].clone();
+    let (reviewer_id, reviewer_template, reviewer_requires_approval) = steps[1].clone();
 
+    // Two steps (drafter + reviewer) per round, so the step_order a round
+    // resumes at always lands on a round boundary.
+    let rounds_done = (start_step_order / 2) as u8;
+    let mut step_order = start_step_order;
     let mut review_feedback = String::new();
-    let mut step_order: i64 = 0;
-    for _ in 0..MAX_PEER_REVIEW_ROUNDS {
+    if let Some(review) = review_override {
+        if review.trim_start().to_uppercase().starts_with(PEER_REVIEW_APPROVAL_MARKER) {
+            return Ok(RunOutcome::Completed);
+        }
+        review_feedback = review;
+    }
+
+    for _ in rounds_done..MAX_PEER_REVIEW_ROUNDS {
         let draft_input = resolve_template(&drafter_template, &review_feedback, trigger_input);
         let draft = run_step(conn, workspace_id, master_key, actor, run_id, &drafter_id, step_order, &draft_input, "The drafter step names an agent that no longer exists").await?;
         step_order += 1;
@@ -293,8 +367,11 @@ async fn run_peer_review(conn: &Connection, workspace_id: &str, master_key: &[u8
         let review = run_step(conn, workspace_id, master_key, actor, run_id, &reviewer_id, step_order, &review_input, "The reviewer step names an agent that no longer exists").await?;
         step_order += 1;
 
+        if reviewer_requires_approval {
+            return Ok(RunOutcome::Paused { resume_at_step: step_order, previous_output: review });
+        }
         if review.trim_start().to_uppercase().starts_with(PEER_REVIEW_APPROVAL_MARKER) {
-            return Ok(());
+            return Ok(RunOutcome::Completed);
         }
         review_feedback = review;
     }
@@ -372,8 +449,8 @@ async fn run_internal(
     ai_agent_run_repo::start_run(conn, &run_id, workspace_id, target_type, target_id, triggered_by, source_entity_type, source_entity_id, trigger_input)?;
 
     let result = match topology.as_str() {
-        "consensus" => run_consensus(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await.map(|()| RunOutcome::Completed),
-        "peer_review" => run_peer_review(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await.map(|()| RunOutcome::Completed),
+        "consensus" => run_consensus(conn, workspace_id, master_key, actor, &run_id, steps, trigger_input).await,
+        "peer_review" => run_peer_review_from(conn, workspace_id, master_key, actor, &run_id, steps, 0, None, trigger_input).await,
         _ => run_sequential_from(conn, workspace_id, master_key, actor, &run_id, &steps, 0, String::new(), trigger_input).await,
     };
     finalize_run(conn, &run_id, result)
@@ -391,15 +468,21 @@ fn finalize_run(conn: &Connection, run_id: &str, result: AppResult<RunOutcome>) 
     Ok(ai_agent_run_repo::get_run(conn, run_id)?.expect("just finished or paused"))
 }
 
-/// Human-in-the-loop (Phase 7e): approves the step a run is currently
-/// paused on and resumes execution from the next one - optionally with
-/// `edited_output` standing in for that step's own real output as the
-/// next step's `{{previous_output}}`, the same "approve, or approve with
+/// Human-in-the-loop (Phase 7e; extended to consensus/peer_review in
+/// Phase 7g): approves the step a run is currently paused on and resumes
+/// execution from there - optionally with `edited_output` standing in for
+/// that step's own real output, the same "approve, or approve with
 /// changes" latitude a real reviewer needs. Re-reads the pipeline fresh
 /// (not a frozen copy from when the run paused) - an edit to the
 /// pipeline in the meantime takes effect on resume, the same way a
 /// changed Business Rule takes effect on its next evaluation rather than
 /// being pinned to whatever existed when a record was first opened.
+/// Dispatches by the pipeline's own `topology`, since each one resumes
+/// through a different function - `run_sequential_from` continues into
+/// the next step, `run_consensus_synthesizer` runs just the synthesizer
+/// against the (possibly edited) `candidate_outputs`, and
+/// `run_peer_review_from` checks the (possibly edited) reviewer verdict
+/// and continues the round-robin loop if it isn't approval.
 pub async fn approve_pending_step(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], run_id: &str, edited_output: Option<&str>, actor_user_id: Option<&str>) -> AppResult<AiAgentRun> {
     require_admin(conn, actor_user_id)?;
     let run = ai_agent_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
@@ -407,11 +490,21 @@ pub async fn approve_pending_step(conn: &Connection, workspace_id: &str, master_
         return Err(AppError::Validation("This run is not awaiting approval".into()));
     }
     let pipeline = ai_agent_pipeline_repo::get(conn, &run.target_id)?.ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
+    let topology = pipeline.topology.clone();
     let steps: Vec<(String, String, bool)> = pipeline.steps.into_iter().map(|s| (s.agent_id, s.input_template, s.requires_approval)).collect();
-    let start_index = run.paused_at_step_order.unwrap_or(0) as usize;
+    let resume_at_step = run.paused_at_step_order.unwrap_or(0);
     let previous_output = edited_output.map(str::to_string).unwrap_or_else(|| run.resume_previous_output.clone().unwrap_or_default());
 
-    let result = run_sequential_from(conn, workspace_id, master_key, actor_user_id, run_id, &steps, start_index, previous_output, &run.trigger_input).await;
+    let result = match topology.as_str() {
+        "consensus" => {
+            let mut steps = steps;
+            let (synth_agent_id, synth_template, _) = steps.pop().expect("validate_pipeline_input guarantees >= 2 steps for consensus");
+            let synth_step_order = steps.len() as i64;
+            run_consensus_synthesizer(conn, workspace_id, master_key, actor_user_id, run_id, &synth_agent_id, &synth_template, synth_step_order, &previous_output, &run.trigger_input).await
+        }
+        "peer_review" => run_peer_review_from(conn, workspace_id, master_key, actor_user_id, run_id, steps, resume_at_step, Some(previous_output), &run.trigger_input).await,
+        _ => run_sequential_from(conn, workspace_id, master_key, actor_user_id, run_id, &steps, resume_at_step as usize, previous_output, &run.trigger_input).await,
+    };
     finalize_run(conn, run_id, result)
 }
 

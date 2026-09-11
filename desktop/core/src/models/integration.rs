@@ -471,12 +471,37 @@ pub struct ApiFieldMetadata {
     pub is_custom: bool,
 }
 
+/// One Custom Relationship this object participates in, from either
+/// direction - `related_object_key`/`label` are already resolved to
+/// whichever side isn't `object_key`, so a caller never has to compare
+/// `source_entity_type`/`target_entity_type` itself to figure out which
+/// label or object applies. A relationship is stored as a link
+/// (`relationship_instances`), never a raw foreign-key column on the
+/// record - `GET /api/v1/objects/{key}/records/{id}/related` (the same
+/// `relationship_service::related_records_for` the desktop UI's own
+/// "Related records" panel calls) is how the actual linked records for
+/// one record are fetched, not a field on the record itself.
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiRelationshipMetadata {
+    pub relationship_key: String,
+    pub related_object_key: String,
+    /// "one_to_one" | "many_to_one" | "many_to_many".
+    pub relationship_type: String,
+    pub label: String,
+    /// "forward" (this object is the relationship's source) | "reverse"
+    /// (this object is the target) - which of `forward_label`/
+    /// `reverse_label` `label` above already resolved to.
+    pub direction: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiObjectMetadata {
     pub object_key: String,
     pub label: String,
     pub is_custom: bool,
     pub fields: Vec<ApiFieldMetadata>,
+    #[serde(default)]
+    pub relationships: Vec<ApiRelationshipMetadata>,
 }
 
 /// The generic paged list result `GET /api/v1/objects/{key}/records`

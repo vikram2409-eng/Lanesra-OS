@@ -41,6 +41,13 @@ pub struct AiSettings {
     /// no-ops. Genuinely optional: `run_to_otlp_json`/the "View OTLP
     /// trace" export work with no endpoint configured at all.
     pub otlp_endpoint: Option<String>,
+    /// AI & Agentic Layer, Phase 7g: the embeddings model
+    /// `ai_service::embed_texts` calls, when set - `None` means "use a
+    /// sensible per-provider default" (see that function's own doc
+    /// comment), not "vector search is off"; there's no separate on/off
+    /// switch, since reindexing simply never runs for a workspace with
+    /// no provider key configured at all.
+    pub embedding_model: Option<String>,
     pub updated_at: String,
     pub updated_by: Option<String>,
 }
@@ -71,6 +78,25 @@ pub struct AiDailyTokenBudgetInput {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AiObservabilitySettingsInput {
     pub otlp_endpoint: Option<String>,
+}
+
+/// Phase 7g: same shape as `AiObservabilitySettingsInput` above - its own
+/// dial, not folded into `AiSettingsInput`, since it's edited from the
+/// new Vector Search admin panel rather than the LLM provider form. An
+/// empty string clears it back to the per-provider default, the same
+/// "blank means unset" convention `otlp_endpoint` already uses.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiEmbeddingSettingsInput {
+    pub embedding_model: Option<String>,
+}
+
+/// The `services::vector_search_service::reindex_workspace`/admin panel's
+/// own progress readout - `embedded`/`pending` mirror
+/// `AiTokenUsageSummary`'s "prove it actually did something" shape.
+#[derive(Debug, Clone, Serialize)]
+pub struct VectorSearchStatus {
+    pub embedded_count: i64,
+    pub pending_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]

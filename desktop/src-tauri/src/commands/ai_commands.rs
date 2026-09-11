@@ -11,8 +11,8 @@ use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id, resolve_master_key};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::ai::{AiDailyTokenBudgetInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary};
-use lanesra_core::services::ai_service;
+use lanesra_core::models::ai::{AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary, VectorSearchStatus};
+use lanesra_core::services::{ai_service, vector_search_service};
 
 #[tauri::command]
 pub fn get_ai_settings(state: State<AppState>) -> AppResult<AiSettings> {
@@ -62,4 +62,21 @@ pub fn set_ai_otlp_endpoint(state: State<AppState>, input: AiObservabilitySettin
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     ai_service::set_otlp_endpoint(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+}
+
+/// Phase 7g: same shape as `set_ai_otlp_endpoint` above -
+/// `reindex_vector_search` (real outbound embedding calls) is its own
+/// async command, alongside `ai_agent_pipeline_commands`'s other
+/// genuinely-async operations.
+#[tauri::command]
+pub fn set_ai_embedding_model(state: State<AppState>, input: AiEmbeddingSettingsInput) -> AppResult<AiSettings> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    ai_service::set_embedding_model(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn get_vector_search_status(state: State<AppState>) -> AppResult<VectorSearchStatus> {
+    let conn = state.conn.lock().unwrap();
+    vector_search_service::status(&conn, &require_workspace_id(&conn)?)
 }

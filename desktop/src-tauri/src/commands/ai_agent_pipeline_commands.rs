@@ -112,6 +112,24 @@ pub async fn push_ai_agent_run_otlp(state: State<'_, AppState>, id: String) -> A
     run_with_own_connection(db_path, move |conn| async move { ai_orchestration_service::push_run_trace_to_otlp(&conn, &workspace_id, &id, actor.as_deref()).await }).await
 }
 
+/// AI & Agentic Layer, Phase 7g: drains the workspace's full pending
+/// embedding queue right away - genuinely async, same reasoning
+/// `push_ai_agent_run_otlp` above isn't a plain sync command. Returns how
+/// many records were actually reindexed.
+#[tauri::command]
+pub async fn reindex_vector_search(state: State<'_, AppState>) -> AppResult<usize> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::vector_search_service::reindex_workspace(&conn, &workspace_id, &master_key, actor.as_deref()).await
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn run_ai_agent(state: State<'_, AppState>, id: String, input: String) -> AppResult<AiAgentRun> {
     run_target(state, "agent", id, input).await
@@ -137,8 +155,9 @@ async fn run_target(state: State<'_, AppState>, target_type: &'static str, id: S
 
 /// Desktop's own poll for everything the server's `job_scheduler.rs`
 /// tick drains - a schedule Trigger, a `run_ai_agent` workflow action,
-/// and (the incidental fix) `call_connector_action`'s own long-unwired
-/// queue. Called from `App.tsx`'s existing 5-minute `runScheduledWorkflows`
+/// (the incidental fix) `call_connector_action`'s own long-unwired
+/// queue, and (Phase 7g) a Custom Object record's own pending vector
+/// search reindex. Called from `App.tsx`'s existing 5-minute `runScheduledWorkflows`
 /// interval, not a separate one - `runScheduledWorkflows` itself stays
 /// sync (scheduled workflow triggers make no network calls); this is the
 /// one genuinely-async drain desktop needs alongside it.
@@ -154,6 +173,9 @@ pub async fn drain_pending_async_work(state: State<'_, AppState>) -> AppResult<(
         let _ = lanesra_core::services::connector_execution_service::drain_pending_actions(&conn, &workspace_id, &master_key, 50).await;
         let _ = ai_orchestration_service::enqueue_due_schedules(&conn, &workspace_id);
         let _ = ai_orchestration_service::drain_pending_runs(&conn, &workspace_id, &master_key, 50).await;
+        // AI & Agentic Layer, Phase 7g: same drain the server's
+        // `job_scheduler.rs` tick runs, here on desktop's own poll.
+        let _ = lanesra_core::services::vector_search_service::drain_pending_embeddings(&conn, &workspace_id, &master_key, 50).await;
         Ok(())
     })
     .await

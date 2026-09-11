@@ -10,7 +10,7 @@ use serde_json::Value;
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
-use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput};
+use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput};
 use lanesra_core::models::ai_agent::{AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
 use lanesra_core::models::ai_eval::AiEvalSuiteInput;
@@ -62,7 +62,7 @@ use lanesra_core::services::{
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, product_service,
     publisher_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
-    user_service, webhook_service, workflow_service, workspace_service,
+    user_service, vector_search_service, webhook_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -1251,6 +1251,15 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let input: AiObservabilitySettingsInput = arg(args, "input")?;
             to_value(ai_service::set_otlp_endpoint(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
+        // AI & Agentic Layer, Phase 7g: setting the embedding model is
+        // plain sync; `reindex_vector_search` (real outbound embedding
+        // calls) is genuinely async, so it's its own route in
+        // `admin_actions.rs`, same reasoning `push_ai_agent_run_otlp` is.
+        "set_ai_embedding_model" => {
+            let input: AiEmbeddingSettingsInput = arg(args, "input")?;
+            to_value(ai_service::set_embedding_model(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "get_vector_search_status" => to_value(vector_search_service::status(conn, &require_workspace_id(conn)?)?),
         "get_ai_token_usage_summary" => to_value(ai_service::token_usage_today(conn, &require_workspace_id(conn)?)?),
         "list_ai_gateway_failover_events" => {
             let limit: i64 = arg(args, "limit")?;

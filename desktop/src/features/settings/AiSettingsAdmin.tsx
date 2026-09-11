@@ -200,8 +200,11 @@ function GatewayTab() {
   const [editing, setEditing] = useState<AiProvider | null>(null);
   const [budgetDraft, setBudgetDraft] = useState<string | null>(null);
   const [otlpDraft, setOtlpDraft] = useState<string | null>(null);
+  const [embeddingModelDraft, setEmbeddingModelDraft] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // AI & Agentic Layer, Phase 7g.
+  const vectorSearchStatusQuery = useQuery({ queryKey: ["vectorSearchStatus"], queryFn: () => api.getVectorSearchStatus() });
 
   function invalidateProviders() {
     queryClient.invalidateQueries({ queryKey: ["aiProviders"] });
@@ -248,10 +251,28 @@ function GatewayTab() {
       queryClient.invalidateQueries({ queryKey: ["aiSettings"] });
     },
   });
+  const saveEmbeddingModel = useMutation({
+    mutationFn: (embedding_model: string | null) => api.setAiEmbeddingModel({ embedding_model }),
+    onSuccess: () => {
+      setEmbeddingModelDraft(null);
+      queryClient.invalidateQueries({ queryKey: ["aiSettings"] });
+    },
+  });
+  const [vectorSearchError, setVectorSearchError] = useState<string | null>(null);
+  const reindexVectorSearch = useMutation({
+    mutationFn: () => api.reindexVectorSearch(),
+    onSuccess: () => {
+      setVectorSearchError(null);
+      queryClient.invalidateQueries({ queryKey: ["vectorSearchStatus"] });
+    },
+    onError: (err) => setVectorSearchError(apiErrorMessage(err, "Could not reindex vector search")),
+  });
 
   const budget = usageQuery.data?.daily_token_budget ?? null;
   const budgetValue = budgetDraft !== null ? budgetDraft : budget === null ? "" : String(budget);
   const otlpValue = otlpDraft !== null ? otlpDraft : settingsQuery.data?.otlp_endpoint ?? "";
+  const embeddingModelValue = embeddingModelDraft !== null ? embeddingModelDraft : settingsQuery.data?.embedding_model ?? "";
+  const embeddingsSupported = settingsQuery.data?.provider === "openai_compatible" || settingsQuery.data?.provider === "google_gemini";
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -297,6 +318,42 @@ function GatewayTab() {
             {saveOtlpEndpoint.isPending ? "Saving..." : "Save"}
           </button>
         </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: 560 }}>
+        <h3 style={{ marginTop: 0 }}>Vector search</h3>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+          Real embeddings from this workspace's own configured provider power a second, meaning-based ranking over Custom Object records
+          (semantic_search_records, alongside the keyword-ranked search_records) - stored as plain vectors here, compared by cosine
+          similarity, no external vector database. Needs an OpenAI-compatible or Google Gemini provider - Anthropic has no embeddings API.
+        </p>
+        {!embeddingsSupported && (
+          <p style={{ fontSize: 13, color: "var(--warning, #92610a)" }}>
+            The LLM tab's provider ({settingsQuery.data?.provider ?? "none configured"}) doesn't support embeddings - switch to
+            OpenAI-compatible or Google Gemini there first.
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <input
+            style={{ flex: 1 }}
+            placeholder={settingsQuery.data?.provider === "google_gemini" ? "text-embedding-004 (default)" : "text-embedding-3-small (default)"}
+            value={embeddingModelValue}
+            onChange={(e) => setEmbeddingModelDraft(e.target.value)}
+          />
+          <button className="btn btn-secondary" disabled={saveEmbeddingModel.isPending} onClick={() => saveEmbeddingModel.mutate(embeddingModelValue.trim() === "" ? null : embeddingModelValue)}>
+            {saveEmbeddingModel.isPending ? "Saving..." : "Save"}
+          </button>
+        </div>
+        {vectorSearchStatusQuery.data && (
+          <p style={{ fontSize: 13 }}>
+            <b>{vectorSearchStatusQuery.data.embedded_count}</b> record{vectorSearchStatusQuery.data.embedded_count === 1 ? "" : "s"} embedded
+            {vectorSearchStatusQuery.data.pending_count > 0 && <> - {vectorSearchStatusQuery.data.pending_count} waiting to be reindexed</>}
+          </p>
+        )}
+        <button className="btn btn-secondary" disabled={reindexVectorSearch.isPending || !embeddingsSupported} onClick={() => reindexVectorSearch.mutate()}>
+          {reindexVectorSearch.isPending ? "Reindexing..." : "Reindex now"}
+        </button>
+        {vectorSearchError && <div className="error-banner" style={{ marginTop: 8 }}>{vectorSearchError}</div>}
       </div>
 
       <div className="card">

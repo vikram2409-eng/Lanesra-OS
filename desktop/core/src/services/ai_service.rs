@@ -40,7 +40,7 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::ai::{AiDailyTokenBudgetInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS};
+use crate::models::ai::{AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS};
 use crate::models::chat::ChatMessage;
 use crate::repositories::{ai_settings_repo, ai_token_usage_repo, integration_secret_repo};
 
@@ -182,6 +182,15 @@ pub fn set_otlp_endpoint(conn: &Connection, workspace_id: &str, input: &AiObserv
     ai_settings_repo::ensure_default(conn, workspace_id)?;
     let endpoint = input.otlp_endpoint.as_deref().map(str::trim).filter(|s| !s.is_empty());
     ai_settings_repo::set_otlp_endpoint(conn, workspace_id, endpoint)?;
+    Ok(ai_settings_repo::ensure_default(conn, workspace_id)?)
+}
+
+/// Phase 7g: same shape as `set_otlp_endpoint` above.
+pub fn set_embedding_model(conn: &Connection, workspace_id: &str, input: &AiEmbeddingSettingsInput, actor_user_id: Option<&str>) -> AppResult<AiSettings> {
+    require_admin(conn, actor_user_id)?;
+    ai_settings_repo::ensure_default(conn, workspace_id)?;
+    let model = input.embedding_model.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    ai_settings_repo::set_embedding_model(conn, workspace_id, model)?;
     Ok(ai_settings_repo::ensure_default(conn, workspace_id)?)
 }
 
@@ -821,4 +830,118 @@ pub(crate) async fn test_provider(provider: &str, base_url: Option<&str>, model:
         "google_gemini" => test_gemini(base_url, api_key).await,
         other => Err(AppError::Validation(format!("No test implemented for provider '{other}'"))),
     }
+}
+
+// --- AI & Agentic Layer, Phase 7g: embeddings for vector search ---------
+//
+// Only "openai_compatible"/"google_gemini" expose an embeddings endpoint
+// - Anthropic's API has none at all, so a workspace configured for it
+// gets one clear, named error the moment reindexing/searching is
+// attempted, not a confusing HTTP failure partway through. `embed_texts`
+// batches everything it can in one request (openai_compatible's own
+// array `input`; Gemini's `batchEmbedContents`) so reindexing many
+// records doesn't mean one round trip per record.
+
+const DEFAULT_OPENAI_EMBEDDING_MODEL: &str = "text-embedding-3-small";
+const DEFAULT_GEMINI_EMBEDDING_MODEL: &str = "text-embedding-004";
+
+/// The effective embedding model name - `settings.embedding_model` when
+/// an admin has set one (`set_embedding_model`), else this per-provider
+/// default. Deliberately never `settings.model` - that's the *chat*
+/// model, not necessarily an embeddings-capable one.
+fn default_embedding_model(provider: &str) -> &'static str {
+    match provider {
+        "google_gemini" => DEFAULT_GEMINI_EMBEDDING_MODEL,
+        _ => DEFAULT_OPENAI_EMBEDDING_MODEL,
+    }
+}
+
+/// Real embedding vectors for `texts`, in the same order - the one place
+/// both `vector_search_service::drain_pending_embeddings` (reindexing)
+/// and `semantic_search_records` (embedding the query itself) funnel
+/// through, the same "one place every call funnels through" shape
+/// `ai_orchestration_service::run_step` already established for agent
+/// calls. Resolves settings/secret exactly like `complete` above.
+pub async fn embed_texts(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], texts: &[String]) -> AppResult<Vec<Vec<f32>>> {
+    if texts.is_empty() {
+        return Ok(Vec::new());
+    }
+    let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
+    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?
+        .ok_or_else(|| AppError::Validation("Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into()))?;
+    let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
+    let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
+    let model = settings.embedding_model.as_deref().filter(|m| !m.trim().is_empty()).unwrap_or_else(|| default_embedding_model(&settings.provider)).to_string();
+
+    match settings.provider.as_str() {
+        "openai_compatible" => embed_openai_compatible(settings.base_url.as_deref(), &model, &api_key, texts).await,
+        "google_gemini" => embed_gemini(settings.base_url.as_deref(), &model, &api_key, texts).await,
+        "anthropic" => Err(AppError::Validation(
+            "Anthropic has no embeddings API - configure an OpenAI-compatible or Google Gemini provider (Admin -> LLM & MCP -> LLM) to use vector search".into(),
+        )),
+        other => Err(AppError::Validation(format!("No embeddings implemented for provider '{other}'"))),
+    }
+}
+
+async fn embed_openai_compatible(base_url: Option<&str>, model: &str, api_key: &str, texts: &[String]) -> AppResult<Vec<Vec<f32>>> {
+    let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| AppError::Validation("An OpenAI-compatible provider needs a base URL".into()))?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
+    let body = serde_json::json!({"model": model, "input": texts});
+    let response = client
+        .post(format!("{}/embeddings", base.trim_end_matches('/')))
+        .header("Authorization", format!("Bearer {api_key}"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+    }
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let data = value.get("data").and_then(|d| d.as_array()).ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))?;
+    data.iter()
+        .map(|d| {
+            d.get("embedding")
+                .and_then(|e| e.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).map(|v| v as f32).collect::<Vec<f32>>())
+                .ok_or_else(|| AppError::Validation(format!("Unexpected embedding shape from {base}: {}", truncate(&text, 200))))
+        })
+        .collect()
+}
+
+async fn embed_gemini(base_url: Option<&str>, model: &str, api_key: &str, texts: &[String]) -> AppResult<Vec<Vec<f32>>> {
+    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_GEMINI_BASE_URL);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
+    let requests: Vec<serde_json::Value> = texts.iter().map(|t| serde_json::json!({"model": format!("models/{model}"), "content": {"parts": [{"text": t}]}})).collect();
+    let body = serde_json::json!({"requests": requests});
+    let response = client
+        .post(format!("{}/v1beta/models/{}:batchEmbedContents?key={}", base.trim_end_matches('/'), model, api_key))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+    }
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let embeddings = value.get("embeddings").and_then(|e| e.as_array()).ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))?;
+    embeddings
+        .iter()
+        .map(|e| {
+            e.get("values")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).map(|v| v as f32).collect::<Vec<f32>>())
+                .ok_or_else(|| AppError::Validation(format!("Unexpected embedding shape from {base}: {}", truncate(&text, 200))))
+        })
+        .collect()
 }

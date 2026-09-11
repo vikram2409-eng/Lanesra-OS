@@ -18,7 +18,10 @@
 //! `ai_orchestration_service::drain_pending_runs` (AI & Agentic Layer,
 //! Phase 6b's `run_ai_agent` workflow action, plus schedule/webhook
 //! Triggers - `enqueue_due_schedules` is what actually enqueues a due
-//! schedule Trigger, right before the drain that runs it).
+//! schedule Trigger, right before the drain that runs it) and Phase 7g's
+//! `vector_search_service::drain_pending_embeddings` (a Custom Object
+//! record's own migration-0048 triggers enqueue it, this is where the
+//! real embedding-provider call happens).
 //!
 //! Runs on its **own dedicated OS thread with its own single-threaded
 //! Tokio runtime**, not `tokio::spawn`ed onto axum's shared
@@ -43,7 +46,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use lanesra_core::services::{ai_orchestration_service, connector_execution_service, integration_job_service, secret_service};
+use lanesra_core::services::{ai_orchestration_service, connector_execution_service, integration_job_service, secret_service, vector_search_service};
 
 /// Spawns the scheduler loop on its own OS thread and returns
 /// immediately - call once from `main`, after the primary workspace
@@ -106,6 +109,14 @@ async fn tick(conn: &rusqlite::Connection, key_file_path: &std::path::Path) -> R
     }
     if let Err(e) = ai_orchestration_service::drain_pending_runs(conn, &workspace.id, &master_key, 50).await {
         tracing::error!(error = %e, "drain_pending_runs (AI Agent Foundry) failed");
+    }
+    // AI & Agentic Layer, Phase 7g: same "enqueue now, drain later" shape
+    // as drain_pending_runs above - a workspace with no provider key
+    // configured yet logs here every tick rather than reindexing, the
+    // same "log and move on" resilience every other step in this
+    // function already has for its own not-yet-configured case.
+    if let Err(e) = vector_search_service::drain_pending_embeddings(conn, &workspace.id, &master_key, 50).await {
+        tracing::error!(error = %e, "drain_pending_embeddings (vector search) failed");
     }
     Ok(())
 }

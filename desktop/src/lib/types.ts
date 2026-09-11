@@ -2179,6 +2179,8 @@ export interface AiSettings {
   daily_token_budget: number | null;
   /** Phase 7f: where a run's OTLP trace can be pushed - `null` means the push action is unavailable. */
   otlp_endpoint: string | null;
+  /** Phase 7g: the embeddings model `embed_texts` calls - `null` means "use a sensible per-provider default", not "vector search is off". */
+  embedding_model: string | null;
   updated_at: string;
   updated_by: string | null;
 }
@@ -2238,6 +2240,23 @@ export interface AiDailyTokenBudgetInput {
 
 export interface AiObservabilitySettingsInput {
   otlp_endpoint: string | null;
+}
+
+/** Phase 7g: vector search over Custom Object records. See ai_orchestration_service.rs's own doc comment on the embeddings/cosine-similarity approach. */
+export interface AiEmbeddingSettingsInput {
+  embedding_model: string | null;
+}
+
+export interface VectorSearchStatus {
+  embedded_count: number;
+  pending_count: number;
+}
+
+export interface SemanticSearchHit {
+  object_key: string;
+  record_id: string;
+  title: string;
+  similarity: number;
 }
 
 export interface AiGatewayFailoverEvent {

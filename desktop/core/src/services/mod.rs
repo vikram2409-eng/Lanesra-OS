@@ -61,6 +61,7 @@ pub mod solution_service;
 pub mod status_transition_service;
 pub mod task_service;
 pub mod user_service;
+pub mod vector_search_service;
 pub mod webhook_service;
 pub mod workflow_service;
 pub mod workspace_service;
