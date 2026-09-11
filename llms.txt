@@ -19,7 +19,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - App Catalog (desktop and demo): all 10 industry reference packages install transactionally into an existing workspace.
 - Deployment Management (desktop and demo): Publishers, versioned Solutions, real export/import, update-with-diff.
 - Integration Hub (desktop only, real): AES-256-GCM-encrypted Connections, OpenAPI Connector import, a generic REST API secured by hashed scoped API keys, HMAC-signed Webhooks, a CSV data-exchange wizard, External Objects, and a real background-scheduled Integration Jobs engine on the Team Workspace server. The online demo simulates this layer client-side (no server to make a real call from).
-- AI & Agentic Layer (desktop and demo): a native MCP server & CLI, a Chat Assistant, the AI Agent Foundry (named agents with persona, Actions, Memory, Skills, delegation), Orchestration (Pipelines/Triggers/workflow-fired runs), and a Unified AI Gateway (multi-provider routing, failover, token budgets, DLP air-gapping) are all shipped. A Context Layer adds ranked full-text search over Custom Object records (SQLite FTS5/`bm25()` — lexical relevance, not embeddings or a vector database) and real change-history for every agent's Memory.
+- AI & Agentic Layer (desktop and demo): a native MCP server & CLI, a Chat Assistant, the AI Agent Foundry (named agents with persona, Actions, Memory, Skills, delegation), Orchestration (Pipelines/Triggers/workflow-fired runs, with human-approval gates on any topology's own resume point), and a Unified AI Gateway (multi-provider routing, failover, token budgets, DLP air-gapping) are all shipped. A Context Layer adds ranked full-text search over Custom Object records (SQLite FTS5/`bm25()` — lexical relevance) and real change-history for every agent's Memory; Vector Search (desktop only, opt-in) adds a second, meaning-based ranking on top - real embeddings from the workspace's own already-configured OpenAI-compatible/Gemini provider, stored as plain SQLite BLOBs and compared by cosine similarity in Rust, not a bundled vector database.
 - Team Workspace server: can be exposed on the open internet on an organization's own domain (still self-hosted, never a Lanesra-run SaaS), with opt-in TLS-aware cookies, CORS and always-on security headers.
 
 ## Core capabilities
@@ -37,7 +37,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - Unified AI Gateway: multi-provider routing (Anthropic/OpenAI-compatible/Gemini/local), automatic failover, token budgets, DLP-triggered air-gapping
 - Orchestration: deterministic Pipelines, schedule/webhook/workflow-fired runs, one unified run history
 - Native Model Context Protocol server & CLI, and a Chat Assistant with real tool access
-- Ranked full-text search over Custom Object records (SQLite FTS5, lexical relevance, no vector database)
+- Ranked full-text search over Custom Object records (SQLite FTS5, lexical relevance), plus optional semantic (embedding-based) search via the workspace's own configured provider (desktop only, no bundled vector database)
 
 ## Product principles
 
@@ -55,7 +55,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - Is it just a CRM? No — the same platform underneath the CRM builds any business app, no code, or installs one of 10 ready-made industry apps, and its own AI agents run directly against that data model.
 - Does it have a REST API and webhooks? Yes — the Integration Hub's generic REST API, OpenAPI connectors and HMAC-signed webhooks (desktop edition).
 - How do I promote customizations from test to production? Deployment Management: curate a named, versioned Solution, export it, import it into another workspace.
-- Does it use embeddings or a vector database for AI? No — free-text search over Custom Object records is ranked lexically (SQLite FTS5's `bm25()`), a deliberate choice at this scale; nothing in the product depends on an embeddings service or vector store.
+- Does it use embeddings or a vector database for AI? By default, no — free-text search over Custom Object records is ranked lexically (SQLite FTS5's `bm25()`). Desktop can optionally reindex records as real embeddings from its own already-configured OpenAI-compatible or Google Gemini provider (Anthropic has no embeddings API) for a second, meaning-based search ranking alongside it - vectors are plain SQLite BLOBs compared by cosine similarity in Rust, not a bundled vector database, and it's opt-in (Admin → LLM & MCP → Vector Search).
 
 ## Important pages
 

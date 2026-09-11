@@ -19,6 +19,30 @@ const TOPOLOGY_LABELS: Record<AiAgentPipeline["topology"], string> = {
   peer_review: "Peer review",
 };
 
+// Phase 7g: mirrors `validate_pipeline_input`'s own rule exactly - a
+// human-approval gate is only meaningful at the one step each topology
+// has a well-defined resume point for.
+function stepSupportsApproval(topology: AiAgentPipelineInput["topology"], i: number, total: number): boolean {
+  if (topology === "sequential") return true;
+  if (topology === "consensus") return i === total - 1;
+  if (topology === "peer_review") return i === 1;
+  return false;
+}
+
+// Phase 7g: `paused_at_step_order` means something different per
+// topology (see `ai_orchestration_service.rs`'s own doc comments on
+// `run_consensus`/`run_peer_review_from`) - sequential's own step-count
+// framing only reads correctly for sequential itself.
+function awaitingApprovalMessage(topology: AiAgentPipelineInput["topology"], pausedAtStepOrder: number | null | undefined, totalSteps: number): string {
+  if (topology === "consensus") {
+    return "Paused for approval before the synthesizer step. Edit the joined candidate outputs below before continuing, or leave them as-is to synthesize unchanged.";
+  }
+  if (topology === "peer_review") {
+    return 'Paused for approval on this round’s reviewer verdict. Edit the feedback below before it’s acted on – or start it with "APPROVED" to force approval – or leave it as-is to continue unchanged.';
+  }
+  return `Paused for approval before step ${(pausedAtStepOrder ?? 0) + 1} of ${totalSteps}. Edit the output below before continuing, or leave it as-is to approve unchanged.`;
+}
+
 function stepRoleLabel(topology: AiAgentPipelineInput["topology"], i: number, total: number): string {
   if (topology === "consensus") return i === total - 1 ? "Synthesizer" : `Candidate ${i + 1}`;
   if (topology === "peer_review") return i === 0 ? "Drafter" : "Reviewer";
@@ -259,10 +283,7 @@ function PipelineDetail({ pipeline, agentName }: { pipeline: AiAgentPipeline; ag
           ))}
           {activeRun.status === "awaiting_approval" && (
             <div className="panel" style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 13, margin: "0 0 6px" }}>
-                Paused for approval before step {(activeRun.paused_at_step_order ?? 0) + 1} of {pipeline.steps.length}. Edit the output below before
-                continuing, or leave it as-is to approve unchanged.
-              </p>
+              <p style={{ fontSize: 13, margin: "0 0 6px" }}>{awaitingApprovalMessage(pipeline.topology, activeRun.paused_at_step_order, pipeline.steps.length)}</p>
               <textarea style={{ width: "100%", minHeight: 80 }} value={editedOutput} onChange={(e) => setEditedOutput(e.target.value)} />
               <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                 <button className="btn btn-primary" onClick={() => approve.mutate()} disabled={approve.isPending}>
@@ -393,7 +414,21 @@ function AiAgentPipelineForm({
         </div>
         <div className="field full">
           <label>Topology</label>
-          <select value={input.topology} onChange={(e) => setInput({ ...input, topology: e.target.value as AiAgentPipelineInput["topology"] })}>
+          <select
+            value={input.topology}
+            onChange={(e) => {
+              const topology = e.target.value as AiAgentPipelineInput["topology"];
+              setInput((prev) => ({
+                ...prev,
+                topology,
+                // A step's "needs approval" flag only makes sense at the
+                // one step the new topology actually supports it on -
+                // drop it from every other step rather than carry a flag
+                // forward that the backend would now reject on save.
+                steps: prev.steps.map((s, i) => (stepSupportsApproval(topology, i, prev.steps.length) ? s : { ...s, requires_approval: false })),
+              }));
+            }}
+          >
             <option value="sequential">Sequential - a fixed chain, each step sees the prior step's answer</option>
             <option value="consensus">Consensus - every step but the last runs independently; the last synthesizes them all</option>
             <option value="peer_review">Peer review - exactly 2 steps: a drafter and a reviewer, looping until approved</option>
@@ -431,7 +466,7 @@ function AiAgentPipelineForm({
                 onChange={(e) => updateStep(i, { input_template: e.target.value })}
                 placeholder={i === 0 ? "{{trigger_input}}" : "{{previous_output}}"}
               />
-              {input.topology === "sequential" && (
+              {stepSupportsApproval(input.topology, i, input.steps.length) && (
                 <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }} title="Pause the run here for an Administrator to approve or reject before continuing">
                   <input type="checkbox" checked={step.requires_approval} onChange={(e) => updateStep(i, { requires_approval: e.target.checked })} />
                   Needs approval

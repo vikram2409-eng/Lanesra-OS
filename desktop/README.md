@@ -650,12 +650,20 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   primary/fallback/local-fallback model routing with automatic failover,
   real token-usage accounting against System/Agent daily budgets, and
   DLP-driven forced air-gapping the moment a request touches a configured
-  sensitive-data class; and a `search_records` tool giving agents ranked
-  full-text search over Custom Object records via a SQLite FTS5 index -
-  `bm25()` lexical relevance, deliberately not embeddings or a vector
+  sensitive-data class; approval gates on any topology's own well-defined
+  resume point (a sequential Pipeline's any step, a consensus Pipeline's
+  synthesizer, a peer-review Pipeline's reviewer) pause a run for an
+  Administrator to approve, edit, or reject; a `search_records` tool
+  giving agents ranked full-text search over Custom Object records via a
+  SQLite FTS5 index - `bm25()` lexical relevance; and (opt-in, desktop
+  only) Vector Search - a `semantic_search_records` tool ranking the same
+  records by real embedding similarity instead, via the workspace's own
+  already-configured OpenAI-compatible or Google Gemini provider
+  (Anthropic has no embeddings API), stored as plain SQLite BLOBs and
+  compared by cosine similarity in Rust rather than a bundled vector
   database. See `core/src/services/chat_service.rs`,
   `ai_agent_service.rs`, `ai_gateway_service.rs`, `search_service.rs`,
-  `server/src/mcp.rs`.
+  `vector_search_service.rs`, `server/src/mcp.rs`.
 
 ## What's deferred to a later phase
 

@@ -27,13 +27,14 @@ use serde_json::{json, Value};
 use crate::domain::{AppError, AppResult};
 use crate::models::contact::ContactInput;
 use crate::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
-use crate::models::integration::{ApiFieldMetadata, ApiListQuery, ApiObjectMetadata, ApiRecordPage};
+use crate::models::integration::{ApiFieldMetadata, ApiListQuery, ApiObjectMetadata, ApiRecordPage, ApiRelationshipMetadata};
 use crate::models::product::ProductInput;
+use crate::models::relationship::RelatedRecord;
 use crate::models::task::TaskInput;
 use crate::models::company::CompanyInput;
 use crate::services::{
     company_service, contact_service, custom_field_service, custom_object_service, custom_record_service, contract_service,
-    invoice_service, opportunity_service, order_service, product_service, quote_service, task_service,
+    invoice_service, opportunity_service, order_service, product_service, quote_service, relationship_service, task_service,
 };
 
 /// Built-ins this dispatcher can read - a superset of the ones it can
@@ -46,9 +47,9 @@ fn is_custom(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResu
 }
 
 pub fn list_object_keys(conn: &Connection, workspace_id: &str) -> AppResult<Vec<ApiObjectMetadata>> {
-    let mut out: Vec<ApiObjectMetadata> = READABLE_BUILTINS.iter().map(|k| ApiObjectMetadata { object_key: k.to_string(), label: k.to_string(), is_custom: false, fields: vec![] }).collect();
+    let mut out: Vec<ApiObjectMetadata> = READABLE_BUILTINS.iter().map(|k| ApiObjectMetadata { object_key: k.to_string(), label: k.to_string(), is_custom: false, fields: vec![], relationships: vec![] }).collect();
     for def in custom_object_service::list(conn, workspace_id, true)? {
-        out.push(ApiObjectMetadata { object_key: def.key, label: def.singular_label, is_custom: true, fields: vec![] });
+        out.push(ApiObjectMetadata { object_key: def.key, label: def.singular_label, is_custom: true, fields: vec![], relationships: vec![] });
     }
     Ok(out)
 }
@@ -66,7 +67,19 @@ pub fn get_metadata(conn: &Connection, workspace_id: &str, object_key: &str) -> 
         .into_iter()
         .map(|f| ApiFieldMetadata { key: f.key, label: f.label, field_type: f.field_type, required: f.required, is_custom: true })
         .collect();
-    Ok(ApiObjectMetadata { object_key: object_key.to_string(), label, is_custom: is_custom_obj, fields })
+    let relationships = relationship_service::list(conn, workspace_id, true)?
+        .into_iter()
+        .filter_map(|def| {
+            if def.source_entity_type == object_key {
+                Some(ApiRelationshipMetadata { relationship_key: def.key, related_object_key: def.target_entity_type, relationship_type: def.relationship_type, label: def.forward_label, direction: "forward".into() })
+            } else if def.target_entity_type == object_key {
+                Some(ApiRelationshipMetadata { relationship_key: def.key, related_object_key: def.source_entity_type, relationship_type: def.relationship_type, label: def.reverse_label, direction: "reverse".into() })
+            } else {
+                None
+            }
+        })
+        .collect();
+    Ok(ApiObjectMetadata { object_key: object_key.to_string(), label, is_custom: is_custom_obj, fields, relationships })
 }
 
 fn paginate(mut records: Vec<Value>, query: &ApiListQuery) -> ApiRecordPage {
@@ -140,6 +153,19 @@ pub fn get_record(conn: &Connection, workspace_id: &str, object_key: &str, id: &
         other => return Err(AppError::NotFound(format!("Object '{other}'"))),
     };
     value.map_err(|e| AppError::Validation(format!("could not serialize record: {e}")))
+}
+
+/// Every related record for one record, across every active Custom
+/// Relationship it participates in, either direction - the same
+/// `relationship_service::related_records_for` the desktop UI's own
+/// "Related records" panel already calls, exposed generically here (no
+/// existence check on `object_key`/`id` beyond what
+/// `related_records_for` itself already does - an unknown pair simply
+/// returns no rows, matching a record with no relationships at all,
+/// since a relationship link is workspace-scoped by definition, not by
+/// this dispatcher re-validating the record itself).
+pub fn related_records(conn: &Connection, workspace_id: &str, object_key: &str, id: &str) -> AppResult<Vec<RelatedRecord>> {
+    relationship_service::related_records_for(conn, workspace_id, object_key, id)
 }
 
 fn not_writable(object_key: &str) -> AppError {

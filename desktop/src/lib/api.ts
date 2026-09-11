@@ -11,6 +11,8 @@ import type {
   AiAgentModelRouting,
   AiDailyTokenBudgetInput,
   AiObservabilitySettingsInput,
+  AiEmbeddingSettingsInput,
+  VectorSearchStatus,
   AiGatewayFailoverEvent,
   AiTokenUsageSummary,
   NlReportQuery,
@@ -299,6 +301,13 @@ export const api = {
   setAiOtlpEndpoint: (input: AiObservabilitySettingsInput) => call<AiSettings>("set_ai_otlp_endpoint", { input }),
   pushAiAgentRunOtlp: (id: string) => callAdminAction<string>("push_ai_agent_run_otlp", { id }, "POST", `/api/admin/ai-agent-runs/${encodeURIComponent(id)}/push-otlp`),
   listAiGatewayFailoverEvents: (limit: number) => call<AiGatewayFailoverEvent[]>("list_ai_gateway_failover_events", { limit }),
+  // AI & Agentic Layer, Phase 7g - vector search. Setting the embedding
+  // model and reading the embedded/pending counts are plain CRUD/reads;
+  // reindexing makes real outbound embedding calls, so it's the same
+  // admin-action shape as pushAiAgentRunOtlp above.
+  setAiEmbeddingModel: (input: AiEmbeddingSettingsInput) => call<AiSettings>("set_ai_embedding_model", { input }),
+  getVectorSearchStatus: () => call<VectorSearchStatus>("get_vector_search_status"),
+  reindexVectorSearch: () => callAdminAction<number>("reindex_vector_search", {}, "POST", "/api/admin/ai/vector-search/reindex"),
 
   askReport: (query: NlReportQuery) =>
     callAdminAction<NlReportResult>("ask_report", { query }, "POST", "/api/admin/agent/ask-report", { question: query.question }),

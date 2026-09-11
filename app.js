@@ -5205,10 +5205,17 @@ function runAiAgentPipelineNow(pipeline,triggerInput){
   const candidateResults=candidateSteps.map(step=>simStep(step,resolveAiTemplate(step.inputTemplate,'',triggerInput)));
   steps=steps.concat(candidateResults);
   const candidateOutputs=candidateResults.map((r,i)=>`Candidate ${i+1}: ${r.output}`).join('\n\n');
-  const synthInput=resolveAiTemplate(synthStep.inputTemplate,'',triggerInput).split('{{candidate_outputs}}').join(candidateOutputs);
-  const synthResult=simStep(synthStep,synthInput);
-  steps.push(synthResult);
-  finalOutput=synthResult.output;
+  // Phase 7g mirror: same synchronous confirm()-as-pause the sequential
+  // branch below already uses - here the resumable value is the joined
+  // candidate_outputs feeding the synthesizer, not a step's own output.
+  if(!synthStep.requiresApproval||confirm(`Approve the candidate outputs before synthesizing?\n\n${candidateOutputs}`)){
+   const synthInput=resolveAiTemplate(synthStep.inputTemplate,'',triggerInput).split('{{candidate_outputs}}').join(candidateOutputs);
+   const synthResult=simStep(synthStep,synthInput);
+   steps.push(synthResult);
+   finalOutput=synthResult.output;
+  }else{
+   runStatus='rejected';
+  }
  }else if(topology==='peer_review'&&(pipeline.steps||[]).length===2){
   const [drafterStep,reviewerStep]=pipeline.steps;
   let reviewFeedback='';
@@ -5218,6 +5225,14 @@ function runAiAgentPipelineNow(pipeline,triggerInput){
    const review=simStep(reviewerStep,resolveAiTemplate(reviewerStep.inputTemplate,draft.output,triggerInput));
    steps.push(review);
    finalOutput=draft.output;
+   // Phase 7g mirror: same synchronous confirm()-as-pause, on the
+   // reviewer's own verdict, before it's checked for "APPROVED" -
+   // rejecting here stops the run rather than feeding the verdict back
+   // as another round's drafter feedback.
+   if(reviewerStep.requiresApproval&&!confirm(`Approve this round's reviewer verdict before it's acted on?\n\n${review.output}`)){
+    runStatus='rejected';
+    break;
+   }
    if(review.output.trim().toUpperCase().startsWith('APPROVED'))break;
    reviewFeedback=review.output;
   }
@@ -5284,6 +5299,16 @@ function aiAgentPipelinesTab(body){
   wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name} <span class="badge">${run.status}</span></h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b>${stepDurationMs(s)!==null?` <small class="muted">(${stepDurationMs(s)}ms)</small>`:''}<br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}</div>`;
  });
 }
+/* AI & Agentic Layer, Phase 7g: mirrors the desktop app's
+ * `stepSupportsApproval` exactly - a "needs approval" gate is only
+ * meaningful at the one step each topology has a well-defined pause
+ * point for (sequential: any step; consensus: the last/synthesizer
+ * step; peer_review: the second/reviewer step). */
+function pipelineStepSupportsApproval(topology,idx,total){
+ if(topology==='consensus')return idx===total-1;
+ if(topology==='peer_review')return idx===1;
+ return true;
+}
 function mountPipelineStepsEditor(container,agents,initialSteps,getTopology){
  let steps=(initialSteps&&initialSteps.length?initialSteps:[{agentId:agents[0]?.id||'',inputTemplate:'{{trigger_input}}',requiresApproval:false}]).map(s=>({...s}));
  function syncFromDom(){
@@ -5295,12 +5320,12 @@ function mountPipelineStepsEditor(container,agents,initialSteps,getTopology){
   }));
  }
  function render(){
-  const sequential=getTopology()==='sequential';
+  const topology=getTopology();
   container.innerHTML=steps.map((s,idx)=>`<div class="builder-row-card" style="align-items:flex-start">
    <span class="muted" style="font-size:12px;min-width:16px">${idx+1}.</span>
    <select name="pstep${idx}_agentId">${agents.map(a=>`<option value="${a.id}" ${a.id===s.agentId?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select>
    <input name="pstep${idx}_inputTemplate" value="${s.inputTemplate||''}" placeholder="{{trigger_input}}, {{previous_output}}, or literal text" style="min-width:220px">
-   ${sequential?`<label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap" title="Pause the run here for approval before continuing"><input type="checkbox" name="pstep${idx}_requiresApproval" ${s.requiresApproval?'checked':''}>Needs approval</label>`:''}
+   ${pipelineStepSupportsApproval(topology,idx,steps.length)?`<label style="font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap" title="Pause the run here for approval before continuing"><input type="checkbox" name="pstep${idx}_requiresApproval" ${s.requiresApproval?'checked':''}>Needs approval</label>`:''}
    <button type="button" class="icon-btn" data-pstep-up="${idx}" ${idx===0?'disabled':''}>↑</button>
    <button type="button" class="icon-btn" data-pstep-down="${idx}" ${idx===steps.length-1?'disabled':''}>↓</button>
    <button type="button" class="builder-row-remove" data-pstep-remove="${idx}" title="Remove step">✕</button>
@@ -5341,7 +5366,7 @@ function aiAgentPipelineModal(pipeline){
   const topology=fd.get('topology')||'sequential';
   if(topology==='consensus'&&steps.length<2)return alert('A consensus pipeline needs at least one candidate step plus a synthesizer step.');
   if(topology==='peer_review'&&steps.length!==2)return alert('A peer-review pipeline needs exactly two steps - a drafter and a reviewer.');
-  if(topology!=='sequential')steps.forEach(s=>{s.requiresApproval=false});
+  steps.forEach((s,idx)=>{if(!pipelineStepSupportsApproval(topology,idx,steps.length))s.requiresApproval=false});
   const obj={name:fd.get('name'),description:fd.get('description')||'',topology,steps};
   if(isEdit)Object.assign(pipeline,obj);
   else{obj.id='pln_'+uid();obj.isActive=true;obj.runs=[];data.aiAgentPipelines.push(obj)}

@@ -205,20 +205,56 @@ async fn rejecting_a_paused_run_stops_it_and_it_cannot_be_acted_on_again() {
     assert!(approve_after_reject.unwrap_err().to_string().contains("not awaiting approval"));
 }
 
+/// Phase 7g: `requires_approval` is restricted to whichever single step
+/// each topology has a well-defined resume point for - the drafter
+/// (peer_review) and every candidate but the last (consensus) are still
+/// rejected, but the reviewer/synthesizer step is now allowed.
 #[tokio::test]
-async fn requires_approval_is_rejected_outside_the_sequential_topology() {
+async fn requires_approval_is_restricted_to_each_topologys_own_resume_point() {
     let (conn, ws, admin) = setup_workspace();
     let a1 = make_agent(&conn, &ws, &admin, "A1");
     let a2 = make_agent(&conn, &ws, &admin, "A2");
-    let bad = AiAgentPipelineInput {
+    let a3 = make_agent(&conn, &ws, &admin, "A3");
+
+    let bad_drafter = AiAgentPipelineInput {
         name: "Bad".into(), description: None, topology: "peer_review".into(),
         steps: vec![
             PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: true },
             PipelineStepInput { agent_id: a2.id.clone(), input_template: "{{previous_output}}".into(), requires_approval: false },
         ],
     };
-    let err = ai_orchestration_service::create_pipeline(&conn, &ws, &bad, Some(&admin)).unwrap_err();
-    assert!(err.to_string().contains("sequential"), "{err}");
+    let err = ai_orchestration_service::create_pipeline(&conn, &ws, &bad_drafter, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("reviewer"), "{err}");
+
+    let ok_reviewer = AiAgentPipelineInput {
+        name: "Ok".into(), description: None, topology: "peer_review".into(),
+        steps: vec![
+            PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: a2.id.clone(), input_template: "{{previous_output}}".into(), requires_approval: true },
+        ],
+    };
+    ai_orchestration_service::create_pipeline(&conn, &ws, &ok_reviewer, Some(&admin)).unwrap();
+
+    let bad_candidate = AiAgentPipelineInput {
+        name: "Bad".into(), description: None, topology: "consensus".into(),
+        steps: vec![
+            PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: true },
+            PipelineStepInput { agent_id: a2.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: a3.id.clone(), input_template: "{{candidate_outputs}}".into(), requires_approval: false },
+        ],
+    };
+    let err = ai_orchestration_service::create_pipeline(&conn, &ws, &bad_candidate, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("synthesizer"), "{err}");
+
+    let ok_synthesizer = AiAgentPipelineInput {
+        name: "Ok".into(), description: None, topology: "consensus".into(),
+        steps: vec![
+            PipelineStepInput { agent_id: a1.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: a2.id.clone(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: a3.id.clone(), input_template: "{{candidate_outputs}}".into(), requires_approval: true },
+        ],
+    };
+    ai_orchestration_service::create_pipeline(&conn, &ws, &ok_synthesizer, Some(&admin)).unwrap();
 }
 
 #[tokio::test]
@@ -246,6 +282,136 @@ async fn the_otlp_export_is_a_deterministic_two_span_trace_for_a_two_step_run() 
         assert_eq!(step_span["traceId"].as_str().unwrap(), root_trace_id, "every step span shares the run's trace id");
         assert_eq!(step_span["parentSpanId"].as_str().unwrap(), spans[0]["spanId"].as_str().unwrap());
     }
+}
+
+// --- Phase 7g: approval gates on consensus/peer_review -------------------
+
+fn consensus_pipeline(candidate_a: &str, candidate_b: &str, synthesizer: &str, synth_requires_approval: bool) -> AiAgentPipelineInput {
+    AiAgentPipelineInput {
+        name: "Gated consensus".into(), description: None, topology: "consensus".into(),
+        steps: vec![
+            PipelineStepInput { agent_id: candidate_a.into(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: candidate_b.into(), input_template: "{{trigger_input}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: synthesizer.into(), input_template: "Answers:\n{{candidate_outputs}}".into(), requires_approval: synth_requires_approval },
+        ],
+    }
+}
+
+fn peer_review_pipeline(drafter: &str, reviewer: &str, reviewer_requires_approval: bool) -> AiAgentPipelineInput {
+    AiAgentPipelineInput {
+        name: "Gated peer review".into(), description: None, topology: "peer_review".into(),
+        steps: vec![
+            PipelineStepInput { agent_id: drafter.into(), input_template: "{{trigger_input}} | feedback: {{previous_output}}".into(), requires_approval: false },
+            PipelineStepInput { agent_id: reviewer.into(), input_template: "critique: {{previous_output}}".into(), requires_approval: reviewer_requires_approval },
+        ],
+    }
+}
+
+#[tokio::test]
+async fn a_consensus_run_pauses_before_the_synthesizer_and_resumes_with_the_joined_candidate_outputs() {
+    let (conn, ws, admin) = setup_workspace();
+    let candidate_a = make_agent(&conn, &ws, &admin, "Candidate A");
+    let candidate_b = make_agent(&conn, &ws, &admin, "Candidate B");
+    let synthesizer = make_agent(&conn, &ws, &admin, "Synthesizer");
+    let pipeline = ai_orchestration_service::create_pipeline(&conn, &ws, &consensus_pipeline(&candidate_a.id, &candidate_b.id, &synthesizer.id, true), Some(&admin)).unwrap();
+
+    let (port, captured) = spawn_sequence_stub(vec![anthropic_text_body("42"), anthropic_text_body("forty-two"), anthropic_text_body("The answers agree: 42.")]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+
+    let paused = ai_orchestration_service::run_manual(&conn, &ws, &master_key(), "pipeline", &pipeline.id, "What is the answer?", Some(&admin)).await.unwrap();
+    assert_eq!(paused.status, "awaiting_approval", "{paused:?}");
+    assert_eq!(paused.steps.len(), 2, "both candidates should have run before pausing");
+    assert_eq!(paused.paused_at_step_order, Some(2), "pauses right at the synthesizer's own step index");
+    let resume_output = paused.resume_previous_output.as_deref().unwrap_or_default();
+    assert!(resume_output.contains("Candidate 1: 42"), "{resume_output}");
+    assert!(resume_output.contains("Candidate 2: forty-two"), "{resume_output}");
+
+    // Only 2 real requests so far - the synthesizer must not have run yet.
+    assert_eq!(captured.lock().unwrap().len(), 2);
+
+    let resumed = ai_orchestration_service::approve_pending_step(&conn, &ws, &master_key(), &paused.id, None, Some(&admin)).await.unwrap();
+    assert_eq!(resumed.status, "succeeded", "{resumed:?}");
+    assert_eq!(resumed.steps.len(), 3);
+    assert!(resumed.steps[2].input_text.contains("Candidate 1: 42"), "{}", resumed.steps[2].input_text);
+    assert_eq!(resumed.steps[2].output_text.as_deref(), Some("The answers agree: 42."));
+    assert!(resumed.paused_at_step_order.is_none());
+}
+
+#[tokio::test]
+async fn editing_the_candidate_outputs_before_synthesizing_overrides_what_the_synthesizer_sees() {
+    let (conn, ws, admin) = setup_workspace();
+    let candidate_a = make_agent(&conn, &ws, &admin, "Candidate A");
+    let candidate_b = make_agent(&conn, &ws, &admin, "Candidate B");
+    let synthesizer = make_agent(&conn, &ws, &admin, "Synthesizer");
+    let pipeline = ai_orchestration_service::create_pipeline(&conn, &ws, &consensus_pipeline(&candidate_a.id, &candidate_b.id, &synthesizer.id, true), Some(&admin)).unwrap();
+
+    let (port, _captured) = spawn_sequence_stub(vec![anthropic_text_body("42"), anthropic_text_body("forty-two"), anthropic_text_body("Synthesized from the edit.")]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+
+    let paused = ai_orchestration_service::run_manual(&conn, &ws, &master_key(), "pipeline", &pipeline.id, "What is the answer?", Some(&admin)).await.unwrap();
+    let resumed = ai_orchestration_service::approve_pending_step(&conn, &ws, &master_key(), &paused.id, Some("Candidate 1: EDITED ANSWER"), Some(&admin)).await.unwrap();
+    assert_eq!(resumed.status, "succeeded", "{resumed:?}");
+    assert_eq!(resumed.steps[2].input_text, "Answers:\nCandidate 1: EDITED ANSWER", "the edited text, not the candidates' real joined answers, should feed the synthesizer");
+}
+
+#[tokio::test]
+async fn a_peer_review_run_pauses_after_every_rounds_reviewer_verdict_and_completes_once_an_approved_verdict_is_itself_approved() {
+    let (conn, ws, admin) = setup_workspace();
+    let drafter = make_agent(&conn, &ws, &admin, "Drafter");
+    let reviewer = make_agent(&conn, &ws, &admin, "Reviewer");
+    let pipeline = ai_orchestration_service::create_pipeline(&conn, &ws, &peer_review_pipeline(&drafter.id, &reviewer.id, true), Some(&admin)).unwrap();
+
+    let (port, _captured) = spawn_sequence_stub(vec![
+        anthropic_text_body("draft v1"),
+        anthropic_text_body("Needs more detail."),
+        anthropic_text_body("draft v2"),
+        anthropic_text_body("APPROVED - clean and correct."),
+    ]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+
+    // Round 1: pauses right after the reviewer's (unapproved) verdict.
+    let paused1 = ai_orchestration_service::run_manual(&conn, &ws, &master_key(), "pipeline", &pipeline.id, "write the spec", Some(&admin)).await.unwrap();
+    assert_eq!(paused1.status, "awaiting_approval", "{paused1:?}");
+    assert_eq!(paused1.steps.len(), 2);
+    assert_eq!(paused1.paused_at_step_order, Some(2));
+    assert_eq!(paused1.resume_previous_output.as_deref(), Some("Needs more detail."));
+
+    // Approving unchanged feeds "Needs more detail." back as round 2's
+    // drafter feedback, then pauses again after round 2's (approved)
+    // verdict - the pause happens before that verdict is even checked.
+    let paused2 = ai_orchestration_service::approve_pending_step(&conn, &ws, &master_key(), &paused1.id, None, Some(&admin)).await.unwrap();
+    assert_eq!(paused2.status, "awaiting_approval", "{paused2:?}");
+    assert_eq!(paused2.steps.len(), 4);
+    assert_eq!(paused2.steps[2].input_text, "write the spec | feedback: Needs more detail.", "round 2's draft should carry round 1's real feedback");
+    assert_eq!(paused2.paused_at_step_order, Some(4));
+    assert_eq!(paused2.resume_previous_output.as_deref(), Some("APPROVED - clean and correct."));
+
+    // Approving that verdict unchanged is what actually finishes the run
+    // - no round 3 should ever run.
+    let finished = ai_orchestration_service::approve_pending_step(&conn, &ws, &master_key(), &paused2.id, None, Some(&admin)).await.unwrap();
+    assert_eq!(finished.status, "succeeded", "{finished:?}");
+    assert_eq!(finished.steps.len(), 4, "no third round should have run");
+}
+
+#[tokio::test]
+async fn editing_a_reviewer_verdict_to_start_with_approved_forces_approval_without_another_round() {
+    let (conn, ws, admin) = setup_workspace();
+    let drafter = make_agent(&conn, &ws, &admin, "Drafter");
+    let reviewer = make_agent(&conn, &ws, &admin, "Reviewer");
+    let pipeline = ai_orchestration_service::create_pipeline(&conn, &ws, &peer_review_pipeline(&drafter.id, &reviewer.id, true), Some(&admin)).unwrap();
+
+    let (port, captured) = spawn_sequence_stub(vec![anthropic_text_body("draft v1"), anthropic_text_body("Needs more detail.")]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+
+    let paused = ai_orchestration_service::run_manual(&conn, &ws, &master_key(), "pipeline", &pipeline.id, "write the spec", Some(&admin)).await.unwrap();
+    assert_eq!(paused.status, "awaiting_approval");
+
+    let finished = ai_orchestration_service::approve_pending_step(&conn, &ws, &master_key(), &paused.id, Some("APPROVED by admin override"), Some(&admin)).await.unwrap();
+    assert_eq!(finished.status, "succeeded", "{finished:?}");
+    assert_eq!(finished.steps.len(), 2, "forcing approval on resume should not run a second round");
+    // Still just the 2 real requests from round 1 - forcing approval never
+    // calls a provider again.
+    assert_eq!(captured.lock().unwrap().len(), 2);
 }
 
 // --- Phase 7f: pushing a run's OTLP trace to a configured collector ------

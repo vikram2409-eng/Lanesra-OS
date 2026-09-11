@@ -94,6 +94,21 @@ fn record_tools() -> Vec<ToolSpec> {
             "Ranked full-text search across Custom Object records - finds records by relevance to free text, not just exact-match filters. Arguments: query (required), object_key (optional, scopes to one custom object), limit (optional, max 25). Built-in objects (Company, Contact, ...) aren't covered - use list_records for those.",
             object_schema(),
         ),
+        tool(
+            "get_related_records",
+            "Get every record linked to one record via a Custom Relationship, in either direction (e.g. a Company's related Contacts and Opportunities). A relationship is a link, not a field on the record itself - get_object_metadata's own 'relationships' list names which relationships an object participates in and what each one is called; this tool follows them for one specific record. Arguments: object_key, id.",
+            object_schema(),
+        ),
+        tool(
+            "get_platform_overview",
+            "Orientation for how Lanesra OS itself is built and how its pieces fit together - the primitives an app is assembled from, the recommended order to build a new business capability, and a live summary (object/relationship/app counts, the actual object list) of this specific workspace. Call this before proposing or building anything unfamiliar, rather than guessing at how the platform works. No arguments.",
+            object_schema(),
+        ),
+        tool(
+            "semantic_search_records",
+            "Meaning-based search across Custom Object records - finds records related to a question or description even when they don't share its exact words (unlike search_records, which ranks by keyword/phrase match). Needs an OpenAI-compatible or Google Gemini provider configured with vector search reindexed (Admin -> LLM & MCP -> Vector Search) - fails clearly if neither is true yet. Arguments: query (required), object_key (optional, scopes to one custom object), limit (optional, max 25).",
+            object_schema(),
+        ),
     ]
 }
 
@@ -106,7 +121,7 @@ fn required_object<'a>(args: &'a Value, key: &str) -> AppResult<&'a Value> {
     if v.is_object() { Ok(v) } else { Err(AppError::Validation(format!("'{key}' must be an object"))) }
 }
 
-fn dispatch_record_tool(conn: &Connection, workspace_id: &str, name: &str, arguments: &Value) -> AppResult<Value> {
+async fn dispatch_record_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], name: &str, arguments: &Value) -> AppResult<Value> {
     match name {
         "list_objects" => api_object_service::list_object_keys(conn, workspace_id).and_then(|v| serde_json::to_value(v).map_err(ser_err)),
         "get_object_metadata" => {
@@ -146,12 +161,60 @@ fn dispatch_record_tool(conn: &Connection, workspace_id: &str, name: &str, argum
             let hits = crate::services::search_service::search_custom_records(conn, workspace_id, query, object_key, limit)?;
             serde_json::to_value(hits).map_err(ser_err)
         }
+        "get_related_records" => {
+            let key = required_str(arguments, "object_key")?;
+            let id = required_str(arguments, "id")?;
+            api_object_service::related_records(conn, workspace_id, key, id).and_then(|v| serde_json::to_value(v).map_err(ser_err))
+        }
+        "get_platform_overview" => platform_overview(conn, workspace_id),
+        "semantic_search_records" => {
+            let query = required_str(arguments, "query")?;
+            let object_key = arguments.get("object_key").and_then(Value::as_str);
+            let limit = arguments.get("limit").and_then(Value::as_i64).unwrap_or(10);
+            let hits = super::vector_search_service::semantic_search_records(conn, workspace_id, master_key, query, object_key, limit).await?;
+            serde_json::to_value(hits).map_err(ser_err)
+        }
         other => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
     }
 }
 
 fn ser_err(e: serde_json::Error) -> AppError {
     AppError::Validation(format!("could not serialize result: {e}"))
+}
+
+/// Static explainer of how Lanesra OS's own admin/data-model primitives
+/// compose - the context gap this closes: nothing else automatically
+/// teaches an agent (or the admin chat assistant) how the platform is
+/// built, only the literal name/description/argument-shape of each tool.
+/// Deliberately not baked into every agent's system prompt by default
+/// (that's still whatever the admin who created it wrote - see
+/// `agent_system_prompt`'s own doc comment); an agent calls this the same
+/// way it calls any other tool, when it decides orientation would help.
+const PLATFORM_EXPLAINER: &str = "Lanesra OS is a no-code business platform: every capability - the built-in CRM included - is assembled from a small set of primitives that compose, not hard-coded per business type. The recommended order to add a new one: \
+(1) Custom Object - define the record type itself (label, icon, ID prefix/digit width). \
+(2) Custom Fields - add fields to that Custom Object, or to most built-in objects (Company, Contact, ...). \
+(3) Relationships - connect two object types (a link, not a field on either record - see get_object_metadata's own 'relationships' list for an object's schema, and get_related_records to follow one for a specific record). \
+(4) Business Rules - require/hide/lock/default a field, or block the save outright, based on conditions. \
+(5) Workflow Automation - fire an action (create a task, update a related record, send a notification, run an AI Agent, ...) when a record is created, a field changes, or a date arrives. \
+(6) App - bundle a set of objects (plus their published Screen layouts and a Dashboard) into a named, role-gated app with its own navigation. \
+(7) Dashboard - KPI tiles, charts and record lists for that App or the workspace default. \
+None of these steps is required in isolation - most workspaces use only Custom Objects and Fields, with no App/Dashboard/Automation at all; build only what the request actually needs.";
+
+fn platform_overview(conn: &Connection, workspace_id: &str) -> AppResult<Value> {
+    let objects = api_object_service::list_object_keys(conn, workspace_id)?;
+    let custom_object_count = objects.iter().filter(|o| o.is_custom).count();
+    let relationship_count = super::relationship_service::list(conn, workspace_id, true)?.len();
+    let app_count = super::app_service::list(conn, workspace_id)?.len();
+    Ok(json!({
+        "how_lanesra_os_is_built": PLATFORM_EXPLAINER,
+        "this_workspace": {
+            "object_count": objects.len(),
+            "custom_object_count": custom_object_count,
+            "relationship_count": relationship_count,
+            "app_count": app_count,
+            "objects": objects.iter().map(|o| &o.object_key).collect::<Vec<_>>(),
+        },
+    }))
 }
 
 // --- Admin mode: one list/create pair per subsystem -------------------
@@ -478,7 +541,10 @@ async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Optio
 fn tools_for_mode(mode: &str) -> AppResult<Vec<ToolSpec>> {
     match mode {
         "records" => Ok(record_tools()),
-        "admin" => Ok(admin_tools()),
+        // The records catalog too - see `execute_tool`'s own doc comment
+        // on why an admin-gated assistant should have at least everything
+        // a records-mode one does, not a disjoint set.
+        "admin" => Ok(record_tools().into_iter().chain(admin_tools()).collect()),
         other => Err(AppError::Validation(format!("Unknown chat mode '{other}'"))),
     }
 }
@@ -489,16 +555,21 @@ fn system_prompt(mode: &str) -> &'static str {
             "You are Lanesra OS's assistant for finding and working with this workspace's records - \
              companies, contacts, opportunities, and every other built-in or custom object. Use the \
              tools available to look things up before answering, and to make the changes a person asks \
-             for. Be concise. When you create, update, or archive something, say plainly what you did."
+             for - get_object_metadata for an object's fields and relationships, get_related_records to \
+             follow one for a specific record, and get_platform_overview if you're unsure how this \
+             product's own pieces fit together. Be concise. When you create, update, or archive \
+             something, say plainly what you did."
         }
         "admin" => {
             "You are Lanesra OS's assistant for administrators - helping build and configure workflows, \
              business rules, custom objects and fields, integrations, and the rest of the admin surface. \
-             Use the tools available to look at what's already configured before proposing or creating \
-             something new, and to make the changes an admin asks for. Never ask for or accept a \
-             Connection's or API client's credential in chat - create_connection never takes one; tell \
-             the admin to add it afterward through the existing secure form. Be concise, and say plainly \
-             what you created."
+             Call get_platform_overview first if you're unsure how this product's own primitives fit \
+             together or what order to build them in. Use the tools available to look at what's already \
+             configured before proposing or creating something new (list_objects/get_object_metadata/ \
+             get_related_records included, not just the admin-catalog list_* tools), and to make the \
+             changes an admin asks for. Never ask for or accept a Connection's or API client's credential \
+             in chat - create_connection never takes one; tell the admin to add it afterward through the \
+             existing secure form. Be concise, and say plainly what you created."
         }
         _ => "",
     }
@@ -620,8 +691,18 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
 
 async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, mode: &str, call: &RequestedToolCall) -> AppResult<Value> {
     match mode {
-        "records" => dispatch_record_tool(conn, workspace_id, &call.name, &call.arguments),
-        "admin" => dispatch_admin_tool(conn, workspace_id, actor, master_key, &call.name, &call.arguments).await,
+        "records" => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments).await,
+        // Admin mode's own tool list is the records catalog plus the
+        // admin one (see `tools_for_mode`) - an admin who can create a
+        // Business Rule can obviously also read what get_object_metadata/
+        // get_related_records/get_platform_overview already expose to
+        // every other agent, so route by which catalog a name actually
+        // belongs to rather than assuming the whole mode maps to one
+        // dispatcher.
+        "admin" => match tool_source(&call.name) {
+            Some("record") => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments).await,
+            _ => dispatch_admin_tool(conn, workspace_id, actor, master_key, &call.name, &call.arguments).await,
+        },
         other => Err(AppError::Validation(format!("Unknown chat mode '{other}'"))),
     }
 }
@@ -827,7 +908,7 @@ fn execute_agent_tool<'a>(
                 Ok(json!({"answer": outcome.final_text}))
             }
             other => match tool_source(other) {
-                Some("record") => dispatch_record_tool(conn, workspace_id, other, &call.arguments),
+                Some("record") => dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments).await,
                 Some("admin") => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
                 _ => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
             },
