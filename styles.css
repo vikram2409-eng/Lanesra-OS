@@ -646,3 +646,52 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 .code-tab-body{padding:24px;font-family:var(--font-mono);font-size:13px;line-height:1.9;color:#d7f7ff;white-space:pre-wrap;overflow-x:auto}
 .code-tab-body .c{color:var(--muted)}
 .code-tab-body .k{color:var(--brand2)}
+
+/* Help section - hub (category cards + search) and article (side "on this
+   page" nav + long-form content) layouts. Reuses .feature-card/.feature-icon
+   for category cards and details.rm-cat's overall visual language rather
+   than inventing a parallel card system. */
+.help-search{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px 18px;margin:28px 0 36px;max-width:520px}
+.help-search input{border:0;outline:0;flex:1;font-size:15px;background:transparent;color:var(--text)}
+.help-search span{color:var(--muted);font-size:15px}
+.help-cat{margin-bottom:40px}
+.help-cat-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.help-cat-head .feature-icon{flex-shrink:0}
+.help-cat-head h2{margin:0 0 4px;font-size:22px}
+.help-cat-head p{margin:0;color:var(--muted);font-size:14px;max-width:640px}
+.help-topic-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.help-topic-link{display:flex;flex-direction:column;gap:4px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;transition:.15s ease}
+.help-topic-link:hover{border-color:var(--brand);box-shadow:0 8px 22px rgba(79,70,229,.1);transform:translateY(-1px)}
+.help-topic-link b{font-size:14.5px;color:var(--text)}
+.help-topic-link span{font-size:13px;color:var(--muted);line-height:1.5}
+.help-topic-link.help-hidden{display:none}
+.help-empty{color:var(--muted);padding:20px 0}
+.help-crumb{font-size:13px;color:var(--muted);margin-bottom:18px}
+.help-crumb a{color:var(--brand);font-weight:600}
+.help-article-layout{display:grid;grid-template-columns:220px 1fr;gap:48px;align-items:start}
+.help-toc{position:sticky;top:24px;border-left:2px solid var(--line);padding-left:16px;display:flex;flex-direction:column;gap:9px}
+.help-toc span{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px}
+.help-toc a{font-size:13px;color:var(--muted);line-height:1.5}
+.help-toc a:hover{color:var(--brand)}
+.help-article h4{font-size:19px;margin:36px 0 12px;scroll-margin-top:24px}
+.help-article h4:first-child{margin-top:0}
+.help-article p{font-size:15.5px;line-height:1.8;color:#374151;margin:0 0 16px}
+.help-article ul,.help-article ol{font-size:15.5px;line-height:1.8;color:#374151;margin:0 0 16px;padding-left:22px}
+.help-article li{margin-bottom:6px}
+.help-article code{font-family:var(--font-mono);background:#f1f5f9;border-radius:5px;padding:2px 6px;font-size:13.5px;color:#4338ca}
+.help-article pre{background:#0d0f13;color:#d7f7ff;border-radius:14px;padding:18px 20px;overflow-x:auto;font-family:var(--font-mono);font-size:13px;line-height:1.8;margin:0 0 16px}
+.help-article pre code{background:transparent;padding:0;color:inherit}
+.help-article table{width:100%;border-collapse:collapse;margin:0 0 16px;font-size:14px}
+.help-article th,.help-article td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+.help-article th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+.help-article .help-note{background:#eef2ff;border-radius:12px;padding:14px 18px;font-size:14px;color:#3730a3;margin:0 0 16px}
+.help-related{margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
+.help-related h3{font-size:15px;margin:0 0 14px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+@media(max-width:900px){.help-article-layout{grid-template-columns:1fr}.help-toc{position:static;border-left:0;padding-left:0;border-top:2px solid var(--line);padding-top:14px}.help-topic-grid{grid-template-columns:1fr}}
+.site-dark .help-search{background:rgba(255,255,255,.03);border-color:var(--line)}
+.site-dark .help-topic-link{background:rgba(255,255,255,.03);border-color:var(--line)}
+.site-dark .help-topic-link b{color:var(--text)}
+.site-dark .help-article p,.site-dark .help-article ul,.site-dark .help-article ol{color:var(--text)}
+.site-dark .help-article code{background:rgba(255,255,255,.06);color:var(--brand2)}
+.site-dark .help-article th,.site-dark .help-article td{border-color:var(--line)}
+.site-dark .help-article .help-note{background:rgba(99,102,241,.12);color:#c7d2fe}

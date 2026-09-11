@@ -22,6 +22,7 @@ import { AiAgentsAdmin } from "./AiAgentsAdmin";
 import { AiSkillsAdmin } from "./AiSkillsAdmin";
 import { AiAgentPipelinesAdmin } from "./AiAgentPipelinesAdmin";
 import { AiEvalSuitesAdmin } from "./AiEvalSuitesAdmin";
+import { HelpAdmin } from "./HelpAdmin";
 import { ChatPanel } from "../../components/ChatPanel";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
 
@@ -81,7 +82,8 @@ type AdminTab =
   | "aiAgents"
   | "aiSkills"
   | "aiAgentPipelines"
-  | "aiEvalSuites";
+  | "aiEvalSuites"
+  | "help";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
@@ -106,6 +108,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "aiSkills", label: "Skills" },
   { key: "aiAgentPipelines", label: "Orchestration" },
   { key: "aiEvalSuites", label: "Evaluations" },
+  { key: "help", label: "Help" },
 ];
 
 function tabLabel(key: AdminTab): string {
@@ -150,6 +153,13 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
     note: "Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other",
     items: ["aiAgents", "aiSkills", "aiAgentPipelines", "aiEvalSuites"],
   },
+  {
+    key: "help",
+    label: "Help",
+    icon: "📖",
+    note: "Detailed how-to guides for every feature, and how to extend it",
+    items: ["help"],
+  },
 ];
 
 /**
@@ -170,6 +180,11 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
 export function AdminPanel() {
   const [view, setView] = useState<"landing" | "tool">("landing");
   const [tab, setTab] = useState<AdminTab>("users");
+  // Set only by openHelpTopic below (a deep link into a specific Help
+  // article, e.g. AI Agent Foundry's own "📖 Help" button) - openTab clears
+  // it so a plain click into the Help category from the landing page always
+  // opens on the hub, not a stale deep link left over from an earlier visit.
+  const [helpTopicSlug, setHelpTopicSlug] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const workspace = useQuery({ queryKey: ["workspaceStatus"], queryFn: () => api.workspaceStatus() });
 
@@ -178,7 +193,14 @@ export function AdminPanel() {
   }
 
   function openTab(key: AdminTab) {
+    setHelpTopicSlug(null);
     setTab(key);
+    setView("tool");
+  }
+
+  function openHelpTopic(slug: string) {
+    setHelpTopicSlug(slug);
+    setTab("help");
     setView("tool");
   }
 
@@ -253,10 +275,11 @@ export function AdminPanel() {
       {tab === "integrations" && <IntegrationHubAdmin />}
       {tab === "ai" && <AiSettingsAdmin />}
       {tab === "assistant" && <ChatPanel mode="admin" />}
-      {tab === "aiAgents" && <AiAgentsAdmin />}
+      {tab === "aiAgents" && <AiAgentsAdmin onOpenHelp={openHelpTopic} />}
       {tab === "aiSkills" && <AiSkillsAdmin />}
       {tab === "aiAgentPipelines" && <AiAgentPipelinesAdmin />}
       {tab === "aiEvalSuites" && <AiEvalSuitesAdmin />}
+      {tab === "help" && <HelpAdmin initialTopicSlug={helpTopicSlug} />}
     </div>
   );
 }

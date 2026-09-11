@@ -1018,3 +1018,141 @@ tr:hover td {
     padding: 0;
   }
 }
+
+/* Help tab - a category/topic list on the left, article content on the
+   right, matching the search-then-drill-in shape of every other admin
+   list+detail screen rather than inventing a new layout pattern. */
+.help-admin-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.help-admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.help-admin-cat-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 14px 0 6px;
+}
+.help-admin-cat-label:first-child {
+  margin-top: 0;
+}
+.help-admin-topic-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.help-admin-topic-btn:hover {
+  background: var(--bg-elevated);
+}
+.help-admin-topic-btn.active {
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.help-admin-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 18px 0 0;
+  padding: 14px 16px;
+}
+.help-admin-toc div {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.help-admin-toc a {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.help-admin-toc a:hover {
+  color: var(--accent);
+}
+.help-admin-article h4 {
+  font-size: 16px;
+  margin: 26px 0 10px;
+  scroll-margin-top: 16px;
+}
+.help-admin-article h4:first-child {
+  margin-top: 0;
+}
+.help-admin-article p,
+.help-admin-article ul,
+.help-admin-article ol {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+  margin: 0 0 14px;
+}
+.help-admin-article ul,
+.help-admin-article ol {
+  padding-left: 20px;
+}
+.help-admin-article li {
+  margin-bottom: 5px;
+}
+.help-admin-article code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: rgba(127, 127, 127, 0.15);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+}
+.help-admin-article pre {
+  background: #0d0f13;
+  color: #d7f7ff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  line-height: 1.7;
+  margin: 0 0 14px;
+}
+.help-admin-article pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.help-admin-article .help-note {
+  background: rgba(99, 102, 241, 0.12);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin: 0 0 14px;
+}
+.help-admin-related {
+  margin-top: 32px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 800px) {
+  .help-admin-layout {
+    grid-template-columns: 1fr;
+  }
+}
