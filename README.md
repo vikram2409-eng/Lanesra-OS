@@ -5,35 +5,13 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Try the demo](https://img.shields.io/badge/try%20it-online%20demo-4f7cff)](https://lanesraos.com/demo)
 
-Modern, open-source, AI-native business application platform — a complete CRM out of the box, a no-code admin panel that lets you reshape the workspace itself (your own record types, relationships, screens, business rules and automations, not just the fixed CRM fields), an AI Agent Foundry and Unified AI Gateway that let agents run directly against that same data model, Deployment Management to package and promote your customizations between workspaces, and an Integration Hub to connect it to everything else you run. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
+Modern, open-source, AI-native business application platform — a complete CRM as your Business OS, and an AI Agent Foundry and Unified AI Gateway that let named agents run directly against that same data, not a bolted-on chatbot. Both sit on the same no-code admin panel that lets you reshape the workspace itself (your own record types, relationships, screens, business rules and automations, not just the fixed CRM fields), with Deployment Management to package and promote your customizations between workspaces, and an Integration Hub to connect it to everything else you run. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
 
 **[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
 ## Features
 
-**Make it yours, no code required:**
-
-- **Custom Objects** — define an entirely new record type (Vendors, Assets, Projects, …) with its own fields, ID format and navigation section, no code change
-- **Custom Relationships** — connect any two record types (built-in or custom) with one-to-one, many-to-one or many-to-many links; a related-records list appears automatically on both sides
-- **Business Rules** — multi-condition AND/OR logic across 10 operators, driving require/hide/lock/set-value/block-save/show-message effects on any field
-- **Workflow Automation** — trigger on a status or field change, a date reached or overdue, or a schedule; create a task, assign an owner, create a related record, update a field, or post an in-app notification
-- **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
-- **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
-- **App Catalog** — install one of 10 ready-made industry apps (Field Service, Property Management, Construction, Professional Services, Practice Administration, Recruitment, Real Estate, Legal Practice, Nonprofit & Association, Auto Repair) with a validated, backed-up, transactional install
-- **Deployment Management** — a Publisher registry, named/versioned Solutions curated from any component you've built, real export/import between workspaces, and update-with-diff — package and promote your customizations the way a real software vendor would
-- **Integration Hub** — AES-256-GCM-encrypted Connections (REST/SFTP/PostgreSQL/OData/SMTP), OpenAPI-imported Connectors usable as Workflow Automation actions, a generic REST API with hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a generalized CSV data-exchange wizard, and scheduled Integration Jobs
-
-**AI & Agentic Layer:**
-
-- **Unified AI Gateway** — bring your own key (Anthropic, an OpenAI-compatible endpoint, Google Gemini, or a fully local/air-gapped model via Ollama), no markup or reselling; automatic primary → fallback → local-fallback failover, per-agent and per-workspace daily token budgets, and forced air-gapping the moment a request touches a sensitive data class you configure
-- **AI Agent Foundry** — named, admin-defined AI Agents: a persona layered over a per-tool Actions checklist, a persistent Memory document the agent revises itself, a shared Skills library, operational guardrails, and delegation to other agents (depth-guarded against runaway recursion); export/import an agent or Skill as part of a Solution, exactly like a Custom Object
-- **Orchestration** — chain agents into a deterministic Pipeline (sequential, consensus, or a peer-review loop); fire it manually, on a schedule, from an authenticated webhook, or as a new Workflow Automation action, with human-in-the-loop approval gates at any topology's own resume point and OTLP tracing on every run — every run lands in one unified history
-- **Evaluation Harness** — a named Suite of golden test cases, each graded by an LLM-as-judge call against an Agent or Pipeline's real response, not a brittle exact-match
-- **Native Model Context Protocol server & CLI** — exposes your Custom Objects, records and business logic to Claude Desktop, an IDE agent, or any MCP-capable client over JSON-RPC 2.0, authenticated with the same scoped API keys the REST API already uses
-- **Chat Assistant** — a conversational assistant with real tool access to your records, and, for an Administrator, to the admin configuration surface itself, including an agent context primer (relationship metadata and a live platform overview) so an agent understands how your own workspace is actually built
-- **Context Layer & Vector Search** — real change history for an agent's own Memory, ranked full-text search over Custom Object records (SQLite FTS5), and optional embeddings-based semantic search via your own already-configured provider — no bundled vector database
-
-**The core CRM:**
+**The core CRM — your Business OS:**
 
 - **Companies, Contacts & Sales Pipeline** — connected customer records with a Kanban/list opportunity pipeline
 - **Products & Services**, **Quotes**, **Orders**, **Invoices**, **Contracts**, **Tasks** — the full flexible sales lifecycle (Company → Opportunity → Quote → Order → Invoice), plus direct-quote/direct-order shortcuts
@@ -44,6 +22,28 @@ Modern, open-source, AI-native business application platform — a complete CRM 
 - Windows task reminder notifications, session inactivity auto-lock
 - CSV import/export, whole-workspace backup & restore, self-service password change
 - Runs fully offline — no cloud account, licence key, or mandatory internet connection
+
+**AI Agent Foundry — agents that run directly on that same CRM data:**
+
+- **Unified AI Gateway** — bring your own key (Anthropic, an OpenAI-compatible endpoint, Google Gemini, or a fully local/air-gapped model via Ollama), no markup or reselling; automatic primary → fallback → local-fallback failover, per-agent and per-workspace daily token budgets, and forced air-gapping the moment a request touches a sensitive data class you configure
+- **AI Agent Foundry** — named, admin-defined AI Agents: a persona layered over a per-tool Actions checklist, a persistent Memory document the agent revises itself, a shared Skills library, operational guardrails, and delegation to other agents (depth-guarded against runaway recursion); export/import an agent or Skill as part of a Solution, exactly like a Custom Object
+- **Orchestration** — chain agents into a deterministic Pipeline (sequential, consensus, or a peer-review loop); fire it manually, on a schedule, from an authenticated webhook, or as a new Workflow Automation action, with human-in-the-loop approval gates at any topology's own resume point and OTLP tracing on every run — every run lands in one unified history
+- **Evaluation Harness** — a named Suite of golden test cases, each graded by an LLM-as-judge call against an Agent or Pipeline's real response, not a brittle exact-match
+- **Native Model Context Protocol server & CLI** — exposes your Custom Objects, records and business logic to Claude Desktop, an IDE agent, or any MCP-capable client over JSON-RPC 2.0, authenticated with the same scoped API keys the REST API already uses
+- **Chat Assistant** — a conversational assistant with real tool access to your records, and, for an Administrator, to the admin configuration surface itself, including an agent context primer (relationship metadata and a live platform overview) so an agent understands how your own workspace is actually built
+- **Context Layer & Vector Search** — real change history for an agent's own Memory, ranked full-text search over Custom Object records (SQLite FTS5), and optional embeddings-based semantic search via your own already-configured provider — no bundled vector database
+
+**Both are built on one no-code platform, make it yours:**
+
+- **Custom Objects** — define an entirely new record type (Vendors, Assets, Projects, …) with its own fields, ID format and navigation section, no code change
+- **Custom Relationships** — connect any two record types (built-in or custom) with one-to-one, many-to-one or many-to-many links; a related-records list appears automatically on both sides
+- **Business Rules** — multi-condition AND/OR logic across 10 operators, driving require/hide/lock/set-value/block-save/show-message effects on any field
+- **Workflow Automation** — trigger on a status or field change, a date reached or overdue, or a schedule; create a task, assign an owner, create a related record, update a field, or post an in-app notification
+- **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
+- **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
+- **App Catalog** — install one of 10 ready-made industry apps (Field Service, Property Management, Construction, Professional Services, Practice Administration, Recruitment, Real Estate, Legal Practice, Nonprofit & Association, Auto Repair) with a validated, backed-up, transactional install
+- **Deployment Management** — a Publisher registry, named/versioned Solutions curated from any component you've built, real export/import between workspaces, and update-with-diff — package and promote your customizations the way a real software vendor would
+- **Integration Hub** — AES-256-GCM-encrypted Connections (REST/SFTP/PostgreSQL/OData/SMTP), OpenAPI-imported Connectors usable as Workflow Automation actions, a generic REST API with hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a generalized CSV data-exchange wizard, and scheduled Integration Jobs
 
 ## Try it online
 
