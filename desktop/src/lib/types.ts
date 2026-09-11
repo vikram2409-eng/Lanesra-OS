@@ -2177,6 +2177,8 @@ export interface AiSettings {
   last_tested_at: string | null;
   /** Phase 7a: the Gateway's System-tier daily token budget - `null` is unlimited. */
   daily_token_budget: number | null;
+  /** Phase 7f: where a run's OTLP trace can be pushed - `null` means the push action is unavailable. */
+  otlp_endpoint: string | null;
   updated_at: string;
   updated_by: string | null;
 }
@@ -2232,6 +2234,10 @@ export interface AiAgentModelRouting {
 
 export interface AiDailyTokenBudgetInput {
   daily_token_budget: number | null;
+}
+
+export interface AiObservabilitySettingsInput {
+  otlp_endpoint: string | null;
 }
 
 export interface AiGatewayFailoverEvent {

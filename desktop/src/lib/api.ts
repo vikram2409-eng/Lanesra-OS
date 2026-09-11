@@ -10,6 +10,7 @@ import type {
   AiProviderInput,
   AiAgentModelRouting,
   AiDailyTokenBudgetInput,
+  AiObservabilitySettingsInput,
   AiGatewayFailoverEvent,
   AiTokenUsageSummary,
   NlReportQuery,
@@ -292,6 +293,11 @@ export const api = {
   getAiAgentTokenUsage: (id: string) => call<AiTokenUsageSummary>("get_ai_agent_token_usage", { id }),
   setAiDailyTokenBudget: (input: AiDailyTokenBudgetInput) => call<AiSettings>("set_ai_daily_token_budget", { input }),
   getAiTokenUsageSummary: () => call<AiTokenUsageSummary>("get_ai_token_usage_summary"),
+  // AI & Agentic Layer, Phase 7f - setting the endpoint is plain CRUD;
+  // pushing a run's trace makes a real outbound call, so it's the same
+  // admin-action shape as runAiAgentPipeline above.
+  setAiOtlpEndpoint: (input: AiObservabilitySettingsInput) => call<AiSettings>("set_ai_otlp_endpoint", { input }),
+  pushAiAgentRunOtlp: (id: string) => callAdminAction<string>("push_ai_agent_run_otlp", { id }, "POST", `/api/admin/ai-agent-runs/${encodeURIComponent(id)}/push-otlp`),
   listAiGatewayFailoverEvents: (limit: number) => call<AiGatewayFailoverEvent[]>("list_ai_gateway_failover_events", { limit }),
 
   askReport: (query: NlReportQuery) =>

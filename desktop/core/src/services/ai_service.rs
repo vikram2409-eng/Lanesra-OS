@@ -40,7 +40,7 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::ai::{AiDailyTokenBudgetInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS};
+use crate::models::ai::{AiDailyTokenBudgetInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS};
 use crate::models::chat::ChatMessage;
 use crate::repositories::{ai_settings_repo, ai_token_usage_repo, integration_secret_repo};
 
@@ -168,6 +168,20 @@ pub fn set_daily_token_budget(conn: &Connection, workspace_id: &str, input: &AiD
     require_admin(conn, actor_user_id)?;
     ai_settings_repo::ensure_default(conn, workspace_id)?;
     ai_settings_repo::set_daily_token_budget(conn, workspace_id, input.daily_token_budget)?;
+    Ok(ai_settings_repo::ensure_default(conn, workspace_id)?)
+}
+
+/// Phase 7f: where `ai_orchestration_service::push_run_trace_to_otlp`
+/// reads the endpoint it POSTs a run's trace to - same "own dial" shape
+/// `set_daily_token_budget` above already uses. A blank/whitespace-only
+/// value clears it, matching this codebase's "blank means unset"
+/// convention rather than storing an empty string as if it were a real
+/// endpoint.
+pub fn set_otlp_endpoint(conn: &Connection, workspace_id: &str, input: &AiObservabilitySettingsInput, actor_user_id: Option<&str>) -> AppResult<AiSettings> {
+    require_admin(conn, actor_user_id)?;
+    ai_settings_repo::ensure_default(conn, workspace_id)?;
+    let endpoint = input.otlp_endpoint.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    ai_settings_repo::set_otlp_endpoint(conn, workspace_id, endpoint)?;
     Ok(ai_settings_repo::ensure_default(conn, workspace_id)?)
 }
 

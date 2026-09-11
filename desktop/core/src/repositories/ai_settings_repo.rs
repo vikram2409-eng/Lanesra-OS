@@ -20,6 +20,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiSettings> {
         last_test_message: row.get("last_test_message")?,
         last_tested_at: row.get("last_tested_at")?,
         daily_token_budget: row.get("daily_token_budget")?,
+        otlp_endpoint: row.get("otlp_endpoint")?,
         updated_at: row.get("updated_at")?,
         updated_by: row.get("updated_by")?,
     })
@@ -94,5 +95,12 @@ pub fn set_test_result(conn: &Connection, workspace_id: &str, status: &str, mess
 /// provider form.
 pub fn set_daily_token_budget(conn: &Connection, workspace_id: &str, daily_token_budget: Option<i64>) -> rusqlite::Result<()> {
     conn.execute("UPDATE ai_settings SET daily_token_budget = ?1 WHERE workspace_id = ?2", rusqlite::params![daily_token_budget, workspace_id])?;
+    Ok(())
+}
+
+/// Phase 7f: same shape as `set_daily_token_budget` above - its own
+/// independent admin dial, not folded into `update`.
+pub fn set_otlp_endpoint(conn: &Connection, workspace_id: &str, otlp_endpoint: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute("UPDATE ai_settings SET otlp_endpoint = ?1 WHERE workspace_id = ?2", rusqlite::params![otlp_endpoint, workspace_id])?;
     Ok(())
 }

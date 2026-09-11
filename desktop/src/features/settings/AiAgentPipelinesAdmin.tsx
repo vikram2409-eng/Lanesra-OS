@@ -219,6 +219,18 @@ function PipelineDetail({ pipeline, agentName }: { pipeline: AiAgentPipeline; ag
     mutationFn: (runId: string) => api.exportAiAgentRunOtlp(runId),
     onSuccess: (data) => setOtlpJson(JSON.stringify(data, null, 2)),
   });
+  const [pushResult, setPushResult] = useState<string | null>(null);
+  const pushOtlp = useMutation({
+    mutationFn: (runId: string) => api.pushAiAgentRunOtlp(runId),
+    onSuccess: (message) => {
+      setError(null);
+      setPushResult(message);
+    },
+    onError: (err) => {
+      setPushResult(null);
+      setError(err instanceof ApiError ? err.message : "Could not push this trace");
+    },
+  });
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -269,9 +281,15 @@ function PipelineDetail({ pipeline, agentName }: { pipeline: AiAgentPipeline; ag
               </div>
             </div>
           )}
-          <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => viewOtlp.mutate(activeRun.id)}>
-            View OTLP trace
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-secondary" onClick={() => viewOtlp.mutate(activeRun.id)}>
+              View OTLP trace
+            </button>
+            <button className="btn btn-secondary" disabled={pushOtlp.isPending} onClick={() => pushOtlp.mutate(activeRun.id)}>
+              {pushOtlp.isPending ? "Pushing..." : "Push to collector"}
+            </button>
+            {pushResult && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{pushResult}</span>}
+          </div>
         </div>
       )}
       {otlpJson && (

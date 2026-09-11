@@ -571,3 +571,40 @@ pub fn export_run_as_otlp(conn: &Connection, run_id: &str) -> AppResult<serde_js
     let run = ai_agent_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
     Ok(run_to_otlp_json(&run))
 }
+
+/// Phase 7f: pushes one run's trace to the workspace's configured OTLP
+/// collector, on demand - the manual counterpart to `export_run_as_otlp`,
+/// same "Test Connection"-style shape `webhook_service::attempt_delivery`
+/// already uses (a real outbound call, timed out, no silent retry - a
+/// one-off push, not a delivery queue, so there's no delivery history to
+/// persist here the way a real webhook subscription earns one). Admin-
+/// gated since it makes a real outbound call to an admin-configured
+/// endpoint, unlike the no-gate JSON-only export above.
+pub async fn push_run_trace_to_otlp(conn: &Connection, workspace_id: &str, run_id: &str, actor_user_id: Option<&str>) -> AppResult<String> {
+    require_admin(conn, actor_user_id)?;
+    let settings = super::ai_service::get_settings(conn, workspace_id)?;
+    let endpoint = settings.otlp_endpoint.ok_or_else(|| AppError::Validation("No OTLP collector endpoint is configured (Admin -> LLM & MCP -> Gateway)".into()))?;
+    let run = ai_agent_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    let payload = run_to_otlp_json(&run);
+    let body = serde_json::to_string(&payload).map_err(|e| AppError::Validation(format!("could not serialize trace: {e}")))?;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
+    let response = client
+        .post(&endpoint)
+        .header("Content-Type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("could not reach the collector: {e}")))?;
+
+    let status = response.status();
+    if status.is_success() {
+        Ok(format!("Collector responded {status}"))
+    } else {
+        let snippet: String = response.text().await.unwrap_or_default().chars().take(200).collect();
+        Err(AppError::Validation(format!("Collector responded {status}: {snippet}")))
+    }
+}

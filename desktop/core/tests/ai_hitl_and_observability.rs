@@ -1,14 +1,15 @@
 //! AI & Agentic Layer, Phase 7e: Human-in-the-loop approval gates on a
 //! sequential Pipeline (pause, approve - with or without editing the
-//! output - and reject), plus the OTLP trace exporter. Reuses
-//! `ai_agent_orchestration.rs`'s own stub-listener pattern.
+//! output - and reject), plus the OTLP trace exporter. Phase 7f adds the
+//! collector push on top: the settings dial and the real outbound POST.
+//! Reuses `ai_agent_orchestration.rs`'s own stub-listener pattern.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
-use lanesra_core::models::ai::AiSettingsInput;
+use lanesra_core::models::ai::{AiObservabilitySettingsInput, AiSettingsInput};
 use lanesra_core::models::ai_agent::AiAgentInput;
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, PipelineStepInput};
 use lanesra_core::models::user::NewUser;
@@ -245,4 +246,107 @@ async fn the_otlp_export_is_a_deterministic_two_span_trace_for_a_two_step_run() 
         assert_eq!(step_span["traceId"].as_str().unwrap(), root_trace_id, "every step span shares the run's trace id");
         assert_eq!(step_span["parentSpanId"].as_str().unwrap(), spans[0]["spanId"].as_str().unwrap());
     }
+}
+
+// --- Phase 7f: pushing a run's OTLP trace to a configured collector ------
+
+/// A plain HTTP stub (unlike `spawn_sequence_stub`, which wraps every
+/// body in an Anthropic-shaped `{"content": [...]}`) - returns a fixed
+/// status/body for every request, capturing each raw request body
+/// verbatim, so a test can assert exactly what `push_run_trace_to_otlp`
+/// actually sent.
+fn spawn_status_stub(status_line: &'static str, response_body: &'static str) -> (u16, Arc<Mutex<Vec<String>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let captured = Arc::new(Mutex::new(Vec::new()));
+    let captured_clone = captured.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut request_line = String::new();
+            let _ = reader.read_line(&mut request_line);
+            let mut content_length: usize = 0;
+            loop {
+                let mut l = String::new();
+                match reader.read_line(&mut l) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        if l == "\r\n" || l.trim().is_empty() {
+                            break;
+                        }
+                        if let Some(v) = l.to_ascii_lowercase().strip_prefix("content-length:") {
+                            content_length = v.trim().parse().unwrap_or(0);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            let mut body_buf = vec![0u8; content_length];
+            let _ = reader.read_exact(&mut body_buf);
+            captured_clone.lock().unwrap().push(String::from_utf8_lossy(&body_buf).to_string());
+            let response = format!("HTTP/1.1 {status_line}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response_body.len(), response_body);
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    (port, captured)
+}
+
+#[tokio::test]
+async fn otlp_endpoint_setting_is_administrator_gated_and_blank_clears_it() {
+    let (conn, ws, admin) = setup_workspace();
+    let rep = non_admin_user(&conn, &ws, &admin);
+
+    let denied = ai_service::set_otlp_endpoint(&conn, &ws, &AiObservabilitySettingsInput { otlp_endpoint: Some("http://example.com".into()) }, Some(&rep));
+    assert!(denied.unwrap_err().to_string().contains("Administrator"));
+
+    let saved = ai_service::set_otlp_endpoint(&conn, &ws, &AiObservabilitySettingsInput { otlp_endpoint: Some("http://collector.example.com/v1/traces".into()) }, Some(&admin)).unwrap();
+    assert_eq!(saved.otlp_endpoint.as_deref(), Some("http://collector.example.com/v1/traces"));
+
+    let cleared = ai_service::set_otlp_endpoint(&conn, &ws, &AiObservabilitySettingsInput { otlp_endpoint: Some("   ".into()) }, Some(&admin)).unwrap();
+    assert_eq!(cleared.otlp_endpoint, None, "blank/whitespace-only should clear it, not store an empty string");
+}
+
+#[tokio::test]
+async fn pushing_a_trace_with_no_endpoint_configured_fails_clearly() {
+    let (conn, ws, admin) = setup_workspace();
+    let drafter = make_agent(&conn, &ws, &admin, "Drafter");
+    let finisher = make_agent(&conn, &ws, &admin, "Finisher");
+    let pipeline = ai_orchestration_service::create_pipeline(&conn, &ws, &two_step_pipeline(&drafter.id, &finisher.id, false), Some(&admin)).unwrap();
+
+    let (port, _captured) = spawn_sequence_stub(vec![anthropic_text_body("draft"), anthropic_text_body("final")]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+    let run = ai_orchestration_service::run_manual(&conn, &ws, &master_key(), "pipeline", &pipeline.id, "hello", Some(&admin)).await.unwrap();
+
+    let err = ai_orchestration_service::push_run_trace_to_otlp(&conn, &ws, &run.id, Some(&admin)).await.unwrap_err();
+    assert!(err.to_string().contains("No OTLP collector endpoint"), "{err}");
+}
+
+#[tokio::test]
+async fn pushing_a_trace_posts_the_real_otlp_json_and_surfaces_a_collector_failure() {
+    let (conn, ws, admin) = setup_workspace();
+    let drafter = make_agent(&conn, &ws, &admin, "Drafter");
+    let finisher = make_agent(&conn, &ws, &admin, "Finisher");
+    let pipeline = ai_orchestration_service::create_pipeline(&conn, &ws, &two_step_pipeline(&drafter.id, &finisher.id, false), Some(&admin)).unwrap();
+
+    let (agent_port, _captured) = spawn_sequence_stub(vec![anthropic_text_body("draft"), anthropic_text_body("final")]);
+    configure_anthropic_key(&conn, &ws, &admin, agent_port);
+    let run = ai_orchestration_service::run_manual(&conn, &ws, &master_key(), "pipeline", &pipeline.id, "hello", Some(&admin)).await.unwrap();
+    let expected_trace = ai_orchestration_service::export_run_as_otlp(&conn, &run.id).unwrap();
+
+    let (collector_port, collector_captured) = spawn_status_stub("200 OK", "ok");
+    ai_service::set_otlp_endpoint(&conn, &ws, &AiObservabilitySettingsInput { otlp_endpoint: Some(format!("http://127.0.0.1:{collector_port}/v1/traces")) }, Some(&admin)).unwrap();
+
+    let ok_message = ai_orchestration_service::push_run_trace_to_otlp(&conn, &ws, &run.id, Some(&admin)).await.unwrap();
+    assert!(ok_message.contains("200"), "{ok_message}");
+    let requests = collector_captured.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    let sent: serde_json::Value = serde_json::from_str(&requests[0]).unwrap();
+    assert_eq!(sent, expected_trace, "the collector should receive exactly the same trace run_to_otlp_json/export_run_as_otlp produces");
+    drop(requests);
+
+    let (failing_port, _failing_captured) = spawn_status_stub("500 Internal Server Error", "collector on fire");
+    ai_service::set_otlp_endpoint(&conn, &ws, &AiObservabilitySettingsInput { otlp_endpoint: Some(format!("http://127.0.0.1:{failing_port}/v1/traces")) }, Some(&admin)).unwrap();
+    let err = ai_orchestration_service::push_run_trace_to_otlp(&conn, &ws, &run.id, Some(&admin)).await.unwrap_err();
+    assert!(err.to_string().contains("500"), "{err}");
 }

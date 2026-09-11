@@ -193,11 +193,13 @@ function GatewayTab() {
   const providersQuery = useQuery({ queryKey: ["aiProviders"], queryFn: () => api.listAiProviders(false) });
   const usageQuery = useQuery({ queryKey: ["aiTokenUsageSummary"], queryFn: () => api.getAiTokenUsageSummary() });
   const failoverQuery = useQuery({ queryKey: ["aiGatewayFailoverEvents"], queryFn: () => api.listAiGatewayFailoverEvents(25) });
+  const settingsQuery = useQuery({ queryKey: ["aiSettings"], queryFn: () => api.getAiSettings() });
   const providers = providersQuery.data ?? [];
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AiProvider | null>(null);
   const [budgetDraft, setBudgetDraft] = useState<string | null>(null);
+  const [otlpDraft, setOtlpDraft] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -239,9 +241,17 @@ function GatewayTab() {
       queryClient.invalidateQueries({ queryKey: ["aiTokenUsageSummary"] });
     },
   });
+  const saveOtlpEndpoint = useMutation({
+    mutationFn: (otlp_endpoint: string | null) => api.setAiOtlpEndpoint({ otlp_endpoint }),
+    onSuccess: () => {
+      setOtlpDraft(null);
+      queryClient.invalidateQueries({ queryKey: ["aiSettings"] });
+    },
+  });
 
   const budget = usageQuery.data?.daily_token_budget ?? null;
   const budgetValue = budgetDraft !== null ? budgetDraft : budget === null ? "" : String(budget);
+  const otlpValue = otlpDraft !== null ? otlpDraft : settingsQuery.data?.otlp_endpoint ?? "";
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -271,6 +281,20 @@ function GatewayTab() {
             onClick={() => saveBudget.mutate(budgetValue === "" ? null : Number(budgetValue))}
           >
             {saveBudget.isPending ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: 560 }}>
+        <h3 style={{ marginTop: 0 }}>Observability</h3>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+          An optional OTLP collector endpoint - each agent/pipeline run's trace (real per-step timing, no LLM output) can be pushed here on demand
+          from that run's own history, or exported as OTLP JSON with no endpoint configured at all.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input style={{ flex: 1 }} placeholder="https://your-collector:4318/v1/traces" value={otlpValue} onChange={(e) => setOtlpDraft(e.target.value)} />
+          <button className="btn btn-secondary" disabled={saveOtlpEndpoint.isPending} onClick={() => saveOtlpEndpoint.mutate(otlpValue.trim() === "" ? null : otlpValue)}>
+            {saveOtlpEndpoint.isPending ? "Saving..." : "Save"}
           </button>
         </div>
       </div>

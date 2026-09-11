@@ -10,7 +10,7 @@ use serde_json::Value;
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
-use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiProviderInput, AiSettingsInput};
+use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput};
 use lanesra_core::models::ai_agent::{AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
 use lanesra_core::models::ai_eval::AiEvalSuiteInput;
@@ -1243,6 +1243,13 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "set_ai_daily_token_budget" => {
             let input: AiDailyTokenBudgetInput = arg(args, "input")?;
             to_value(ai_service::set_daily_token_budget(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        // AI & Agentic Layer, Phase 7f: setting the endpoint is plain
+        // sync; `push_ai_agent_run_otlp` (a real outbound call) is
+        // genuinely async, so it's its own route in `admin_actions.rs`.
+        "set_ai_otlp_endpoint" => {
+            let input: AiObservabilitySettingsInput = arg(args, "input")?;
+            to_value(ai_service::set_otlp_endpoint(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
         "get_ai_token_usage_summary" => to_value(ai_service::token_usage_today(conn, &require_workspace_id(conn)?)?),
         "list_ai_gateway_failover_events" => {

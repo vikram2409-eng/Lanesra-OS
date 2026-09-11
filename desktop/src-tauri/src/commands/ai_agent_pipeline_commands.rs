@@ -103,6 +103,16 @@ pub async fn approve_ai_agent_pending_step(state: State<'_, AppState>, id: Strin
 }
 
 #[tauri::command]
+pub async fn push_ai_agent_run_otlp(state: State<'_, AppState>, id: String) -> AppResult<String> {
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move { ai_orchestration_service::push_run_trace_to_otlp(&conn, &workspace_id, &id, actor.as_deref()).await }).await
+}
+
+#[tauri::command]
 pub async fn run_ai_agent(state: State<'_, AppState>, id: String, input: String) -> AppResult<AiAgentRun> {
     run_target(state, "agent", id, input).await
 }

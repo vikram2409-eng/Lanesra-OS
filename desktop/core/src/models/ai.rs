@@ -35,6 +35,12 @@ pub struct AiSettings {
     /// agent dispatch, against the real per-day totals in
     /// `ai_token_usage`.
     pub daily_token_budget: Option<i64>,
+    /// AI & Agentic Layer, Phase 7f: where `ai_orchestration_service::
+    /// push_run_trace_to_otlp` sends a run's OTLP-shaped trace - `None`
+    /// means the push action is unavailable, not that pushing silently
+    /// no-ops. Genuinely optional: `run_to_otlp_json`/the "View OTLP
+    /// trace" export work with no endpoint configured at all.
+    pub otlp_endpoint: Option<String>,
     pub updated_at: String,
     pub updated_by: Option<String>,
 }
@@ -55,6 +61,16 @@ pub struct AiSettingsInput {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AiDailyTokenBudgetInput {
     pub daily_token_budget: Option<i64>,
+}
+
+/// Phase 7f: its own admin action, not folded into `AiSettingsInput` -
+/// same "own dial, not the LLM connection form" shape
+/// `AiDailyTokenBudgetInput` above already uses. An empty string clears
+/// the endpoint (rather than being rejected as invalid), the same
+/// "blank means unset" convention this codebase already uses elsewhere.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiObservabilitySettingsInput {
+    pub otlp_endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
