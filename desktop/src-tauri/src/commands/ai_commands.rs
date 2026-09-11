@@ -11,7 +11,7 @@ use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id, resolve_master_key};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::ai::{AiDailyTokenBudgetInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary};
+use lanesra_core::models::ai::{AiDailyTokenBudgetInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary};
 use lanesra_core::services::ai_service;
 
 #[tauri::command]
@@ -52,4 +52,14 @@ pub fn set_ai_daily_token_budget(state: State<AppState>, input: AiDailyTokenBudg
 pub fn get_ai_token_usage_summary(state: State<AppState>) -> AppResult<AiTokenUsageSummary> {
     let conn = state.conn.lock().unwrap();
     ai_service::token_usage_today(&conn, &require_workspace_id(&conn)?)
+}
+
+/// Phase 7f: where a run's OTLP trace can be pushed - `push_ai_agent_run_
+/// otlp` (a real outbound call) is its own async command, alongside
+/// `ai_agent_pipeline_commands`'s other genuinely-async operations.
+#[tauri::command]
+pub fn set_ai_otlp_endpoint(state: State<AppState>, input: AiObservabilitySettingsInput) -> AppResult<AiSettings> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    ai_service::set_otlp_endpoint(&conn, &workspace_id, &input, current_actor(&state).as_deref())
 }

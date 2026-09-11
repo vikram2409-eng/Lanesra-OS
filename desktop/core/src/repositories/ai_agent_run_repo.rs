@@ -19,8 +19,11 @@ fn map_run_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentRun> {
         triggered_by: row.get("triggered_by")?,
         source_entity_type: row.get("source_entity_type")?,
         source_entity_id: row.get("source_entity_id")?,
+        trigger_input: row.get("trigger_input")?,
         started_at: row.get("started_at")?,
         finished_at: row.get("finished_at")?,
+        paused_at_step_order: row.get("paused_at_step_order")?,
+        resume_previous_output: row.get("resume_previous_output")?,
         steps: Vec::new(), // filled in by `hydrate`
     })
 }
@@ -35,6 +38,8 @@ fn map_step_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentRunStep> {
         output_text: row.get("output_text")?,
         error: row.get("error")?,
         tool_calls_count: row.get("tool_calls_count")?,
+        started_at: row.get("started_at")?,
+        finished_at: row.get("finished_at")?,
     })
 }
 
@@ -59,29 +64,58 @@ pub fn start_run(
     triggered_by: Option<&str>,
     source_entity_type: Option<&str>,
     source_entity_id: Option<&str>,
+    trigger_input: &str,
 ) -> rusqlite::Result<()> {
-    // 'failed' is the placeholder status until `finish_run` overwrites it -
-    // fail-closed, so a row that's interrupted before finishing (a panic,
-    // a process restart mid-run) reads as failed rather than falsely
-    // succeeded.
+    // 'failed' is the placeholder status until `finish_run`/`pause_for_
+    // approval` overwrites it - fail-closed, so a row that's interrupted
+    // before either (a panic, a process restart mid-run) reads as failed
+    // rather than falsely succeeded or silently stuck.
     conn.execute(
-        "INSERT INTO ai_agent_runs (id, workspace_id, target_type, target_id, status, triggered_by, source_entity_type, source_entity_id, started_at)
-         VALUES (?1, ?2, ?3, ?4, 'failed', ?5, ?6, ?7, ?8)",
-        (id, workspace_id, target_type, target_id, triggered_by, source_entity_type, source_entity_id, now_iso()),
+        "INSERT INTO ai_agent_runs (id, workspace_id, target_type, target_id, status, triggered_by, source_entity_type, source_entity_id, trigger_input, started_at)
+         VALUES (?1, ?2, ?3, ?4, 'failed', ?5, ?6, ?7, ?8, ?9)",
+        (id, workspace_id, target_type, target_id, triggered_by, source_entity_type, source_entity_id, trigger_input, now_iso()),
     )?;
     Ok(())
 }
 
-pub fn append_run_step(conn: &Connection, run_id: &str, agent_id: &str, step_order: i64, input_text: &str, output_text: Option<&str>, error: Option<&str>, tool_calls_count: i64) -> rusqlite::Result<()> {
+#[allow(clippy::too_many_arguments)]
+pub fn append_run_step(
+    conn: &Connection,
+    run_id: &str,
+    agent_id: &str,
+    step_order: i64,
+    input_text: &str,
+    output_text: Option<&str>,
+    error: Option<&str>,
+    tool_calls_count: i64,
+    started_at: &str,
+    finished_at: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO ai_agent_run_steps (id, run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        (crate::domain::ids::new_uuid(), run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count),
+        "INSERT INTO ai_agent_run_steps (id, run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count, started_at, finished_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        (crate::domain::ids::new_uuid(), run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count, started_at, finished_at),
     )?;
     Ok(())
 }
 
 pub fn finish_run(conn: &Connection, id: &str, status: &str, error: Option<&str>) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_agent_runs SET status = ?1, error = ?2, finished_at = ?3 WHERE id = ?4", (status, error, now_iso(), id))?;
+    conn.execute(
+        "UPDATE ai_agent_runs SET status = ?1, error = ?2, finished_at = ?3, paused_at_step_order = NULL, resume_previous_output = NULL WHERE id = ?4",
+        (status, error, now_iso(), id),
+    )?;
+    Ok(())
+}
+
+/// Phase 7e: a run stops here, not at `finish_run` - `status` becomes
+/// `awaiting_approval`, `finished_at` stays `NULL` (the run genuinely
+/// isn't done), and the resume point is persisted so a later, entirely
+/// separate request (`approve_pending_step`/`reject_pending_run`) can
+/// pick it back up correctly.
+pub fn pause_for_approval(conn: &Connection, id: &str, paused_at_step_order: i64, resume_previous_output: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_agent_runs SET status = 'awaiting_approval', paused_at_step_order = ?1, resume_previous_output = ?2 WHERE id = ?3",
+        (paused_at_step_order, resume_previous_output, id),
+    )?;
     Ok(())
 }
 

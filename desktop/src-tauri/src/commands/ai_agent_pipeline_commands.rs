@@ -73,6 +73,45 @@ pub fn list_ai_agent_runs(state: State<AppState>, target_type: String, target_id
     ai_orchestration_service::list_runs(&conn, &target_type, &target_id, limit)
 }
 
+/// AI & Agentic Layer, Phase 7e: rejecting a paused run and exporting its
+/// trace are both plain sync; `approve_ai_agent_pending_step` (resumes
+/// real agent execution) is genuinely async, below.
+#[tauri::command]
+pub fn reject_ai_agent_pending_run(state: State<AppState>, id: String, reason: String) -> AppResult<AiAgentRun> {
+    let conn = state.conn.lock().unwrap();
+    ai_orchestration_service::reject_pending_run(&conn, &id, &reason, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn export_ai_agent_run_otlp(state: State<AppState>, id: String) -> AppResult<serde_json::Value> {
+    let conn = state.conn.lock().unwrap();
+    ai_orchestration_service::export_run_as_otlp(&conn, &id)
+}
+
+#[tauri::command]
+pub async fn approve_ai_agent_pending_step(state: State<'_, AppState>, id: String, edited_output: Option<String>) -> AppResult<AiAgentRun> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        ai_orchestration_service::approve_pending_step(&conn, &workspace_id, &master_key, &id, edited_output.as_deref(), actor.as_deref()).await
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn push_ai_agent_run_otlp(state: State<'_, AppState>, id: String) -> AppResult<String> {
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move { ai_orchestration_service::push_run_trace_to_otlp(&conn, &workspace_id, &id, actor.as_deref()).await }).await
+}
+
 #[tauri::command]
 pub async fn run_ai_agent(state: State<'_, AppState>, id: String, input: String) -> AppResult<AiAgentRun> {
     run_target(state, "agent", id, input).await

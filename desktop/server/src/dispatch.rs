@@ -10,9 +10,10 @@ use serde_json::Value;
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
-use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiProviderInput, AiSettingsInput};
+use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput};
 use lanesra_core::models::ai_agent::{AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
+use lanesra_core::models::ai_eval::AiEvalSuiteInput;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
 use lanesra_core::models::contract::ContractInput;
@@ -50,7 +51,7 @@ use lanesra_core::services::{
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
-    ai_agent_service, ai_gateway_service, ai_orchestration_service, ai_provider_service,
+    ai_agent_service, ai_eval_service, ai_gateway_service, ai_orchestration_service, ai_provider_service,
     auth_service, backup_service, bulk_action_service, business_rule_service, chat_service, company_service, connection_ref_service, connection_service, connector_service,
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
@@ -1170,6 +1171,43 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(ai_orchestration_service::list_runs(conn, &target_type, &target_id, limit)?)
         }
 
+        // AI & Agentic Layer, Phase 7e: rejecting a paused run and
+        // exporting its trace are both plain sync; `approve_ai_agent_
+        // pending_step` (resumes real agent execution) is genuinely
+        // async, so it's its own route in `admin_actions.rs`.
+        "reject_ai_agent_pending_run" => {
+            let id: String = arg(args, "id")?;
+            let reason: String = arg(args, "reason")?;
+            to_value(ai_orchestration_service::reject_pending_run(conn, &id, &reason, actor)?)
+        }
+        "export_ai_agent_run_otlp" => to_value(ai_orchestration_service::export_run_as_otlp(conn, &arg::<String>(args, "id")?)?),
+
+        // AI & Agentic Layer, Phase 7d: Eval Suite CRUD and run history
+        // are plain sync; `run_suite` (a real judge-model call per case)
+        // is genuinely async, so it's its own route in `admin_actions.rs`,
+        // same shape as `run_manual`.
+        "list_ai_eval_suites" => to_value(ai_eval_service::list_suites(conn, &require_workspace_id(conn)?)?),
+        "get_ai_eval_suite" => to_value(ai_eval_service::get_suite(conn, &arg::<String>(args, "id")?)?),
+        "create_ai_eval_suite" => {
+            let input: AiEvalSuiteInput = arg(args, "input")?;
+            to_value(ai_eval_service::create_suite(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_ai_eval_suite" => {
+            let id: String = arg(args, "id")?;
+            let input: AiEvalSuiteInput = arg(args, "input")?;
+            to_value(ai_eval_service::update_suite(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "delete_ai_eval_suite" => {
+            let id: String = arg(args, "id")?;
+            ai_eval_service::delete_suite(conn, &id, actor)?;
+            Ok(Value::Null)
+        }
+        "list_ai_eval_runs" => {
+            let suite_id: String = arg(args, "suiteId")?;
+            let limit: i64 = arg(args, "limit")?;
+            to_value(ai_eval_service::list_runs(conn, &suite_id, limit)?)
+        }
+
         // AI & Agentic Layer, Phase 7a: the Unified AI Gateway - named
         // provider CRUD, an agent's routing policy, and the Gateway
         // health view's read-only data. `test_ai_provider_key` is
@@ -1205,6 +1243,13 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "set_ai_daily_token_budget" => {
             let input: AiDailyTokenBudgetInput = arg(args, "input")?;
             to_value(ai_service::set_daily_token_budget(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        // AI & Agentic Layer, Phase 7f: setting the endpoint is plain
+        // sync; `push_ai_agent_run_otlp` (a real outbound call) is
+        // genuinely async, so it's its own route in `admin_actions.rs`.
+        "set_ai_otlp_endpoint" => {
+            let input: AiObservabilitySettingsInput = arg(args, "input")?;
+            to_value(ai_service::set_otlp_endpoint(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
         "get_ai_token_usage_summary" => to_value(ai_service::token_usage_today(conn, &require_workspace_id(conn)?)?),
         "list_ai_gateway_failover_events" => {
