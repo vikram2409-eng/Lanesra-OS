@@ -21,7 +21,7 @@ const ICON_CHOICES = ["◆", "🏭", "📦", "🚗", "🏢", "🔧", "📋", "�
  * sidebar section and as an extra tab in the Custom fields / Business
  * rules admin screens, exactly like any of the nine built-in entities.
  */
-export function CustomObjectsAdmin() {
+export function CustomObjectsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -38,15 +38,20 @@ export function CustomObjectsAdmin() {
     <div className="card">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Custom objects</h3>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setCreating((v) => !v);
-            setEditingId(null);
-          }}
-        >
-          + New object
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => onOpenHelp("custom-objects")}>
+            📖 Help
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setCreating((v) => !v);
+              setEditingId(null);
+            }}
+          >
+            + New object
+          </button>
+        </div>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         Add a whole new business object - Vendors, Assets, Projects - without a code change. Once created it gets its
