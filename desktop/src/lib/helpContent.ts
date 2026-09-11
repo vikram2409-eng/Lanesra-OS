@@ -839,4 +839,145 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       },
     ],
   },
+  {
+    key: "integration-hub",
+    label: "Integration Hub",
+    icon: "⬡",
+    blurb:
+      "Connect encrypted external systems, turn an OpenAPI spec into callable Workflow actions, expose your own REST API and outbound webhooks, move data with CSV or a recurring pull sync, and watch it all through one unified log.",
+    topics: [
+      {
+        slug: "connections-and-overview",
+        title: "Connections & the Integration Hub Overview",
+        summary: "Encrypted connections to six kinds of external systems, Connection References for portable Solutions, and the health KPIs up front.",
+        sections: [
+          {
+            heading: "Overview: six numbers, one glance",
+            bodyHtml:
+              "<p>This tab opens on Overview - live KPI tiles for Active connections, Failed connections, API calls today, Failed webhooks today, Jobs running, and Jobs failed today, so a problem is visible from the first screen.</p>",
+          },
+          {
+            heading: "Connections: six types, encrypted at rest",
+            bodyHtml:
+              "<p>Connections holds generic REST, webhook, SFTP, PostgreSQL, OData and SMTP connections - Name, Type, Base URL, and one of 7 auth modes (none, API key, basic, bearer, custom header, OAuth2 client-credentials, OAuth2 authorization-code). Any secret is encrypted at rest (AES-256-GCM), never returned in plaintext. Test makes one real call and records the result directly on the connection.</p>",
+          },
+          {
+            heading: "Connection References: portable by design",
+            bodyHtml:
+              "<p>A Connection holds a real base URL and secret, so it can't travel inside an exported Solution. A Connection Reference is the portable half - a logical Key (e.g. crm_primary) a Solution or Workflow binds to instead. Export a Solution using one and only the reference travels; the receiving workspace binds it to its own real Connection afterward.</p>",
+          },
+        ],
+      },
+      {
+        slug: "connectors-openapi-import",
+        title: "Connectors: turn an OpenAPI spec into Workflow actions",
+        summary: 'Import an OpenAPI 3.x spec, pick which operations you need, and call any of them as a "Call Connector Action" Workflow step.',
+        sections: [
+          {
+            heading: "Parse, then choose",
+            bodyHtml:
+              "<p>+ Import connector takes a pasted OpenAPI 3.x spec (JSON or YAML) and Parse spec returns every operation found, with parsing warnings shown up front. Nothing is imported yet - you're previewing what's available.</p>",
+          },
+          {
+            heading: "Select exactly what you need",
+            bodyHtml:
+              "<p>Every parsed operation starts checked; uncheck what you don't want. Name the connector, add an optional description, and Import N actions creates one Connector with only the operations you selected.</p>",
+          },
+          {
+            heading: "A new Workflow Automation action",
+            bodyHtml:
+              "<p>Each imported action becomes callable from Workflow Automation as Call Connector Action. Test next to any action calls it for real right from this tab, before wiring it into a workflow.</p>",
+          },
+        ],
+      },
+      {
+        slug: "api-access-and-webhooks",
+        title: "API Access & Webhooks: exposing your workspace to the outside",
+        summary: "Scoped API clients for the generic REST API, and HMAC-signed outbound webhooks for record and workflow events - both Team Workspace only.",
+        sections: [
+          {
+            heading: "API Access: service-account style clients",
+            bodyHtml:
+              "<p>+ New API client issues credentials against the generic /api/v1/objects/... REST API: a Name, a scope checklist (objects.read/write, metadata.read, search.read, bulk.read/write, webhooks.manage, events.read, admin.integration.read/manage), and an optional Allowed CIDR. The secret is shown exactly once, at creation or after Rotate - hashed, never shown again. Revoke/Reactivate toggle access; Delete removes it outright. Only reachable where a Team Workspace server is running.</p>",
+          },
+          {
+            heading: "Webhooks: outbound, signed, retried",
+            bodyHtml:
+              "<p>+ New webhook subscribes to one or more of 6 event types (record.created/updated/archived, field.changed, workflow.completed/failed), delivering to a Connection's base URL with an optional Object scope. Every delivery is HMAC-SHA256 signed (X-Lanesra-Signature) and retried with exponential backoff on failure.</p>",
+          },
+          {
+            heading: "Testing and watching deliveries",
+            bodyHtml:
+              "<p>Test sends a real test delivery on demand. Deliveries opens the full attempt history for that webhook. Pause/Reactivate stop and resume delivery without deleting the subscription.</p>",
+          },
+        ],
+      },
+      {
+        slug: "data-exchange-and-external-objects",
+        title: "Data Exchange & External Objects",
+        summary: "CSV import/export and reusable Mappings through the same validated write path the REST API uses, plus read-only live records.",
+        sections: [
+          {
+            heading: "CSV Import: the same path as everything else",
+            bodyHtml:
+              "<p>Pick a Target object, an Operation (insert/update/upsert - update/upsert need a Match key), and a Duplicate policy (skip/update matched/create new). Paste CSV text, Auto-map from header row, then adjust each mapping's transform by hand. Preview (dry run) runs the import without writing anything; Import commits it - both go through the same generic record-write path the REST API uses, so the same validation, rules and permissions apply.</p>",
+          },
+          {
+            heading: "CSV Export & reusable Mappings",
+            bodyHtml:
+              "<p>CSV Export downloads any object's records as a file. Mappings saves a named field-mapping configuration so a recurring import doesn't need re-mapping by hand every time.</p>",
+          },
+          {
+            heading: "External Objects: read-only, live",
+            bodyHtml:
+              "<p>+ New external object defines a live, read-only window into another system through a Connection: an Object key, Display name, the Connection to use, and a Resource path. Preview fetches real records on demand. Nothing is copied into your workspace by defining one - it's also what an Integration Job pulls from on a schedule.</p>",
+          },
+        ],
+      },
+      {
+        slug: "integration-jobs",
+        title: "Integration Jobs: recurring pull sync",
+        summary: "Pull records from an External Object into a Lanesra object on an interval, with a checkpoint cursor - Team Workspace only for real scheduling.",
+        sections: [
+          {
+            heading: "What a Job actually does",
+            bodyHtml:
+              "<p>+ New job pairs an External Object with a target Lanesra object and an interval in minutes. Each run tracks a checkpoint cursor, resuming rather than re-pulling everything. This is pull-only - use a Webhook or Connector Action for the outbound direction instead.</p>",
+          },
+          {
+            heading: "Where the schedule actually runs",
+            bodyHtml:
+              "<p>The background scheduler only runs where a Team Workspace server is hosting this workspace. A pure desktop install has no long-running process to host it, so Run Now is the only way a desktop-hosted Job ever executes.</p>",
+          },
+          {
+            heading: "Watching runs",
+            bodyHtml:
+              "<p>Each Job's row shows its target, interval, status and last run outcome; Runs opens the full history for that Job, separate from the Hub-wide log.</p>",
+          },
+        ],
+      },
+      {
+        slug: "logs-monitoring-settings",
+        title: "Logs, Monitoring & Settings",
+        summary: "One unified log across every API call, webhook delivery and import/export run, plus workspace-level rate limits and retention.",
+        sections: [
+          {
+            heading: "One log, every execution type",
+            bodyHtml:
+              "<p>A single execution log spanning API calls, webhook deliveries and import/export runs - type, direction, status, a records breakdown (Read/Written/Skipped/Failed), duration and timestamp. Filter by type, status, or correlation id to trace one request's effects across every system it touched.</p>",
+          },
+          {
+            heading: "Purging old logs",
+            bodyHtml:
+              "<p>Purge expired logs removes anything past the retention window on demand, reporting exactly how many rows it removed.</p>",
+          },
+          {
+            heading: "Settings: rate limits & retention",
+            bodyHtml:
+              "<p>Workspace-wide: a per-client and a global API rate limit (per minute), Log retention and File retention in days, and an Allow insecure (non-TLS) outbound connections toggle. These apply across every tab in this category.</p>",
+          },
+        ],
+      },
+    ],
+  },
 ];

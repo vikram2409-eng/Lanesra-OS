@@ -272,7 +272,7 @@ export function AdminPanel() {
       {tab === "apps" && <AppsAdmin />}
       {tab === "packages" && <IndustryPackagesAdmin onOpenHelp={openHelpTopic} />}
       {tab === "solutions" && <DeploymentManagementAdmin onOpenHelp={openHelpTopic} />}
-      {tab === "integrations" && <IntegrationHubAdmin />}
+      {tab === "integrations" && <IntegrationHubAdmin onOpenHelp={openHelpTopic} />}
       {tab === "ai" && <AiSettingsAdmin />}
       {tab === "assistant" && <ChatPanel mode="admin" />}
       {tab === "aiAgents" && <AiAgentsAdmin onOpenHelp={openHelpTopic} />}
