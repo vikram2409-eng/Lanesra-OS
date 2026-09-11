@@ -82,7 +82,7 @@ function emptyInput(): AiAgentInput {
   return { name: "", description: "", icon: "🤖", system_prompt: "", action_names: [], delegate_agent_ids: [], skill_ids: [] };
 }
 
-export function AiAgentsAdmin() {
+export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["aiAgents"], queryFn: () => api.listAiAgents(false) });
   const skillsQuery = useQuery({ queryKey: ["aiSkills"], queryFn: () => api.listAiSkills(true) });
@@ -160,9 +160,14 @@ export function AiAgentsAdmin() {
               optionally other agents it can delegate to.
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
-            + New agent
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-secondary" onClick={() => onOpenHelp("build-your-first-agent")}>
+              📖 Help
+            </button>
+            <button className="btn btn-primary" onClick={() => setCreating(true)}>
+              + New agent
+            </button>
+          </div>
         </div>
         {error && <div className="error-banner">{error}</div>}
         <div className="table-wrap">
