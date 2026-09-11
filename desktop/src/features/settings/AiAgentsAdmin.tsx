@@ -33,6 +33,7 @@ const RECORD_ACTIONS: [string, string][] = [
   ["create_record", "Create a record"],
   ["update_record", "Update a record"],
   ["archive_record", "Archive a record"],
+  ["search_records", "Search records (ranked, Custom Objects only)"],
 ];
 const ADMIN_ACTIONS: [string, string][] = [
   ["list_business_rules", "List business rules"],
@@ -315,6 +316,48 @@ function MemoryEditor({
           Cancel
         </button>
       </div>
+      <MemoryHistoryPanel agentId={agent.id} />
+    </div>
+  );
+}
+
+/**
+ * Phase 7b: read-only, most-recent-first history of this agent's prior
+ * memory_md values - every snapshot taken just before an overwrite,
+ * whichever path changed it (the agent's own update_memory tool, or an
+ * admin's direct edit above). Collapsed by default since most agents will
+ * have an empty or short history and this is a review/audit aid, not
+ * something needed on every open.
+ */
+function MemoryHistoryPanel({ agentId }: { agentId: string }) {
+  const [open, setOpen] = useState(false);
+  const historyQuery = useQuery({
+    queryKey: ["aiAgentMemoryHistory", agentId],
+    queryFn: () => api.listAiAgentMemoryHistory(agentId),
+    enabled: open,
+  });
+  const history = historyQuery.data ?? [];
+  return (
+    <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <button className="btn btn-secondary" onClick={() => setOpen((o) => !o)}>
+        {open ? "Hide" : "Show"} memory history{history.length > 0 ? ` (${history.length})` : ""}
+      </button>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {historyQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading...</p>}
+          {!historyQuery.isLoading && history.length === 0 && (
+            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No prior memory changes recorded yet.</p>
+          )}
+          {history.map((snap) => (
+            <div key={snap.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
+                {new Date(snap.created_at).toLocaleString()} · changed by {snap.changed_by === "agent" ? "the agent itself" : snap.changed_by}
+              </div>
+              <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{snap.memory_md}</pre>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

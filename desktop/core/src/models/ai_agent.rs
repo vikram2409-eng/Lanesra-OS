@@ -66,6 +66,20 @@ pub struct AiAgentMemoryUpdate {
     pub memory_md: String,
 }
 
+/// Phase 7b: one snapshot of `memory_md` taken just before it was
+/// overwritten - by the agent's own `update_memory` tool (`changed_by:
+/// "agent"`) or an admin's direct edit via `ai_agent_service::set_memory`
+/// (`changed_by`: that admin's user id). See
+/// `ai_agent_repo::update_memory`/`list_memory_history`.
+#[derive(Debug, Clone, Serialize)]
+pub struct AiAgentMemorySnapshot {
+    pub id: String,
+    pub agent_id: String,
+    pub memory_md: String,
+    pub changed_by: String,
+    pub created_at: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct AiSkill {
     pub id: String,

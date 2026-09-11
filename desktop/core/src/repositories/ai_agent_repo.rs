@@ -7,7 +7,7 @@ use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::now_iso;
 use crate::models::ai::AiAgentModelRouting;
-use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiSkill, AiSkillInput};
+use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiAgentMemorySnapshot, AiSkill, AiSkillInput};
 
 fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
     let action_names_json: String = row.get("action_names_json")?;
@@ -161,9 +161,39 @@ pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: O
 /// The agent's own `update_memory` tool call, and an admin's direct edit
 /// in its form, both go through this - a full overwrite, no merge logic
 /// (see `ai_agent.rs`'s own doc comment on why).
-pub fn update_memory(conn: &Connection, id: &str, memory_md: &str) -> rusqlite::Result<()> {
+/// Phase 7b: snapshots the *current* `memory_md` into
+/// `ai_agent_memory_history` before overwriting it - `changed_by` is
+/// `"agent"` for the always-available `update_memory` tool
+/// (`chat_service::execute_agent_tool`), or the acting admin's user id for
+/// a direct edit (`ai_agent_service::set_memory`) - both paths go through
+/// this one function, so the history table can't be bypassed. No snapshot
+/// is written when the prior value was empty (nothing written yet - see
+/// migration 0038's own doc comment on `memory_md`'s `''` sentinel) or
+/// identical to the new value (a genuine no-op write).
+pub fn update_memory(conn: &Connection, id: &str, memory_md: &str, changed_by: &str) -> rusqlite::Result<()> {
+    let existing: Option<String> = conn.query_row("SELECT memory_md FROM ai_agents WHERE id = ?1", [id], |r| r.get(0)).optional()?;
+    if let Some(prev) = existing {
+        if !prev.is_empty() && prev != memory_md {
+            conn.execute(
+                "INSERT INTO ai_agent_memory_history (id, agent_id, memory_md, changed_by, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![crate::domain::ids::new_uuid(), id, prev, changed_by, now_iso()],
+            )?;
+        }
+    }
     conn.execute("UPDATE ai_agents SET memory_md = ?1 WHERE id = ?2", (memory_md, id))?;
     Ok(())
+}
+
+/// Most recent first - the natural order for an admin reviewing "what has
+/// this agent learned/changed over time".
+pub fn list_memory_history(conn: &Connection, agent_id: &str) -> rusqlite::Result<Vec<AiAgentMemorySnapshot>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, agent_id, memory_md, changed_by, created_at FROM ai_agent_memory_history WHERE agent_id = ?1 ORDER BY created_at DESC",
+    )?;
+    let rows = stmt.query_map([agent_id], |r| {
+        Ok(AiAgentMemorySnapshot { id: r.get(0)?, agent_id: r.get(1)?, memory_md: r.get(2)?, changed_by: r.get(3)?, created_at: r.get(4)? })
+    })?;
+    rows.collect()
 }
 
 // --- Skills ---------------------------------------------------------------

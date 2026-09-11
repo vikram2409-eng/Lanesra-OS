@@ -228,3 +228,86 @@ pub fn global_search(conn: &Connection, workspace_id: &str, query: &str) -> AppR
 
     Ok(out)
 }
+
+// --- Phase 7b: ranked full-text search over Custom Object records ---------
+
+/// One ranked hit from `search_custom_records` - `score` is FTS5's raw
+/// `bm25()` value (lower is a better match; SQLite's own convention, not
+/// normalized to a 0-1 range here) and `snippet` is a short excerpt of
+/// the record's combined searchable text, not just its title, so a match
+/// coming from a custom field's value is still explainable at a glance -
+/// the same reasoning `SearchResult::subtitle` above already documents.
+#[derive(Debug, Clone, Serialize)]
+pub struct RankedSearchHit {
+    pub object_key: String,
+    pub record_id: String,
+    pub title: String,
+    pub snippet: String,
+    pub score: f64,
+}
+
+const MAX_RANKED_RESULTS: i64 = 25;
+
+/// Turns free text into an FTS5 MATCH expression that can't be broken (or
+/// abused as a query-syntax injection) by special FTS5 characters in the
+/// input - every whitespace-separated token is quoted as a literal phrase
+/// (embedded `"` doubled per FTS5's own escaping rule), then joined with
+/// FTS5's implicit AND, e.g. `unpaid invoice` -> `"unpaid" "invoice"`.
+fn fts_match_expr(query: &str) -> String {
+    query.split_whitespace().map(|tok| format!("\"{}\"", tok.replace('"', "\"\""))).collect::<Vec<_>>().join(" ")
+}
+
+/// Ranked (bm25()) full-text search over the `record_search_fts` index
+/// (migration 0042) - lexical/tokenized relevance, **not** embedding or
+/// vector similarity (there is no embeddings infrastructure anywhere in
+/// this codebase). A ranked evolution of `global_search`'s own unranked
+/// `LIKE` pass over the same custom-object fields above, not a parallel
+/// system - so an agent (or a future search UI) can ask "find records
+/// relevant to X" instead of only exact-match filters. Optionally scoped
+/// to one `object_key`. Built-in entities (Company, Contact, ...) aren't
+/// indexed by this pass - named here, not silently absent - since they
+/// don't share the `custom_records`/`custom_field_values` tables this
+/// index is built from; see `record_search_fts`'s own doc comment.
+pub fn search_custom_records(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &str,
+    object_key: Option<&str>,
+    limit: i64,
+) -> AppResult<Vec<RankedSearchHit>> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let match_expr = fts_match_expr(query);
+    let limit = limit.clamp(1, MAX_RANKED_RESULTS);
+
+    let map_row = |r: &rusqlite::Row| -> rusqlite::Result<RankedSearchHit> {
+        Ok(RankedSearchHit {
+            object_key: r.get("object_key")?,
+            record_id: r.get("record_id")?,
+            title: r.get("title")?,
+            snippet: r.get::<_, String>("text")?.chars().take(160).collect(),
+            score: r.get("score")?,
+        })
+    };
+
+    let hits = if let Some(object_key) = object_key {
+        let mut stmt = conn.prepare(
+            "SELECT object_key, record_id, title, text, bm25(record_search_fts) AS score FROM record_search_fts
+             WHERE record_search_fts MATCH ?1 AND workspace_id = ?2 AND object_key = ?3
+             ORDER BY score LIMIT ?4",
+        )?;
+        let result: rusqlite::Result<Vec<_>> = stmt.query_map(params![match_expr, workspace_id, object_key, limit], map_row)?.collect();
+        result?
+    } else {
+        let mut stmt = conn.prepare(
+            "SELECT object_key, record_id, title, text, bm25(record_search_fts) AS score FROM record_search_fts
+             WHERE record_search_fts MATCH ?1 AND workspace_id = ?2
+             ORDER BY score LIMIT ?3",
+        )?;
+        let result: rusqlite::Result<Vec<_>> = stmt.query_map(params![match_expr, workspace_id, limit], map_row)?.collect();
+        result?
+    };
+    Ok(hits)
+}

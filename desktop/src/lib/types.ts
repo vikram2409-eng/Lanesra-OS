@@ -2346,6 +2346,17 @@ export interface AiAgentMemoryUpdate {
   memory_md: string;
 }
 
+// core::models::ai_agent 1:1 - Phase 7b: one snapshot of memory_md taken
+// just before it was overwritten (by the agent's own update_memory tool,
+// or an admin's direct edit).
+export interface AiAgentMemorySnapshot {
+  id: string;
+  agent_id: string;
+  memory_md: string;
+  changed_by: string;
+  created_at: string;
+}
+
 export interface AiSkill {
   id: string;
   workspace_id: string;

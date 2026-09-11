@@ -103,8 +103,17 @@ pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: O
 pub fn set_memory(conn: &Connection, id: &str, memory_md: &str, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
-    ai_agent_repo::update_memory(conn, id, memory_md)?;
+    ai_agent_repo::update_memory(conn, id, memory_md, actor_user_id.unwrap_or("admin"))?;
     Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
+}
+
+/// Phase 7b: most-recent-first history of this agent's `memory_md`
+/// changes - read-only, Administrator only (same visibility as the rest
+/// of an agent's configuration).
+pub fn list_memory_history(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<crate::models::ai_agent::AiAgentMemorySnapshot>> {
+    require_admin(conn, actor_user_id)?;
+    ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    Ok(ai_agent_repo::list_memory_history(conn, id)?)
 }
 
 fn validate_routing(conn: &Connection, workspace_id: &str, routing: &AiAgentModelRouting) -> AppResult<()> {
