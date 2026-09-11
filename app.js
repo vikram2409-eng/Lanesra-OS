@@ -4967,9 +4967,10 @@ function aiAgentsTab(body){
  body.innerHTML=`<div class="panel">
  <div class="panel-head"><h3>AI Agents</h3><button class="btn btn-primary" id="addAgent">+ New agent</button></div>
  <p class="muted" style="font-size:13px">Each agent is a persona layered over a set of actions it can take, with its own persistent memory and attached skills - real, structured data in this browser; chatting with one simulates the reply with a keyword match, since this static demo has no server to run a real tool-calling loop from.</p>
- <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-guardrails-agent="${a.id}">Guardrails</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
  <div id="agentChatWrap"></div>
  <div id="agentMemoryWrap"></div>
+ <div id="agentGuardrailsWrap"></div>
  <div id="agentRoutingWrap"></div>
  </div>`;
  $('#addAgent').onclick=()=>aiAgentModal();
@@ -4988,6 +4989,22 @@ function aiAgentsTab(body){
   const a=agents.find(x=>x.id===b.dataset.memoryAgent);
   renderAgentMemoryPanel(a,$('#agentMemoryWrap'));
  });
+ body.querySelectorAll('[data-guardrails-agent]').forEach(b=>b.onclick=()=>{
+  const a=agents.find(x=>x.id===b.dataset.guardrailsAgent);
+  renderAgentGuardrailsPanel(a,$('#agentGuardrailsWrap'));
+ });
+}
+// AI & Agentic Layer, Phase 7c: guardrailsMd is a free-text operational-
+// boundary statement injected into this agent's system prompt alongside
+// its persona/memory - advisory/prompted, not independently enforced.
+// The one guard the real edition does enforce in code (loop detection on
+// 3 identical consecutive tool calls) needs the real provider-call loop
+// this static demo's keyword-matched replies don't have - not mirrored
+// here, same boundary aiAgentsTab's own doc comment already draws for
+// delegation.
+function renderAgentGuardrailsPanel(a,wrap){
+ wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>${a.icon} ${a.name}'s guardrails</h4><p class="muted" style="font-size:13px">An operational-boundary statement included in this agent's system prompt - the model is instructed to respect it, but it isn't independently enforced.</p><textarea id="agentGuardrailsInput" style="width:100%;min-height:120px;font-family:monospace">${a.guardrailsMd||''}</textarea><div style="margin-top:8px"><button class="btn btn-primary" id="saveAgentGuardrails">Save guardrails</button></div></div>`;
+ $('#saveAgentGuardrails').onclick=()=>{a.guardrailsMd=$('#agentGuardrailsInput').value;save();toast('Guardrails saved')};
 }
 // AI & Agentic Layer, Phase 7b: mirrors ai_agent_repo::update_memory's
 // snapshot-before-overwrite behavior - a prior, non-empty, actually-

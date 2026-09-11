@@ -339,6 +339,16 @@ fn build_export_manifest(
     let mut business_rules = Vec::new();
     let mut raw_workflows: Vec<crate::models::workflow::WorkflowDefinitionInput> = Vec::new();
     let mut screen_layouts = Vec::new();
+    let mut ai_skills = Vec::new();
+    let mut ai_agents = Vec::new();
+    // Phase 7c: which ai_skill/ai_agent ids this same export also owns -
+    // an agent's skill/delegate reference outside this set is dropped on
+    // export, the same "a reference this export doesn't own is dropped"
+    // policy already applied to a workflow action's relationship_ref above.
+    let exported_ai_skill_ids: std::collections::HashSet<&str> =
+        components.iter().filter(|(t, _)| t == "ai_skill").map(|(_, id)| id.as_str()).collect();
+    let exported_ai_agent_ids: std::collections::HashSet<&str> =
+        components.iter().filter(|(t, _)| t == "ai_agent").map(|(_, id)| id.as_str()).collect();
     let mut reports = Vec::new();
 
     // Pass 1: everything relationships might need to reference (objects,
@@ -508,6 +518,44 @@ fn build_export_manifest(
                     });
                 }
             }
+            "ai_skill" => {
+                if let Some(skill) = crate::repositories::ai_agent_repo::get_skill(conn, metadata_id).map_err(AppError::from)? {
+                    ai_skills.push(crate::models::industry_package::ManifestAiSkill {
+                        name: skill.name,
+                        description: skill.description,
+                        instructions_md: skill.instructions_md,
+                    });
+                }
+            }
+            "ai_agent" => {
+                if let Some(agent) = crate::repositories::ai_agent_repo::get(conn, metadata_id).map_err(AppError::from)? {
+                    let skill_names = agent
+                        .skill_ids
+                        .iter()
+                        .filter(|id: &&String| exported_ai_skill_ids.contains(id.as_str()))
+                        .filter_map(|id| crate::repositories::ai_agent_repo::get_skill(conn, id).ok().flatten())
+                        .map(|s| s.name)
+                        .collect();
+                    let delegate_names = agent
+                        .delegate_agent_ids
+                        .iter()
+                        .filter(|id: &&String| exported_ai_agent_ids.contains(id.as_str()))
+                        .filter_map(|id| crate::repositories::ai_agent_repo::get(conn, id).ok().flatten())
+                        .map(|a| a.name)
+                        .collect();
+                    ai_agents.push(crate::models::industry_package::ManifestAiAgent {
+                        name: agent.name,
+                        description: agent.description,
+                        icon: agent.icon,
+                        system_prompt: agent.system_prompt,
+                        memory_md: agent.memory_md,
+                        guardrails_md: agent.guardrails_md,
+                        action_names: agent.action_names,
+                        skill_names,
+                        delegate_names,
+                    });
+                }
+            }
             // dashboard_layout: intentionally not exported - see this
             // function's own doc comment. Still visible in the Components
             // tab (solution_component_service::list_for_workspace), just
@@ -585,6 +633,8 @@ fn build_export_manifest(
         numbering_overrides: Vec::new(),
         app: None,
         seed_data: Vec::new(),
+        ai_skills,
+        ai_agents,
     })
 }
 
@@ -864,6 +914,84 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
         // its entity_type is the table's real key, same convention
         // migration 0027's own comment on package_artifacts documents.
         artifacts.push(("numbering_override", override_input.entity_type.clone()));
+    }
+
+    // Phase 7c: AI Agent Foundry skills, then agents (a manifest's own
+    // ai_skills must exist before any ai_agents.skill_names can resolve).
+    // Delegation is a second pass, same "create first, resolve cross-
+    // references afterward" shape relationships/screen layouts use above -
+    // an agent's delegate_names can otherwise name an agent that appears
+    // later in this same manifest.
+    let mut skill_name_to_id: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for skill_input in &manifest.ai_skills {
+        let created = super::ai_agent_service::create_skill(
+            conn,
+            workspace_id,
+            &crate::models::ai_agent::AiSkillInput {
+                name: skill_input.name.clone(),
+                description: skill_input.description.clone(),
+                instructions_md: skill_input.instructions_md.clone(),
+            },
+            actor_user_id,
+        )?;
+        skill_name_to_id.insert(created.name.clone(), created.id.clone());
+        artifacts.push(("ai_skill", created.id));
+    }
+
+    let mut agent_name_to_id: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut deferred_delegates: Vec<(String, Vec<String>)> = Vec::new();
+    for agent_input in &manifest.ai_agents {
+        let skill_ids: Vec<String> = agent_input.skill_names.iter().filter_map(|n| skill_name_to_id.get(n).cloned()).collect();
+        let created = super::ai_agent_service::create(
+            conn,
+            workspace_id,
+            &crate::models::ai_agent::AiAgentInput {
+                name: agent_input.name.clone(),
+                description: agent_input.description.clone(),
+                icon: agent_input.icon.clone(),
+                system_prompt: agent_input.system_prompt.clone(),
+                action_names: agent_input.action_names.clone(),
+                delegate_agent_ids: Vec::new(),
+                skill_ids,
+            },
+            actor_user_id,
+        )?;
+        if !agent_input.memory_md.is_empty() {
+            crate::repositories::ai_agent_repo::update_memory(conn, &created.id, &agent_input.memory_md, actor_user_id.unwrap_or("import")).map_err(AppError::from)?;
+        }
+        if !agent_input.guardrails_md.is_empty() {
+            crate::repositories::ai_agent_repo::set_guardrails(conn, &created.id, &agent_input.guardrails_md).map_err(AppError::from)?;
+        }
+        agent_name_to_id.insert(created.name.clone(), created.id.clone());
+        if !agent_input.delegate_names.is_empty() {
+            deferred_delegates.push((created.id.clone(), agent_input.delegate_names.clone()));
+        }
+        artifacts.push(("ai_agent", created.id));
+    }
+    for (agent_id, delegate_names) in deferred_delegates {
+        // Names this same manifest doesn't also define as an agent are
+        // dropped, same "a reference this export doesn't own" policy as
+        // everywhere else in this function.
+        let delegate_ids: Vec<String> = delegate_names.iter().filter_map(|n| agent_name_to_id.get(n).cloned()).collect();
+        if delegate_ids.is_empty() {
+            continue;
+        }
+        let current = super::ai_agent_service::get(conn, &agent_id)?.expect("just created above");
+        super::ai_agent_service::update(
+            conn,
+            &agent_id,
+            workspace_id,
+            &crate::models::ai_agent::AiAgentInput {
+                name: current.name,
+                description: current.description,
+                icon: current.icon,
+                system_prompt: current.system_prompt,
+                action_names: current.action_names,
+                delegate_agent_ids: delegate_ids,
+                skill_ids: current.skill_ids,
+            },
+            actor_user_id,
+        )?;
     }
 
     // App Builder grouping (spec 13.4's "app-level UX") - reused as-is

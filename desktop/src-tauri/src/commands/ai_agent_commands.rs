@@ -9,7 +9,7 @@ use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
-use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiAgentMemoryUpdate, AiAgentMemorySnapshot, AiSkill, AiSkillInput};
+use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiAgentMemorySnapshot, AiSkill, AiSkillInput};
 use lanesra_core::services::ai_agent_service;
 
 #[tauri::command]
@@ -52,6 +52,13 @@ pub fn set_ai_agent_memory(state: State<AppState>, id: String, input: AiAgentMem
 pub fn list_ai_agent_memory_history(state: State<AppState>, id: String) -> AppResult<Vec<AiAgentMemorySnapshot>> {
     let conn = state.conn.lock().unwrap();
     ai_agent_service::list_memory_history(&conn, &id, current_actor(&state).as_deref())
+}
+
+/// Phase 7c: an agent's operational-boundary statement.
+#[tauri::command]
+pub fn set_ai_agent_guardrails(state: State<AppState>, id: String, input: AiAgentGuardrailsUpdate) -> AppResult<AiAgentDefinition> {
+    let conn = state.conn.lock().unwrap();
+    ai_agent_service::set_guardrails(&conn, &id, &input.guardrails_md, current_actor(&state).as_deref())
 }
 
 /// Phase 7a: an agent's Gateway routing policy - `routing: None` clears

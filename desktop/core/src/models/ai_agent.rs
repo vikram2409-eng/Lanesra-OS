@@ -21,6 +21,17 @@ pub struct AiAgentDefinition {
     /// `chat_service`'s own doc comment. Never `null`, only ever `""`
     /// before anything's been written.
     pub memory_md: String,
+    /// Phase 7c: a free-text operational-boundary statement, injected into
+    /// this agent's system prompt alongside its persona/memory (see
+    /// `chat_service::agent_system_prompt`) - advisory/prompted, not
+    /// independently code-enforced (the one guard this phase does enforce
+    /// in code, consecutive-identical-tool-call loop detection, needs no
+    /// column here - see `chat_service::run_agent_once`). Never `null`,
+    /// only ever `""` before anything's been written - same convention as
+    /// `memory_md`, and edited the same separate-admin-action way (see
+    /// `ai_agent_service::set_guardrails`), not part of the main
+    /// create/update form.
+    pub guardrails_md: String,
     /// Individual tool names drawn from `chat_service::record_tools()`/
     /// `admin_tools()` - not a coarse scope. Whether this agent needs
     /// Administrator is computed from this set, not stored -
@@ -64,6 +75,11 @@ pub struct AiAgentInput {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AiAgentMemoryUpdate {
     pub memory_md: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiAgentGuardrailsUpdate {
+    pub guardrails_md: String,
 }
 
 /// Phase 7b: one snapshot of `memory_md` taken just before it was
