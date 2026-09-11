@@ -2535,7 +2535,7 @@ dependencies = [
 
 [[package]]
 name = "lanesra-cli"
-version = "0.11.0"
+version = "0.13.0"
 dependencies = [
  "clap",
  "reqwest 0.12.28",
@@ -2544,7 +2544,7 @@ dependencies = [
 
 [[package]]
 name = "lanesra-core"
-version = "0.11.0"
+version = "0.13.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -2574,7 +2574,7 @@ dependencies = [
 
 [[package]]
 name = "lanesra-os"
-version = "0.11.0"
+version = "0.13.0"
 dependencies = [
  "lanesra-core",
  "rusqlite",
@@ -2586,7 +2586,7 @@ dependencies = [
 
 [[package]]
 name = "lanesra-server"
-version = "0.11.0"
+version = "0.13.0"
 dependencies = [
  "async-stream",
  "axum",
