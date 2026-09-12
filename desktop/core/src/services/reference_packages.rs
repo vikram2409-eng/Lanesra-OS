@@ -10,6 +10,15 @@
 //! all ten, proving the foundation against real content rather than only
 //! the synthetic manifests `industry_data_model.rs`'s tests use.
 //!
+//! An eleventh package, Policy Administration & Claims Management
+//! (`policy_admin_claims_manifest_json`), was added afterward on direct
+//! product request - insurance carriers and MGAs weren't in the original
+//! ten-vertical spec. It follows the exact same manifest shape and the
+//! same engine-limitation list below; see its own doc comment for the
+//! real-world policy admin/claims systems (Guidewire PolicyCenter/
+//! ClaimCenter, Duck Creek, and the ACORD data standards) its object
+//! model and vocabulary are checked against.
+//!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
 //! packages coexisting in one workspace: a custom object's key is
@@ -3970,6 +3979,502 @@ fn auto_service_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Follow up on backordered part\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+// --- lanesra.policy_admin_claims -----------------------------------------
+
+/// `lanesra.policy_admin_claims` v1.0.0 - an eleventh reference package,
+/// added after the original ten-vertical spec on direct product request:
+/// insurance carriers, MGAs and TPAs running policy administration and
+/// claims handling on the same extensible object model as everything
+/// else in this module.
+///
+/// Object model and vocabulary are checked against how real policy admin
+/// (PAS) and claims systems actually shape this data - Guidewire
+/// PolicyCenter/ClaimCenter, Duck Creek, and the ACORD data standards -
+/// rather than invented from scratch:
+/// - `policy` / `coverage` / `insured_risk` mirrors a PAS's own Policy ->
+///   Coverage (a.k.a. "Coverage Part") -> insured-item structure; a
+///   `coverage` can optionally point at one specific `insured_risk`
+///   (e.g. Collision on a named vehicle) or apply at the policy level
+///   (e.g. Homeowners liability), matching real multi-vehicle/
+///   multi-location policies rather than assuming exactly one insured
+///   item per policy.
+/// - `endorsement` is the PAS term of art for a mid-term policy change;
+///   kept as its own object the same way every other package here keeps
+///   a document/change-order object separate from what it amends
+///   (Construction & Contractors' `change_order`, Auto Repair's
+///   `parts_order`).
+/// - `claim` / `claimant` / `loss_reserve` / `claim_payment` /
+///   `adjuster_assignment` / `subrogation` mirrors ClaimCenter's own
+///   claim-file shape: one `claim` against a `policy`, one or more
+///   `claimant`s against it (first- or third-party), reserves tracked
+///   separately from payments (real claims reserving keeps Indemnity/
+///   Expense/Legal reserves distinct from what's actually been paid out -
+///   exactly what `loss_reserve` vs. `claim_payment` models), one or more
+///   adjusters assigned, and an optional subrogation case when a third
+///   party is responsible for the loss.
+///
+/// Simplifications, beyond the standard omissions this module's own doc
+/// comment already covers:
+/// - The Named Insured is a single `Contact`, not a polymorphic person-or-
+///   organization link - real PAS systems support commercial policies
+///   insuring an organization too, but a manifest relationship always
+///   targets one fixed entity type. Personal lines (the more common case
+///   for a `Contact`-shaped CRM record) is the one modeled; a commercial-
+///   lines variant relating `policy` to `Company` instead would need its
+///   own package, the same reasoning `professional_services_manifest_json`
+///   gives for not reusing Construction's `project` object key.
+/// - No separate Underwriting Referral object - underwriting is a status
+///   on `policy` itself (`underwriting_status`), not a queue of its own
+///   records, since nothing else in this model needs to relate to one
+///   individual underwriting decision the way, say, a `claim` needs its
+///   own `loss_reserve` history.
+/// - Reserve and payment amounts are plain fields an adjuster sets, not a
+///   rollup automatically summed from anything - this engine has no
+///   rollup/aggregate field type, the same reason every other package's
+///   totals (Property Management's `rent_amount`, Construction's premium
+///   fields) are plain entries too.
+/// - `claim_payment`'s payee is a plain select field (`payee_type`), not a
+///   relationship to whichever record was actually paid - the payee can
+///   be the insured, a claimant, a repair shop, or an attorney, and this
+///   engine's relationships always target one fixed entity type, the
+///   same reason `policy`'s own Named Insured is Contact-only above.
+pub fn policy_admin_claims_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.policy_admin_claims",
+        "name": "Policy Administration & Claims Management",
+        "industry": "Insurance",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "policy", "singular_label": "Policy", "plural_label": "Policies", "icon": "📋", "prefix": "POL", "digits": 6 },
+            { "key": "coverage", "singular_label": "Coverage", "plural_label": "Coverages", "icon": "🛡", "prefix": "COV", "digits": 5 },
+            { "key": "insured_risk", "singular_label": "Insured Risk", "plural_label": "Insured Risks", "icon": "📦", "prefix": "RISK", "digits": 5 },
+            { "key": "endorsement", "singular_label": "Endorsement", "plural_label": "Endorsements", "icon": "✏", "prefix": "END", "digits": 5 },
+            { "key": "claim", "singular_label": "Claim", "plural_label": "Claims", "icon": "🧾", "prefix": "CLM", "digits": 6 },
+            { "key": "claimant", "singular_label": "Claimant", "plural_label": "Claimants", "icon": "🧑", "prefix": "CLT", "digits": 5 },
+            { "key": "loss_reserve", "singular_label": "Loss Reserve", "plural_label": "Loss Reserves", "icon": "💰", "prefix": "RES", "digits": 6 },
+            { "key": "claim_payment", "singular_label": "Claim Payment", "plural_label": "Claim Payments", "icon": "💳", "prefix": "PAY", "digits": 6 },
+            { "key": "adjuster_assignment", "singular_label": "Adjuster Assignment", "plural_label": "Adjuster Assignments", "icon": "🕵", "prefix": "ADJ", "digits": 5 },
+            { "key": "subrogation", "singular_label": "Subrogation Case", "plural_label": "Subrogation Cases", "icon": "🔁", "prefix": "SUB", "digits": 5 }
+        ],
+        "fields": policy_admin_claims_fields(),
+        "relationships": policy_admin_claims_relationships(),
+        "business_rules": policy_admin_claims_business_rules(),
+        "workflows": policy_admin_claims_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "policy",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "overview",
+                            "title": "Overview",
+                            "sections": [
+                                { "id": "details", "title": "Details", "columns": 2, "fields": ["policy_stage", "product_line", "policy_type", "effective_date", "expiration_date", "total_premium", "underwriting_status", "billing_plan"] }
+                            ],
+                            // Indices into `relationships` below: Coverages
+                            // (1), Insured Risks (2), Endorsements (4),
+                            // Claims (5).
+                            "related": ["1", "2", "4", "5"]
+                        }
+                    ]
+                },
+                "publish": true
+            },
+            {
+                "entity_type": "claim",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "loss",
+                            "title": "Loss Information",
+                            "sections": [
+                                { "id": "overview", "title": "Overview", "columns": 2, "fields": ["claim_status", "date_of_loss", "date_reported", "loss_type", "reserve_amount", "paid_amount", "fraud_referral", "litigation_flag"] }
+                            ],
+                            // Indices into `relationships` below: Claimants
+                            // (7), Loss Reserves (8), Payments (9), Adjuster
+                            // Assignments (10), Subrogation (12).
+                            "related": ["7", "8", "9", "10", "12"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Policies by Status", "entity_type": "policy", "group_by_source": "custom", "group_by_field": "policy_stage", "aggregate": "count", "sum_field_key": null },
+            { "name": "Claims by Status", "entity_type": "claim", "group_by_source": "custom", "group_by_field": "claim_status", "aggregate": "count", "sum_field_key": null },
+            { "name": "Claims by Loss Type", "entity_type": "claim", "group_by_source": "custom", "group_by_field": "loss_type", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Policy Admin & Claims Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } },
+                { "kind": "chart", "config": { "report_ref": 1, "chart_type": "bar" } },
+                { "kind": "chart", "config": { "report_ref": 2, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Policy Administration & Claims Management",
+            "icon": "🛡",
+            "description": "Policies, coverages, insured risks and endorsements on one side; claims, claimants, reserves, payments, adjuster assignments and subrogation on the other - the full policy admin and claims lifecycle for a carrier, MGA or TPA.",
+            "object_keys": [
+                "policy", "coverage", "insured_risk", "endorsement", "claim", "claimant",
+                "loss_reserve", "claim_payment", "adjuster_assignment", "subrogation", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            // See field_service_manifest_json's own note on mapping the spec's role
+            // names onto this build's actual role set.
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "editor" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        // No pure reference/lookup object in this data model - every object
+        // here is a live business record - so nothing to seed.
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn policy_admin_claims_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        policy_fields(),
+        coverage_fields(),
+        insured_risk_fields(),
+        endorsement_fields(),
+        claim_fields(),
+        claimant_fields(),
+        loss_reserve_fields(),
+        claim_payment_fields(),
+        adjuster_assignment_fields(),
+        subrogation_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn policy_fields() -> serde_json::Value {
+    json!([
+        { "key": "product_line", "entity_type": "policy", "label": "Product Line", "field_type": "select", "options": ["Personal Auto", "Homeowners", "Commercial Property", "Commercial General Liability", "Workers Compensation", "Umbrella/Excess", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "policy_type", "entity_type": "policy", "label": "Policy Type", "field_type": "select", "options": ["New Business", "Renewal", "Rewrite"], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "New Business", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "effective_date", "entity_type": "policy", "label": "Effective Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "expiration_date", "entity_type": "policy", "label": "Expiration Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "term", "entity_type": "policy", "label": "Term", "field_type": "select", "options": ["Month-to-Month", "Semi-Annual", "Annual", "Multi-Year"], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "Annual", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billing_plan", "entity_type": "policy", "label": "Billing Plan", "field_type": "select", "options": ["Annual", "Semi-Annual", "Quarterly", "Monthly"], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "Monthly", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "total_premium", "entity_type": "policy", "label": "Total Premium", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 6, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "underwriting_status", "entity_type": "policy", "label": "Underwriting Status", "field_type": "select", "options": ["Pending Review", "Approved", "Declined", "Referred"], "required": false, "show_in_list": false, "sort_order": 7, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Pending Review", "is_unique": false, "help_text": null, "placeholder": null },
+        // Named policy_stage, not status - every custom object already has a
+        // fixed built-in Active/Inactive/Archived status (see this module's
+        // own doc comment); a same-named custom field would collide with it.
+        // Drives the "Policy bound" workflow below.
+        { "key": "policy_stage", "entity_type": "policy", "label": "Status", "field_type": "select", "options": ["Quote", "Bound", "In Force", "Renewed", "Non-Renewed", "Cancelled", "Expired", "Lapsed"], "required": true, "show_in_list": true, "sort_order": 8, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Quote", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "cancellation_reason", "entity_type": "policy", "label": "Cancellation Reason", "field_type": "select", "options": ["Non-Payment", "Underwriting", "Insured Request", "Other"], "required": false, "show_in_list": false, "sort_order": 9, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn coverage_fields() -> serde_json::Value {
+    json!([
+        { "key": "coverage_type", "entity_type": "coverage", "label": "Coverage Type", "field_type": "select", "options": ["Bodily Injury Liability", "Property Damage Liability", "Collision", "Comprehensive", "Uninsured/Underinsured Motorist", "Medical Payments", "Dwelling", "Other Structures", "Personal Property", "Loss of Use", "General Liability", "Property", "Workers Compensation", "Umbrella", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "limit_amount", "entity_type": "coverage", "label": "Limit", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "deductible_amount", "entity_type": "coverage", "label": "Deductible", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "premium_amount", "entity_type": "coverage", "label": "Premium", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "coverage_status", "entity_type": "coverage", "label": "Status", "field_type": "select", "options": ["Active", "Pending", "Removed"], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn insured_risk_fields() -> serde_json::Value {
+    json!([
+        { "key": "risk_type", "entity_type": "insured_risk", "label": "Risk Type", "field_type": "select", "options": ["Vehicle", "Real Property", "Location", "Equipment/Contents", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "description", "entity_type": "insured_risk", "label": "Description", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Generic identifier - a VIN for a vehicle, a parcel/serial number
+        // for property or equipment.
+        { "key": "identifier", "entity_type": "insured_risk", "label": "Identifier", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "VIN, parcel number, serial number, or other identifying number for this risk.", "placeholder": null },
+        { "key": "insured_value", "entity_type": "insured_risk", "label": "Insured Value", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "risk_status", "entity_type": "insured_risk", "label": "Status", "field_type": "select", "options": ["Active", "Removed"], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn endorsement_fields() -> serde_json::Value {
+    json!([
+        { "key": "endorsement_type", "entity_type": "endorsement", "label": "Endorsement Type", "field_type": "select", "options": ["Add Coverage", "Remove Coverage", "Change Limit or Deductible", "Add Insured Risk", "Remove Insured Risk", "Address/Name Change", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "effective_date", "entity_type": "endorsement", "label": "Effective Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "premium_change_amount", "entity_type": "endorsement", "label": "Premium Change", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": "Positive to add premium, negative to return premium.", "placeholder": null },
+        { "key": "description", "entity_type": "endorsement", "label": "Description", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Endorsement processed" workflow below.
+        { "key": "endorsement_status", "entity_type": "endorsement", "label": "Status", "field_type": "select", "options": ["Draft", "Pending Approval", "Approved", "Processed", "Rejected"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn claim_fields() -> serde_json::Value {
+    json!([
+        { "key": "date_of_loss", "entity_type": "claim", "label": "Date of Loss", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "date_reported", "entity_type": "claim", "label": "Date Reported", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "loss_type", "entity_type": "claim", "label": "Loss Type", "field_type": "select", "options": ["Collision", "Fire", "Theft", "Water Damage", "Wind/Hail", "Liability - Bodily Injury", "Liability - Property Damage", "Vandalism", "Weather/Catastrophe", "Workers Comp Injury", "Other"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "description_of_loss", "entity_type": "claim", "label": "Description of Loss", "field_type": "text", "options": [], "required": true, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Claim closure follow-up" workflow and the "Claim
+        // payout documentation" business rule below.
+        { "key": "claim_status", "entity_type": "claim", "label": "Status", "field_type": "select", "options": ["New", "Under Investigation", "Pending Documentation", "Approved", "Denied", "In Litigation", "Closed - Paid", "Closed - Denied", "Reopened"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "New", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reserve_amount", "entity_type": "claim", "label": "Total Reserve", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 5, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": "The claim's own headline reserve figure - see the Loss Reserves related list for the itemized Indemnity/Expense/Legal breakdown.", "placeholder": null },
+        // Required-when-Closed-Paid by the "Claim payout documentation" rule below.
+        { "key": "paid_amount", "entity_type": "claim", "label": "Total Paid", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 6, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "SIU referral escalation" workflow below.
+        { "key": "fraud_referral", "entity_type": "claim", "label": "Fraud Referral", "field_type": "select", "options": ["No", "Under Review", "Confirmed - SIU"], "required": false, "show_in_list": false, "sort_order": 7, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "No", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "litigation_flag", "entity_type": "claim", "label": "Litigation", "field_type": "select", "options": ["No", "Yes - Pending", "Yes - Resolved"], "required": false, "show_in_list": false, "sort_order": 8, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "No", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn claimant_fields() -> serde_json::Value {
+    json!([
+        { "key": "claimant_type", "entity_type": "claimant", "label": "Claimant Type", "field_type": "select", "options": ["First Party - Named Insured", "First Party - Additional Insured", "Third Party"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "relationship_to_insured", "entity_type": "claimant", "label": "Relationship to Insured", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "injury_involved", "entity_type": "claimant", "label": "Injury Involved", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Attorney representation" business rule below.
+        { "key": "represented_by_attorney", "entity_type": "claimant", "label": "Represented by Attorney", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "attorney_name", "entity_type": "claimant", "label": "Attorney Name", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn loss_reserve_fields() -> serde_json::Value {
+    json!([
+        { "key": "reserve_type", "entity_type": "loss_reserve", "label": "Reserve Type", "field_type": "select", "options": ["Indemnity", "Expense", "Legal/Defense"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reserve_amount", "entity_type": "loss_reserve", "label": "Reserve Amount", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reserve_date", "entity_type": "loss_reserve", "label": "Reserve Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reserve_reason", "entity_type": "loss_reserve", "label": "Reason", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn claim_payment_fields() -> serde_json::Value {
+    json!([
+        { "key": "payment_type", "entity_type": "claim_payment", "label": "Payment Type", "field_type": "select", "options": ["Indemnity", "Expense", "Deductible Recovery", "Subrogation Recovery", "Salvage Recovery"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "payee_type", "entity_type": "claim_payment", "label": "Payee", "field_type": "select", "options": ["Insured", "Claimant", "Third Party", "Vendor/Repair Shop", "Attorney"], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "payment_amount", "entity_type": "claim_payment", "label": "Payment Amount", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "payment_date", "entity_type": "claim_payment", "label": "Payment Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "payment_status", "entity_type": "claim_payment", "label": "Status", "field_type": "select", "options": ["Issued", "Voided", "Reissued", "Stopped"], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Issued", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "check_number", "entity_type": "claim_payment", "label": "Check/Reference Number", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn adjuster_assignment_fields() -> serde_json::Value {
+    json!([
+        { "key": "adjuster_role", "entity_type": "adjuster_assignment", "label": "Adjuster Role", "field_type": "select", "options": ["Desk Adjuster", "Field Adjuster", "Independent Adjuster", "SIU Investigator", "Appraiser"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "assigned_date", "entity_type": "adjuster_assignment", "label": "Assigned Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "assignment_status", "entity_type": "adjuster_assignment", "label": "Status", "field_type": "select", "options": ["Assigned", "Active", "Completed", "Reassigned"], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Assigned", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "notes", "entity_type": "adjuster_assignment", "label": "Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn subrogation_fields() -> serde_json::Value {
+    json!([
+        // Drives the "Subrogation recovery documentation" business rule below.
+        { "key": "subrogation_status", "entity_type": "subrogation", "label": "Status", "field_type": "select", "options": ["Identified", "Demand Sent", "In Negotiation", "Recovered", "Closed - No Recovery"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Identified", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "demand_amount", "entity_type": "subrogation", "label": "Demand Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Recovered by the "Subrogation recovery documentation" rule below.
+        { "key": "recovered_amount", "entity_type": "subrogation", "label": "Recovered Amount", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "responsible_party_description", "entity_type": "subrogation", "label": "Responsible Party", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: `screen_layouts` above and every test
+/// in `policy_admin_claims_reference_package.rs` that resolves a
+/// relationship by source/target pair reference these by position.
+fn policy_admin_claims_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "policy", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Named Insured", "reverse_label": "Policies", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "coverage", "target_entity_type": "policy", "relationship_type": "many_to_one", "forward_label": "Policy", "reverse_label": "Coverages", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 2 */ { "source_entity_type": "insured_risk", "target_entity_type": "policy", "relationship_type": "many_to_one", "forward_label": "Policy", "reverse_label": "Insured Risks", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 1 },
+        /* 3 */ { "source_entity_type": "coverage", "target_entity_type": "insured_risk", "relationship_type": "many_to_one", "forward_label": "Insured Risk", "reverse_label": "Coverages", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 4 */ { "source_entity_type": "endorsement", "target_entity_type": "policy", "relationship_type": "many_to_one", "forward_label": "Policy", "reverse_label": "Endorsements", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 2 },
+        /* 5 */ { "source_entity_type": "claim", "target_entity_type": "policy", "relationship_type": "many_to_one", "forward_label": "Policy", "reverse_label": "Claims", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        /* 6 */ { "source_entity_type": "claim", "target_entity_type": "insured_risk", "relationship_type": "many_to_one", "forward_label": "Insured Risk", "reverse_label": "Claims", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 7 */ { "source_entity_type": "claimant", "target_entity_type": "claim", "relationship_type": "many_to_one", "forward_label": "Claim", "reverse_label": "Claimants", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 8 */ { "source_entity_type": "loss_reserve", "target_entity_type": "claim", "relationship_type": "many_to_one", "forward_label": "Claim", "reverse_label": "Loss Reserves", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 1 },
+        /* 9 */ { "source_entity_type": "claim_payment", "target_entity_type": "claim", "relationship_type": "many_to_one", "forward_label": "Claim", "reverse_label": "Payments", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 2 },
+        /* 10 */ { "source_entity_type": "adjuster_assignment", "target_entity_type": "claim", "relationship_type": "many_to_one", "forward_label": "Claim", "reverse_label": "Adjuster Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 3 },
+        /* 11 */ { "source_entity_type": "adjuster_assignment", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Adjusting Firm", "reverse_label": "Adjuster Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 12 */ { "source_entity_type": "subrogation", "target_entity_type": "claim", "relationship_type": "many_to_one", "forward_label": "Claim", "reverse_label": "Subrogation", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 4 },
+        /* 13 */ { "source_entity_type": "subrogation", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Responsible Party Insurer", "reverse_label": "Subrogation Cases", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 }
+    ])
+}
+
+fn policy_admin_claims_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "policy",
+            "name": "Policy date validation",
+            "description": "A policy's expiration date must be after its effective date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "expiration_date", "operator": "on_or_before", "value": "", "compare_field_source": "custom", "compare_field_key": "effective_date" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Policy expiration date must be after the effective date." }
+            ]
+        },
+        {
+            "entity_type": "claim",
+            "name": "Claim payout documentation",
+            "description": "A claim closed as paid must record the amount paid.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "equals", "value": "Closed - Paid" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "paid_amount", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "claimant",
+            "name": "Attorney representation",
+            "description": "A claimant represented by an attorney must record the attorney's name.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "represented_by_attorney", "operator": "equals", "value": "true" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "attorney_name", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "subrogation",
+            "name": "Subrogation recovery documentation",
+            "description": "A subrogation case marked Recovered must record the amount recovered.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "subrogation_status", "operator": "equals", "value": "Recovered" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "recovered_amount", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// None of these reach for `update_related_record` - unlike Property
+/// Management's lease/unit pair, nothing in this object model has an
+/// obvious single field on a *related* record that a claim or policy
+/// event should just overwrite (a coverage's own status doesn't follow
+/// mechanically from its policy being bound, the way a unit's occupancy
+/// follows from its lease being active). Every workflow here creates a
+/// task instead - the same fallback Property Management's own "Maintenance
+/// intake" and Auto Repair's "No show"/"Parts backordered" workflows use.
+fn policy_admin_claims_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "policy",
+            "name": "Policy bound",
+            "description": "Binding a policy creates a task to issue documents to the named insured.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "policy_stage",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "policy_stage", "operator": "equals", "value": "Bound" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Issue policy documents to the named insured\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "claim",
+            "name": "Claim intake",
+            "description": "A newly reported claim gets a task to assign an adjuster and begin investigation.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Assign an adjuster and begin investigation\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "claim",
+            "name": "SIU referral escalation",
+            "description": "A claim confirmed for SIU referral gets an escalation task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "fraud_referral",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "fraud_referral", "operator": "equals", "value": "Confirmed - SIU" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Notify SIU and legal\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "claim",
+            "name": "Claim closure follow-up",
+            "description": "A closed claim (paid or denied) gets a task to send the closure letter.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "claim_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "claim_status", "operator": "in_list", "value": "Closed - Paid|Closed - Denied" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Send closure letter to claimant\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "endorsement",
+            "name": "Endorsement processed",
+            "description": "A processed endorsement gets a task to update billing for the premium change.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "endorsement_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "endorsement_status", "operator": "equals", "value": "Processed" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Update billing for the premium change\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
         }
     ])

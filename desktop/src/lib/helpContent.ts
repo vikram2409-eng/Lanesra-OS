@@ -620,9 +620,9 @@ export const HELP_CATEGORIES: HelpCategory[] = [
               "<p>This tab has three panels: <b>Import a package</b>, <b>Imported packages</b>, and <b>Installed apps</b>. Importing - pasting a manifest or clicking a bundled starter - only adds it to this workspace's local catalog for review. Nothing is created until you click Install.</p>",
           },
           {
-            heading: "The 10 bundled starters",
+            heading: "The 11 bundled starters",
             bodyHtml:
-              "<p>One click each loads a ready-to-review manifest: Field Service, Property Management, Construction &amp; Contractors, Professional Services, Practice Administration, Recruitment &amp; Staffing, Real Estate Brokerage, Legal Practice, Nonprofit &amp; Association Management, and Auto Repair &amp; Service Garage. Loading a starter just fills the Import box - you still choose whether to Import and Install it.</p>",
+              "<p>One click each loads a ready-to-review manifest: Field Service, Property Management, Construction &amp; Contractors, Professional Services, Practice Administration, Recruitment &amp; Staffing, Real Estate Brokerage, Legal Practice, Nonprofit &amp; Association Management, Auto Repair &amp; Service Garage, and Policy Administration &amp; Claims Management. Loading a starter just fills the Import box - you still choose whether to Import and Install it.</p>",
           },
           {
             heading: "Review before you commit",
