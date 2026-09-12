@@ -2915,6 +2915,15 @@ function freshFieldDef(entity,key,label,type,options){
  return {id:uid(),entity,key,label,type,options:options||'',active:true,defaultValue:'',unique:false,helpText:'',placeholder:'',required:false,maxLength:null,pattern:'',minValue:'',maxValue:'',searchable:false,filterable:false,reportable:true,hiddenByDefault:false};
 }
 const REFERENCE_PACKAGES={
+ // Deepened alongside the desktop edition's own field_service_manifest_json
+ // (see that function's own doc comment for the real FSM systems - ServiceTitan,
+ // Salesforce Field Service Lightning - it's now checked against): Estimate and
+ // Maintenance Plan carry over, each trimmed to its own status field + one or
+ // two more, the same ratio every other reduced-mirror package below uses.
+ // Estimate Line and Time Entry are left out of this demo entirely - both are
+ // plain child-record objects (line items, labor hours) this demo already
+ // omits the equivalent of elsewhere (no work_order_line here either), not a
+ // new engine gap.
  field_service:{
   packageId:'lanesra.field_service',name:'Field Service',industry:'Field Service',version:'1.0.0',
   description:'Sites, assets, work orders and appointments for a field service crew - dispatch work, track what was serviced, and close out completed jobs.',
@@ -2925,6 +2934,8 @@ const REFERENCE_PACKAGES={
    {key:'work_order',label:'Work Order',labelPlural:'Work Orders',icon:'🛠️',prefix:'WO',digits:4},
    {key:'service_appointment',label:'Appointment',labelPlural:'Appointments',icon:'📅',prefix:'APT',digits:4},
    {key:'warranty_claim',label:'Warranty Claim',labelPlural:'Warranty Claims',icon:'🧾',prefix:'WC',digits:5},
+   {key:'service_estimate',label:'Estimate',labelPlural:'Estimates',icon:'📝',prefix:'EST',digits:5},
+   {key:'maintenance_plan',label:'Maintenance Plan',labelPlural:'Maintenance Plans',icon:'🔁',prefix:'MPL',digits:4},
   ],
   fields:[
    ['service_site','address','Address','text'],['service_site','city','City','text'],
@@ -2938,6 +2949,10 @@ const REFERENCE_PACKAGES={
    ['service_appointment','outcome','Outcome','text'],
    ['warranty_claim','claim_status','Status','select','Draft|Submitted|Approved|Denied|Reimbursed'],
    ['warranty_claim','resolution_notes','Resolution Notes','text'],['warranty_claim','amount_approved','Amount Approved','number'],
+   ['service_estimate','estimate_status','Status','select','Draft|Presented|Approved|Declined|Expired'],
+   ['service_estimate','total_amount','Total','number'],
+   ['maintenance_plan','plan_status','Status','select','Active|Expired|Cancelled'],
+   ['maintenance_plan','auto_renew','Auto-Renew','select','Yes|No'],['maintenance_plan','end_date','End Date','date'],
   ],
   relationships:[
    {source:'work_order',target:'service_site',relType:'many_to_one',forwardLabel:'Service Site',reverseLabel:'Work Orders'},
@@ -2945,6 +2960,10 @@ const REFERENCE_PACKAGES={
    {source:'service_appointment',target:'work_order',relType:'many_to_one',forwardLabel:'Work Order',reverseLabel:'Appointments'},
    {source:'warranty_claim',target:'asset',relType:'many_to_one',forwardLabel:'Asset',reverseLabel:'Warranty Claims'},
    {source:'work_order',target:'Company',relType:'many_to_one',forwardLabel:'Customer',reverseLabel:'Work Orders'},
+   {source:'service_estimate',target:'Company',relType:'many_to_one',forwardLabel:'Customer',reverseLabel:'Estimates'},
+   {source:'work_order',target:'service_estimate',relType:'many_to_one',forwardLabel:'Originating Estimate',reverseLabel:'Work Orders Created'},
+   {source:'maintenance_plan',target:'Company',relType:'many_to_one',forwardLabel:'Customer',reverseLabel:'Maintenance Plans'},
+   {source:'asset',target:'maintenance_plan',relType:'many_to_one',forwardLabel:'Covered By Plan',reverseLabel:'Covered Assets'},
   ],
   rules:[
    {entity:'work_order',matchType:'all',
@@ -2959,6 +2978,12 @@ const REFERENCE_PACKAGES={
    {entity:'warranty_claim',matchType:'all',
     conditions:[{fieldKey:'claim_status',operator:'equals',value:'Reimbursed',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'amount_approved',value:'',message:''}]},
+   {entity:'service_estimate',matchType:'all',
+    conditions:[{fieldKey:'estimate_status',operator:'equals',value:'Approved',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'total_amount',value:'',message:''}]},
+   {entity:'maintenance_plan',matchType:'all',
+    conditions:[{fieldKey:'auto_renew',operator:'equals',value:'No',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'end_date',value:'',message:''}]},
   ],
   workflows:[
    {entity:'work_order',matchType:'all',notify:true,
@@ -2967,6 +2992,15 @@ const REFERENCE_PACKAGES={
    {entity:'warranty_claim',matchType:'all',notify:true,
     conditions:[{fieldKey:'claim_status',operator:'equals',value:'Submitted',compareField:null,groupId:null}],
     actions:[{type:'create_task',taskTitle:'Review warranty claim',daysOffset:2}]},
+   {entity:'service_estimate',matchType:'all',notify:false,
+    conditions:[{fieldKey:'estimate_status',operator:'equals',value:'Presented',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Follow up with customer on estimate',daysOffset:2}]},
+   {entity:'service_estimate',matchType:'all',notify:true,
+    conditions:[{fieldKey:'estimate_status',operator:'equals',value:'Approved',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Schedule a work order from this approved estimate',daysOffset:1}]},
+   {entity:'maintenance_plan',matchType:'all',notify:false,
+    conditions:[{fieldKey:'plan_status',operator:'equals',value:'Cancelled',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Confirm cancellation and stop billing',daysOffset:1}]},
   ],
  },
  property_management:{

@@ -19,6 +19,13 @@
 //! ClaimCenter, Duck Creek, and the ACORD data standards) its object
 //! model and vocabulary are checked against.
 //!
+//! `field_service_manifest_json` was later deepened past its original
+//! ten-vertical scope, on direct product request to check it against how
+//! real field service management (FSM) software actually shapes this
+//! data - ServiceTitan and Salesforce Field Service Lightning - rather
+//! than stopping at the spec's original Work Order/Appointment/Asset
+//! core. See that function's own doc comment for what was added and why.
+//!
 //! A twelfth package, Lanesra Industry Foundation
 //! (`lanesra_industry_foundation_manifest_json`), is different in kind
 //! from the eleven above it: it's shared cross-industry plumbing (Party,
@@ -147,7 +154,11 @@
 //!   a parent link is genuinely part of the spec (Lanesra Industry
 //!   Foundation's own Organization Unit), recorded as a plain unenforced
 //!   text field instead of a real link; see
-//!   `lanesra_industry_foundation_manifest_json`'s own doc comment.
+//!   `lanesra_industry_foundation_manifest_json`'s own doc comment. Field
+//!   Service's own "callback job points back at the original Work Order"
+//!   hits the same gap and is modeled as a plain boolean flag
+//!   (`is_callback`) instead, with no link to which earlier Work Order it
+//!   was a callback for; see `field_service_fields`'s own doc comment.
 //! - A generic polymorphic relationship target - "this record relates to
 //!   *any* other record, of whatever type" (a document attached to a
 //!   policy or a claim or a matter; an external identifier for whatever
@@ -170,6 +181,35 @@ use serde_json::json;
 /// starter package" button does the latter, matching the spec's own
 /// Review -> Validate -> Install flow instead of a silent one-click
 /// install).
+///
+/// Deepened past the original ten-vertical spec's Work Order/Appointment/
+/// Asset/Warranty Claim core, checked against how ServiceTitan and
+/// Salesforce Field Service Lightning actually shape the rest of a real
+/// FSM business:
+/// - `service_estimate` / `service_estimate_line` - both tools separate a
+///   pre-authorization estimate (options presented to the customer, with
+///   its own approve/decline lifecycle) from the eventual job; a Work
+///   Order can now optionally point back at the estimate it was created
+///   from, the same "document that precedes and can become another
+///   document" shape Field Service's own `work_order_line` already uses
+///   for its own object.
+/// - `maintenance_plan` - ServiceTitan's "Membership"/recurring service
+///   agreement and Salesforce's "Maintenance Plan": a contracted, ongoing
+///   revenue relationship distinct from a one-off Work Order, which an
+///   Asset can optionally be covered by and a Work Order can optionally
+///   be generated under. Recurring Work Order *generation* on a schedule
+///   would need a `date_reached` trigger on a custom object's own date
+///   field - this engine doesn't have one (see this module's own doc
+///   comment) - so which visits happen when stays a dispatcher decision;
+///   the plan only records the agreement's own terms and which asset/
+///   customer it covers.
+/// - `time_entry` - per-technician labor hours against a Work Order, the
+///   basic unit both tools use for job costing and payroll, entirely
+///   absent from the original model.
+/// - `work_order.is_callback` - both tools track whether a job is a
+///   return visit for unresolved prior work, a real quality metric; see
+///   this module's own doc comment for why it isn't linked back to the
+///   original Work Order.
 pub fn field_service_manifest_json() -> String {
     json!({
         "format_version": 1,
@@ -189,7 +229,11 @@ pub fn field_service_manifest_json() -> String {
             { "key": "resource_profile", "singular_label": "Resource Profile", "plural_label": "Resource Profiles", "icon": "🧑‍🔧", "prefix": "RES", "digits": 4 },
             { "key": "skill", "singular_label": "Skill", "plural_label": "Skills", "icon": "🎓", "prefix": "SKL", "digits": 3 },
             { "key": "service_territory", "singular_label": "Service Territory", "plural_label": "Service Territories", "icon": "🗺", "prefix": "TER", "digits": 3 },
-            { "key": "warranty_claim", "singular_label": "Warranty Claim", "plural_label": "Warranty Claims", "icon": "🧾", "prefix": "WC", "digits": 5 }
+            { "key": "warranty_claim", "singular_label": "Warranty Claim", "plural_label": "Warranty Claims", "icon": "🧾", "prefix": "WC", "digits": 5 },
+            { "key": "service_estimate", "singular_label": "Estimate", "plural_label": "Estimates", "icon": "📝", "prefix": "EST", "digits": 5 },
+            { "key": "service_estimate_line", "singular_label": "Estimate Line", "plural_label": "Estimate Lines", "icon": "📄", "prefix": "ESL", "digits": 5 },
+            { "key": "maintenance_plan", "singular_label": "Maintenance Plan", "plural_label": "Maintenance Plans", "icon": "🔁", "prefix": "MPL", "digits": 4 },
+            { "key": "field_time_entry", "singular_label": "Time Entry", "plural_label": "Time Entries", "icon": "⏱", "prefix": "FTE", "digits": 6 }
         ],
         "fields": field_service_fields(),
         "relationships": field_service_relationships(),
@@ -209,7 +253,7 @@ pub fn field_service_manifest_json() -> String {
                                     "id": "overview",
                                     "title": "Overview",
                                     "columns": 2,
-                                    "fields": ["description", "stage", "priority", "requested_date", "resolution", "completion_date"]
+                                    "fields": ["description", "stage", "priority", "requested_date", "resolution", "completion_date", "is_callback"]
                                 }
                             ],
                             // Indices into `relationships` below: Asset (4), Appointments (6), Lines (5) -
@@ -219,15 +263,37 @@ pub fn field_service_manifest_json() -> String {
                     ]
                 },
                 "publish": true
+            },
+            {
+                "entity_type": "service_estimate",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "overview",
+                            "title": "Overview",
+                            "sections": [
+                                { "id": "details", "title": "Details", "columns": 2, "fields": ["estimate_status", "subtotal_amount", "tax_amount", "total_amount", "presented_date", "approved_date", "decline_reason"] }
+                            ],
+                            // Indices into `relationships` below: Estimate Lines (15), Work Orders Created (17).
+                            "related": ["15", "17"]
+                        }
+                    ]
+                },
+                "publish": true
             }
         ],
         "reports": [
-            { "name": "Work Orders by Stage", "entity_type": "work_order", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null }
+            { "name": "Work Orders by Stage", "entity_type": "work_order", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null },
+            { "name": "Estimates by Status", "entity_type": "service_estimate", "group_by_source": "custom", "group_by_field": "estimate_status", "aggregate": "count", "sum_field_key": null },
+            { "name": "Maintenance Plans by Status", "entity_type": "maintenance_plan", "group_by_source": "custom", "group_by_field": "plan_status", "aggregate": "count", "sum_field_key": null }
         ],
         "dashboard": {
             "name": "Field Service Dashboard",
             "widgets": [
-                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } },
+                { "kind": "chart", "config": { "report_ref": 1, "chart_type": "bar" } },
+                { "kind": "chart", "config": { "report_ref": 2, "chart_type": "bar" } }
             ],
             "publish": true
         },
@@ -238,7 +304,8 @@ pub fn field_service_manifest_json() -> String {
             "description": "Dispatch, work orders, assets and service appointments for on-site service businesses.",
             "object_keys": [
                 "work_order", "service_appointment", "asset", "service_site", "work_order_line",
-                "work_type", "resource_profile", "skill", "service_territory", "warranty_claim", "Task"
+                "work_type", "resource_profile", "skill", "service_territory", "warranty_claim",
+                "service_estimate", "service_estimate_line", "maintenance_plan", "field_time_entry", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -294,6 +361,10 @@ fn field_service_fields() -> serde_json::Value {
         skill_fields(),
         service_territory_fields(),
         warranty_claim_fields(),
+        service_estimate_fields(),
+        service_estimate_line_fields(),
+        maintenance_plan_fields(),
+        field_time_entry_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -340,7 +411,13 @@ fn work_order_fields() -> serde_json::Value {
         { "key": "description", "entity_type": "work_order", "label": "Description", "field_type": "text", "options": [], "required": true, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
         // Required-when-Completed by the "Completion validation" business rule below.
         { "key": "resolution", "entity_type": "work_order", "label": "Resolution", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
-        { "key": "completion_date", "entity_type": "work_order", "label": "Completion Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+        { "key": "completion_date", "entity_type": "work_order", "label": "Completion Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // See this module's own doc comment: a self-referential
+        // relationship back to the original Work Order isn't possible
+        // (`source_entity_type == target_entity_type` is rejected), so a
+        // callback is flagged here rather than linked to what it was a
+        // callback for.
+        { "key": "is_callback", "entity_type": "work_order", "label": "Callback", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "false", "is_unique": false, "help_text": "A return visit for unresolved prior work, not a new issue.", "placeholder": null }
     ])
 }
 
@@ -396,8 +473,71 @@ fn warranty_claim_fields() -> serde_json::Value {
     ])
 }
 
+fn service_estimate_fields() -> serde_json::Value {
+    json!([
+        { "key": "estimate_status", "entity_type": "service_estimate", "label": "Status", "field_type": "select", "options": ["Draft", "Presented", "Approved", "Declined", "Expired"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "subtotal_amount", "entity_type": "service_estimate", "label": "Subtotal", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "tax_amount", "entity_type": "service_estimate", "label": "Tax", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Approved by the "Estimate approval requires totals" business rule below.
+        { "key": "total_amount", "entity_type": "service_estimate", "label": "Total", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "presented_date", "entity_type": "service_estimate", "label": "Presented Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Approved by the "Estimate approval requires totals" business rule below.
+        { "key": "approved_date", "entity_type": "service_estimate", "label": "Approved Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Declined by the "Estimate decline requires reason" business rule below.
+        { "key": "decline_reason", "entity_type": "service_estimate", "label": "Decline Reason", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn service_estimate_line_fields() -> serde_json::Value {
+    json!([
+        { "key": "line_description", "entity_type": "service_estimate_line", "label": "Description", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "quantity", "entity_type": "service_estimate_line", "label": "Quantity", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "1", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "unit_price", "entity_type": "service_estimate_line", "label": "Unit Price", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // A plain field the estimator enters, not a rollup - this engine
+        // has no aggregate/computed field type (see this module's own doc
+        // comment; `work_order_line` has the identical gap already).
+        { "key": "line_total", "entity_type": "service_estimate_line", "label": "Line Total", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn maintenance_plan_fields() -> serde_json::Value {
+    json!([
+        { "key": "plan_status", "entity_type": "maintenance_plan", "label": "Status", "field_type": "select", "options": ["Active", "Expired", "Cancelled"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "plan_type", "entity_type": "maintenance_plan", "label": "Plan Type", "field_type": "select", "options": ["Annual Tune-Up", "Quarterly Filter Change", "Custom"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "start_date", "entity_type": "maintenance_plan", "label": "Start Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-non-renewing by the "Non-renewing plan requires an end date" business rule below.
+        { "key": "end_date", "entity_type": "maintenance_plan", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "visit_frequency", "entity_type": "maintenance_plan", "label": "Visit Frequency", "field_type": "select", "options": ["Monthly", "Quarterly", "Semi-Annual", "Annual"], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "included_visits_per_term", "entity_type": "maintenance_plan", "label": "Included Visits per Term", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Manually incremented by a dispatcher - `update_related_record`
+        // only ever sets a literal or a copied value, it never reads and
+        // increments a target's current value (see this module's own doc
+        // comment), so there's no automated way to bump this when a
+        // covered Work Order completes.
+        { "key": "visits_used", "entity_type": "maintenance_plan", "label": "Visits Used This Term", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 6, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "0", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "auto_renew", "entity_type": "maintenance_plan", "label": "Auto-Renew", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 7, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "annual_value", "entity_type": "maintenance_plan", "label": "Annual Value", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 8, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+// Named field_time_entry, not time_entry - Professional Services already
+// claims that object key for its own billable-hours object (and Legal
+// Practice's own equivalent is `matter_time_entry` for the identical
+// reason); see this module's own doc comment on workspace-wide object
+// key uniqueness.
+fn field_time_entry_fields() -> serde_json::Value {
+    json!([
+        { "key": "entry_date", "entity_type": "field_time_entry", "label": "Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "hours", "entity_type": "field_time_entry", "label": "Hours", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": "24", "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Overtime requires justification" business rule below.
+        { "key": "labor_type", "entity_type": "field_time_entry", "label": "Labor Type", "field_type": "select", "options": ["Standard", "Overtime", "Travel"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Standard", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "billable", "entity_type": "field_time_entry", "label": "Billable", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "true", "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Overtime by the "Overtime requires justification" business rule below.
+        { "key": "notes", "entity_type": "field_time_entry", "label": "Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: `screen_layouts[0].draft`'s `related`
-/// and both `update_related_record` workflow actions reference these
 /// relationships by their position in this array (see this module's own
 /// doc comment / `IndustryPackageManifest::workflows`' doc comment).
 fn field_service_relationships() -> serde_json::Value {
@@ -414,14 +554,29 @@ fn field_service_relationships() -> serde_json::Value {
         /* 9 */ { "source_entity_type": "work_order", "target_entity_type": "Contract", "relationship_type": "many_to_one", "forward_label": "Contract", "reverse_label": "Work Orders", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
         /* 10 */ { "source_entity_type": "work_order_line", "target_entity_type": "Product", "relationship_type": "many_to_one", "forward_label": "Product / Service", "reverse_label": "Work Order Lines", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 11 */ { "source_entity_type": "warranty_claim", "target_entity_type": "asset", "relationship_type": "many_to_one", "forward_label": "Asset", "reverse_label": "Warranty Claims", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
-        /* 12 */ { "source_entity_type": "warranty_claim", "target_entity_type": "work_order", "relationship_type": "many_to_one", "forward_label": "Work Order", "reverse_label": "Warranty Claims", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 }
+        /* 12 */ { "source_entity_type": "warranty_claim", "target_entity_type": "work_order", "relationship_type": "many_to_one", "forward_label": "Work Order", "reverse_label": "Warranty Claims", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 13 */ { "source_entity_type": "service_estimate", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Customer", "reverse_label": "Estimates", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 14 */ { "source_entity_type": "service_estimate", "target_entity_type": "service_site", "relationship_type": "many_to_one", "forward_label": "Service Site", "reverse_label": "Estimates", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 15 */ { "source_entity_type": "service_estimate_line", "target_entity_type": "service_estimate", "relationship_type": "many_to_one", "forward_label": "Estimate", "reverse_label": "Lines", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 16 */ { "source_entity_type": "service_estimate_line", "target_entity_type": "Product", "relationship_type": "many_to_one", "forward_label": "Product / Service", "reverse_label": "Estimate Lines", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        // work_order's own sort_order sequence continues from index 9 above (Contract, sort_order 3).
+        /* 17 */ { "source_entity_type": "work_order", "target_entity_type": "service_estimate", "relationship_type": "many_to_one", "forward_label": "Originating Estimate", "reverse_label": "Work Orders Created", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
+        /* 18 */ { "source_entity_type": "maintenance_plan", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Customer", "reverse_label": "Maintenance Plans", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        // asset's own sort_order sequence continues from index 1 above (Service Site, sort_order 0).
+        /* 19 */ { "source_entity_type": "asset", "target_entity_type": "maintenance_plan", "relationship_type": "many_to_one", "forward_label": "Covered By Plan", "reverse_label": "Covered Assets", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 20 */ { "source_entity_type": "work_order", "target_entity_type": "maintenance_plan", "relationship_type": "many_to_one", "forward_label": "Maintenance Plan", "reverse_label": "Work Orders", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 5 },
+        /* 21 */ { "source_entity_type": "field_time_entry", "target_entity_type": "work_order", "relationship_type": "many_to_one", "forward_label": "Work Order", "reverse_label": "Time Entries", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 22 */ { "source_entity_type": "field_time_entry", "target_entity_type": "resource_profile", "relationship_type": "many_to_one", "forward_label": "Technician", "reverse_label": "Time Entries", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 }
     ])
 }
 
-/// Only the two spec rules a same-record condition/action engine can
-/// actually express - "Asset/site integrity" and "Warranty warning" both
-/// need to read a *related* record's own fields, which conditions can't
-/// do; see this module's own doc comment.
+/// The original spec's rules are limited to the two a same-record
+/// condition/action engine can actually express - "Asset/site integrity"
+/// and "Warranty warning" both need to read a *related* record's own
+/// fields, which conditions can't do; see this module's own doc comment.
+/// The four below it were added with the Estimate/Maintenance Plan/Time
+/// Entry deepening (see `field_service_manifest_json`'s own doc comment)
+/// and hold to the same limit.
 fn field_service_business_rules() -> serde_json::Value {
     json!([
         {
@@ -486,12 +641,73 @@ fn field_service_business_rules() -> serde_json::Value {
             "actions": [
                 { "action_type": "require", "target_field_key": "amount_approved", "target_field_source": "custom", "action_value": null, "message": null }
             ]
+        },
+        {
+            "entity_type": "service_estimate",
+            "name": "Estimate approval requires totals",
+            "description": "An approved estimate must record its total amount and approval date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "estimate_status", "operator": "equals", "value": "Approved" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "total_amount", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "approved_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "service_estimate",
+            "name": "Estimate decline requires reason",
+            "description": "A declined estimate must record why.",
+            "match_type": "all",
+            "priority": 1,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "estimate_status", "operator": "equals", "value": "Declined" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "decline_reason", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "maintenance_plan",
+            "name": "Non-renewing plan requires an end date",
+            "description": "A plan that won't auto-renew must record when it ends.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "auto_renew", "operator": "equals", "value": "false" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "end_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "field_time_entry",
+            "name": "Overtime requires justification",
+            "description": "An overtime time entry must record why the extra hours were needed.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "labor_type", "operator": "equals", "value": "Overtime" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "notes", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
         }
     ])
 }
 
-/// Two of the spec's five workflows. Left out, beyond the two already
-/// noted in this module's own doc comment:
+/// Only two of the original spec's five workflows. Left out, beyond the
+/// two already noted in this module's own doc comment:
 /// - "Technician departure" - no activity-log action exists to write to.
 /// - "Preventive maintenance" - needs a `date_reached` trigger on a
 ///   custom object's own date field, which the engine doesn't support.
@@ -506,6 +722,12 @@ fn field_service_business_rules() -> serde_json::Value {
 ///   not a useful automation. "Work completed updates asset" below
 ///   avoids this because linking an Asset to its Work Order naturally
 ///   happens well before that Work Order is later marked Completed.
+///
+/// The three after "Warranty claim submitted" were added with the
+/// Estimate/Maintenance Plan deepening (see `field_service_manifest_json`'s
+/// own doc comment). "Plan expiring soon" would need the same
+/// unsupported `date_reached` trigger as "Preventive maintenance" above,
+/// so it's left out for the identical reason.
 fn field_service_workflows() -> serde_json::Value {
     json!([
         {
@@ -560,6 +782,61 @@ fn field_service_workflows() -> serde_json::Value {
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Review warranty claim\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" },
                 { "action_type": "add_notification", "params_json": "{\"message\":\"A warranty claim was submitted\",\"audience\":\"all_admins\"}" }
+            ]
+        },
+        {
+            "entity_type": "service_estimate",
+            "name": "Estimate presented",
+            "description": "Presenting an estimate to the customer opens a follow-up task.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "estimate_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "estimate_status", "operator": "equals", "value": "Presented" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Follow up with customer on estimate\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "service_estimate",
+            "name": "Estimate approved",
+            "description": "An approved estimate needs its work order scheduled and lets the service manager know.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "estimate_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "estimate_status", "operator": "equals", "value": "Approved" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Schedule a work order from this approved estimate\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" },
+                { "action_type": "add_notification", "params_json": "{\"message\":\"An estimate was approved\",\"audience\":\"all_admins\"}" }
+            ]
+        },
+        {
+            "entity_type": "maintenance_plan",
+            "name": "Plan cancelled",
+            "description": "Cancelling a maintenance plan opens a task to confirm the cancellation and stop billing.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "plan_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "plan_status", "operator": "equals", "value": "Cancelled" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Confirm cancellation and stop billing\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
         }
     ])
