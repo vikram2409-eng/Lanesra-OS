@@ -375,7 +375,7 @@ title/H1 to a distinct long-tail modifier.
 og/twitter meta with a rasterized PNG preview image, llms.txt for AI-search discovery). Apply this
 agent to:
 - Running the on-page checklist above against every page (`homepage`, `/platform`, `/roadmap`,
-  `/releases`, `/download`, `/compare`, `/principles`) whenever copy changes, to catch title/H1
+  `/releases`, `/download`, `/compare`) whenever copy changes, to catch title/H1
   drift or duplicate primary-keyword cannibalization across pages that all describe the same
   product.
 - Auditing `sitemap.xml` and `netlify.toml`/redirects for orphaned or stale routes whenever pages
