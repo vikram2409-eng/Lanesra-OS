@@ -68,7 +68,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - Principles: https://lanesraos.com/principles
 - Compare: https://lanesraos.com/compare
 - Download: https://lanesraos.com/download
-- Help & user guides: https://lanesraos.com/help
+- Documentation: https://lanesraos.com/help
 - Roadmap & backlog: https://lanesraos.com/roadmap
 - Releases: https://lanesraos.com/releases
 - Source: https://github.com/vikram2409-eng/Lanesra-OS

@@ -67,7 +67,7 @@ Customer records connect to contacts, opportunities, quotes, orders, invoices, c
 - https://lanesraos.com/principles
 - https://lanesraos.com/compare
 - https://lanesraos.com/download
-- https://lanesraos.com/help (detailed admin user guides, starting with the AI & Agentic Layer and Core CRM/No-Code Platform categories)
+- https://lanesraos.com/help (Documentation - detailed admin guides across all 5 categories: Agentic AI Foundry, Core CRM & No-Code Platform, Industry Data Model, Deployment Management, Integration Hub)
 - Desktop edition source: https://github.com/vikram2409-eng/Lanesra-OS/tree/main/desktop
 
 ## Creator

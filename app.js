@@ -6046,11 +6046,11 @@ function kpisTab(body){
  $('#showAllKpis').onclick=()=>{data.kpiPrefs=[];save();toast('Dashboard now shows every KPI');renderAdminTab()};
 }
 
-function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links"><a href="/platform">Platform</a><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/help">Help</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div class="nav-actions"><a class="btn btn-primary mobile-try" href="/demo">Try Online →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden><a href="/platform">Platform</a><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/help">Help</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a><hr><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
+function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links"><a href="/platform">Platform</a><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/help">Documentation</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div class="nav-actions"><a class="btn btn-primary mobile-try" href="/demo">Try Online →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden><a href="/platform">Platform</a><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/help">Documentation</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a><hr><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
 function publicFooter(){return `<footer class="footer"><div class="container footer-grid"><div><a class="brand footer-brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><span class="muted">The open-source platform for building your own business app - a complete CRM out of the box.</span></div><div><strong>Product</strong><a href="/platform">Platform</a><a href="/#features">Features</a><a href="/principles">Principles</a><a href="/compare">Compare</a><a href="/help">Help</a><a href="/download">Download</a></div><div><strong>Development</strong><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div><strong>Creator</strong><a href="https://vikramgrover.com">VikramGrover.com</a></div></div><div class="container footer-bottom"><span>© 2026 Lanesra OS</span><span>Created by Vikram Grover</span></div></footer>`}
 function roadmapPage(){
  document.title='Roadmap & Backlog — Lanesra OS';
- setPageMeta('Everything shipped in Lanesra OS - CRM, no-code platform, App Catalog, Deployment Management, Integration Hub, and the AI & Agentic Layer (BYO LLM key, MCP server, chat assistant, AI Agent Foundry, orchestration) - what\'s being built next, and what\'s still proposed. Compiled directly from the working codebase, not a wishlist.');
+ setPageMeta('Everything shipped in Lanesra OS - CRM, no-code platform, App Catalog, Deployment Management, Integration Hub, the AI & Agentic Layer (BYO LLM key, MCP server, chat assistant, AI Agent Foundry, orchestration), and full product documentation - what\'s being built next, and what\'s still proposed. Compiled directly from the working codebase, not a wishlist.');
  // Shipped work is organized two levels deep: a handful of PILLARS (the
  // real mental model - "what kind of thing is this") each containing a
  // few thematic CATEGORIES (what previously was the only level). Going
@@ -6073,6 +6073,7 @@ function roadmapPage(){
    ]],
   ['⌕','Admin, Search & Demo Parity','Finding records fast, keeping admins oriented across a growing Admin section, and making sure the browser demo never falls behind the desktop edition.',[
    ['⌕','Admin UX, search & list views',[['Customer 360 / Contact 360','A dedicated detail page for every company and contact — full field overview plus every linked record (contacts, opportunities, quotes, orders, invoices, contracts, tasks) one click away, replacing edit-modal-only access.'],['Admin landing page redesign & Admin UX polish','Admin no longer opens straight into a flat tab row — a categorized landing page (Workspace, Access, Customization, Automation, Integrations) routes straight into each builder on click, with a breadcrumb (Dashboard → Admin → tool) back to the landing page; the sidebar Admin icon always resets to it. Business Rules and Workflow Automation both gained Duplicate (clones a rule/workflow as an inactive draft, opened for review), a bounded version history (last 10 saves with a one-click Restore per version — restoring itself snapshots the state it replaces, so it\'s never a dead end), and a dependency warning before deactivating a custom field an active rule or workflow still reads or writes, listing exactly which ones. Shipped on both the online demo and the desktop app (Rust core + React). The last scoped item in the Admin Automation & Customization addendum.'],['Desktop: Global search & list-view filtering','A topbar search box (Companies, Contacts, Opportunities, Products, Quotes, Orders, Invoices, Contracts, Tasks, active custom objects, plus any custom field flagged Searchable) resolves matches to a real display name via the entity-registry dispatcher and jumps straight to the record, reusing the exact same one-shot openId navigation every ID hyperlink already uses. Every list screen also gained filter controls for whichever custom fields an admin flagged Filterable — a select/boolean field filters by exact match, text by case-insensitive contains — client-side against one bulk values fetch per screen. Gives the is_searchable/is_filterable capability flags their first real use since Phase E introduced them. Desktop only; the online demo\'s own simple ⌘K search stays unaffected, as planned.'],['Saved Views & Bulk Actions','Any list screen that already had per-field filtering — Companies, Contacts, Tasks, Opportunities, and every Custom Object\'s records — can now save its current filter/sort/column/grouping combination as a named view, Private or Shared, with an admin-settable object default; a saved view also feeds a dashboard record-list widget directly, narrowing it to that view\'s filters instead of showing every record. Bulk operations pair with the multi-select a saved view narrows to: update a status/stage (validated through the same Status Transition rules a single edit already goes through), reassign owner, add/remove tags, and archive — each offered only where the entity actually carries that field (Contacts have no owner field, for instance, so bulk reassign isn\'t offered there). Shipped on the desktop edition (Rust core: migration 0034, <code>saved_view_service</code>, <code>bulk_action_service</code>) and mirrored in the online demo — the same view/sort/group-by and bulk update-status/reassign-owner/export/delete operations against this demo\'s simpler status-and-owner field set, without a Private/Shared distinction or a per-custom-field filter, since the demo has neither a signed-in-user concept nor desktop\'s per-field list filtering to begin with.'],['Audit trail exposure: per-record created_by/updated_by + Activity view','The audit history every create/update/archive already wrote was captured but unreachable — no API exposed it, and no screen rendered it. Now closed end to end: a generic audit-history API (Tauri command + server dispatch), a reusable AuditTrail component wired into all 9 built-in entity detail/edit views and Custom Object records, and created_by/updated_by extended to the 7 admin metadata tables that previously lacked it. Shipped on the desktop edition and mirrored in the online demo where practical.']]],
+   ['📖','Documentation',[['Product Documentation: 5 categories, 32 articles, two surfaces','A full documentation system, not a wishlist item anymore - Agentic AI Foundry, Core CRM &amp; No-Code Platform, Industry Data Model, Deployment Management and Integration Hub, each with real step-by-step articles (real menu paths, field names and constraints verified against the working codebase, not written from memory). Ships in two independently-maintained places, matching this codebase\'s established demo/desktop convention: a public <a href="/help">Documentation</a> section on the website (crawlable, no login needed - pre-purchase evaluation and reference) and a searchable Help tab inside the desktop admin panel, context-linked with a "📖 Help" button from the builder each category documents (Custom Objects, AI Agents, App Catalog, Deployment Management, Integration Hub, Users).'],['Documentation redesign: the "Holy Trinity" reader layout','The public Documentation section rebuilt around the 3-column layout real technical docs use - a persistent left sidebar (every category and article, current one highlighted, plus a version indicator), a width-restricted center article with breadcrumbs, and a sticky right "On this page" table of contents with scroll-spy highlighting the section currently in view. A <b>⌘K / Ctrl+K</b> search palette indexes every article\'s title, summary and section headings for instant type-ahead, separate from the hub\'s own inline filter box. Collapses to a single column with native <code>&lt;details&gt;</code> disclosures for the sidebar and TOC below 1000px - no extra JS for the mobile behavior.'],['Documentation redesign: callouts, copyable code & feedback','Info/warning/danger admonition callouts now flag the genuinely risky steps inline (restoring a backup replaces the whole workspace, the last-Administrator lockout guard, an API client secret shown exactly once) instead of reading identically to routine text. Every code sample gets a one-click Copy button, and multi-language examples (calling the MCP server or the REST API) render as switchable tabs reusing the site\'s existing code-tabs component. A "Was this page helpful?" widget closes the loop for a maintainer - a Yes/No vote, with a follow-up note field on No - captured today as a static site honestly can: client-side, ready to wire to a real endpoint later. Prev/Next cards at the bottom of every article follow one flat reading order across all 5 categories, not just same-category siblings.']]],
    ['◧','Online demo parity',[['Online demo: full interactive parity','The browser demo at /demo mirrors everything above as real interactive features, not just changelog copy — its own Status Transitions tab, expanded workflow actions, Test rule/Test workflow panels, the redesigned rule-builder layout with a visual canvas, custom field extensibility, and Customer 360/Contact 360 detail pages.'],['Online demo: workflow-action & custom-field parity','Workflow "Create a new record" now offers all 9 built-in entities, not just 3, and "Update a related record" walks the relationship graph in both directions so every trigger entity gets its actual related-record options. Custom fields in the demo gained the same Required/Max length/Pattern/Min/Max/Searchable/Filterable/Reportable settings the desktop edition already had.'],['Online demo: Custom Objects','An Administrator can define a whole new business object at runtime from Admin → Custom Objects - its own icon, sidebar entry and ID format, no code change - and it works through the demo\'s existing Custom Fields, Business Rules, Status Transitions and Workflow Automation tabs exactly like a built-in entity. Delete is blocked while records exist; deactivate is always safe and reversible.'],['Online demo: Custom Relationships','An Administrator can connect any two object types - built-in or custom - from Admin → Relationships, with a cardinality (many-to-one/one-to-one/many-to-many), forward/reverse labels, and a delete behavior (Restrict or Archive). Every record\'s edit form gets a "Related records" panel showing every link from either direction, with inline Link/Unlink.'],['Online demo: Reports','A new Reports section in the browser demo with the desktop edition\'s full fixed report gallery (Revenue by month, Win rate by owner, Lost reasons, AR aging, Sales by owner) plus a Custom Reports builder that can group any built-in or custom object by its status/stage or a reportable custom field, count or sum, with CSV export on every report - closing the online demo\'s last desktop-parity gap.'],['Online demo: Screen layouts (no-code UI designer)','A new capability that doesn\'t exist on desktop either: from Admin → Screen layouts, an admin drag-orders any built-in or custom object\'s create/edit fields into named sections. Editing only ever touches a draft - the live form keeps its default order until Publish, and Preview shows the draft rendered before that. A scoped, demo-first version of the "No-code Screen/UI Designer" item still proposed below for the full desktop admin extensibility spec (which also covers detail-page and tab/column layouts).'],['Online demo: Integrations (UI-only simulation)','A new Admin → Integrations section, also new to the product rather than a desktop port: scheduled data Export/Import/Sync jobs against any object with a Run now simulation and per-job history, defined-and-exposed API endpoints with a Test call that returns real demo data as JSON, and configured external API connections with a Test request and call history. Everything is a local simulation against this browser\'s data - the static demo has no server, so it\'s built and labeled that way rather than faking a real backend.'],['Online demo: workflow self-updates + custom-object workflow fix','Workflow automation gained the desktop edition\'s update_field action - set another field on the same record a workflow just triggered on (e.g. Company status becomes Customer, so Industry gets set to Active), with the new value either fixed or copied live from another field. Also fixed a bug where workflow rules on admin-defined Custom Objects were creatable but silently never fired.'],['Online demo: mobile layout fix + stale favicon fix','The new record detail pages above overflowed horizontally on a phone - a nested overflow:auto table wrapper without min-width:0 on its containing grid, the same class of bug across Order/Invoice/Quote/Product/Contract detail; fixed to match Company/Contact 360\'s existing correct mobile behavior. Also fixed the browser tab favicon, which still drew a "B" glyph left over from the product\'s original BusinessOS name.']]],
    ]],
   ['✦','AI & Agentic Layer','Bring your own LLM key, then build on it — an MCP server for outside agents, a conversational assistant, a full AI Agent Foundry with memory, skills, actions, guardrails, delegation and orchestration (sequential, consensus or peer-review, with human-in-the-loop approval gates and a real Evaluation Harness), a Unified AI Gateway for multi-provider routing/failover/budgets, and a Context Layer for memory history, ranked search, an agent context primer and embeddings-based Vector Search.',[
@@ -6096,7 +6097,7 @@ function roadmapPage(){
  // item (App Catalog Details) - found by title rather than assumed to be
  // last in array order, so it can't silently point at the wrong thing
  // if categories get reordered later.
- const latestCatIndex=flatCats.findIndex(c=>c.title==='Context Layer');
+ const latestCatIndex=flatCats.findIndex(c=>c.title==='Documentation');
  const latestCat=flatCats[latestCatIndex];
  // Short chip/quick-nav label for a category: the part before an em dash
  // or colon, so "Screen/App Builder, Dashboards & App Builder" reads as
@@ -6114,7 +6115,6 @@ function roadmapPage(){
   ['Full drag-and-drop report builder','The shipped report builder covers pick-an-object → group-by-field (including custom fields) → count or sum. A richer builder — multiple group-bys, filters, joins across objects, a visual canvas — was scoped down to that simpler version by explicit choice.','Worth revisiting once real usage shows the count/sum + single group-by shape is genuinely too narrow.',null,'M–L'],
   ['Optional Google/Microsoft sign-in','Let a user log in with their Google or Microsoft identity alongside the existing local username/password, as an optional per-workspace toggle — local accounts remain the required baseline so offline use never depends on it.','Needs a decision first: since every workspace is self-hosted (not a shared Lanesra SaaS), each organization would have to register its own OAuth client — is that acceptable setup friction, or does this need a generic OIDC option instead of naming specific providers? Also unclear whether it applies to the Team Workspace server only, or the Tauri desktop app too (an OAuth redirect flow is awkward inside a native webview).',null,'M'],
   ['Code-signed Windows installer','The published installer is unsigned, so Windows SmartScreen flags it as an unknown publisher.','Mostly not a coding task: buy a certificate, add a signtool step to the release workflow. The real cost is procurement — identity verification lead time, a recurring fee — an ops/budget decision, not an engineering one.',null,'S (code) / ops-heavy'],
-  ['Product help documentation','Detailed, task-oriented admin guides for every feature — not just what a screen does, but how to configure and use it step by step (Business Rules, Workflow Automation, Custom Objects, Deployment Management, the AI & Agentic Layer, and everything else) — the same reference depth learn.microsoft.com or help.sap.com give their own admins. Two surfaces from one source of content: a searchable Help section inside Admin Settings, context-linked from each builder, and a public docs section on the website for pre-purchase evaluation and reference without logging in.','Needs a decision on where the content actually lives and how it stays in sync with a fast-moving codebase before this is scoped — hand-authored Markdown per feature (accurate, but only as good as the discipline to update it every time a feature ships or changes) vs. something generated or pulled from the same in-app context this product already maintains for its own AI agents (get_platform_overview, get_object_metadata, tool descriptions), so there isn\'t a second, divergent description of "how this feature works." Also open: whether it\'s a single canonical version shipped with the product or something a workspace can extend with its own internal notes, and how far to go on screenshots/video vs. text-only for a v1.',null,'L'],
  ];
  const futureIdeas=['Projects and milestones','Inventory and suppliers','Recurring invoices','Customer portal','Plugin architecture'];
 
@@ -6349,6 +6349,24 @@ function downloadPage(){document.title='Download — Lanesra OS';$('#app').inner
 //        Topic{slug,title,summary,sections:Section[]}
 //        Section{heading,bodyHtml} - bodyHtml is hand-authored semantic
 //        HTML (no markdown parser anywhere in this dependency-free file).
+//
+// DOCS_VERSION labels the single-version dropdown in the documentation
+// sidebar - there's only ever one version of this content (it ships with
+// whatever's on main), so the dropdown is honest about having one option
+// rather than faking a version picker with nothing behind it.
+const DOCS_VERSION='v0.52.0';
+// A tabbed, copyable code sample for a documentation article - reuses the
+// homepage's own .code-tabs/.code-tab-btn/.code-tab-body visual language
+// (see codeTabsHtml above) rather than a parallel component, generalized
+// to support any number of independent tab groups on the same page via an
+// explicit id (safe to call here, before enhanceDocsCode/bindDocsTabs are
+// textually defined below - function declarations are hoisted, and this
+// array literal is evaluated once, immediately, at script load).
+// tabs: [[label, codeHtml], ...] - codeHtml is pre-escaped HTML, same
+// convention as the rest of this file's hand-authored content strings.
+function docCodeTabsHtml(id,tabs){
+ return `<div class="docs-code-block"><div class="code-tabs" data-doc-tabgroup="${id}"><div class="code-tabs-nav">${tabs.map((t,i)=>`<button type="button" class="code-tab-btn${i===0?' active':''}" data-doc-tab="${i}">${t[0]}</button>`).join('')}</div>${tabs.map((t,i)=>`<pre class="code-tab-body" data-doc-tab-body="${i}" ${i===0?'':'hidden'}>${t[1]}</pre>`).join('')}</div><button type="button" class="docs-copy-btn" data-doc-copy>Copy</button></div>`;
+}
 const HELP_CATEGORIES=[
  {key:'ai-agent-foundry',label:'Agentic AI Foundry',icon:'🏭',
   blurb:'Connect an LLM, build named AI Agents with memory/skills/actions/guardrails, chain them into orchestrated Pipelines, route and budget them through the Unified AI Gateway, and extend the whole thing from outside the product.',
@@ -6359,7 +6377,7 @@ const HELP_CATEGORIES=[
      {heading:'Before you begin',bodyHtml:`<p>Nothing in the AI &amp; Agentic Layer works until a workspace has a configured LLM provider - the Chat Assistant, every AI Agent, every Pipeline, Vector Search and the Evaluation Harness all call through it. This applies identically to the desktop Personal Workspace and a Team Workspace server; the only difference is who can reach the admin screen to set it up (an Administrator, either way).</p>`},
      {heading:'Add a provider — Admin → LLM & MCP → LLM',bodyHtml:`<p>Open <b>Admin → LLM &amp; MCP</b> (grouped under the AI Agent Foundry category) and stay on its default <b>LLM</b> sub-tab.</p><ol><li>Pick a provider type.</li><li>Paste the API key for that provider. It is written once and never read back - the field always shows blank on return, by design.</li><li>For a self-hosted or fully local model server, set the <b>Base URL</b> instead of (or alongside) a key.</li><li>Click <b>Test key</b> before saving anything that depends on it - it makes one real, minimal call to the provider and reports success or the exact error back (bad key, unreachable host, wrong model name).</li></ol><table><thead><tr><th>Provider</th><th>Covers</th></tr></thead><tbody><tr><td>Anthropic</td><td>Claude models directly. No embeddings endpoint - see the Context Layer &amp; Vector Search article for what that rules out.</td></tr><tr><td>OpenAI-compatible</td><td>OpenAI itself, or any server that speaks the same API shape - Ollama, LM Studio, vLLM, an internal proxy. This is also how a fully offline/air-gapped model gets configured, by pointing Base URL at a local address.</td></tr><tr><td>Google Gemini</td><td>Gemini models directly.</td></tr></tbody></table><p class="help-note">A workspace can add more than one named provider beyond this default one - see <a href="/help/unified-ai-gateway">Unified AI Gateway</a> for per-agent routing across them.</p>`},
      {heading:'What “bring your own key” actually means',bodyHtml:`<p>Lanesra OS never resells or proxies inference - the key you paste is used to call the provider directly from your own server or desktop process, the same "own your data" posture the rest of the product takes. It's stored encrypted at rest (AES-256-GCM) like every other secret in the product, and no read command ever returns it in plaintext. Until a provider is saved and passes Test key, nothing else on this page - or any AI Agent, Pipeline or the Assistant - will attempt a call.</p>`},
-     {heading:'The native MCP server',bodyHtml:`<p>The <b>MCP Server</b> sub-tab documents a stateless <code>POST /mcp</code> endpoint that speaks the Model Context Protocol (JSON-RPC 2.0) - the same protocol Claude Desktop and most IDE coding agents use to discover and call tools. It exposes exactly 7 tools, the same permission-checked object dispatcher the REST API already wraps:</p><table><thead><tr><th>Tool</th><th>Does</th></tr></thead><tbody><tr><td><code>list_objects</code></td><td>Enumerate the workspace's built-in and Custom Object types</td></tr><tr><td><code>get_object_metadata</code></td><td>Fields, relationships and capabilities for one object type</td></tr><tr><td><code>list_records</code></td><td>Paged records of one object type</td></tr><tr><td><code>get_record</code></td><td>One record by id</td></tr><tr><td><code>create_record</code></td><td>Create a record</td></tr><tr><td><code>update_record</code></td><td>Update a record</td></tr><tr><td><code>archive_record</code></td><td>Archive a record</td></tr></tbody></table><p class="help-note">Only reachable where a Team Workspace server is actually running - a pure desktop install has no listening socket for an external client to call into. This is the same boundary Integration Hub's own API Access documents.</p><p>Authenticate with the same scoped API client the REST API already uses - issue one from <b>Integration Hub → API Access</b> and send it as <code>Authorization: Bearer {client_id}.{secret}</code>. Grant it <code>metadata.read</code> for the two lookup tools, <code>objects.read</code> for list/get, and <code>objects.write</code> for create/update/archive. There's no separate MCP credential to provision.</p>`},
+     {heading:'The native MCP server',bodyHtml:`<p>The <b>MCP Server</b> sub-tab documents a stateless <code>POST /mcp</code> endpoint that speaks the Model Context Protocol (JSON-RPC 2.0) - the same protocol Claude Desktop and most IDE coding agents use to discover and call tools. It exposes exactly 7 tools, the same permission-checked object dispatcher the REST API already wraps:</p><table><thead><tr><th>Tool</th><th>Does</th></tr></thead><tbody><tr><td><code>list_objects</code></td><td>Enumerate the workspace's built-in and Custom Object types</td></tr><tr><td><code>get_object_metadata</code></td><td>Fields, relationships and capabilities for one object type</td></tr><tr><td><code>list_records</code></td><td>Paged records of one object type</td></tr><tr><td><code>get_record</code></td><td>One record by id</td></tr><tr><td><code>create_record</code></td><td>Create a record</td></tr><tr><td><code>update_record</code></td><td>Update a record</td></tr><tr><td><code>archive_record</code></td><td>Archive a record</td></tr></tbody></table><p class="help-note">Only reachable where a Team Workspace server is actually running - a pure desktop install has no listening socket for an external client to call into. This is the same boundary Integration Hub's own API Access documents.</p><p>Authenticate with the same scoped API client the REST API already uses - issue one from <b>Integration Hub → API Access</b> and send it as <code>Authorization: Bearer {client_id}.{secret}</code>. Grant it <code>metadata.read</code> for the two lookup tools, <code>objects.read</code> for list/get, and <code>objects.write</code> for create/update/archive. There's no separate MCP credential to provision.</p>${docCodeTabsHtml('mcp-example',[['curl','curl -X POST https://your-server/mcp \\\n  -H "Authorization: Bearer &lt;client_id&gt;.&lt;secret&gt;" \\\n  -H "Content-Type: application/json" \\\n  -d \'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_objects","arguments":{}}}\''],['Claude Desktop config','{\n  "mcpServers": {\n    "lanesra": {\n      "url": "https://your-server/mcp",\n      "headers": {\n        "Authorization": "Bearer &lt;client_id&gt;.&lt;secret&gt;"\n      }\n    }\n  }\n}']])}`},
      {heading:'The CLI — a separate tool from MCP',bodyHtml:`<p>The paired <b>CLI</b> (<code>lanesra</code>, package <code>lanesra-cli</code> in this repo's <code>desktop/cli</code>) is not an MCP client and doesn't speak JSON-RPC at all - it's a plain, simpler way to script the same REST API from a shell. Build it with:</p><pre><code>cargo build --release -p lanesra-cli</code></pre><p>then point it at the same base URL and an API client key from Integration Hub → API Access, and it wraps the identical <code>/api/v1/objects/...</code> endpoints an AI Agent's own record tools, MCP, and a hand-written <code>curl</code> script all ultimately call through. Reach for the CLI when a human or a cron job needs to script the workspace directly; reach for MCP when an external AI agent needs to.</p>`},
      {heading:'Chat Assistant: two modes',bodyHtml:`<p>Every signed-in user gets the conversational <b>Assistant</b>, with the same 7 record tools MCP exposes above - it can look up, create and update records in plain English, scoped to whatever that user is already permitted to touch. An Administrator additionally gets <b>admin mode</b>, with tool pairs across Business Rules, Workflow Automation, Custom Objects/Fields/Relationships/Status Transitions, Integration Hub, Dashboards, Apps, Custom Reports, Saved Views, Users, Numbering, Workspace Profile and more - so it can genuinely build a workflow or a business rule for you, not just describe how. One boundary holds in both modes: a Connection's or API client's secret is never read by a tool call and is redacted a second time before it reaches chat history.</p>`},
      {heading:'Next: build your first agent',bodyHtml:`<p>With a provider connected, move on to <a href="/help/build-your-first-agent">Build your first AI Agent</a> to give that connection a persona, actions and memory of its own.</p>`},
@@ -6392,7 +6410,7 @@ const HELP_CATEGORIES=[
      {heading:'Named Providers beyond the default',bodyHtml:`<p>The single provider set up in <a href="/help/connect-llm-provider">Getting started</a> is a workspace default. The Gateway lets you register additional named <b>Providers</b> - another Anthropic key, a second OpenAI-compatible endpoint, a local Ollama instance - each independently testable, so an individual agent can be pointed at a different provider than the workspace default without reconfiguring anything else.</p>`},
      {heading:'Per-agent routing',bodyHtml:`<p>From <b>Admin → AI Agent Foundry → AI Agents</b>, click <b>Routing</b> on any agent row to set:</p><ul><li><b>Primary provider</b> - tried first</li><li><b>Fallback provider</b> - tried automatically if the primary errors or is rate-limited</li><li><b>Local / air-gapped fallback</b> - the last resort, typically a fully local model, for when both cloud providers above are unavailable</li></ul><p>plus a per-agent <b>temperature</b> and <b>max tokens</b> override. An agent with no routing policy configured behaves exactly as it did before the Gateway existed - this is purely additive.</p>`},
      {heading:'Token budgets',bodyHtml:`<p>Real usage is tracked per (workspace, agent, user, day) and enforced against a daily budget at two tiers: a <b>System</b> daily token budget (Admin → LLM &amp; MCP → Gateway → "System token budget," the top of the hierarchy - applies to every agent run in the workspace) and, from the same Routing panel above, an optional per-<b>Agent</b> daily budget. Today's usage and any failover events (which tier answered the request, and why the tier above it didn't) show on the Gateway's own health view.</p>`},
-     {heading:'DLP-driven forced air-gapping',bodyHtml:`<p>In the same Routing panel, an agent can name which sensitive data classes force it straight to its local/air-gapped fallback the instant a scan detects one in the request - <b>regardless of the normal primary → fallback → local order</b>:</p><table><thead><tr><th>Class</th></tr></thead><tbody><tr><td>Social Security Number</td></tr><tr><td>Credit card number</td></tr><tr><td>Bank account / routing number</td></tr><tr><td>Phone number</td></tr><tr><td>Email address</td></tr></tbody></table><p>Leave every class unchecked and nothing changes - this is opt-in per agent, not a workspace-wide policy.</p>`},
+     {heading:'DLP-driven forced air-gapping',bodyHtml:`<div class="callout callout-info"><p>In the same Routing panel, an agent can name which sensitive data classes force it straight to its local/air-gapped fallback the instant a scan detects one in the request - <b>regardless of the normal primary → fallback → local order</b>.</p></div><table><thead><tr><th>Class</th></tr></thead><tbody><tr><td>Social Security Number</td></tr><tr><td>Credit card number</td></tr><tr><td>Bank account / routing number</td></tr><tr><td>Phone number</td></tr><tr><td>Email address</td></tr></tbody></table><p>Leave every class unchecked and nothing changes - this is opt-in per agent, not a workspace-wide policy.</p>`},
     ]},
    {slug:'context-layer-vector-search',title:'Context Layer & Vector Search',
     summary:'Lexical search_records vs. embeddings-based semantic_search_records, setting up Vector Search, and the agent context primer tools.',
@@ -6418,7 +6436,7 @@ const HELP_CATEGORIES=[
      {heading:'Package an Agent or Skill into a Solution',bodyHtml:`<p>An Agent or Skill - its persona, Memory seed, guardrails, Actions and delegate list - can be added to a named <b>Solution</b> and exported/imported into another workspace exactly like a Custom Object or Business Rule already can be, from <b>Admin → Deployment Management</b>. What deliberately does <i>not</i> travel with it: its Gateway routing policy and live token-usage history, since those are workspace-specific runtime state, not part of the agent's portable definition - the receiving workspace configures its own routing after import.</p>`},
      {heading:'Fire a Pipeline from automation',bodyHtml:`<p>Beyond a manual or scheduled trigger, a Pipeline (or a lone Agent) can be launched from an authenticated inbound webhook, or as a <b>"Run AI agent"</b> action inside Workflow Automation - so an ordinary business event (a status change, a record created) can kick off agent work without anyone opening the Assistant. See <a href="/help/orchestration-pipelines">Orchestration: Pipelines &amp; topologies</a> for the full trigger list.</p>`},
      {heading:'The REST API underneath it all',bodyHtml:`<p>Every layer above - an agent's own record tools, the MCP server, the CLI - ultimately calls through the same generic, permission-checked <code>/api/v1/objects/...</code> REST API (<code>api_object_service</code>) that Integration Hub exposes to everything else. Anyone building a genuinely custom integration - a script, a different agent framework entirely, a BI tool - can target that same API surface directly with an API client key, with no need to go through an AI Agent at all.</p>`},
-     {heading:'What comes next',bodyHtml:`<p>This first Help category covers the AI &amp; Agentic Layer end to end. <b>Core CRM &amp; No-Code Platform</b> and <b>Industry Data Model</b> are alongside it below; <b>Deployment Management</b> and <b>Integration Hub</b> are the named next categories for this Help section - not built yet, but planned, the same way this category itself started as a roadmap backlog item.</p>`},
+     {heading:'The rest of the documentation',bodyHtml:`<p>This category covers the AI &amp; Agentic Layer end to end. <b>Core CRM &amp; No-Code Platform</b>, <b>Industry Data Model</b>, <b>Deployment Management</b> and <b>Integration Hub</b> are the other four categories in this documentation, each just as detailed - use the sidebar or <b>Cmd/Ctrl+K</b> to jump to any of them.</p>`},
     ]},
   ]},
  {key:'core-crm-no-code',label:'Core CRM & No-Code Platform',icon:'🧩',
@@ -6459,7 +6477,7 @@ const HELP_CATEGORIES=[
      {heading:'Validation',bodyHtml:`<p>Text fields can carry a <b>maximum length</b> and a <b>regex pattern</b> (e.g. <code>^[A-Z]{2}-\\d{3}$</code> for a structured code); number fields can carry a <b>minimum</b> and <b>maximum</b>. Both are enforced at save time, on top of a plain <b>Required</b> toggle any field type can carry.</p>`},
      {heading:'The capability flags',bodyHtml:`<table><thead><tr><th>Flag</th><th>What it plugs into</th></tr></thead><tbody><tr><td>Searchable</td><td>Included in global search results</td></tr><tr><td>Filterable</td><td>Offered as a list-view filter</td></tr><tr><td>Reportable</td><td>Selectable as a group-by in the Custom Reports builder (on by default)</td></tr><tr><td>Unique</td><td>Rejects a save that would duplicate another record's value (not offered on Yes/No fields)</td></tr><tr><td>Hidden by default</td><td>Omitted from a layout unless a Screen Builder layout deliberately places it</td></tr></tbody></table>`},
      {heading:'Default value, placeholder & help text',bodyHtml:`<p>A <b>default value</b> fills the field automatically when a save would otherwise leave it empty; <b>placeholder text</b> shows inside an empty input; <b>help text</b> renders underneath the field on the form - three small, independent settings for making a field self-explanatory without a separate manual.</p>`},
-     {heading:'Changing a field later',bodyHtml:`<p>Deactivating a custom field an active Business Rule or Workflow still reads or writes shows a dependency warning first, naming exactly which ones - so you find out before something else silently breaks, not after.</p>`},
+     {heading:'Changing a field later',bodyHtml:`<div class="callout callout-warning"><p>Deactivating a custom field an active Business Rule or Workflow still reads or writes shows a dependency warning first, naming exactly which ones - so you find out before something else silently breaks, not after.</p></div>`},
     ]},
    {slug:'business-rules',title:'Business Rules: conditions, effects & status transitions',
     summary:'Multi-condition AND/OR logic across 12 operators, 12 field-behavior and validation effects, rule priority, and restricting status changes.',
@@ -6502,8 +6520,8 @@ const HELP_CATEGORIES=[
     summary:'The five admin screens every workspace touches early: user accounts and roles, business profile and logo, built-in ID formats, the classic Dashboard KPI picker, and the standalone Admin Assistant chat.',
     sections:[
      {heading:'Users & roles — Admin → Access → Users',bodyHtml:`<p>Only an Administrator can create, edit or deactivate an account. A new user needs a <b>username</b>, a <b>display name</b>, a <b>password</b> (minimum 8 characters) and at least one of five roles: <b>Administrator</b>, <b>Manager</b>, <b>Sales</b>, <b>Finance</b>, <b>ReadOnly</b> - a user can hold several at once. Editing an existing account changes display name, roles and an <b>Active</b> toggle; a separate password-reset form on the same screen lets an Administrator set a new password for someone without knowing their old one.</p>`},
-     {heading:'The last-Administrator guard',bodyHtml:`<p>The workspace can never be locked out of its own admin surface: removing the Administrator role from an account, or deactivating it, is rejected outright if doing so would leave zero active Administrators - the save fails with "Cannot remove or deactivate the last active administrator" instead of silently succeeding and orphaning the workspace. Deactivating or role-changing any other active Administrator while at least one more remains works normally.</p>`},
-     {heading:'Backup & restore lives here too',bodyHtml:`<p>The bottom of the Users screen carries whole-workspace <b>Backup &amp; restore</b>: <b>Export backup</b> downloads every company, contact, product, opportunity, quote, order, invoice, contract, task and user as a single <code>.lanesra</code> file; <b>Restore from file</b> replaces everything currently in the workspace with what's in a chosen backup, after a confirmation dialog that spells out exactly what's about to be overwritten. A restore reloads the app afterward rather than trying to patch every screen's cached data in place.</p>`},
+     {heading:'The last-Administrator guard',bodyHtml:`<div class="callout callout-warning"><p>Removing the Administrator role from an account, or deactivating it, is rejected outright if doing so would leave zero active Administrators - the save fails with "Cannot remove or deactivate the last active administrator" instead of silently succeeding and orphaning the workspace.</p></div><p>The workspace can never be locked out of its own admin surface this way. Deactivating or role-changing any other active Administrator while at least one more remains works normally.</p>`},
+     {heading:'Backup & restore lives here too',bodyHtml:`<p>The bottom of the Users screen carries whole-workspace <b>Backup &amp; restore</b>: <b>Export backup</b> downloads every company, contact, product, opportunity, quote, order, invoice, contract, task and user as a single <code>.lanesra</code> file.</p><div class="callout callout-danger"><p><b>Restore from file</b> replaces <i>everything</i> currently in the workspace with what's in the chosen backup - every company, contact, quote, order, invoice, contract, task and user. This cannot be undone. A confirmation dialog spells out exactly what's about to be overwritten before it runs, and the app reloads afterward rather than trying to patch every screen's cached data in place.</p></div>`},
      {heading:'Business profile & logo — Admin → Workspace → Business profile',bodyHtml:`<p>Business name, legal name, business address, phone, currency code, default tax rate, locale and timezone all live on one form (<b>Business name</b> and <b>Currency</b> are required; everything else is optional). These values feed the print preview on quotes, orders and invoices, and the default tax rate seeds new line items. A separate <b>Logo</b> card uploads a PNG/JPEG (resized client-side before it's sent) shown next to the business name on that same print preview, with a one-click removal back to no logo.</p>`},
      {heading:'ID / number formats for built-in objects — Admin → Workspace → Numbering',bodyHtml:`<p>Every built-in entity - Company, Contact, Opportunity, Product, Quote, Order, Invoice, Contract, Task - gets its own configurable <b>prefix</b> and zero-padded <b>digit width</b> (1-10), the same mechanism the Custom Objects article describes for your own record types, just fixed to the 9 built-in ones here. Changing a format never resets or renumbers anything already issued - the sequence just continues, reformatted from that point on. A format an admin has customized shows a <b>Custom</b> badge and a <b>Reset to default</b> option; leaving it alone keeps the shipped default (e.g. <code>CUS-000001</code>-style).</p>`},
      {heading:'Dashboard KPIs (classic picker) — Admin → Analytics → Dashboard KPIs',bodyHtml:`<p>Distinct from the newer <a href="/help/apps-dashboards">Dashboards</a> widget system: this is the simple on/off picker for the fixed set of KPI tiles at the top of the main <b>Dashboard</b> - Open pipeline value, Won revenue, Outstanding invoices, Overdue invoices, Quotes awaiting response, Contracts renewing soon, Open tasks. Check the ones you want; unchecking every one of them resets to "show all, default order" rather than showing nothing. Reordering the selected tiles isn't exposed yet in this picker - it's on the backlog - but the stored preference is already an ordered list under the hood, so that's additive when it ships, not a breaking change.</p>`},
@@ -6549,9 +6567,9 @@ const HELP_CATEGORIES=[
    {slug:'deactivate-reactivate-safety',title:'Deactivate, reactivate & install safety',
     summary:'What Deactivate/Reactivate actually do, and the validation, automatic backup and transactional rollback behind every install.',
     sections:[
-     {heading:'Deactivate vs. Reactivate',bodyHtml:`<p>Deactivating an installed app flips its status without deleting anything it created - objects, records, rules and workflows all stay exactly as they are; deactivating only affects the app's own visibility/status tracking. Reactivate flips it back. Neither is a substitute for actually removing what an install created - there is no destructive uninstall today (named as a known gap, not silently missing).</p>`},
+     {heading:'Deactivate vs. Reactivate',bodyHtml:`<p>Deactivating an installed app flips its status without deleting anything it created - objects, records, rules and workflows all stay exactly as they are; deactivating only affects the app's own visibility/status tracking. Reactivate flips it back.</p><div class="callout callout-warning"><p>Neither is a substitute for actually removing what an install created - there is <b>no destructive uninstall today</b> (named as a known gap, not silently missing). If you install a package to try it out, deactivating hides it but its objects, fields, rules and workflows remain.</p></div>`},
      {heading:'Validated before anything runs',bodyHtml:`<p>Every install re-validates the manifest - your workspace's Lanesra version against <code>min_lanesra_version</code>, and every object/field key the package would create checked for collisions against what already exists - before a single row is written.</p>`},
-     {heading:'A real safety backup, every time',bodyHtml:`<p>Immediately before installing, the exact same whole-workspace backup mechanism behind Admin → Backup &amp; Restore runs automatically and its path is recorded against this specific install attempt - so a bad install has a real, immediate recovery point, not just a promise.</p>`},
+     {heading:'A real safety backup, every time',bodyHtml:`<div class="callout callout-info"><p>Immediately before installing, the exact same whole-workspace backup mechanism behind Admin → Backup &amp; Restore runs automatically and its path is recorded against this specific install attempt - so a bad install has a real, immediate recovery point, not just a promise.</p></div>`},
      {heading:'One atomic transaction',bodyHtml:`<p>The entire install - every object, field, relationship, rule, workflow and seed record - runs inside a single database transaction. A collision or failure caught partway through rolls back cleanly, as if the install never started; nothing is left half-created.</p>`},
      {heading:'Coming from Deployment Management',bodyHtml:`<p>An already-installed package's own version history, and update-with-diff (reviewing exactly what a newer version of a package would add, modify or remove before applying it), live in <b>Admin → Deployment Management</b> - see the <a href="/help/releases-and-updates">Releases and updating an installed package</a> article in that Help category, which also covers Solutions, Publishers and export/import between workspaces.</p>`},
     ]},
@@ -6617,8 +6635,8 @@ const HELP_CATEGORIES=[
    {slug:'api-access-and-webhooks',title:'API Access & Webhooks: exposing your workspace to the outside',
     summary:'Scoped API clients for the generic REST API, and HMAC-signed outbound webhooks for record and workflow events - both Team Workspace only.',
     sections:[
-     {heading:'API Access: service-account style clients',bodyHtml:`<p><b>+ New API client</b> issues credentials against the generic <code>/api/v1/objects/...</code> REST API: a <b>Name</b>, a checklist of scopes (<code>objects.read</code>/<code>write</code>, <code>metadata.read</code>, <code>search.read</code>, <code>bulk.read</code>/<code>write</code>, <code>webhooks.manage</code>, <code>events.read</code>, <code>admin.integration.read</code>/<code>manage</code>), and an optional <b>Allowed CIDR</b> (e.g. <code>10.0.0.0/8</code>) to restrict which network the client can call from. The secret is shown exactly once at creation (or after a <b>Rotate</b>) - it's hashed, never stored or shown again. <b>Revoke</b>/<b>Reactivate</b> toggle access without losing the client's history; <b>Delete</b> removes it outright.</p><p class="help-note">Only reachable where a Team Workspace server is running - a pure desktop install has no listening socket for an external caller to reach.</p>`},
-     {heading:'Webhooks: outbound, signed, retried',bodyHtml:`<p><b>+ New webhook</b> subscribes to one or more of 6 event types (<code>record.created</code>/<code>updated</code>/<code>archived</code>, <code>field.changed</code>, <code>workflow.completed</code>/<code>failed</code>), delivering to a Connection's base URL with an optional <b>Object scope</b> to narrow it to one entity (e.g. <code>companies</code>). Every delivery is signed with HMAC-SHA256 in an <code>X-Lanesra-Signature</code> header and retried with exponential backoff on failure.</p>`},
+     {heading:'API Access: service-account style clients',bodyHtml:`<p><b>+ New API client</b> issues credentials against the generic <code>/api/v1/objects/...</code> REST API: a <b>Name</b>, a checklist of scopes (<code>objects.read</code>/<code>write</code>, <code>metadata.read</code>, <code>search.read</code>, <code>bulk.read</code>/<code>write</code>, <code>webhooks.manage</code>, <code>events.read</code>, <code>admin.integration.read</code>/<code>manage</code>), and an optional <b>Allowed CIDR</b> (e.g. <code>10.0.0.0/8</code>) to restrict which network the client can call from. <b>Revoke</b>/<b>Reactivate</b> toggle access without losing the client's history; <b>Delete</b> removes it outright.</p><div class="callout callout-warning"><p>The secret is shown exactly once, at creation (or right after a <b>Rotate</b>) - copy it now. It's hashed at rest and can never be displayed again; a lost secret means rotating to a new one.</p></div><p class="help-note">Only reachable where a Team Workspace server is running - a pure desktop install has no listening socket for an external caller to reach.</p>${docCodeTabsHtml('rest-example',[['curl','curl https://your-server/api/v1/objects/companies \\\n  -H "Authorization: Bearer &lt;client_id&gt;.&lt;secret&gt;"'],['JavaScript','const res = await fetch("https://your-server/api/v1/objects/companies", {\n  headers: { Authorization: "Bearer &lt;client_id&gt;.&lt;secret&gt;" }\n});\nconst companies = await res.json();']])}`},
+     {heading:'Webhooks: outbound, signed, retried',bodyHtml:`<p><b>+ New webhook</b> subscribes to one or more of 6 event types (<code>record.created</code>/<code>updated</code>/<code>archived</code>, <code>field.changed</code>, <code>workflow.completed</code>/<code>failed</code>), delivering to a Connection's base URL with an optional <b>Object scope</b> to narrow it to one entity (e.g. <code>companies</code>). Every delivery is signed with HMAC-SHA256 in an <code>X-Lanesra-Signature</code> header and retried with exponential backoff on failure.</p><p>Verifying a delivery is on the receiving end - recompute the same HMAC over the raw request body with your webhook's secret and compare it to the header:</p><pre><code>const crypto = require("crypto");\nconst expected = crypto\n  .createHmac("sha256", webhookSecret)\n  .update(requestBody)\n  .digest("hex");\nif (expected !== req.headers["x-lanesra-signature"]) {\n  return res.status(401).send("Invalid signature");\n}</code></pre>`},
      {heading:'Testing and watching deliveries',bodyHtml:`<p><b>Test</b> sends a real test delivery on demand. <b>Deliveries</b> opens the full history for that webhook - every attempt, its status and when it happened - so a silently failing integration on the receiving end is visible here even when nothing looks wrong on your side. <b>Pause</b>/<b>Reactivate</b> stop and resume delivery without deleting the subscription.</p>`},
     ]},
    {slug:'data-exchange-and-external-objects',title:'Data Exchange & External Objects',
@@ -6644,32 +6662,230 @@ const HELP_CATEGORIES=[
     ]},
    ]},
 ];
+// Documentation section shared helpers - the "Holy Trinity" 3-column shell
+// (persistent left nav + version, restricted-width center article, sticky
+// right TOC with scrollspy), a Cmd+K search palette, copyable/tabbed code
+// blocks, a client-side feedback widget and flat Prev/Next navigation. Used
+// by both helpHubPage() (2 columns - no TOC) and helpTopicPage() (all 3).
+const DOCS_FLAT=HELP_CATEGORIES.flatMap(c=>c.topics.map(t=>({slug:t.slug,title:t.title,cat:c.label})));
+const isMacPlatform=()=>/Mac|iPhone|iPod|iPad/.test((navigator.platform||navigator.userAgent||''));
+function docsSidebarHtml(activeSlug){
+ const nav=HELP_CATEGORIES.map(c=>`<div class="docs-nav-cat"><div class="docs-nav-cat-label">${c.icon} ${c.label}</div>${c.topics.map(t=>`<a class="docs-nav-link${t.slug===activeSlug?' active':''}" href="/help/${t.slug}">${t.title}</a>`).join('')}</div>`).join('');
+ return `<details class="docs-sidebar-wrap" open><summary>📚 Browse documentation</summary><nav class="docs-sidebar">`+
+  `<button type="button" class="docs-search-trigger" data-docs-search-open>🔎 Search docs<kbd>${isMacPlatform()?'⌘':'Ctrl'} K</kbd></button>`+
+  `<div class="docs-version"><span>📦</span><select aria-label="Documentation version"><option>${DOCS_VERSION} (current)</option></select></div>`+
+  nav+
+  `</nav></details>`;
+}
+function docsBreadcrumbHtml(parts){
+ return `<div class="docs-crumb">${parts.map((p,i)=>i<parts.length-1?`<a href="${p[1]}">${p[0]}</a> › `:p[0]).join('')}</div>`;
+}
+function docsPrevNextHtml(slug){
+ const idx=DOCS_FLAT.findIndex(t=>t.slug===slug);
+ if(idx<0)return '';
+ const prev=idx>0?DOCS_FLAT[idx-1]:null;
+ const next=idx<DOCS_FLAT.length-1?DOCS_FLAT[idx+1]:null;
+ if(!prev&&!next)return '';
+ return `<div class="docs-prevnext">`+
+  (prev?`<a class="docs-prevnext-card prev" href="/help/${prev.slug}"><span class="docs-prevnext-label">← Previous</span><span class="docs-prevnext-title">${prev.title}</span></a>`:'')+
+  (next?`<a class="docs-prevnext-card next" href="/help/${next.slug}"><span class="docs-prevnext-label">Next →</span><span class="docs-prevnext-title">${next.title}</span></a>`:'')+
+  `</div>`;
+}
+function docsFeedbackHtml(slug){
+ return `<div class="docs-feedback" data-docs-feedback="${slug}">`+
+  `<div class="docs-feedback-q"><span>Was this page helpful?</span><button type="button" class="docs-feedback-btn" data-docs-fb="yes">👍 Yes</button><button type="button" class="docs-feedback-btn" data-docs-fb="no">👎 No</button></div>`+
+  `<div class="docs-feedback-detail" hidden><textarea placeholder="What was missing or unclear? (optional)"></textarea><button type="button" class="btn btn-secondary">Send feedback</button></div>`+
+  `<p class="docs-feedback-thanks" hidden>Thanks — that helps us improve this article.</p>`+
+  `</div>`;
+}
+// No backend exists for this static marketing/docs site to post feedback
+// to, so a vote is captured client-side only (localStorage) - honest about
+// what this can be today rather than faking a network call that goes
+// nowhere. Wiring this to a real collection endpoint is a natural follow-up.
+function bindDocsFeedback(slug){
+ const root=document.querySelector(`[data-docs-feedback="${slug}"]`);
+ if(!root)return;
+ const q=root.querySelector('.docs-feedback-q');
+ const detail=root.querySelector('.docs-feedback-detail');
+ const thanks=root.querySelector('.docs-feedback-thanks');
+ const textarea=detail.querySelector('textarea');
+ const submit=detail.querySelector('button');
+ function record(helpful,note){
+  try{
+   const key='lanesraDocsFeedback';
+   const all=JSON.parse(localStorage.getItem(key)||'[]');
+   all.push({slug,helpful,note:note||null,ts:Date.now()});
+   localStorage.setItem(key,JSON.stringify(all.slice(-200)));
+  }catch(e){/* private browsing / storage blocked - vote just isn't persisted locally */}
+ }
+ root.querySelectorAll('[data-docs-fb]').forEach(btn=>{
+  btn.onclick=()=>{
+   root.querySelectorAll('[data-docs-fb]').forEach(b=>b.classList.remove('picked'));
+   btn.classList.add('picked');
+   if(btn.dataset.docsFb==='no'){detail.hidden=false}
+   else{record(true,null);q.hidden=true;detail.hidden=true;thanks.hidden=false}
+  };
+ });
+ submit.onclick=()=>{
+  record(false,textarea.value.trim()||null);
+  q.hidden=true;detail.hidden=true;thanks.hidden=false;
+ };
+}
+let docsScrollObserver=null;
+function bindDocsScrollspy(){
+ if(docsScrollObserver)docsScrollObserver.disconnect();
+ const headings=[...document.querySelectorAll('.docs-article h4[id]')];
+ const links=[...document.querySelectorAll('.docs-toc a')];
+ if(!headings.length||!links.length)return;
+ const linkFor=id=>links.find(a=>a.getAttribute('href')==='#'+id);
+ docsScrollObserver=new IntersectionObserver(entries=>{
+  entries.forEach(entry=>{
+   if(!entry.isIntersecting)return;
+   const link=linkFor(entry.target.id);
+   if(!link)return;
+   links.forEach(a=>a.classList.remove('active'));
+   link.classList.add('active');
+  });
+ },{rootMargin:'-10% 0px -70% 0px',threshold:0});
+ headings.forEach(h=>docsScrollObserver.observe(h));
+ links[0].classList.add('active');
+}
+// Interactive code blocks: every plain <pre> gets a floating Copy button;
+// tabbed groups (docCodeTabsHtml above) get tab-switching plus a Copy
+// button that copies whichever tab is currently visible.
+function copyDocsText(text,btn){
+ const original=btn.textContent;
+ const mark=()=>{btn.textContent='Copied!';btn.classList.add('copied');setTimeout(()=>{btn.textContent=original;btn.classList.remove('copied')},1500)};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(mark).catch(mark);
+ else mark();
+}
+function enhanceDocsCode(root){
+ if(!root)return;
+ root.querySelectorAll('pre').forEach(pre=>{
+  if(pre.closest('.code-tabs')||pre.parentElement.classList.contains('docs-code-block'))return;
+  const wrap=document.createElement('div');
+  wrap.className='docs-code-block';
+  pre.parentNode.insertBefore(wrap,pre);
+  wrap.appendChild(pre);
+  const btn=document.createElement('button');
+  btn.type='button';btn.className='docs-copy-btn';btn.textContent='Copy';
+  btn.onclick=()=>copyDocsText(pre.textContent,btn);
+  wrap.appendChild(btn);
+ });
+ root.querySelectorAll('[data-doc-tabgroup]').forEach(group=>{
+  const btns=[...group.querySelectorAll('[data-doc-tab]')];
+  const bodies=[...group.querySelectorAll('[data-doc-tab-body]')];
+  btns.forEach(btn=>{
+   btn.onclick=()=>{
+    btns.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    bodies.forEach(b=>{b.hidden=b.dataset.docTabBody!==btn.dataset.docTab});
+   };
+  });
+  const copyBtn=group.parentElement.querySelector('[data-doc-copy]');
+  if(copyBtn)copyBtn.onclick=()=>{
+   const activeBody=bodies.find(b=>!b.hidden)||bodies[0];
+   copyDocsText(activeBody?activeBody.textContent:'',copyBtn);
+  };
+ });
+}
+// Cmd+K / Ctrl+K search palette - a plain-text index over every topic's
+// title, summary and section headings (not full body text/code, which
+// would bloat this into a real search backend for no real benefit at this
+// content size). Bound once per page load; document-level listeners are
+// fine here since this is a fresh script load per page (no client router).
+function docsSearchIndex(){
+ return HELP_CATEGORIES.flatMap(c=>c.topics.map(t=>({slug:t.slug,title:t.title,cat:c.label,text:(t.title+' '+t.summary+' '+t.sections.map(s=>s.heading).join(' ')).toLowerCase()})));
+}
+function docsSearchModalHtml(){
+ return `<div class="docs-search-overlay" id="docsSearchOverlay" hidden><div class="docs-search-panel"><div class="docs-search-input-row"><span>🔎</span><input id="docsSearchInput" type="text" placeholder="Search documentation…" autocomplete="off"><span class="docs-search-esc">Esc</span></div><div class="docs-search-results" id="docsSearchResults"></div></div></div>`;
+}
+function renderDocsSearchResults(q){
+ const results=document.getElementById('docsSearchResults');
+ if(!results)return;
+ const query=q.trim().toLowerCase();
+ const idx=docsSearchIndex();
+ const matches=(query?idx.filter(e=>e.text.includes(query)):idx).slice(0,20);
+ if(!matches.length){results.innerHTML='<div class="docs-search-empty">No matching articles.</div>';return}
+ results.innerHTML=matches.map((m,i)=>`<a class="docs-search-result${i===0?' active':''}" href="/help/${m.slug}"><b>${m.title}</b><span>${m.cat}</span></a>`).join('');
+}
+function openDocsSearch(){
+ const overlay=document.getElementById('docsSearchOverlay');
+ if(!overlay)return;
+ overlay.hidden=false;
+ const input=document.getElementById('docsSearchInput');
+ input.value='';
+ renderDocsSearchResults('');
+ setTimeout(()=>input.focus(),0);
+}
+function closeDocsSearch(){
+ const overlay=document.getElementById('docsSearchOverlay');
+ if(overlay)overlay.hidden=true;
+}
+let docsSearchBound=false;
+function bindDocsSearch(){
+ if(docsSearchBound)return;
+ docsSearchBound=true;
+ document.addEventListener('keydown',e=>{
+  const overlay=document.getElementById('docsSearchOverlay');
+  if(!overlay)return;
+  const mod=e.metaKey||e.ctrlKey;
+  if(mod&&e.key.toLowerCase()==='k'){e.preventDefault();overlay.hidden?openDocsSearch():closeDocsSearch();return}
+  if(overlay.hidden)return;
+  if(e.key==='Escape'){closeDocsSearch();return}
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+   e.preventDefault();
+   const rs=[...document.querySelectorAll('.docs-search-result')];
+   if(!rs.length)return;
+   let i=rs.findIndex(r=>r.classList.contains('active'));
+   if(i>=0)rs[i].classList.remove('active');
+   i=e.key==='ArrowDown'?(i+1)%rs.length:(i-1+rs.length)%rs.length;
+   rs[i].classList.add('active');
+   rs[i].scrollIntoView({block:'nearest'});
+  }
+  if(e.key==='Enter'){
+   const active=document.querySelector('.docs-search-result.active');
+   if(active){e.preventDefault();active.click()}
+  }
+ });
+ document.addEventListener('click',e=>{
+  if(e.target.closest('[data-docs-search-open]')){e.preventDefault();openDocsSearch();return}
+  const overlay=document.getElementById('docsSearchOverlay');
+  if(overlay&&!overlay.hidden&&e.target===overlay)closeDocsSearch();
+ });
+ document.addEventListener('input',e=>{
+  if(e.target&&e.target.id==='docsSearchInput')renderDocsSearchResults(e.target.value);
+ });
+}
 function helpHubPage(){
- document.title='Help & User Guides — Lanesra OS';
- setPageMeta('Detailed, step-by-step admin user guides for every Lanesra OS feature - how to configure it, use it, and extend it. Starting with the Agentic AI Foundry.');
+ document.title='Documentation — Lanesra OS';
+ setPageMeta('Detailed, step-by-step admin guides for every Lanesra OS feature - how to configure it, use it, and truly extend it. Searchable, with a persistent category nav and copyable code samples.');
  const allTopics=[];
  HELP_CATEGORIES.forEach(c=>c.topics.forEach(t=>allTopics.push({slug:t.slug,title:t.title,summary:t.summary})));
  setPageJsonLd('help-jsonld',{
   '@context':'https://schema.org','@type':'CollectionPage','@id':'https://lanesraos.com/help#page',
-  url:'https://lanesraos.com/help',name:'Lanesra OS Help & User Guides',
-  description:'Detailed admin user guides for every Lanesra OS feature - how to configure, use and truly extend it, starting with the Agentic AI Foundry.',
+  url:'https://lanesraos.com/help',name:'Lanesra OS Documentation',
+  description:'Detailed admin documentation for every Lanesra OS feature - how to configure, use and truly extend it.',
   hasPart:allTopics.map(t=>({'@type':'TechArticle',name:t.title,description:t.summary,url:`https://lanesraos.com/help/${t.slug}`})),
  });
- $('#app').innerHTML=`<div class="site-dark">${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Documentation</div><h1>Help &amp; user guides.</h1><p>Detailed, step-by-step admin guides for every Lanesra OS feature - how to configure it, use it, and truly extend it. Written from the working codebase, not a feature list.</p></div></section><section class="section"><div class="container narrow">`+
-  `<div class="help-search"><span>🔎</span><input id="help-search-input" type="text" placeholder="Search help articles…" aria-label="Search help articles"></div>`+
-  `<div id="help-cats">${HELP_CATEGORIES.map(c=>`<div class="help-cat" data-cat="${c.key}"><div class="help-cat-head"><div class="feature-icon">${c.icon}</div><div><h2>${c.label}</h2><p>${c.blurb}</p></div></div><div class="help-topic-grid">${c.topics.map(t=>`<a class="help-topic-link" href="/help/${t.slug}" data-search="${(t.title+' '+t.summary).toLowerCase().replace(/"/g,'&quot;')}"><b>${t.title}</b><span>${t.summary}</span></a>`).join('')}</div></div>`).join('')}</div>`+
-  `<p class="help-empty" id="help-empty" hidden>No help articles match your search. More categories — Core CRM &amp; No-Code Platform, App Catalog, Deployment Management, Integration Hub — are coming next.</p>`+
-  `</div></section></main>${publicFooter()}</div>`;
+ $('#app').innerHTML=`<div class="site-dark">${publicNav()}<main class="page-site"><section class="page-hero"><div class="container narrow"><div class="eyebrow">Documentation</div><h1>Lanesra OS documentation.</h1><p>Detailed, step-by-step admin guides for every feature - how to configure it, use it, and truly extend it. Written from the working codebase, not a feature list.</p></div></section><section class="section"><div class="container">`+
+  `<div class="docs-shell">${docsSidebarHtml(null)}<div class="docs-main"><div class="docs-main-inner">`+
+  `<div class="docs-search"><span>🔎</span><input id="help-search-input" type="text" placeholder="Search documentation…" aria-label="Search documentation"></div>`+
+  `<div id="help-cats">${HELP_CATEGORIES.map(c=>`<div class="docs-cat" data-cat="${c.key}"><div class="docs-cat-head"><div class="feature-icon">${c.icon}</div><div><h2>${c.label}</h2><p>${c.blurb}</p></div></div><div class="docs-topic-grid">${c.topics.map(t=>`<a class="docs-topic-link" href="/help/${t.slug}" data-search="${(t.title+' '+t.summary).toLowerCase().replace(/"/g,'&quot;')}"><b>${t.title}</b><span>${t.summary}</span></a>`).join('')}</div></div>`).join('')}</div>`+
+  `<p class="docs-empty" id="help-empty" hidden>No articles match your search.</p>`+
+  `</div></div></div>`+
+  `</div></section></main>${publicFooter()}${docsSearchModalHtml()}</div>`;
  bindPublicNav();
+ bindDocsSearch();
  const input=document.getElementById('help-search-input');
  input.addEventListener('input',()=>{
   const q=input.value.trim().toLowerCase();
   let anyVisible=false;
-  document.querySelectorAll('.help-cat').forEach(catEl=>{
+  document.querySelectorAll('.docs-cat').forEach(catEl=>{
    let catHasVisible=false;
-   catEl.querySelectorAll('.help-topic-link').forEach(a=>{
+   catEl.querySelectorAll('.docs-topic-link').forEach(a=>{
     const match=!q||a.dataset.search.includes(q);
-    a.classList.toggle('help-hidden',!match);
+    a.classList.toggle('docs-hidden',!match);
     if(match){catHasVisible=true;anyVisible=true}
    });
    catEl.hidden=!catHasVisible;
@@ -6681,25 +6897,31 @@ function helpTopicPage(slug){
  let found=null,foundCat=null;
  HELP_CATEGORIES.forEach(c=>c.topics.forEach(t=>{if(t.slug===slug){found=t;foundCat=c}}));
  if(!found){history.replaceState(null,'','/help');helpHubPage();return}
- document.title=`${found.title} — Lanesra OS`;
+ document.title=`${found.title} — Lanesra OS Documentation`;
  setPageMeta(found.summary);
  const tocId=h=>h.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
  setPageJsonLd('help-topic-jsonld',{
   '@context':'https://schema.org','@type':'TechArticle','@id':`https://lanesraos.com/help/${slug}#article`,
   url:`https://lanesraos.com/help/${slug}`,headline:found.title,description:found.summary,about:foundCat.label,
   breadcrumb:{'@type':'BreadcrumbList',itemListElement:[
-   {'@type':'ListItem',position:1,name:'Help',item:'https://lanesraos.com/help'},
+   {'@type':'ListItem',position:1,name:'Docs',item:'https://lanesraos.com/help'},
    {'@type':'ListItem',position:2,name:foundCat.label,item:'https://lanesraos.com/help#'+foundCat.key},
    {'@type':'ListItem',position:3,name:found.title,item:`https://lanesraos.com/help/${slug}`},
   ]},
  });
- const siblingTopics=foundCat.topics.filter(t=>t.slug!==slug);
- $('#app').innerHTML=`<div class="site-dark">${publicNav()}<main class="page-site"><section class="page-hero" style="padding-bottom:0"><div class="container narrow"><div class="help-crumb"><a href="/help">Help</a> › ${foundCat.label} › ${found.title}</div><div class="eyebrow">${foundCat.label}</div><h1 style="font-size:clamp(32px,5vw,48px)">${found.title}</h1><p>${found.summary}</p></div></section><section class="section"><div class="container">`+
-  `<div class="help-article-layout"><nav class="help-toc"><span>On this page</span>${found.sections.map(s=>`<a href="#${tocId(s.heading)}">${s.heading}</a>`).join('')}</nav>`+
-  `<article class="help-article">${found.sections.map(s=>`<h4 id="${tocId(s.heading)}">${s.heading}</h4>${s.bodyHtml}`).join('')}`+
-  (siblingTopics.length?`<div class="help-related"><h3>More in ${foundCat.label}</h3><div class="help-topic-grid">${siblingTopics.map(t=>`<a class="help-topic-link" href="/help/${t.slug}"><b>${t.title}</b><span>${t.summary}</span></a>`).join('')}</div></div>`:'')+
-  `</article></div></div></section></main>${publicFooter()}</div>`;
+ $('#app').innerHTML=`<div class="site-dark">${publicNav()}<main class="page-site"><section class="page-hero" style="padding-bottom:0"><div class="container narrow">${docsBreadcrumbHtml([['Docs','/help'],[foundCat.label,'/help#'+foundCat.key],[found.title,null]])}<div class="eyebrow">${foundCat.label}</div><h1 style="font-size:clamp(32px,5vw,48px)">${found.title}</h1><p>${found.summary}</p></div></section><section class="section"><div class="container">`+
+  `<div class="docs-shell with-toc">${docsSidebarHtml(slug)}<div class="docs-main"><div class="docs-main-inner">`+
+  `<article class="docs-article">${found.sections.map(s=>`<h4 id="${tocId(s.heading)}">${s.heading}</h4>${s.bodyHtml}`).join('')}</article>`+
+  docsPrevNextHtml(slug)+
+  docsFeedbackHtml(slug)+
+  `</div></div>`+
+  `<details class="docs-toc-wrap" open><summary>On this page</summary><nav class="docs-toc"><div class="docs-toc-label">On this page</div>${found.sections.map(s=>`<a href="#${tocId(s.heading)}">${s.heading}</a>`).join('')}</nav></details>`+
+  `</div></section></main>${publicFooter()}${docsSearchModalHtml()}</div>`;
  bindPublicNav();
+ bindDocsSearch();
+ enhanceDocsCode(document.querySelector('.docs-article'));
+ bindDocsScrollspy();
+ bindDocsFeedback(slug);
 }
 // directly (or any route beyond the homepage) would otherwise report the
 // homepage's description regardless of which page it actually rendered.
