@@ -24,4 +24,20 @@
   <url><loc>https://lanesraos.com/help/workflow-automation</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/screen-app-builder</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/apps-dashboards</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/install-an-industry-app</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/the-package-manifest</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/review-before-you-install</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/after-install-what-changed</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/deactivate-reactivate-safety</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/solution-packages-overview</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/releases-and-updates</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/solutions-curate-and-promote</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/components-and-dependencies</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/publishers-and-namespaces</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/connections-and-overview</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/connectors-openapi-import</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/api-access-and-webhooks</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/data-exchange-and-external-objects</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/integration-jobs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/logs-monitoring-settings</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 </urlset>

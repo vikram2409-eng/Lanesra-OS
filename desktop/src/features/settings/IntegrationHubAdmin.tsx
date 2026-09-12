@@ -91,15 +91,20 @@ function downloadText(filename: string, content: string, mime: string): void {
  * workspace-level policy Settings. Nothing here is a UI-only simulation -
  * that's the online demo's Integrations tab, not this one.
  */
-export function IntegrationHubAdmin() {
+export function IntegrationHubAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
   const [tab, setTab] = useState<IntegrationTab>("overview");
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
-        Connect Lanesra to the outside world: outbound Connections and Connectors, inbound API clients and
-        webhooks, CSV data exchange, recurring sync Jobs, and one place to watch it all run.
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+          Connect Lanesra to the outside world: outbound Connections and Connectors, inbound API clients and
+          webhooks, CSV data exchange, recurring sync Jobs, and one place to watch it all run.
+        </p>
+        <button className="btn btn-secondary" style={{ flexShrink: 0 }} onClick={() => onOpenHelp("connections-and-overview")}>
+          📖 Help
+        </button>
+      </div>
 
       <div className="tab-row">
         {INTEGRATION_TABS.map((t) => (

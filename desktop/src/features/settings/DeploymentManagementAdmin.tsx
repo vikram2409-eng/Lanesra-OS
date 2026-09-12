@@ -75,7 +75,7 @@ function downloadJson(filename: string, content: string): void {
  * component to a publisher other than `local` (registering a publisher
  * doesn't yet let you *reassign* an existing component to it).
  */
-export function DeploymentManagementAdmin() {
+export function DeploymentManagementAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
   const [tab, setTab] = useState<SolutionTab>("packages");
 
   const installed = useQuery({ queryKey: ["installedApps"], queryFn: () => api.listInstalledApps() });
@@ -88,14 +88,19 @@ export function DeploymentManagementAdmin() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
-        Every industry app installed in this workspace, what it created, what it depends on, and who published it -
-        plus everything you've built by hand, grouped as your Local Workspace. Install, deactivate or reactivate an
-        app from <b>Admin → App Catalog</b>; this is where you see the result, review updates, and export your own
-        customizations. Building something to ship to another workspace on purpose? Pick exactly what goes in it
-        under <b>Solutions</b> - export it there, then import it in the target workspace the same way any package is
-        imported.
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+        <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+          Every industry app installed in this workspace, what it created, what it depends on, and who published it -
+          plus everything you've built by hand, grouped as your Local Workspace. Install, deactivate or reactivate an
+          app from <b>Admin → App Catalog</b>; this is where you see the result, review updates, and export your own
+          customizations. Building something to ship to another workspace on purpose? Pick exactly what goes in it
+          under <b>Solutions</b> - export it there, then import it in the target workspace the same way any package is
+          imported.
+        </p>
+        <button className="btn btn-secondary" style={{ flexShrink: 0 }} onClick={() => onOpenHelp("solution-packages-overview")}>
+          📖 Help
+        </button>
+      </div>
 
       <div className="tab-row">
         {SOLUTION_TABS.map((t) => (

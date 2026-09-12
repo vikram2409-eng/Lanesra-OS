@@ -270,9 +270,9 @@ export function AdminPanel() {
       {tab === "kpis" && <DashboardKpiAdmin />}
       {tab === "dashboards" && <DashboardLayoutsAdmin />}
       {tab === "apps" && <AppsAdmin />}
-      {tab === "packages" && <IndustryPackagesAdmin />}
-      {tab === "solutions" && <DeploymentManagementAdmin />}
-      {tab === "integrations" && <IntegrationHubAdmin />}
+      {tab === "packages" && <IndustryPackagesAdmin onOpenHelp={openHelpTopic} />}
+      {tab === "solutions" && <DeploymentManagementAdmin onOpenHelp={openHelpTopic} />}
+      {tab === "integrations" && <IntegrationHubAdmin onOpenHelp={openHelpTopic} />}
       {tab === "ai" && <AiSettingsAdmin />}
       {tab === "assistant" && <ChatPanel mode="admin" />}
       {tab === "aiAgents" && <AiAgentsAdmin onOpenHelp={openHelpTopic} />}

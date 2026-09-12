@@ -559,4 +559,425 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       },
     ],
   },
+  {
+    key: "industry-data-model",
+    label: "Industry Data Model",
+    icon: "⬢",
+    blurb:
+      "Install a complete, ready-made industry app - or review one in plain language before you commit - built from a versioned package manifest that reuses your existing Companies and Contacts instead of creating a parallel database.",
+    topics: [
+      {
+        slug: "install-an-industry-app",
+        title: "Installing an industry app",
+        summary: "Import a manifest or load a bundled starter, review it, install it, and see it in Installed apps.",
+        sections: [
+          {
+            heading: "The flow: Import → Review → Install",
+            bodyHtml:
+              "<p>This tab has three panels: <b>Import a package</b>, <b>Imported packages</b>, and <b>Installed apps</b>. Importing - pasting a manifest or clicking a bundled starter - only adds it to this workspace's local catalog for review. Nothing is created until you click Install.</p>",
+          },
+          {
+            heading: "The 10 bundled starters",
+            bodyHtml:
+              "<p>One click each loads a ready-to-review manifest: Field Service, Property Management, Construction &amp; Contractors, Professional Services, Practice Administration, Recruitment &amp; Staffing, Real Estate Brokerage, Legal Practice, Nonprofit &amp; Association Management, and Auto Repair &amp; Service Garage. Loading a starter just fills the Import box - you still choose whether to Import and Install it.</p>",
+          },
+          {
+            heading: "Review before you commit",
+            bodyHtml:
+              "<p>An imported package shows its name, industry, version and minimum required Lanesra version. Click <b>Details</b> for a full plain-language preview before installing (see <b>Reading a package's Details</b>, next in this list).</p>",
+          },
+          {
+            heading: "Installing",
+            bodyHtml:
+              "<p>Click Install from the table row or the open Details panel. A successful install moves the app into Installed apps with a status badge, and - if the package defines one - a new sidebar entry via the same App Builder mechanism a hand-built app uses.</p>",
+          },
+          {
+            heading: "Installing more than one",
+            bodyHtml:
+              "<p>An already-installed package shows an \"Installed\" badge instead of an Install button - re-installing the identical package is blocked, but different industry packages can be installed side by side in the same workspace, each tracked and deactivatable independently.</p>",
+          },
+        ],
+      },
+      {
+        slug: "the-package-manifest",
+        title: "The package manifest",
+        summary: "What a package contains - objects, fields, relationships, business rules, workflows, seed data and recommended permissions.",
+        sections: [
+          {
+            heading: "One JSON document",
+            bodyHtml:
+              "<p>A manifest is plain JSON: <code>format_version</code>, a globally-unique <code>package_id</code> (e.g. <code>lanesra.field_service</code>), a display <code>name</code>, an <code>industry</code> label, a semantic <code>version</code>, and a <code>min_lanesra_version</code> your workspace must meet.</p>",
+          },
+          {
+            heading: "What it can define",
+            bodyHtml:
+              "<table><thead><tr><th>Section</th><th>Same shape as</th></tr></thead><tbody><tr><td><code>objects</code></td><td>Custom Objects (key, labels, icon, ID prefix &amp; digits)</td></tr><tr><td><code>fields</code></td><td>Custom Fields (entity, label, type, options, required)</td></tr><tr><td><code>relationships</code></td><td>Custom Relationships (source/target, cardinality, labels)</td></tr><tr><td><code>business_rules</code></td><td>Business Rules (conditions + actions)</td></tr><tr><td><code>workflows</code></td><td>Workflow Automation (trigger + conditions + actions)</td></tr><tr><td><code>seed_data</code></td><td>Starter records created at install, if any</td></tr><tr><td><code>app</code></td><td>An App Builder definition - name, icon, description, and recommended_permissions (informational only)</td></tr></tbody></table>",
+          },
+          {
+            heading: "Why this matters",
+            bodyHtml:
+              "<p>Because a package is just data in the same shape the platform already understands, installing one doesn't create a parallel data model - everything it creates shows up in the same Admin screens as anything built by hand, editable the same way afterward.</p>",
+          },
+        ],
+      },
+      {
+        slug: "review-before-you-install",
+        title: "Reading a package's Details",
+        summary: "The four-part plain-language preview before you commit to installing.",
+        sections: [
+          {
+            heading: "What this builds",
+            bodyHtml: "<p>Every object, field and relationship the package defines, rendered as plain sentences instead of raw JSON.</p>",
+          },
+          {
+            heading: "How it connects to your existing data",
+            bodyHtml: "<p>Which of your built-in entities the package's new objects link into, and how.</p>",
+          },
+          {
+            heading: "Automation, in plain language",
+            bodyHtml:
+              "<p>Every rule and workflow the package would create, in the identical wording the real Business Rules and Workflow Automation builders use - so it reads the same once you open those screens after installing.</p>",
+          },
+          {
+            heading: "Fitting this to your organization",
+            bodyHtml:
+              "<p>Generated guidance: whether it links into built-ins you should have real records in first; whether it ships starter records; a reminder that names/prefixes/options are just defaults you can adjust after installing; how many permission grants need your review; and that every rule/workflow only reacts to the record that changed - a multi-record check still needs a person.</p>",
+          },
+          {
+            heading: "Costs nothing to open",
+            bodyHtml: "<p>Details is generated entirely from the manifest already imported - opening it doesn't touch your workspace or commit to anything.</p>",
+          },
+        ],
+      },
+      {
+        slug: "after-install-what-changed",
+        title: "After install: what changed, and fitting it to your team",
+        summary: "The per-install artifact breakdown, why permissions are never auto-granted, and adjusting defaults afterward.",
+        sections: [
+          {
+            heading: "What this install created",
+            bodyHtml:
+              "<p>Expand an installed app to see a count of every artifact it created, grouped by type - objects, fields, relationships, rules, workflows, screens, dashboards, reports, numbering overrides, seed records, and (if included) AI agents or skills.</p>",
+          },
+          {
+            heading: "Permissions are never auto-granted",
+            bodyHtml:
+              "<p>A package can list recommended role → access-level pairs, but installing never changes anyone's access on its own - these are for you to review and apply by hand from Users or Apps, the same explicit-grant model every app already uses.</p>",
+          },
+          {
+            heading: "It becomes a real, editable app",
+            bodyHtml:
+              "<p>If defined, install also publishes a genuine App Builder app - its own icon, sidebar entry, the same Draft/Publish and Viewer/Editor model any hand-built app uses. It's not a special installed mode - it's an ordinary app you can extend.</p>",
+          },
+          {
+            heading: "Making it yours",
+            bodyHtml:
+              "<p>Object names, ID prefixes and picklist options are defaults, not permanent - adjust them from Custom Objects/Custom Fields exactly as you would for anything hand-built. A rule or workflow the package created is a real row too - edit, deactivate, or delete it like any other.</p>",
+          },
+        ],
+      },
+      {
+        slug: "deactivate-reactivate-safety",
+        title: "Deactivate, reactivate & install safety",
+        summary: "What Deactivate/Reactivate do, and the validation, automatic backup and transactional rollback behind every install.",
+        sections: [
+          {
+            heading: "Deactivate vs. Reactivate",
+            bodyHtml:
+              "<p>Deactivating flips an app's status without deleting anything it created - objects, records, rules and workflows stay exactly as they are. Reactivate flips it back. Neither substitutes for actually removing what an install created - there's no destructive uninstall today, a known gap, not silently missing.</p>",
+          },
+          {
+            heading: "Validated before anything runs",
+            bodyHtml:
+              "<p>Every install re-validates the manifest - your workspace's version against min_lanesra_version, and every object/field key checked for collisions against what already exists - before a single row is written.</p>",
+          },
+          {
+            heading: "A real safety backup, every time",
+            bodyHtml:
+              "<p>Immediately before installing, the same whole-workspace backup mechanism behind Backup &amp; Restore runs automatically and its path is recorded against this install attempt - a real recovery point, not just a promise.</p>",
+          },
+          {
+            heading: "One atomic transaction",
+            bodyHtml:
+              "<p>The entire install runs inside a single database transaction. A collision or failure caught partway through rolls back cleanly, as if it never started.</p>",
+          },
+          {
+            heading: "Coming from Deployment Management",
+            bodyHtml:
+              "<p>An installed package's version history and update-with-diff live in Deployment Management - see Releases and updating an installed package in that category, which also covers Solutions, Publishers and export/import between workspaces.</p>",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    key: "deployment-management",
+    label: "Deployment Management",
+    icon: "◈",
+    blurb:
+      "See everything installed, what it created and depends on, curate a named Solution of exactly what you want to ship, and register the Publishers who own each package namespace - the way a real software vendor packages and promotes an update.",
+    topics: [
+      {
+        slug: "solution-packages-overview",
+        title: "Solution Packages: what's installed, what it created",
+        summary: "The landing tab - every installed app, its Publisher and component/dependency counts, plus your own hand-built Local Workspace.",
+        sections: [
+          {
+            heading: "One table, two kinds of rows",
+            bodyHtml:
+              '<p>The <b>Solution Packages</b> tab lists every installed app - name, Publisher, Type (always "Packaged"), installed Version, active/inactive Status, and live Components/Dependencies counts. Alongside sits one synthetic row, 🧩 Local Workspace ("local" publisher, type "Custom") - everything you\'ve built by hand rather than installed.</p>',
+          },
+          {
+            heading: "Export your own customizations",
+            bodyHtml:
+              "<p>Local Workspace's Export button downloads everything the local publisher owns as one re-importable manifest - the all-or-nothing counterpart to a Solution's deliberately-curated subset. No fake package row is created for it; it's generated on demand.</p>",
+          },
+          {
+            heading: "Where installs actually happen",
+            bodyHtml:
+              "<p>This tab is read-and-review only - installing, deactivating or reactivating an app happens from App Catalog (see the Industry Data Model category). Come here afterward to see the result.</p>",
+          },
+        ],
+      },
+      {
+        slug: "releases-and-updates",
+        title: "Releases and updating an installed package",
+        summary: "Every imported version of a package, and update-with-diff's real per-field Added/Modified/Removed preview.",
+        sections: [
+          {
+            heading: "Releases: every version you've imported",
+            bodyHtml:
+              "<p>Click Releases on any installed app's row to see every version of that package_id you've ever imported, oldest first - each an immutable snapshot already sitting in the workspace's own package history.</p>",
+          },
+          {
+            heading: '"Update available"',
+            bodyHtml:
+              "<p>Import a newer version of an already-installed package from App Catalog the same way you'd import any package, then return here - an Update button appears automatically, offering the newest imported version that isn't the one currently installed.</p>",
+          },
+          {
+            heading: "Review before you apply",
+            bodyHtml:
+              '<p>A real diff, not a guess: every object and field key gets an individual Added, Modified or Removed badge. Everything else - relationships, business rules, workflows, screen layouts, reports - shows as a summarized count ("3 new business rules") rather than a per-item breakdown.</p>',
+          },
+          {
+            heading: "Applying an update",
+            bodyHtml:
+              "<p>Apply update runs inside the same validated, safety-backed, single-transaction machinery as an original install - replacing what used to be a dead end where reinstalling an already-installed package_id was simply rejected.</p>",
+          },
+        ],
+      },
+      {
+        slug: "solutions-curate-and-promote",
+        title: "Solutions: curate exactly what ships",
+        summary: "Name a versioned, deliberately-picked subset of components, export it, and import it into another workspace.",
+        sections: [
+          {
+            heading: "Not everything - exactly what you pick",
+            bodyHtml:
+              "<p>+ New solution asks only for a Name and an optional Description. Unlike Local Workspace's all-or-nothing Export, a Solution starts empty - add exactly the objects, fields, rules, workflows and screens it needs (filterable by type, publisher or source app), and remove any you change your mind about.</p>",
+          },
+          {
+            heading: "Version it like a real release",
+            bodyHtml:
+              "<p>Open a Solution to edit its Version field directly. Bump it before each Export so repeated promotions become successive, listable releases - the same Releases view any installed package already gets.</p>",
+          },
+          {
+            heading: "Export, then import like any package",
+            bodyHtml:
+              '<p>Export (disabled until the Solution has at least one component) downloads the same manifest format every package uses. Promote it to another workspace through the ordinary App Catalog import flow there - two Lanesra OS workspaces already are two separate environments, so promoting a Solution to "prod" is just exporting from one and importing into the other.</p>',
+          },
+          {
+            heading: "Deleting a Solution",
+            bodyHtml:
+              "<p>Delete removes the Solution definition itself - the curated list and version history - without touching any of the actual components it referenced.</p>",
+          },
+        ],
+      },
+      {
+        slug: "components-and-dependencies",
+        title: "Components & Dependencies",
+        summary: "Every custom object/field/relationship/rule/workflow/screen/report and who owns it, plus every declared dependency.",
+        sections: [
+          {
+            heading: "Components: everything, tagged with an owner",
+            bodyHtml:
+              '<p>Lists every custom object, field, relationship, business rule, workflow, screen layout and report - filterable by publisher, source app, type or id - whether an installed package created it or you built it by hand. Each row shows its Publisher (a Local badge for hand-built ones) and Source (the installed app, or "Hand-built").</p>',
+          },
+          {
+            heading: "Why this is one list",
+            bodyHtml:
+              "<p>This is the same underlying data both Solution Packages' component counts and a Solution's own \"Add a component\" picker draw from - one real inventory rather than several views that could drift apart.</p>",
+          },
+          {
+            heading: "Dependencies: what a package needs",
+            bodyHtml:
+              "<p>Lists every dependency declared by any imported package - which package it depends on, the version constraint, Required/Optional, and a live Satisfied/Unsatisfied status computed against what's actually installed.</p>",
+          },
+        ],
+      },
+      {
+        slug: "publishers-and-namespaces",
+        title: "Publishers: namespace ownership",
+        summary: "Who a package_id belongs to, and why importing an unregistered publisher's package is rejected until they're registered.",
+        sections: [
+          {
+            heading: "A package_id has an owner",
+            bodyHtml:
+              "<p>Every package's package_id is expected to be shaped &lt;publisher-key&gt;.&lt;name&gt; (bundled reference packages all use lanesra.*). Publishers is the registry of which keys are claimed - importing under an unregistered key is rejected outright, naming exactly what needs registering first.</p>",
+          },
+          {
+            heading: "Registering one",
+            bodyHtml:
+              "<p>+ Register publisher takes a Key (lowercased automatically), a display Name, and an optional Description. Two publishers are seeded automatically and can't be un-registered: lanesra (Official - owns every bundled reference package) and local (the implicit home for hand-built work).</p>",
+          },
+          {
+            heading: "What the table shows",
+            bodyHtml:
+              "<p>Each row shows key, name, description, and a live count of imported packages belonging to it, plus Official/Local badges for the two seeded ones. Registering a publisher only unblocks importing packages under its key - it doesn't retroactively reassign anything already built.</p>",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    key: "integration-hub",
+    label: "Integration Hub",
+    icon: "⬡",
+    blurb:
+      "Connect encrypted external systems, turn an OpenAPI spec into callable Workflow actions, expose your own REST API and outbound webhooks, move data with CSV or a recurring pull sync, and watch it all through one unified log.",
+    topics: [
+      {
+        slug: "connections-and-overview",
+        title: "Connections & the Integration Hub Overview",
+        summary: "Encrypted connections to six kinds of external systems, Connection References for portable Solutions, and the health KPIs up front.",
+        sections: [
+          {
+            heading: "Overview: six numbers, one glance",
+            bodyHtml:
+              "<p>This tab opens on Overview - live KPI tiles for Active connections, Failed connections, API calls today, Failed webhooks today, Jobs running, and Jobs failed today, so a problem is visible from the first screen.</p>",
+          },
+          {
+            heading: "Connections: six types, encrypted at rest",
+            bodyHtml:
+              "<p>Connections holds generic REST, webhook, SFTP, PostgreSQL, OData and SMTP connections - Name, Type, Base URL, and one of 7 auth modes (none, API key, basic, bearer, custom header, OAuth2 client-credentials, OAuth2 authorization-code). Any secret is encrypted at rest (AES-256-GCM), never returned in plaintext. Test makes one real call and records the result directly on the connection.</p>",
+          },
+          {
+            heading: "Connection References: portable by design",
+            bodyHtml:
+              "<p>A Connection holds a real base URL and secret, so it can't travel inside an exported Solution. A Connection Reference is the portable half - a logical Key (e.g. crm_primary) a Solution or Workflow binds to instead. Export a Solution using one and only the reference travels; the receiving workspace binds it to its own real Connection afterward.</p>",
+          },
+        ],
+      },
+      {
+        slug: "connectors-openapi-import",
+        title: "Connectors: turn an OpenAPI spec into Workflow actions",
+        summary: 'Import an OpenAPI 3.x spec, pick which operations you need, and call any of them as a "Call Connector Action" Workflow step.',
+        sections: [
+          {
+            heading: "Parse, then choose",
+            bodyHtml:
+              "<p>+ Import connector takes a pasted OpenAPI 3.x spec (JSON or YAML) and Parse spec returns every operation found, with parsing warnings shown up front. Nothing is imported yet - you're previewing what's available.</p>",
+          },
+          {
+            heading: "Select exactly what you need",
+            bodyHtml:
+              "<p>Every parsed operation starts checked; uncheck what you don't want. Name the connector, add an optional description, and Import N actions creates one Connector with only the operations you selected.</p>",
+          },
+          {
+            heading: "A new Workflow Automation action",
+            bodyHtml:
+              "<p>Each imported action becomes callable from Workflow Automation as Call Connector Action. Test next to any action calls it for real right from this tab, before wiring it into a workflow.</p>",
+          },
+        ],
+      },
+      {
+        slug: "api-access-and-webhooks",
+        title: "API Access & Webhooks: exposing your workspace to the outside",
+        summary: "Scoped API clients for the generic REST API, and HMAC-signed outbound webhooks for record and workflow events - both Team Workspace only.",
+        sections: [
+          {
+            heading: "API Access: service-account style clients",
+            bodyHtml:
+              "<p>+ New API client issues credentials against the generic /api/v1/objects/... REST API: a Name, a scope checklist (objects.read/write, metadata.read, search.read, bulk.read/write, webhooks.manage, events.read, admin.integration.read/manage), and an optional Allowed CIDR. The secret is shown exactly once, at creation or after Rotate - hashed, never shown again. Revoke/Reactivate toggle access; Delete removes it outright. Only reachable where a Team Workspace server is running.</p>",
+          },
+          {
+            heading: "Webhooks: outbound, signed, retried",
+            bodyHtml:
+              "<p>+ New webhook subscribes to one or more of 6 event types (record.created/updated/archived, field.changed, workflow.completed/failed), delivering to a Connection's base URL with an optional Object scope. Every delivery is HMAC-SHA256 signed (X-Lanesra-Signature) and retried with exponential backoff on failure.</p>",
+          },
+          {
+            heading: "Testing and watching deliveries",
+            bodyHtml:
+              "<p>Test sends a real test delivery on demand. Deliveries opens the full attempt history for that webhook. Pause/Reactivate stop and resume delivery without deleting the subscription.</p>",
+          },
+        ],
+      },
+      {
+        slug: "data-exchange-and-external-objects",
+        title: "Data Exchange & External Objects",
+        summary: "CSV import/export and reusable Mappings through the same validated write path the REST API uses, plus read-only live records.",
+        sections: [
+          {
+            heading: "CSV Import: the same path as everything else",
+            bodyHtml:
+              "<p>Pick a Target object, an Operation (insert/update/upsert - update/upsert need a Match key), and a Duplicate policy (skip/update matched/create new). Paste CSV text, Auto-map from header row, then adjust each mapping's transform by hand. Preview (dry run) runs the import without writing anything; Import commits it - both go through the same generic record-write path the REST API uses, so the same validation, rules and permissions apply.</p>",
+          },
+          {
+            heading: "CSV Export & reusable Mappings",
+            bodyHtml:
+              "<p>CSV Export downloads any object's records as a file. Mappings saves a named field-mapping configuration so a recurring import doesn't need re-mapping by hand every time.</p>",
+          },
+          {
+            heading: "External Objects: read-only, live",
+            bodyHtml:
+              "<p>+ New external object defines a live, read-only window into another system through a Connection: an Object key, Display name, the Connection to use, and a Resource path. Preview fetches real records on demand. Nothing is copied into your workspace by defining one - it's also what an Integration Job pulls from on a schedule.</p>",
+          },
+        ],
+      },
+      {
+        slug: "integration-jobs",
+        title: "Integration Jobs: recurring pull sync",
+        summary: "Pull records from an External Object into a Lanesra object on an interval, with a checkpoint cursor - Team Workspace only for real scheduling.",
+        sections: [
+          {
+            heading: "What a Job actually does",
+            bodyHtml:
+              "<p>+ New job pairs an External Object with a target Lanesra object and an interval in minutes. Each run tracks a checkpoint cursor, resuming rather than re-pulling everything. This is pull-only - use a Webhook or Connector Action for the outbound direction instead.</p>",
+          },
+          {
+            heading: "Where the schedule actually runs",
+            bodyHtml:
+              "<p>The background scheduler only runs where a Team Workspace server is hosting this workspace. A pure desktop install has no long-running process to host it, so Run Now is the only way a desktop-hosted Job ever executes.</p>",
+          },
+          {
+            heading: "Watching runs",
+            bodyHtml:
+              "<p>Each Job's row shows its target, interval, status and last run outcome; Runs opens the full history for that Job, separate from the Hub-wide log.</p>",
+          },
+        ],
+      },
+      {
+        slug: "logs-monitoring-settings",
+        title: "Logs, Monitoring & Settings",
+        summary: "One unified log across every API call, webhook delivery and import/export run, plus workspace-level rate limits and retention.",
+        sections: [
+          {
+            heading: "One log, every execution type",
+            bodyHtml:
+              "<p>A single execution log spanning API calls, webhook deliveries and import/export runs - type, direction, status, a records breakdown (Read/Written/Skipped/Failed), duration and timestamp. Filter by type, status, or correlation id to trace one request's effects across every system it touched.</p>",
+          },
+          {
+            heading: "Purging old logs",
+            bodyHtml:
+              "<p>Purge expired logs removes anything past the retention window on demand, reporting exactly how many rows it removed.</p>",
+          },
+          {
+            heading: "Settings: rate limits & retention",
+            bodyHtml:
+              "<p>Workspace-wide: a per-client and a global API rate limit (per minute), Log retention and File retention in days, and an Allow insecure (non-TLS) outbound connections toggle. These apply across every tab in this category.</p>",
+          },
+        ],
+      },
+    ],
+  },
 ];
