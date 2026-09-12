@@ -6798,7 +6798,10 @@ function docsSearchIndex(){
  return HELP_CATEGORIES.flatMap(c=>c.topics.map(t=>({slug:t.slug,title:t.title,cat:c.label,text:(t.title+' '+t.summary+' '+t.sections.map(s=>s.heading).join(' ')).toLowerCase()})));
 }
 function docsSearchModalHtml(){
- return `<div class="docs-search-overlay" id="docsSearchOverlay" hidden><div class="docs-search-panel"><div class="docs-search-input-row"><span>🔎</span><input id="docsSearchInput" type="text" placeholder="Search documentation…" autocomplete="off"><span class="docs-search-esc">Esc</span></div><div class="docs-search-results" id="docsSearchResults"></div></div></div>`;
+ // A real, always-tappable close button - not just an "Esc" hint - since a
+ // mobile virtual keyboard has no Escape key and the visible backdrop area
+ // to tap-outside-to-close shrinks to almost nothing once it's open.
+ return `<div class="docs-search-overlay" id="docsSearchOverlay" hidden><div class="docs-search-panel"><div class="docs-search-input-row"><span>🔎</span><input id="docsSearchInput" type="text" placeholder="Search documentation…" autocomplete="off"><button type="button" class="docs-search-close" data-docs-search-close aria-label="Close search">✕</button></div><div class="docs-search-results" id="docsSearchResults"></div></div></div>`;
 }
 function renderDocsSearchResults(q){
  const results=document.getElementById('docsSearchResults');
@@ -6850,6 +6853,7 @@ function bindDocsSearch(){
  });
  document.addEventListener('click',e=>{
   if(e.target.closest('[data-docs-search-open]')){e.preventDefault();openDocsSearch();return}
+  if(e.target.closest('[data-docs-search-close]')){e.preventDefault();closeDocsSearch();return}
   const overlay=document.getElementById('docsSearchOverlay');
   if(overlay&&!overlay.hidden&&e.target===overlay)closeDocsSearch();
  });
