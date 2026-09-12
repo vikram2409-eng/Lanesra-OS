@@ -249,7 +249,7 @@ export function AdminPanel() {
       </div>
       <h2>{tabLabel(tab)}</h2>
 
-      {tab === "users" && <Users />}
+      {tab === "users" && <Users onOpenHelp={openHelpTopic} />}
 
       {tab === "profile" && workspace.data && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
