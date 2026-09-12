@@ -43,6 +43,12 @@
 //! ships, what it deliberately leaves out of the source spec's object
 //! list, and why.
 //!
+//! `property_management_manifest_json` (v1.1.0) is the first business
+//! vertical actually retrofitted onto Lanesra Industry Foundation - a
+//! real `dependencies` entry, not just the synthetic inline test manifest
+//! Foundation's own test suite uses to prove the mechanism works. See
+//! its own doc comment for exactly what changed.
+//!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
 //! packages coexisting in one workspace: a custom object's key is
@@ -844,19 +850,45 @@ fn field_service_workflows() -> serde_json::Value {
 
 // --- lanesra.property_management -------------------------------------
 
-/// `lanesra.property_management` v1.0.0 - see this module's own doc
+/// `lanesra.property_management` v1.1.0 - see this module's own doc
 /// comment for what's included and deliberately left out (notably: no
 /// Field Service integration, no lease-overlap/occupancy cross-record
 /// checks, no lease-renewal or document-expiry date-based workflows).
+///
+/// v1.1.0 retrofits this package onto `lanesra.industry_foundation`
+/// (a real, enforced `dependencies` entry - install now hard-fails
+/// without Foundation installed and active first) and adds four objects
+/// the spec's own deeper Property Management section calls for: Owner
+/// Interest (fractional co-ownership, a junction between `property` and
+/// Foundation's `party`), Lease Amendment, Security Deposit and
+/// Violation / Notice. `property`'s own "Owner" relationship (index 0)
+/// now targets `party` instead of the built-in `Company` - a single
+/// primary owner party, person or organization; `owner_interest` is
+/// where multiple co-owners and their ownership percentages actually
+/// live, since a `many_to_one` relationship can't itself carry a
+/// percentage split across several owners. `maintenance_request` also
+/// gains an optional relationship to Foundation's `service_case`, for
+/// workspaces that want a unified cross-industry case record on top of
+/// the maintenance-specific fields this package still owns.
+///
+/// Still deliberately deferred (see the spec's own longer Property
+/// Management section for the full list): Portfolio, Building (as
+/// distinct from Property), Amenity, Renewal Option, Inspection,
+/// Vacancy Period and Utility/Meter objects - none of them are needed by
+/// any relationship, rule or workflow this pass actually ships, and
+/// adding object shells with nothing wired to them would be exactly the
+/// "faked" scope this module's own doc comment warns against.
 pub fn property_management_manifest_json() -> String {
     json!({
         "format_version": 1,
         "package_id": "lanesra.property_management",
         "name": "Property Management",
         "industry": "Property Management",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "min_lanesra_version": "0.11.0",
-        "dependencies": [],
+        "dependencies": [
+            { "package_id": "lanesra.industry_foundation", "version_constraint": ">=1.0.0", "is_required": true }
+        ],
         "objects": [
             { "key": "property", "singular_label": "Property", "plural_label": "Properties", "icon": "🏢", "prefix": "PROP", "digits": 4 },
             { "key": "unit", "singular_label": "Unit", "plural_label": "Units", "icon": "🚪", "prefix": "UNIT", "digits": 5 },
@@ -868,7 +900,15 @@ pub fn property_management_manifest_json() -> String {
             { "key": "maintenance_request", "singular_label": "Maintenance Request", "plural_label": "Maintenance Requests", "icon": "🛠", "prefix": "MR", "digits": 5 },
             { "key": "vendor_assignment", "singular_label": "Vendor Assignment", "plural_label": "Vendor Assignments", "icon": "🧰", "prefix": "VA", "digits": 5 },
             { "key": "property_document", "singular_label": "Property Document", "plural_label": "Property Documents", "icon": "📄", "prefix": "DOC", "digits": 5 },
-            { "key": "unit_showing", "singular_label": "Unit Showing", "plural_label": "Unit Showings", "icon": "👁", "prefix": "SHW", "digits": 5 }
+            { "key": "unit_showing", "singular_label": "Unit Showing", "plural_label": "Unit Showings", "icon": "👁", "prefix": "SHW", "digits": 5 },
+            // --- v1.1.0 Foundation retrofit additions below ---
+            // Junction object rather than a plain many_to_many, since a co-owner's
+            // ownership percentage has nowhere to live on a bare RelationshipInstance -
+            // same reasoning as `lease_party` above.
+            { "key": "owner_interest", "singular_label": "Owner Interest", "plural_label": "Owner Interests", "icon": "🤝", "prefix": "OWNI", "digits": 5 },
+            { "key": "lease_amendment", "singular_label": "Lease Amendment", "plural_label": "Lease Amendments", "icon": "✍", "prefix": "AMD", "digits": 5 },
+            { "key": "security_deposit", "singular_label": "Security Deposit", "plural_label": "Security Deposits", "icon": "🔒", "prefix": "DEP", "digits": 5 },
+            { "key": "violation", "singular_label": "Violation / Notice", "plural_label": "Violations / Notices", "icon": "🚫", "prefix": "VIOL", "digits": 5 }
         ],
         "fields": property_management_fields(),
         "relationships": property_management_relationships(),
@@ -886,8 +926,27 @@ pub fn property_management_manifest_json() -> String {
                             "sections": [
                                 { "id": "overview", "title": "Overview", "columns": 2, "fields": ["stage", "start_date", "end_date", "rent_amount", "deposit_amount"] }
                             ],
-                            // Indices into `relationships` below: Lease Parties (3), Rent Schedule (5).
-                            "related": ["3", "5"]
+                            // Indices into `relationships` below: Lease Parties (3), Rent Schedule (5),
+                            // Amendments (15), Security Deposit (16), Violations (17).
+                            "related": ["3", "5", "15", "16", "17"]
+                        }
+                    ]
+                },
+                "publish": true
+            },
+            {
+                "entity_type": "property",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "overview",
+                            "title": "Overview",
+                            "sections": [
+                                { "id": "details", "title": "Details", "columns": 2, "fields": ["property_type", "address", "stage"] }
+                            ],
+                            // Indices into `relationships` below: Units (1), Owner Interests (13), Location (19).
+                            "related": ["1", "13", "19"]
                         }
                     ]
                 },
@@ -895,12 +954,15 @@ pub fn property_management_manifest_json() -> String {
             }
         ],
         "reports": [
-            { "name": "Leases by Stage", "entity_type": "lease", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null }
+            { "name": "Leases by Stage", "entity_type": "lease", "group_by_source": "custom", "group_by_field": "stage", "aggregate": "count", "sum_field_key": null },
+            { "name": "Violations by Status", "entity_type": "violation", "group_by_source": "custom", "group_by_field": "violation_status", "aggregate": "count", "sum_field_key": null },
+            { "name": "Security Deposits by Disposition", "entity_type": "security_deposit", "group_by_source": "custom", "group_by_field": "disposition", "aggregate": "count", "sum_field_key": null }
         ],
         "dashboard": {
             "name": "Property Management Dashboard",
             "widgets": [
-                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } }
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } },
+                { "kind": "chart", "config": { "report_ref": 1, "chart_type": "bar" } }
             ],
             "publish": true
         },
@@ -911,7 +973,8 @@ pub fn property_management_manifest_json() -> String {
             "description": "Properties, units, leases, rent schedules and maintenance for residential/commercial property managers.",
             "object_keys": [
                 "property", "unit", "lease", "lease_party", "rent_schedule",
-                "maintenance_request", "vendor_assignment", "property_document", "unit_showing", "Task"
+                "maintenance_request", "vendor_assignment", "property_document", "unit_showing",
+                "owner_interest", "lease_amendment", "security_deposit", "violation", "Task"
             ],
             "use_package_dashboard": true,
             "publish": true,
@@ -946,6 +1009,10 @@ fn property_management_fields() -> serde_json::Value {
         vendor_assignment_fields(),
         property_document_fields(),
         unit_showing_fields(),
+        owner_interest_fields(),
+        lease_amendment_fields(),
+        security_deposit_fields(),
+        violation_fields(),
     ] {
         all.extend(group.as_array().expect("each group is a json array").clone());
     }
@@ -1034,12 +1101,62 @@ fn unit_showing_fields() -> serde_json::Value {
     ])
 }
 
+fn owner_interest_fields() -> serde_json::Value {
+    json!([
+        { "key": "interest_type", "entity_type": "owner_interest", "label": "Interest Type", "field_type": "select", "options": ["Sole", "Joint", "Trust", "LLC Member"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Sole", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "ownership_percent", "entity_type": "owner_interest", "label": "Ownership %", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": "100", "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "is_primary_contact", "entity_type": "owner_interest", "label": "Primary Contact", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": "Who the property manager contacts first among several co-owners.", "placeholder": null },
+        { "key": "interest_start_date", "entity_type": "owner_interest", "label": "Start Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "interest_end_date", "entity_type": "owner_interest", "label": "End Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "interest_status", "entity_type": "owner_interest", "label": "Status", "field_type": "select", "options": ["Active", "Ended"], "required": true, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn lease_amendment_fields() -> serde_json::Value {
+    json!([
+        { "key": "amendment_type", "entity_type": "lease_amendment", "label": "Amendment Type", "field_type": "select", "options": ["Rent Change", "Term Extension", "Party Change", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amendment_date", "entity_type": "lease_amendment", "label": "Amendment Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "previous_value", "entity_type": "lease_amendment", "label": "Previous Value", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Free text - e.g. the prior rent amount or end date being amended.", "placeholder": null },
+        { "key": "new_value", "entity_type": "lease_amendment", "label": "New Value", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amendment_description", "entity_type": "lease_amendment", "label": "Description", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Executed by the "Lease amendment execution" business rule below.
+        { "key": "amendment_status", "entity_type": "lease_amendment", "label": "Status", "field_type": "select", "options": ["Draft", "Executed"], "required": true, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn security_deposit_fields() -> serde_json::Value {
+    json!([
+        { "key": "deposit_amount", "entity_type": "security_deposit", "label": "Amount", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "held_date", "entity_type": "security_deposit", "label": "Held Since", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Security deposit disposition" business rule below.
+        { "key": "disposition", "entity_type": "security_deposit", "label": "Disposition", "field_type": "select", "options": ["Held", "Partially Refunded", "Fully Refunded", "Forfeited"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Held", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "disposition_date", "entity_type": "security_deposit", "label": "Disposition Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "deduction_amount", "entity_type": "security_deposit", "label": "Deduction Amount", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "deduction_notes", "entity_type": "security_deposit", "label": "Deduction Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn violation_fields() -> serde_json::Value {
+    json!([
+        { "key": "violation_type", "entity_type": "violation", "label": "Violation Type", "field_type": "select", "options": ["Noise", "Unauthorized Occupant", "Property Damage", "Non-Payment", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "reported_date", "entity_type": "violation", "label": "Reported Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "violation_description", "entity_type": "violation", "label": "Description", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Violation escalation" workflow and required-when-Resolved
+        // by the "Violation resolution" business rule, both below.
+        { "key": "violation_status", "entity_type": "violation", "label": "Status", "field_type": "select", "options": ["Open", "Notice Sent", "Resolved", "Escalated"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Open", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "resolution_date", "entity_type": "violation", "label": "Resolution Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
 /// Indices below are load-bearing: `screen_layouts[0].draft`'s `related`
 /// and both `update_related_record` workflow actions reference these
 /// relationships by their position in this array.
 fn property_management_relationships() -> serde_json::Value {
     json!([
-        /* 0 */ { "source_entity_type": "property", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Owner", "reverse_label": "Properties", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        // v1.1.0: retargeted from the built-in `Company` to Foundation's `party` -
+        // a single primary owner party (person or organization); `owner_interest`
+        // (13/14 below) is where fractional co-ownership actually lives.
+        /* 0 */ { "source_entity_type": "property", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Owner", "reverse_label": "Properties", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
         /* 1 */ { "source_entity_type": "unit", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Units", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
         /* 2 */ { "source_entity_type": "lease", "target_entity_type": "unit", "relationship_type": "many_to_one", "forward_label": "Unit", "reverse_label": "Leases", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 3 */ { "source_entity_type": "lease_party", "target_entity_type": "lease", "relationship_type": "many_to_one", "forward_label": "Lease", "reverse_label": "Parties", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
@@ -1051,14 +1168,29 @@ fn property_management_relationships() -> serde_json::Value {
         /* 9 */ { "source_entity_type": "vendor_assignment", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Vendor", "reverse_label": "Vendor Assignments", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
         /* 10 */ { "source_entity_type": "property_document", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Documents", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 3 },
         /* 11 */ { "source_entity_type": "unit_showing", "target_entity_type": "unit", "relationship_type": "many_to_one", "forward_label": "Unit", "reverse_label": "Showings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 4 },
-        /* 12 */ { "source_entity_type": "unit_showing", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Prospect", "reverse_label": "Unit Showings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 }
+        /* 12 */ { "source_entity_type": "unit_showing", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Prospect", "reverse_label": "Unit Showings", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        // --- v1.1.0 Foundation retrofit additions below ---
+        /* 13 */ { "source_entity_type": "owner_interest", "target_entity_type": "property", "relationship_type": "many_to_one", "forward_label": "Property", "reverse_label": "Owner Interests", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 5 },
+        /* 14 */ { "source_entity_type": "owner_interest", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Owner Party", "reverse_label": "Property Interests", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 15 */ { "source_entity_type": "lease_amendment", "target_entity_type": "lease", "relationship_type": "many_to_one", "forward_label": "Lease", "reverse_label": "Amendments", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 3 },
+        /* 16 */ { "source_entity_type": "security_deposit", "target_entity_type": "lease", "relationship_type": "many_to_one", "forward_label": "Lease", "reverse_label": "Security Deposit", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 4 },
+        /* 17 */ { "source_entity_type": "violation", "target_entity_type": "lease", "relationship_type": "many_to_one", "forward_label": "Lease", "reverse_label": "Violations", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 5 },
+        /* 18 */ { "source_entity_type": "violation", "target_entity_type": "unit", "relationship_type": "many_to_one", "forward_label": "Unit", "reverse_label": "Violations", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 },
+        // Foundation cross-package relationships - `party`/`location`/`service_case`
+        // are `lanesra.industry_foundation` object keys, valid only because this
+        // package now declares a real, enforced dependency on it (see this
+        // function's own module-level doc comment on cross-package relationships).
+        /* 19 */ { "source_entity_type": "property", "target_entity_type": "location", "relationship_type": "many_to_one", "forward_label": "Location", "reverse_label": "Properties", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 20 */ { "source_entity_type": "maintenance_request", "target_entity_type": "service_case", "relationship_type": "many_to_one", "forward_label": "Service Case", "reverse_label": "Maintenance Requests", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 3 }
     ])
 }
 
-/// Two of the spec's four rules - "Occupancy conflict" and "Lease
-/// activation"'s own eligibility checks both need cross-record/aggregate
-/// reads (another Lease on the same Unit; counting linked Lease Parties)
-/// no condition can do; see this module's own doc comment.
+/// Two of the spec's four original rules - "Occupancy conflict" and
+/// "Lease activation"'s own eligibility checks - both need cross-record/
+/// aggregate reads (another Lease on the same Unit; counting linked
+/// Lease Parties) no condition can do; see this module's own doc
+/// comment. The three v1.1.0 additions (amendment/deposit/violation) are
+/// all same-record checks, so they don't hit that gap.
 fn property_management_business_rules() -> serde_json::Value {
     json!([
         {
@@ -1106,6 +1238,52 @@ fn property_management_business_rules() -> serde_json::Value {
             "actions": [
                 { "action_type": "require", "target_field_key": "interest_level", "target_field_source": "custom", "action_value": null, "message": null }
             ]
+        },
+        {
+            "entity_type": "lease_amendment",
+            "name": "Lease amendment execution",
+            "description": "An executed amendment must record what the new value actually is.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "amendment_status", "operator": "equals", "value": "Executed" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "new_value", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "security_deposit",
+            "name": "Security deposit disposition",
+            "description": "A partially refunded or forfeited deposit must record the disposition date and the deduction amount.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "disposition", "operator": "in_list", "value": "Partially Refunded|Forfeited" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "disposition_date", "target_field_source": "custom", "action_value": null, "message": null },
+                { "action_type": "require", "target_field_key": "deduction_amount", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "violation",
+            "name": "Violation resolution",
+            "description": "A resolved violation must record its resolution date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "violation_status", "operator": "equals", "value": "Resolved" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "resolution_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
         }
     ])
 }
@@ -1119,7 +1297,9 @@ fn property_management_business_rules() -> serde_json::Value {
 /// format yet. "Lease termination/expiry" simplifies away the spec's
 /// "unless another active lease exists" clause - checking that needs
 /// reading every other Lease linked to the same Unit, a cross-record
-/// aggregate no condition can express.
+/// aggregate no condition can express. The v1.1.0 "Violation escalation"
+/// addition is a plain `field_changed` task-creation workflow, same shape
+/// as "High-interest showing follow-up" above.
 fn property_management_workflows() -> serde_json::Value {
     json!([
         {
@@ -1191,6 +1371,24 @@ fn property_management_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Follow up with interested prospect\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "violation",
+            "name": "Violation escalation",
+            "description": "An escalated violation gets a task for the property manager to take further action (notice, fee, or legal referral).",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "violation_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "violation_status", "operator": "equals", "value": "Escalated" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Escalated lease violation needs action\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
             ]
         }
     ])
