@@ -656,6 +656,7 @@ pub fn reference_package_manifest(key: &str) -> AppResult<String> {
         "nonprofit_association" => Ok(super::reference_packages::nonprofit_association_manifest_json()),
         "auto_service" => Ok(super::reference_packages::auto_service_manifest_json()),
         "policy_admin_claims" => Ok(super::reference_packages::policy_admin_claims_manifest_json()),
+        "industry_foundation" => Ok(super::reference_packages::lanesra_industry_foundation_manifest_json()),
         other => Err(AppError::NotFound(format!("Reference package '{other}'"))),
     }
 }

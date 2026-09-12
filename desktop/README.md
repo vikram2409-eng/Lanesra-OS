@@ -618,6 +618,17 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   backup, and a transactional, rollback-safe install that reuses the
   workspace's existing Company/Contact/Task records instead of creating a
   parallel data model.
+- **Lanesra Industry Foundation**: a twelfth, different-in-kind package -
+  shared cross-industry plumbing (Party, Party Role, Party Relationship,
+  Organization Unit, Location, Contact Point, External Identifier,
+  Consent/Preference, Asset, Agreement, Service Case, Interaction,
+  Document Record, Financial Transaction, Data Quality Issue) other
+  packages can optionally declare a real, enforced dependency on
+  (`IndustryPackageManifest::dependencies`, checked before install) and
+  relate their own objects to, instead of each reinventing its own
+  version. Not retrofitted onto the eleven business-vertical packages
+  above in this pass - each keeps its own independent fields exactly as
+  shipped.
 - **Deployment Management**: a Publisher registry with enforced namespace
   validation, component-tagging across every admin-configurable artifact
   (a synthetic "Local Workspace" grouping shows everything built by hand),
