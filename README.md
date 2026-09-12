@@ -88,7 +88,6 @@ The root of this repo is the public product website (`lanesraos.com`), a static 
 ## Public product pages
 
 - `/platform` — What you can build on top of the CRM, illustrated with real examples
-- `/principles` — The product decisions and beliefs behind Lanesra OS
 - `/compare` — A factual market-positioning comparison
 - `/download` — Desktop platform status, what's available today, and what's still planned
 - `/roadmap` — Shipped, in-progress and proposed work, plus the recommended build sequence (formerly split across separate Roadmap and Backlog pages)
