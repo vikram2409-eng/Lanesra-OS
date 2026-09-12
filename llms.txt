@@ -17,7 +17,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - Early Access — the desktop app itself is at v0.12.0; the website/product tracks a separate sequential version counter, now at v0.45.0
 - Windows desktop edition (Tauri + Rust + SQLite): the full sales lifecycle, Contracts, Tasks, user management, Team Workspace mode for small teams (Docker), backup/restore, self-service password change, PDF generation/printing, and CSV import/export all working. desktop-v0.12.0 is the latest tagged Early Access Windows installer (.exe/.msi) on GitHub Releases (unsigned); build and run from source is also supported.
 - No-code platform (desktop and demo): Custom Objects, Custom Relationships, Screen/App Builder, Business Rules, Workflow Automation, Dashboards, Reports, global search, Saved Views & Bulk Actions.
-- App Catalog (desktop and demo): all 10 industry reference packages install transactionally into an existing workspace.
+- App Catalog (desktop and demo): all 11 industry reference packages install transactionally into an existing workspace.
 - Deployment Management (desktop and demo): Publishers, versioned Solutions, real export/import, update-with-diff.
 - Integration Hub (desktop only, real): AES-256-GCM-encrypted Connections, OpenAPI Connector import, a generic REST API secured by hashed scoped API keys, HMAC-signed Webhooks, a CSV data-exchange wizard, External Objects, and a real background-scheduled Integration Jobs engine on the Team Workspace server. The online demo simulates this layer client-side (no server to make a real call from).
 - AI & Agentic Layer (desktop and demo): a native MCP server & CLI, a Chat Assistant, the AI Agent Foundry (named agents with persona, Actions, Memory, Skills, delegation), Orchestration (Pipelines/Triggers/workflow-fired runs, with human-approval gates on any topology's own resume point), and a Unified AI Gateway (multi-provider routing, failover, token budgets, DLP air-gapping) are all shipped. A Context Layer adds ranked full-text search over Custom Object records (SQLite FTS5/`bm25()` — lexical relevance) and real change-history for every agent's Memory; Vector Search (desktop only, opt-in) adds a second, meaning-based ranking on top - real embeddings from the workspace's own already-configured OpenAI-compatible/Gemini provider, stored as plain SQLite BLOBs and compared by cosine similarity in Rust, not a bundled vector database.
@@ -38,7 +38,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - Companies, contacts, opportunities, products, quotes, orders, invoices, contracts, tasks
 - Sales dashboards with admin-configurable KPIs, global search, CSV import/export, PDF print output
 - Saved Views (named filter/sort/group-by combinations, reusable as a dashboard data source) and Bulk Actions (update status, reassign owner, tag, archive across a multi-select)
-- Industry Data Model: a versioned package manifest format, and App Catalog (10 install-ready industry apps)
+- Industry Data Model: a versioned package manifest format, and App Catalog (11 install-ready industry apps)
 - Deployment Management: Publishers, versioned Solutions, component export/import, update-with-diff
 - Integration Hub: encrypted Connections, OpenAPI Connectors, a generic REST API, HMAC-signed Webhooks, CSV data exchange, scheduled Integration Jobs, unified execution logs
 

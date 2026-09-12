@@ -5,7 +5,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Try the demo](https://img.shields.io/badge/try%20it-online%20demo-4f7cff)](https://lanesraos.com/demo)
 
-Modern, open-source, AI-native business application platform — an AI Agent Foundry and Unified AI Gateway where named agents run directly against your real data, not a bolted-on chatbot; a native MCP server & CLI that expose that same data to Claude Desktop, an IDE agent or any MCP-capable client; the same no-code admin panel that lets you reshape the workspace itself (your own record types, relationships, screens, business rules and automations, not just the fixed CRM fields); a complete CRM out of the box; and an Industry Data Model of 10 ready-made industry apps you can install instead of building from scratch. Deployment Management packages and promotes your customizations between workspaces, and an Integration Hub connects it to everything else you run. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
+Modern, open-source, AI-native business application platform — an AI Agent Foundry and Unified AI Gateway where named agents run directly against your real data, not a bolted-on chatbot; a native MCP server & CLI that expose that same data to Claude Desktop, an IDE agent or any MCP-capable client; the same no-code admin panel that lets you reshape the workspace itself (your own record types, relationships, screens, business rules and automations, not just the fixed CRM fields); a complete CRM out of the box; and an Industry Data Model of 11 ready-made industry apps you can install instead of building from scratch. Deployment Management packages and promotes your customizations between workspaces, and an Integration Hub connects it to everything else you run. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
 
 **[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
@@ -49,7 +49,7 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 **Industry Data Model — install instead of building from scratch:**
 
 - **Industry Data Model** — a versioned package manifest format (objects, fields, relationships, business rules, workflows, screens, reports and a dashboard, with optional sample data) installed into an existing workspace, reusing your existing Company/Contact/Task core rather than creating a parallel data model
-- **App Catalog** — install one of 10 ready-made industry apps (Field Service, Property Management, Construction, Professional Services, Practice Administration, Recruitment, Real Estate, Legal Practice, Nonprofit & Association, Auto Repair) with a validated, backed-up, transactional install
+- **App Catalog** — install one of 11 ready-made industry apps (Field Service, Property Management, Construction, Professional Services, Practice Administration, Recruitment, Real Estate, Legal Practice, Nonprofit & Association, Auto Repair, Policy Administration & Claims Management) with a validated, backed-up, transactional install
 
 **Also included:**
 

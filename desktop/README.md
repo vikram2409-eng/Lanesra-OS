@@ -607,11 +607,12 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   published screens, and one dashboard into a named, publishable app with
   its own icon, granted to roles or individual users as Viewer or Editor,
   enforced server-side on every write including status-lifecycle actions.
-- **App Catalog** (10 industry apps): Field Service, Property Management,
+- **App Catalog** (11 industry apps): Field Service, Property Management,
   Construction & Contractors, Professional Services, Practice
   Administration, Recruitment & Staffing, Real Estate Brokerage, Legal
-  Practice, Nonprofit & Association Management, and Auto Repair & Service
-  Garage - each a versioned package manifest (objects, fields,
+  Practice, Nonprofit & Association Management, Auto Repair & Service
+  Garage, and Policy Administration & Claims Management - each a versioned
+  package manifest (objects, fields,
   relationships, business rules, workflows, screens, reports, an optional
   dashboard) installed with pre-install validation, an automatic safety
   backup, and a transactional, rollback-safe install that reuses the
