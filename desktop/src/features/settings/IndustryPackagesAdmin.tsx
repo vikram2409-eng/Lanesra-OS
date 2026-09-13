@@ -143,6 +143,9 @@ export function IndustryPackagesAdmin({ onOpenHelp }: { onOpenHelp: (slug: strin
           <button className="btn" disabled={loadStarter.isPending} onClick={() => loadStarter.mutate("policy_admin_claims")}>
             {loadStarter.isPending ? "Loading..." : "Load Policy Administration & Claims Management starter"}
           </button>
+          <button className="btn" disabled={loadStarter.isPending} onClick={() => loadStarter.mutate("industry_foundation")}>
+            {loadStarter.isPending ? "Loading..." : "Load Industry Foundation starter"}
+          </button>
         </div>
         <textarea
           value={manifestJson}

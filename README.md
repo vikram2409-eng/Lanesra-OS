@@ -50,6 +50,7 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 
 - **Industry Data Model** — a versioned package manifest format (objects, fields, relationships, business rules, workflows, screens, reports and a dashboard, with optional sample data) installed into an existing workspace, reusing your existing Company/Contact/Task core rather than creating a parallel data model
 - **App Catalog** — install one of 11 ready-made industry apps (Field Service, Property Management, Construction, Professional Services, Practice Administration, Recruitment, Real Estate, Legal Practice, Nonprofit & Association, Auto Repair, Policy Administration & Claims Management) with a validated, backed-up, transactional install
+- **Lanesra Industry Foundation** (desktop only) — a shared cross-industry package (Party, Party Role, Party Relationship, Location, Asset, Agreement and more) other industry packages can optionally declare a real, enforced dependency on and relate to, instead of each reinventing its own version
 
 **Also included:**
 

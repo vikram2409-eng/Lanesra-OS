@@ -26,6 +26,23 @@
 //! than stopping at the spec's original Work Order/Appointment/Asset
 //! core. See that function's own doc comment for what was added and why.
 //!
+//! A twelfth package, Lanesra Industry Foundation
+//! (`lanesra_industry_foundation_manifest_json`), is different in kind
+//! from the eleven above it: it's shared cross-industry plumbing (Party,
+//! Party Role, Location, Asset, Agreement, ...) other packages can
+//! optionally *depend on*, not its own business vertical. It's the first
+//! package in this module to use `IndustryPackageManifest::dependencies`
+//! for real - `industry_package_service::validate` already enforces a
+//! required dependency (installed, active, version-satisfying) before
+//! `install`/`apply_update` runs, and a later package's own
+//! objects/fields/relationships can already target an earlier package's
+//! object key with no package-boundary check at all
+//! (`custom_object_service::is_valid_dynamic_entity_type` is a plain
+//! workspace-wide key lookup). Confirmed by reading that validation code
+//! directly, not assumed - see its own doc comment for exactly what it
+//! ships, what it deliberately leaves out of the source spec's object
+//! list, and why.
+//!
 //! Two packages both needing a "Project"-shaped object (Construction &
 //! Contractors and Professional Services) is also the first real test of
 //! packages coexisting in one workspace: a custom object's key is
@@ -126,14 +143,33 @@
 //!   Garage's "Appointment check-in ... copy customer/vehicle [context]")
 //!   can only do the create-and-link half; see `auto_service_workflows`'s
 //!   own doc comment.
-//! - A self-referential relationship (an object related to another record
-//!   of its own same type) - `relationship_service::validate_shape`
+//! - A self-referential relationship - an object related to another
+//!   record of its own same type (a parent/child hierarchy: an
+//!   Organization Unit's parent unit, a WBS Element's parent WBS, an
+//!   Asset's parent Asset). `relationship_service::validate_shape`
 //!   rejects `source_entity_type == target_entity_type` outright ("A
-//!   relationship must connect two different object types"). Field
+//!   relationship must connect two different object types") - confirmed
+//!   by reading that function, not assumed. Every hierarchy in this
+//!   module is either flattened to one level (no sub-assemblies) or, where
+//!   a parent link is genuinely part of the spec (Lanesra Industry
+//!   Foundation's own Organization Unit), recorded as a plain unenforced
+//!   text field instead of a real link; see
+//!   `lanesra_industry_foundation_manifest_json`'s own doc comment. Field
 //!   Service's own "callback job points back at the original Work Order"
-//!   is modeled as a plain boolean flag (`is_callback`) instead, with no
-//!   link to which earlier Work Order it was a callback for; see
-//!   `field_service_fields`'s own doc comment.
+//!   hits the same gap and is modeled as a plain boolean flag
+//!   (`is_callback`) instead, with no link to which earlier Work Order it
+//!   was a callback for; see `field_service_fields`'s own doc comment.
+//! - A generic polymorphic relationship target - "this record relates to
+//!   *any* other record, of whatever type" (a document attached to a
+//!   policy or a claim or a matter; an external identifier for whatever
+//!   object it maps to). A `RelationshipDefinitionInput`'s
+//!   `target_entity_type` is always one fixed type, chosen at manifest-
+//!   authoring time, never resolved per-record at runtime. Lanesra
+//!   Industry Foundation's Document Record, External Identifier,
+//!   Interaction, Financial Transaction and Data Quality Issue objects
+//!   all want exactly this and don't get it - see that package's own doc
+//!   comment for how each is degraded to a plain, unenforced pair of text
+//!   fields instead.
 
 use serde_json::json;
 
@@ -4756,6 +4792,592 @@ fn policy_admin_claims_workflows() -> serde_json::Value {
             ],
             "actions": [
                 { "action_type": "create_task", "params_json": "{\"title\":\"Update billing for the premium change\",\"description\":null,\"due_in_days\":1,\"assignee_user_id\":null}" }
+            ]
+        }
+    ])
+}
+
+// --- lanesra.industry_foundation -----------------------------------------
+
+/// `lanesra.industry_foundation` v1.0.0 - see this module's own doc comment
+/// for the two new engine-limitation gaps it surfaced (self-referential
+/// relationships; generic polymorphic relationship targets) and for why
+/// it's different in kind from the eleven packages above it: this one is
+/// shared cross-industry plumbing other packages can *depend on*, not its
+/// own business vertical - the first real exercise of
+/// `IndustryPackageManifest::dependencies` and of one package's objects/
+/// relationships/fields targeting another already-installed package's
+/// object keys, both already fully supported by `industry_package_service`
+/// (confirmed by reading `validate()` and
+/// `custom_object_service::is_valid_dynamic_entity_type` directly, not
+/// assumed).
+///
+/// Modeled after this spec's own "Lanesra Industry Foundation" chapter -
+/// Microsoft Common Data Model's cross-industry entities, ServiceNow's
+/// foundational/operational split, Salesforce's additive industry
+/// extensions around shared CRM entities - trimmed to what this engine can
+/// actually deliver honestly today:
+/// - `party` / `party_role` / `party_relationship`: a person-or-
+///   organization abstraction, generic roles a party holds (with effective
+///   dates), and party-to-party relationships (ownership %, guarantor,
+///   household, ...). `party` doesn't *replace* Contact/Company - it wraps
+///   an optional link to either one (a relationship can't target "Company
+///   OR Contact" - every relationship has exactly one fixed target type),
+///   so nothing enforces that at least one is actually set (the same "no
+///   rule can require a relationship link, only a field value" gap
+///   `practice_admin_manifest_json` already documents). `party_role`
+///   deliberately does NOT attempt the source spec's generic "role in the
+///   context of any object" (e.g. "Producer on this specific Policy") -
+///   that needs a polymorphic relationship target this engine doesn't have
+///   (see this module's own doc comment); a consuming package wanting a
+///   role-in-context relates its own object directly to `party`/
+///   `party_role` instead, the same fixed-target pattern every other
+///   package in this file already uses. `party_relationship` needs two
+///   separate relationships to the *same* target type (`from_party`,
+///   `to_party`, both -> `party`) - confirmed working, not assumed:
+///   `relationship_service::slugify` auto-suffixes the second one's key
+///   rather than rejecting the collision.
+/// - `organization_unit`: a department/branch/unit within a Company, with
+///   effective dates. Its own natural parent-unit hierarchy can't be a
+///   real relationship - self-referential relationships are rejected (see
+///   this module's own doc comment) - so `parent_unit_name` is a plain,
+///   unenforced text field instead of a link.
+/// - `location`: site/address/geo/timezone in one object rather than a
+///   separate Location + Address pair the source spec calls for - nothing
+///   in that spec's own relationship table ever needs Address addressed
+///   independently of its owning Location, so splitting it would only add
+///   indirection with no realized benefit (the same reasoning
+///   `professional_services_manifest_json` already gives for not
+///   reusing Construction's `project` key elsewhere in this file).
+/// - `contact_point`: kept as its own object (not folded into `party` as
+///   plain fields) because a party genuinely has *many* of these (work
+///   email, mobile, home phone, ...), a real one-to-many the other fields-
+///   only folds in this package don't have.
+/// - `external_identifier`, `interaction`, `document_record`,
+///   `financial_transaction`, `data_quality_issue`: each wants to relate to
+///   "whatever record this is about," a generic polymorphic relationship
+///   target this engine doesn't have (see this module's own doc comment).
+///   Each is instead given a plain `linked_object_type`/`linked_object_id`
+///   text-field pair - stored, visible, but not a real link: no clickable
+///   related list, no cascade/restrict delete behavior, nothing stopping a
+///   typo in either field. Recorded once here rather than repeated per
+///   object.
+/// - `enterprise_asset`: named with an `enterprise_` prefix, not plain
+///   `asset` - Field Service already claims that exact object key, and a
+///   custom object's key is workspace-wide (see this module's own doc
+///   comment on `engagement` vs. `project` for the identical reasoning).
+///   No parent-asset link for the same self-referential-relationship
+///   reason as `organization_unit`.
+/// - `agreement`: a lighter-weight contractual master than the core
+///   `Contract` entity, for commitments that don't need a full contract
+///   (e.g. a producer appointment) - optionally related to a real Contract
+///   when one does back it, rather than forcing every agreement through
+///   the heavier object.
+///
+/// Deliberately left out of this package entirely, not merely trimmed:
+/// - **Product Model / Product Offering** - the source spec's own Field
+///   Service chapter already says to "use the generic Lanesra Product/
+///   Service catalog rather than a separate parts catalog"; a second
+///   "product" concept sitting next to the platform's existing built-in
+///   Product entity (already the target of every package's own line-item
+///   objects) would only invite confusion between two different things
+///   both called a product, not add real capability.
+/// - **Reference Code Set** - cannot be built as anything more than a
+///   decorative, unenforced list: no field type or mechanism exists today
+///   where a `select` field's options are dynamically pulled from another
+///   object's rows (`CUSTOM_FIELD_TYPES` is a fixed text/number/date/
+///   boolean/select set). Shipping it would misrepresent what it does;
+///   real support needs a new field type, engine work, not modeling.
+/// - **Automatic Data Quality Issue generation** - the source spec's own
+///   vision has these auto-created by a background rules engine running
+///   on every save/import/API call across every object. That's a new
+///   cross-cutting validation subsystem, not a bigger manifest; this
+///   package ships `data_quality_issue` as a plain object other workflows
+///   or an admin can create/relate to, not the automatic detection engine
+///   itself.
+///
+/// Not retrofitted onto the eleven packages above: none of them are
+/// changed to consume these shared objects in this pass - each keeps its
+/// own independent party-like/asset-like fields exactly as already
+/// shipped and tested. Adopting Foundation objects is a later, per-package
+/// decision, not automatic.
+pub fn lanesra_industry_foundation_manifest_json() -> String {
+    json!({
+        "format_version": 1,
+        "package_id": "lanesra.industry_foundation",
+        "name": "Lanesra Industry Foundation",
+        "industry": "Cross-Industry",
+        "version": "1.0.0",
+        "min_lanesra_version": "0.11.0",
+        "dependencies": [],
+        "objects": [
+            { "key": "party", "singular_label": "Party", "plural_label": "Parties", "icon": "🧑‍🤝‍🧑", "prefix": "PTY", "digits": 6 },
+            { "key": "party_role", "singular_label": "Party Role", "plural_label": "Party Roles", "icon": "🎭", "prefix": "PROL", "digits": 6 },
+            { "key": "party_relationship", "singular_label": "Party Relationship", "plural_label": "Party Relationships", "icon": "🔗", "prefix": "PREL", "digits": 6 },
+            { "key": "organization_unit", "singular_label": "Organization Unit", "plural_label": "Organization Units", "icon": "🏢", "prefix": "OU", "digits": 4 },
+            { "key": "location", "singular_label": "Location", "plural_label": "Locations", "icon": "📍", "prefix": "LOC", "digits": 5 },
+            { "key": "contact_point", "singular_label": "Contact Point", "plural_label": "Contact Points", "icon": "☎", "prefix": "CP", "digits": 6 },
+            { "key": "external_identifier", "singular_label": "External Identifier", "plural_label": "External Identifiers", "icon": "🆔", "prefix": "EXTID", "digits": 6 },
+            { "key": "consent_preference", "singular_label": "Consent / Preference", "plural_label": "Consents / Preferences", "icon": "✅", "prefix": "CONS", "digits": 6 },
+            { "key": "enterprise_asset", "singular_label": "Asset", "plural_label": "Assets", "icon": "📦", "prefix": "EAST", "digits": 6 },
+            { "key": "agreement", "singular_label": "Agreement", "plural_label": "Agreements", "icon": "📜", "prefix": "AGR", "digits": 5 },
+            { "key": "service_case", "singular_label": "Service Case", "plural_label": "Service Cases", "icon": "🗂", "prefix": "CASE", "digits": 5 },
+            { "key": "interaction", "singular_label": "Interaction", "plural_label": "Interactions", "icon": "💬", "prefix": "INTX", "digits": 6 },
+            { "key": "document_record", "singular_label": "Document Record", "plural_label": "Document Records", "icon": "🗎", "prefix": "DOC", "digits": 6 },
+            { "key": "financial_transaction", "singular_label": "Financial Transaction", "plural_label": "Financial Transactions", "icon": "💵", "prefix": "FTXN", "digits": 6 },
+            { "key": "data_quality_issue", "singular_label": "Data Quality Issue", "plural_label": "Data Quality Issues", "icon": "⚠", "prefix": "DQI", "digits": 6 }
+        ],
+        "fields": lanesra_industry_foundation_fields(),
+        "relationships": lanesra_industry_foundation_relationships(),
+        "business_rules": lanesra_industry_foundation_business_rules(),
+        "workflows": lanesra_industry_foundation_workflows(),
+        "screen_layouts": [
+            {
+                "entity_type": "party",
+                "name": "Default",
+                "draft": {
+                    "tabs": [
+                        {
+                            "id": "overview",
+                            "title": "Overview",
+                            "sections": [
+                                { "id": "details", "title": "Details", "columns": 2, "fields": ["party_type", "display_name", "party_status"] }
+                            ],
+                            // Indices into `relationships` below: Roles (2), Relationships From (3),
+                            // Contact Points (8), Locations (6), Agreements (12), Cases (14).
+                            "related": ["2", "3", "8", "6", "12", "14"]
+                        }
+                    ]
+                },
+                "publish": true
+            }
+        ],
+        "reports": [
+            { "name": "Parties by Type", "entity_type": "party", "group_by_source": "custom", "group_by_field": "party_type", "aggregate": "count", "sum_field_key": null },
+            { "name": "Data Quality Issues by Severity", "entity_type": "data_quality_issue", "group_by_source": "custom", "group_by_field": "severity", "aggregate": "count", "sum_field_key": null }
+        ],
+        "dashboard": {
+            "name": "Industry Foundation Dashboard",
+            "widgets": [
+                { "kind": "chart", "config": { "report_ref": 0, "chart_type": "bar" } },
+                { "kind": "chart", "config": { "report_ref": 1, "chart_type": "bar" } }
+            ],
+            "publish": true
+        },
+        "numbering_overrides": [],
+        "app": {
+            "name": "Lanesra Industry Foundation",
+            "icon": "🏛",
+            "description": "Shared cross-industry plumbing - Party, Party Role, Party Relationship, Location, Asset, Agreement and more - other industry packages can optionally depend on and relate to, instead of each reinventing its own version.",
+            "object_keys": [
+                "party", "party_role", "party_relationship", "organization_unit", "location",
+                "contact_point", "external_identifier", "consent_preference", "enterprise_asset",
+                "agreement", "service_case", "interaction", "document_record",
+                "financial_transaction", "data_quality_issue", "Task"
+            ],
+            "use_package_dashboard": true,
+            "publish": true,
+            "recommended_permissions": [
+                { "role": "Administrator", "level": "editor" },
+                { "role": "Manager", "level": "editor" },
+                { "role": "Sales", "level": "editor" },
+                { "role": "Finance", "level": "viewer" },
+                { "role": "ReadOnly", "level": "viewer" }
+            ]
+        },
+        // No pure reference/lookup object in this data model to seed sample
+        // rows for, same reasoning `policy_admin_claims_manifest_json`
+        // already gives for its own empty seed_data.
+        "seed_data": []
+    })
+    .to_string()
+}
+
+fn lanesra_industry_foundation_fields() -> serde_json::Value {
+    let mut all = Vec::new();
+    for group in [
+        party_fields(),
+        party_role_fields(),
+        party_relationship_fields(),
+        organization_unit_fields(),
+        location_fields(),
+        contact_point_fields(),
+        external_identifier_fields(),
+        consent_preference_fields(),
+        enterprise_asset_fields(),
+        agreement_fields(),
+        service_case_fields(),
+        interaction_fields(),
+        document_record_fields(),
+        financial_transaction_fields(),
+        data_quality_issue_fields(),
+    ] {
+        all.extend(group.as_array().expect("each group is a json array").clone());
+    }
+    serde_json::Value::Array(all)
+}
+
+fn party_fields() -> serde_json::Value {
+    json!([
+        { "key": "party_type", "entity_type": "party", "label": "Party Type", "field_type": "select", "options": ["Person", "Organization"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "display_name", "entity_type": "party", "label": "Display Name", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Shown even before this Party is linked to a Contact or Company.", "placeholder": null },
+        { "key": "party_status", "entity_type": "party", "label": "Status", "field_type": "select", "options": ["Active", "Inactive"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn party_role_fields() -> serde_json::Value {
+    json!([
+        // Admin-editable list, same as any select field - a package or
+        // admin can widen it after install (e.g. an insurance package
+        // adding "Producer" doesn't need engine changes).
+        { "key": "role_type", "entity_type": "party_role", "label": "Role Type", "field_type": "select", "options": ["Tenant", "Claimant", "Producer", "Provider", "Candidate", "Owner", "Guarantor", "Beneficiary", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_from", "entity_type": "party_role", "label": "Valid From", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Optional - an ongoing role has no end date. See the "Role date
+        // order" business rule below for why an empty value here is safe.
+        { "key": "valid_to", "entity_type": "party_role", "label": "Valid To", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Role ended" workflow below.
+        { "key": "role_status", "entity_type": "party_role", "label": "Status", "field_type": "select", "options": ["Active", "Ended"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn party_relationship_fields() -> serde_json::Value {
+    json!([
+        { "key": "relationship_type", "entity_type": "party_relationship", "label": "Relationship Type", "field_type": "select", "options": ["Ownership", "Guarantor", "Household", "Referral", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "ownership_percent", "entity_type": "party_relationship", "label": "Ownership %", "field_type": "number", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": "0", "max_value": "100", "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_from", "entity_type": "party_relationship", "label": "Valid From", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_to", "entity_type": "party_relationship", "label": "Valid To", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "relationship_status", "entity_type": "party_relationship", "label": "Status", "field_type": "select", "options": ["Active", "Ended"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn organization_unit_fields() -> serde_json::Value {
+    json!([
+        { "key": "unit_type", "entity_type": "organization_unit", "label": "Unit Type", "field_type": "select", "options": ["Department", "Branch", "Division", "Team", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "unit_code", "entity_type": "organization_unit", "label": "Unit Code", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Not a real relationship - self-referential relationships are
+        // rejected (see this module's own doc comment).
+        { "key": "parent_unit_name", "entity_type": "organization_unit", "label": "Parent Unit", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Not a real link - this engine can't relate an object to another record of its own same type.", "placeholder": null },
+        { "key": "valid_from", "entity_type": "organization_unit", "label": "Valid From", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_to", "entity_type": "organization_unit", "label": "Valid To", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "unit_status", "entity_type": "organization_unit", "label": "Status", "field_type": "select", "options": ["Active", "Inactive"], "required": true, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn location_fields() -> serde_json::Value {
+    json!([
+        { "key": "location_type", "entity_type": "location", "label": "Location Type", "field_type": "select", "options": ["Site", "Office", "Warehouse", "Residence", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "address_line1", "entity_type": "location", "label": "Address Line 1", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "address_line2", "entity_type": "location", "label": "Address Line 2", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "city", "entity_type": "location", "label": "City", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "region", "entity_type": "location", "label": "Region / State", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "postal_code", "entity_type": "location", "label": "Postal Code", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "country", "entity_type": "location", "label": "Country", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "timezone", "entity_type": "location", "label": "Timezone", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 7, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "geo_coordinates", "entity_type": "location", "label": "Geo Coordinates", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 8, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "e.g. \"40.7128,-74.0060\" - plain text, no map field type exists.", "placeholder": null },
+        { "key": "location_status", "entity_type": "location", "label": "Status", "field_type": "select", "options": ["Active", "Inactive"], "required": true, "show_in_list": true, "sort_order": 9, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn contact_point_fields() -> serde_json::Value {
+    json!([
+        { "key": "point_type", "entity_type": "contact_point", "label": "Type", "field_type": "select", "options": ["Email", "Phone", "Mobile", "Fax", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "contact_value", "entity_type": "contact_point", "label": "Value", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "purpose", "entity_type": "contact_point", "label": "Purpose", "field_type": "select", "options": ["Work", "Home", "Billing", "Other"], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "is_preferred", "entity_type": "contact_point", "label": "Preferred", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "is_verified", "entity_type": "contact_point", "label": "Verified", "field_type": "boolean", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "false", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_from", "entity_type": "contact_point", "label": "Valid From", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_to", "entity_type": "contact_point", "label": "Valid To", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn external_identifier_fields() -> serde_json::Value {
+    json!([
+        { "key": "external_system", "entity_type": "external_identifier", "label": "External System", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "external_key", "entity_type": "external_identifier", "label": "External Key", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "key_type", "entity_type": "external_identifier", "label": "Key Type", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Plain text, not a real relationship - see this module's own doc
+        // comment on generic polymorphic relationship targets.
+        { "key": "linked_object_type", "entity_type": "external_identifier", "label": "Linked Object Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Not a real link - see this package's own doc comment.", "placeholder": null },
+        { "key": "linked_object_id", "entity_type": "external_identifier", "label": "Linked Object ID", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_from", "entity_type": "external_identifier", "label": "Valid From", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "valid_to", "entity_type": "external_identifier", "label": "Valid To", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn consent_preference_fields() -> serde_json::Value {
+    json!([
+        { "key": "purpose", "entity_type": "consent_preference", "label": "Purpose", "field_type": "select", "options": ["Marketing", "Data Processing", "Communications", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "channel", "entity_type": "consent_preference", "label": "Channel", "field_type": "select", "options": ["Email", "Phone", "SMS", "Mail", "Other"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Granted consent requires a captured date" business rule below.
+        { "key": "consent_state", "entity_type": "consent_preference", "label": "Consent State", "field_type": "select", "options": ["Granted", "Denied", "Withdrawn"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "captured_source", "entity_type": "consent_preference", "label": "Captured Source", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Granted by the "Granted consent requires a captured date" business rule below.
+        { "key": "captured_date", "entity_type": "consent_preference", "label": "Captured Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "expiry_date", "entity_type": "consent_preference", "label": "Expiry Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn enterprise_asset_fields() -> serde_json::Value {
+    json!([
+        { "key": "asset_type", "entity_type": "enterprise_asset", "label": "Asset Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "asset_status", "entity_type": "enterprise_asset", "label": "Status", "field_type": "select", "options": ["Active", "Out of Service", "Retired", "Disposed"], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Active", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "install_date", "entity_type": "enterprise_asset", "label": "Install Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "serial_reference", "entity_type": "enterprise_asset", "label": "Serial / Reference", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": true, "help_text": null, "placeholder": null },
+        { "key": "asset_value", "entity_type": "enterprise_asset", "label": "Value", "field_type": "number", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": "0", "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn agreement_fields() -> serde_json::Value {
+    json!([
+        { "key": "agreement_type", "entity_type": "agreement", "label": "Agreement Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "effective_date", "entity_type": "agreement", "label": "Effective Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Checked against effective_date by the "Agreement date order" business rule below.
+        { "key": "expiration_date", "entity_type": "agreement", "label": "Expiration Date", "field_type": "date", "options": [], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Agreement expired" workflow below.
+        { "key": "agreement_status", "entity_type": "agreement", "label": "Status", "field_type": "select", "options": ["Draft", "Active", "Expired", "Terminated"], "required": true, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn service_case_fields() -> serde_json::Value {
+    json!([
+        { "key": "case_type", "entity_type": "service_case", "label": "Case Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "priority", "entity_type": "service_case", "label": "Priority", "field_type": "select", "options": ["Low", "Medium", "High", "Urgent"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Medium", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "case_status", "entity_type": "service_case", "label": "Status", "field_type": "select", "options": ["New", "In Progress", "Resolved", "Closed"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "New", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "sla_due_date", "entity_type": "service_case", "label": "SLA Due Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn interaction_fields() -> serde_json::Value {
+    json!([
+        { "key": "channel", "entity_type": "interaction", "label": "Channel", "field_type": "select", "options": ["Phone", "Email", "Chat", "In Person", "Other"], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "direction", "entity_type": "interaction", "label": "Direction", "field_type": "select", "options": ["Inbound", "Outbound"], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "subject", "entity_type": "interaction", "label": "Subject", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "interaction_date", "entity_type": "interaction", "label": "Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "summary", "entity_type": "interaction", "label": "Summary", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Plain text, not a real relationship - see this module's own doc
+        // comment on generic polymorphic relationship targets.
+        { "key": "linked_object_type", "entity_type": "interaction", "label": "Linked Object Type", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Not a real link - see this package's own doc comment.", "placeholder": null },
+        { "key": "linked_object_id", "entity_type": "interaction", "label": "Linked Object ID", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn document_record_fields() -> serde_json::Value {
+    json!([
+        { "key": "document_type", "entity_type": "document_record", "label": "Document Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "document_version", "entity_type": "document_record", "label": "Version", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Drives the "Superseded or expired document requires an expiry date" business rule below.
+        { "key": "document_status", "entity_type": "document_record", "label": "Status", "field_type": "select", "options": ["Draft", "Final", "Superseded", "Expired"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Draft", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "confidentiality", "entity_type": "document_record", "label": "Confidentiality", "field_type": "select", "options": ["Public", "Internal", "Confidential", "Restricted"], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": "Internal", "is_unique": false, "help_text": "Descriptive only - nothing in this engine enforces field/record-level access by this value yet.", "placeholder": null },
+        { "key": "effective_date", "entity_type": "document_record", "label": "Effective Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Superseded/Expired by the business rule below.
+        { "key": "expiry_date", "entity_type": "document_record", "label": "Expiry Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Plain text, not a real relationship - see this module's own doc
+        // comment on generic polymorphic relationship targets.
+        { "key": "linked_object_type", "entity_type": "document_record", "label": "Linked Object Type", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Not a real link - see this package's own doc comment.", "placeholder": null },
+        { "key": "linked_object_id", "entity_type": "document_record", "label": "Linked Object ID", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 7, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn financial_transaction_fields() -> serde_json::Value {
+    json!([
+        { "key": "transaction_type", "entity_type": "financial_transaction", "label": "Transaction Type", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "amount", "entity_type": "financial_transaction", "label": "Amount", "field_type": "number", "options": [], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": true, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "currency", "entity_type": "financial_transaction", "label": "Currency", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": "USD", "is_unique": false, "help_text": null, "placeholder": null },
+        // Required-when-Posted by the "Posted transaction requires a date" business rule below.
+        { "key": "transaction_date", "entity_type": "financial_transaction", "label": "Transaction Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "transaction_status", "entity_type": "financial_transaction", "label": "Status", "field_type": "select", "options": ["Pending", "Posted", "Reversed"], "required": true, "show_in_list": true, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Pending", "is_unique": false, "help_text": "Descriptive only - nothing in this engine enforces immutability once Posted; a correction is an admin discipline, not a blocked edit.", "placeholder": null },
+        // Plain text, not a real relationship - see this module's own doc
+        // comment on generic polymorphic relationship targets.
+        { "key": "linked_object_type", "entity_type": "financial_transaction", "label": "Linked Object Type", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Not a real link - see this package's own doc comment.", "placeholder": null },
+        { "key": "linked_object_id", "entity_type": "financial_transaction", "label": "Linked Object ID", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+fn data_quality_issue_fields() -> serde_json::Value {
+    json!([
+        { "key": "issue_rule", "entity_type": "data_quality_issue", "label": "Rule", "field_type": "text", "options": [], "required": true, "show_in_list": true, "sort_order": 0, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "severity", "entity_type": "data_quality_issue", "label": "Severity", "field_type": "select", "options": ["Low", "Medium", "High", "Critical"], "required": true, "show_in_list": true, "sort_order": 1, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Medium", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "issue_status", "entity_type": "data_quality_issue", "label": "Status", "field_type": "select", "options": ["Open", "In Review", "Resolved", "Ignored"], "required": true, "show_in_list": true, "sort_order": 2, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": true, "default_value": "Open", "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "detected_date", "entity_type": "data_quality_issue", "label": "Detected Date", "field_type": "date", "options": [], "required": false, "show_in_list": true, "sort_order": 3, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "resolved_date", "entity_type": "data_quality_issue", "label": "Resolved Date", "field_type": "date", "options": [], "required": false, "show_in_list": false, "sort_order": 4, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        { "key": "remediation_notes", "entity_type": "data_quality_issue", "label": "Remediation Notes", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 5, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": true, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null },
+        // Plain text, not a real relationship - see this module's own doc
+        // comment on generic polymorphic relationship targets. Also: this
+        // package ships the storage object only, not the automatic
+        // detection engine the source spec envisions - see this package's
+        // own doc comment.
+        { "key": "linked_object_type", "entity_type": "data_quality_issue", "label": "Linked Object Type", "field_type": "text", "options": [], "required": false, "show_in_list": true, "sort_order": 6, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": true, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": "Not a real link - see this package's own doc comment.", "placeholder": null },
+        { "key": "linked_object_id", "entity_type": "data_quality_issue", "label": "Linked Object ID", "field_type": "text", "options": [], "required": false, "show_in_list": false, "sort_order": 7, "min_value": null, "max_value": null, "max_length": null, "regex_pattern": null, "is_searchable": false, "is_filterable": false, "is_reportable": false, "default_value": null, "is_unique": false, "help_text": null, "placeholder": null }
+    ])
+}
+
+/// Indices below are load-bearing: `screen_layouts[0].draft`'s `related`
+/// references these by position (see this module's own doc comment /
+/// `IndustryPackageManifest::workflows`' doc comment). Note indices 3 and
+/// 4 share the identical `(source_entity_type, target_entity_type)` pair
+/// (`party_relationship` -> `party`, twice) - `relationship_service::slugify`
+/// auto-suffixes the second one's key rather than rejecting the
+/// collision, confirmed by reading that function directly.
+fn lanesra_industry_foundation_relationships() -> serde_json::Value {
+    json!([
+        /* 0 */ { "source_entity_type": "party", "target_entity_type": "Contact", "relationship_type": "many_to_one", "forward_label": "Represents Contact", "reverse_label": "Parties", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 1 */ { "source_entity_type": "party", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Represents Organization", "reverse_label": "Parties", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 2 */ { "source_entity_type": "party_role", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Roles", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 3 */ { "source_entity_type": "party_relationship", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "From Party", "reverse_label": "Relationships From", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 4 */ { "source_entity_type": "party_relationship", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "To Party", "reverse_label": "Relationships To", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 1 },
+        /* 5 */ { "source_entity_type": "organization_unit", "target_entity_type": "Company", "relationship_type": "many_to_one", "forward_label": "Organization", "reverse_label": "Units", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 6 */ { "source_entity_type": "location", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Locations", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 7 */ { "source_entity_type": "location", "target_entity_type": "organization_unit", "relationship_type": "many_to_one", "forward_label": "Organization Unit", "reverse_label": "Locations", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 8 */ { "source_entity_type": "contact_point", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Contact Points", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 9 */ { "source_entity_type": "consent_preference", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Consents", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 10 */ { "source_entity_type": "enterprise_asset", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Owner", "reverse_label": "Assets", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 11 */ { "source_entity_type": "enterprise_asset", "target_entity_type": "location", "relationship_type": "many_to_one", "forward_label": "Location", "reverse_label": "Assets", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 12 */ { "source_entity_type": "agreement", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Agreements", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 13 */ { "source_entity_type": "agreement", "target_entity_type": "Contract", "relationship_type": "many_to_one", "forward_label": "Related Contract", "reverse_label": "Agreements", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 1 },
+        /* 14 */ { "source_entity_type": "service_case", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Cases", "is_required": true, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 },
+        /* 15 */ { "source_entity_type": "interaction", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Interactions", "is_required": true, "show_related_list": true, "delete_behavior": "archive", "sort_order": 0 },
+        /* 16 */ { "source_entity_type": "financial_transaction", "target_entity_type": "party", "relationship_type": "many_to_one", "forward_label": "Party", "reverse_label": "Financial Transactions", "is_required": false, "show_related_list": true, "delete_behavior": "restrict", "sort_order": 0 }
+    ])
+}
+
+fn lanesra_industry_foundation_business_rules() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "party_role",
+            "name": "Role date order",
+            "description": "A role's end date, once set, must be after its start date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "valid_to", "operator": "on_or_before", "value": "", "compare_field_source": "custom", "compare_field_key": "valid_from" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Valid To must be after Valid From." }
+            ]
+        },
+        {
+            "entity_type": "agreement",
+            "name": "Agreement date order",
+            "description": "An agreement's expiration date must be after its effective date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "expiration_date", "operator": "on_or_before", "value": "", "compare_field_source": "custom", "compare_field_key": "effective_date" }
+            ],
+            "actions": [
+                { "action_type": "block_save", "target_field_key": null, "target_field_source": "custom", "action_value": null, "message": "Expiration date must be after the effective date." }
+            ]
+        },
+        {
+            "entity_type": "consent_preference",
+            "name": "Granted consent requires a captured date",
+            "description": "Granting consent must record when it was captured.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "consent_state", "operator": "equals", "value": "Granted" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "captured_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "document_record",
+            "name": "Superseded or expired document requires an expiry date",
+            "description": "A document marked Superseded or Expired must record when.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "document_status", "operator": "in_list", "value": "Superseded|Expired" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "expiry_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        },
+        {
+            "entity_type": "financial_transaction",
+            "name": "Posted transaction requires a date",
+            "description": "A posted financial transaction must record its transaction date.",
+            "match_type": "all",
+            "priority": 0,
+            "effective_start_date": null,
+            "effective_end_date": null,
+            "conditions": [
+                { "field_source": "custom", "field_key": "transaction_status", "operator": "equals", "value": "Posted" }
+            ],
+            "actions": [
+                { "action_type": "require", "target_field_key": "transaction_date", "target_field_source": "custom", "action_value": null, "message": null }
+            ]
+        }
+    ])
+}
+
+/// None of these reach for `update_related_record` - Foundation objects
+/// relate to Party or to each other, not to a sibling record with an
+/// obvious single field to overwrite the way, say, Property Management's
+/// lease/unit pair does. Every workflow here creates a task instead, the
+/// same fallback most packages in this file already use for the same
+/// reason.
+fn lanesra_industry_foundation_workflows() -> serde_json::Value {
+    json!([
+        {
+            "entity_type": "party_role",
+            "name": "Role ended",
+            "description": "Ending a party role creates a task to review whatever depended on it.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "role_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "role_status", "operator": "equals", "value": "Ended" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Review dependent records for this ended role\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "agreement",
+            "name": "Agreement expired",
+            "description": "An expired agreement creates a task to review renewal or termination.",
+            "trigger_type": "field_changed",
+            "trigger_status": null,
+            "trigger_field_key": "agreement_status",
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [
+                { "field_source": "custom", "field_key": "agreement_status", "operator": "equals", "value": "Expired" }
+            ],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Review agreement for renewal or termination\",\"description\":null,\"due_in_days\":3,\"assignee_user_id\":null}" }
+            ]
+        },
+        {
+            "entity_type": "data_quality_issue",
+            "name": "New data quality issue",
+            "description": "A newly created data quality issue gets a triage task.",
+            "trigger_type": "record_created",
+            "trigger_status": null,
+            "trigger_field_key": null,
+            "trigger_field_source": "custom",
+            "trigger_offset_days": 0,
+            "match_type": "all",
+            "priority": 0,
+            "conditions": [],
+            "actions": [
+                { "action_type": "create_task", "params_json": "{\"title\":\"Triage new data quality issue\",\"description\":null,\"due_in_days\":2,\"assignee_user_id\":null}" }
             ]
         }
     ])
