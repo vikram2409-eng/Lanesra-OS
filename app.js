@@ -3003,6 +3003,14 @@ const REFERENCE_PACKAGES={
     actions:[{type:'create_task',taskTitle:'Confirm cancellation and stop billing',daysOffset:1}]},
   ],
  },
+ // v1.1.0 note: the desktop edition's property_management package now
+ // depends on lanesra.industry_foundation and retargets its Owner
+ // relationship onto Foundation's `party` object - not mirrored here,
+ // since this demo has no dependency-checking of any kind for any
+ // package (see the Lanesra Industry Foundation section of llms.txt).
+ // Owner Interest, the Foundation-facing junction object, is left out
+ // for the same reason; Lease Amendment, Security Deposit and Violation
+ // are mirrored below since none of the three needs Foundation at all.
  property_management:{
   packageId:'lanesra.property_management',name:'Property Management',industry:'Real Estate',version:'1.0.0',
   description:'Properties, units, leases and maintenance requests - activate or end a lease and its unit\'s occupancy follows automatically.',
@@ -3013,6 +3021,9 @@ const REFERENCE_PACKAGES={
    {key:'lease',label:'Lease',labelPlural:'Leases',icon:'📄',prefix:'LSE',digits:4},
    {key:'maintenance_request',label:'Maintenance Request',labelPlural:'Maintenance Requests',icon:'🔧',prefix:'MNT',digits:4},
    {key:'unit_showing',label:'Unit Showing',labelPlural:'Unit Showings',icon:'👁',prefix:'SHW',digits:5},
+   {key:'lease_amendment',label:'Lease Amendment',labelPlural:'Lease Amendments',icon:'✍',prefix:'AMD',digits:5},
+   {key:'security_deposit',label:'Security Deposit',labelPlural:'Security Deposits',icon:'🔒',prefix:'DEP',digits:5},
+   {key:'violation',label:'Violation / Notice',labelPlural:'Violations / Notices',icon:'🚫',prefix:'VIOL',digits:5},
   ],
   fields:[
    ['property','address','Address','text'],['property','city','City','text'],
@@ -3023,6 +3034,13 @@ const REFERENCE_PACKAGES={
    ['maintenance_request','description','Description','text'],['maintenance_request','resolution','Resolution','text'],['maintenance_request','completed_date','Completed Date','date'],
    ['unit_showing','showing_stage','Stage','select','Scheduled|Completed|Cancelled|No Show'],
    ['unit_showing','interest_level','Interest Level','select','Low|Medium|High'],
+   ['lease_amendment','amendment_type','Amendment Type','select','Rent Change|Term Extension|Party Change|Other'],
+   ['lease_amendment','amendment_status','Status','select','Draft|Executed'],['lease_amendment','new_value','New Value','text'],
+   ['security_deposit','deposit_amount','Amount','number'],
+   ['security_deposit','disposition','Disposition','select','Held|Partially Refunded|Fully Refunded|Forfeited'],
+   ['security_deposit','disposition_date','Disposition Date','date'],['security_deposit','deduction_amount','Deduction Amount','number'],
+   ['violation','violation_type','Violation Type','select','Noise|Unauthorized Occupant|Property Damage|Non-Payment|Other'],
+   ['violation','violation_status','Status','select','Open|Notice Sent|Resolved|Escalated'],['violation','resolution_date','Resolution Date','date'],
   ],
   relationships:[
    {source:'unit',target:'property',relType:'many_to_one',forwardLabel:'Property',reverseLabel:'Units'},
@@ -3030,6 +3048,9 @@ const REFERENCE_PACKAGES={
    {source:'maintenance_request',target:'unit',relType:'many_to_one',forwardLabel:'Unit',reverseLabel:'Maintenance Requests'},
    {source:'unit_showing',target:'unit',relType:'many_to_one',forwardLabel:'Unit',reverseLabel:'Showings'},
    {source:'property',target:'Company',relType:'many_to_one',forwardLabel:'Owner',reverseLabel:'Properties'},
+   {source:'lease_amendment',target:'lease',relType:'many_to_one',forwardLabel:'Lease',reverseLabel:'Amendments'},
+   {source:'security_deposit',target:'lease',relType:'many_to_one',forwardLabel:'Lease',reverseLabel:'Security Deposit'},
+   {source:'violation',target:'lease',relType:'many_to_one',forwardLabel:'Lease',reverseLabel:'Violations'},
   ],
   rules:[
    {entity:'maintenance_request',matchType:'all',
@@ -3038,6 +3059,15 @@ const REFERENCE_PACKAGES={
    {entity:'unit_showing',matchType:'all',
     conditions:[{fieldKey:'showing_stage',operator:'equals',value:'Completed',compareField:null,groupId:null}],
     actions:[{type:'require',targetField:'interest_level',value:'',message:''}]},
+   {entity:'lease_amendment',matchType:'all',
+    conditions:[{fieldKey:'amendment_status',operator:'equals',value:'Executed',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'new_value',value:'',message:''}]},
+   {entity:'security_deposit',matchType:'all',
+    conditions:[{fieldKey:'disposition',operator:'in_list',value:'Partially Refunded|Forfeited',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'disposition_date',value:'',message:''}]},
+   {entity:'violation',matchType:'all',
+    conditions:[{fieldKey:'violation_status',operator:'equals',value:'Resolved',compareField:null,groupId:null}],
+    actions:[{type:'require',targetField:'resolution_date',value:'',message:''}]},
   ],
   workflows:[
    {entity:'lease',matchType:'all',notify:false,
@@ -3052,6 +3082,9 @@ const REFERENCE_PACKAGES={
    {entity:'unit_showing',matchType:'all',notify:false,
     conditions:[{fieldKey:'showing_stage',operator:'equals',value:'Completed',compareField:null,groupId:null},{fieldKey:'interest_level',operator:'equals',value:'High',compareField:null,groupId:null}],
     actions:[{type:'create_task',taskTitle:'Follow up with interested prospect',daysOffset:1}]},
+   {entity:'violation',matchType:'all',notify:true,
+    conditions:[{fieldKey:'violation_status',operator:'equals',value:'Escalated',compareField:null,groupId:null}],
+    actions:[{type:'create_task',taskTitle:'Escalated lease violation needs action',daysOffset:1}]},
   ],
  },
  // The remaining eight packages below are reduced mirrors of the desktop

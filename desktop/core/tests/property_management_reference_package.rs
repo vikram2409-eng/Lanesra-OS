@@ -5,6 +5,13 @@
 //! what's included and what's deliberately left out (no Field Service
 //! integration, no lease-overlap/occupancy cross-record checks, no
 //! date-triggered workflows).
+//!
+//! v1.1.0 retrofits this package onto `lanesra.industry_foundation` (a
+//! real, enforced dependency) - every test below installs Foundation
+//! first via `install_dependencies`, exactly like a real workspace admin
+//! would have to, and `installs_cleanly_and_creates_every_kind_of_artifact`
+//! covers the four new v1.1.0 objects (Owner Interest, Lease Amendment,
+//! Security Deposit, Violation) in its artifact counts.
 
 use std::collections::HashMap;
 
@@ -15,7 +22,7 @@ use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::industry_package::ImportPackageInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::reference_packages::property_management_manifest_json;
+use lanesra_core::services::reference_packages::{lanesra_industry_foundation_manifest_json, property_management_manifest_json};
 use lanesra_core::services::{company_service, contact_service, custom_field_service, custom_record_service, industry_package_service, relationship_service, user_service, workspace_service};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -36,7 +43,16 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
     (conn, workspace.id, admin.id)
 }
 
+/// Installs `lanesra.industry_foundation` first - a real, enforced
+/// prerequisite for Property Management since its v1.1.0 retrofit.
+fn install_dependencies(conn: &rusqlite::Connection, ws: &str, admin: &str) {
+    let input = ImportPackageInput { manifest_json: lanesra_industry_foundation_manifest_json() };
+    let package = industry_package_service::import_package(conn, ws, &input, Some(admin)).unwrap();
+    industry_package_service::install(conn, ws, &package.id, Some(admin)).unwrap();
+}
+
 fn install_property_management(conn: &rusqlite::Connection, ws: &str, admin: &str) -> lanesra_core::models::industry_package::InstalledApp {
+    install_dependencies(conn, ws, admin);
     let input = ImportPackageInput { manifest_json: property_management_manifest_json() };
     let package = industry_package_service::import_package(conn, ws, &input, Some(admin)).unwrap();
     industry_package_service::install(conn, ws, &package.id, Some(admin)).unwrap()
@@ -51,7 +67,11 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = property_management_manifest_json();
     let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.property_management");
-    assert_eq!(value["objects"].as_array().unwrap().len(), 9);
+    assert_eq!(value["objects"].as_array().unwrap().len(), 13);
+    let deps = value["dependencies"].as_array().unwrap();
+    assert_eq!(deps.len(), 1);
+    assert_eq!(deps[0]["package_id"], "lanesra.industry_foundation");
+    assert_eq!(deps[0]["is_required"], true);
 }
 
 #[test]
@@ -67,15 +87,117 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
     let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
-    assert_eq!(count_of("custom_object"), 9);
-    assert_eq!(count_of("custom_field"), 34);
-    assert_eq!(count_of("relationship_definition"), 13);
-    assert_eq!(count_of("business_rule"), 3);
-    assert_eq!(count_of("workflow_definition"), 4);
-    assert_eq!(count_of("screen_layout"), 1);
-    assert_eq!(count_of("custom_report"), 1);
+    assert_eq!(count_of("custom_object"), 13);
+    assert_eq!(count_of("custom_field"), 57);
+    assert_eq!(count_of("relationship_definition"), 21);
+    assert_eq!(count_of("business_rule"), 6);
+    assert_eq!(count_of("workflow_definition"), 5);
+    assert_eq!(count_of("screen_layout"), 2);
+    assert_eq!(count_of("custom_report"), 3);
     assert_eq!(count_of("dashboard_layout"), 1);
     assert_eq!(count_of("custom_record"), 0); // no seed data - see the module's own doc comment
+}
+
+#[test]
+fn property_owner_relationship_targets_foundations_party_object() {
+    let (conn, ws, admin) = setup_workspace();
+    install_property_management(&conn, &ws, &admin);
+
+    let relationships = relationship_service::list(&conn, &ws, true).unwrap();
+    let property_to_party = relationships
+        .iter()
+        .find(|r| r.source_entity_type == "property" && r.target_entity_type == "party")
+        .expect("v1.1.0 retargets property's Owner relationship onto Foundation's party object");
+    assert_eq!(property_to_party.forward_label, "Owner");
+
+    let party = custom_record_service::create(&conn, &ws, &record("party", "Acme Holdings Party"), Some(&admin)).unwrap();
+    let property = custom_record_service::create(&conn, &ws, &record("property", "123 Main St"), Some(&admin)).unwrap();
+    relationship_service::link(&conn, &ws, &property_to_party.id, "property", &property.id, "party", &party.id, Some(&admin)).unwrap();
+}
+
+#[test]
+fn owner_interest_junction_links_a_property_to_multiple_co_owner_parties() {
+    let (conn, ws, admin) = setup_workspace();
+    install_property_management(&conn, &ws, &admin);
+
+    let property = custom_record_service::create(&conn, &ws, &record("property", "123 Main St"), Some(&admin)).unwrap();
+    let owner_a = custom_record_service::create(&conn, &ws, &record("party", "Owner A"), Some(&admin)).unwrap();
+    let owner_b = custom_record_service::create(&conn, &ws, &record("party", "Owner B"), Some(&admin)).unwrap();
+
+    let relationships = relationship_service::list(&conn, &ws, true).unwrap();
+    let interest_to_property = relationships
+        .iter()
+        .find(|r| r.source_entity_type == "owner_interest" && r.target_entity_type == "property")
+        .expect("the manifest defines an owner_interest -> property relationship");
+    let interest_to_party = relationships
+        .iter()
+        .find(|r| r.source_entity_type == "owner_interest" && r.target_entity_type == "party")
+        .expect("the manifest defines an owner_interest -> party relationship");
+
+    for (owner, pct) in [(&owner_a, "60"), (&owner_b, "40")] {
+        let interest = custom_record_service::create(&conn, &ws, &record("owner_interest", "Interest"), Some(&admin)).unwrap();
+        let mut values = HashMap::new();
+        values.insert("interest_type".to_string(), "Joint".to_string());
+        values.insert("ownership_percent".to_string(), pct.to_string());
+        custom_field_service::set_entity_values(&conn, "owner_interest", &interest.id, &values, Some(&admin)).unwrap();
+        relationship_service::link(&conn, &ws, &interest_to_property.id, "owner_interest", &interest.id, "property", &property.id, Some(&admin)).unwrap();
+        relationship_service::link(&conn, &ws, &interest_to_party.id, "owner_interest", &interest.id, "party", &owner.id, Some(&admin)).unwrap();
+    }
+}
+
+#[test]
+fn lease_amendment_execution_rule_requires_a_new_value() {
+    let (conn, ws, admin) = setup_workspace();
+    install_property_management(&conn, &ws, &admin);
+
+    let amendment = custom_record_service::create(&conn, &ws, &record("lease_amendment", "Rent increase"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("amendment_type".to_string(), "Rent Change".to_string());
+    values.insert("amendment_date".to_string(), "2026-03-01".to_string());
+    values.insert("amendment_status".to_string(), "Executed".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "lease_amendment", &amendment.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("New Value"));
+
+    values.insert("new_value".to_string(), "$2,100/mo".to_string());
+    custom_field_service::set_entity_values(&conn, "lease_amendment", &amendment.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn security_deposit_disposition_rule_requires_date_and_deduction_amount() {
+    let (conn, ws, admin) = setup_workspace();
+    install_property_management(&conn, &ws, &admin);
+
+    let deposit = custom_record_service::create(&conn, &ws, &record("security_deposit", "Unit 4B Deposit"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("deposit_amount".to_string(), "1500".to_string());
+    values.insert("disposition".to_string(), "Forfeited".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "security_deposit", &deposit.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Disposition Date") || err.to_string().contains("Deduction Amount"));
+
+    values.insert("disposition_date".to_string(), "2026-02-01".to_string());
+    values.insert("deduction_amount".to_string(), "1500".to_string());
+    custom_field_service::set_entity_values(&conn, "security_deposit", &deposit.id, &values, Some(&admin)).unwrap();
+}
+
+#[test]
+fn violation_resolution_rule_requires_a_resolution_date_and_escalation_workflow_creates_a_task() {
+    let (conn, ws, admin) = setup_workspace();
+    install_property_management(&conn, &ws, &admin);
+
+    let violation = custom_record_service::create(&conn, &ws, &record("violation", "Noise complaint"), Some(&admin)).unwrap();
+    let mut values = HashMap::new();
+    values.insert("violation_type".to_string(), "Noise".to_string());
+    values.insert("reported_date".to_string(), "2026-02-01".to_string());
+    values.insert("violation_status".to_string(), "Resolved".to_string());
+    let err = custom_field_service::set_entity_values(&conn, "violation", &violation.id, &values, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("Resolution Date"));
+
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    let mut escalate = values.clone();
+    escalate.insert("violation_status".to_string(), "Escalated".to_string());
+    custom_field_service::set_entity_values(&conn, "violation", &violation.id, &escalate, Some(&admin)).unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    assert_eq!(after, before + 1, "the 'Violation escalation' workflow should have created a task");
 }
 
 #[test]
