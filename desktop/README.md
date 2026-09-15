@@ -676,6 +676,29 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   database. See `core/src/services/chat_service.rs`,
   `ai_agent_service.rs`, `ai_gateway_service.rs`, `search_service.rs`,
   `vector_search_service.rs`, `server/src/mcp.rs`.
+- **Engine hardening (platform primitives, not one industry vertical)**:
+  five gaps `reference_packages.rs`'s own doc comment had been
+  accumulating across the twelve shipped industry packages, closed
+  together since each pays off retroactively across all of them -
+  self-referential relationships (a parent/child hierarchy: an
+  Organization Unit's parent unit, an Asset's parent Asset), a generic
+  polymorphic relationship target (a Document attached to a Policy, a
+  Claim, or a Matter - any valid type, chosen per link, read paths only;
+  writing through the variable side is a stated follow-up), cross-record
+  validation (a business rule/workflow condition reading a field off the
+  record linked through a `many_to_one`/`one_to_one` relationship, not
+  just the triggering record's own), `date_reached`/`due_overdue`
+  workflow triggers on a custom object's own date field (previously
+  built-in-only), and an "as of" query - `effective_dating_service`
+  answers whether a record's *currently stored* `valid_from`/`valid_to`
+  window is in effect on a given date (not true point-in-time
+  reconstruction of a past value, which the schema has no history table
+  for), wired into the custom report builder. None of the twelve existing
+  packages have been retrofitted to actually use these yet - see
+  `reference_packages.rs`'s own doc comment for the full, honestly-scoped
+  breakdown of what each closes and what's still deferred. See
+  `core/src/services/relationship_service.rs`, `business_rule_service.rs`,
+  `workflow_service.rs`, `effective_dating_service.rs`.
 
 ## What's deferred to a later phase
 

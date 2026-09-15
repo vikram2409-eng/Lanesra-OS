@@ -408,6 +408,7 @@ fn build_export_manifest(
                     relationships.push(crate::models::relationship::RelationshipDefinitionInput {
                         source_entity_type: def.source_entity_type,
                         target_entity_type: def.target_entity_type,
+                        target_is_polymorphic: def.target_is_polymorphic,
                         relationship_type: def.relationship_type,
                         forward_label: def.forward_label,
                         reverse_label: def.reverse_label,
@@ -444,6 +445,7 @@ fn build_export_manifest(
                                 compare_field_source: c.compare_field_source,
                                 compare_field_key: c.compare_field_key,
                                 group_id: c.group_id,
+                                relationship_definition_id: c.relationship_definition_id,
                             })
                             .collect(),
                         actions: rule
@@ -485,6 +487,7 @@ fn build_export_manifest(
                                 compare_field_source: c.compare_field_source,
                                 compare_field_key: c.compare_field_key,
                                 group_id: c.group_id,
+                                relationship_definition_id: c.relationship_definition_id,
                             })
                             .collect(),
                         actions: wf

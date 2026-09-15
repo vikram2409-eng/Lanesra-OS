@@ -28,9 +28,9 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 **No-Code Platform — make it yours:**
 
 - **Custom Objects** — define an entirely new record type (Vendors, Assets, Projects, …) with its own fields, ID format and navigation section, no code change
-- **Custom Relationships** — connect any two record types (built-in or custom) with one-to-one, many-to-one or many-to-many links; a related-records list appears automatically on both sides
-- **Business Rules** — multi-condition AND/OR logic across 10 operators, driving require/hide/lock/set-value/block-save/show-message effects on any field
-- **Workflow Automation** — trigger on a status or field change, a date reached or overdue, or a schedule; create a task, assign an owner, create a related record, update a field, or post an in-app notification
+- **Custom Relationships** — connect any two record types (built-in or custom) with one-to-one, many-to-one or many-to-many links, including a self-referential hierarchy on one type or a polymorphic "any type" target; a related-records list appears automatically on both sides
+- **Business Rules** — multi-condition AND/OR logic across 10 operators, driving require/hide/lock/set-value/block-save/show-message effects on any field, including a condition that reads a related record's own field through a relationship
+- **Workflow Automation** — trigger on a status or field change, a date reached or overdue (any custom object's own date field, not just a fixed built-in set), or a schedule; create a task, assign an owner, create a related record, update a field, or post an in-app notification
 - **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
 - **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
 

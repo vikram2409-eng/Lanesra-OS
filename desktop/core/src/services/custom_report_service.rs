@@ -183,9 +183,31 @@ fn list_builtin_values(conn: &Connection, workspace_id: &str, entity_type: &str)
 
 /// Runs a saved report against live data - grouped counts or sums, one row
 /// per distinct group value seen (a record with no value for the group-by
-/// custom field is bucketed under "(none)").
+/// custom field is bucketed under "(none)"). Unchanged behavior for every
+/// existing caller - see `run_with_as_of` for the effective-dating filter.
 pub fn run(conn: &Connection, report: &CustomReport) -> AppResult<Vec<CustomReportRow>> {
-    let entity_ids = list_builtin_values(conn, &report.workspace_id, &report.entity_type)?;
+    run_with_as_of(conn, report, None)
+}
+
+/// Same as `run`, additionally restricted to records whose stored
+/// `valid_from`/`valid_to` window is in effect as of `as_of` (an ISO
+/// `YYYY-MM-DD` date) - see `effective_dating_service` for exactly what
+/// that does and does not mean. `None` is identical to `run`. Errors if
+/// `report.entity_type` isn't effective-dated (see
+/// `effective_dating_service::is_effective_dated`) - same "don't silently
+/// ignore an inapplicable filter" stance the rest of this engine takes.
+pub fn run_with_as_of(conn: &Connection, report: &CustomReport, as_of: Option<&str>) -> AppResult<Vec<CustomReportRow>> {
+    let entity_ids = if let Some(as_of) = as_of {
+        let eligible = super::effective_dating_service::active_record_ids_as_of(conn, &report.workspace_id, &report.entity_type, as_of)?
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>();
+        list_builtin_values(conn, &report.workspace_id, &report.entity_type)?
+            .into_iter()
+            .filter(|(id, _)| eligible.contains(id))
+            .collect()
+    } else {
+        list_builtin_values(conn, &report.workspace_id, &report.entity_type)?
+    };
 
     // group_key(entity_id, builtin_value) -> group label
     let group_of: Box<dyn Fn(&str, &str, &HashMap<String, String>) -> String> = if report.group_by_source == "builtin" {

@@ -59,7 +59,7 @@ fn describe_active_dependents_reports_both_a_referencing_rule_and_a_referencing_
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {
                 field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-                compare_field_source: None, compare_field_key: None, group_id: None,
+                compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(),
@@ -107,7 +107,7 @@ fn describe_active_dependents_is_advisory_not_blocking() {
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {
                 field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-                compare_field_source: None, compare_field_key: None, group_id: None,
+                compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(),

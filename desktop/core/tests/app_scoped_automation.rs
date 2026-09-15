@@ -45,7 +45,7 @@ fn app_input(name: &str) -> AppDefinitionInput {
 fn condition(field_key: &str, operator: &str, value: &str) -> BusinessRuleConditionInput {
     BusinessRuleConditionInput {
         field_source: "builtin".into(), field_key: field_key.into(), operator: operator.into(), value: value.into(),
-        compare_field_source: None, compare_field_key: None, group_id: None,
+        compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
     }
 }
 
@@ -141,7 +141,7 @@ fn updating_a_rule_can_set_and_then_clear_its_app_id() {
         priority: created.priority, is_active: created.is_active,
         effective_start_date: created.effective_start_date.clone(), effective_end_date: created.effective_end_date.clone(),
         app_id: Some(app.id.clone()),
-        conditions: vec![BusinessRuleConditionInput { field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(), compare_field_source: None, compare_field_key: None, group_id: None }],
+        conditions: vec![BusinessRuleConditionInput { field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(), compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None }],
         actions: vec![BusinessRuleActionInput { action_type: "block_save".into(), target_field_key: None, target_field_source: "custom".into(), action_value: None, message: Some("Nope".into()) }],
     };
     let tagged = business_rule_service::update_rule(&conn, &created.id, &tag_update, Some(&admin)).unwrap();
@@ -173,7 +173,7 @@ fn restoring_a_rule_version_restores_its_app_id_too() {
         priority: created.priority, is_active: created.is_active,
         effective_start_date: created.effective_start_date.clone(), effective_end_date: created.effective_end_date.clone(),
         app_id: None,
-        conditions: vec![BusinessRuleConditionInput { field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(), compare_field_source: None, compare_field_key: None, group_id: None }],
+        conditions: vec![BusinessRuleConditionInput { field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(), compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None }],
         actions: vec![BusinessRuleActionInput { action_type: "block_save".into(), target_field_key: None, target_field_source: "custom".into(), action_value: None, message: Some("Nope".into()) }],
     };
     business_rule_service::update_rule(&conn, &created.id, &clear_update, Some(&admin)).unwrap();

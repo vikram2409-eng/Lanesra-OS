@@ -533,9 +533,14 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
         "run_custom_report" => {
             let id: String = arg(args, "id")?;
+            let as_of: Option<String> = arg(args, "asOf")?;
             let report = lanesra_core::repositories::custom_report_repo::get(conn, &id)?
                 .ok_or_else(|| AppError::NotFound("Custom report".into()))?;
-            to_value(custom_report_service::run(conn, &report)?)
+            to_value(custom_report_service::run_with_as_of(conn, &report, as_of.as_deref())?)
+        }
+        "is_effective_dated_entity_type" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(lanesra_core::services::effective_dating_service::is_effective_dated(conn, &require_workspace_id(conn)?, &entity_type)?)
         }
 
         "list_custom_objects" => {

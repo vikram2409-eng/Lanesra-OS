@@ -27,6 +27,7 @@ import {
   type ConditionOperator,
   type CustomFieldDefinition,
   type MatchType,
+  type RelationshipDefinition,
   type TriggerSource,
 } from "../../lib/types";
 
@@ -72,7 +73,7 @@ const ACTION_LEGEND: { title: string; types: ActionType[] }[] = [
 function emptyCondition(entityType: string): BusinessRuleConditionInput {
   return {
     field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "",
-    compare_field_source: null, compare_field_key: null, group_id: null,
+    compare_field_source: null, compare_field_key: null, group_id: null, relationship_definition_id: null,
   };
 }
 
@@ -172,6 +173,7 @@ export function BusinessRulesAdmin() {
 
   const rules = useQuery({ queryKey: ["businessRules", entityType, "all"], queryFn: () => api.listBusinessRules(entityType, false) });
   const defs = useQuery({ queryKey: ["customFieldDefinitions", entityType, "all"], queryFn: () => api.listCustomFieldDefinitions(entityType, false) });
+  const relationshipDefs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["businessRules"] });
@@ -238,6 +240,7 @@ export function BusinessRulesAdmin() {
         <RuleForm
           entityType={entityType}
           customFields={activeDefs}
+          relationshipDefs={relationshipDefs.data ?? []}
           apps={appList}
           initial={{
             entity_type: entityType, name: "", description: null, match_type: "all", priority: 0,
@@ -258,6 +261,7 @@ export function BusinessRulesAdmin() {
         <RuleForm
           entityType={entityType}
           customFields={activeDefs}
+          relationshipDefs={relationshipDefs.data ?? []}
           apps={appList}
           initial={{
             entity_type: entityType, name: editing.name, description: editing.description, match_type: editing.match_type,
@@ -266,6 +270,7 @@ export function BusinessRulesAdmin() {
             conditions: editing.conditions.map((c) => ({
               field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
               compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
+              relationship_definition_id: c.relationship_definition_id,
             })),
             actions: editing.actions.map((a) => ({ action_type: a.action_type, target_field_key: a.target_field_key, target_field_source: a.target_field_source, action_value: a.action_value, message: a.message })),
             is_active: editing.is_active,
@@ -336,34 +341,86 @@ export function BusinessRulesAdmin() {
   );
 }
 
+/** Relationships where `entityType` has at most one linked record - the
+ * only shape "cross-record validation" can read a determinate value
+ * from (the "many" side of a many_to_one, or either side of a
+ * one_to_one). See the Rust engine's `resolve_related_field` doc
+ * comment for the identical restriction. */
+function eligibleRelatedRecordSources(entityType: string, relationshipDefs: RelationshipDefinition[]): RelationshipDefinition[] {
+  return relationshipDefs.filter(
+    (r) =>
+      (r.source_entity_type === entityType && (r.relationship_type === "many_to_one" || r.relationship_type === "one_to_one")) ||
+      (r.target_entity_type === entityType && r.relationship_type === "one_to_one"),
+  );
+}
+
 function ConditionRow({
   entityType,
   customFields,
+  relationshipDefs,
   condition,
   onChange,
   onRemove,
 }: {
   entityType: string;
   customFields: CustomFieldLite[];
+  relationshipDefs: RelationshipDefinition[];
   condition: BusinessRuleConditionInput;
   onChange: (c: BusinessRuleConditionInput) => void;
   onRemove: () => void;
 }) {
-  const builtinFields = builtinFieldsFor(entityType);
+  const eligibleRelationships = eligibleRelatedRecordSources(entityType, relationshipDefs);
+  const relatedDef = relationshipDefs.find((r) => r.id === condition.relationship_definition_id) ?? null;
+  const relatedType = relatedDef ? (relatedDef.source_entity_type === entityType ? relatedDef.target_entity_type : relatedDef.source_entity_type) : null;
+  // Same pattern WorkflowAutomationAdmin's update_related_record action
+  // editor already uses to populate the *other* object's fields once a
+  // relationship is chosen.
+  const relatedTypeCustomFields = useQuery({
+    queryKey: ["customFieldDefinitions", relatedType, "all"],
+    queryFn: () => api.listCustomFieldDefinitions(relatedType as string, false),
+    enabled: !!relatedType,
+  });
+  const activeRelatedCustomFields = (relatedTypeCustomFields.data ?? []).filter((d) => d.is_active);
+
+  const builtinFields = relatedType ? builtinFieldsFor(relatedType) : builtinFieldsFor(entityType);
+  const activeCustomFields = relatedDef ? activeRelatedCustomFields : customFields;
   const isBuiltin = condition.field_source === "builtin";
   const needsValue = !VALUELESS_OPERATORS.includes(condition.operator);
   const isListOp = condition.operator === "in_list" || condition.operator === "not_in_list";
   const comparesToField = condition.compare_field_key !== null;
   const selectedBuiltin = isBuiltin ? builtinFields.find((f) => f.key === condition.field_key) : undefined;
-  const compareFields = condition.compare_field_source === "builtin" ? builtinFields : customFields;
+  const compareFields = condition.compare_field_source === "builtin" ? builtinFieldsFor(entityType) : customFields;
 
   return (
     <div className="builder-row-card">
+      {eligibleRelationships.length > 0 && (
+        <select
+          value={condition.relationship_definition_id ?? ""}
+          onChange={(e) => {
+            const defId = e.target.value || null;
+            const def = relationshipDefs.find((r) => r.id === defId) ?? null;
+            const otherType = def ? (def.source_entity_type === entityType ? def.target_entity_type : def.source_entity_type) : entityType;
+            onChange({
+              ...condition,
+              relationship_definition_id: defId,
+              field_source: "builtin",
+              field_key: builtinFieldsFor(otherType)[0]?.key ?? "",
+              value: "",
+            });
+          }}
+          title="Read this condition's field from this record, or from a related record"
+        >
+          <option value="">This record</option>
+          {eligibleRelationships.map((r) => (
+            <option key={r.id} value={r.id}>{r.source_entity_type === entityType ? r.forward_label : r.reverse_label} (related record)</option>
+          ))}
+        </select>
+      )}
       <select
         value={condition.field_source}
         onChange={(e) => {
           const source = e.target.value as TriggerSource;
-          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinFields[0]?.key ?? "" : customFields[0]?.key ?? "", value: "" });
+          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinFields[0]?.key ?? "" : activeCustomFields[0]?.key ?? "", value: "" });
         }}
       >
         {TRIGGER_SOURCES.map((s) => (
@@ -376,7 +433,7 @@ function ConditionRow({
         </select>
       ) : (
         <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value })}>
-          {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+          {activeCustomFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
         </select>
       )}
       <select value={condition.operator} onChange={(e) => onChange({ ...condition, operator: e.target.value as ConditionOperator })}>
@@ -544,6 +601,7 @@ function ActionRow({
 function RuleForm({
   entityType,
   customFields,
+  relationshipDefs,
   apps,
   initial,
   submitLabel,
@@ -554,6 +612,7 @@ function RuleForm({
 }: {
   entityType: string;
   customFields: CustomFieldLite[];
+  relationshipDefs: RelationshipDefinition[];
   apps: AppDefinition[];
   initial: BusinessRuleInput & { is_active?: boolean };
   submitLabel: string;
@@ -718,6 +777,7 @@ function RuleForm({
                     <ConditionRow
                       entityType={entityType}
                       customFields={customFields}
+                      relationshipDefs={relationshipDefs}
                       condition={conditions[u.index]}
                       onChange={(next) => updateConditionAt(u.index, next)}
                       onRemove={() => removeConditionAt(u.index)}
@@ -731,6 +791,7 @@ function RuleForm({
                           <ConditionRow
                             entityType={entityType}
                             customFields={customFields}
+                            relationshipDefs={relationshipDefs}
                             condition={conditions[idx]}
                             onChange={(next) => updateConditionAt(idx, next)}
                             onRemove={() => removeConditionAt(idx)}

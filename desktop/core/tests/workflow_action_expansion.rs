@@ -87,7 +87,7 @@ fn create_record_action_creates_a_custom_object_record_and_links_it_via_the_rela
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -133,7 +133,7 @@ fn update_related_record_action_writes_a_builtin_field_on_every_linked_company()
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_many".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_many".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -188,7 +188,7 @@ fn update_related_record_action_can_copy_a_value_from_the_triggering_record() {
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -229,7 +229,7 @@ fn update_related_record_action_is_a_no_op_when_nothing_is_linked_yet() {
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -266,7 +266,7 @@ fn update_related_record_action_rejects_a_relationship_that_does_not_connect_to_
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: project.key.clone(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: project.key.clone(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Project".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -319,7 +319,7 @@ fn test_workflows_omits_workflows_whose_conditions_do_not_match_the_hypothetical
     // the "ctx doesn't satisfy it" path test_workflows is meant to prove.
     wf.conditions = vec![lanesra_core::models::workflow::WorkflowConditionInput {
         field_source: "builtin".into(), field_key: "tax_number".into(), operator: "equals".into(), value: "VIP".into(),
-        compare_field_source: None, compare_field_key: None, group_id: None,
+        compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 

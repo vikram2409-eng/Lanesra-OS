@@ -24,6 +24,7 @@ import {
   type ConditionOperator,
   type MatchType,
   type NotificationAudience,
+  type RelationshipDefinition,
   type TriggerSource,
   type TriggerType,
   type WorkflowActionInput,
@@ -76,7 +77,7 @@ const OPERATOR_LABELS: Record<ConditionOperator, string> = {
 function emptyCondition(entityType: string): WorkflowConditionInput {
   return {
     field_source: "builtin", field_key: builtinTriggerFieldFor(entityType), operator: "equals", value: "",
-    compare_field_source: null, compare_field_key: null, group_id: null,
+    compare_field_source: null, compare_field_key: null, group_id: null, relationship_definition_id: null,
   };
 }
 
@@ -327,6 +328,7 @@ export function WorkflowAutomationAdmin() {
             conditions: editing.conditions.map((c) => ({
               field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
               compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
+              relationship_definition_id: c.relationship_definition_id,
             })),
             actions: editing.actions.map((a) => ({ action_type: a.action_type, params_json: a.params_json })),
             is_active: editing.is_active,
@@ -399,34 +401,81 @@ export function WorkflowAutomationAdmin() {
   );
 }
 
+/** See BusinessRulesAdmin's identical helper - kept as a separate copy
+ * since it's typed against `WorkflowConditionInput`'s own condition row,
+ * not shared across the two admin screens. */
+function eligibleRelatedRecordSources(entityType: string, relationshipDefs: RelationshipDefinition[]): RelationshipDefinition[] {
+  return relationshipDefs.filter(
+    (r) =>
+      (r.source_entity_type === entityType && (r.relationship_type === "many_to_one" || r.relationship_type === "one_to_one")) ||
+      (r.target_entity_type === entityType && r.relationship_type === "one_to_one"),
+  );
+}
+
 function ConditionRow({
   entityType,
   customFields,
+  relationshipDefs,
   condition,
   onChange,
   onRemove,
 }: {
   entityType: string;
   customFields: { key: string; label: string }[];
+  relationshipDefs: RelationshipDefinition[];
   condition: WorkflowConditionInput;
   onChange: (c: WorkflowConditionInput) => void;
   onRemove: () => void;
 }) {
-  const builtinFields = builtinFieldsFor(entityType);
+  const eligibleRelationships = eligibleRelatedRecordSources(entityType, relationshipDefs);
+  const relatedDef = relationshipDefs.find((r) => r.id === condition.relationship_definition_id) ?? null;
+  const relatedType = relatedDef ? (relatedDef.source_entity_type === entityType ? relatedDef.target_entity_type : relatedDef.source_entity_type) : null;
+  const relatedTypeCustomFields = useQuery({
+    queryKey: ["customFieldDefinitions", relatedType, "all"],
+    queryFn: () => api.listCustomFieldDefinitions(relatedType as string, false),
+    enabled: !!relatedType,
+  });
+  const activeRelatedCustomFields = (relatedTypeCustomFields.data ?? []).filter((d) => d.is_active);
+
+  const builtinFields = relatedType ? builtinFieldsFor(relatedType) : builtinFieldsFor(entityType);
+  const activeCustomFields = relatedDef ? activeRelatedCustomFields : customFields;
   const isBuiltin = condition.field_source === "builtin";
   const needsValue = !VALUELESS_OPERATORS.includes(condition.operator);
   const isListOp = condition.operator === "in_list" || condition.operator === "not_in_list";
   const comparesToField = condition.compare_field_key !== null;
   const selectedBuiltin = isBuiltin ? builtinFields.find((f) => f.key === condition.field_key) : undefined;
-  const compareFields = condition.compare_field_source === "builtin" ? builtinFields : customFields;
+  const compareFields = condition.compare_field_source === "builtin" ? builtinFieldsFor(entityType) : customFields;
 
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+      {eligibleRelationships.length > 0 && (
+        <select
+          value={condition.relationship_definition_id ?? ""}
+          onChange={(e) => {
+            const defId = e.target.value || null;
+            const def = relationshipDefs.find((r) => r.id === defId) ?? null;
+            const otherType = def ? (def.source_entity_type === entityType ? def.target_entity_type : def.source_entity_type) : entityType;
+            onChange({
+              ...condition,
+              relationship_definition_id: defId,
+              field_source: "builtin",
+              field_key: builtinFieldsFor(otherType)[0]?.key ?? "",
+              value: "",
+            });
+          }}
+          title="Read this condition's field from this record, or from a related record"
+        >
+          <option value="">This record</option>
+          {eligibleRelationships.map((r) => (
+            <option key={r.id} value={r.id}>{r.source_entity_type === entityType ? r.forward_label : r.reverse_label} (related record)</option>
+          ))}
+        </select>
+      )}
       <select
         value={condition.field_source}
         onChange={(e) => {
           const source = e.target.value as TriggerSource;
-          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinFields[0]?.key ?? "" : customFields[0]?.key ?? "", value: "" });
+          onChange({ ...condition, field_source: source, field_key: source === "builtin" ? builtinFields[0]?.key ?? "" : activeCustomFields[0]?.key ?? "", value: "" });
         }}
       >
         {TRIGGER_SOURCES.map((s) => <option key={s} value={s}>{s === "builtin" ? "Built-in field" : "Custom field"}</option>)}
@@ -437,7 +486,7 @@ function ConditionRow({
         </select>
       ) : (
         <select value={condition.field_key} onChange={(e) => onChange({ ...condition, field_key: e.target.value })}>
-          {customFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+          {activeCustomFields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
         </select>
       )}
       <select value={condition.operator} onChange={(e) => onChange({ ...condition, operator: e.target.value as ConditionOperator })}>
@@ -760,10 +809,16 @@ function WorkflowForm({
   showActiveToggle,
 }: {
   entityType: string;
-  customFields: { key: string; label: string }[];
+  // `field_type` (beyond the narrower `{key,label}` shape every sibling
+  // component here uses) is only needed to find this object's `date`-typed
+  // fields for the date_reached/due_overdue fallback below.
+  customFields: { key: string; label: string; field_type: string }[];
   customObjects: { key: string; plural_label: string }[];
   users: { id: string; display_name: string; is_active: boolean }[];
-  relationshipDefs: { id: string; source_entity_type: string; target_entity_type: string; forward_label: string; reverse_label: string }[];
+  // Full `RelationshipDefinition` (not the narrower shape ActionEditor
+  // above uses) - ConditionRow's "cross-record validation" picker also
+  // needs `relationship_type` to know which relationships are eligible.
+  relationshipDefs: RelationshipDefinition[];
   aiAgents: { id: string; name: string }[];
   aiAgentPipelines: { id: string; name: string }[];
   apps: AppDefinition[];
@@ -793,7 +848,12 @@ function WorkflowForm({
   const [zoom, setZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
 
-  const dateFields = dateFieldsFor(entityType);
+  // `dateFieldsFor` only knows the curated built-in date fields (Task,
+  // Quote, Contract, Invoice) - empty for every custom object. Falling
+  // back to that object's own `date`-typed custom fields closes the
+  // "custom objects have no date field of their own yet" gap the backend
+  // now also supports (`matching_date_records`'s custom-object fallback).
+  const dateFields = dateFieldsFor(entityType).length > 0 ? dateFieldsFor(entityType) : customFields.filter((f) => f.field_type === "date").map((f) => f.key);
   const labelByKey = new Map(customFields.map((f) => [f.key, f.label]));
   const agentNameById = new Map<string, string>([...aiAgents.map((a): [string, string] => [a.id, a.name]), ...aiAgentPipelines.map((p): [string, string] => [p.id, p.name])]);
 
@@ -961,7 +1021,7 @@ function WorkflowForm({
                         <label>Watch date field</label>
                         <select value={triggerFieldKey} onChange={(e) => setTriggerFieldKey(e.target.value)}>
                           {dateFields.length === 0 && <option value="">No date field available for {entityTypeLabel(entityType)}</option>}
-                          {dateFields.map((f) => <option key={f} value={f}>{f}</option>)}
+                          {dateFields.map((f) => <option key={f} value={f}>{labelByKey.get(f) ?? f}</option>)}
                         </select>
                       </div>
                       <div className="form-field">
@@ -1017,6 +1077,7 @@ function WorkflowForm({
                         <ConditionRow
                           entityType={entityType}
                           customFields={customFields}
+                          relationshipDefs={relationshipDefs}
                           condition={conditions[u.index]}
                           onChange={(next) => updateConditionAt(u.index, next)}
                           onRemove={() => removeConditionAt(u.index)}
@@ -1030,6 +1091,7 @@ function WorkflowForm({
                               <ConditionRow
                                 entityType={entityType}
                                 customFields={customFields}
+                                relationshipDefs={relationshipDefs}
                                 condition={conditions[idx]}
                                 onChange={(next) => updateConditionAt(idx, next)}
                                 onRemove={() => removeConditionAt(idx)}

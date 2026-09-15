@@ -61,19 +61,31 @@
 //! express, that item is left out rather than faked - each gap is called
 //! out below, at the exact point it's skipped, so it's easy to revisit
 //! once the underlying engine gains the capability:
-//! - Cross-record validation (a business rule reading a *related*
-//!   record's own field, e.g. "the selected Asset must belong to the
-//!   selected Site", or Property Management's "the Unit must not already
-//!   have an overlapping active Lease") - conditions only ever see the
-//!   triggering record's own field values, never a related record's or an
-//!   aggregate across several.
-//! - `date_reached`/`due_overdue` triggers on a custom object - a
-//!   workflow trigger's watchable date fields are one specific, hardcoded
-//!   set of core-entity fields (`models::workflow::date_fields_for`),
-//!   empty for every custom object. Rules out Field Service's preventive-
-//!   maintenance workflow, Property Management's lease-renewal/
-//!   document-expiry ones, and Professional Services' "Milestone due
-//!   soon" reminder.
+//! - **Closed** (engine hardening pass, post-v0.13): Cross-record
+//!   validation (a business rule reading a *related* record's own field,
+//!   e.g. "the selected Asset must belong to the selected Site", or
+//!   Property Management's "the Unit must not already have an overlapping
+//!   active Lease"). Left here as the historical record of what worked
+//!   around it: conditions used to only ever see the triggering record's
+//!   own field values, never a related record's. Business rule/workflow
+//!   conditions now carry an optional `relationship_definition_id`
+//!   (migration 0049) that reads a field off the record linked through
+//!   that relationship instead, scoped to relationships where the
+//!   triggering record has at most one linked record (see
+//!   `business_rule_service.rs`/`workflow_service.rs`). None of the
+//!   twelve packages above have been retrofitted to actually use this yet
+//!   - real follow-up work, not attempted in this pass.
+//! - **Closed** (engine hardening pass, post-v0.13): `date_reached`/
+//!   `due_overdue` triggers on a custom object. Left here as the
+//!   historical record: a workflow trigger's watchable date fields used
+//!   to be one specific, hardcoded set of core-entity fields
+//!   (`models::workflow::date_fields_for`), empty for every custom
+//!   object - ruling out Field Service's preventive-maintenance workflow,
+//!   Property Management's lease-renewal/document-expiry ones, and
+//!   Professional Services' "Milestone due soon" reminder.
+//!   `workflow_service::matching_date_records` now falls back to any
+//!   active `date`-typed custom field on a genuine custom object; none of
+//!   the twelve packages above have been retrofitted to use it yet.
 //! - A per-object custom status/stage vocabulary using the built-in
 //!   `status_changed` trigger or `status`/`stage` action targets - every
 //!   custom object's built-in status is the fixed Active/Inactive/
@@ -149,33 +161,65 @@
 //!   Garage's "Appointment check-in ... copy customer/vehicle [context]")
 //!   can only do the create-and-link half; see `auto_service_workflows`'s
 //!   own doc comment.
-//! - A self-referential relationship - an object related to another
-//!   record of its own same type (a parent/child hierarchy: an
-//!   Organization Unit's parent unit, a WBS Element's parent WBS, an
-//!   Asset's parent Asset). `relationship_service::validate_shape`
-//!   rejects `source_entity_type == target_entity_type` outright ("A
-//!   relationship must connect two different object types") - confirmed
-//!   by reading that function, not assumed. Every hierarchy in this
-//!   module is either flattened to one level (no sub-assemblies) or, where
-//!   a parent link is genuinely part of the spec (Lanesra Industry
-//!   Foundation's own Organization Unit), recorded as a plain unenforced
-//!   text field instead of a real link; see
-//!   `lanesra_industry_foundation_manifest_json`'s own doc comment. Field
-//!   Service's own "callback job points back at the original Work Order"
-//!   hits the same gap and is modeled as a plain boolean flag
-//!   (`is_callback`) instead, with no link to which earlier Work Order it
-//!   was a callback for; see `field_service_fields`'s own doc comment.
-//! - A generic polymorphic relationship target - "this record relates to
-//!   *any* other record, of whatever type" (a document attached to a
-//!   policy or a claim or a matter; an external identifier for whatever
-//!   object it maps to). A `RelationshipDefinitionInput`'s
-//!   `target_entity_type` is always one fixed type, chosen at manifest-
-//!   authoring time, never resolved per-record at runtime. Lanesra
+//! - **Closed** (engine hardening pass, post-v0.13): A self-referential
+//!   relationship - an object related to another record of its own same
+//!   type (a parent/child hierarchy: an Organization Unit's parent unit, a
+//!   WBS Element's parent WBS, an Asset's parent Asset). Left here as the
+//!   historical record: `relationship_service::validate_shape` used to
+//!   reject `source_entity_type == target_entity_type` outright ("A
+//!   relationship must connect two different object types"); it's now
+//!   allowed (`link()` instead guards the one real constraint that shape
+//!   needs - a record can't link to itself), and
+//!   `RelatedRecordsCard.tsx`'s related-list rendering/picker were updated
+//!   to show a self-referential relationship's two directions distinctly.
+//!   Every hierarchy in this module is still either flattened to one
+//!   level or recorded as a plain unenforced text field (Lanesra Industry
+//!   Foundation's own Organization Unit `parent_unit_name`; Field
+//!   Service's callback-job `is_callback` flag) - retrofitting those to
+//!   real self-referential relationships is real follow-up work, not
+//!   attempted in this pass.
+//! - **Closed** (engine hardening pass, post-v0.13): A generic
+//!   polymorphic relationship target - "this record relates to *any*
+//!   other record, of whatever type" (a document attached to a policy or
+//!   a claim or a matter; an external identifier for whatever object it
+//!   maps to). Left here as the historical record: a
+//!   `RelationshipDefinitionInput`'s `target_entity_type` used to always
+//!   be one fixed type, chosen at manifest-authoring time, never resolved
+//!   per-record at runtime. A definition can now set
+//!   `target_is_polymorphic` (migration 0049), leaving
+//!   `target_entity_type` an unused placeholder and validating each
+//!   link's target type individually instead (`relationship_service::
+//!   link`); reading related records back out already renders each
+//!   link's real type correctly either way
+//!   (`relationship_service::related_records_for`). Scoped to read paths
+//!   only: `update_related_record`/`create_record`'s link-via-relationship
+//!   action reject cleanly against a polymorphic-target relationship's
+//!   variable side rather than guessing one type to write into
+//!   (`workflow_service::other_side_of_relationship`) - grouping writes by
+//!   each linked record's actual type is real follow-up work. Lanesra
 //!   Industry Foundation's Document Record, External Identifier,
 //!   Interaction, Financial Transaction and Data Quality Issue objects
-//!   all want exactly this and don't get it - see that package's own doc
-//!   comment for how each is degraded to a plain, unenforced pair of text
-//!   fields instead.
+//!   all want exactly this and are real candidates for a follow-up pass,
+//!   not retrofitted in this one - see that package's own doc comment for
+//!   how each is still degraded to a plain, unenforced pair of text
+//!   fields today.
+//! - **Closed** (engine hardening pass, post-v0.13): No server-side
+//!   effective-dating query support - no way to ask "which records were
+//!   valid as of date X" server-side, only client-side list filtering.
+//!   `effective_dating_service::active_record_ids_as_of` now answers a
+//!   narrower, honestly-scoped version of that: "is this record's
+//!   *currently stored* `valid_from`/`valid_to` window in effect as of
+//!   date X" - not true point-in-time reconstruction of a field's past
+//!   value, which `custom_field_values` has no history to support at all.
+//!   Eligible automatically for any active custom object with an active
+//!   `valid_from` date field - the exact convention Lanesra Industry
+//!   Foundation's `party_role`, `party_relationship`, `organization_unit`,
+//!   `location`, `contact_point`, `external_identifier` and
+//!   `consent_preference` objects already established below. Wired into
+//!   the custom report builder's "as of" filter
+//!   (`custom_report_service::run_with_as_of`); wiring the same predicate
+//!   into every built-in list view's own filter bar is real follow-up
+//!   work, not attempted in this pass.
 
 use serde_json::json;
 

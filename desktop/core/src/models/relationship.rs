@@ -10,6 +10,11 @@ pub struct RelationshipDefinition {
     pub key: String,
     pub source_entity_type: String,
     pub target_entity_type: String,
+    /// When true, `target_entity_type` above is an ignored placeholder
+    /// (stored as `""`) - each link instance carries its own real target
+    /// type instead of the definition fixing one (see migration 0049 and
+    /// `relationship_service::link`'s handling of this flag).
+    pub target_is_polymorphic: bool,
     pub relationship_type: String,
     pub forward_label: String,
     pub reverse_label: String,
@@ -29,6 +34,12 @@ pub struct RelationshipDefinition {
 pub struct RelationshipDefinitionInput {
     pub source_entity_type: String,
     pub target_entity_type: String,
+    /// See `RelationshipDefinition::target_is_polymorphic`. When true,
+    /// `target_entity_type` is ignored and stored as `""` - any valid
+    /// object type in the workspace may be linked as the target, chosen
+    /// per link rather than fixed on the definition.
+    #[serde(default)]
+    pub target_is_polymorphic: bool,
     pub relationship_type: String,
     pub forward_label: String,
     pub reverse_label: String,

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
-import type { RelatedRecord, RelationshipDefinition } from "../lib/types";
+import { CUSTOM_FIELD_ENTITY_TYPES, entityTypeLabel, type RelatedRecord, type RelationshipDefinition } from "../lib/types";
 
 type PickableRecord = { id: string; label: string };
 
@@ -60,8 +60,14 @@ export function RelatedRecordsCard({ entityType, entityId, only }: { entityType:
   });
   const defs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
 
+  // A polymorphic-target definition's stored target_entity_type is an
+  // unused '' placeholder (see RelationshipDefinition.target_is_polymorphic)
+  // so it can never equal a real entityType - it's included unconditionally
+  // instead, mirroring `list_definitions_for_entity`'s own "can't say which
+  // types are eligible" reasoning server-side. `related.data` (the actual
+  // linked records) still determines what renders inside each group.
   const applicableDefs = (defs.data ?? []).filter(
-    (d) => d.show_related_list && (d.source_entity_type === entityType || d.target_entity_type === entityType) && (!only || only.includes(d.key)),
+    (d) => d.show_related_list && (d.source_entity_type === entityType || d.target_entity_type === entityType || d.target_is_polymorphic) && (!only || only.includes(d.key)),
   );
 
   function invalidate() {
@@ -75,16 +81,37 @@ export function RelatedRecordsCard({ entityType, entityId, only }: { entityType:
 
   if (applicableDefs.length === 0) return null;
 
-  const grouped = new Map<string, { label: string; rows: RelatedRecord[] }>();
+  // A self-referential definition (source and target object are the same
+  // type) needs two distinct groups - "as source" and "as target" - not
+  // one, since `source_entity_type === entityType` is trivially always
+  // true here and would otherwise collapse both directions' rows into one
+  // group permanently mislabeled with `forward_label`. Every other
+  // definition still gets exactly one group, keyed by `d.key` alone,
+  // unchanged from before.
+  type Group = { label: string; rows: RelatedRecord[]; def: RelationshipDefinition; direction: "forward" | "reverse" };
+  const grouped = new Map<string, Group>();
   for (const d of applicableDefs) {
-    grouped.set(d.key, { label: d.source_entity_type === entityType ? d.forward_label : d.reverse_label, rows: [] });
+    if (d.source_entity_type === d.target_entity_type) {
+      grouped.set(`${d.key}:forward`, { label: d.forward_label, rows: [], def: d, direction: "forward" });
+      grouped.set(`${d.key}:reverse`, { label: d.reverse_label, rows: [], def: d, direction: "reverse" });
+    } else {
+      const direction = d.source_entity_type === entityType ? "forward" : "reverse";
+      grouped.set(d.key, { label: direction === "forward" ? d.forward_label : d.reverse_label, rows: [], def: d, direction });
+    }
   }
   for (const r of related.data ?? []) {
-    const group = grouped.get(r.relationship_key);
+    const def = applicableDefs.find((d) => d.key === r.relationship_key);
+    if (!def) continue;
+    // `related_records_for` already stamps each row's `label` with
+    // `forward_label`/`reverse_label` per which side it came from - reuse
+    // that instead of re-deriving direction, since for a self-referential
+    // definition entity-type comparison alone can't tell the two apart.
+    const groupKey = def.source_entity_type === def.target_entity_type ? `${r.relationship_key}:${r.label === def.forward_label ? "forward" : "reverse"}` : r.relationship_key;
+    const group = grouped.get(groupKey);
     if (group) group.rows.push(r);
   }
 
-  const linkingDef = linkingKey ? applicableDefs.find((d) => d.key === linkingKey) ?? null : null;
+  const linkingGroup = linkingKey ? grouped.get(linkingKey) ?? null : null;
 
   return (
     <div className="card">
@@ -119,9 +146,10 @@ export function RelatedRecordsCard({ entityType, entityId, only }: { entityType:
         </div>
       ))}
 
-      {linkingDef && (
+      {linkingGroup && (
         <LinkPicker
-          definition={linkingDef}
+          definition={linkingGroup.def}
+          direction={linkingGroup.direction}
           entityType={entityType}
           entityId={entityId}
           onDone={() => {
@@ -137,20 +165,55 @@ export function RelatedRecordsCard({ entityType, entityId, only }: { entityType:
 
 function LinkPicker({
   definition,
+  direction,
   entityType,
   entityId,
   onDone,
   onCancel,
 }: {
   definition: RelationshipDefinition;
+  /** Which side the current record plays. For every non-self-referential
+   * definition this is implied by entity type alone (`isSource` below);
+   * for a self-referential one (source and target object are the same
+   * type) it can't be, since the current record's type always matches
+   * both sides - the caller passes the direction the clicked group
+   * actually represents instead. */
+  direction?: "forward" | "reverse";
   entityType: string;
   entityId: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const isSource = definition.source_entity_type === entityType;
-  const otherType = isSource ? definition.target_entity_type : definition.source_entity_type;
-  const options = useQuery({ queryKey: ["pickableRecords", otherType], queryFn: () => listRecordsOfType(otherType) });
+  const selfReferential = definition.source_entity_type === definition.target_entity_type;
+  const isSource = selfReferential ? direction !== "reverse" : definition.source_entity_type === entityType;
+  // Linking *from* the variable side (entityType is some polymorphic
+  // target, isSource false) needs no special handling - `otherType`
+  // resolves to the fixed `source_entity_type` same as any other
+  // relationship. Only linking *from* the fixed source side needs a type
+  // choice first, since `target_entity_type` on the definition is the
+  // unused '' placeholder rather than one real type.
+  const polymorphicChoice = isSource && definition.target_is_polymorphic;
+  const [chosenType, setChosenType] = useState("");
+  const otherType = polymorphicChoice ? chosenType : isSource ? definition.target_entity_type : definition.source_entity_type;
+
+  const customObjects = useQuery({
+    queryKey: ["customObjects", "active"],
+    queryFn: () => api.listCustomObjects(true),
+    enabled: polymorphicChoice,
+  });
+  const targetTypeChoices: string[] = polymorphicChoice ? [...CUSTOM_FIELD_ENTITY_TYPES, ...(customObjects.data?.map((o) => o.key) ?? [])] : [];
+  const targetTypeLabel = (t: string) => customObjects.data?.find((o) => o.key === t)?.plural_label ?? entityTypeLabel(t);
+
+  const options = useQuery({
+    queryKey: ["pickableRecords", otherType],
+    queryFn: () => listRecordsOfType(otherType),
+    enabled: !!otherType,
+    // A self-referential relationship's picker would otherwise list this
+    // very record among its own candidate links - `link()` rejects
+    // source_id === target_id server-side, but excluding it here is both
+    // a clearer UI and one fewer round trip to find that out.
+    select: (records) => (otherType === entityType ? records.filter((r) => r.id !== entityId) : records),
+  });
   const [selected, setSelected] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -167,8 +230,24 @@ function LinkPicker({
     <div className="card" style={{ background: "var(--surface-2, transparent)" }}>
       {error && <div className="error-banner">{error}</div>}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-          <option value="">{options.isLoading ? "Loading..." : "Select a record..."}</option>
+        {polymorphicChoice && (
+          <select
+            value={chosenType}
+            onChange={(e) => {
+              setChosenType(e.target.value);
+              setSelected("");
+            }}
+          >
+            <option value="">Select a record type...</option>
+            {targetTypeChoices.map((t) => (
+              <option key={t} value={t}>
+                {targetTypeLabel(t)}
+              </option>
+            ))}
+          </select>
+        )}
+        <select value={selected} onChange={(e) => setSelected(e.target.value)} disabled={polymorphicChoice && !chosenType}>
+          <option value="">{options.isLoading && otherType ? "Loading..." : "Select a record..."}</option>
           {(options.data ?? []).map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}

@@ -595,7 +595,22 @@ function CustomReportForm({ onDone, onCancel }: { onDone: () => void; onCancel: 
 }
 
 function CustomReportRunner({ report }: { report: CustomReport }) {
-  const q = useQuery({ queryKey: ["runCustomReport", report.id], queryFn: () => api.runCustomReport(report.id) });
+  // Engine hardening item #5: "as of" filtering only applies to entity
+  // types with an active 'valid_from' date custom field (Lanesra Industry
+  // Foundation's party_role/party_relationship/organization_unit/location/
+  // contact_point/external_identifier/consent_preference objects, or any
+  // other object that adopts the same convention) - same UI slot the AR
+  // Aging report's own as-of date picker already occupies, generalized.
+  const effectiveDated = useQuery({
+    queryKey: ["isEffectiveDatedEntityType", report.entity_type],
+    queryFn: () => api.isEffectiveDatedEntityType(report.entity_type),
+  });
+  const [asOfDate, setAsOfDate] = useState<string>(todayIso());
+  const [asOfEnabled, setAsOfEnabled] = useState(false);
+  const q = useQuery({
+    queryKey: ["runCustomReport", report.id, asOfEnabled ? asOfDate : null],
+    queryFn: () => api.runCustomReport(report.id, asOfEnabled ? asOfDate : null),
+  });
   const rows = q.data ?? [];
   const max = Math.max(0, ...rows.map((r) => r.value));
 
@@ -603,6 +618,13 @@ function CustomReportRunner({ report }: { report: CustomReport }) {
     <div className="card">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>{report.name}</h3>
+        {effectiveDated.data && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+            <input type="checkbox" checked={asOfEnabled} onChange={(e) => setAsOfEnabled(e.target.checked)} />
+            As of
+            <input type="date" value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} disabled={!asOfEnabled} />
+          </label>
+        )}
         <ExportCsvButton
           rows={rows}
           filename={`${report.name.toLowerCase().replace(/\s+/g, "-")}.csv`}

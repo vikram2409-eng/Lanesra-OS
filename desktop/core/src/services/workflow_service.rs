@@ -124,6 +124,24 @@ fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type:
 
 // --- Validation -------------------------------------------------------
 
+/// See `business_rule_service::related_field_owner_type`'s doc comment -
+/// identical eligibility check, kept as a separate copy since it's typed
+/// against a different condition input and this module doesn't depend on
+/// business_rule_service.
+fn related_field_owner_type(conn: &Connection, entity_type: &str, relationship_definition_id: &str) -> AppResult<String> {
+    let def = relationship_repo::get_definition(conn, relationship_definition_id)?
+        .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
+    if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
+        Ok(def.target_entity_type)
+    } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
+        Ok(def.source_entity_type)
+    } else {
+        Err(AppError::Validation(
+            "Selected relationship doesn't have a single determinate related record from this object - only a many-to-one's \"many\" side or either side of a one-to-one can be used".into(),
+        ))
+    }
+}
+
 fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str, conditions: &[crate::models::workflow::WorkflowConditionInput]) -> AppResult<()> {
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
     let active_keys: Vec<&str> = defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
@@ -134,7 +152,14 @@ fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str,
         if !crate::domain::conditions::CONDITION_OPERATORS.contains(&c.operator.as_str()) {
             return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
         }
-        if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
+        if let Some(rel_id) = &c.relationship_definition_id {
+            let related_type = related_field_owner_type(conn, entity_type, rel_id)?;
+            let related_defs = custom_field_repo::list_definitions(conn, workspace_id, &related_type)?;
+            let related_active_keys: Vec<&str> = related_defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
+            if !crate::domain::conditions::field_ref_is_valid(&related_type, &c.field_source, &c.field_key, related_active_keys.iter().copied()) {
+                return Err(AppError::Validation(format!("'{}' is not a valid field on the related {related_type} record", c.field_key)));
+            }
+        } else if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
             return Err(AppError::Validation(format!("'{}' is not a valid field to trigger on", c.field_key)));
         }
         // Addendum §3.2: field-to-field comparison, same rule as business
@@ -201,7 +226,18 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
         }
         "date_reached" | "due_overdue" => {
             let field = input.trigger_field_key.as_deref().unwrap_or("");
-            if !crate::models::workflow::date_fields_for(entity_type).contains(&field) {
+            // `date_fields_for` is the *built-in* allow-list, empty for
+            // every custom object by design - a custom object is instead
+            // eligible through any of its own active `date`-typed custom
+            // fields, matching `custom_object_matching_date_records`'s own
+            // runtime eligibility check (see workflow_service.rs's
+            // `matching_date_records`).
+            let is_builtin_date_field = crate::models::workflow::date_fields_for(entity_type).contains(&field);
+            let is_custom_object_date_field = super::custom_object_service::get_by_key(conn, workspace_id, entity_type)?.is_some_and(|d| d.is_active)
+                && custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+                    .iter()
+                    .any(|d| d.key == field && d.is_active && d.field_type == "date");
+            if !is_builtin_date_field && !is_custom_object_date_field {
                 return Err(AppError::Validation(format!("'{field}' is not a date field this trigger can watch on {entity_type}")));
             }
         }
@@ -327,6 +363,7 @@ pub fn restore_version(conn: &Connection, workflow_id: &str, version_id: &str, a
                 compare_field_source: c.compare_field_source,
                 compare_field_key: c.compare_field_key,
                 group_id: c.group_id,
+                relationship_definition_id: c.relationship_definition_id,
             })
             .collect(),
         actions: snapshot.actions.into_iter().map(|a| WorkflowActionInput { action_type: a.action_type, params_json: a.params_json }).collect(),
@@ -363,6 +400,7 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
                 compare_field_source: c.compare_field_source.clone(),
                 compare_field_key: c.compare_field_key.clone(),
                 group_id: c.group_id.clone(),
+                relationship_definition_id: c.relationship_definition_id.clone(),
             })
             .collect(),
         actions: existing.actions.iter().map(|a| WorkflowActionInput { action_type: a.action_type.clone(), params_json: a.params_json.clone() }).collect(),
@@ -465,15 +503,62 @@ fn resolve_condition_value<'a>(c: &'a crate::models::workflow::WorkflowCondition
     }
 }
 
-fn workflow_matches(wf: &WorkflowDefinition, ctx: &HashMap<String, String>) -> bool {
+/// Migration 0049, "cross-record validation" - identical mechanism and
+/// scope restriction to `business_rule_service::resolve_related_field`'s
+/// own doc comment (kept as a separate copy since it's typed against
+/// `WorkflowCondition`, same reason `resolve_condition_value` above is).
+fn resolve_related_field(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    relationship_definition_id: &str,
+    field_source: &str,
+    field_key: &str,
+) -> AppResult<Option<String>> {
+    let Some(def) = relationship_repo::get_definition(conn, relationship_definition_id)? else {
+        return Ok(None);
+    };
+    let (related_id, other_type) = if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
+        (relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.target_id), def.target_entity_type)
+    } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
+        (relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.source_id), def.source_entity_type)
+    } else {
+        (None, String::new())
+    };
+    let Some(related_id) = related_id else { return Ok(None) };
+    let values = if field_source == "builtin" {
+        builtin_field_service::field_values(conn, &other_type, &related_id)?
+    } else {
+        custom_field_repo::get_values(conn, &related_id)?
+    };
+    Ok(values.get(field_key).cloned())
+}
+
+fn workflow_matches(conn: &Connection, entity_type: &str, entity_id: &str, wf: &WorkflowDefinition, ctx: &HashMap<String, String>) -> AppResult<bool> {
     if wf.conditions.is_empty() {
-        return true; // a workflow with no extra conditions always fires on its trigger
+        return Ok(true); // a workflow with no extra conditions always fires on its trigger
     }
-    conditions_match(
+    if !wf.conditions.iter().any(|c| c.relationship_definition_id.is_some()) {
+        return Ok(conditions_match(
+            &wf.match_type,
+            wf.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
+            ctx,
+        ));
+    }
+    // See `business_rule_service::rule_matches`'s identical doc comment -
+    // a per-call scratch copy, never the shared base `ctx`.
+    let mut scratch = ctx.clone();
+    for c in &wf.conditions {
+        if let Some(rel_id) = &c.relationship_definition_id {
+            let value = resolve_related_field(conn, entity_type, entity_id, rel_id, &c.field_source, &c.field_key)?.unwrap_or_default();
+            scratch.insert(c.field_key.clone(), value);
+        }
+    }
+    Ok(conditions_match(
         &wf.match_type,
-        wf.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
-        ctx,
-    )
+        wf.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, &scratch))),
+        &scratch,
+    ))
 }
 
 // --- record_created / record_updated / status_changed -------------------
@@ -503,7 +588,7 @@ pub fn fire_event(
             "status_changed" => old_status.is_some_and(|old| old != new_status) && wf.trigger_status.as_deref() == Some(new_status),
             _ => false,
         };
-        if !trigger_matches || !workflow_matches(wf, &ctx) {
+        if !trigger_matches || !workflow_matches(conn, entity_type, entity_id, wf, &ctx)? {
             continue;
         }
         run_workflow(conn, workspace_id, wf, entity_type, entity_id, fallback_owner_user_id, actor_user_id)?;
@@ -542,7 +627,7 @@ pub fn fire_field_changed(
 
     for wf in workflows.iter().filter(|w| w.is_active && w.trigger_type == "field_changed" && w.trigger_field_source == field_source) {
         let watched = wf.trigger_field_key.as_deref().unwrap_or("");
-        if !changed_field_keys.iter().any(|k| k == watched) || !workflow_matches(wf, &ctx) {
+        if !changed_field_keys.iter().any(|k| k == watched) || !workflow_matches(conn, entity_type, entity_id, wf, &ctx)? {
             continue;
         }
         run_workflow(conn, workspace_id, wf, entity_type, entity_id, fallback_owner_user_id, actor_user_id)?;
@@ -584,7 +669,7 @@ pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Optio
                 continue;
             }
             let ctx = build_trigger_context(conn, &wf.entity_type, &entity_id, None)?;
-            if !workflow_matches(&wf, &ctx) {
+            if !workflow_matches(conn, &wf.entity_type, &entity_id, &wf, &ctx)? {
                 continue;
             }
             run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, None, actor_user_id)?;
@@ -602,7 +687,7 @@ pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Optio
         }
         for entity_id in all_active_records(conn, workspace_id, &wf.entity_type)? {
             let ctx = build_trigger_context(conn, &wf.entity_type, &entity_id, None)?;
-            if !workflow_matches(&wf, &ctx) {
+            if !workflow_matches(conn, &wf.entity_type, &entity_id, &wf, &ctx)? {
                 continue;
             }
             run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, None, actor_user_id)?;
@@ -627,9 +712,13 @@ fn days_between(from_iso_date: &str, to_iso_date: &str) -> i64 {
 /// IDs of non-archived `entity_type` records whose `date_field` is on or
 /// before `today + offset_days` - the shared evaluation both date_reached
 /// and due_overdue use (see this module's doc comment for why they're one
-/// mechanism). Deliberately scoped to the small set of built-in entities
-/// `date_fields_for` recognizes - custom objects have no date field of
-/// their own yet, a documented gap rather than an oversight.
+/// mechanism). The hardcoded arms cover the small set of built-in entities
+/// `date_fields_for` recognizes; the fallback arm below covers a `date`-
+/// typed custom field on any custom object - previously a documented gap
+/// ("custom objects have no date field of their own yet"), closed by
+/// reusing the same non-archived + string-compare-to-threshold shape the
+/// built-in arms already use, just sourced from `custom_record_repo`/
+/// `custom_field_repo` instead of a dedicated repo per entity.
 fn matching_date_records(conn: &Connection, workspace_id: &str, entity_type: &str, date_field: &str, today: &str, offset_days: i64) -> AppResult<Vec<String>> {
     let threshold = (Utc::now() - Duration::days(-offset_days)).format("%Y-%m-%d").to_string();
     let _ = today;
@@ -659,8 +748,42 @@ fn matching_date_records(conn: &Connection, workspace_id: &str, entity_type: &st
             .filter(|i| i.archived_at.is_none() && i.due_date.as_deref().is_some_and(|d| d <= threshold.as_str()))
             .map(|i| i.id)
             .collect(),
-        _ => Vec::new(),
+        _ => custom_object_matching_date_records(conn, workspace_id, entity_type, date_field, &threshold)?,
     };
+    Ok(ids)
+}
+
+/// Fallback for `matching_date_records` when `(entity_type, date_field)`
+/// isn't one of the hardcoded built-in pairs above - `date_field` must be
+/// the key of an active `date`-typed custom field on an active custom
+/// object named `entity_type`, otherwise this returns empty (same "no
+/// match, not an error" shape the built-in match's own `_` arm had before).
+/// Deliberately checks `custom_object_service::get_by_key` rather than the
+/// looser `is_valid_dynamic_entity_type` (which also accepts a built-in
+/// entity type carrying custom fields) - `custom_record_repo::list` below
+/// only ever holds genuine custom-object records, never Company/Contact/
+/// etc., which store their custom field values against their own tables.
+fn custom_object_matching_date_records(conn: &Connection, workspace_id: &str, entity_type: &str, date_field: &str, threshold: &str) -> AppResult<Vec<String>> {
+    let is_custom_object = custom_object_service::get_by_key(conn, workspace_id, entity_type)?.is_some_and(|d| d.is_active);
+    if !is_custom_object {
+        return Ok(Vec::new());
+    }
+    let is_date_field = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+        .iter()
+        .any(|d| d.key == date_field && d.is_active && d.field_type == "date");
+    if !is_date_field {
+        return Ok(Vec::new());
+    }
+    let mut ids = Vec::new();
+    for record in custom_record_repo::list(conn, workspace_id, entity_type)? {
+        if record.archived_at.is_some() {
+            continue;
+        }
+        let values = custom_field_repo::get_values(conn, &record.id)?;
+        if values.get(date_field).is_some_and(|d| d.as_str() <= threshold) {
+            ids.push(record.id);
+        }
+    }
     Ok(ids)
 }
 
@@ -846,6 +969,16 @@ fn is_creatable_entity_type(conn: &Connection, workspace_id: &str, entity_type: 
 /// when `entity_type` isn't actually one of the definition's two sides.
 fn other_side_of_relationship(def: &crate::models::relationship::RelationshipDefinition, entity_type: &str) -> AppResult<String> {
     if def.source_entity_type == entity_type {
+        if def.target_is_polymorphic {
+            // The target varies per link (a Document Record can attach to
+            // a Policy, a Claim, or a Matter) - there is no single "other
+            // type" to write into. Grouping writes by each linked record's
+            // actual type is real follow-up work, not built here; reject
+            // cleanly rather than silently writing to the wrong type.
+            return Err(AppError::Validation(
+                "This relationship's target can be any record type, so an action that writes to \"the other side\" isn't supported for it".into(),
+            ));
+        }
         Ok(def.target_entity_type.clone())
     } else if def.target_entity_type == entity_type {
         Ok(def.source_entity_type.clone())
@@ -1334,7 +1467,10 @@ pub fn test_workflows(conn: &Connection, workspace_id: &str, entity_type: &str, 
     let workflows = workflow_repo::list(conn, workspace_id, entity_type)?;
     let mut matches = Vec::new();
     for wf in workflows.iter().filter(|w| w.is_active) {
-        if !workflow_matches(wf, ctx) {
+        // No real record id to resolve a "cross-record validation"
+        // condition's relationship from - see business_rule_service::
+        // test_rules's identical doc comment.
+        if !workflow_matches(conn, entity_type, "", wf, ctx)? {
             continue;
         }
         let mut action_descriptions = Vec::new();

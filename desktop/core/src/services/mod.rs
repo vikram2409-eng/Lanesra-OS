@@ -23,6 +23,7 @@ pub mod custom_record_service;
 pub mod dashboard_layout_service;
 pub mod dashboard_service;
 pub mod dashboard_widget_service;
+pub mod effective_dating_service;
 pub mod entity_registry;
 pub mod event_hooks;
 pub mod external_object_service;

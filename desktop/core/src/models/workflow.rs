@@ -73,6 +73,10 @@ pub struct WorkflowCondition {
     /// See `BusinessRuleCondition::group_id`'s doc comment - identical
     /// one-level OR-group mechanism, shared matcher.
     pub group_id: Option<String>,
+    /// See `BusinessRuleCondition::relationship_definition_id`'s doc
+    /// comment - identical "cross-record validation" mechanism, shared
+    /// resolution point in each engine's own service layer.
+    pub relationship_definition_id: Option<String>,
     pub sort_order: i64,
 }
 
@@ -88,6 +92,8 @@ pub struct WorkflowConditionInput {
     pub compare_field_key: Option<String>,
     #[serde(default)]
     pub group_id: Option<String>,
+    #[serde(default)]
+    pub relationship_definition_id: Option<String>,
 }
 
 /// `params_json` is a JSON-encoded object whose shape depends on

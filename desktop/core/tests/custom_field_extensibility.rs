@@ -86,7 +86,7 @@ fn a_business_rules_set_default_still_wins_over_the_fields_own_default_value() {
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {
                 field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-                compare_field_source: None, compare_field_key: None, group_id: None,
+                compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "set_default".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(),
@@ -219,7 +219,7 @@ fn a_field_hidden_by_default_is_skipped_unless_a_rule_shows_it() {
             priority: 0, effective_start_date: None, effective_end_date: None,
             conditions: vec![BusinessRuleConditionInput {
                 field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-                compare_field_source: None, compare_field_key: None, group_id: None,
+                compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "show".into(), target_field_key: Some(def.key.clone()), target_field_source: "custom".into(),

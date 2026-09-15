@@ -47,7 +47,7 @@ fn an_administrator_can_define_a_relationship_and_a_non_admin_cannot() {
         &conn, &ws,
         &RelationshipDefinitionInput {
             source_entity_type: vendor.key.clone(),
-            target_entity_type: "Company".into(),
+            target_entity_type: "Company".into(), target_is_polymorphic: false,
             relationship_type: "many_to_one".into(),
             forward_label: "Client".into(),
             reverse_label: "Vendors".into(),
@@ -68,7 +68,7 @@ fn an_administrator_can_define_a_relationship_and_a_non_admin_cannot() {
     let denied = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key, target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key, target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors 2".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -84,7 +84,7 @@ fn many_to_one_limits_the_source_to_one_link_but_allows_many_sources_per_target(
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -123,7 +123,7 @@ fn one_to_one_limits_both_sides_to_a_single_link() {
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "one_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "one_to_one".into(),
             forward_label: "Primary Client".into(), reverse_label: "Primary Vendor".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -149,7 +149,7 @@ fn many_to_many_allows_multiple_links_but_rejects_an_exact_duplicate() {
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: project.key.clone(), target_entity_type: vendor.key.clone(), relationship_type: "many_to_many".into(),
+            source_entity_type: project.key.clone(), target_entity_type: vendor.key.clone(), target_is_polymorphic: false, relationship_type: "many_to_many".into(),
             forward_label: "Vendors".into(), reverse_label: "Projects".into(), is_required: false, show_related_list: true,
             delete_behavior: "archive".into(), sort_order: 0,
         },
@@ -178,7 +178,7 @@ fn restrict_blocks_archive_while_archive_behavior_clears_the_link_silently() {
     let restrict_def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -220,7 +220,7 @@ fn deleting_a_relationship_definition_is_blocked_while_links_exist() {
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
@@ -238,27 +238,100 @@ fn deleting_a_relationship_definition_is_blocked_while_links_exist() {
 }
 
 #[test]
-fn a_relationship_cannot_connect_an_object_type_to_itself_or_an_unknown_type() {
+fn a_relationship_cannot_connect_an_object_type_to_an_unknown_type() {
     let (conn, ws, admin) = setup_workspace();
-    let self_link = relationship_service::create(
-        &conn, &ws,
-        &RelationshipDefinitionInput {
-            source_entity_type: "Company".into(), target_entity_type: "Company".into(), relationship_type: "many_to_many".into(),
-            forward_label: "Related Company".into(), reverse_label: "Related Company".into(), is_required: false, show_related_list: true,
-            delete_behavior: "restrict".into(), sort_order: 0,
-        },
-        Some(&admin),
-    );
-    assert!(self_link.is_err());
-
     let unknown = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: "NotARealType".into(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: "NotARealType".into(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "X".into(), reverse_label: "Y".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },
         Some(&admin),
     );
     assert!(unknown.is_err());
+}
+
+/// Engine hardening item #1: self-referential relationships (source and
+/// target object are the same type) are allowed - a parent/child
+/// hierarchy - but a record still can't link to itself.
+#[test]
+fn self_referential_relationship_allows_a_hierarchy_but_not_self_linking() {
+    let (conn, ws, admin) = setup_workspace();
+    let vendor = custom_object_service::create(&conn, &ws, &vendor_object(), Some(&admin)).unwrap();
+    let def = relationship_service::create(
+        &conn, &ws,
+        &RelationshipDefinitionInput {
+            source_entity_type: vendor.key.clone(), target_entity_type: vendor.key.clone(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
+            forward_label: "Parent Vendor".into(), reverse_label: "Sub-Vendors".into(), is_required: false, show_related_list: true,
+            delete_behavior: "restrict".into(), sort_order: 0,
+        },
+        Some(&admin),
+    ).unwrap();
+
+    let parent = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Parent Vendor Co".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+    let child = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Sub-Vendor Co".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+
+    // A record can't link to itself, even though the shape is allowed.
+    let self_link = relationship_service::link(&conn, &ws, &def.id, &vendor.key, &child.id, &vendor.key, &child.id, Some(&admin));
+    assert!(self_link.is_err());
+
+    relationship_service::link(&conn, &ws, &def.id, &vendor.key, &child.id, &vendor.key, &parent.id, Some(&admin)).unwrap();
+
+    // Each direction resolves distinctly through the shared definition.
+    let from_child = relationship_service::related_records_for(&conn, &ws, &vendor.key, &child.id).unwrap();
+    assert_eq!(from_child.len(), 1);
+    assert_eq!(from_child[0].label, "Parent Vendor");
+    assert_eq!(from_child[0].entity_id, parent.id);
+
+    let from_parent = relationship_service::related_records_for(&conn, &ws, &vendor.key, &parent.id).unwrap();
+    assert_eq!(from_parent.len(), 1);
+    assert_eq!(from_parent[0].label, "Sub-Vendors");
+    assert_eq!(from_parent[0].entity_id, child.id);
+}
+
+/// Engine hardening item #4: a definition with `target_is_polymorphic` set
+/// accepts any valid workspace type as its target, chosen per link, and
+/// each linked record's own real type is what related-record resolution
+/// renders back out.
+#[test]
+fn polymorphic_target_relationship_accepts_any_type_and_resolves_each_links_real_type() {
+    let (conn, ws, admin) = setup_workspace();
+    let vendor = custom_object_service::create(&conn, &ws, &vendor_object(), Some(&admin)).unwrap();
+    let project = custom_object_service::create(&conn, &ws, &project_object(), Some(&admin)).unwrap();
+
+    let def = relationship_service::create(
+        &conn, &ws,
+        &RelationshipDefinitionInput {
+            source_entity_type: vendor.key.clone(), target_entity_type: String::new(), target_is_polymorphic: true, relationship_type: "many_to_many".into(),
+            forward_label: "Attached To".into(), reverse_label: "Attached Vendors".into(), is_required: false, show_related_list: true,
+            delete_behavior: "restrict".into(), sort_order: 0,
+        },
+        Some(&admin),
+    ).unwrap();
+    assert!(def.target_is_polymorphic);
+
+    let vendor_1 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Vendor One".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+    let company = company_service::create(&conn, &ws, &CompanyInput { name: "Acme".into(), status: "Active Customer".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, ..Default::default() }, Some(&admin)).unwrap();
+    let project_1 = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: project.key.clone(), primary_name: "Website Revamp".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+
+    // The same vendor attaches to two different target types.
+    relationship_service::link(&conn, &ws, &def.id, &vendor.key, &vendor_1.id, "Company", &company.id, Some(&admin)).unwrap();
+    relationship_service::link(&conn, &ws, &def.id, &vendor.key, &vendor_1.id, &project.key, &project_1.id, Some(&admin)).unwrap();
+
+    // An unrecognized target type is still rejected per link.
+    let bad = relationship_service::link(&conn, &ws, &def.id, &vendor.key, &vendor_1.id, "NotARealType", "whatever", Some(&admin));
+    assert!(bad.is_err());
+
+    let from_vendor = relationship_service::related_records_for(&conn, &ws, &vendor.key, &vendor_1.id).unwrap();
+    assert_eq!(from_vendor.len(), 2);
+    assert!(from_vendor.iter().any(|r| r.entity_type == "Company" && r.entity_id == company.id));
+    assert!(from_vendor.iter().any(|r| r.entity_type == project.key && r.entity_id == project_1.id));
+
+    // Viewing from the variable-type side resolves back to the fixed
+    // source correctly, per-instance-typed just like any other definition.
+    let from_company = relationship_service::related_records_for(&conn, &ws, "Company", &company.id).unwrap();
+    assert_eq!(from_company.len(), 1);
+    assert_eq!(from_company[0].label, "Attached Vendors");
+    assert_eq!(from_company[0].entity_id, vendor_1.id);
 }

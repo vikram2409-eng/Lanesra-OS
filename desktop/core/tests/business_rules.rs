@@ -10,9 +10,15 @@ use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput, BusinessRuleUpdate};
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
+use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
+use lanesra_core::models::custom_record::CustomRecordInput;
+use lanesra_core::models::relationship::RelationshipDefinitionInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{business_rule_service, company_service, custom_field_service, user_service, workspace_service};
+use lanesra_core::services::{
+    business_rule_service, company_service, custom_field_service, custom_object_service, custom_record_service, relationship_service,
+    user_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -62,14 +68,14 @@ fn text_field_input(label: &str) -> CustomFieldDefinitionInput {
 fn condition(field_key: &str, operator: &str, value: &str) -> BusinessRuleConditionInput {
     BusinessRuleConditionInput {
         field_source: "builtin".into(), field_key: field_key.into(), operator: operator.into(), value: value.into(),
-        compare_field_source: None, compare_field_key: None, group_id: None,
+        compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
     }
 }
 
 fn custom_condition(field_key: &str, operator: &str, value: &str) -> BusinessRuleConditionInput {
     BusinessRuleConditionInput {
         field_source: "custom".into(), field_key: field_key.into(), operator: operator.into(), value: value.into(),
-        compare_field_source: None, compare_field_key: None, group_id: None,
+        compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
     }
 }
 
@@ -105,6 +111,72 @@ fn rule_requires_field_only_when_the_condition_matches() {
 
     let customer = company_service::create(&conn, &ws, &company_input("Globex", "Active Customer"), Some(&admin)).unwrap();
     custom_field_service::set_entity_values(&conn, "Company", &customer.id, &HashMap::new(), Some(&admin)).unwrap();
+}
+
+/// Engine hardening item #3: a condition can read a field off the record
+/// linked through a `many_to_one`/`one_to_one` relationship instead of the
+/// triggering record's own field - "cross-record validation".
+#[test]
+fn rule_condition_reads_a_related_records_field_through_a_relationship() {
+    let (conn, ws, admin) = setup_workspace();
+    let vendor = custom_object_service::create(
+        &conn, &ws,
+        &CustomObjectDefinitionInput { singular_label: "Vendor".into(), plural_label: "Vendors".into(), icon: "🏭".into(), prefix: "VEN".into(), digits: 4 },
+        Some(&admin),
+    ).unwrap();
+    let tier = custom_field_service::create_definition(
+        &conn, &ws,
+        &CustomFieldDefinitionInput { entity_type: "Company".into(), ..text_field_input("Tier") },
+        Some(&admin),
+    ).unwrap();
+    let compliance_doc = custom_field_service::create_definition(
+        &conn, &ws,
+        &CustomFieldDefinitionInput { entity_type: vendor.key.clone(), ..text_field_input("Compliance Doc") },
+        Some(&admin),
+    ).unwrap();
+    let def = relationship_service::create(
+        &conn, &ws,
+        &RelationshipDefinitionInput {
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
+            forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
+            delete_behavior: "restrict".into(), sort_order: 0,
+        },
+        Some(&admin),
+    ).unwrap();
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &BusinessRuleInput {
+            app_id: None,
+            entity_type: vendor.key.clone(), name: "Enterprise client vendors need a compliance doc".into(), description: None,
+            match_type: "all".into(), priority: 0, effective_start_date: None, effective_end_date: None,
+            conditions: vec![BusinessRuleConditionInput {
+                field_source: "custom".into(), field_key: tier.key.clone(), operator: "equals".into(), value: "Enterprise".into(),
+                compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: Some(def.id.clone()),
+            }],
+            actions: vec![require_action(&compliance_doc.key)],
+        },
+        Some(&admin),
+    ).unwrap();
+
+    let enterprise_co = company_service::create(&conn, &ws, &company_input("Acme", "Active Customer"), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &enterprise_co.id, &HashMap::from([(tier.key.clone(), "Enterprise".to_string())]), Some(&admin)).unwrap();
+    let standard_co = company_service::create(&conn, &ws, &company_input("Globex", "Active Customer"), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &standard_co.id, &HashMap::from([(tier.key.clone(), "Standard".to_string())]), Some(&admin)).unwrap();
+
+    let enterprise_vendor = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Enterprise Vendor".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+    relationship_service::link(&conn, &ws, &def.id, &vendor.key, &enterprise_vendor.id, "Company", &enterprise_co.id, Some(&admin)).unwrap();
+    let standard_vendor = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Standard Vendor".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+    relationship_service::link(&conn, &ws, &def.id, &vendor.key, &standard_vendor.id, "Company", &standard_co.id, Some(&admin)).unwrap();
+
+    // The Enterprise-linked vendor is blocked without its own compliance doc...
+    let err = custom_field_service::set_entity_values(&conn, &vendor.key, &enterprise_vendor.id, &HashMap::new(), Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").contains("Compliance Doc is required"));
+    custom_field_service::set_entity_values(&conn, &vendor.key, &enterprise_vendor.id, &HashMap::from([(compliance_doc.key.clone(), "on file".to_string())]), Some(&admin)).unwrap();
+
+    // ...while the Standard-linked vendor is unaffected - the condition
+    // read Globex's own "tier" field, not Acme's, and it doesn't match.
+    custom_field_service::set_entity_values(&conn, &vendor.key, &standard_vendor.id, &HashMap::new(), Some(&admin)).unwrap();
 }
 
 #[test]
@@ -308,7 +380,7 @@ fn contains_and_numeric_operators_evaluate_correctly() {
             "Company", 0, "all",
             vec![BusinessRuleConditionInput {
                 field_source: "custom".into(), field_key: notes_def.key.clone(), operator: "contains".into(), value: "urgent".into(),
-                compare_field_source: None, compare_field_key: None, group_id: None,
+                compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
             }],
             vec![require_action(&flag_def.key)],
         ),
@@ -456,7 +528,7 @@ fn field_to_field_comparison_condition_matches_correctly() {
             "Company", 0, "all",
             vec![BusinessRuleConditionInput {
                 field_source: "custom".into(), field_key: notes_def.key.clone(), operator: "equals".into(), value: String::new(),
-                compare_field_source: Some("custom".into()), compare_field_key: Some(expected_def.key.clone()), group_id: None,
+                compare_field_source: Some("custom".into()), compare_field_key: Some(expected_def.key.clone()), group_id: None, relationship_definition_id: None,
             }],
             vec![require_action(&flag_def.key)],
         ),
@@ -518,11 +590,11 @@ fn an_or_group_condition_matches_when_any_member_of_the_group_matches() {
                 condition("status", "equals", "Prospect"),
                 BusinessRuleConditionInput {
                     field_source: "builtin".into(), field_key: "tax_number".into(), operator: "equals".into(), value: "A".into(),
-                    compare_field_source: None, compare_field_key: None, group_id: Some("g1".into()),
+                    compare_field_source: None, compare_field_key: None, group_id: Some("g1".into()), relationship_definition_id: None,
                 },
                 BusinessRuleConditionInput {
                     field_source: "builtin".into(), field_key: "tax_number".into(), operator: "equals".into(), value: "B".into(),
-                    compare_field_source: None, compare_field_key: None, group_id: Some("g1".into()),
+                    compare_field_source: None, compare_field_key: None, group_id: Some("g1".into()), relationship_definition_id: None,
                 },
             ],
             vec![require_action(&flag_def.key)],
@@ -668,7 +740,7 @@ fn a_condition_with_only_a_compare_field_source_or_only_a_key_is_rejected() {
             "Company", 0, "all",
             vec![BusinessRuleConditionInput {
                 field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-                compare_field_source: Some("custom".into()), compare_field_key: None, group_id: None,
+                compare_field_source: Some("custom".into()), compare_field_key: None, group_id: None, relationship_definition_id: None,
             }],
             vec![require_action(&flag_def.key)],
         ),
