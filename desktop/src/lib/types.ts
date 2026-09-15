@@ -2886,6 +2886,9 @@ export interface Connector {
   spec_source: string;
   publisher_id: string | null;
   actions: ConnectorAction[];
+  agent_tools_enabled: boolean;
+  agent_write_tools_enabled: boolean;
+  agent_reference_key: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -2898,6 +2901,21 @@ export interface DiscoveredOperation {
   path_template: string;
   summary: string | null;
   params: ConnectorActionParam[];
+  request_schema: unknown;
+}
+
+// Integration Hub Tool Bridge: one Connector Action currently eligible to
+// be checked in an AI Agent's Actions checklist - see
+// `connector_tool_service::list_options` (Rust).
+export interface AgentConnectorToolOption {
+  tool_name: string;
+  connector_id: string;
+  connector_name: string;
+  action_key: string;
+  action_display_name: string;
+  http_method: string;
+  path_template: string;
+  requires_admin: boolean;
 }
 
 export interface OpenApiImportPreview {

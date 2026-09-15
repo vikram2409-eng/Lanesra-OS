@@ -52,7 +52,7 @@ use lanesra_core::services::{
     api_client_service, api_object_service,
     app_service, audit_service,
     ai_agent_service, ai_eval_service, ai_gateway_service, ai_orchestration_service, ai_provider_service,
-    auth_service, backup_service, bulk_action_service, business_rule_service, chat_service, company_service, connection_ref_service, connection_service, connector_service,
+    auth_service, backup_service, bulk_action_service, business_rule_service, chat_service, company_service, connection_ref_service, connection_service, connector_service, connector_tool_service,
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service, data_exchange_service,
@@ -951,6 +951,22 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             connector_service::delete(conn, &require_workspace_id(conn)?, &arg::<String>(args, "id")?, actor)?;
             Ok(Value::Null)
         }
+        "update_connector_agent_tools" => {
+            let id: String = arg(args, "id")?;
+            let agent_tools_enabled: bool = arg(args, "agentToolsEnabled")?;
+            let agent_write_tools_enabled: bool = arg(args, "agentWriteToolsEnabled")?;
+            let agent_reference_key: Option<String> = arg(args, "agentReferenceKey")?;
+            to_value(connector_service::update_agent_tool_settings(
+                conn,
+                &require_workspace_id(conn)?,
+                &id,
+                agent_tools_enabled,
+                agent_write_tools_enabled,
+                agent_reference_key.as_deref(),
+                actor,
+            )?)
+        }
+        "list_agent_connector_tools" => to_value(connector_tool_service::list_options(conn, &require_workspace_id(conn)?)?),
 
         "list_api_clients" => to_value(api_client_service::list_for_workspace(conn, &require_workspace_id(conn)?)?),
         "create_api_client" => {

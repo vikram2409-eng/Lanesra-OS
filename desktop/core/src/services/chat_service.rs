@@ -330,22 +330,34 @@ fn admin_tools() -> Vec<ToolSpec> {
 /// which dispatcher a given name goes to instead of assuming one fixed
 /// `mode`. Returns `None` for an unknown name (rejected at
 /// `ai_agent_service`'s validation, before it ever reaches here).
+/// Integration Hub Tool Bridge: a connector-derived tool name is
+/// self-describing by prefix (`connector_tool_service`'s own doc comment)
+/// - "connector_read"/"connector_write" classify it without a DB round
+/// trip, same as the two fixed catalogs below. Whether the name actually
+/// resolves to a real, currently-enabled connector action is checked
+/// where it matters (`ai_agent_service::validate_action_names` at save
+/// time, `connector_tool_service::dispatch` at call time), not here.
 pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
     if record_tools().iter().any(|t| t.name == name) {
         Some("record")
     } else if admin_tools().iter().any(|t| t.name == name) {
         Some("admin")
+    } else if name.starts_with("connector_action:") {
+        Some("connector_read")
+    } else if name.starts_with("connector_write_action:") {
+        Some("connector_write")
     } else {
         None
     }
 }
 
 /// An Agent needs Administrator the moment any one of its own
-/// `action_names` resolves to an admin-catalog tool - checked once before
-/// its loop starts, the same `mode == "admin"` gate `send_message` already
-/// has, just keyed off a computed set instead of a literal mode string.
+/// `action_names` resolves to an admin-catalog tool, or a write-capable
+/// Connector Action tool - checked once before its loop starts, the same
+/// `mode == "admin"` gate `send_message` already has, just keyed off a
+/// computed set instead of a literal mode string.
 pub(crate) fn agent_requires_admin(action_names: &[String]) -> bool {
-    action_names.iter().any(|n| tool_source(n) == Some("admin"))
+    action_names.iter().any(|n| matches!(tool_source(n), Some("admin" | "connector_write")))
 }
 
 fn to_val<T: serde::Serialize>(r: AppResult<T>) -> AppResult<Value> {
@@ -783,10 +795,14 @@ fn synthetic_message(role: &str, content: Option<&str>, tool_calls: Option<&Valu
 fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<ToolSpec>> {
     let all_record = record_tools();
     let all_admin = admin_tools();
+    // Workspace-scoped, unlike the two fixed catalogs above, so it can't
+    // be a bare `fn() -> Vec<ToolSpec>` - built fresh per call, same as
+    // they are.
+    let all_connector = super::connector_tool_service::agent_tools(conn, &agent.workspace_id)?;
     let mut tools: Vec<ToolSpec> = agent
         .action_names
         .iter()
-        .filter_map(|name| all_record.iter().chain(all_admin.iter()).find(|t| &t.name == name).cloned())
+        .filter_map(|name| all_record.iter().chain(all_admin.iter()).chain(all_connector.iter()).find(|t| &t.name == name).cloned())
         .collect();
 
     tools.push(tool(
@@ -910,6 +926,7 @@ fn execute_agent_tool<'a>(
             other => match tool_source(other) {
                 Some("record") => dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments).await,
                 Some("admin") => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
+                Some("connector_read" | "connector_write") => super::connector_tool_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
                 _ => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
             },
         }

@@ -51,8 +51,15 @@ const ADMIN_ACTION_NAMES = new Set([
   "create_ai_skill",
 ]);
 
+// Integration Hub Tool Bridge: a write-capable Connector Action tool
+// self-describes by name prefix (`connector_tool_service.rs`'s own doc
+// comment - "connector_write_action:{connector_id}:{action_key}"), so
+// this mirror can classify it without a round trip, same as the fixed
+// ADMIN_ACTION_NAMES set above.
+const CONNECTOR_WRITE_ACTION_PREFIX = "connector_write_action:";
+
 export function agentRequiresAdmin(actionNames: string[]): boolean {
-  return actionNames.some((n) => ADMIN_ACTION_NAMES.has(n));
+  return actionNames.some((n) => ADMIN_ACTION_NAMES.has(n) || n.startsWith(CONNECTOR_WRITE_ACTION_PREFIX));
 }
 
 export function agentUsableBy(agent: AiAgentDefinition, isAdmin: boolean): boolean {

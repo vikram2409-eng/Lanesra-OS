@@ -345,6 +345,18 @@ pub struct Connector {
     pub spec_source: String,
     pub publisher_id: Option<String>,
     pub actions: Vec<ConnectorAction>,
+    /// Integration Hub Tool Bridge: whether this connector's read-only
+    /// Actions may be exposed as AI Agent Foundry tools - see
+    /// `connector_tool_service.rs` and migration 0050's own comment.
+    pub agent_tools_enabled: bool,
+    /// A second, separate opt-in: this connector's mutating Actions are
+    /// only ever exposed as agent tools when this is *also* true.
+    pub agent_write_tools_enabled: bool,
+    /// The one Connection Reference used whenever any of this connector's
+    /// actions run as an agent tool. Required (checked in
+    /// `connector_service::update_agent_tool_settings`, not the DB)
+    /// whenever either flag above is set.
+    pub agent_reference_key: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -382,6 +394,30 @@ pub struct DiscoveredOperation {
     pub path_template: String,
     pub summary: Option<String>,
     pub params: Vec<ConnectorActionParam>,
+    /// The request body's own resolved JSON Schema (before being
+    /// flattened into `params`' single "body" `schema_type` string) -
+    /// `None` when there's no body, or its schema couldn't be located.
+    /// `connector_service::import` stores this verbatim as
+    /// `ConnectorAction.request_schema_json` when it's confidently typed
+    /// (see `is_locally_typed`) - the fidelity a chat/agent tool's
+    /// `input_schema` needs that the flat `schema_type` alone can't give.
+    pub request_schema: Option<serde_json::Value>,
+}
+
+/// Integration Hub Tool Bridge: one Connector Action available to be
+/// checked in an AI Agent's Actions checklist - `connector_tool_
+/// service::list_options` builds this for the admin UI (richer than the
+/// bare `ToolSpec` the model itself sees).
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentConnectorToolOption {
+    pub tool_name: String,
+    pub connector_id: String,
+    pub connector_name: String,
+    pub action_key: String,
+    pub action_display_name: String,
+    pub http_method: String,
+    pub path_template: String,
+    pub requires_admin: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

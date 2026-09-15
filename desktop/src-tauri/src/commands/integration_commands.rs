@@ -24,7 +24,7 @@ use lanesra_core::models::integration::{
 };
 use lanesra_core::services::{
     api_client_service, api_object_service, connection_ref_service, connection_service, connector_execution_service, connector_service,
-    data_exchange_service, external_object_service, integration_job_service, integration_log_service, mapping_service, webhook_service,
+    connector_tool_service, data_exchange_service, external_object_service, integration_job_service, integration_log_service, mapping_service, webhook_service,
 };
 
 /// Runs `f` - an async closure handed a fresh, exclusively-owned
@@ -165,6 +165,38 @@ pub fn delete_connector(state: State<AppState>, id: String) -> AppResult<()> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     connector_service::delete(&conn, &workspace_id, &id, current_actor(&state).as_deref())
+}
+
+/// Integration Hub Tool Bridge: an admin's per-connector agent-tool
+/// exposure settings - see `connector_service::update_agent_tool_settings`.
+#[tauri::command]
+pub fn update_connector_agent_tools(
+    state: State<AppState>,
+    id: String,
+    agent_tools_enabled: bool,
+    agent_write_tools_enabled: bool,
+    agent_reference_key: Option<String>,
+) -> AppResult<Connector> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    connector_service::update_agent_tool_settings(
+        &conn,
+        &workspace_id,
+        &id,
+        agent_tools_enabled,
+        agent_write_tools_enabled,
+        agent_reference_key.as_deref(),
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// Every Connector Action currently eligible to be offered as an AI
+/// Agent tool - for the Actions-checklist UI, not the model itself. See
+/// `connector_tool_service::list_options`.
+#[tauri::command]
+pub fn list_agent_connector_tools(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::AgentConnectorToolOption>> {
+    let conn = state.conn.lock().unwrap();
+    connector_tool_service::list_options(&conn, &require_workspace_id(&conn)?)
 }
 
 /// A manual "Test Action" run - opens its own connection, same reason as

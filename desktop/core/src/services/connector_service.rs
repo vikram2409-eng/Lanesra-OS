@@ -23,7 +23,7 @@ use rusqlite::Connection;
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::integration::{Connector, ConnectorActionParam, ConnectorImportInput, DiscoveredOperation, OpenApiImportPreview};
-use crate::repositories::integration_connector_repo;
+use crate::repositories::{integration_connection_ref_repo, integration_connector_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -72,7 +72,38 @@ fn parse_parameters(list: &[serde_json::Value], op_id: &str, warnings: &mut Vec<
     params
 }
 
-fn parse_request_body(body: &serde_json::Value, op_id: &str, warnings: &mut Vec<String>) -> Option<ConnectorActionParam> {
+/// Whether `schema` is fully local (no `$ref`/`oneOf`/`anyOf`/`allOf`
+/// anywhere in it - this parser doesn't resolve any of those, see
+/// `schema_type_of`) and every declared property/item has a concrete
+/// JSON-Schema type - i.e. safe to store verbatim as
+/// `ConnectorAction::request_schema_json` and later hand an LLM as a
+/// tool's real `input_schema` without guessing at a shape this parser
+/// can't see. Depth-capped, same conservative spirit as the rest of this
+/// parser - a schema nested deeper than this is treated as not
+/// confidently typed rather than risk unbounded recursion on a
+/// pathological spec.
+fn is_locally_typed(schema: &serde_json::Value, depth: u8) -> bool {
+    if depth > 6 {
+        return false;
+    }
+    if schema.get("$ref").is_some() {
+        return false;
+    }
+    if ["oneOf", "anyOf", "allOf"].iter().any(|k| schema.get(*k).is_some()) {
+        return false;
+    }
+    match schema.get("type").and_then(|t| t.as_str()) {
+        Some("object") => schema
+            .get("properties")
+            .and_then(|p| p.as_object())
+            .map_or(true, |props| props.values().all(|p| is_locally_typed(p, depth + 1))),
+        Some("array") => schema.get("items").map_or(true, |i| is_locally_typed(i, depth + 1)),
+        Some("string" | "integer" | "number" | "boolean" | "null") => true,
+        _ => false,
+    }
+}
+
+fn parse_request_body(body: &serde_json::Value, op_id: &str, warnings: &mut Vec<String>) -> Option<(ConnectorActionParam, Option<serde_json::Value>)> {
     let required = body.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
     let content = body.get("content")?.as_object()?;
     let (media_type, schema) = if let Some(json_schema) = content.get("application/json") {
@@ -84,7 +115,8 @@ fn parse_request_body(body: &serde_json::Value, op_id: &str, warnings: &mut Vec<
         return None;
     };
     let schema_type = schema.map(|s| schema_type_of(s, warnings, &format!("{op_id}: request body ({media_type})"))).unwrap_or_else(|| "object".to_string());
-    Some(ConnectorActionParam { name: "body".to_string(), location: "body".to_string(), required, schema_type })
+    let param = ConnectorActionParam { name: "body".to_string(), location: "body".to_string(), required, schema_type };
+    Some((param, schema.cloned()))
 }
 
 /// Parses an OpenAPI 3.x document and reports every operation it could
@@ -139,9 +171,11 @@ pub fn preview_import(spec_text: &str, spec_format: &str) -> AppResult<OpenApiIm
             let mut all_params = shared_params.clone();
             all_params.append(&mut own_params);
             let mut params = parse_parameters(&all_params, operation_id, &mut warnings);
+            let mut request_schema = None;
             if let Some(body) = operation.get("requestBody") {
-                if let Some(body_param) = parse_request_body(body, operation_id, &mut warnings) {
+                if let Some((body_param, schema)) = parse_request_body(body, operation_id, &mut warnings) {
                     params.push(body_param);
+                    request_schema = schema;
                 }
             }
 
@@ -151,6 +185,7 @@ pub fn preview_import(spec_text: &str, spec_format: &str) -> AppResult<OpenApiIm
                 path_template: path_template.clone(),
                 summary,
                 params,
+                request_schema,
             });
         }
     }
@@ -175,7 +210,28 @@ pub fn import(conn: &Connection, workspace_id: &str, input: &ConnectorImportInpu
     for op in &selected {
         let params_json = serde_json::to_string(&op.params).unwrap_or_else(|_| "[]".to_string());
         let display_name = op.summary.clone().unwrap_or_else(|| op.operation_id.clone());
-        integration_connector_repo::insert_action(conn, &new_uuid(), &id, &op.operation_id, &display_name, &op.http_method, &op.path_template, &params_json, None, None)?;
+        // Only store the resolved body schema when it's confidently typed
+        // (see `is_locally_typed`) - an untyped/ambiguous schema stays
+        // `None` here exactly as it always has, and `connector_tool_
+        // service::agent_tools` treats a `None` on a body-bearing action
+        // as the concrete "fail closed" signal rather than guessing.
+        let request_schema_json = op
+            .request_schema
+            .as_ref()
+            .filter(|s| is_locally_typed(s, 0))
+            .map(|s| serde_json::to_string(s).unwrap_or_default());
+        integration_connector_repo::insert_action(
+            conn,
+            &new_uuid(),
+            &id,
+            &op.operation_id,
+            &display_name,
+            &op.http_method,
+            &op.path_template,
+            &params_json,
+            request_schema_json.as_deref(),
+            None,
+        )?;
     }
     get(conn, workspace_id, &id)
 }
@@ -201,4 +257,35 @@ pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Op
     require_admin(conn, actor_user_id)?;
     get(conn, workspace_id, id)?;
     Ok(integration_connector_repo::delete(conn, id)?)
+}
+
+/// Integration Hub Tool Bridge: an admin's per-connector agent-tool
+/// exposure settings (spec: read-only Actions first, write-capable ones
+/// behind this further explicit opt-in - see migration 0050's own
+/// comment). `agent_reference_key` is required, and must name a real
+/// Connection Reference in this workspace, whenever either flag is set -
+/// the same existence-only validation Workflow Automation's own
+/// `call_connector_action` already applies to a reference key, no
+/// stricter type-check invented here.
+pub fn update_agent_tool_settings(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    agent_tools_enabled: bool,
+    agent_write_tools_enabled: bool,
+    agent_reference_key: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<Connector> {
+    require_admin(conn, actor_user_id)?;
+    get(conn, workspace_id, id)?;
+    if agent_tools_enabled || agent_write_tools_enabled {
+        let key = agent_reference_key
+            .filter(|k| !k.trim().is_empty())
+            .ok_or_else(|| AppError::Validation("A connection reference is required to expose this connector's actions to agents".into()))?;
+        if integration_connection_ref_repo::get_by_key(conn, workspace_id, key)?.is_none() {
+            return Err(AppError::Validation(format!("Unknown connection reference '{key}'")));
+        }
+    }
+    integration_connector_repo::update_agent_tool_settings(conn, id, agent_tools_enabled, agent_write_tools_enabled, agent_reference_key, actor_user_id)?;
+    get(conn, workspace_id, id)
 }

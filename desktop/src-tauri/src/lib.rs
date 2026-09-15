@@ -294,6 +294,8 @@ pub fn run() {
             commands::integration_commands::list_connectors,
             commands::integration_commands::get_connector,
             commands::integration_commands::delete_connector,
+            commands::integration_commands::update_connector_agent_tools,
+            commands::integration_commands::list_agent_connector_tools,
             commands::integration_commands::test_connector_action,
             commands::integration_commands::list_api_clients,
             commands::integration_commands::create_api_client,

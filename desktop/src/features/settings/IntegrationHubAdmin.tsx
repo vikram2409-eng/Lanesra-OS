@@ -420,13 +420,20 @@ function ConnectionRefsTab() {
 function ConnectorsTab() {
   const queryClient = useQueryClient();
   const connectors = useQuery({ queryKey: ["connectors"], queryFn: () => api.listConnectors() });
+  const refs = useQuery({ queryKey: ["connectionRefs"], queryFn: () => api.listConnectionRefs() });
   const [importing, setImporting] = useState(false);
   const [testingActionOf, setTestingActionOf] = useState<{ connector: Connector; actionKey: string } | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["connectors"] });
   const del = useMutation({ mutationFn: (id: string) => api.deleteConnector(id), onSuccess: invalidate });
+  const agentTools = useMutation({
+    mutationFn: (args: { id: string; agentToolsEnabled: boolean; agentWriteToolsEnabled: boolean; agentReferenceKey: string | null }) =>
+      api.updateConnectorAgentTools(args.id, args.agentToolsEnabled, args.agentWriteToolsEnabled, args.agentReferenceKey),
+    onSuccess: invalidate,
+  });
 
   const rows = connectors.data ?? [];
+  const refRows = refs.data ?? [];
   return (
     <div className="card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
@@ -452,6 +459,35 @@ function ConnectorsTab() {
               {c.description && <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--text-muted)" }}>{c.description}</p>}
             </div>
             <button className="btn btn-danger" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => { if (confirm(`Delete connector "${c.name}"?`)) del.mutate(c.id); }}>Delete</button>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 8, fontSize: 13 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input
+                type="checkbox"
+                checked={c.agent_tools_enabled}
+                onChange={(e) => agentTools.mutate({ id: c.id, agentToolsEnabled: e.target.checked, agentWriteToolsEnabled: c.agent_write_tools_enabled, agentReferenceKey: c.agent_reference_key })}
+              /> Expose read-only actions to AI agents
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 4, opacity: c.agent_tools_enabled ? 1 : 0.5 }}>
+              <input
+                type="checkbox"
+                disabled={!c.agent_tools_enabled}
+                checked={c.agent_write_tools_enabled}
+                onChange={(e) => agentTools.mutate({ id: c.id, agentToolsEnabled: c.agent_tools_enabled, agentWriteToolsEnabled: e.target.checked, agentReferenceKey: c.agent_reference_key })}
+              /> Also allow write actions (Administrator-only)
+            </label>
+            {(c.agent_tools_enabled || c.agent_write_tools_enabled) && (
+              <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                Connection reference:
+                <select
+                  value={c.agent_reference_key ?? ""}
+                  onChange={(e) => agentTools.mutate({ id: c.id, agentToolsEnabled: c.agent_tools_enabled, agentWriteToolsEnabled: c.agent_write_tools_enabled, agentReferenceKey: e.target.value || null })}
+                >
+                  <option value="">Select a reference...</option>
+                  {refRows.map((r) => <option key={r.id} value={r.reference_key}>{r.reference_name}</option>)}
+                </select>
+              </label>
+            )}
           </div>
           {c.actions.length > 0 && (
             <table style={{ marginTop: 8, marginBottom: 0 }}>

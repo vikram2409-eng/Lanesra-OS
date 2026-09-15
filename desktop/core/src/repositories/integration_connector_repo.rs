@@ -23,6 +23,9 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Connector> {
         spec_source: row.get("spec_source")?,
         publisher_id: row.get("publisher_id")?,
         actions: Vec::new(),
+        agent_tools_enabled: row.get("agent_tools_enabled")?,
+        agent_write_tools_enabled: row.get("agent_write_tools_enabled")?,
+        agent_reference_key: row.get("agent_reference_key")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -83,6 +86,30 @@ pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Re
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM integration_connectors WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+/// Integration Hub Tool Bridge: the admin's agent-tool exposure settings
+/// for one connector - see migration 0050's own comment for what each
+/// column means. `connector_service::update_agent_tool_settings` owns
+/// validation (admin-only, `agent_reference_key` required when either
+/// flag is set); this is bare CRUD, same layering as the rest of this
+/// repo.
+pub fn update_agent_tool_settings(
+    conn: &Connection,
+    id: &str,
+    agent_tools_enabled: bool,
+    agent_write_tools_enabled: bool,
+    agent_reference_key: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE integration_connectors
+            SET agent_tools_enabled = ?1, agent_write_tools_enabled = ?2, agent_reference_key = ?3,
+                updated_at = ?4, updated_by = ?5
+          WHERE id = ?6",
+        rusqlite::params![agent_tools_enabled, agent_write_tools_enabled, agent_reference_key, now_iso(), actor_user_id, id],
+    )?;
     Ok(())
 }
 
