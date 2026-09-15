@@ -46,6 +46,7 @@ fn map_action_row(row: &rusqlite::Row) -> rusqlite::Result<ConnectorAction> {
         params,
         request_schema_json: row.get("request_schema_json")?,
         response_schema_json: row.get("response_schema_json")?,
+        request_content_type: row.get("request_content_type")?,
     })
 }
 
@@ -113,6 +114,7 @@ pub fn update_agent_tool_settings(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn insert_action(
     conn: &Connection,
     id: &str,
@@ -124,12 +126,13 @@ pub fn insert_action(
     params_json: &str,
     request_schema_json: Option<&str>,
     response_schema_json: Option<&str>,
+    request_content_type: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO integration_connector_actions
-            (id, connector_id, action_key, display_name, http_method, path_template, params_json, request_schema_json, response_schema_json, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        rusqlite::params![id, connector_id, action_key, display_name, http_method, path_template, params_json, request_schema_json, response_schema_json, now_iso()],
+            (id, connector_id, action_key, display_name, http_method, path_template, params_json, request_schema_json, response_schema_json, request_content_type, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        rusqlite::params![id, connector_id, action_key, display_name, http_method, path_template, params_json, request_schema_json, response_schema_json, request_content_type, now_iso()],
     )?;
     Ok(())
 }

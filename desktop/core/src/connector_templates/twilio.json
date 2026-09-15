@@ -1,0 +1,36 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Twilio",
+    "version": "1.0.0",
+    "description": "Send an SMS message via the Twilio Messaging API. Twilio uses form-encoded request bodies, not JSON."
+  },
+  "servers": [{ "url": "https://api.twilio.com" }],
+  "paths": {
+    "/2010-04-01/Accounts/{AccountSid}/Messages.json": {
+      "post": {
+        "operationId": "sendMessage",
+        "summary": "Send a message",
+        "parameters": [
+          { "name": "AccountSid", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "To": { "type": "string" },
+                  "From": { "type": "string" },
+                  "Body": { "type": "string" }
+                },
+                "required": ["To", "From", "Body"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

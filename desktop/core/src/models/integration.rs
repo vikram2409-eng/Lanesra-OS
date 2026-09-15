@@ -383,6 +383,16 @@ pub struct ConnectorAction {
     pub params: Vec<ConnectorActionParam>,
     pub request_schema_json: Option<String>,
     pub response_schema_json: Option<String>,
+    /// The request body's actual media type - `None` means
+    /// `application/json` (this action's implicit default, and every
+    /// action imported before Connector Template Library Phase 2).
+    /// `connector_service::import` only ever sets this to
+    /// `Some("application/x-www-form-urlencoded")`, and only when the
+    /// body schema is flat (see `is_locally_typed`'s sibling `is_flat_
+    /// object_schema`) - `connector_execution_service::build_and_send`
+    /// switches on this to decide whether to send the body as `.form()`
+    /// instead of `.json()`.
+    pub request_content_type: Option<String>,
 }
 
 /// What OpenAPI import (spec §6.2) reports back before anything is saved -
@@ -402,6 +412,13 @@ pub struct DiscoveredOperation {
     /// (see `is_locally_typed`) - the fidelity a chat/agent tool's
     /// `input_schema` needs that the flat `schema_type` alone can't give.
     pub request_schema: Option<serde_json::Value>,
+    /// The request body's actual media type when there is one - `None`
+    /// for a bodyless operation. `connector_service::import` only ever
+    /// persists `"application/x-www-form-urlencoded"` onto the saved
+    /// `ConnectorAction` when the body schema is also flat; every other
+    /// value (including `"application/json"`) is treated as the
+    /// existing default and stored as `None`.
+    pub request_content_type: Option<String>,
 }
 
 /// Integration Hub Tool Bridge: one Connector Action available to be

@@ -1,0 +1,50 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Notion",
+    "version": "1.0.0",
+    "description": "Retrieve a database and create a page via the Notion API. Every request requires the Notion-Version header - pass exactly '2026-03-11' (or whatever current version your integration was built against)."
+  },
+  "servers": [{ "url": "https://api.notion.com" }],
+  "paths": {
+    "/v1/databases/{database_id}": {
+      "get": {
+        "operationId": "retrieveDatabase",
+        "summary": "Retrieve a database (requires Notion-Version header, e.g. '2026-03-11')",
+        "parameters": [
+          { "name": "database_id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "Notion-Version", "in": "header", "required": true, "schema": { "type": "string" } }
+        ]
+      }
+    },
+    "/v1/pages": {
+      "post": {
+        "operationId": "createPage",
+        "summary": "Create a page in a database (requires Notion-Version header, e.g. '2026-03-11')",
+        "parameters": [
+          { "name": "Notion-Version", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "parent": {
+                    "type": "object",
+                    "properties": {
+                      "database_id": { "type": "string" }
+                    }
+                  },
+                  "properties": { "type": "object" }
+                },
+                "required": ["parent", "properties"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+-- Connector Template Library, Phase 2: lets a Connector Action's request
+-- body be sent as application/x-www-form-urlencoded instead of always
+-- application/json - needed for Stripe/Twilio-shaped APIs, whose classic
+-- REST surfaces use form-encoded bodies, not JSON.
+--
+-- NULL (every existing row) means application/json, today's implicit
+-- behavior - completely unchanged for every action imported before this
+-- shipped. connector_service::parse_request_body only ever sets this to
+-- 'application/x-www-form-urlencoded' when the body schema is flat (no
+-- nested object/array properties - see is_flat_object_schema); anything
+-- else keeps the existing "treated as opaque" fallback this column was
+-- introduced to move beyond, not replace everywhere.
+ALTER TABLE integration_connector_actions ADD COLUMN request_content_type TEXT;

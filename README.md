@@ -55,7 +55,7 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 **Also included:**
 
 - **Deployment Management** — a Publisher registry, named/versioned Solutions curated from any component you've built, real export/import between workspaces, and update-with-diff — package and promote your customizations the way a real software vendor would
-- **Integration Hub** — AES-256-GCM-encrypted Connections (REST/SFTP/PostgreSQL/OData/SMTP), OpenAPI-imported Connectors (a curated template gallery — OpenAI, Cohere, Slack, GitHub, SendGrid — to start from) usable as Workflow Automation actions or, once opted in, as AI Agent Foundry tools (read-only by default, write access behind a further explicit per-connector opt-in), a generic REST API with hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a generalized CSV data-exchange wizard, and scheduled Integration Jobs
+- **Integration Hub** — AES-256-GCM-encrypted Connections (REST/SFTP/PostgreSQL/OData/SMTP), OpenAPI-imported Connectors (a curated template gallery of 13 — AI models, data warehouses and SaaS tools including OpenAI, Google Gemini, Snowflake, Databricks, Slack, GitHub, HubSpot, Stripe, Twilio — to start from) usable as Workflow Automation actions or, once opted in, as AI Agent Foundry tools (read-only by default, write access behind a further explicit per-connector opt-in), a generic REST API with hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a generalized CSV data-exchange wizard, and scheduled Integration Jobs
 
 ## Try it online
 

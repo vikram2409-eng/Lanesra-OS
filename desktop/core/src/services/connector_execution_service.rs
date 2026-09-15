@@ -143,7 +143,18 @@ async fn build_and_send(
             }
             "body" => {
                 if let Some(v) = params.get(&p.name) {
-                    builder = builder.json(v);
+                    builder = if action.request_content_type.as_deref() == Some("application/x-www-form-urlencoded") {
+                        // Connector Template Library Phase 2: only ever
+                        // set on a flat body (see `connector_service::
+                        // is_flat_object_schema`), so a plain top-level
+                        // object-to-string-pairs flatten is safe here -
+                        // no vendor-specific bracket-notation nesting to
+                        // reproduce.
+                        let pairs: Vec<(String, String)> = v.as_object().map(|obj| obj.iter().map(|(k, val)| (k.clone(), value_as_query_string(val))).collect()).unwrap_or_default();
+                        builder.form(&pairs)
+                    } else {
+                        builder.json(v)
+                    };
                 }
             }
             _ => {}

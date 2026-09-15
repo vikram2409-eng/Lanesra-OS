@@ -103,20 +103,56 @@ fn is_locally_typed(schema: &serde_json::Value, depth: u8) -> bool {
     }
 }
 
-fn parse_request_body(body: &serde_json::Value, op_id: &str, warnings: &mut Vec<String>) -> Option<(ConnectorActionParam, Option<serde_json::Value>)> {
+/// Whether `schema` is a flat `object` - no `$ref`, and every declared
+/// property (if any) is a bare primitive, never a nested object or
+/// array. Connector Template Library Phase 2: the one shape this parser
+/// is willing to send as `application/x-www-form-urlencoded` (Stripe/
+/// Twilio-style form bodies) rather than JSON - form-encoding a nested
+/// structure would need vendor-specific bracket-notation flattening
+/// this parser deliberately doesn't attempt, so a non-flat form body
+/// still falls back to the existing opaque-with-warning path below,
+/// unchanged.
+fn is_flat_object_schema(schema: &serde_json::Value) -> bool {
+    if schema.get("$ref").is_some() {
+        return false;
+    }
+    if schema.get("type").and_then(|t| t.as_str()) != Some("object") {
+        return false;
+    }
+    schema
+        .get("properties")
+        .and_then(|p| p.as_object())
+        .map_or(true, |props| props.values().all(|p| matches!(p.get("type").and_then(|t| t.as_str()), Some("string" | "integer" | "number" | "boolean"))))
+}
+
+fn parse_request_body(body: &serde_json::Value, op_id: &str, warnings: &mut Vec<String>) -> Option<(ConnectorActionParam, Option<serde_json::Value>, String)> {
     let required = body.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
     let content = body.get("content")?.as_object()?;
-    let (media_type, schema) = if let Some(json_schema) = content.get("application/json") {
-        ("application/json", json_schema.get("schema"))
+    // `media_type` is what actually gets stored as `request_content_type`
+    // and later decides `.form()` vs `.json()` in `connector_execution_
+    // service::build_and_send` - it must only ever be "application/x-www-
+    // form-urlencoded" when `is_flat_object_schema` actually passed.
+    // `warn_label` is just for the warning/schema-type messages below and
+    // may legitimately name the real (unsupported) media type even when
+    // `media_type` itself falls back to "application/json" - e.g. a
+    // *nested* form-urlencoded body still falls into the opaque branch
+    // below, warns with its real media type, but must be executed as
+    // opaque JSON (today's pre-existing behavior for every unsupported
+    // media type), not silently form-encoded just because the string
+    // happens to match.
+    let (media_type, schema, warn_label) = if let Some(json_schema) = content.get("application/json") {
+        ("application/json", json_schema.get("schema"), "application/json")
+    } else if let Some(form_schema) = content.get("application/x-www-form-urlencoded").filter(|v| v.get("schema").is_some_and(is_flat_object_schema)) {
+        ("application/x-www-form-urlencoded", form_schema.get("schema"), "application/x-www-form-urlencoded")
     } else if let Some((mt, first)) = content.iter().next() {
         warnings.push(format!("{op_id}: request body uses media type '{mt}', not 'application/json' - treated as opaque JSON"));
-        (mt.as_str(), first.get("schema"))
+        ("application/json", first.get("schema"), mt.as_str())
     } else {
         return None;
     };
-    let schema_type = schema.map(|s| schema_type_of(s, warnings, &format!("{op_id}: request body ({media_type})"))).unwrap_or_else(|| "object".to_string());
+    let schema_type = schema.map(|s| schema_type_of(s, warnings, &format!("{op_id}: request body ({warn_label})"))).unwrap_or_else(|| "object".to_string());
     let param = ConnectorActionParam { name: "body".to_string(), location: "body".to_string(), required, schema_type };
-    Some((param, schema.cloned()))
+    Some((param, schema.cloned(), media_type.to_string()))
 }
 
 /// Parses an OpenAPI 3.x document and reports every operation it could
@@ -172,10 +208,12 @@ pub fn preview_import(spec_text: &str, spec_format: &str) -> AppResult<OpenApiIm
             all_params.append(&mut own_params);
             let mut params = parse_parameters(&all_params, operation_id, &mut warnings);
             let mut request_schema = None;
+            let mut request_content_type = None;
             if let Some(body) = operation.get("requestBody") {
-                if let Some((body_param, schema)) = parse_request_body(body, operation_id, &mut warnings) {
+                if let Some((body_param, schema, media_type)) = parse_request_body(body, operation_id, &mut warnings) {
                     params.push(body_param);
                     request_schema = schema;
+                    request_content_type = Some(media_type);
                 }
             }
 
@@ -186,6 +224,7 @@ pub fn preview_import(spec_text: &str, spec_format: &str) -> AppResult<OpenApiIm
                 summary,
                 params,
                 request_schema,
+                request_content_type,
             });
         }
     }
@@ -220,6 +259,12 @@ pub fn import(conn: &Connection, workspace_id: &str, input: &ConnectorImportInpu
             .as_ref()
             .filter(|s| is_locally_typed(s, 0))
             .map(|s| serde_json::to_string(s).unwrap_or_default());
+        // "application/json" is this column's implicit default (`None`) -
+        // only a genuinely different media type (today, only the flat
+        // form-urlencoded case `parse_request_body` recognizes) is worth
+        // persisting; `connector_execution_service::build_and_send`
+        // reads this to decide `.form()` vs `.json()`.
+        let request_content_type = op.request_content_type.as_deref().filter(|mt| *mt != "application/json");
         integration_connector_repo::insert_action(
             conn,
             &new_uuid(),
@@ -231,6 +276,7 @@ pub fn import(conn: &Connection, workspace_id: &str, input: &ConnectorImportInpu
             &params_json,
             request_schema_json.as_deref(),
             None,
+            request_content_type,
         )?;
     }
     get(conn, workspace_id, &id)

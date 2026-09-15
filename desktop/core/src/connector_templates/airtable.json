@@ -1,0 +1,43 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Airtable",
+    "version": "1.0.0",
+    "description": "List and create records in an Airtable base/table."
+  },
+  "servers": [{ "url": "https://api.airtable.com" }],
+  "paths": {
+    "/v0/{baseId}/{tableIdOrName}": {
+      "parameters": [
+        { "name": "baseId", "in": "path", "required": true, "schema": { "type": "string" } },
+        { "name": "tableIdOrName", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "operationId": "listRecords",
+        "summary": "List records",
+        "parameters": [
+          { "name": "pageSize", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      },
+      "post": {
+        "operationId": "createRecord",
+        "summary": "Create a record",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fields": { "type": "object" },
+                  "typecast": { "type": "boolean" }
+                },
+                "required": ["fields"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
