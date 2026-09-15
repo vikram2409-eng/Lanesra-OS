@@ -1,0 +1,46 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "GitHub",
+    "version": "1.0.0",
+    "description": "Create and list issues on a repository via the GitHub REST API."
+  },
+  "servers": [{ "url": "https://api.github.com" }],
+  "paths": {
+    "/repos/{owner}/{repo}/issues": {
+      "parameters": [
+        { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+        { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "post": {
+        "operationId": "createIssue",
+        "summary": "Create an issue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "body": { "type": "string" },
+                  "labels": { "type": "array", "items": { "type": "string" } },
+                  "assignees": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["title"]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listIssues",
+        "summary": "List issues on a repository",
+        "parameters": [
+          { "name": "state", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "labels", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      }
+    }
+  }
+}

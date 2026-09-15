@@ -146,6 +146,8 @@ import type {
   Connector,
   ConnectorImportInput,
   ConnectorExecutionResult,
+  ConnectorTemplateSummary,
+  ConnectorTemplateSpec,
   AgentConnectorToolOption,
   OpenApiImportPreview,
   ExternalObject,
@@ -684,6 +686,8 @@ export const api = {
   bindConnectionRef: (id: string, connectionId: string | null) => call<ConnectionRef>("bind_connection_ref", { id, connectionId }),
   deleteConnectionRef: (id: string) => call<void>("delete_connection_ref", { id }),
 
+  listConnectorTemplates: () => call<ConnectorTemplateSummary[]>("list_connector_templates"),
+  getConnectorTemplate: (key: string) => call<ConnectorTemplateSpec>("get_connector_template", { key }),
   previewConnectorImport: (specText: string, specFormat: string) =>
     call<OpenApiImportPreview>("preview_connector_import", { specText, specFormat }),
   importConnector: (input: ConnectorImportInput) => call<Connector>("import_connector", { input }),

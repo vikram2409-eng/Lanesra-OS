@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Slack",
+    "version": "1.0.0",
+    "description": "Post messages and list conversations via the Slack Web API."
+  },
+  "servers": [{ "url": "https://slack.com/api" }],
+  "paths": {
+    "/chat.postMessage": {
+      "post": {
+        "operationId": "postMessage",
+        "summary": "Post a message to a channel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channel": { "type": "string" },
+                  "text": { "type": "string" }
+                },
+                "required": ["channel"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations.list": {
+      "get": {
+        "operationId": "listConversations",
+        "summary": "List channels in the workspace",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "types", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      }
+    }
+  }
+}

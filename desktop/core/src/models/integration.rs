@@ -420,6 +420,32 @@ pub struct AgentConnectorToolOption {
     pub requires_admin: bool,
 }
 
+/// Connector Template Library: one curated, ready-to-import OpenAPI
+/// template - `connector_template_service::list` returns just this
+/// metadata (never the spec text itself) for the admin's gallery UI.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectorTemplateSummary {
+    pub key: String,
+    pub name: String,
+    /// `"ai_model"` | `"saas"` (room for `"data_warehouse"` later).
+    pub category: String,
+    pub description: String,
+    /// The `Connection.auth_mode` this template expects - not applied
+    /// automatically, just told to the admin so they set up a matching
+    /// Connection before binding a Connection Reference to it.
+    pub auth_mode: String,
+    pub setup_notes: String,
+}
+
+/// What picking a template actually hands the import wizard -
+/// `connector_service::preview_import`/`import` take these two fields
+/// unchanged, exactly as they would from a hand-pasted spec.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectorTemplateSpec {
+    pub spec_text: String,
+    pub spec_format: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct OpenApiImportPreview {
     pub title: String,

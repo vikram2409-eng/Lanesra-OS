@@ -521,8 +521,14 @@ function ConnectorImportWizard({ onDone, onCancel }: { onDone: () => void; onCan
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const templatesQuery = useQuery({ queryKey: ["connectorTemplates"], queryFn: () => api.listConnectorTemplates() });
+
+  // Accepts an optional override so picking a template can fire this
+  // immediately with the just-fetched spec text, instead of racing
+  // React's async state update from setSpecText/setSpecFormat above it.
   const previewMutation = useMutation({
-    mutationFn: () => api.previewConnectorImport(specText, specFormat),
+    mutationFn: (override?: { text: string; format: "json" | "yaml" }) =>
+      api.previewConnectorImport(override?.text ?? specText, override?.format ?? specFormat),
     onSuccess: (p) => {
       setPreview(p);
       setName(p.title);
@@ -530,6 +536,17 @@ function ConnectorImportWizard({ onDone, onCancel }: { onDone: () => void; onCan
       setError(null);
     },
     onError: (err) => setError(apiErrorMessage(err, "Could not parse that OpenAPI spec")),
+  });
+
+  const templateMutation = useMutation({
+    mutationFn: (key: string) => api.getConnectorTemplate(key),
+    onSuccess: (spec) => {
+      const format = spec.spec_format as "json" | "yaml";
+      setSpecText(spec.spec_text);
+      setSpecFormat(format);
+      previewMutation.mutate({ text: spec.spec_text, format });
+    },
+    onError: (err) => setError(apiErrorMessage(err, "Could not load that template")),
   });
 
   const importMutation = useMutation({
@@ -546,6 +563,41 @@ function ConnectorImportWizard({ onDone, onCancel }: { onDone: () => void; onCan
       {error && <div className="error-banner">{error}</div>}
       {!preview && (
         <div className="form-grid">
+          {templatesQuery.data && templatesQuery.data.length > 0 && (
+            <div className="form-field full">
+              <label>Start from a template</label>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+                Pick a curated, ready-to-import spec, or paste your own below.
+              </p>
+              {(["ai_model", "saas"] as const).map((cat) => {
+                const items = templatesQuery.data!.filter((t) => t.category === cat);
+                if (items.length === 0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom: 10 }}>
+                    <b style={{ fontSize: 11, textTransform: "uppercase", color: "var(--text-muted)" }}>
+                      {cat === "ai_model" ? "AI models" : "SaaS tools"}
+                    </b>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                      {items.map((t) => (
+                        <button
+                          key={t.key}
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ textAlign: "left", maxWidth: 220, padding: "6px 10px" }}
+                          disabled={templateMutation.isPending}
+                          onClick={() => templateMutation.mutate(t.key)}
+                          title={t.setup_notes}
+                        >
+                          <div><b>{t.name}</b></div>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t.description}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div className="form-field">
             <label>Format</label>
             <select value={specFormat} onChange={(e) => setSpecFormat(e.target.value as "json" | "yaml")}>
@@ -558,7 +610,7 @@ function ConnectorImportWizard({ onDone, onCancel }: { onDone: () => void; onCan
             <textarea value={specText} onChange={(e) => setSpecText(e.target.value)} rows={8} placeholder="Paste the spec text here..." />
           </div>
           <div className="form-field full" style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" type="button" onClick={() => previewMutation.mutate()} disabled={previewMutation.isPending || !specText.trim()}>
+            <button className="btn btn-primary" type="button" onClick={() => previewMutation.mutate(undefined)} disabled={previewMutation.isPending || !specText.trim()}>
               {previewMutation.isPending ? "Parsing..." : "Parse spec"}
             </button>
             <button className="btn btn-secondary" type="button" onClick={onCancel}>Cancel</button>
