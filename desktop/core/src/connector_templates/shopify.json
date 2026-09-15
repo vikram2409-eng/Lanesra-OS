@@ -1,0 +1,46 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Shopify",
+    "version": "1.0.0",
+    "description": "List and create products via the Shopify Admin REST API, for a custom/private app's static Admin API access token. Replace YOUR_SHOP with your own *.myshopify.com subdomain."
+  },
+  "servers": [{ "url": "https://YOUR_SHOP.myshopify.com" }],
+  "paths": {
+    "/admin/api/2026-07/products.json": {
+      "get": {
+        "operationId": "listProducts",
+        "summary": "List products",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      },
+      "post": {
+        "operationId": "createProduct",
+        "summary": "Create a product",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "product": {
+                    "type": "object",
+                    "properties": {
+                      "title": { "type": "string" },
+                      "body_html": { "type": "string" },
+                      "vendor": { "type": "string" },
+                      "product_type": { "type": "string" }
+                    }
+                  }
+                },
+                "required": ["product"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,9 +2,9 @@
 //! storage/rotation, dependency-blocked delete, Connection References
 //! (binding + type-mismatch rejection) - and `test_connection` for the
 //! REST/webhook connection types against a real local HTTP listener, and
-//! for Postgres against this sandbox's real local PostgreSQL server
-//! (`#[ignore]`d - see this file's own note on why, and how it's still
-//! proven).
+//! for Postgres and MySQL against this sandbox's real local PostgreSQL
+//! and MariaDB servers (`#[ignore]`d - see this file's own note on why,
+//! and how each is still proven).
 //!
 //! SMTP's `test_connection` is proven against a minimal in-process raw
 //! SMTP dialogue (`spawn_smtp_stub`) - real TCP, real EHLO/QUIT exchange,
@@ -17,7 +17,11 @@
 //! skipped: `sftp_service::test_connection` is exercised by construction
 //! (same `connection_service::test_connection` dispatch this file already
 //! covers for every other type) but its actual SSH handshake is unproven
-//! here.
+//! here. SQL Server is the same kind of stated gap for the same reason -
+//! see `sqlserver_service`'s own doc comment - this file proves its
+//! failure path is real (an unreachable port produces a genuine error)
+//! but not its success path against a live instance, since none exists in
+//! this sandbox.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
@@ -192,6 +196,58 @@ async fn a_wrong_postgres_password_is_a_real_failure_not_ignored() {
     let connection = connection_service::create(
         &conn, &workspace_id, &master_key(),
         &ConnectionInput { name: "Bad Postgres".into(), connection_type: "postgres".into(), base_url: None, auth_mode: "basic".into(), secret_value: Some("whatever".into()), config_json: r#"{"host": "127.0.0.1", "port": 1, "database": "nope", "username": "nope"}"#.into(), owner_user_id: None },
+        Some(&admin_id),
+    ).unwrap();
+    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    assert!(!result.ok);
+}
+
+#[tokio::test]
+#[ignore = "requires this sandbox's local MariaDB server (service mariadb start; lanesra_test role/db created once via mysql - see this crate's test setup notes). Run with `cargo test -- --ignored`."]
+async fn mysql_test_connection_succeeds_against_a_real_local_mysql() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let connection = connection_service::create(
+        &conn, &workspace_id, &master_key(),
+        &ConnectionInput {
+            name: "Local MySQL".into(), connection_type: "mysql".into(), base_url: None, auth_mode: "basic".into(),
+            secret_value: Some("lanesra_test_pw".into()),
+            config_json: r#"{"host": "127.0.0.1", "port": 3306, "database": "lanesra_test", "username": "lanesra_test"}"#.into(),
+            owner_user_id: None,
+        },
+        Some(&admin_id),
+    ).unwrap();
+    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    assert!(result.ok, "{result:?}");
+}
+
+#[tokio::test]
+async fn a_wrong_mysql_password_is_a_real_failure_not_ignored() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    // Deliberately not #[ignore] - mirrors the Postgres equivalent above:
+    // an unreachable port fails during connection setup, no real MySQL
+    // server needed to prove this path is real.
+    let connection = connection_service::create(
+        &conn, &workspace_id, &master_key(),
+        &ConnectionInput { name: "Bad MySQL".into(), connection_type: "mysql".into(), base_url: None, auth_mode: "basic".into(), secret_value: Some("whatever".into()), config_json: r#"{"host": "127.0.0.1", "port": 1, "database": "nope", "username": "nope"}"#.into(), owner_user_id: None },
+        Some(&admin_id),
+    ).unwrap();
+    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    assert!(!result.ok);
+}
+
+/// SQL Server's success path (`sqlserver_service::test_connection`
+/// against a real live instance) is a **stated, known gap** - see that
+/// module's own doc comment for why (no SQL Server build exists for this
+/// sandbox, matching this crate's precedent for SFTP's server-side).
+/// This test proves what *is* real: an unreachable port produces a
+/// genuine connection error through the actual `tiberius`/`tokio::net`
+/// code path, not a panic and not a silently-fabricated success.
+#[tokio::test]
+async fn sqlserver_test_connection_reports_a_real_failure_against_an_unreachable_port() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let connection = connection_service::create(
+        &conn, &workspace_id, &master_key(),
+        &ConnectionInput { name: "Unreachable SQL Server".into(), connection_type: "sqlserver".into(), base_url: None, auth_mode: "basic".into(), secret_value: Some("whatever".into()), config_json: r#"{"host": "127.0.0.1", "port": 1, "database": "nope", "username": "nope"}"#.into(), owner_user_id: None },
         Some(&admin_id),
     ).unwrap();
     let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();

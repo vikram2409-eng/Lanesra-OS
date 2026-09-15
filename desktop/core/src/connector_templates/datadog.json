@@ -1,0 +1,87 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Datadog",
+    "version": "1.0.0",
+    "description": "Submit an event or metrics to Datadog. Scoped to the two operations confirmed (against Datadog's own published OpenAPI spec) to need only an API key - most other Datadog endpoints also require a separate Application key, which this Connection model has no second secret slot for."
+  },
+  "servers": [{ "url": "https://api.datadoghq.com" }],
+  "paths": {
+    "/api/v1/events": {
+      "post": {
+        "operationId": "submitEvent",
+        "summary": "Post an event",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "text": { "type": "string" },
+                  "priority": { "type": "string" },
+                  "alert_type": { "type": "string" },
+                  "tags": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                },
+                "required": ["title", "text"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/series": {
+      "post": {
+        "operationId": "submitMetrics",
+        "summary": "Submit metrics",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "series": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "metric": { "type": "string" },
+                        "type": { "type": "integer" },
+                        "points": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "timestamp": { "type": "integer" },
+                              "value": { "type": "number" }
+                            }
+                          }
+                        },
+                        "resources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": { "type": "string" },
+                              "type": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["series"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
