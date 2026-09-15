@@ -24,7 +24,7 @@ use lanesra_core::models::integration::{
 };
 use lanesra_core::services::{
     api_client_service, api_object_service, connection_ref_service, connection_service, connector_execution_service, connector_service,
-    connector_tool_service, data_exchange_service, external_object_service, integration_job_service, integration_log_service, mapping_service, webhook_service,
+    connector_template_service, connector_tool_service, data_exchange_service, external_object_service, integration_job_service, integration_log_service, mapping_service, webhook_service,
 };
 
 /// Runs `f` - an async closure handed a fresh, exclusively-owned
@@ -135,6 +135,18 @@ pub fn delete_connection_ref(state: State<AppState>, id: String) -> AppResult<()
 }
 
 // --- Connectors (spec §6) ----------------------------------------------------
+
+/// Connector Template Library: the curated, ready-to-import spec
+/// gallery - see `connector_template_service.rs`.
+#[tauri::command]
+pub fn list_connector_templates() -> Vec<lanesra_core::models::integration::ConnectorTemplateSummary> {
+    connector_template_service::list()
+}
+
+#[tauri::command]
+pub fn get_connector_template(key: String) -> AppResult<lanesra_core::models::integration::ConnectorTemplateSpec> {
+    connector_template_service::get_spec(&key)
+}
 
 #[tauri::command]
 pub fn preview_connector_import(spec_text: String, spec_format: String) -> AppResult<OpenApiImportPreview> {

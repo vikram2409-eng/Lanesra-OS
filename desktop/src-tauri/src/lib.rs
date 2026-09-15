@@ -289,6 +289,8 @@ pub fn run() {
             commands::integration_commands::create_connection_ref,
             commands::integration_commands::bind_connection_ref,
             commands::integration_commands::delete_connection_ref,
+            commands::integration_commands::list_connector_templates,
+            commands::integration_commands::get_connector_template,
             commands::integration_commands::preview_connector_import,
             commands::integration_commands::import_connector,
             commands::integration_commands::list_connectors,

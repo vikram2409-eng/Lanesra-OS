@@ -637,9 +637,11 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   Added/Modified/Removed diff for objects/fields, a summarized
   added-count for everything else) before a package update is applied.
 - **Integration Hub**: AES-256-GCM-encrypted Connections (REST, SFTP,
-  PostgreSQL, OData, SMTP), OpenAPI 3.x Connectors usable as a Workflow
-  Automation action or, once an admin opts a connector in, as an AI Agent
-  Foundry tool via the Tool Bridge - read-only by default, write access
+  PostgreSQL, OData, SMTP), OpenAPI 3.x Connectors - importable from a
+  curated template gallery (OpenAI, Cohere, Slack, GitHub, SendGrid) or
+  a hand-pasted spec - usable as a Workflow Automation action or, once an
+  admin opts a connector in, as an AI Agent Foundry tool via the Tool
+  Bridge - read-only by default, write access
   behind a further explicit per-connector opt-in, and fails closed rather
   than exposing a tool for an action whose request-body schema can't be
   confidently typed - a generic `/api/v1/objects/...` REST API secured by

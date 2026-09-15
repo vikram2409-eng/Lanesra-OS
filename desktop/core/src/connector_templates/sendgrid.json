@@ -1,0 +1,64 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "SendGrid",
+    "version": "1.0.0",
+    "description": "Send transactional email via the Twilio SendGrid Mail Send API."
+  },
+  "servers": [{ "url": "https://api.sendgrid.com/v3" }],
+  "paths": {
+    "/mail/send": {
+      "post": {
+        "operationId": "sendMail",
+        "summary": "Send an email",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "personalizations": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "to": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "from": {
+                    "type": "object",
+                    "properties": {
+                      "email": { "type": "string" }
+                    }
+                  },
+                  "subject": { "type": "string" },
+                  "content": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": { "type": "string" },
+                        "value": { "type": "string" }
+                      }
+                    }
+                  }
+                },
+                "required": ["personalizations", "from"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

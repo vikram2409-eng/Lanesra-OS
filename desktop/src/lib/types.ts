@@ -2941,6 +2941,23 @@ export interface ConnectorImportInput {
   selected_operation_ids: string[];
 }
 
+// Connector Template Library: a curated, ready-to-import OpenAPI spec an
+// admin can pick from instead of pasting their own - see
+// `connector_template_service.rs` (Rust).
+export interface ConnectorTemplateSummary {
+  key: string;
+  name: string;
+  category: string; // "ai_model" | "saas"
+  description: string;
+  auth_mode: string;
+  setup_notes: string;
+}
+
+export interface ConnectorTemplateSpec {
+  spec_text: string;
+  spec_format: string;
+}
+
 export interface ExternalObject {
   id: string;
   workspace_id: string;

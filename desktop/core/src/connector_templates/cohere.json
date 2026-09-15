@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Cohere",
+    "version": "1.0.0",
+    "description": "Chat completions against the Cohere v2 API."
+  },
+  "servers": [{ "url": "https://api.cohere.com/v2" }],
+  "paths": {
+    "/chat": {
+      "post": {
+        "operationId": "chat",
+        "summary": "Generate a chat response",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": { "type": "string" },
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": { "type": "string" },
+                        "content": { "type": "string" }
+                      }
+                    }
+                  },
+                  "stream": { "type": "boolean" }
+                },
+                "required": ["model", "messages"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
