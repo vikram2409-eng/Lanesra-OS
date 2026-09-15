@@ -32,9 +32,19 @@ pub fn delete_custom_report(state: State<AppState>, id: String) -> AppResult<()>
 }
 
 #[tauri::command]
-pub fn run_custom_report(state: State<AppState>, id: String) -> AppResult<Vec<CustomReportRow>> {
+pub fn run_custom_report(state: State<AppState>, id: String, as_of: Option<String>) -> AppResult<Vec<CustomReportRow>> {
     let conn = state.conn.lock().unwrap();
     let report = lanesra_core::repositories::custom_report_repo::get(&conn, &id)?
         .ok_or_else(|| lanesra_core::domain::AppError::NotFound("Custom report".into()))?;
-    custom_report_service::run(&conn, &report)
+    custom_report_service::run_with_as_of(&conn, &report, as_of.as_deref())
+}
+
+/// Whether `entity_type` is eligible for the "as of" filter above - an
+/// active custom object with an active `valid_from` date field. The
+/// report builder UI calls this to decide whether to even show the
+/// as-of picker for the entity type the report is against.
+#[tauri::command]
+pub fn is_effective_dated_entity_type(state: State<AppState>, entity_type: String) -> AppResult<bool> {
+    let conn = state.conn.lock().unwrap();
+    lanesra_core::services::effective_dating_service::is_effective_dated(&conn, &require_workspace_id(&conn)?, &entity_type)
 }

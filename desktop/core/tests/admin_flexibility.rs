@@ -120,7 +120,7 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
                 value: "Won".into(),
                 compare_field_source: None,
                 compare_field_key: None,
-                group_id: None,
+                group_id: None, relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),

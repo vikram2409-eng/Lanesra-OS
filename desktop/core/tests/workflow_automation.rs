@@ -5,6 +5,9 @@
 
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::company::CompanyInput;
+use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
+use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
+use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::invoice::{InvoiceInput, InvoiceLineInput};
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
@@ -12,7 +15,8 @@ use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowConditionInput
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::repositories::notification_repo;
 use lanesra_core::services::{
-    company_service, invoice_service, opportunity_service, task_service, user_service, workflow_service, workspace_service,
+    company_service, custom_field_service, custom_object_service, custom_record_service, invoice_service, opportunity_service,
+    task_service, user_service, workflow_service, workspace_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -66,6 +70,74 @@ fn status_changed_workflow(entity_type: &str, trigger_status: &str, action: Work
         trigger_type: "status_changed".into(), trigger_status: Some(trigger_status.into()), trigger_field_key: None, trigger_field_source: "custom".into(),
         trigger_offset_days: 0, match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![action],
     }
+}
+
+/// Engine hardening item #2: `date_reached`/`due_overdue` triggers, on a
+/// custom object's own `date`-typed custom field (previously a hardcoded,
+/// built-in-only set).
+#[test]
+fn date_reached_workflow_fires_for_a_custom_objects_own_date_field() {
+    let (conn, ws, admin) = setup_workspace();
+    let lease = custom_object_service::create(
+        &conn, &ws,
+        &CustomObjectDefinitionInput { singular_label: "Lease".into(), plural_label: "Leases".into(), icon: "📄".into(), prefix: "LSE".into(), digits: 4 },
+        Some(&admin),
+    ).unwrap();
+    let renewal_date = custom_field_service::create_definition(
+        &conn, &ws,
+        &CustomFieldDefinitionInput {
+            entity_type: lease.key.clone(), label: "Renewal Date".into(), field_type: "date".into(),
+            options: vec![], required: false, show_in_list: false, sort_order: 0,
+            min_value: None, max_value: None, max_length: None, regex_pattern: None,
+            is_searchable: false, is_filterable: false, is_reportable: true,
+            default_value: None, is_unique: false, help_text: None, placeholder: None,
+            is_hidden_by_default: false,
+        },
+        Some(&admin),
+    ).unwrap();
+
+    // A workflow can now be defined against a custom object's own date
+    // field - `validate_shape` used to reject this outright since
+    // `date_fields_for` only ever recognized a fixed set of built-ins.
+    let wf = workflow_service::create_rule(
+        &conn, &ws,
+        &WorkflowDefinitionInput {
+            app_id: None,
+            entity_type: lease.key.clone(), name: "Lease renewal reminder".into(), description: None,
+            trigger_type: "date_reached".into(), trigger_status: None, trigger_field_key: Some(renewal_date.key.clone()),
+            trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
+            conditions: vec![],
+            actions: vec![WorkflowActionInput {
+                action_type: "add_notification".into(),
+                params_json: serde_json::json!({"message": "Lease renewal is due", "audience": "all_admins"}).to_string(),
+            }],
+        },
+        Some(&admin),
+    ).unwrap();
+
+    let lease_1 = custom_record_service::create(
+        &conn, &ws,
+        &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Lease One".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        Some(&admin),
+    ).unwrap();
+    // Past due - matches on_or_before(today + 0).
+    let yesterday = (chrono::Utc::now() - chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+    custom_field_service::set_entity_values(
+        &conn, &lease.key, &lease_1.id,
+        &std::collections::HashMap::from([(renewal_date.key.clone(), yesterday)]),
+        Some(&admin),
+    ).unwrap();
+
+    let fired = workflow_service::run_scheduled(&conn, &ws, Some(&admin)).unwrap();
+    assert_eq!(fired, 1);
+
+    let notifications = notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap();
+    assert!(notifications.iter().any(|n| n.message.contains("Lease renewal is due")));
+
+    // Re-running doesn't refire for the same record/workflow pair.
+    let fired_again = workflow_service::run_scheduled(&conn, &ws, Some(&admin)).unwrap();
+    assert_eq!(fired_again, 0);
+    let _ = wf;
 }
 
 #[test]
@@ -393,7 +465,7 @@ fn workflow_extra_condition_supports_the_starts_with_operator() {
     let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Follow up", 0, None));
     wf.conditions = vec![WorkflowConditionInput {
         field_source: "builtin".into(), field_key: "next_step".into(), operator: "starts_with".into(), value: "Send".into(),
-        compare_field_source: None, compare_field_key: None, group_id: None,
+        compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
@@ -422,7 +494,7 @@ fn workflow_extra_condition_supports_field_to_field_comparison() {
     let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Review", 0, None));
     wf.conditions = vec![WorkflowConditionInput {
         field_source: "builtin".into(), field_key: "next_step".into(), operator: "equals".into(), value: String::new(),
-        compare_field_source: Some("builtin".into()), compare_field_key: Some("lost_reason".into()), group_id: None,
+        compare_field_source: Some("builtin".into()), compare_field_key: Some("lost_reason".into()), group_id: None, relationship_definition_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 

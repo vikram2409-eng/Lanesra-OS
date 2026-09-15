@@ -457,7 +457,7 @@ pub fn set_entity_values(
     for (k, v) in values {
         trigger_context.insert(k.clone(), v.clone());
     }
-    let evaluation = business_rule_service::evaluate(conn, &workspace_id, entity_type, &trigger_context)?;
+    let evaluation = business_rule_service::evaluate(conn, &workspace_id, entity_type, entity_id, &trigger_context)?;
 
     if let Some(reason) = &evaluation.blocked {
         return Err(AppError::Validation(reason.clone()));

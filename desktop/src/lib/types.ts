@@ -1080,6 +1080,7 @@ export interface BusinessRuleCondition {
    * conditions OR'd together into one sub-unit before that unit
    * participates in the rule's top-level match_type. */
   group_id: string | null;
+  relationship_definition_id: string | null;
   sort_order: number;
 }
 
@@ -1091,6 +1092,11 @@ export interface BusinessRuleConditionInput {
   compare_field_source: TriggerSource | null;
   compare_field_key: string | null;
   group_id: string | null;
+  /** "Cross-record validation": when set, `field_source`/`field_key` name
+   * a field on the record linked through this relationship, not this
+   * record's own field - see the Rust engine's identical doc comment on
+   * `BusinessRuleCondition`. */
+  relationship_definition_id: string | null;
 }
 
 export interface BusinessRuleAction {
@@ -1264,6 +1270,7 @@ export interface WorkflowCondition {
   compare_field_source: TriggerSource | null;
   compare_field_key: string | null;
   group_id: string | null;
+  relationship_definition_id: string | null;
   sort_order: number;
 }
 export interface WorkflowConditionInput {
@@ -1274,6 +1281,9 @@ export interface WorkflowConditionInput {
   compare_field_source: TriggerSource | null;
   compare_field_key: string | null;
   group_id: string | null;
+  /** See `BusinessRuleConditionInput.relationship_definition_id`'s doc
+   * comment - identical "cross-record validation" mechanism. */
+  relationship_definition_id: string | null;
 }
 export interface WorkflowAction {
   id: string;
@@ -1687,6 +1697,10 @@ export interface RelationshipDefinition {
   key: string;
   source_entity_type: string;
   target_entity_type: string;
+  /** When true, target_entity_type above is an unused placeholder ("") -
+   *  each link instance carries its own real target type instead of the
+   *  definition fixing one. */
+  target_is_polymorphic: boolean;
   relationship_type: RelationshipType;
   forward_label: string;
   reverse_label: string;
@@ -1705,6 +1719,10 @@ export interface RelationshipDefinition {
 export interface RelationshipDefinitionInput {
   source_entity_type: string;
   target_entity_type: string;
+  /** See RelationshipDefinition.target_is_polymorphic. When true,
+   *  target_entity_type is ignored - any valid object type in the
+   *  workspace may be linked as the target, chosen per link. */
+  target_is_polymorphic: boolean;
   relationship_type: RelationshipType;
   forward_label: string;
   reverse_label: string;

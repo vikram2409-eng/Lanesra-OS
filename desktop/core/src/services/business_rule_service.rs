@@ -26,8 +26,8 @@ use crate::models::business_rule::{
     BusinessRuleVersion, ACTION_TYPES, CONDITION_OPERATORS, FIELD_TARGETED_ACTIONS, MATCH_TYPES, MESSAGE_ACTIONS,
     TRIGGER_SOURCES,
 };
-use crate::repositories::{business_rule_repo, custom_field_repo, user_repo};
-use crate::services::{custom_object_service, entity_registry};
+use crate::repositories::{business_rule_repo, custom_field_repo, relationship_repo, user_repo};
+use crate::services::{builtin_field_service, custom_object_service, entity_registry};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -62,6 +62,27 @@ fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type:
     Err(AppError::Validation(format!("'{entity_type}' is not a recognized object type")))
 }
 
+/// The related type a condition's `relationship_definition_id` resolves
+/// against, for `entity_type` - only relationships where `entity_type` has
+/// at most one linked record are eligible (the `many_to_one` "many" side,
+/// or either side of a `one_to_one`), mirroring exactly the same
+/// eligibility `resolve_related_field` checks at evaluation time. Kept in
+/// sync with that function rather than shared, since one resolves a type
+/// (authoring time) and the other a value (evaluation time).
+fn related_field_owner_type(conn: &Connection, entity_type: &str, relationship_definition_id: &str) -> AppResult<String> {
+    let def = relationship_repo::get_definition(conn, relationship_definition_id)?
+        .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
+    if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
+        Ok(def.target_entity_type)
+    } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
+        Ok(def.source_entity_type)
+    } else {
+        Err(AppError::Validation(
+            "Selected relationship doesn't have a single determinate related record from this object - only a many-to-one's \"many\" side or either side of a one-to-one can be used".into(),
+        ))
+    }
+}
+
 fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str, conditions: &[crate::models::business_rule::BusinessRuleConditionInput]) -> AppResult<()> {
     if conditions.is_empty() {
         return Err(AppError::Validation("A rule needs at least one condition".into()));
@@ -75,7 +96,17 @@ fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str,
         if !CONDITION_OPERATORS.contains(&c.operator.as_str()) {
             return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
         }
-        if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
+        // A condition reading a related record's field (relationship_
+        // definition_id set) validates field_key against *that* type's
+        // fields instead of the triggering entity_type's own.
+        if let Some(rel_id) = &c.relationship_definition_id {
+            let related_type = related_field_owner_type(conn, entity_type, rel_id)?;
+            let related_defs = custom_field_repo::list_definitions(conn, workspace_id, &related_type)?;
+            let related_active_keys: Vec<&str> = related_defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
+            if !crate::domain::conditions::field_ref_is_valid(&related_type, &c.field_source, &c.field_key, related_active_keys.iter().copied()) {
+                return Err(AppError::Validation(format!("'{}' is not a valid field on the related {related_type} record", c.field_key)));
+            }
+        } else if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
             return Err(AppError::Validation(format!("'{}' is not a valid field to trigger on", c.field_key)));
         }
         // Addendum §2.2: field-to-field comparison - either both compare_*
@@ -247,6 +278,7 @@ pub fn restore_version(conn: &Connection, rule_id: &str, version_id: &str, actor
                 compare_field_source: c.compare_field_source,
                 compare_field_key: c.compare_field_key,
                 group_id: c.group_id,
+                relationship_definition_id: c.relationship_definition_id,
             })
             .collect(),
         actions: snapshot
@@ -293,6 +325,7 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
                 compare_field_source: c.compare_field_source.clone(),
                 compare_field_key: c.compare_field_key.clone(),
                 group_id: c.group_id.clone(),
+                relationship_definition_id: c.relationship_definition_id.clone(),
             })
             .collect(),
         actions: existing
@@ -398,15 +431,71 @@ fn resolve_condition_value<'a>(c: &'a crate::models::business_rule::BusinessRule
     }
 }
 
+/// Migration 0049, "cross-record validation": the actual value of
+/// `field_key`/`field_source` on the record linked to `entity_id` through
+/// `relationship_definition_id`, not `entity_id`'s own field. Scoped to
+/// relationships shaped so `entity_type` has *at most one* linked record -
+/// the "many" side of a `many_to_one`, or either side of a `one_to_one` -
+/// since a `many_to_many` or the "one" side of a `many_to_one` has no
+/// single determinate record to read. Returns `None` (never an error) when
+/// the relationship doesn't apply, isn't eligibly shaped, or nothing is
+/// linked yet - the condition then evaluates against an empty value, same
+/// as any other unset field.
+fn resolve_related_field(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    relationship_definition_id: &str,
+    field_source: &str,
+    field_key: &str,
+) -> AppResult<Option<String>> {
+    let Some(def) = relationship_repo::get_definition(conn, relationship_definition_id)? else {
+        return Ok(None);
+    };
+    let (related_id, other_type) = if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
+        (relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.target_id), def.target_entity_type)
+    } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
+        (relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.source_id), def.source_entity_type)
+    } else {
+        (None, String::new())
+    };
+    let Some(related_id) = related_id else { return Ok(None) };
+    let values = if field_source == "builtin" {
+        builtin_field_service::field_values(conn, &other_type, &related_id)?
+    } else {
+        custom_field_repo::get_values(conn, &related_id)?
+    };
+    Ok(values.get(field_key).cloned())
+}
+
 /// Delegates to the shared AND/OR matcher (`domain::conditions`) also used
 /// by workflow_service, so the two engines' "IF" halves can never drift
-/// apart.
-fn rule_matches(rule: &BusinessRule, ctx: &HashMap<String, String>) -> bool {
-    crate::domain::conditions::conditions_match(
+/// apart. When any of `rule`'s conditions reads a related record's field
+/// (`relationship_definition_id` set), resolves those into a per-rule
+/// scratch copy of `ctx` first - the shared base `ctx` passed in from
+/// `evaluate` below is never mutated, since a sibling rule's own related-
+/// field conditions (if any) may need a different resolved value under the
+/// same field key.
+fn rule_matches(conn: &Connection, entity_type: &str, entity_id: &str, rule: &BusinessRule, ctx: &HashMap<String, String>) -> AppResult<bool> {
+    if !rule.conditions.iter().any(|c| c.relationship_definition_id.is_some()) {
+        return Ok(crate::domain::conditions::conditions_match(
+            &rule.match_type,
+            rule.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
+            ctx,
+        ));
+    }
+    let mut scratch = ctx.clone();
+    for c in &rule.conditions {
+        if let Some(rel_id) = &c.relationship_definition_id {
+            let value = resolve_related_field(conn, entity_type, entity_id, rel_id, &c.field_source, &c.field_key)?.unwrap_or_default();
+            scratch.insert(c.field_key.clone(), value);
+        }
+    }
+    Ok(crate::domain::conditions::conditions_match(
         &rule.match_type,
-        rule.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
-        ctx,
-    )
+        rule.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, &scratch))),
+        &scratch,
+    ))
 }
 
 fn is_effective_today(rule: &BusinessRule, today: &str) -> bool {
@@ -430,13 +519,13 @@ fn is_effective_today(rule: &BusinessRule, today: &str) -> bool {
 /// later-evaluated (higher priority number) rule wins - the same "last one
 /// wins" rule the original engine documented, now scoped per rule instead
 /// of per condition.
-pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &HashMap<String, String>) -> AppResult<RuleEvaluation> {
+pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, entity_id: &str, ctx: &HashMap<String, String>) -> AppResult<RuleEvaluation> {
     let today = Utc::now().format("%Y-%m-%d").to_string();
     let rules = business_rule_repo::list(conn, workspace_id, entity_type)?;
     let mut result = RuleEvaluation::default();
 
     for rule in rules.iter().filter(|r| r.is_active && is_effective_today(r, &today)) {
-        if !rule_matches(rule, ctx) {
+        if !rule_matches(conn, entity_type, entity_id, rule, ctx)? {
             continue;
         }
         for action in &rule.actions {
@@ -507,7 +596,12 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &
 /// values against every active rule for an entity type before relying on
 /// it - the same `evaluate` real saves use, just against caller-supplied
 /// values instead of a persisted record, so nothing here writes anything.
+/// There's no real record id to resolve a "cross-record validation"
+/// condition's relationship from - an empty `entity_id` finds no linked
+/// record (same as any other never-yet-linked record would), so such a
+/// condition evaluates against an empty related value here, same as every
+/// other hypothetical field this tester can't fully simulate.
 pub fn test_rules(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &HashMap<String, String>, actor_user_id: Option<&str>) -> AppResult<RuleEvaluation> {
     require_admin(conn, actor_user_id)?;
-    evaluate(conn, workspace_id, entity_type, ctx)
+    evaluate(conn, workspace_id, entity_type, "", ctx)
 }

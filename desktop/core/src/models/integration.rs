@@ -484,6 +484,10 @@ pub struct ApiFieldMetadata {
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiRelationshipMetadata {
     pub relationship_key: String,
+    /// Empty when `is_polymorphic` is true - the target varies per link
+    /// (any valid object type in the workspace), so there is no single
+    /// type to report here. Fetch the actual related records
+    /// (`.../related`) to see each link's real type.
     pub related_object_key: String,
     /// "one_to_one" | "many_to_one" | "many_to_many".
     pub relationship_type: String,
@@ -492,6 +496,11 @@ pub struct ApiRelationshipMetadata {
     /// (this object is the target) - which of `forward_label`/
     /// `reverse_label` `label` above already resolved to.
     pub direction: String,
+    /// True when this is the "forward" direction of a definition whose
+    /// target isn't one fixed object type (see
+    /// `RelationshipDefinition::target_is_polymorphic`).
+    #[serde(default)]
+    pub is_polymorphic: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

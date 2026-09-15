@@ -10,6 +10,7 @@ fn map_def(row: &rusqlite::Row) -> rusqlite::Result<RelationshipDefinition> {
         key: row.get("key")?,
         source_entity_type: row.get("source_entity_type")?,
         target_entity_type: row.get("target_entity_type")?,
+        target_is_polymorphic: row.get("target_is_polymorphic")?,
         relationship_type: row.get("relationship_type")?,
         forward_label: row.get("forward_label")?,
         reverse_label: row.get("reverse_label")?,
@@ -50,14 +51,18 @@ pub fn create_definition(
     actor_user_id: Option<&str>,
 ) -> rusqlite::Result<RelationshipDefinition> {
     let now = now_iso();
+    // A polymorphic-target definition stores '' for target_entity_type -
+    // it's an ignored placeholder once target_is_polymorphic is set (see
+    // relationship_service::validate_shape/link and migration 0049).
+    let target_entity_type = if input.target_is_polymorphic { "" } else { input.target_entity_type.as_str() };
     conn.execute(
         "INSERT INTO relationship_definitions
-            (id, workspace_id, key, source_entity_type, target_entity_type, relationship_type,
+            (id, workspace_id, key, source_entity_type, target_entity_type, target_is_polymorphic, relationship_type,
              forward_label, reverse_label, is_required, show_related_list, delete_behavior,
              is_protected, is_active, sort_order, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, 1, ?12, ?13, ?14, ?13, ?14)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0, 1, ?13, ?14, ?15, ?14, ?15)",
         rusqlite::params![
-            id, workspace_id, key, input.source_entity_type, input.target_entity_type, input.relationship_type,
+            id, workspace_id, key, input.source_entity_type, target_entity_type, input.target_is_polymorphic, input.relationship_type,
             input.forward_label, input.reverse_label, input.is_required, input.show_related_list,
             input.delete_behavior, input.sort_order, now, actor_user_id,
         ],
@@ -85,7 +90,8 @@ pub fn list_definitions(conn: &Connection, workspace_id: &str) -> rusqlite::Resu
 pub fn list_definitions_for_entity(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<RelationshipDefinition>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM relationship_definitions
-         WHERE workspace_id = ?1 AND is_active = 1 AND (source_entity_type = ?2 OR target_entity_type = ?2)
+         WHERE workspace_id = ?1 AND is_active = 1
+           AND (source_entity_type = ?2 OR target_entity_type = ?2 OR target_is_polymorphic = 1)
          ORDER BY sort_order, forward_label",
     )?;
     let rows = stmt.query_map((workspace_id, entity_type), map_def)?.collect();

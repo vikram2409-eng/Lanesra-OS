@@ -28,6 +28,7 @@ function emptyInput(entityTypes: string[]): RelationshipDefinitionInput {
   return {
     source_entity_type: entityTypes[0] ?? "Company",
     target_entity_type: entityTypes[1] ?? entityTypes[0] ?? "Contact",
+    target_is_polymorphic: false,
     relationship_type: "many_to_one",
     forward_label: "",
     reverse_label: "",
@@ -123,7 +124,7 @@ export function RelationshipsAdmin() {
             {defs.data.map((d) => (
               <tr key={d.id}>
                 <td>
-                  {labelFor(d.source_entity_type)} → {labelFor(d.target_entity_type)}
+                  {labelFor(d.source_entity_type)} → {d.target_is_polymorphic ? "Any record type" : labelFor(d.target_entity_type)}
                 </td>
                 <td>{RELATIONSHIP_TYPE_LABELS[d.relationship_type]}</td>
                 <td>
@@ -208,7 +209,22 @@ function RelationshipForm({
         </div>
         <div className="form-field">
           <label>Target</label>
-          <EntityTypeSelect value={input.target_entity_type} onChange={(v) => setInput({ ...input, target_entity_type: v })} entityTypes={entityTypes} labelFor={labelFor} />
+          {input.target_is_polymorphic ? (
+            <input value="Any record type" disabled />
+          ) : (
+            <EntityTypeSelect value={input.target_entity_type} onChange={(v) => setInput({ ...input, target_entity_type: v })} entityTypes={entityTypes} labelFor={labelFor} />
+          )}
+        </div>
+        <div className="form-field">
+          <label>
+            <input
+              type="checkbox"
+              checked={input.target_is_polymorphic}
+              onChange={(e) => setInput({ ...input, target_is_polymorphic: e.target.checked })}
+            />
+            {" "}Target can be any record type (chosen per link, e.g. a Document that can attach to a Policy, a Claim,
+            or a Matter). Actions that write to the target side aren't available for this kind of relationship yet.
+          </label>
         </div>
         <div className="form-field">
           <label>Relationship type</label>
@@ -232,10 +248,15 @@ function RelationshipForm({
         </div>
         <div className="form-field">
           <label>Forward label (shown on the {labelFor(input.source_entity_type)} record)</label>
-          <input value={input.forward_label} onChange={(e) => setInput({ ...input, forward_label: e.target.value })} placeholder={labelFor(input.target_entity_type)} required />
+          <input
+            value={input.forward_label}
+            onChange={(e) => setInput({ ...input, forward_label: e.target.value })}
+            placeholder={input.target_is_polymorphic ? "Linked records" : labelFor(input.target_entity_type)}
+            required
+          />
         </div>
         <div className="form-field">
-          <label>Reverse label (shown on the {labelFor(input.target_entity_type)} record)</label>
+          <label>Reverse label (shown on the linked record{input.target_is_polymorphic ? "" : `, ${labelFor(input.target_entity_type)}`})</label>
           <input value={input.reverse_label} onChange={(e) => setInput({ ...input, reverse_label: e.target.value })} placeholder={labelFor(input.source_entity_type)} required />
         </div>
         <div className="form-field">
@@ -314,7 +335,7 @@ function RelationshipEditForm({
   return (
     <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
       <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
-        {labelFor(definition.source_entity_type)} → {labelFor(definition.target_entity_type)} ({RELATIONSHIP_TYPE_LABELS[definition.relationship_type]}, fixed)
+        {labelFor(definition.source_entity_type)} → {definition.target_is_polymorphic ? "Any record type" : labelFor(definition.target_entity_type)} ({RELATIONSHIP_TYPE_LABELS[definition.relationship_type]}, fixed)
       </p>
       {error && <div className="error-banner">{error}</div>}
       <form

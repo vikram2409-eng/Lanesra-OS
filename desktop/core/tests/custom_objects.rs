@@ -14,7 +14,10 @@ use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate}
 use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
 use lanesra_core::models::custom_report::CustomReportInput;
 use lanesra_core::models::user::NewUser;
-use lanesra_core::services::{business_rule_service, custom_field_service, custom_object_service, custom_record_service, custom_report_service, user_service};
+use lanesra_core::services::{
+    business_rule_service, custom_field_service, custom_object_service, custom_record_service, custom_report_service,
+    effective_dating_service, user_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -216,7 +219,7 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
                 value: "Inactive".into(),
                 compare_field_source: None,
                 compare_field_key: None,
-                group_id: None,
+                group_id: None, relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),
@@ -278,6 +281,68 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
     let by_group: HashMap<String, f64> = rows.into_iter().map(|r| (r.group, r.value)).collect();
     assert_eq!(by_group.get("Active"), Some(&1.0));
     assert_eq!(by_group.get("Inactive"), Some(&1.0));
+}
+
+fn date_field_input(entity_type: &str, key_label: &str) -> CustomFieldDefinitionInput {
+    CustomFieldDefinitionInput {
+        entity_type: entity_type.into(), label: key_label.into(), field_type: "date".into(),
+        options: vec![], required: false, show_in_list: false, sort_order: 0,
+        min_value: None, max_value: None, max_length: None, regex_pattern: None,
+        is_searchable: false, is_filterable: true, is_reportable: false,
+        default_value: None, is_unique: false, help_text: None, placeholder: None,
+        is_hidden_by_default: false,
+    }
+}
+
+/// Engine hardening item #5: effective-dating "as of" query support - a
+/// predicate over each record's *currently stored* valid_from/valid_to
+/// window, not point-in-time reconstruction of a past field value.
+#[test]
+fn effective_dating_service_answers_whether_a_record_is_valid_as_of_a_date() {
+    let (conn, ws, admin) = setup_workspace();
+    let lease = custom_object_service::create(
+        &conn, &ws,
+        &CustomObjectDefinitionInput { singular_label: "Lease".into(), plural_label: "Leases".into(), icon: "📄".into(), prefix: "LSE".into(), digits: 4 },
+        Some(&admin),
+    ).unwrap();
+    // Not eligible until it has an active 'valid_from' date field.
+    assert!(!effective_dating_service::is_effective_dated(&conn, &ws, &lease.key).unwrap());
+    assert!(effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-08-01").is_err());
+
+    custom_field_service::create_definition(&conn, &ws, &date_field_input(&lease.key, "Valid From"), Some(&admin)).unwrap();
+    custom_field_service::create_definition(&conn, &ws, &date_field_input(&lease.key, "Valid To"), Some(&admin)).unwrap();
+    assert!(effective_dating_service::is_effective_dated(&conn, &ws, &lease.key).unwrap());
+
+    let expired = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Expired Lease".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, &lease.key, &expired.id, &HashMap::from([("valid_from".to_string(), "2024-01-01".to_string()), ("valid_to".to_string(), "2024-06-30".to_string())]), Some(&admin)).unwrap();
+
+    let ongoing = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Ongoing Lease".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, &lease.key, &ongoing.id, &HashMap::from([("valid_from".to_string(), "2024-07-01".to_string())]), Some(&admin)).unwrap();
+
+    let not_yet_started = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Future Lease".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, &lease.key, &not_yet_started.id, &HashMap::from([("valid_from".to_string(), "2025-01-01".to_string())]), Some(&admin)).unwrap();
+
+    let as_of_august = effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-08-01").unwrap();
+    assert_eq!(as_of_august, vec![ongoing.id.clone()]);
+
+    let as_of_march = effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-03-01").unwrap();
+    assert_eq!(as_of_march, vec![expired.id.clone()]);
+
+    let as_of_next_year = effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2025-02-01").unwrap();
+    assert_eq!(as_of_next_year.len(), 2);
+    assert!(as_of_next_year.contains(&ongoing.id));
+    assert!(as_of_next_year.contains(&not_yet_started.id));
+
+    // Wired into the custom report builder's "as of" filter.
+    let report = custom_report_service::create(
+        &conn, &ws,
+        &CustomReportInput { name: "Leases by status".into(), entity_type: lease.key.clone(), group_by_source: "builtin".into(), group_by_field: "status".into(), aggregate: "count".into(), sum_field_key: None },
+        Some(&admin),
+    ).unwrap();
+    let unfiltered = custom_report_service::run(&conn, &report).unwrap();
+    assert_eq!(unfiltered[0].value, 3.0);
+    let as_of_filtered = custom_report_service::run_with_as_of(&conn, &report, Some("2024-08-01")).unwrap();
+    assert_eq!(as_of_filtered[0].value, 1.0);
 }
 
 #[test]

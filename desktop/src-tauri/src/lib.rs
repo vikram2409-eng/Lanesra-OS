@@ -133,6 +133,7 @@ pub fn run() {
             commands::custom_report_commands::update_custom_report,
             commands::custom_report_commands::delete_custom_report,
             commands::custom_report_commands::run_custom_report,
+            commands::custom_report_commands::is_effective_dated_entity_type,
             commands::custom_object_commands::list_custom_objects,
             commands::custom_object_commands::create_custom_object,
             commands::custom_object_commands::update_custom_object,

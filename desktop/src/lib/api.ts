@@ -545,7 +545,10 @@ export const api = {
   updateCustomReport: (id: string, input: CustomReportUpdate) =>
     call<CustomReport>("update_custom_report", { id, input }),
   deleteCustomReport: (id: string) => call<void>("delete_custom_report", { id }),
-  runCustomReport: (id: string) => call<CustomReportRow[]>("run_custom_report", { id }),
+  runCustomReport: (id: string, asOf?: string | null) => call<CustomReportRow[]>("run_custom_report", { id, asOf: asOf ?? null }),
+  /** Whether entityType has an active 'valid_from' date custom field -
+   *  whether the "as of" filter above even applies to it. */
+  isEffectiveDatedEntityType: (entityType: string) => call<boolean>("is_effective_dated_entity_type", { entityType }),
 
   listCustomObjects: (activeOnly: boolean) => call<CustomObjectDefinition[]>("list_custom_objects", { activeOnly }),
   createCustomObject: (input: CustomObjectDefinitionInput) =>

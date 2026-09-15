@@ -71,9 +71,24 @@ pub fn get_metadata(conn: &Connection, workspace_id: &str, object_key: &str) -> 
         .into_iter()
         .filter_map(|def| {
             if def.source_entity_type == object_key {
-                Some(ApiRelationshipMetadata { relationship_key: def.key, related_object_key: def.target_entity_type, relationship_type: def.relationship_type, label: def.forward_label, direction: "forward".into() })
+                // `def.target_entity_type` is the unused '' placeholder
+                // when target_is_polymorphic - report that explicitly
+                // rather than a misleading empty-string "type". Since the
+                // target varies per link, the reverse direction (which
+                // object types can point back at a polymorphic target)
+                // isn't statically resolvable per object_key, so it's not
+                // reported here - fetch `.../related` on an actual record.
+                Some(ApiRelationshipMetadata {
+                    relationship_key: def.key, related_object_key: def.target_entity_type,
+                    relationship_type: def.relationship_type, label: def.forward_label,
+                    direction: "forward".into(), is_polymorphic: def.target_is_polymorphic,
+                })
             } else if def.target_entity_type == object_key {
-                Some(ApiRelationshipMetadata { relationship_key: def.key, related_object_key: def.source_entity_type, relationship_type: def.relationship_type, label: def.reverse_label, direction: "reverse".into() })
+                Some(ApiRelationshipMetadata {
+                    relationship_key: def.key, related_object_key: def.source_entity_type,
+                    relationship_type: def.relationship_type, label: def.reverse_label,
+                    direction: "reverse".into(), is_polymorphic: false,
+                })
             } else {
                 None
             }

@@ -69,7 +69,7 @@ fn second_admin(conn: &rusqlite::Connection, ws: &str, actor: &str) -> String {
 fn rule_condition() -> BusinessRuleConditionInput {
     BusinessRuleConditionInput {
         field_source: "builtin".into(), field_key: "status".into(), operator: "equals".into(), value: "Prospect".into(),
-        compare_field_source: None, compare_field_key: None, group_id: None,
+        compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
     }
 }
 
@@ -161,7 +161,7 @@ fn relationship_definition_and_instance_expose_created_by() {
     let def = relationship_service::create(
         &conn, &ws,
         &RelationshipDefinitionInput {
-            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), relationship_type: "many_to_one".into(),
+            source_entity_type: vendor.key.clone(), target_entity_type: "Company".into(), target_is_polymorphic: false, relationship_type: "many_to_one".into(),
             forward_label: "Client".into(), reverse_label: "Vendors".into(), is_required: false, show_related_list: true,
             delete_behavior: "restrict".into(), sort_order: 0,
         },

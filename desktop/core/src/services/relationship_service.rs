@@ -55,10 +55,20 @@ fn slugify(conn: &Connection, workspace_id: &str, source: &str, target: &str) ->
 
 fn validate_shape(conn: &Connection, workspace_id: &str, input: &RelationshipDefinitionInput) -> AppResult<()> {
     require_valid_entity_type(conn, workspace_id, &input.source_entity_type)?;
-    require_valid_entity_type(conn, workspace_id, &input.target_entity_type)?;
-    if input.source_entity_type == input.target_entity_type {
-        return Err(AppError::Validation("A relationship must connect two different object types".into()));
+    // A polymorphic-target definition doesn't fix one target type at
+    // authoring time - `target_entity_type` is an unused placeholder (see
+    // migration 0049), so there's nothing to validate against the
+    // workspace's entity types here; `link()` validates the *chosen* type
+    // per link instead.
+    if !input.target_is_polymorphic {
+        require_valid_entity_type(conn, workspace_id, &input.target_entity_type)?;
     }
+    // Self-referential relationships (source == target - a parent/child
+    // hierarchy: an Organization Unit's parent unit, a category tree, an
+    // Asset's parent Asset) are allowed. `related_records_for` below was
+    // already written to handle this shape correctly (see its own doc
+    // comment); `link()` below guards the one thing that shape actually
+    // needs and didn't have before: a record can't link to itself.
     if !RELATIONSHIP_TYPES.contains(&input.relationship_type.as_str()) {
         return Err(AppError::Validation(format!("Invalid relationship type '{}'", input.relationship_type)));
     }
@@ -74,7 +84,8 @@ fn validate_shape(conn: &Connection, workspace_id: &str, input: &RelationshipDef
 pub fn create(conn: &Connection, workspace_id: &str, input: &RelationshipDefinitionInput, actor_user_id: Option<&str>) -> AppResult<RelationshipDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, input)?;
-    let key = slugify(conn, workspace_id, &input.source_entity_type, &input.target_entity_type)?;
+    let target_for_key = if input.target_is_polymorphic { "any" } else { input.target_entity_type.as_str() };
+    let key = slugify(conn, workspace_id, &input.source_entity_type, target_for_key)?;
     let id = crate::domain::ids::new_uuid();
     let created = relationship_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "relationship_definition", &created.id, actor_user_id)?;
@@ -147,8 +158,20 @@ pub fn link(
     if !def.is_active {
         return Err(AppError::Validation("This relationship is not active".into()));
     }
-    if def.source_entity_type != source_entity_type || def.target_entity_type != target_entity_type {
+    if def.source_entity_type != source_entity_type {
         return Err(AppError::Validation("Record types do not match this relationship's definition".into()));
+    }
+    if def.target_is_polymorphic {
+        // Any real object type in the workspace is a valid target, chosen
+        // per link rather than fixed on the definition.
+        require_valid_entity_type(conn, workspace_id, target_entity_type)?;
+    } else if def.target_entity_type != target_entity_type {
+        return Err(AppError::Validation("Record types do not match this relationship's definition".into()));
+    }
+    // Only reachable at all for a self-referential definition (source and
+    // target entity types equal) - a record can't link to itself.
+    if source_entity_type == target_entity_type && source_id == target_id {
+        return Err(AppError::Validation("A record cannot be linked to itself".into()));
     }
 
     let source = resolve_or_error(conn, source_entity_type, source_id)?;
@@ -221,9 +244,19 @@ pub fn related_records_for(conn: &Connection, workspace_id: &str, entity_type: &
         // Not `else if` - a self-referencing-shaped pair of custom objects
         // could theoretically match both; in practice source != target is
         // enforced at creation, so at most one branch ever contributes rows
-        // for a given definition.
-        if def.target_entity_type == entity_type {
+        // for a given definition. For a polymorphic-target definition,
+        // `def.target_entity_type` is the unused '' placeholder (never
+        // equal to a real entity_type), so this branch is instead gated by
+        // `target_is_polymorphic` and each instance's *own* stored type is
+        // checked to confirm this record is actually a target of it -
+        // `list_definitions_for_entity` surfaces every polymorphic
+        // definition regardless of the viewed type, precisely because the
+        // definition itself can't say which types are eligible.
+        if def.target_entity_type == entity_type || def.target_is_polymorphic {
             for inst in relationship_repo::list_instances_where_target(conn, &def.id, entity_id)? {
+                if def.target_is_polymorphic && inst.target_entity_type != entity_type {
+                    continue;
+                }
                 if let Some(other) = entity_registry::resolve(conn, &inst.source_entity_type, &inst.source_id)? {
                     out.push(RelatedRecord {
                         instance_id: inst.id,

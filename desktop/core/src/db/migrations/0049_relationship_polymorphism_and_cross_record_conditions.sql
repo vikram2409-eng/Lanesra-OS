@@ -1,0 +1,35 @@
+-- Engine hardening: two of the documented gaps `reference_packages.rs`'s
+-- own top-of-file doc comment has been accumulating, closed together
+-- since both are additive columns on the same small cluster of tables
+-- (relationship_definitions, business_rule_conditions,
+-- workflow_conditions) - same "one migration, several related
+-- capabilities" shape migration 0046 already used.
+--
+-- `target_is_polymorphic`: a relationship definition whose target isn't
+-- one fixed object type chosen at admin-authoring time, but can be any
+-- valid type in the workspace, picked per link (a Document Record that
+-- can attach to a Policy, a Claim, or a Matter). `relationship_instances`
+-- already stores `source_entity_type`/`target_entity_type` as real
+-- per-row columns supplied by the caller, not derived from the
+-- definition - the storage layer already supports this shape. When this
+-- flag is set, `target_entity_type` on the definition itself is an
+-- unused placeholder (stored as '') - see relationship_service.rs's
+-- `link()` for where validation moves from "must equal the definition's
+-- fixed type" to "must be some valid type in this workspace".
+--
+-- `relationship_definition_id` on both condition tables: NULL (every
+-- existing row, unchanged behavior) means a condition reads the
+-- triggering record's own field, exactly as today. Non-NULL means
+-- `field_key`/`field_source` name a field on the record linked through
+-- that relationship instead - "cross-record validation" (e.g. Property
+-- Management's "the Unit must not already have an overlapping active
+-- Lease"-shaped rule, where reading a related record's own field is the
+-- missing primitive). Scoped to relationships where the triggering
+-- record has at most one linked record (many_to_one's "many" side, or
+-- either side of a one_to_one) - see business_rule_service.rs/
+-- workflow_service.rs for where that's enforced; a many_to_many or the
+-- "one" side of a many_to_one has no single determinate record to read
+-- and is excluded from the picker, not silently wrong here.
+ALTER TABLE relationship_definitions ADD COLUMN target_is_polymorphic INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE business_rule_conditions ADD COLUMN relationship_definition_id TEXT REFERENCES relationship_definitions(id);
+ALTER TABLE workflow_conditions ADD COLUMN relationship_definition_id TEXT REFERENCES relationship_definitions(id);

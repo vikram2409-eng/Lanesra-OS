@@ -54,7 +54,7 @@ fn vendor_object() -> CustomObjectDefinitionInput {
 fn vendor_company_relationship() -> RelationshipDefinitionInput {
     RelationshipDefinitionInput {
         source_entity_type: "".into(), // filled in by the caller once the Vendor object's real key is known
-        target_entity_type: "Company".into(),
+        target_entity_type: "Company".into(), target_is_polymorphic: false,
         relationship_type: "many_to_one".into(),
         forward_label: "Client".into(),
         reverse_label: "Vendors".into(),

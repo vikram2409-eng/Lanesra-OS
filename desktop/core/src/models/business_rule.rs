@@ -75,6 +75,14 @@ pub struct BusinessRuleCondition {
     /// for an ungrouped, top-level condition; `Some(group_id)` for one that
     /// belongs to an OR-group, sharing the id with its group siblings.
     pub group_id: Option<String>,
+    /// Migration 0049, "cross-record validation": `None` (every condition
+    /// before this) reads `field_key` off the triggering record itself,
+    /// unchanged. `Some(relationship_definition_id)` means `field_key`/
+    /// `field_source` instead name a field on the record linked through
+    /// that relationship - see `business_rule_service`'s own doc comment
+    /// on where that's resolved, and why it's scoped to relationships
+    /// with at most one linked record.
+    pub relationship_definition_id: Option<String>,
     pub sort_order: i64,
 }
 
@@ -90,6 +98,8 @@ pub struct BusinessRuleConditionInput {
     pub compare_field_key: Option<String>,
     #[serde(default)]
     pub group_id: Option<String>,
+    #[serde(default)]
+    pub relationship_definition_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
