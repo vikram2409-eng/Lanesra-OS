@@ -56,7 +56,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 
 - Is Lanesra OS free and open source? Yes — MIT-licensed, no licence key, no per-seat pricing.
 - Can I self-host it instead of a cloud CRM? Yes — desktop runs fully offline on local SQLite; Team Workspace lets a small team share one instance on their own infrastructure.
-- Is it just a CRM? No — the same platform underneath the CRM builds any business app, no code, or installs one of 10 ready-made industry apps, and its own AI agents run directly against that data model.
+- Is it just a CRM? No — the same platform underneath the CRM builds any business app, no code, or installs one of 11 ready-made industry apps, and its own AI agents run directly against that data model.
 - Does it have a REST API and webhooks? Yes — the Integration Hub's generic REST API, OpenAPI connectors and HMAC-signed webhooks (desktop edition).
 - How do I promote customizations from test to production? Deployment Management: curate a named, versioned Solution, export it, import it into another workspace.
 - Does it use embeddings or a vector database for AI? By default, no — free-text search over Custom Object records is ranked lexically (SQLite FTS5's `bm25()`). Desktop can optionally reindex records as real embeddings from its own already-configured OpenAI-compatible or Google Gemini provider (Anthropic has no embeddings API) for a second, meaning-based search ranking alongside it - vectors are plain SQLite BLOBs compared by cosine similarity in Rust, not a bundled vector database, and it's opt-in (Admin → LLM & MCP → Vector Search).
