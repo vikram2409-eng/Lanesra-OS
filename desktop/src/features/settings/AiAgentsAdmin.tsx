@@ -5,7 +5,7 @@ import { api, ApiError } from "../../lib/api";
 import { ChatPanel } from "../../components/ChatPanel";
 import { AiTriggersPanel } from "./AiTriggersPanel";
 import { agentRequiresAdmin } from "../../lib/aiAgents";
-import type { AiAgentDefinition, AiAgentInput, AiAgentModelRouting, AiProvider, AiSkill } from "../../lib/types";
+import type { AgentConnectorToolOption, AiAgentDefinition, AiAgentInput, AiAgentModelRouting, AiProvider, AiSkill } from "../../lib/types";
 
 // Phase 7a: the DLP classes an agent's forced-air-gap list can name -
 // hand-mirrored from `dlp_service::CLASSES`, the same "hardcoded mirror
@@ -87,9 +87,15 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
   const agentsQuery = useQuery({ queryKey: ["aiAgents"], queryFn: () => api.listAiAgents(false) });
   const skillsQuery = useQuery({ queryKey: ["aiSkills"], queryFn: () => api.listAiSkills(true) });
   const providersQuery = useQuery({ queryKey: ["aiProviders"], queryFn: () => api.listAiProviders(true) });
+  // Integration Hub Tool Bridge: unlike RECORD_ACTIONS/ADMIN_ACTIONS
+  // above, this one genuinely is workspace-scoped data (which connectors
+  // an admin has opted into agent-tool use), so it's fetched rather than
+  // hand-mirrored - see `connector_tool_service::list_options`.
+  const connectorToolsQuery = useQuery({ queryKey: ["agentConnectorTools"], queryFn: () => api.listAgentConnectorTools() });
   const agents = agentsQuery.data ?? [];
   const skills = skillsQuery.data ?? [];
   const providers = providersQuery.data ?? [];
+  const connectorTools = connectorToolsQuery.data ?? [];
 
   const [editing, setEditing] = useState<AiAgentDefinition | null>(null);
   const [creating, setCreating] = useState(false);
@@ -235,6 +241,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
           initial={editing ?? undefined}
           agents={agents}
           skills={skills}
+          connectorTools={connectorTools}
           onCancel={() => {
             setCreating(false);
             setEditing(null);
@@ -578,6 +585,7 @@ function AiAgentForm({
   initial,
   agents,
   skills,
+  connectorTools,
   onCancel,
   onSubmit,
   pending,
@@ -585,6 +593,7 @@ function AiAgentForm({
   initial?: AiAgentDefinition;
   agents: AiAgentDefinition[];
   skills: AiSkill[];
+  connectorTools: AgentConnectorToolOption[];
   onCancel: () => void;
   onSubmit: (input: AiAgentInput) => void;
   pending: boolean;
@@ -693,6 +702,24 @@ function AiAgentForm({
               </div>
             </div>
           </div>
+          {connectorTools.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <b style={{ fontSize: 12 }}>Connector Actions</b>
+              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                {connectorTools.map((t) => (
+                  <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                    <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
+                    {t.connector_name}: {t.action_display_name} ({t.http_method.toUpperCase()})
+                    {t.requires_admin && (
+                      <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
+                        Administrator
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         {skills.length > 0 && (
           <div className="field full">

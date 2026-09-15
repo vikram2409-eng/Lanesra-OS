@@ -146,6 +146,7 @@ import type {
   Connector,
   ConnectorImportInput,
   ConnectorExecutionResult,
+  AgentConnectorToolOption,
   OpenApiImportPreview,
   ExternalObject,
   ExternalObjectInput,
@@ -689,6 +690,9 @@ export const api = {
   listConnectors: () => call<Connector[]>("list_connectors"),
   getConnector: (id: string) => call<Connector>("get_connector", { id }),
   deleteConnector: (id: string) => call<void>("delete_connector", { id }),
+  updateConnectorAgentTools: (id: string, agentToolsEnabled: boolean, agentWriteToolsEnabled: boolean, agentReferenceKey: string | null) =>
+    call<Connector>("update_connector_agent_tools", { id, agentToolsEnabled, agentWriteToolsEnabled, agentReferenceKey }),
+  listAgentConnectorTools: () => call<AgentConnectorToolOption[]>("list_agent_connector_tools"),
   testConnectorAction: (connectorId: string, actionKey: string, referenceKey: string, params: unknown) =>
     callAdminAction<ConnectorExecutionResult>(
       "test_connector_action",

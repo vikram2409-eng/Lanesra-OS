@@ -638,7 +638,11 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   added-count for everything else) before a package update is applied.
 - **Integration Hub**: AES-256-GCM-encrypted Connections (REST, SFTP,
   PostgreSQL, OData, SMTP), OpenAPI 3.x Connectors usable as a Workflow
-  Automation action, a generic `/api/v1/objects/...` REST API secured by
+  Automation action or, once an admin opts a connector in, as an AI Agent
+  Foundry tool via the Tool Bridge - read-only by default, write access
+  behind a further explicit per-connector opt-in, and fails closed rather
+  than exposing a tool for an action whose request-body schema can't be
+  confidently typed - a generic `/api/v1/objects/...` REST API secured by
   hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a
   generalized CSV Data Exchange wizard, read-only External Objects, and
   Integration Jobs run by a real background scheduler on the Team

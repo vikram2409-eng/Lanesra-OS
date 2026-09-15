@@ -37,6 +37,7 @@ pub mod connection_ref_service;
 pub mod connection_service;
 pub mod connector_execution_service;
 pub mod connector_service;
+pub mod connector_tool_service;
 pub mod data_exchange_service;
 pub mod dlp_service;
 pub mod postgres_service;

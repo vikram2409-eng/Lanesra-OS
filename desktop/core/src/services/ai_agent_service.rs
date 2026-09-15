@@ -19,10 +19,26 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-fn validate_action_names(action_names: &[String]) -> AppResult<()> {
+fn validate_action_names(conn: &Connection, workspace_id: &str, action_names: &[String]) -> AppResult<()> {
+    // Connector-derived names classify by prefix alone (see
+    // `chat_service::tool_source`'s own doc comment), but that doesn't
+    // confirm the connector/action they name still exists and is
+    // currently enabled for agent use - check those against the real,
+    // workspace-scoped catalog here rather than let a stale/bogus name
+    // through to be silently dropped later by `chat_service::agent_tools`.
+    let mut connector_names: Option<Vec<String>> = None;
     for name in action_names {
-        if super::chat_service::tool_source(name).is_none() {
-            return Err(AppError::Validation(format!("'{name}' isn't a known action")));
+        match super::chat_service::tool_source(name) {
+            Some("connector_read" | "connector_write") => {
+                if connector_names.is_none() {
+                    connector_names = Some(super::connector_tool_service::agent_tool_names(conn, workspace_id)?);
+                }
+                if !connector_names.as_ref().unwrap().contains(name) {
+                    return Err(AppError::Validation(format!("'{name}' isn't currently available as an agent tool")));
+                }
+            }
+            Some(_) => {}
+            None => return Err(AppError::Validation(format!("'{name}' isn't a known action"))),
         }
     }
     Ok(())
@@ -35,7 +51,7 @@ fn validate_agent_input(conn: &Connection, workspace_id: &str, id: Option<&str>,
     if input.system_prompt.trim().is_empty() {
         return Err(AppError::Validation("Agent instructions are required".into()));
     }
-    validate_action_names(&input.action_names)?;
+    validate_action_names(conn, workspace_id, &input.action_names)?;
     // A direct self-reference is a trivial, pointless cycle worth
     // rejecting outright at save time - anything indirect is left to the
     // runtime delegation-depth guard, same reasoning as
