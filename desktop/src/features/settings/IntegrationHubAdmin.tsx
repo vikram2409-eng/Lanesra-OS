@@ -34,7 +34,7 @@ import type {
 // to drive select options, not re-validated client-side; the service is
 // always the source of truth and rejects anything else.
 const CONNECTION_TYPES = ["rest", "webhook", "sftp", "postgres", "odata", "smtp"];
-const AUTH_MODES = ["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code"];
+const AUTH_MODES = ["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code", "query_param"];
 const EVENT_TYPES = ["record.created", "record.updated", "record.archived", "field.changed", "workflow.completed", "workflow.failed"];
 const OPERATIONS = ["insert", "update", "upsert"];
 const DUPLICATE_POLICIES = ["skip", "update_matched", "create_new"];
@@ -569,13 +569,13 @@ function ConnectorImportWizard({ onDone, onCancel }: { onDone: () => void; onCan
               <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
                 Pick a curated, ready-to-import spec, or paste your own below.
               </p>
-              {(["ai_model", "saas"] as const).map((cat) => {
+              {(["ai_model", "data_warehouse", "saas"] as const).map((cat) => {
                 const items = templatesQuery.data!.filter((t) => t.category === cat);
                 if (items.length === 0) return null;
                 return (
                   <div key={cat} style={{ marginBottom: 10 }}>
                     <b style={{ fontSize: 11, textTransform: "uppercase", color: "var(--text-muted)" }}>
-                      {cat === "ai_model" ? "AI models" : "SaaS tools"}
+                      {cat === "ai_model" ? "AI models" : cat === "data_warehouse" ? "Data warehouses" : "SaaS tools"}
                     </b>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
                       {items.map((t) => (

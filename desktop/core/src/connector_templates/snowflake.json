@@ -1,0 +1,36 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Snowflake",
+    "version": "1.0.0",
+    "description": "Submit a SQL statement via the Snowflake SQL API v2."
+  },
+  "servers": [{ "url": "https://YOUR_ACCOUNT.snowflakecomputing.com" }],
+  "paths": {
+    "/api/v2/statements": {
+      "post": {
+        "operationId": "submitStatement",
+        "summary": "Submit a SQL statement for execution",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "statement": { "type": "string" },
+                  "database": { "type": "string" },
+                  "schema": { "type": "string" },
+                  "warehouse": { "type": "string" },
+                  "role": { "type": "string" },
+                  "timeout": { "type": "integer" }
+                },
+                "required": ["statement"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

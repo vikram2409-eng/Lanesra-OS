@@ -9,9 +9,17 @@
 //! `connection_type` is one of `"rest"` | `"webhook"` | `"sftp"` |
 //! `"postgres"` | `"odata"` | `"smtp"` (spec table 4). `auth_mode` is one
 //! of `"none"` | `"api_key"` | `"basic"` | `"bearer"` | `"custom_header"`
-//! | `"oauth2_client_credentials"` | `"oauth2_authorization_code"` (spec
-//! table 5) - mTLS is the one auth mode never implemented, even
-//! best-effort: the spec itself marks it "Future".
+//! | `"oauth2_client_credentials"` | `"oauth2_authorization_code"` |
+//! `"query_param"` (spec table 5, plus `query_param` added for
+//! Connector Template Library Phase 2 - Google Gemini-shaped APIs that
+//! authenticate via a `?key=...` query parameter rather than any
+//! header) - mTLS is the one auth mode never implemented, even
+//! best-effort: the spec itself marks it "Future". Note `oauth2_client_
+//! credentials`/`oauth2_authorization_code` are, today, purely
+//! descriptive labels for `apply_auth` below - both are handled exactly
+//! like `bearer` (a static secret, no token exchange or refresh loop
+//! anywhere in this file), so they only fit a service offering a
+//! long-lived static token, not one requiring genuine OAuth2 refresh.
 //!
 //! Every `test_connection` variant below is proven against a real local
 //! listener spun up inside this crate's own tests - not a live third-party
@@ -35,7 +43,7 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 }
 
 pub const CONNECTION_TYPES: &[&str] = &["rest", "webhook", "sftp", "postgres", "odata", "smtp"];
-const AUTH_MODES: &[&str] = &["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code"];
+const AUTH_MODES: &[&str] = &["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code", "query_param"];
 
 fn validate_types(connection_type: &str, auth_mode: &str) -> AppResult<()> {
     if !CONNECTION_TYPES.contains(&connection_type) {
@@ -199,6 +207,10 @@ pub(crate) fn apply_auth(builder: reqwest::RequestBuilder, auth_mode: &str, secr
             Some((name, value)) => builder.header(name, value),
             None => builder,
         },
+        "query_param" => match secret.and_then(|s| s.split_once(':')) {
+            Some((name, value)) => builder.query(&[(name, value)]),
+            None => builder,
+        },
         _ => builder,
     }
 }
@@ -271,4 +283,34 @@ async fn test_http(connection: &ConnectionModel, secret: Option<&str>) -> AppRes
     // above and carries no status code at all.
     let message = if status.is_success() || status.is_redirection() { format!("Reachable - HTTP {status}") } else { format!("Endpoint responded with HTTP {status}") };
     Ok((Some(status.as_u16()), message))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Connector Template Library Phase 2: `"query_param"` must inject the
+    /// secret into the request's query string - never as a header - so a
+    /// Gemini-shaped `?key=...` Connection actually authenticates. Built
+    /// against `http://example.invalid` and inspected via `.build()`
+    /// rather than sent, so this needs no network access.
+    #[test]
+    fn apply_auth_query_param_injects_a_query_string_pair_not_a_header() {
+        let client = reqwest::Client::new();
+        let builder = client.get("http://example.invalid/v1beta/models/gemini:generateContent");
+        let request = apply_auth(builder, "query_param", Some("key:abc123")).build().unwrap();
+        assert_eq!(request.url().query(), Some("key=abc123"));
+        assert!(request.headers().get("key").is_none());
+        assert!(request.headers().get("Authorization").is_none());
+    }
+
+    /// With no secret at all, `query_param` must be a no-op - not a panic,
+    /// not a bogus empty pair in the URL.
+    #[test]
+    fn apply_auth_query_param_with_no_secret_leaves_the_request_unchanged() {
+        let client = reqwest::Client::new();
+        let builder = client.get("http://example.invalid/foo");
+        let request = apply_auth(builder, "query_param", None).build().unwrap();
+        assert_eq!(request.url().query(), None);
+    }
 }

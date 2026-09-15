@@ -1,0 +1,41 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Databricks",
+    "version": "1.0.0",
+    "description": "List SQL warehouses and execute a SQL statement via the Databricks Statement Execution API."
+  },
+  "servers": [{ "url": "https://YOUR_WORKSPACE.cloud.databricks.com" }],
+  "paths": {
+    "/api/2.0/sql/warehouses": {
+      "get": {
+        "operationId": "listWarehouses",
+        "summary": "List SQL warehouses",
+        "parameters": [
+          { "name": "page_size", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      }
+    },
+    "/api/2.0/sql/statements": {
+      "post": {
+        "operationId": "executeStatement",
+        "summary": "Execute a SQL statement",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "statement": { "type": "string" },
+                  "warehouse_id": { "type": "string" }
+                },
+                "required": ["statement", "warehouse_id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

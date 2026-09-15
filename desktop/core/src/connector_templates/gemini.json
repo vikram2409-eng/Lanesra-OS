@@ -1,0 +1,51 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Google Gemini",
+    "version": "1.0.0",
+    "description": "Generate content via the Google Gemini API. The API key is injected automatically by the bound Connection's query_param auth - do not pass it as an action parameter."
+  },
+  "servers": [{ "url": "https://generativelanguage.googleapis.com" }],
+  "paths": {
+    "/v1beta/models/{model}:generateContent": {
+      "post": {
+        "operationId": "generateContent",
+        "summary": "Generate content from the model",
+        "parameters": [
+          { "name": "model", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "contents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": { "type": "string" },
+                        "parts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "text": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["contents"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

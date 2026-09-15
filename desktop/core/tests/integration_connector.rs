@@ -274,3 +274,150 @@ fn secret_encrypt_decrypt_round_trip_matches_the_connection_service_convention()
     let decrypted = secret_service::decrypt(&master_key(), &ciphertext, &nonce).unwrap();
     assert_eq!(decrypted, "hunter2");
 }
+
+const FLAT_FORM_OPENAPI_JSON: &str = r#"{
+  "openapi": "3.0.0",
+  "info": {"title": "Flat Form API", "version": "1.0.0"},
+  "paths": {
+    "/customers": {
+      "post": {
+        "operationId": "createCustomer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {"type": "object", "properties": {"name": {"type": "string"}, "email": {"type": "string"}}}
+            }
+          }
+        }
+      }
+    }
+  }
+}"#;
+
+const NESTED_FORM_OPENAPI_JSON: &str = r#"{
+  "openapi": "3.0.0",
+  "info": {"title": "Nested Form API", "version": "1.0.0"},
+  "paths": {
+    "/customers": {
+      "post": {
+        "operationId": "createCustomer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {"type": "object", "properties": {"name": {"type": "string"}, "address": {"type": "object", "properties": {"city": {"type": "string"}}}}}
+            }
+          }
+        }
+      }
+    }
+  }
+}"#;
+
+/// Connector Template Library Phase 2's conservative boundary: a *flat*
+/// form-urlencoded body (every top-level property a bare primitive, like
+/// Stripe/Twilio) is recognized as a first-class supported media type with
+/// zero warnings and a real `request_content_type`; a *nested* one falls
+/// back to today's pre-existing "treated as opaque JSON" warning path,
+/// unchanged - and critically, its `request_content_type` must come back
+/// `None` (i.e. `application/json`, matching what the warning promises),
+/// not the form-urlencoded string, or `connector_execution_service::
+/// build_and_send` would silently mis-flatten a nested body at send time.
+#[test]
+fn flat_form_body_is_recognized_but_a_nested_one_falls_back_to_opaque() {
+    let flat = connector_service::preview_import(FLAT_FORM_OPENAPI_JSON, "json").unwrap();
+    assert!(flat.warnings.is_empty(), "a flat form-urlencoded body should import with zero warnings: {:?}", flat.warnings);
+    let flat_op = flat.operations.iter().find(|o| o.operation_id == "createCustomer").unwrap();
+    assert_eq!(flat_op.request_content_type.as_deref(), Some("application/x-www-form-urlencoded"));
+
+    let nested = connector_service::preview_import(NESTED_FORM_OPENAPI_JSON, "json").unwrap();
+    assert!(
+        nested.warnings.iter().any(|w| w.contains("treated as opaque JSON")),
+        "a nested form-urlencoded body should still warn and fall back: {:?}",
+        nested.warnings
+    );
+    let nested_op = nested.operations.iter().find(|o| o.operation_id == "createCustomer").unwrap();
+    assert_eq!(nested_op.request_content_type.as_deref(), Some("application/json"), "the opaque fallback must not be mistaken for a real form body downstream");
+
+    // The distinction survives all the way into a saved Connector Action,
+    // not just the preview.
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let import_input = ConnectorImportInput { name: "Flat".into(), description: None, spec_text: FLAT_FORM_OPENAPI_JSON.into(), spec_format: "json".into(), selected_operation_ids: vec!["createCustomer".into()] };
+    let connector = connector_service::import(&conn, &workspace_id, &import_input, Some(&admin_id)).unwrap();
+    assert_eq!(connector.actions[0].request_content_type.as_deref(), Some("application/x-www-form-urlencoded"));
+
+    let import_input2 = ConnectorImportInput { name: "Nested".into(), description: None, spec_text: NESTED_FORM_OPENAPI_JSON.into(), spec_format: "json".into(), selected_operation_ids: vec!["createCustomer".into()] };
+    let connector2 = connector_service::import(&conn, &workspace_id, &import_input2, Some(&admin_id)).unwrap();
+    assert_eq!(connector2.actions[0].request_content_type, None, "nested form body must persist as the implicit application/json default, not form-urlencoded");
+}
+
+/// A minimal raw-socket HTTP/1.1 server that captures the Content-Type
+/// header and the full request body, then echoes both back in its JSON
+/// response - proves an actual outbound request used the right encoding,
+/// not just that `build_and_send` picked a code path.
+fn spawn_capturing_server() -> u16 {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut request_line = String::new();
+            let _ = reader.read_line(&mut request_line);
+            let mut content_type = String::new();
+            let mut content_length: usize = 0;
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Ok(0) => break,
+                    Ok(_) if line == "\r\n" || line.is_empty() => break,
+                    Ok(_) => {
+                        let lower = line.to_ascii_lowercase();
+                        if let Some(v) = lower.strip_prefix("content-type:") {
+                            content_type = v.trim().to_string();
+                        } else if let Some(v) = lower.strip_prefix("content-length:") {
+                            content_length = v.trim().parse().unwrap_or(0);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            let mut body_buf = vec![0u8; content_length];
+            let _ = std::io::Read::read_exact(&mut reader, &mut body_buf);
+            let body_str = String::from_utf8_lossy(&body_buf).replace('"', "'");
+            let echoed_line = request_line.trim().replace('"', "'");
+            let body = format!("{{\"ok\":true,\"request_line\":\"{echoed_line}\",\"content_type\":\"{content_type}\",\"captured_body\":\"{body_str}\"}}");
+            let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+            let mut stream = stream;
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    port
+}
+
+/// End-to-end: a flat form-urlencoded Connector Action actually sends
+/// `Content-Type: application/x-www-form-urlencoded` with correctly
+/// encoded fields against a real local listener - not JSON, matching
+/// what Stripe/Twilio's real APIs require.
+#[tokio::test]
+async fn execute_sends_a_form_urlencoded_body_with_the_right_content_type() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let port = spawn_capturing_server();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let reference_key = setup_reference(&conn, &workspace_id, &admin_id, &base_url);
+
+    let import_input = ConnectorImportInput { name: "Flat".into(), description: None, spec_text: FLAT_FORM_OPENAPI_JSON.into(), spec_format: "json".into(), selected_operation_ids: vec!["createCustomer".into()] };
+    let connector = connector_service::import(&conn, &workspace_id, &import_input, Some(&admin_id)).unwrap();
+    assert_eq!(connector.actions[0].request_content_type.as_deref(), Some("application/x-www-form-urlencoded"));
+
+    let params = serde_json::json!({"body": {"name": "Ada Lovelace", "email": "ada@example.com"}});
+    let result = connector_execution_service::execute(&conn, &workspace_id, &master_key(), &connector.id, "createCustomer", &reference_key, &params, None).await.unwrap();
+
+    assert!(result.ok, "{result:?}");
+    let content_type = result.response_body["content_type"].as_str().unwrap();
+    assert_eq!(content_type, "application/x-www-form-urlencoded");
+    let captured_body = result.response_body["captured_body"].as_str().unwrap();
+    assert!(captured_body.contains("name=Ada"), "form body should be present, url-encoded: {captured_body}");
+    assert!(captured_body.contains("email=ada%40example.com") || captured_body.contains("email=ada@example.com"), "email field should be present: {captured_body}");
+}

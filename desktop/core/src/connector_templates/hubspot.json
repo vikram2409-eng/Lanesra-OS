@@ -1,0 +1,48 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "HubSpot",
+    "version": "1.0.0",
+    "description": "List and create contacts via the HubSpot CRM API."
+  },
+  "servers": [{ "url": "https://api.hubapi.com" }],
+  "paths": {
+    "/crm/v3/objects/contacts": {
+      "get": {
+        "operationId": "listContacts",
+        "summary": "List contacts",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "after", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      },
+      "post": {
+        "operationId": "createContact",
+        "summary": "Create a contact",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "properties": {
+                    "type": "object",
+                    "properties": {
+                      "email": { "type": "string" },
+                      "firstname": { "type": "string" },
+                      "lastname": { "type": "string" },
+                      "phone": { "type": "string" },
+                      "jobtitle": { "type": "string" }
+                    }
+                  }
+                },
+                "required": ["properties"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
