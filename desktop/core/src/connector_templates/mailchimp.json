@@ -1,0 +1,43 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Mailchimp",
+    "version": "1.0.0",
+    "description": "List and add members to a Mailchimp audience via the Marketing API. The base URL is data-center-specific - replace YOUR_DC with the subdomain embedded in your own API key (e.g. an API key ending '-us6' means base URL https://us6.api.mailchimp.com/3.0)."
+  },
+  "servers": [{ "url": "https://YOUR_DC.api.mailchimp.com/3.0" }],
+  "paths": {
+    "/lists/{list_id}/members": {
+      "get": {
+        "operationId": "listMembers",
+        "summary": "List members of an audience",
+        "parameters": [
+          { "name": "list_id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "count", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      },
+      "post": {
+        "operationId": "addMember",
+        "summary": "Add a member to an audience",
+        "parameters": [
+          { "name": "list_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email_address": { "type": "string" },
+                  "status": { "type": "string" }
+                },
+                "required": ["email_address", "status"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

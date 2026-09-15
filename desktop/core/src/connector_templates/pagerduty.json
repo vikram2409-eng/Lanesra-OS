@@ -1,0 +1,55 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "PagerDuty",
+    "version": "1.0.0",
+    "description": "Create and list incidents via the PagerDuty REST API v2."
+  },
+  "servers": [{ "url": "https://api.pagerduty.com" }],
+  "paths": {
+    "/incidents": {
+      "get": {
+        "operationId": "listIncidents",
+        "summary": "List incidents",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } },
+          { "name": "statuses[]", "in": "query", "required": false, "schema": { "type": "string" } }
+        ]
+      },
+      "post": {
+        "operationId": "createIncident",
+        "summary": "Create an incident",
+        "parameters": [
+          { "name": "From", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "incident": {
+                    "type": "object",
+                    "properties": {
+                      "type": { "type": "string" },
+                      "title": { "type": "string" },
+                      "service": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "type": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["incident"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

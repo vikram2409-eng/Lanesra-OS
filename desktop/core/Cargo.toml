@@ -33,16 +33,25 @@ regex = "1"
 # services/secret_service.rs / connection_service.rs for how these are used;
 # only the small set of functions that genuinely make a network call are
 # `async fn` - everything else in this crate stays plain sync, as before.
-tokio = { version = "1", features = ["rt", "macros", "time"] }
+tokio = { version = "1", features = ["rt", "macros", "time", "net"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 aes-gcm = "0.10"
 hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
-# SQL connector (PostgreSQL only - see connection_service's own doc comment
-# for why SQL Server/MySQL share the same abstraction without being wired
-# up this pass).
+# SQL connectors - PostgreSQL, MySQL/MariaDB, SQL Server. All three are
+# pure-Rust wire-protocol drivers (no native libpq/libmysqlclient/ODBC
+# dependency), and all use rustls rather than native-tls/OpenSSL, matching
+# reqwest's own "rustls-tls" feature choice above - no new OpenSSL
+# dependency anywhere in this crate.
 tokio-postgres = "0.7"
+mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
+# SQL Server (tiberius): implemented and code-reviewed, but this sandbox
+# has no SQL Server build to prove it against live (unlike Postgres/MySQL,
+# which are both proven against real local servers in this crate's own
+# tests) - see sqlserver_service.rs's own doc comment for the stated gap.
+tiberius = { version = "0.12", default-features = false, features = ["rustls", "tds73"] }
+tokio-util = { version = "0.7", features = ["compat"] }
 # SFTP connector - pure-Rust client *and* server, so the in-process test
 # double needs no system SFTP daemon.
 russh = "0.44"

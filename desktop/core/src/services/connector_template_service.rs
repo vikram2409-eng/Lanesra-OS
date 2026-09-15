@@ -36,6 +36,22 @@
 //! which the frontend calls immediately after picking a template,
 //! already enforces `require_admin` exactly as it does for a hand-pasted
 //! spec today.
+//!
+//! Phase 3 added six more SaaS templates (Zendesk, Jira Cloud,
+//! PagerDuty, Datadog, Mailchimp, Shopify) and, separately, real MySQL/
+//! SQL Server `Connection` types (see `mysql_service.rs`/
+//! `sqlserver_service.rs` - a different kind of connectivity than the
+//! OpenAPI templates here, no template registration needed). Two real
+//! findings shaped this batch: **Linear is GraphQL-only** (confirmed
+//! against developers.linear.app - no REST resource endpoints exist),
+//! a real architectural mismatch with this OpenAPI/REST-parsing
+//! gallery, not a curation gap - excluded, not silently dropped.
+//! **Datadog needs a second credential** (`DD-APPLICATION-KEY`, in
+//! addition to `DD-API-KEY`) for most endpoints, confirmed against
+//! Datadog's own published OpenAPI specs - this `Connection` model has
+//! exactly one secret slot, so the Datadog template is deliberately
+//! scoped to the two operations confirmed to need only the API key
+//! (submit event, submit metrics), not a general Datadog client.
 
 use crate::domain::{AppError, AppResult};
 use crate::models::integration::{ConnectorTemplateSpec, ConnectorTemplateSummary};
@@ -181,6 +197,66 @@ const TEMPLATES: &[ConnectorTemplate] = &[
         setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://generativelanguage.googleapis.com', auth_mode 'query_param', and the secret stored as 'key:<your Gemini API key from aistudio.google.com/apikey>' - injected automatically as a ?key= query parameter on every call, never passed as an action parameter.",
         spec_format: "json",
         spec_text: include_str!("../connector_templates/gemini.json"),
+    },
+    ConnectorTemplate {
+        key: "zendesk",
+        name: "Zendesk",
+        category: "saas",
+        description: "Create and list support tickets via the Zendesk REST API.",
+        auth_mode: "basic",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://YOUR_SUBDOMAIN.zendesk.com' (replace with your real subdomain), auth_mode 'basic', and the secret stored as '<your email>/token:<API token>' (Admin Center -> Apps and integrations -> APIs -> Zendesk API). Zendesk is nudging accounts toward OAuth, but this static API token option remains live and documented.",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/zendesk.json"),
+    },
+    ConnectorTemplate {
+        key: "jira",
+        name: "Jira Cloud",
+        category: "saas",
+        description: "Create an issue and search issues via JQL on Jira Cloud.",
+        auth_mode: "basic",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://YOUR_DOMAIN.atlassian.net' (replace with your real site), auth_mode 'basic', and the secret stored as '<your Atlassian account email>:<API token>' (id.atlassian.com/manage/api-tokens).",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/jira.json"),
+    },
+    ConnectorTemplate {
+        key: "pagerduty",
+        name: "PagerDuty",
+        category: "saas",
+        description: "Create and list incidents via the PagerDuty REST API v2.",
+        auth_mode: "custom_header",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://api.pagerduty.com', auth_mode 'custom_header', and the secret stored as 'Authorization:Token token=<your REST API key>' (from a PagerDuty user's or the account's own API access settings). createIncident's own 'From' header parameter must be a valid PagerDuty user's email on every call.",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/pagerduty.json"),
+    },
+    ConnectorTemplate {
+        key: "datadog",
+        name: "Datadog",
+        category: "saas",
+        description: "Submit an event or metrics to Datadog.",
+        auth_mode: "custom_header",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://api.datadoghq.com' (or your account's regional site, e.g. 'https://api.us5.datadoghq.com'), auth_mode 'custom_header', and the secret stored as 'DD-API-KEY:<your API key>' (Organization Settings -> API Keys). Scoped to submitEvent/submitMetrics only - most other Datadog endpoints also require a separate Application key this Connection model has no second secret slot for.",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/datadog.json"),
+    },
+    ConnectorTemplate {
+        key: "mailchimp",
+        name: "Mailchimp",
+        category: "saas",
+        description: "List and add members to a Mailchimp audience.",
+        auth_mode: "bearer",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://YOUR_DC.api.mailchimp.com/3.0' (replace YOUR_DC with the data-center suffix on your own API key, e.g. an API key ending '-us6' means 'us6'), auth_mode 'bearer', and your API key (Account -> Extras -> API keys) as the secret.",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/mailchimp.json"),
+    },
+    ConnectorTemplate {
+        key: "shopify",
+        name: "Shopify",
+        category: "saas",
+        description: "List and create products via the Shopify Admin API.",
+        auth_mode: "custom_header",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://YOUR_SHOP.myshopify.com' (replace with your own *.myshopify.com subdomain), auth_mode 'custom_header', and the secret stored as 'X-Shopify-Access-Token:<your custom app's Admin API access token>' (Settings -> Apps and sales channels -> Develop apps, in your own store admin).",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/shopify.json"),
     },
 ];
 

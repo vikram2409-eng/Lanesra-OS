@@ -33,7 +33,7 @@ import type {
 // DUPLICATE_POLICIES; api_client_service::VALID_SCOPES) - mirrored here only
 // to drive select options, not re-validated client-side; the service is
 // always the source of truth and rejects anything else.
-const CONNECTION_TYPES = ["rest", "webhook", "sftp", "postgres", "odata", "smtp"];
+const CONNECTION_TYPES = ["rest", "webhook", "sftp", "postgres", "mysql", "sqlserver", "odata", "smtp"];
 const AUTH_MODES = ["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code", "query_param"];
 const EVENT_TYPES = ["record.created", "record.updated", "record.archived", "field.changed", "workflow.completed", "workflow.failed"];
 const OPERATIONS = ["insert", "update", "upsert"];

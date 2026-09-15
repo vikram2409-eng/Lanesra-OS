@@ -1,0 +1,58 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Jira Cloud",
+    "version": "1.0.0",
+    "description": "Create an issue and search issues via JQL on the Jira Cloud REST API."
+  },
+  "servers": [{ "url": "https://YOUR_DOMAIN.atlassian.net" }],
+  "paths": {
+    "/rest/api/3/search": {
+      "get": {
+        "operationId": "searchIssues",
+        "summary": "Search issues via JQL",
+        "parameters": [
+          { "name": "jql", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "maxResults", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      }
+    },
+    "/rest/api/3/issue": {
+      "post": {
+        "operationId": "createIssue",
+        "summary": "Create an issue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "properties": {
+                      "project": {
+                        "type": "object",
+                        "properties": {
+                          "key": { "type": "string" }
+                        }
+                      },
+                      "summary": { "type": "string" },
+                      "issuetype": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["fields"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

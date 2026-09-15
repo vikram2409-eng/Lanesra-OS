@@ -1,0 +1,50 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Zendesk",
+    "version": "1.0.0",
+    "description": "Create and list support tickets via the Zendesk REST API."
+  },
+  "servers": [{ "url": "https://YOUR_SUBDOMAIN.zendesk.com" }],
+  "paths": {
+    "/api/v2/tickets": {
+      "get": {
+        "operationId": "listTickets",
+        "summary": "List tickets",
+        "parameters": [
+          { "name": "page[size]", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      },
+      "post": {
+        "operationId": "createTicket",
+        "summary": "Create a ticket",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ticket": {
+                    "type": "object",
+                    "properties": {
+                      "subject": { "type": "string" },
+                      "comment": {
+                        "type": "object",
+                        "properties": {
+                          "body": { "type": "string" }
+                        }
+                      },
+                      "priority": { "type": "string" }
+                    }
+                  }
+                },
+                "required": ["ticket"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
