@@ -229,9 +229,49 @@ function migrateWorkflowRule(r){
  else if(actionType==='update_field'){action.updateFieldKey=r.updateFieldKey||'';action.updateValue=r.updateValue||'';action.updateCopyFrom=r.updateCopyFrom||''}
  r.actions=[action];
 }
+// ---- Roles & Permissions (enterprise RBAC) ---------------------------------
+// A named Role - the same Profile/Permission-Set shape Salesforce and most
+// enterprise SaaS use - sets, per object (every built-in plus every active
+// Custom Object), one of none/read/read_write, plus a separate AI &
+// Agent Access block (Assistant chat, AI Agent Foundry build access,
+// LLM & MCP settings management, and which named AI Agents a role can
+// open a Chat with). Real, structured configuration in this browser - a
+// user's `role` field is still just a name string matched against
+// data.roles, same shape usersTab always had, just backed by an editable
+// table instead of a fixed 3-value enum. Honesty note: the real desktop/
+// Team Workspace edition does NOT enforce a permission matrix like this
+// today - it only gates by whether a user's role list includes
+// "Administrator" (see chat_service.rs/user_service.rs) - so this models
+// a real, currently-unbuilt enterprise capability, not a shipped one.
+const OBJECT_PERMISSION_LEVELS=[['none','None'],['read','Read'],['read_write','Read/write']];
+function permissionObjectRows(){
+ return [...Object.keys(numberRules).map(k=>[k,entityLabel(k)]),...activeCustomObjects().map(o=>[o.key,o.labelPlural])];
+}
+function defaultRoles(){
+ // Literal, not Object.keys(numberRules) - ensureAdminData() (and this fn
+ // with it) runs at the very top of the script, before numberRules's own
+ // `const` initializer further down has executed; reaching for it here
+ // would throw a temporal-dead-zone error. Matches numberRules'/
+ // AUDITED_BUILTIN_KEYS' own key set exactly.
+ const allKeys=['companies','contacts','opportunities','products','quotes','orders','invoices','contracts','tasks'];
+ const fullAccess=Object.fromEntries(allKeys.map(k=>[k,'read_write']));
+ const readOnly=Object.fromEntries(allKeys.map(k=>[k,'read']));
+ const salesAccess={...fullAccess};
+ ['orders','invoices','contracts'].forEach(k=>salesAccess[k]='read');
+ return [
+  {id:'role_administrator',name:'Administrator',description:'Full read/write access to every object, plus every admin and AI tool.',isSystem:true,
+   objectPermissions:fullAccess,aiPermissions:{assistantAccess:true,agentFoundryAccess:true,manageAiSettings:true,allowedAgentIds:[]}},
+  {id:'role_sales_rep',name:'Sales Rep',description:'Manages companies, contacts, pipeline, products and quotes; read-only on orders, invoices and contracts.',isSystem:true,
+   objectPermissions:salesAccess,aiPermissions:{assistantAccess:true,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
+  {id:'role_viewer',name:'Viewer',description:'Read-only access across the workspace - no admin tools, no AI Agent Foundry.',isSystem:true,
+   objectPermissions:readOnly,aiPermissions:{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
+ ];
+}
 function ensureAdminData(){
  if(!data.workspace)data.workspace={name:'Northstar Digital Solutions',address:'120 Bay Street, Suite 400',city:'Toronto, ON',phone:'416-555-0142',logo:''};
  if(!data.users)data.users=[{id:'u1',name:'Maya Chen',email:'maya@northstar.example',role:'Administrator',status:'Active'}];
+ if(!data.roles)data.roles=defaultRoles();
+ (data.roles||[]).forEach(r=>{if(!r.objectPermissions)r.objectPermissions={};if(!r.aiPermissions)r.aiPermissions={assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}});
  if(!data.customFields)data.customFields=[];
  if(!data.fieldRules)data.fieldRules=[];
  if(!data.workflowRules)data.workflowRules=[];
@@ -551,7 +591,16 @@ function transitionOptionsFor(entityKey){
  return field&&field[3]?field[3].split('|'):[];
 }
 function fieldsFnFor(key){
- const fn={companies:companyFields,contacts:contactFields,opportunities:opportunityFields,products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[key];
+ // "users" was missing here even though usersTab has always routed through
+ // the same recordModal('users', userFields()) every other entity uses -
+ // recordModal's own defaultLayoutFor(key) call reaches this map for ANY
+ // key, so the very first "+ New user"/"Edit" ever pre-dated this fix by
+ // throwing here (fieldsFor spreading a non-function) before the modal
+ // could even open. Not something this pass introduced - confirmed present
+ // on main before this branch touched usersTab at all - just never
+ // exercised until Roles & permissions needed a working modal to build
+ // against.
+ const fn={companies:companyFields,contacts:contactFields,opportunities:opportunityFields,products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields,users:userFields}[key];
  return fn||(customObjectByKey(key)?customObjectFields:undefined);
 }
 // A custom object's records all share this one fixed shape (matches the
@@ -2175,13 +2224,100 @@ function profileTab(body){
  </form></div>`;
  $('#profileForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());Object.assign(data.workspace,obj);save();toast('Business profile updated');renderView()};
 }
-function userFields(){return [['name','Full name'],['email','Email'],['role','Role','select','Administrator|Sales Rep|Viewer'],['status','Status','select','Active|Inactive']]}
+function userFields(){return [['name','Full name'],['email','Email'],['role','Role','select',(data.roles||[]).map(r=>r.name).join('|')],['status','Status','select','Active|Inactive']]}
 function usersTab(body){
  const arr=data.users;
- body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Users & roles</h3><button class="btn btn-primary" id="addUser">+ New user</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${badgeMaybe(u.status)}</td><td><div class="actions"><button class="icon-btn" data-edit="${u.id}">Edit</button><button class="icon-btn" data-del="${u.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No users yet</div>'}</div><p class="muted" style="margin-top:12px">Roles are illustrative in this browser demo — the desktop edition enforces per-role access control server-side.</p></div>`;
+ const roles=data.roles||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Users</h3><button class="btn btn-primary" id="addUser">+ New user</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${badgeMaybe(u.status)}</td><td><div class="actions"><button class="icon-btn" data-edit="${u.id}">Edit</button><button class="icon-btn" data-del="${u.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No users yet</div>'}</div></div>
+ <div class="panel" style="margin-top:16px">
+ <div class="panel-head"><h3>Roles & permissions</h3><button class="btn btn-primary" id="addRole">+ New role</button></div>
+ <p class="muted" style="font-size:13px">Enterprise-style role-based access control - the same Profile/Permission-Set shape Salesforce and most enterprise SaaS use: each role sets none/read/read-write per object, plus Assistant, AI Agent Foundry and per-Agent chat access. Real, structured configuration in this browser; the desktop edition today only gates by whether a user's role list includes Administrator - a per-object/per-AI-feature matrix like this isn't enforced server-side yet, a real gap, not glossed over.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Role</th><th>Users</th><th>Object access</th><th>AI access</th><th>Actions</th></tr></thead><tbody>${roles.map(r=>`<tr><td><b>${r.name}</b>${r.isSystem?' <span class="badge">Built-in</span>':''}${r.description?`<br><small class="muted">${r.description}</small>`:''}</td><td>${arr.filter(u=>u.role===r.name).length}</td><td style="font-size:13px">${roleObjectSummary(r)}</td><td style="font-size:13px">${roleAiSummary(r)}</td><td><div class="actions"><button class="icon-btn" data-edit-role="${r.id}">Edit</button>${r.isSystem?'':`<button class="icon-btn" data-del-role="${r.id}">Delete</button>`}</div></td></tr>`).join('')}</tbody></table>${roles.length?'':'<div class="empty">No roles yet</div>'}</div>
+ </div>`;
  $('#addUser').onclick=()=>recordModal('users',userFields());
  body.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('users',userFields(),byId('users',b.dataset.edit)));
  body.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('users',b.dataset.del));
+ $('#addRole').onclick=()=>roleModal();
+ body.querySelectorAll('[data-edit-role]').forEach(b=>b.onclick=()=>roleModal(roles.find(r=>r.id===b.dataset.editRole)));
+ body.querySelectorAll('[data-del-role]').forEach(b=>b.onclick=()=>{
+  const r=roles.find(x=>x.id===b.dataset.delRole);
+  const usersWithRole=arr.filter(u=>u.role===r.name).length;
+  if(usersWithRole)return alert(`Can't delete "${r.name}" - ${usersWithRole} user(s) still have this role. Reassign them first.`);
+  data.roles=data.roles.filter(x=>x.id!==r.id);save();toast('Role deleted');renderView();
+ });
+}
+function roleObjectSummary(r){
+ const perms=Object.values(r.objectPermissions||{});
+ const rw=perms.filter(p=>p==='read_write').length;
+ const ro=perms.filter(p=>p==='read').length;
+ const none=perms.filter(p=>p==='none').length;
+ const parts=[];
+ if(rw)parts.push(`${rw} read-write`);
+ if(ro)parts.push(`${ro} read-only`);
+ if(none)parts.push(`${none} no access`);
+ return parts.join(', ')||'Not configured';
+}
+function roleAiSummary(r){
+ const p=r.aiPermissions||{};
+ const bits=[];
+ if(p.assistantAccess)bits.push('Assistant');
+ if(p.agentFoundryAccess)bits.push('Agent Foundry');
+ if(p.manageAiSettings)bits.push('LLM & MCP settings');
+ if((p.allowedAgentIds||[]).length)bits.push(`${p.allowedAgentIds.length} named agent${p.allowedAgentIds.length===1?'':'s'}`);
+ return bits.length?bits.join(', '):'No AI access';
+}
+function roleModal(role){
+ const isEdit=!!role;
+ const objects=permissionObjectRows();
+ const perms=role?.objectPermissions||{};
+ const ai=role?.aiPermissions||{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]};
+ const agents=data.aiAgents||[];
+ const matrixRows=objects.map(([key,label])=>{
+  const level=perms[key]||'none';
+  return `<tr><td>${label}</td>${OBJECT_PERMISSION_LEVELS.map(([lv])=>`<td style="text-align:center"><input type="radio" name="perm_${key}" value="${lv}" ${level===lv?'checked':''}></td>`).join('')}</tr>`;
+ }).join('');
+ const body=`<form id="roleForm" class="form-grid">
+ <div class="field full"><label>Role name</label><input name="name" value="${role?.name||''}" required ${role?.isSystem?'readonly':''}>${role?.isSystem?'<small class="field-help">Built-in role names can\'t be changed - other configuration (like Screen Layout visibility) already targets them by name.</small>':''}</div>
+ <div class="field full"><label>Description</label><input name="description" value="${role?.description||''}"></div>
+ <div class="field full"><label>Object permissions</label>
+  <div class="table-wrap"><table class="perm-matrix"><thead><tr><th>Object</th>${OBJECT_PERMISSION_LEVELS.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>${matrixRows}</tbody></table></div>
+ </div>
+ <div class="field full"><label>AI & Agent access</label>
+  <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+   <label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input type="checkbox" name="assistantAccess" ${ai.assistantAccess?'checked':''}> Can use Assistant (AI chat over this workspace's data)</label>
+   <label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input type="checkbox" name="agentFoundryAccess" ${ai.agentFoundryAccess?'checked':''}> Can access AI Agent Foundry (build/edit AI Agents, Skills, Pipelines, Evaluations)</label>
+   <label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input type="checkbox" name="manageAiSettings" ${ai.manageAiSettings?'checked':''}> Can manage LLM & MCP settings (provider keys, Gateway, MCP)</label>
+  </div>
+ </div>
+ <div class="field full"><label>Named AI Agents this role can chat with</label><select name="allowedAgentIds" multiple ${agents.length?'':'disabled'} style="min-height:90px">${agents.map(a=>`<option value="${a.id}" ${(ai.allowedAgentIds||[]).includes(a.id)?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select><small class="field-help">${agents.length?"Beyond general Assistant access above - scopes which named agents (built in AI Agent Foundry) this role's users can open a Chat with. Ctrl/Cmd-click to select several.":'No AI Agents exist yet - create one in AI Agent Foundry first.'}</small></div>
+ <div class="modal-actions">${isEdit&&!role.isSystem?`<button type="button" class="btn btn-secondary" data-delete-role>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save role':'Create role'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${role.name}`:'New role',body);
+ $('[data-close]').onclick=closeModal;
+ $('#roleForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const name=(fd.get('name')||'').trim();
+  if(!name)return alert('Role name is required.');
+  if((data.roles||[]).some(r=>r.name===name&&r.id!==role?.id))return alert('A role with this name already exists.');
+  const objectPermissions={};
+  objects.forEach(([key])=>{objectPermissions[key]=fd.get(`perm_${key}`)||'none'});
+  const allowedAgentIds=Array.from(e.target.elements.allowedAgentIds?.selectedOptions||[]).map(o=>o.value);
+  const obj={name,description:fd.get('description')||'',objectPermissions,aiPermissions:{assistantAccess:fd.get('assistantAccess')==='on',agentFoundryAccess:fd.get('agentFoundryAccess')==='on',manageAiSettings:fd.get('manageAiSettings')==='on',allowedAgentIds}};
+  if(isEdit){
+   const oldName=role.name;
+   Object.assign(role,obj);
+   if(oldName!==name)data.users.forEach(u=>{if(u.role===oldName)u.role=name});
+  }else{
+   obj.id='role_'+uid();obj.isSystem=false;data.roles.push(obj);
+  }
+  save();closeModal();toast(isEdit?'Role saved':'Role created');renderView();
+ };
+ if(isEdit&&!role.isSystem)$('[data-delete-role]').onclick=()=>{
+  const usersWithRole=data.users.filter(u=>u.role===role.name).length;
+  if(usersWithRole)return alert(`Can't delete "${role.name}" - ${usersWithRole} user(s) still have this role. Reassign them first.`);
+  data.roles=data.roles.filter(r=>r.id!==role.id);save();closeModal();toast('Role deleted');renderView();
+ };
 }
 // ---- Custom Objects (admin extensibility) ---------------------------------
 // Lets an Administrator define a whole new business object at runtime -
@@ -2331,7 +2467,10 @@ function relationshipModal(def){
 // missing from it (a new custom field added after publishing, a stale key
 // from a deleted one) is auto-appended to a trailing "Other fields"
 // section, so a layout can never silently drop something off the form.
-const DEMO_LAYOUT_ROLES=['Administrator','Sales Rep','Viewer'];
+// Reads from data.roles (Users & roles -> Roles & permissions) instead of a
+// fixed list, so a custom role created there is immediately selectable for
+// Screen Layout, Dashboard and App Builder visibility targeting too.
+function demoLayoutRoles(){return (data.roles||[]).map(r=>r.name)}
 const SECTION_COLUMN_CHOICES=[1,2,3];
 let layoutsEntityKey=null;
 let layoutsSelectedLayoutId=null;
@@ -2437,7 +2576,7 @@ function layoutsTab(body){
  </div>
  <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
   <div class="field" style="margin:0"><label>Layout name</label><input id="layoutName" value="${layout.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
-  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${DEMO_LAYOUT_ROLES.map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-layout-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${demoLayoutRoles().map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-layout-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
   ${layout.isDefault?'<span class="badge">Default layout — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="makeDefaultLayout" type="button">Make default</button>'}
   <button class="btn btn-secondary" id="deleteLayout" type="button" ${layouts.length<=1||layout.isDefault?'disabled':''}>Delete layout</button>
  </div>
@@ -2656,7 +2795,7 @@ function dashboardsTab(body){
  </div>
  <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
   <div class="field" style="margin:0"><label>Dashboard name</label><input id="dashboardName" value="${dash.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
-  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${DEMO_LAYOUT_ROLES.map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-dashboard-role="${r}" ${dash.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${demoLayoutRoles().map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-dashboard-role="${r}" ${dash.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
   ${appSelectHtml('dashboardApp',dash.appId||null)}
   ${dash.isDefault?'<span class="badge">Default dashboard — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="makeDefaultDashboard" type="button">Make default</button>'}
   <button class="btn btn-secondary" id="deleteDashboard" type="button" ${dashboards.length<=1||dash.isDefault?'disabled':''}>Delete dashboard</button>
@@ -2853,7 +2992,7 @@ function appPermissionsHtml(app){
  const perms=app.permissions||[];
  const grantedRoles=new Set(perms.filter(p=>p.principalType==='role').map(p=>p.principalId));
  const grantedUserIds=new Set(perms.filter(p=>p.principalType==='user').map(p=>p.principalId));
- const availableRoles=DEMO_LAYOUT_ROLES.filter(r=>!grantedRoles.has(r));
+ const availableRoles=demoLayoutRoles().filter(r=>!grantedRoles.has(r));
  const availableUsers=(data.users||[]).filter(u=>!grantedUserIds.has(u.id));
  return `<div class="panel" style="background:var(--surface-alt,#f7f8fc);margin-top:4px">
  <div style="font-weight:700;margin-bottom:8px">Access</div>
