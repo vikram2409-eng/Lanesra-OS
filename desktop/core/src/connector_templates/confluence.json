@@ -1,0 +1,58 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Confluence Cloud",
+    "version": "1.0.0",
+    "description": "List and create pages via the Confluence Cloud REST API."
+  },
+  "servers": [{ "url": "https://YOUR_DOMAIN.atlassian.net" }],
+  "paths": {
+    "/wiki/rest/api/content": {
+      "get": {
+        "operationId": "listContent",
+        "summary": "List content",
+        "parameters": [
+          { "name": "spaceKey", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      },
+      "post": {
+        "operationId": "createPage",
+        "summary": "Create a page",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string" },
+                  "title": { "type": "string" },
+                  "space": {
+                    "type": "object",
+                    "properties": {
+                      "key": { "type": "string" }
+                    }
+                  },
+                  "body": {
+                    "type": "object",
+                    "properties": {
+                      "storage": {
+                        "type": "object",
+                        "properties": {
+                          "value": { "type": "string" },
+                          "representation": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["type", "title", "space"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

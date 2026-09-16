@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Freshdesk",
+    "version": "1.0.0",
+    "description": "List and create support tickets via the Freshdesk API."
+  },
+  "servers": [{ "url": "https://YOUR_DOMAIN.freshdesk.com" }],
+  "paths": {
+    "/api/v2/tickets": {
+      "get": {
+        "operationId": "listTickets",
+        "summary": "List tickets",
+        "parameters": [
+          { "name": "per_page", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      },
+      "post": {
+        "operationId": "createTicket",
+        "summary": "Create a ticket",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subject": { "type": "string" },
+                  "description": { "type": "string" },
+                  "email": { "type": "string" },
+                  "priority": { "type": "integer" },
+                  "status": { "type": "integer" }
+                },
+                "required": ["subject", "description", "email", "priority", "status"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

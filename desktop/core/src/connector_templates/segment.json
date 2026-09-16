@@ -1,0 +1,54 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Segment",
+    "version": "1.0.0",
+    "description": "Track events and identify users via the Segment HTTP Tracking API."
+  },
+  "servers": [{ "url": "https://api.segment.io" }],
+  "paths": {
+    "/v1/track": {
+      "post": {
+        "operationId": "trackEvent",
+        "summary": "Track an event",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": { "type": "string" },
+                  "event": { "type": "string" },
+                  "properties": { "type": "object" }
+                },
+                "required": ["userId", "event"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/identify": {
+      "post": {
+        "operationId": "identifyUser",
+        "summary": "Identify a user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": { "type": "string" },
+                  "traits": { "type": "object" }
+                },
+                "required": ["userId"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

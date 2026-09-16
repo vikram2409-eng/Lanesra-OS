@@ -1,0 +1,27 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Calendly",
+    "version": "1.0.0",
+    "description": "Get the current user and list scheduled events via the Calendly API."
+  },
+  "servers": [{ "url": "https://api.calendly.com" }],
+  "paths": {
+    "/users/me": {
+      "get": {
+        "operationId": "getCurrentUser",
+        "summary": "Get the current authenticated user"
+      }
+    },
+    "/scheduled_events": {
+      "get": {
+        "operationId": "listScheduledEvents",
+        "summary": "List scheduled events",
+        "parameters": [
+          { "name": "user", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "count", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ]
+      }
+    }
+  }
+}

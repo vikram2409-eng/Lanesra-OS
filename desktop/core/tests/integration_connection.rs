@@ -2,9 +2,9 @@
 //! storage/rotation, dependency-blocked delete, Connection References
 //! (binding + type-mismatch rejection) - and `test_connection` for the
 //! REST/webhook connection types against a real local HTTP listener, and
-//! for Postgres and MySQL against this sandbox's real local PostgreSQL
-//! and MariaDB servers (`#[ignore]`d - see this file's own note on why,
-//! and how each is still proven).
+//! for Postgres, MySQL, MongoDB and Redis against this sandbox's real
+//! local PostgreSQL, MariaDB, MongoDB and Redis servers (`#[ignore]`d -
+//! see this file's own note on why, and how each is still proven).
 //!
 //! SMTP's `test_connection` is proven against a minimal in-process raw
 //! SMTP dialogue (`spawn_smtp_stub`) - real TCP, real EHLO/QUIT exchange,
@@ -229,6 +229,72 @@ async fn a_wrong_mysql_password_is_a_real_failure_not_ignored() {
     let connection = connection_service::create(
         &conn, &workspace_id, &master_key(),
         &ConnectionInput { name: "Bad MySQL".into(), connection_type: "mysql".into(), base_url: None, auth_mode: "basic".into(), secret_value: Some("whatever".into()), config_json: r#"{"host": "127.0.0.1", "port": 1, "database": "nope", "username": "nope"}"#.into(), owner_user_id: None },
+        Some(&admin_id),
+    ).unwrap();
+    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    assert!(!result.ok);
+}
+
+#[tokio::test]
+#[ignore = "requires this sandbox's local MongoDB server (a real MongoDB 7.0 downloaded and started for this pass, since no MongoDB package exists in this sandbox's apt repos; a lanesra_test user was created scoped to the lanesra_test database). Run with `cargo test -- --ignored`."]
+async fn mongodb_test_connection_succeeds_against_a_real_local_mongodb() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let connection = connection_service::create(
+        &conn, &workspace_id, &master_key(),
+        &ConnectionInput {
+            name: "Local MongoDB".into(), connection_type: "mongodb".into(), base_url: None, auth_mode: "basic".into(),
+            secret_value: Some("lanesra_test_pw".into()),
+            config_json: r#"{"host": "127.0.0.1", "port": 27017, "database": "lanesra_test", "username": "lanesra_test"}"#.into(),
+            owner_user_id: None,
+        },
+        Some(&admin_id),
+    ).unwrap();
+    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    assert!(result.ok, "{result:?}");
+}
+
+#[tokio::test]
+async fn a_wrong_mongodb_password_is_a_real_failure_not_ignored() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    // Deliberately not #[ignore] - mirrors the Postgres/MySQL equivalents
+    // above: an unreachable port fails during connection setup, no real
+    // MongoDB server needed to prove this path is real.
+    let connection = connection_service::create(
+        &conn, &workspace_id, &master_key(),
+        &ConnectionInput { name: "Bad MongoDB".into(), connection_type: "mongodb".into(), base_url: None, auth_mode: "basic".into(), secret_value: Some("whatever".into()), config_json: r#"{"host": "127.0.0.1", "port": 1, "database": "nope", "username": "nope"}"#.into(), owner_user_id: None },
+        Some(&admin_id),
+    ).unwrap();
+    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    assert!(!result.ok);
+}
+
+#[tokio::test]
+#[ignore = "requires this sandbox's local Redis server (service redis-server start / redis-server --daemonize; requirepass set to lanesra_test_pw - see this crate's test setup notes). Run with `cargo test -- --ignored`."]
+async fn redis_test_connection_succeeds_against_a_real_local_redis() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let connection = connection_service::create(
+        &conn, &workspace_id, &master_key(),
+        &ConnectionInput {
+            name: "Local Redis".into(), connection_type: "redis".into(), base_url: None, auth_mode: "basic".into(),
+            secret_value: Some("lanesra_test_pw".into()),
+            config_json: r#"{"host": "127.0.0.1", "port": 6379, "db": 0}"#.into(),
+            owner_user_id: None,
+        },
+        Some(&admin_id),
+    ).unwrap();
+    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    assert!(result.ok, "{result:?}");
+}
+
+#[tokio::test]
+async fn a_wrong_redis_password_is_a_real_failure_not_ignored() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    // Deliberately not #[ignore] - mirrors the Postgres/MySQL/MongoDB
+    // equivalents above: an unreachable port fails during connection
+    // setup, no real Redis server needed to prove this path is real.
+    let connection = connection_service::create(
+        &conn, &workspace_id, &master_key(),
+        &ConnectionInput { name: "Bad Redis".into(), connection_type: "redis".into(), base_url: None, auth_mode: "basic".into(), secret_value: Some("whatever".into()), config_json: r#"{"host": "127.0.0.1", "port": 1, "db": 0}"#.into(), owner_user_id: None },
         Some(&admin_id),
     ).unwrap();
     let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();

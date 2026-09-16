@@ -44,6 +44,8 @@ pub mod dlp_service;
 pub mod postgres_service;
 pub mod mysql_service;
 pub mod sqlserver_service;
+pub mod mongodb_service;
+pub mod redis_service;
 pub mod sftp_service;
 pub mod smtp_service;
 pub mod invoice_service;

@@ -1,0 +1,41 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "CircleCI",
+    "version": "1.0.0",
+    "description": "List and trigger pipelines via the CircleCI API v2."
+  },
+  "servers": [{ "url": "https://circleci.com" }],
+  "paths": {
+    "/api/v2/project/{project_slug}/pipeline": {
+      "get": {
+        "operationId": "listPipelines",
+        "summary": "List pipelines for a project",
+        "parameters": [
+          { "name": "project_slug", "in": "path", "required": true, "schema": { "type": "string" } }
+        ]
+      },
+      "post": {
+        "operationId": "triggerPipeline",
+        "summary": "Trigger a new pipeline",
+        "parameters": [
+          { "name": "project_slug", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": { "type": "string" },
+                  "tag": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

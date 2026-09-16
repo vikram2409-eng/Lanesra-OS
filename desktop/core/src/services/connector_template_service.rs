@@ -52,6 +52,19 @@
 //! exactly one secret slot, so the Datadog template is deliberately
 //! scoped to the two operations confirmed to need only the API key
 //! (submit event, submit metrics), not a general Datadog client.
+//!
+//! Phase 4 added seven more SaaS templates (GitLab, Confluence Cloud,
+//! Asana, Freshdesk, Segment, Calendly, CircleCI) and, separately, real
+//! MongoDB/Redis `Connection` types (see `mongodb_service.rs`/
+//! `redis_service.rs`). **monday.com is GraphQL-only** (confirmed
+//! against developer.monday.com - the only endpoint is `POST /v2` with
+//! a GraphQL query body, no REST resource paths), the same
+//! architectural mismatch as Linear above - excluded, not forced.
+//! Segment's own docs pages return HTTP 403 to automated fetches (bot
+//! detection); its Basic-auth-with-blank-password shape was instead
+//! confirmed with a real live request against the production API
+//! (`api.segment.io/v1/track`) in this session - a real API accepting
+//! the request is stronger evidence than a doc page, not weaker.
 
 use crate::domain::{AppError, AppResult};
 use crate::models::integration::{ConnectorTemplateSpec, ConnectorTemplateSummary};
@@ -257,6 +270,76 @@ const TEMPLATES: &[ConnectorTemplate] = &[
         setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://YOUR_SHOP.myshopify.com' (replace with your own *.myshopify.com subdomain), auth_mode 'custom_header', and the secret stored as 'X-Shopify-Access-Token:<your custom app's Admin API access token>' (Settings -> Apps and sales channels -> Develop apps, in your own store admin).",
         spec_format: "json",
         spec_text: include_str!("../connector_templates/shopify.json"),
+    },
+    ConnectorTemplate {
+        key: "gitlab",
+        name: "GitLab",
+        category: "saas",
+        description: "List projects and create issues via the GitLab REST API.",
+        auth_mode: "custom_header",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://gitlab.com' (or your own self-hosted GitLab instance URL), auth_mode 'custom_header', and the secret stored as 'PRIVATE-TOKEN:<your personal/project access token>' (User Settings -> Access Tokens).",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/gitlab.json"),
+    },
+    ConnectorTemplate {
+        key: "confluence",
+        name: "Confluence Cloud",
+        category: "saas",
+        description: "List and create pages via the Confluence Cloud REST API.",
+        auth_mode: "basic",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://YOUR_DOMAIN.atlassian.net' (replace with your real site), auth_mode 'basic', and the secret stored as '<your Atlassian account email>:<API token>' (id.atlassian.com/manage/api-tokens) - the same token type Jira Cloud uses.",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/confluence.json"),
+    },
+    ConnectorTemplate {
+        key: "asana",
+        name: "Asana",
+        category: "saas",
+        description: "List and create tasks via the Asana API.",
+        auth_mode: "bearer",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://app.asana.com', auth_mode 'bearer', and a Personal Access Token (My Settings -> Apps -> Manage Developer Apps) as the secret.",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/asana.json"),
+    },
+    ConnectorTemplate {
+        key: "freshdesk",
+        name: "Freshdesk",
+        category: "saas",
+        description: "List and create support tickets via the Freshdesk API.",
+        auth_mode: "basic",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://YOUR_DOMAIN.freshdesk.com' (replace with your real subdomain), auth_mode 'basic', and the secret stored as '<your API key>:X' (Profile Settings -> API Key; the literal character X stands in for a password - Freshdesk ignores it).",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/freshdesk.json"),
+    },
+    ConnectorTemplate {
+        key: "segment",
+        name: "Segment",
+        category: "saas",
+        description: "Track events and identify users via the Segment HTTP Tracking API.",
+        auth_mode: "basic",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://api.segment.io', auth_mode 'basic', and the secret stored as '<your source write key>:' (Segment workspace -> Sources -> your source -> API Keys, followed by a colon with nothing after it - the write key is the Basic auth username with a blank password, the same shape as Stripe).",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/segment.json"),
+    },
+    ConnectorTemplate {
+        key: "calendly",
+        name: "Calendly",
+        category: "saas",
+        description: "Get the current user and list scheduled events via the Calendly API.",
+        auth_mode: "bearer",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://api.calendly.com', auth_mode 'bearer', and a Personal Access Token (Integrations -> API & Webhooks) as the secret. listScheduledEvents needs your own user URI (from getCurrentUser's response) as its 'user' query parameter.",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/calendly.json"),
+    },
+    ConnectorTemplate {
+        key: "circleci",
+        name: "CircleCI",
+        category: "saas",
+        description: "List and trigger pipelines via the CircleCI API v2.",
+        auth_mode: "custom_header",
+        setup_notes: "Create a Connection with connection_type 'rest', base_url 'https://circleci.com', auth_mode 'custom_header', and the secret stored as 'Circle-Token:<your personal API token>' (User Settings -> Personal API Tokens).",
+        spec_format: "json",
+        spec_text: include_str!("../connector_templates/circleci.json"),
     },
 ];
 
