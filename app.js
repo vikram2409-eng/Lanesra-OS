@@ -229,9 +229,49 @@ function migrateWorkflowRule(r){
  else if(actionType==='update_field'){action.updateFieldKey=r.updateFieldKey||'';action.updateValue=r.updateValue||'';action.updateCopyFrom=r.updateCopyFrom||''}
  r.actions=[action];
 }
+// ---- Roles & Permissions (enterprise RBAC) ---------------------------------
+// A named Role - the same Profile/Permission-Set shape Salesforce and most
+// enterprise SaaS use - sets, per object (every built-in plus every active
+// Custom Object), one of none/read/read_write, plus a separate AI &
+// Agent Access block (Assistant chat, AI Agent Foundry build access,
+// LLM & MCP settings management, and which named AI Agents a role can
+// open a Chat with). Real, structured configuration in this browser - a
+// user's `role` field is still just a name string matched against
+// data.roles, same shape usersTab always had, just backed by an editable
+// table instead of a fixed 3-value enum. Honesty note: the real desktop/
+// Team Workspace edition does NOT enforce a permission matrix like this
+// today - it only gates by whether a user's role list includes
+// "Administrator" (see chat_service.rs/user_service.rs) - so this models
+// a real, currently-unbuilt enterprise capability, not a shipped one.
+const OBJECT_PERMISSION_LEVELS=[['none','None'],['read','Read'],['read_write','Read/write']];
+function permissionObjectRows(){
+ return [...Object.keys(numberRules).map(k=>[k,entityLabel(k)]),...activeCustomObjects().map(o=>[o.key,o.labelPlural])];
+}
+function defaultRoles(){
+ // Literal, not Object.keys(numberRules) - ensureAdminData() (and this fn
+ // with it) runs at the very top of the script, before numberRules's own
+ // `const` initializer further down has executed; reaching for it here
+ // would throw a temporal-dead-zone error. Matches numberRules'/
+ // AUDITED_BUILTIN_KEYS' own key set exactly.
+ const allKeys=['companies','contacts','opportunities','products','quotes','orders','invoices','contracts','tasks'];
+ const fullAccess=Object.fromEntries(allKeys.map(k=>[k,'read_write']));
+ const readOnly=Object.fromEntries(allKeys.map(k=>[k,'read']));
+ const salesAccess={...fullAccess};
+ ['orders','invoices','contracts'].forEach(k=>salesAccess[k]='read');
+ return [
+  {id:'role_administrator',name:'Administrator',description:'Full read/write access to every object, plus every admin and AI tool.',isSystem:true,
+   objectPermissions:fullAccess,aiPermissions:{assistantAccess:true,agentFoundryAccess:true,manageAiSettings:true,allowedAgentIds:[]}},
+  {id:'role_sales_rep',name:'Sales Rep',description:'Manages companies, contacts, pipeline, products and quotes; read-only on orders, invoices and contracts.',isSystem:true,
+   objectPermissions:salesAccess,aiPermissions:{assistantAccess:true,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
+  {id:'role_viewer',name:'Viewer',description:'Read-only access across the workspace - no admin tools, no AI Agent Foundry.',isSystem:true,
+   objectPermissions:readOnly,aiPermissions:{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
+ ];
+}
 function ensureAdminData(){
  if(!data.workspace)data.workspace={name:'Northstar Digital Solutions',address:'120 Bay Street, Suite 400',city:'Toronto, ON',phone:'416-555-0142',logo:''};
  if(!data.users)data.users=[{id:'u1',name:'Maya Chen',email:'maya@northstar.example',role:'Administrator',status:'Active'}];
+ if(!data.roles)data.roles=defaultRoles();
+ (data.roles||[]).forEach(r=>{if(!r.objectPermissions)r.objectPermissions={};if(!r.aiPermissions)r.aiPermissions={assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}});
  if(!data.customFields)data.customFields=[];
  if(!data.fieldRules)data.fieldRules=[];
  if(!data.workflowRules)data.workflowRules=[];
@@ -274,6 +314,8 @@ function ensureAdminData(){
  if(!data.integrationJobs)data.integrationJobs=[];
  if(!data.apiEndpoints)data.apiEndpoints=[];
  if(!data.externalConnections)data.externalConnections=[];
+ // Integration Hub demo, Connectors - see connectorsSubTab's own comment.
+ if(!data.connectors)data.connectors=[];
  // Integration Hub demo, Webhooks & Events - see webhooksSubTab's own comment.
  if(!data.webhooks)data.webhooks=[];
  // AI & Agentic Layer, Phase 1 mirror - see llmSubTab's own comment. Only
@@ -306,6 +348,10 @@ function ensureAdminData(){
  // server-side clock/listener this static demo doesn't have; only the
  // manual "Run" and the new Workflow Automation action are simulated.
  if(!data.aiAgentPipelines)data.aiAgentPipelines=[];
+ // AI & Agentic Layer, Phase 7d mirror - see aiEvalTab's own comment.
+ if(!data.aiEvalSuites)data.aiEvalSuites=[];
+ if(!data.aiSettings.vectorSearch)data.aiSettings.vectorSearch={embeddingModel:'',embeddedCount:0,pendingCount:0,lastReindexAt:null};
+ if(data.aiSettings.otlpEndpoint===undefined)data.aiSettings.otlpEndpoint='';
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
  (data.apiEndpoints||[]).forEach(e=>{if(e.active===undefined)e.active=true});
  (data.externalConnections||[]).forEach(c=>{if(c.active===undefined)c.active=true;if(!c.calls)c.calls=[]});
@@ -445,7 +491,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -467,7 +513,7 @@ const ADMIN_CATEGORIES=[
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
- {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines']},
+ {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval']},
 ];
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -545,7 +591,16 @@ function transitionOptionsFor(entityKey){
  return field&&field[3]?field[3].split('|'):[];
 }
 function fieldsFnFor(key){
- const fn={companies:companyFields,contacts:contactFields,opportunities:opportunityFields,products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields}[key];
+ // "users" was missing here even though usersTab has always routed through
+ // the same recordModal('users', userFields()) every other entity uses -
+ // recordModal's own defaultLayoutFor(key) call reaches this map for ANY
+ // key, so the very first "+ New user"/"Edit" ever pre-dated this fix by
+ // throwing here (fieldsFor spreading a non-function) before the modal
+ // could even open. Not something this pass introduced - confirmed present
+ // on main before this branch touched usersTab at all - just never
+ // exercised until Roles & permissions needed a working modal to build
+ // against.
+ const fn={companies:companyFields,contacts:contactFields,opportunities:opportunityFields,products:productFields,quotes:quoteFields,orders:orderFields,invoices:invoiceFields,contracts:contractFields,tasks:taskFields,users:userFields}[key];
  return fn||(customObjectByKey(key)?customObjectFields:undefined);
 }
 // A custom object's records all share this one fixed shape (matches the
@@ -899,7 +954,7 @@ function landing(){
  <main>
  <section class="hero"><div class="container hero-grid"><div><div class="eyebrow">Open source · Self-hosted · AI-native</div><h1>Run your business and AI agents on data you own.</h1><p style="font-size:19px;line-height:1.6;margin:0 0 18px;color:var(--muted)">Lanesra OS combines a complete CRM, no-code app builder, AI Agent Foundry and Integration Hub in one open-source, self-hosted platform — with no per-seat fees or vendor lock-in.</p><div class="hero-actions"><a class="btn btn-primary" href="/demo">Try the live demo →</a><a class="btn btn-secondary" href="/download">Download for Windows (Early Access) →</a></div><p style="margin:14px 0 0"><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">View on GitHub →</a></p><div class="trust-row"><span>✓ 11 installable industry apps</span><span>✓ Offline-first &amp; self-hosted</span><span>✓ Bring your own AI model</span><span>✓ Open source, no licence key</span></div></div><div><img class="hero-screenshot" src="/screenshots/dashboard.png" alt="Lanesra OS CRM dashboard showing open pipeline, revenue and open tasks" loading="eager" width="1440" height="900"></div></div></section>
  <section class="section"><div class="container" style="text-align:center"><p class="muted" style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin:0 0 18px">Powered by</p><div class="trust-row" style="justify-content:center;font-family:var(--font-mono);font-size:14px">SQLite&nbsp;&nbsp;·&nbsp;&nbsp;Anthropic&nbsp;&nbsp;·&nbsp;&nbsp;OpenAI-compatible&nbsp;&nbsp;·&nbsp;&nbsp;Google Gemini&nbsp;&nbsp;·&nbsp;&nbsp;Model Context Protocol</div></div></section>
- <section class="section" style="background:var(--surface-alt)"><div class="container"><div class="section-head" style="margin:0 auto 30px;text-align:center;max-width:720px"><div class="eyebrow">Three ways in</div><h2>Pick where you want to start.</h2></div><div class="split" style="grid-template-columns:repeat(3,1fr)"><div class="choice-card"><div class="eyebrow">Sell, service, invoice</div><h2 style="font-size:22px">Run your business</h2><p class="muted">A complete CRM out of the box — companies, contacts, pipeline, quotes, orders, invoices and contracts — or install one of 11 industry apps instead of building from scratch.</p><a class="btn btn-secondary" href="/demo">Explore the CRM →</a></div><div class="choice-card"><div class="eyebrow">No code required</div><h2 style="font-size:22px">Build custom apps</h2><p class="muted">Custom Objects, relationships, screens, business rules, workflows and dashboards — the same no-code platform everything else on this page runs on.</p><a class="btn btn-secondary" href="/platform">See the platform →</a></div><div class="choice-card"><div class="eyebrow">Persona, actions, memory</div><h2 style="font-size:22px">Deploy AI agents</h2><p class="muted">Give a named agent its own persona, actions and memory, route it to any model, and orchestrate several into a deterministic Pipeline.</p><a class="btn btn-secondary" href="/demo">Open Agent Foundry →</a></div></div></div></section>
+ <section class="section" style="background:var(--surface-alt)"><div class="container"><div class="section-head" style="margin:0 auto 30px;text-align:center;max-width:720px"><div class="eyebrow">Three ways in</div><h2>Pick where you want to start.</h2></div><div class="split split-3"><div class="choice-card"><div class="eyebrow">Sell, service, invoice</div><h2 style="font-size:22px">Run your business</h2><p class="muted">A complete CRM out of the box — companies, contacts, pipeline, quotes, orders, invoices and contracts — or install one of 11 industry apps instead of building from scratch.</p><a class="btn btn-secondary" href="/demo">Explore the CRM →</a></div><div class="choice-card"><div class="eyebrow">No code required</div><h2 style="font-size:22px">Build custom apps</h2><p class="muted">Custom Objects, relationships, screens, business rules, workflows and dashboards — the same no-code platform everything else on this page runs on.</p><a class="btn btn-secondary" href="/platform">See the platform →</a></div><div class="choice-card"><div class="eyebrow">Persona, actions, memory</div><h2 style="font-size:22px">Deploy AI agents</h2><p class="muted">Give a named agent its own persona, actions and memory, route it to any model, and orchestrate several into a deterministic Pipeline.</p><a class="btn btn-secondary" href="/demo">Open Agent Foundry →</a></div></div></div></section>
  <section class="section"><div class="container"><div class="section-head" style="margin:0 auto 34px;text-align:center;max-width:720px"><div class="eyebrow">See it, don't just read about it</div><h2>Three things that make this AI-native.</h2></div><div class="bento"><article class="bento-tile"><img class="demo-tile-shot" src="/screenshots/agent-foundry.png" alt="AI Agent Foundry admin screen listing three configured agents"><h3>AI Agent Foundry</h3><p>Named agents with their own persona, actions, memory and guardrails — routed through a built-in AI Gateway with automatic failover to a local, air-gapped model.</p></article><article class="bento-tile"><img class="demo-tile-shot" src="/screenshots/app-catalog.png" alt="App Catalog showing installable industry reference packages"><h3>No-code business platform</h3><p>Every industry app in the catalog is built from the same Custom Objects, Relationships and Workflows you can use to build your own — not a separate product.</p></article><article class="bento-tile"><img class="demo-tile-shot" src="/screenshots/integration-hub.png" alt="Integration Hub overview screen with connection and job counts"><h3>Integration Hub</h3><p>Encrypted Connections, an OpenAPI connector template gallery, and a Tool Bridge that turns a Connector Action into a real AI Agent tool.</p></article></div></div></section>
  <section id="desktop" class="section" style="background:var(--surface-alt)"><div class="container split"><div class="choice-card"><div class="eyebrow">Try online</div><h2>Explore a working business</h2><p class="muted">Open the live demo with realistic sample customers, opportunities, quotes, invoices and contracts. No registration required.</p><ul><li>Sample company included</li><li>Create and edit records</li><li>Reset demo anytime</li></ul><a class="btn btn-primary" href="/demo">Open live demo</a></div><div class="choice-card dark"><div class="eyebrow" style="color:var(--brand)">Desktop edition</div><h2>Your software. Your computer. Your data.</h2><p style="color:#cbd5e1">A private desktop edition is available now for Windows (Early Access, unsigned installer), with macOS and Linux to follow. The source is public on GitHub today.</p><ul><li>No cloud account required</li><li>Works without internet</li><li>No activation or subscription</li></ul><a class="btn btn-secondary" href="/download">Desktop status — Windows installer available</a></div></div></section>
  <section id="why-ai-native" class="section"><div class="container"><div class="section-head" style="margin:0 auto 34px;text-align:center;max-width:720px"><div class="eyebrow">Integration &amp; architecture</div><h2>What actually runs underneath.</h2><p class="muted">Four real architectural choices, not a feature-name wordlist — every one of these is shipped code you can read on GitHub today.</p></div><div class="bento">${HOME_PRIMITIVES.map(p=>`<article class="bento-tile wide"><div class="bento-icon">${p[0]}</div><h3>${p[1]}</h3><p>${p[2]}</p></article>`).join('')}</div><p style="text-align:center;margin:26px 0 0"><a class="btn btn-secondary" href="/platform">See the full platform →</a></p></div></section>
@@ -1031,6 +1086,16 @@ function renderSidebarNav(){
  };
 }
 function renderView(){
+ // Nothing anywhere reset scroll position on navigation - on mobile in
+ // particular this left a freshly-opened screen's own title clipped
+ // behind the sticky topbar whenever the previous screen had been
+ // scrolled down at all (confirmed via a real screenshot: switching to
+ // Admin -> Integrations from a scrolled dashboard left "Integrations"
+ // half-hidden under the header). window.scrollTo, not `.content`
+ // .scrollTop, since `.content`/`.app-main` have no overflow of their
+ // own - the sticky sidebar/topbar both rely on the window itself
+ // scrolling.
+ window.scrollTo(0,0);
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
  if(current==='dashboard') return dashboard();
  if(current==='pipeline') return pipeline();
@@ -2145,7 +2210,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -2159,13 +2224,100 @@ function profileTab(body){
  </form></div>`;
  $('#profileForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());Object.assign(data.workspace,obj);save();toast('Business profile updated');renderView()};
 }
-function userFields(){return [['name','Full name'],['email','Email'],['role','Role','select','Administrator|Sales Rep|Viewer'],['status','Status','select','Active|Inactive']]}
+function userFields(){return [['name','Full name'],['email','Email'],['role','Role','select',(data.roles||[]).map(r=>r.name).join('|')],['status','Status','select','Active|Inactive']]}
 function usersTab(body){
  const arr=data.users;
- body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Users & roles</h3><button class="btn btn-primary" id="addUser">+ New user</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${badgeMaybe(u.status)}</td><td><div class="actions"><button class="icon-btn" data-edit="${u.id}">Edit</button><button class="icon-btn" data-del="${u.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No users yet</div>'}</div><p class="muted" style="margin-top:12px">Roles are illustrative in this browser demo — the desktop edition enforces per-role access control server-side.</p></div>`;
+ const roles=data.roles||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Users</h3><button class="btn btn-primary" id="addUser">+ New user</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${badgeMaybe(u.status)}</td><td><div class="actions"><button class="icon-btn" data-edit="${u.id}">Edit</button><button class="icon-btn" data-del="${u.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No users yet</div>'}</div></div>
+ <div class="panel" style="margin-top:16px">
+ <div class="panel-head"><h3>Roles & permissions</h3><button class="btn btn-primary" id="addRole">+ New role</button></div>
+ <p class="muted" style="font-size:13px">Enterprise-style role-based access control - the same Profile/Permission-Set shape Salesforce and most enterprise SaaS use: each role sets none/read/read-write per object, plus Assistant, AI Agent Foundry and per-Agent chat access. Real, structured configuration in this browser; the desktop edition today only gates by whether a user's role list includes Administrator - a per-object/per-AI-feature matrix like this isn't enforced server-side yet, a real gap, not glossed over.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Role</th><th>Users</th><th>Object access</th><th>AI access</th><th>Actions</th></tr></thead><tbody>${roles.map(r=>`<tr><td><b>${r.name}</b>${r.isSystem?' <span class="badge">Built-in</span>':''}${r.description?`<br><small class="muted">${r.description}</small>`:''}</td><td>${arr.filter(u=>u.role===r.name).length}</td><td style="font-size:13px">${roleObjectSummary(r)}</td><td style="font-size:13px">${roleAiSummary(r)}</td><td><div class="actions"><button class="icon-btn" data-edit-role="${r.id}">Edit</button>${r.isSystem?'':`<button class="icon-btn" data-del-role="${r.id}">Delete</button>`}</div></td></tr>`).join('')}</tbody></table>${roles.length?'':'<div class="empty">No roles yet</div>'}</div>
+ </div>`;
  $('#addUser').onclick=()=>recordModal('users',userFields());
  body.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('users',userFields(),byId('users',b.dataset.edit)));
  body.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('users',b.dataset.del));
+ $('#addRole').onclick=()=>roleModal();
+ body.querySelectorAll('[data-edit-role]').forEach(b=>b.onclick=()=>roleModal(roles.find(r=>r.id===b.dataset.editRole)));
+ body.querySelectorAll('[data-del-role]').forEach(b=>b.onclick=()=>{
+  const r=roles.find(x=>x.id===b.dataset.delRole);
+  const usersWithRole=arr.filter(u=>u.role===r.name).length;
+  if(usersWithRole)return alert(`Can't delete "${r.name}" - ${usersWithRole} user(s) still have this role. Reassign them first.`);
+  data.roles=data.roles.filter(x=>x.id!==r.id);save();toast('Role deleted');renderView();
+ });
+}
+function roleObjectSummary(r){
+ const perms=Object.values(r.objectPermissions||{});
+ const rw=perms.filter(p=>p==='read_write').length;
+ const ro=perms.filter(p=>p==='read').length;
+ const none=perms.filter(p=>p==='none').length;
+ const parts=[];
+ if(rw)parts.push(`${rw} read-write`);
+ if(ro)parts.push(`${ro} read-only`);
+ if(none)parts.push(`${none} no access`);
+ return parts.join(', ')||'Not configured';
+}
+function roleAiSummary(r){
+ const p=r.aiPermissions||{};
+ const bits=[];
+ if(p.assistantAccess)bits.push('Assistant');
+ if(p.agentFoundryAccess)bits.push('Agent Foundry');
+ if(p.manageAiSettings)bits.push('LLM & MCP settings');
+ if((p.allowedAgentIds||[]).length)bits.push(`${p.allowedAgentIds.length} named agent${p.allowedAgentIds.length===1?'':'s'}`);
+ return bits.length?bits.join(', '):'No AI access';
+}
+function roleModal(role){
+ const isEdit=!!role;
+ const objects=permissionObjectRows();
+ const perms=role?.objectPermissions||{};
+ const ai=role?.aiPermissions||{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]};
+ const agents=data.aiAgents||[];
+ const matrixRows=objects.map(([key,label])=>{
+  const level=perms[key]||'none';
+  return `<tr><td>${label}</td>${OBJECT_PERMISSION_LEVELS.map(([lv])=>`<td style="text-align:center"><input type="radio" name="perm_${key}" value="${lv}" ${level===lv?'checked':''}></td>`).join('')}</tr>`;
+ }).join('');
+ const body=`<form id="roleForm" class="form-grid">
+ <div class="field full"><label>Role name</label><input name="name" value="${role?.name||''}" required ${role?.isSystem?'readonly':''}>${role?.isSystem?'<small class="field-help">Built-in role names can\'t be changed - other configuration (like Screen Layout visibility) already targets them by name.</small>':''}</div>
+ <div class="field full"><label>Description</label><input name="description" value="${role?.description||''}"></div>
+ <div class="field full"><label>Object permissions</label>
+  <div class="table-wrap"><table class="perm-matrix"><thead><tr><th>Object</th>${OBJECT_PERMISSION_LEVELS.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>${matrixRows}</tbody></table></div>
+ </div>
+ <div class="field full"><label>AI & Agent access</label>
+  <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+   <label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input type="checkbox" name="assistantAccess" ${ai.assistantAccess?'checked':''}> Can use Assistant (AI chat over this workspace's data)</label>
+   <label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input type="checkbox" name="agentFoundryAccess" ${ai.agentFoundryAccess?'checked':''}> Can access AI Agent Foundry (build/edit AI Agents, Skills, Pipelines, Evaluations)</label>
+   <label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input type="checkbox" name="manageAiSettings" ${ai.manageAiSettings?'checked':''}> Can manage LLM & MCP settings (provider keys, Gateway, MCP)</label>
+  </div>
+ </div>
+ <div class="field full"><label>Named AI Agents this role can chat with</label><select name="allowedAgentIds" multiple ${agents.length?'':'disabled'} style="min-height:90px">${agents.map(a=>`<option value="${a.id}" ${(ai.allowedAgentIds||[]).includes(a.id)?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select><small class="field-help">${agents.length?"Beyond general Assistant access above - scopes which named agents (built in AI Agent Foundry) this role's users can open a Chat with. Ctrl/Cmd-click to select several.":'No AI Agents exist yet - create one in AI Agent Foundry first.'}</small></div>
+ <div class="modal-actions">${isEdit&&!role.isSystem?`<button type="button" class="btn btn-secondary" data-delete-role>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save role':'Create role'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${role.name}`:'New role',body);
+ $('[data-close]').onclick=closeModal;
+ $('#roleForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const name=(fd.get('name')||'').trim();
+  if(!name)return alert('Role name is required.');
+  if((data.roles||[]).some(r=>r.name===name&&r.id!==role?.id))return alert('A role with this name already exists.');
+  const objectPermissions={};
+  objects.forEach(([key])=>{objectPermissions[key]=fd.get(`perm_${key}`)||'none'});
+  const allowedAgentIds=Array.from(e.target.elements.allowedAgentIds?.selectedOptions||[]).map(o=>o.value);
+  const obj={name,description:fd.get('description')||'',objectPermissions,aiPermissions:{assistantAccess:fd.get('assistantAccess')==='on',agentFoundryAccess:fd.get('agentFoundryAccess')==='on',manageAiSettings:fd.get('manageAiSettings')==='on',allowedAgentIds}};
+  if(isEdit){
+   const oldName=role.name;
+   Object.assign(role,obj);
+   if(oldName!==name)data.users.forEach(u=>{if(u.role===oldName)u.role=name});
+  }else{
+   obj.id='role_'+uid();obj.isSystem=false;data.roles.push(obj);
+  }
+  save();closeModal();toast(isEdit?'Role saved':'Role created');renderView();
+ };
+ if(isEdit&&!role.isSystem)$('[data-delete-role]').onclick=()=>{
+  const usersWithRole=data.users.filter(u=>u.role===role.name).length;
+  if(usersWithRole)return alert(`Can't delete "${role.name}" - ${usersWithRole} user(s) still have this role. Reassign them first.`);
+  data.roles=data.roles.filter(r=>r.id!==role.id);save();closeModal();toast('Role deleted');renderView();
+ };
 }
 // ---- Custom Objects (admin extensibility) ---------------------------------
 // Lets an Administrator define a whole new business object at runtime -
@@ -2315,7 +2467,10 @@ function relationshipModal(def){
 // missing from it (a new custom field added after publishing, a stale key
 // from a deleted one) is auto-appended to a trailing "Other fields"
 // section, so a layout can never silently drop something off the form.
-const DEMO_LAYOUT_ROLES=['Administrator','Sales Rep','Viewer'];
+// Reads from data.roles (Users & roles -> Roles & permissions) instead of a
+// fixed list, so a custom role created there is immediately selectable for
+// Screen Layout, Dashboard and App Builder visibility targeting too.
+function demoLayoutRoles(){return (data.roles||[]).map(r=>r.name)}
 const SECTION_COLUMN_CHOICES=[1,2,3];
 let layoutsEntityKey=null;
 let layoutsSelectedLayoutId=null;
@@ -2421,7 +2576,7 @@ function layoutsTab(body){
  </div>
  <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
   <div class="field" style="margin:0"><label>Layout name</label><input id="layoutName" value="${layout.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
-  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${DEMO_LAYOUT_ROLES.map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-layout-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${demoLayoutRoles().map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-layout-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
   ${layout.isDefault?'<span class="badge">Default layout — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="makeDefaultLayout" type="button">Make default</button>'}
   <button class="btn btn-secondary" id="deleteLayout" type="button" ${layouts.length<=1||layout.isDefault?'disabled':''}>Delete layout</button>
  </div>
@@ -2640,7 +2795,7 @@ function dashboardsTab(body){
  </div>
  <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
   <div class="field" style="margin:0"><label>Dashboard name</label><input id="dashboardName" value="${dash.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
-  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${DEMO_LAYOUT_ROLES.map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-dashboard-role="${r}" ${dash.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${demoLayoutRoles().map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-dashboard-role="${r}" ${dash.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
   ${appSelectHtml('dashboardApp',dash.appId||null)}
   ${dash.isDefault?'<span class="badge">Default dashboard — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="makeDefaultDashboard" type="button">Make default</button>'}
   <button class="btn btn-secondary" id="deleteDashboard" type="button" ${dashboards.length<=1||dash.isDefault?'disabled':''}>Delete dashboard</button>
@@ -2837,7 +2992,7 @@ function appPermissionsHtml(app){
  const perms=app.permissions||[];
  const grantedRoles=new Set(perms.filter(p=>p.principalType==='role').map(p=>p.principalId));
  const grantedUserIds=new Set(perms.filter(p=>p.principalType==='user').map(p=>p.principalId));
- const availableRoles=DEMO_LAYOUT_ROLES.filter(r=>!grantedRoles.has(r));
+ const availableRoles=demoLayoutRoles().filter(r=>!grantedRoles.has(r));
  const availableUsers=(data.users||[]).filter(u=>!grantedUserIds.has(u.id));
  return `<div class="panel" style="background:var(--surface-alt,#f7f8fc);margin-top:4px">
  <div style="font-weight:700;margin-bottom:8px">Access</div>
@@ -4265,8 +4420,52 @@ const FORMAT_OPTIONS=['csv','json'];
 const EXTERNAL_AUTH_TYPES=['none','apiKey','bearer'];
 const EXTERNAL_AUTH_LABELS={none:'None',apiKey:'API key',bearer:'Bearer token'};
 const WEBHOOK_EVENT_TYPES=['record.created','record.updated','record.archived','workflow.completed'];
+// A representative starter set of the desktop edition's own curated
+// gallery of 26 templates (Connector Template Library, Phases 1-4) -
+// spanning AI models, data warehouses and SaaS tools, each with the
+// real auth_mode it actually needs. Not the full 26 - this is a demo,
+// not a mirror of every curated spec - but enough to show the shape of
+// "start from a template" rather than only a blank paste box.
+const DEMO_CONNECTOR_TEMPLATES=[
+ ['openai','OpenAI','ai_model','Chat completions and model listing.','bearer'],
+ ['gemini','Google Gemini','ai_model','Generate content via Gemini models.','query_param'],
+ ['snowflake','Snowflake','data_warehouse','Run SQL statements against a Snowflake warehouse.','bearer'],
+ ['databricks','Databricks','data_warehouse','Run SQL statements against a Databricks warehouse.','bearer'],
+ ['slack','Slack','saas','Post messages and list channels.','bearer'],
+ ['github','GitHub','saas','Create and list issues.','bearer'],
+ ['stripe','Stripe','saas','Create and list customers.','basic'],
+ ['hubspot','HubSpot','saas','Create and update CRM contacts.','bearer'],
+ ['zendesk','Zendesk','saas','Create and list support tickets.','basic'],
+ ['sendgrid','SendGrid','saas','Send transactional email.','bearer'],
+];
+function connectorCategoryLabel(cat){return {ai_model:'AI model',data_warehouse:'Data warehouse',saas:'SaaS'}[cat]||cat}
+function connectorTemplateModal(){
+ const body=`<div class="template-gallery">${DEMO_CONNECTOR_TEMPLATES.map(t=>`<button type="button" class="template-card" data-import-template="${t[0]}"><strong>${t[1]}</strong><span class="muted" style="display:block;font-size:12px;margin:4px 0">${connectorCategoryLabel(t[2])} · ${t[4]}</span><span class="muted" style="font-size:12.5px">${t[3]}</span></button>`).join('')}</div>`;
+ modal('Start from a template',body);
+ document.querySelectorAll('[data-import-template]').forEach(b=>b.onclick=()=>{
+  const t=DEMO_CONNECTOR_TEMPLATES.find(x=>x[0]===b.dataset.importTemplate);
+  data.connectors=data.connectors||[];
+  if(data.connectors.some(c=>c.templateKey===t[0])){toast('Already imported');closeModal();return}
+  data.connectors.push({id:uid(),templateKey:t[0],name:t[1],category:t[2],description:t[3],authMode:t[4],toolBridgeEnabled:false});
+  save();closeModal();renderIntegrationsSubTab();toast(`${t[1]} imported`);
+ });
+}
+// Integration Hub demo, Connectors - a representative slice of the real
+// desktop edition's Connector Template Library (26 curated templates
+// across 4 phases) plus the Tool Bridge (an imported connector opting
+// into an AI Agent's own tool list) - neither existed in this demo
+// before, even though both are real, shipped, substantial features.
+function connectorsSubTab(body){
+ const connectors=data.connectors||[];
+ body.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px"><h4 style="margin:0">Connectors</h4><button class="btn btn-primary" id="newConnectorBtn">+ Import from template</button></div>
+ <p class="muted" style="font-size:13px">OpenAPI-imported Connectors your workflows and AI agents can call. The desktop edition's own gallery has 26 curated templates across AI models, data warehouses and SaaS tools (plus a hand-paste-your-own-spec option) - this demo shows a representative starter set.</p>
+ ${connectors.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Category</th><th>Auth</th><th>Agent tool (Tool Bridge)</th><th>Actions</th></tr></thead><tbody>${connectors.map(c=>`<tr><td><strong>${c.name}</strong><br><span class="muted" style="font-size:12px">${c.description}</span></td><td>${connectorCategoryLabel(c.category)}</td><td>${c.authMode}</td><td><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" data-toggle-bridge="${c.id}" ${c.toolBridgeEnabled?'checked':''}> Enabled</label></td><td><button class="icon-btn" data-remove-connector="${c.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No connectors imported yet - pick a template to get started.</div>'}`;
+ $('#newConnectorBtn').onclick=connectorTemplateModal;
+ body.querySelectorAll('[data-toggle-bridge]').forEach(cb=>cb.onchange=()=>{const c=connectors.find(x=>x.id===cb.dataset.toggleBridge);if(c){c.toolBridgeEnabled=cb.checked;save();toast(c.toolBridgeEnabled?'Enabled as an AI agent tool':'Removed from agent tools')}});
+ body.querySelectorAll('[data-remove-connector]').forEach(b=>b.onclick=()=>{data.connectors=data.connectors.filter(x=>x.id!==b.dataset.removeConnector);save();renderIntegrationsSubTab()});
+}
 function integrationsTab(body){
- const subTabs=[['overview','Overview'],['jobs','Integration Jobs'],['endpoints','API Access'],['external','Connections'],['webhooks','Webhooks & Events']];
+ const subTabs=[['overview','Overview'],['external','Connections'],['connectors','Connectors'],['jobs','Integration Jobs'],['endpoints','API Access'],['webhooks','Webhooks & Events']];
  body.innerHTML=`<div class="panel">
  <h3 style="margin-top:0">Integration Hub</h3>
  <p class="muted" style="font-size:13px">Schedule recurring data jobs, issue API access for other systems to call in, configure outbound connections this workspace would use, and subscribe other systems to what changes here. This is a UI-only simulation: everything is saved to this browser and "runs"/"test calls" produce a realistic result against your demo data, but no real network request, encryption, signature or scheduled job ever actually fires — there's no server behind the online demo to run one. The desktop app's Admin → Integration Hub is the real thing: encrypted Connections, OpenAPI Connectors, hashed API clients, HMAC-signed Webhooks, a generic CSV wizard, External Objects and a real background scheduler.</p>
@@ -4279,17 +4478,18 @@ function integrationsTab(body){
 function renderIntegrationsSubTab(){
  document.querySelectorAll('[data-integrations-tab]').forEach(b=>b.classList.toggle('active',b.dataset.integrationsTab===integrationsSubTab));
  const body=$('#integrationsBody');
- ({overview:integrationOverviewSubTab,jobs:jobsSubTab,endpoints:endpointsSubTab,external:externalSubTab,webhooks:webhooksSubTab}[integrationsSubTab])(body);
+ ({overview:integrationOverviewSubTab,jobs:jobsSubTab,endpoints:endpointsSubTab,external:externalSubTab,connectors:connectorsSubTab,webhooks:webhooksSubTab}[integrationsSubTab])(body);
 }
 // Real counts over this browser's own demo data - not fabricated numbers -
 // the same "compute from what's actually here" convention the Overview
 // KPIs use on desktop (integration_log_service::overview).
 function integrationOverviewSubTab(body){
- const jobs=data.integrationJobs||[], endpoints=data.apiEndpoints||[], connections=data.externalConnections||[], hooks=data.webhooks||[];
+ const jobs=data.integrationJobs||[], endpoints=data.apiEndpoints||[], connections=data.externalConnections||[], hooks=data.webhooks||[], connectors=data.connectors||[];
  const activeJobs=jobs.filter(j=>j.active).length;
  const activeEndpoints=endpoints.filter(e=>e.active).length;
  const activeConnections=connections.filter(c=>c.active).length;
  const activeHooks=hooks.filter(w=>w.active).length;
+ const agentToolConnectors=connectors.filter(c=>c.toolBridgeEnabled).length;
  const totalRuns=jobs.reduce((n,j)=>n+(j.runs||[]).length,0);
  const totalDeliveries=hooks.reduce((n,w)=>n+(w.deliveries||[]).length,0);
  const totalCalls=endpoints.length?connections.reduce((n,c)=>n+(c.calls||[]).length,0):0;
@@ -4299,11 +4499,12 @@ function integrationOverviewSubTab(body){
    kpi('Integration Jobs',`${activeJobs} / ${jobs.length} active`),
    kpi('API endpoints',`${activeEndpoints} / ${endpoints.length} active`),
    kpi('Connections',`${activeConnections} / ${connections.length} active`),
+   kpi('Connectors',`${agentToolConnectors} / ${connectors.length} agent tools`),
    kpi('Webhook subscriptions',`${activeHooks} / ${hooks.length} active`),
    kpi('Simulated job runs',totalRuns),
    kpi('Simulated webhook deliveries',totalDeliveries),
  ].join('')}</div>
- <p class="muted" style="font-size:13px">These counts come from what's actually configured in this browser's demo data, the same "compute it, don't fake it" rule every other number in this demo follows - they just don't reflect a real API call, encrypted secret or network delivery, because this static demo has no server behind it to make one. Get started: <button class="link-btn" data-integrations-tab="jobs">create a job</button>, <button class="link-btn" data-integrations-tab="endpoints">issue API access</button>, <button class="link-btn" data-integrations-tab="external">add a connection</button>, or <button class="link-btn" data-integrations-tab="webhooks">subscribe a webhook</button>.</p>
+ <p class="muted" style="font-size:13px">These counts come from what's actually configured in this browser's demo data, the same "compute it, don't fake it" rule every other number in this demo follows - they just don't reflect a real API call, encrypted secret or network delivery, because this static demo has no server behind it to make one. Get started: <button class="link-btn" data-integrations-tab="jobs">create a job</button>, <button class="link-btn" data-integrations-tab="endpoints">issue API access</button>, <button class="link-btn" data-integrations-tab="external">add a connection</button>, <button class="link-btn" data-integrations-tab="connectors">import a connector</button>, or <button class="link-btn" data-integrations-tab="webhooks">subscribe a webhook</button>.</p>
  </div>`;
  body.querySelectorAll('[data-integrations-tab]').forEach(b=>b.onclick=()=>{integrationsSubTab=b.dataset.integrationsTab;renderIntegrationsSubTab()});
 }
@@ -4898,10 +5099,13 @@ function llmMcpTab(body){
  body.innerHTML=`<div class="panel">
  <h3 style="margin-top:0">LLM &amp; MCP</h3>
  <p class="muted" style="font-size:13px">Bring your own LLM provider key - Lanesra is self-hosted with no subscription or seat charges, so there's no billing surface to meter AI usage through. This tab is a preview: it shows what the real desktop/Team Workspace edition's Admin → LLM &amp; MCP screen looks like and lets you try the shape of it, but nothing here makes a real call to any provider - this static demo has no server to make one from, and whatever you enter is saved to this browser only.</p>
+ <div class="honesty-note" style="margin:0 0 18px"><h3 style="font-size:16px;margin-top:0">What the key you save here is for</h3><p style="margin:0">On the real desktop/Team Workspace edition, this is the one key every AI feature routes through - no separate key per feature. Save it once, then: chat with your own data and ask it questions from <button type="button" class="link-btn" id="gotoAssistantFromLlm">Assistant</button> in the sidebar (the same general assistant every workspace user can already open); or build a named agent with its own persona, actions and memory in <button type="button" class="link-btn" id="gotoAgentFoundryFromLlm">AI Agent Foundry</button> and let it use that key too. One key, reused everywhere an agent or the assistant needs to think - not a separate subscription per surface.</p></div>
  <div class="tabs">${subTabs.map(t=>`<button class="tab ${llmMcpSubTab===t[0]?'active':''}" data-llmmcp-tab="${t[0]}">${t[1]}</button>`).join('')}</div>
  <div id="llmMcpBody"></div>
  </div>`;
  body.querySelectorAll('[data-llmmcp-tab]').forEach(b=>b.onclick=()=>{llmMcpSubTab=b.dataset.llmmcpTab;renderLlmMcpSubTab()});
+ $('#gotoAssistantFromLlm').onclick=()=>{current='assistant';detailRecord=null;renderView()};
+ $('#gotoAgentFoundryFromLlm').onclick=()=>{current='admin';adminView='tool';adminTab='aiAgents';renderView()};
  renderLlmMcpSubTab();
 }
 function renderLlmMcpSubTab(){
@@ -4954,6 +5158,7 @@ function llmSubTab(body){
 function gatewaySubTab(body){
  const providers=data.aiProviders||[];
  const s=data.aiSettings;
+ const vs=s.vectorSearch;
  body.innerHTML=`<div style="margin-top:16px;display:grid;gap:16px">
  <div class="panel" style="max-width:520px">
   <h4 style="margin-top:0">System token budget</h4>
@@ -4978,11 +5183,43 @@ function gatewaySubTab(body){
   <p class="muted" style="font-size:13px;margin-top:0">Recent dispatches that didn't end up served by an agent's primary tier. Demo-only: this static demo has no real provider dispatch to fail over from, so this stays empty rather than showing fabricated events.</p>
   <div class="empty">No failovers recorded yet.</div>
  </div>
+ <div class="panel" style="max-width:560px">
+  <h4 style="margin-top:0">Observability</h4>
+  <p class="muted" style="font-size:13px;margin-top:0">An optional OTLP collector endpoint - each agent/pipeline run's trace (real per-step timing, no LLM output) can be pushed here on demand from that run's own history, or exported as OTLP JSON with no endpoint configured at all. Demo-only: Push/Export buttons live on each pipeline run, this just saves where they'd send to - this static demo has no server to actually POST to a collector from.</p>
+  <div style="display:flex;gap:8px;align-items:center">
+   <input id="otlpEndpointInput" style="flex:1" placeholder="https://your-collector:4318/v1/traces" value="${s.otlpEndpoint||''}">
+   <button class="btn btn-secondary" id="saveOtlpEndpoint">Save</button>
+  </div>
+ </div>
+ <div class="panel" style="max-width:560px">
+  <h4 style="margin-top:0">Vector search</h4>
+  <p class="muted" style="font-size:13px;margin-top:0">Real embeddings from this workspace's own configured provider would power a second, meaning-based ranking over Custom Object records (<code>semantic_search_records</code>, alongside the keyword-ranked <code>search_records</code>) - stored as plain vectors, compared by cosine similarity, no external vector database. Needs an OpenAI-compatible or Google Gemini provider - Anthropic has no embeddings API. Demo-only: Reindex now simulates counting this workspace's actual Custom Object records - there's no real provider call to embed them from here.</p>
+  ${s.provider!=='openai_compatible'&&s.provider!=='google_gemini'?`<p style="font-size:13px;color:#92610a">The LLM tab's provider (${s.provider||'none configured'}) doesn't support embeddings - switch to OpenAI-compatible or Google Gemini there first.</p>`:''}
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+   <input id="embeddingModelInput" style="flex:1" placeholder="${s.provider==='google_gemini'?'text-embedding-004 (default)':'text-embedding-3-small (default)'}" value="${vs.embeddingModel||''}">
+   <button class="btn btn-secondary" id="saveEmbeddingModel">Save</button>
+  </div>
+  ${vs.lastReindexAt?`<p style="font-size:13px"><b>${vs.embeddedCount}</b> record${vs.embeddedCount===1?'':'s'} embedded${vs.pendingCount>0?` - ${vs.pendingCount} waiting to be reindexed`:''}</p>`:''}
+  <button class="btn btn-secondary" id="reindexVectorSearch" ${(s.provider==='openai_compatible'||s.provider==='google_gemini')&&s.apiKey?'':'disabled'}>Reindex now</button>
+ </div>
  </div>`;
  $('#saveDailyBudget').onclick=()=>{
   const v=$('#dailyBudgetInput').value;
   s.dailyTokenBudget=v===''?null:Number(v);
   save();toast('Budget saved');
+ };
+ $('#saveOtlpEndpoint').onclick=()=>{
+  s.otlpEndpoint=$('#otlpEndpointInput').value.trim();
+  save();toast('OTLP endpoint saved');
+ };
+ $('#saveEmbeddingModel').onclick=()=>{
+  vs.embeddingModel=$('#embeddingModelInput').value.trim();
+  save();toast('Embedding model saved');
+ };
+ $('#reindexVectorSearch').onclick=()=>{
+  const count=activeCustomObjects().reduce((sum,o)=>sum+(data[o.key]||[]).length,0);
+  vs.embeddedCount=count;vs.pendingCount=0;vs.lastReindexAt=new Date().toISOString();
+  save();toast('Reindexed');renderLlmMcpSubTab();
  };
  $('#addAiProvider').onclick=()=>aiProviderModal();
  body.querySelectorAll('[data-edit-provider]').forEach(b=>b.onclick=()=>aiProviderModal(providers.find(p=>p.id===b.dataset.editProvider)));
@@ -5157,8 +5394,8 @@ function aiAgentsTab(body){
  const agents=data.aiAgents||[];
  body.innerHTML=`<div class="panel">
  <div class="panel-head"><h3>AI Agents</h3><button class="btn btn-primary" id="addAgent">+ New agent</button></div>
- <p class="muted" style="font-size:13px">Each agent is a persona layered over a set of actions it can take, with its own persistent memory and attached skills - real, structured data in this browser; chatting with one simulates the reply with a keyword match, since this static demo has no server to run a real tool-calling loop from.</p>
- <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-guardrails-agent="${a.id}">Guardrails</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
+ <p class="muted" style="font-size:13px">Each agent is a persona layered over a set of actions it can take, with its own persistent memory and attached skills - real, structured data in this browser; chatting with one simulates the reply with a keyword match, since this static demo has no server to run a real tool-calling loop from. A supervisor agent with no actions of its own can delegate to named sub-agents instead (depth-guarded against runaway recursion, same as the real edition).</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Delegates to</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${(a.delegateAgentIds||[]).length||'—'}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-guardrails-agent="${a.id}">Guardrails</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
  <div id="agentChatWrap"></div>
  <div id="agentMemoryWrap"></div>
  <div id="agentGuardrailsWrap"></div>
@@ -5191,8 +5428,7 @@ function aiAgentsTab(body){
 // The one guard the real edition does enforce in code (loop detection on
 // 3 identical consecutive tool calls) needs the real provider-call loop
 // this static demo's keyword-matched replies don't have - not mirrored
-// here, same boundary aiAgentsTab's own doc comment already draws for
-// delegation.
+// here.
 function renderAgentGuardrailsPanel(a,wrap){
  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>${a.icon} ${a.name}'s guardrails</h4><p class="muted" style="font-size:13px">An operational-boundary statement included in this agent's system prompt - the model is instructed to respect it, but it isn't independently enforced.</p><textarea id="agentGuardrailsInput" style="width:100%;min-height:120px;font-family:monospace">${a.guardrailsMd||''}</textarea><div style="margin-top:8px"><button class="btn btn-primary" id="saveAgentGuardrails">Save guardrails</button></div></div>`;
  $('#saveAgentGuardrails').onclick=()=>{a.guardrailsMd=$('#agentGuardrailsInput').value;save();toast('Guardrails saved')};
@@ -5238,6 +5474,7 @@ function aiAgentModal(agent){
  <div class="field full"><label>Persona / instructions</label><textarea name="systemPrompt" style="width:100%;min-height:80px" required>${agent?.systemPrompt||''}</textarea></div>
  <div class="field full"><label>Actions</label><select name="actionNames" multiple style="min-height:120px">${DEMO_ALL_ACTIONS.map(n=>`<option value="${n}" ${(agent?.actionNames||[]).includes(n)?'selected':''}>${n}</option>`).join('')}</select><small class="field-help">Ctrl/Cmd-click to select several. Any admin action makes this agent Administrator-only in the real edition.</small></div>
  <div class="field full"><label>Skills</label><select name="skillIds" multiple>${(data.aiSkills||[]).map(s=>`<option value="${s.id}" ${(agent?.skillIds||[]).includes(s.id)?'selected':''}>${s.name}</option>`).join('')}</select></div>
+ <div class="field full"><label>Delegates to (optional)</label><select name="delegateAgentIds" multiple>${(data.aiAgents||[]).filter(a=>!agent||a.id!==agent.id).map(a=>`<option value="${a.id}" ${(agent?.delegateAgentIds||[]).includes(a.id)?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select><small class="field-help">A supervisor agent with no actions of its own hands the request to the first active delegate picked here instead - depth-guarded against runaway recursion.</small></div>
  <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-agent>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save agent':'Create agent'}</button></div>
  </form>`;
  modal(isEdit?`Edit ${agent.name}`:'New agent',body);
@@ -5247,9 +5484,10 @@ function aiAgentModal(agent){
   const fd=new FormData(e.target);
   const actionNames=Array.from(e.target.elements.actionNames.selectedOptions).map(o=>o.value);
   const skillIds=Array.from(e.target.elements.skillIds.selectedOptions).map(o=>o.value);
-  const obj={name:fd.get('name'),icon:fd.get('icon'),description:fd.get('description')||'',systemPrompt:fd.get('systemPrompt'),actionNames,skillIds};
+  const delegateAgentIds=Array.from(e.target.elements.delegateAgentIds.selectedOptions).map(o=>o.value);
+  const obj={name:fd.get('name'),icon:fd.get('icon'),description:fd.get('description')||'',systemPrompt:fd.get('systemPrompt'),actionNames,skillIds,delegateAgentIds};
   if(isEdit)Object.assign(agent,obj);
-  else{obj.id='agt_'+uid();obj.isActive=true;obj.memoryMd='';obj.delegateAgentIds=[];data.aiAgents.push(obj)}
+  else{obj.id='agt_'+uid();obj.isActive=true;obj.memoryMd='';data.aiAgents.push(obj)}
   save();closeModal();renderView();
  };
  if(isEdit)$('[data-delete-agent]').onclick=()=>{data.aiAgents=data.aiAgents.filter(a=>a.id!==agent.id);save();closeModal();renderView()};
@@ -5295,16 +5533,29 @@ function aiAgentRoutingPanel(agent,wrap){
   save();toast('Routing saved');
  };
 }
-function chatSimAgentReply(agent,text){
+// AI & Agentic Layer, Phase 6/6b mirror - delegate_to_agent: a supervisor
+// agent with no actions of its own hands the request to its first active
+// delegate instead of falling back to "can't do anything", the same
+// pattern the homepage's own Delegation & Pipelines bento tile promotes.
+// depth caps at 3 hops - a real, if trivial, guard against a delegation
+// cycle (A delegates to B delegates to A...), matching the real edition's
+// own "depth-guarded against runaway recursion" language.
+function chatSimAgentReply(agent,text,depth){
+ depth=depth||0;
  const actionNames=agent.actionNames||[];
  const usesRecords=actionNames.some(n=>DEMO_RECORD_ACTIONS.includes(n));
  const usesAdmin=actionNames.some(n=>DEMO_ADMIN_ACTIONS.includes(n));
+ const persona=(agent.systemPrompt||'').slice(0,80);
+ const personaSuffix=persona?` - persona: "${persona}${(agent.systemPrompt||'').length>80?'...':''}"`:'';
+ if(!usesRecords&&!usesAdmin&&depth<3){
+  const delegate=(agent.delegateAgentIds||[]).map(id=>(data.aiAgents||[]).find(a=>a.id===id&&a.id!==agent.id&&a.isActive)).find(Boolean);
+  if(delegate)return `No actions of its own - delegating to ${delegate.icon} ${delegate.name} (Simulated as "${agent.name}"${personaSuffix}, via delegate_to_agent):\n${chatSimAgentReply(delegate,text,depth+1)}`;
+ }
  let base;
  if(usesRecords)base=chatSimReplyRecords(text);
  else if(usesAdmin)base=chatSimReplyAdmin(text);
- else base="This agent has no actions granted, so it can only talk in persona - it can't look anything up or take action.";
- const persona=(agent.systemPrompt||'').slice(0,80);
- return `${base} (Simulated as "${agent.name}"${persona?` - persona: "${persona}${(agent.systemPrompt||'').length>80?'...':''}"`:''})`;
+ else base="This agent has no actions granted and no delegate configured, so it can only talk in persona - it can't look anything up or take action.";
+ return `${base} (Simulated as "${agent.name}"${personaSuffix})`;
 }
 function chatSimAgentPanel(agent,body){
  ensureChatSim();
@@ -5564,6 +5815,146 @@ function aiAgentPipelineModal(pipeline){
   save();closeModal();renderView();
  };
  if(isEdit)$('[data-delete-pipeline]').onclick=()=>{data.aiAgentPipelines=data.aiAgentPipelines.filter(p=>p.id!==pipeline.id);save();closeModal();renderView()};
+}
+
+// ---- AI & Agentic Layer, Phase 7d mirror: Evaluation Harness ---------------
+// A Suite is a set of golden test cases - an input plus a plain-English
+// success criteria - run against one AI Agent or Pipeline, same shape as
+// core::models::ai_eval's AiEvalSuite/AiEvalCase. The real edition grades
+// each case with an LLM-as-judge call; this static demo has no server to
+// make one from, so simEvalJudge below simulates the judge with a keyword-
+// overlap heuristic against the same chatSimAgentReply/runAiAgentPipelineNow
+// output every other AI Agent Foundry surface already simulates from -
+// labeled as such, not presented as a real grading call.
+function aiEvalTab(body){
+ const suites=data.aiEvalSuites||[];
+ const agents=data.aiAgents||[];
+ const pipelines=data.aiAgentPipelines||[];
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>Evaluations</h3><button class="btn btn-primary" id="addEvalSuite" ${(agents.length||pipelines.length)?'':'disabled'}>+ New suite</button></div>
+ <p class="muted" style="font-size:13px">A Suite is a set of golden test cases - an input plus a plain-English success criteria - run against one AI Agent or Pipeline. Real, structured data and a real grading pass in this browser; like the rest of AI Agent Foundry, the "judge" simulates a keyword-match pass/fail rather than a real LLM-as-judge call, since this static demo has no server to make one from.</p>
+ ${(agents.length||pipelines.length)?'':'<p class="empty-state">Create at least one AI Agent or Pipeline first.</p>'}
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Target</th><th>Cases</th><th>Actions</th></tr></thead><tbody>${suites.map(s=>`<tr><td><b>${s.name}</b>${s.description?`<br><small class="muted">${s.description}</small>`:''}</td><td>${evalTargetName(s)}</td><td>${(s.cases||[]).length}</td><td><div class="actions"><button class="icon-btn" data-run-eval="${s.id}" ${(s.cases||[]).length?'':'disabled'}>Run / History</button><button class="icon-btn" data-edit-eval="${s.id}">Edit</button><button class="icon-btn" data-del-eval="${s.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${suites.length?'':'<div class="empty">No eval suites yet</div>'}</div>
+ <div id="evalDetailWrap"></div>
+ </div>`;
+ $('#addEvalSuite').onclick=()=>aiEvalSuiteModal();
+ body.querySelectorAll('[data-edit-eval]').forEach(b=>b.onclick=()=>aiEvalSuiteModal(suites.find(s=>s.id===b.dataset.editEval)));
+ body.querySelectorAll('[data-del-eval]').forEach(b=>b.onclick=()=>{data.aiEvalSuites=data.aiEvalSuites.filter(s=>s.id!==b.dataset.delEval);save();renderView()});
+ body.querySelectorAll('[data-run-eval]').forEach(b=>b.onclick=()=>{
+  const s=suites.find(x=>x.id===b.dataset.runEval);
+  renderEvalDetail(s,$('#evalDetailWrap'));
+ });
+}
+function evalTargetName(s){
+ if(s.targetType==='pipeline'){const p=(data.aiAgentPipelines||[]).find(x=>x.id===s.targetId);return p?p.name:'(deleted pipeline)'}
+ const a=(data.aiAgents||[]).find(x=>x.id===s.targetId);return a?`${a.icon} ${a.name}`:'(deleted agent)';
+}
+function mountEvalCasesEditor(container,initialCases){
+ let cases=(initialCases||[]).map(c=>({...c}));
+ function syncFromDom(){
+  const form=container.closest('form');
+  cases=cases.map((c,idx)=>({
+   id:c.id,
+   inputText:form.elements[`ecase${idx}_input`]?.value||'',
+   successCriteria:form.elements[`ecase${idx}_criteria`]?.value||'',
+  }));
+ }
+ function render(){
+  container.innerHTML=(cases.length?cases.map((c,idx)=>`<div class="builder-row-card" style="align-items:flex-start">
+   <span class="muted" style="font-size:12px;min-width:16px;margin-top:8px">${idx+1}.</span>
+   <input name="ecase${idx}_input" value="${c.inputText||''}" placeholder="Input to send the target" style="flex:1;min-width:200px">
+   <input name="ecase${idx}_criteria" value="${c.successCriteria||''}" placeholder="What a correct response looks like" style="flex:1;min-width:200px">
+   <button type="button" class="builder-row-remove" data-ecase-remove="${idx}" title="Remove case">✕</button>
+  </div>`).join(''):'<p class="muted" style="font-size:13px">No cases yet.</p>')+`<button type="button" class="btn btn-secondary" data-ecase-add>+ Add case</button>`;
+  wire();
+ }
+ function wire(){
+  container.querySelector('[data-ecase-add]').onclick=()=>{syncFromDom();cases.push({inputText:'',successCriteria:''});render()};
+  container.querySelectorAll('[data-ecase-remove]').forEach(b=>b.onclick=()=>{syncFromDom();cases.splice(Number(b.dataset.ecaseRemove),1);render()});
+ }
+ render();
+ return {getCases:()=>{syncFromDom();return cases}};
+}
+function aiEvalSuiteModal(suite){
+ const isEdit=!!suite;
+ const agents=data.aiAgents||[];
+ const pipelines=data.aiAgentPipelines||[];
+ const targetType=suite?.targetType||'agent';
+ const targetOptionsHtml=t=>(t==='agent'?agents:pipelines).map(x=>`<option value="${x.id}" ${suite?.targetId===x.id?'selected':''}>${x.icon?x.icon+' ':''}${x.name}</option>`).join('');
+ const body=`<form id="evalSuiteForm" class="form-grid">
+ <div class="field full"><label>Name</label><input name="name" value="${suite?.name||''}" required></div>
+ <div class="field full"><label>Description (optional)</label><input name="description" value="${suite?.description||''}"></div>
+ <div class="field"><label>Target type</label><select name="targetType" id="evalTargetType"><option value="agent" ${targetType==='agent'?'selected':''}>AI Agent</option><option value="pipeline" ${targetType==='pipeline'?'selected':''}>Pipeline</option></select></div>
+ <div class="field"><label>Target</label><select name="targetId" id="evalTargetId" required>${targetOptionsHtml(targetType)}</select></div>
+ <div class="field full"><label>Cases</label><div id="evalCasesWrap"></div></div>
+ <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-eval>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save suite':'Create suite'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${suite.name}`:'New suite',body);
+ $('[data-close]').onclick=closeModal;
+ const casesEditor=mountEvalCasesEditor($('#evalCasesWrap'),suite?.cases||[]);
+ $('#evalTargetType').onchange=e=>{$('#evalTargetId').innerHTML=targetOptionsHtml(e.target.value)};
+ $('#evalSuiteForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const cases=casesEditor.getCases().filter(c=>c.inputText&&c.successCriteria);
+  if(!cases.length)return alert('Add at least one case with both an input and a success criteria.');
+  if(!fd.get('targetId'))return alert('Create at least one AI Agent or Pipeline first, then pick it as the target.');
+  const obj={name:fd.get('name'),description:fd.get('description')||'',targetType:fd.get('targetType'),targetId:fd.get('targetId'),cases:cases.map(c=>({id:c.id||('ecs_'+uid()),inputText:c.inputText,successCriteria:c.successCriteria}))};
+  if(isEdit)Object.assign(suite,obj);
+  else{obj.id='evl_'+uid();obj.runs=[];data.aiEvalSuites.push(obj)}
+  save();closeModal();renderView();
+ };
+ if(isEdit)$('[data-delete-eval]').onclick=()=>{data.aiEvalSuites=data.aiEvalSuites.filter(s=>s.id!==suite.id);save();closeModal();renderView()};
+}
+// Keyword-overlap heuristic standing in for a real LLM-as-judge call - at
+// least 40% of the success criteria's own significant (4+ letter) words
+// have to show up in the actual output for a pass. A criteria with no
+// such words (e.g. "Anything reasonable") passes by default rather than
+// failing on a technicality no one intended to grade.
+function simEvalJudge(caseObj,actualOutput){
+ const criteriaWords=(caseObj.successCriteria||'').toLowerCase().split(/\W+/).filter(w=>w.length>3);
+ const output=(actualOutput||'').toLowerCase();
+ const hits=criteriaWords.filter(w=>output.includes(w));
+ const passed=criteriaWords.length===0||hits.length/criteriaWords.length>=0.4;
+ const reasoning=criteriaWords.length===0
+  ?'No specific keywords in the success criteria to check against - passing by default.'
+  :`Matched ${hits.length}/${criteriaWords.length} key term(s) from the success criteria in the response${hits.length?` (${hits.slice(0,5).join(', ')})`:''}.`;
+ return {passed,reasoning};
+}
+function runAiEvalSuiteNow(suite){
+ const target=suite.targetType==='pipeline'
+  ?(data.aiAgentPipelines||[]).find(p=>p.id===suite.targetId)
+  :(data.aiAgents||[]).find(a=>a.id===suite.targetId);
+ const results=(suite.cases||[]).map(c=>{
+  if(!target)return{id:uid(),caseId:c.id,inputText:c.inputText,successCriteria:c.successCriteria,actualOutput:null,passed:false,judgeReasoning:null,error:`This suite's target ${suite.targetType} was deleted.`};
+  const actualOutput=suite.targetType==='pipeline'?(runAiAgentPipelineNow(target,c.inputText).finalOutput||'(no output)'):chatSimAgentReply(target,c.inputText);
+  const{passed,reasoning}=simEvalJudge(c,actualOutput);
+  return{id:uid(),caseId:c.id,inputText:c.inputText,successCriteria:c.successCriteria,actualOutput,passed,judgeReasoning:reasoning,error:null};
+ });
+ const run={id:uid(),startedAt:new Date().toISOString(),finishedAt:new Date().toISOString(),status:'completed',passedCount:results.filter(r=>r.passed).length,failedCount:results.filter(r=>!r.passed).length,results};
+ suite.runs=suite.runs||[];
+ suite.runs.unshift(run);
+ if(suite.runs.length>10)suite.runs.length=10;
+ save();
+ return run;
+}
+function renderEvalDetail(suite,wrap){
+ wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4 style="margin-top:0">${suite.name}</h4><button class="btn btn-primary" id="runEvalSuiteBtn">Run suite</button><div id="evalRunResult"></div><div id="evalRunHistory" style="margin-top:12px"></div></div>`;
+ renderEvalRunHistory(suite,$('#evalRunHistory'));
+ $('#runEvalSuiteBtn').onclick=()=>{
+  const run=runAiEvalSuiteNow(suite);
+  renderEvalRunResult(run,$('#evalRunResult'));
+  renderEvalRunHistory(suite,$('#evalRunHistory'));
+ };
+}
+function renderEvalRunResult(run,el){
+ el.innerHTML=`<div style="margin-top:12px"><span class="badge${run.failedCount===0?' badge-success':' badge-danger'}">${run.passedCount}/${run.passedCount+run.failedCount} passed</span>
+ ${run.results.map(r=>`<div style="font-size:13px;border-top:1px dashed var(--line);padding:6px 0"><div style="display:flex;gap:8px;align-items:center"><span class="badge${r.passed?' badge-success':' badge-danger'}">${r.passed?'PASS':'FAIL'}</span><b>${r.inputText}</b></div><div class="muted">criteria: ${r.successCriteria}</div>${r.actualOutput?`<div>response: ${r.actualOutput}</div>`:''}${r.judgeReasoning?`<div class="muted">judge: ${r.judgeReasoning}</div>`:''}${r.error?`<div style="color:#b23b3b">error: ${r.error}</div>`:''}</div>`).join('')}
+ </div>`;
+}
+function renderEvalRunHistory(suite,el){
+ const runs=suite.runs||[];
+ el.innerHTML=`<b style="font-size:13px">Recent runs</b>${runs.length?runs.map(r=>`<div style="font-size:12px;display:flex;gap:8px;padding:3px 0;align-items:center"><span class="badge${r.failedCount===0?' badge-success':' badge-danger'}">${r.passedCount}/${r.passedCount+r.failedCount} passed</span><span class="muted">${new Date(r.startedAt).toLocaleString()}</span></div>`).join(''):'<p class="muted" style="font-size:13px">No runs yet.</p>'}`;
 }
 
 // ---- Multi-condition (+ OR group) editor, shared by the Business Rules
@@ -6238,7 +6629,7 @@ function kpisTab(body){
 }
 
 function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links"><a href="/platform">Platform</a><a href="/compare">Compare</a><a href="/help">Documentation</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div class="nav-actions"><a class="btn btn-primary mobile-try" href="/demo">Try Online →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden><a href="/platform">Platform</a><a href="/compare">Compare</a><a href="/help">Documentation</a><a href="/download">Download</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a><hr><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
-function publicFooter(){return `<footer class="footer"><div class="container footer-grid"><div><a class="brand footer-brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><span class="muted">The open-source platform for building your own business app - a complete CRM out of the box.</span></div><div><strong>Product</strong><a href="/platform">Platform</a><a href="/compare">Compare</a><a href="/help">Documentation</a><a href="/download">Download</a></div><div><strong>Development</strong><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div><strong>Trust</strong><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/LICENSE" target="_blank">MIT License</a><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/SECURITY.md" target="_blank">Security</a><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a><a href="/platform#data-privacy">Data & Privacy</a></div><div><strong>Creator</strong><a href="https://vikramgrover.com">VikramGrover.com</a></div></div><div class="container footer-bottom"><span>© 2026 Lanesra OS</span><span>Created by Vikram Grover</span></div></footer>`}
+function publicFooter(){return `<footer class="footer"><div class="container footer-grid"><div><a class="brand footer-brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><span class="muted">The open-source, self-hosted operating system for running your business and its AI agents on data you own.</span></div><div><strong>Product</strong><a href="/platform">Platform</a><a href="/compare">Compare</a><a href="/help">Documentation</a><a href="/download">Download</a></div><div><strong>Development</strong><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div><strong>Trust</strong><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/LICENSE" target="_blank">MIT License</a><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/SECURITY.md" target="_blank">Security</a><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a><a href="/platform#data-privacy">Data & Privacy</a></div><div><strong>Creator</strong><a href="https://vikramgrover.com">VikramGrover.com</a></div></div><div class="container footer-bottom"><span>© 2026 Lanesra OS</span><span>Created by Vikram Grover</span></div></footer>`}
 function roadmapPage(){
  document.title='Roadmap & Backlog — Lanesra OS';
  setPageMeta('Everything shipped in Lanesra OS - CRM, no-code platform, App Catalog, Deployment Management, Integration Hub, the AI & Agentic Layer (BYO LLM key, MCP server, chat assistant, AI Agent Foundry, orchestration), and full product documentation - what\'s being built next, and what\'s still proposed. Compiled directly from the working codebase, not a wishlist.');
