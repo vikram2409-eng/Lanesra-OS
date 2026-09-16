@@ -705,6 +705,33 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   breakdown of what each closes and what's still deferred. See
   `core/src/services/relationship_service.rs`, `business_rule_service.rs`,
   `workflow_service.rs`, `effective_dating_service.rs`.
+- **Enterprise Access Foundation (Phase 1 of 6)**: an Organization (one per
+  workspace) containing Organization Units in a materialized-path hierarchy
+  (`/root-id/child-id/.../` + `depth`, so a subtree move is one bounded
+  `UPDATE ... WHERE path LIKE ?`, not a second closure-table structure to
+  keep in sync) and Work Teams with time-bounded memberships - ending a
+  membership never touches any record's ownership, a regression the test
+  suite checks directly. Every record across Companies, Contacts,
+  Opportunities, Products, Quotes, Orders, Invoices, Contracts, Tasks and
+  Custom Objects now carries a structured Owner (a user or a team,
+  `record_owner_type`/`record_owner_id`) and an Owning Organization Unit,
+  with `ownership_version`/`assigned_at` bumped only on a real reassignment
+  and an `audit_events` row per transfer - reusing the existing generic
+  audit table rather than a new Security Activity feed. Bulk
+  dry-run/commit transfer reuses `bulk_action_service`'s existing
+  `BulkActionResult` shape rather than a parallel one. The legacy
+  `owner_user_id` column present on five tables is kept, read-only, as a
+  rollback safety net rather than dropped (SQLite can't rename/drop a
+  column safely without a full table rebuild). The "assign" capability
+  check is a deliberate placeholder (`ownership_service::require_assign_capability`,
+  requiring the existing Administrator role) - the real capability+scope
+  Access Role engine is Phase 2, not built yet. See
+  `core/src/services/organization_service.rs`, `org_unit_service.rs`,
+  `work_team_service.rs`, `ownership_service.rs`, and
+  `core/tests/access_foundation_org_structure.rs` /
+  `access_foundation_ownership.rs`. Mirrored in the online demo
+  (`app.js`) as real client-side state, same convention as every other
+  demo-mirrored feature.
 
 ## What's deferred to a later phase
 
@@ -714,6 +741,15 @@ docker run -p 8080:8080 -v lanesra-data:/data \
 - The Approval Framework, Data Quality Center, and Form Builder sections
   of the v1.3 spec - each is its own substantial subsystem, out of scope
   for the phases done so far
+- Access Foundation Phases 2-6 from the Enterprise Requirements
+  Specification (Organization/Org Units/Work Teams/ownership shipped
+  above is Phase 1 only): Access Control v1 (capability+scope Access
+  Roles, Record Scopes, an Access Inspector), v1.1 (Field Access
+  Policies, Capability Packs/Bundles, Access Groups, Record Grants), v1.2
+  (Record Access Policies, stronger bulk-reassignment audit), AI Access
+  v1 (AI Action Levels, Agent/Integration Identities, data boundaries),
+  and Enterprise Identity v2 (OIDC/SAML/SCIM, external users) - tracked
+  as GitHub issues, not built yet
 - Making session auto-lock's 15-minute timeout admin-configurable
 - A nicer inline banner for non-blocking business-rule `show_message`
   actions - currently a plain `alert()` (see `src/lib/ruleMessages.ts`)

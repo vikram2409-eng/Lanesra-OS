@@ -1023,4 +1023,69 @@ export const HELP_CATEGORIES: HelpCategory[] = [
       },
     ],
   },
+  {
+    key: "organization-access-control",
+    label: "Organization & Access Control",
+    icon: "🔐",
+    blurb:
+      "Who reports to whom, and who owns what. Organizations, an Organization Unit hierarchy, Work Teams, and a structured Owner + Owning Organization Unit on every record - Phase 1 of a six-phase Access Foundation.",
+    topics: [
+      {
+        slug: "organization-and-org-units",
+        title: "Organizations & Organization Units",
+        summary:
+          "One Organization per workspace, an Organization Unit hierarchy you can create, edit and move - with an impact preview before any move commits.",
+        sections: [
+          {
+            heading: "One Organization per workspace",
+            bodyHtml:
+              "<p>Every workspace has exactly one Organization - name, legal name, code, status, default currency, locale and timezone - bootstrapped automatically the first time any screen in this category is opened. Edit it from Admin → Organization.</p>",
+          },
+          {
+            heading: "Organization Units: a real hierarchy",
+            bodyHtml:
+              "<p>Admin → Organization Units lists every unit ordered by its own materialized path, so a parent always sorts before its descendants without a client-side tree-building pass. A workspace always has exactly one root unit with no parent, provisioned by the backend's own bootstrap - it can't be created, moved or deleted here. New Unit creates a child of whichever unit you're viewing.</p>",
+          },
+          {
+            heading: "Moving a unit: impact preview first",
+            bodyHtml:
+              "<p>Move on any non-root unit previews the effect before anything writes: how many descendant units, and how many owned records across every object type, sit in that subtree. Only after reviewing the preview does a move actually commit - it recomputes just that subtree's stored paths, not the whole hierarchy.</p>",
+          },
+          {
+            heading: "Deleting a unit",
+            bodyHtml:
+              "<p>Blocked while child units or owned records still point at it - deactivate instead if you need it out of active use without breaking what references it, the same delete/deactivate split every other admin builder in this product already follows.</p>",
+          },
+        ],
+      },
+      {
+        slug: "work-teams-and-ownership",
+        title: "Work Teams & Record Ownership",
+        summary:
+          "Time-bounded team memberships, and the Owner + Owning Organization Unit fields now on every record - changed individually or via bulk reassignment.",
+        sections: [
+          {
+            heading: "Work Teams & memberships",
+            bodyHtml:
+              "<p>Admin → Work Teams defines named teams - a type, a primary Organization Unit, an optional owning user, and whether the team can own records (most can). Members opens that team's membership list: add a user with a role-in-team and an optional effective-date window, or end a membership.</p><p><b>Ending a membership never touches any record the departing member owns.</b> Team membership and record ownership are deliberately independent.</p>",
+          },
+          {
+            heading: "Owner + Owning Organization Unit on every record",
+            bodyHtml:
+              "<p>Every Company, Contact, Opportunity, Product, Quote, Order, Invoice, Contract, Task and Custom Object record carries an Owner (a user or a team, not free text) and an Owning Organization Unit, both defaulted automatically on create - Owner to the creating user, Owning Organization Unit to their own primary unit.</p>",
+          },
+          {
+            heading: "Changing an owner - one record or many",
+            bodyHtml:
+              "<p>Change it on the record's own edit form like any other field, or select several records on a list screen and use the bulk Change Owner action - pick a new Owner and, optionally, a new Owning Organization Unit; anything left blank stays unchanged. A dry run flags any ineligible record before anything writes.</p>",
+          },
+          {
+            heading: "Ownership history",
+            bodyHtml:
+              "<p>An ownership-version counter and an assigned_at timestamp advance only on a genuine reassignment, never a no-op save, and every real transfer writes a row to the record's own Activity/audit view - the same audit trail every other create/update/archive already appears in.</p>",
+          },
+        ],
+      },
+    ],
+  },
 ];

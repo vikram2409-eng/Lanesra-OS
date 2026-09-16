@@ -34,6 +34,13 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 - **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
 - **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
 
+**Organization & Access Control — who owns what, and who reports to whom:**
+
+- **Organizations & Organization Units** — a hierarchy of Organization Units (regions, divisions, teams) under one Organization per workspace, with create/edit and a move-with-impact-preview (descendant units and owned records affected, before you commit)
+- **Work Teams** — named teams with time-bounded memberships; ending a membership never reassigns anything a team member owned
+- **Record ownership** — every Company, Contact, Opportunity, Product, Quote, Order, Invoice, Contract, Task and Custom Object record carries a structured Owner (a user or a team) and an Owning Organization Unit, defaulted on create and changeable individually or via bulk reassignment, with a full transfer history
+- Phase 1 of a six-phase Access Foundation — see the [roadmap](https://lanesraos.com/roadmap) for what's next (capability-scoped Access Roles, Field Access Policies, Record Grants, AI Action Levels, and Enterprise Identity/SSO)
+
 **The core CRM — your Business OS:**
 
 - **Companies, Contacts & Sales Pipeline** — connected customer records with a Kanban/list opportunity pipeline
