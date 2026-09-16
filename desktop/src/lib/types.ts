@@ -1488,6 +1488,7 @@ export interface CustomObjectDefinition {
   prefix: string;
   digits: number;
   is_active: boolean;
+  ownership_mode: OwnershipMode;
   created_at: string;
   updated_at: string;
 }
@@ -3045,4 +3046,150 @@ export interface IntegrationJobRun {
   error_message: string | null;
   cursor_before: string | null;
   cursor_after: string | null;
+}
+
+// Enterprise Access Foundation, Phase 1 (spec §1-2): Organization,
+// Organization Units, Work Teams, and Record Ownership. "Organization" is
+// a view over the current workspace plus its org-specific columns, not a
+// separate entity - see organization_service.rs's own doc comment.
+export interface Organization {
+  workspace_id: string;
+  name: string;
+  legal_name: string | null;
+  code: string;
+  status: string;
+  default_currency: string;
+  locale: string;
+  timezone: string;
+  root_org_unit_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationUpdate {
+  code: string;
+  status: string;
+}
+
+export const ORG_UNIT_TYPES = ["Division", "Region", "Department", "Branch", "BusinessLine", "Custom"] as const;
+export type OrgUnitType = (typeof ORG_UNIT_TYPES)[number];
+
+export interface OrgUnit {
+  id: string;
+  workspace_id: string;
+  name: string;
+  unit_type: string;
+  parent_org_unit_id: string | null;
+  manager_user_id: string | null;
+  status: string;
+  effective_from: string | null;
+  effective_to: string | null;
+  default_team_id: string | null;
+  path: string;
+  depth: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrgUnitInput {
+  name: string;
+  unit_type: string;
+  parent_org_unit_id: string | null;
+  manager_user_id: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
+export interface OrgUnitUpdate {
+  name: string;
+  unit_type: string;
+  manager_user_id: string | null;
+  status: string;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
+export interface OrgUnitMoveImpact {
+  descendant_unit_count: number;
+  owned_record_counts: [string, number][];
+}
+
+export const WORK_TEAM_TYPES = ["Operational", "Queue", "Project", "CrossFunctional", "ExternalPartner"] as const;
+export type WorkTeamType = (typeof WORK_TEAM_TYPES)[number];
+
+export interface WorkTeam {
+  id: string;
+  workspace_id: string;
+  name: string;
+  code: string;
+  team_type: string;
+  primary_org_unit_id: string;
+  owner_user_id: string | null;
+  can_own_records: boolean;
+  status: string;
+  effective_from: string | null;
+  effective_to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkTeamInput {
+  name: string;
+  code: string;
+  team_type: string;
+  primary_org_unit_id: string;
+  owner_user_id: string | null;
+  can_own_records: boolean;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
+export interface WorkTeamUpdate {
+  name: string;
+  team_type: string;
+  primary_org_unit_id: string;
+  owner_user_id: string | null;
+  can_own_records: boolean;
+  status: string;
+  effective_from: string | null;
+  effective_to: string | null;
+}
+
+export interface TeamMembership {
+  id: string;
+  workspace_id: string;
+  team_id: string;
+  user_id: string;
+  role_in_team: string | null;
+  effective_from: string;
+  effective_to: string | null;
+  created_at: string;
+}
+
+export const OWNER_TYPES = ["USER", "TEAM"] as const;
+export type OwnerType = (typeof OWNER_TYPES)[number];
+
+export interface OwnerRef {
+  owner_type: OwnerType;
+  owner_id: string;
+}
+
+export const OWNERSHIP_MODES = ["USER_TEAM_OWNED", "ORG_OWNED", "PARENT_CONTROLLED", "SYSTEM_OWNED"] as const;
+export type OwnershipMode = (typeof OWNERSHIP_MODES)[number];
+
+export interface RecordOwnership {
+  owner: OwnerRef | null;
+  owning_org_unit_id: string | null;
+  assigned_at: string | null;
+  ownership_version: number;
+}
+
+export interface OwnershipIneligible {
+  id: string;
+  reason: string;
+}
+
+export interface OwnershipTransferDryRun {
+  eligible_ids: string[];
+  ineligible: OwnershipIneligible[];
 }

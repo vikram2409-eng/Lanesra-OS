@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { Users } from "../users/Users";
+import { OrganizationAdmin } from "./OrganizationAdmin";
+import { OrgUnitsAdmin } from "./OrgUnitsAdmin";
+import { WorkTeamsAdmin } from "./WorkTeamsAdmin";
 import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
 import { RelationshipsAdmin } from "./RelationshipsAdmin";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
@@ -62,6 +65,9 @@ function resizeImageToPngBase64(file: File): Promise<string> {
 
 type AdminTab =
   | "users"
+  | "organization"
+  | "orgUnits"
+  | "teams"
   | "profile"
   | "objects"
   | "relationships"
@@ -87,6 +93,9 @@ type AdminTab =
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "users", label: "Users" },
+  { key: "organization", label: "Organization" },
+  { key: "orgUnits", label: "Organization Units" },
+  { key: "teams", label: "Work Teams" },
   { key: "profile", label: "Business profile" },
   { key: "objects", label: "Custom Objects" },
   { key: "relationships", label: "Relationships" },
@@ -136,7 +145,7 @@ function tabLabel(key: AdminTab): string {
 // than leaving it out until that consolidation actually happens.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
-  { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users"] },
+  { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams"] },
   { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields"] },
   { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
@@ -250,6 +259,9 @@ export function AdminPanel() {
       <h2>{tabLabel(tab)}</h2>
 
       {tab === "users" && <Users onOpenHelp={openHelpTopic} />}
+      {tab === "organization" && <OrganizationAdmin />}
+      {tab === "orgUnits" && <OrgUnitsAdmin />}
+      {tab === "teams" && <WorkTeamsAdmin />}
 
       {tab === "profile" && workspace.data && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>

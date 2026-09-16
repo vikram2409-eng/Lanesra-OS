@@ -88,6 +88,8 @@ pub fn create(
         order_repo::insert_line(conn, &id, line_input, calc.line_total_cents, idx as i64)?;
     }
 
+    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Order", &id, actor_user_id, None)?;
+
     audit_repo::record(
         conn,
         &workspace_id,

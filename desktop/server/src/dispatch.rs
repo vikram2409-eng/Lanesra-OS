@@ -35,7 +35,11 @@ use lanesra_core::models::integration::{
     ExternalObjectInput, IntegrationJobInput, IntegrationSettingsUpdate, MappingInput, WebhookInput,
 };
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
+use lanesra_core::models::org_unit::{OrgUnitInput, OrgUnitUpdate};
+use lanesra_core::models::organization::OrganizationUpdate;
+use lanesra_core::models::ownership::OwnerRef;
 use lanesra_core::models::publisher::PublisherInput;
+use lanesra_core::models::work_team::{WorkTeamInput, WorkTeamUpdate};
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::saved_view::SavedViewInput;
@@ -45,7 +49,7 @@ use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
-use lanesra_core::repositories::{notification_repo, workspace_repo};
+use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
 use lanesra_core::services::{
     activity_service,
     ai_service,
@@ -59,10 +63,11 @@ use lanesra_core::services::{
     external_object_service,
     industry_package_service,
     integration_job_service, integration_log_service,
-    invoice_service, mapping_service, numbering_service, opportunity_service, order_service, product_service,
-    publisher_service,
+    invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
+    ownership_service,
+    publisher_service, product_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
-    user_service, vector_search_service, webhook_service, workflow_service, workspace_service,
+    user_service, vector_search_service, webhook_service, work_team_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -562,6 +567,112 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
         "delete_custom_object" => {
             custom_object_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+
+        "get_organization" => to_value(organization_service::get(conn, &require_workspace_id(conn)?, actor)?),
+        "update_organization" => {
+            let input: OrganizationUpdate = arg(args, "input")?;
+            to_value(organization_service::update(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "list_org_units" => to_value(org_unit_service::list_tree(conn, &require_workspace_id(conn)?)?),
+        "create_org_unit" => {
+            let input: OrgUnitInput = arg(args, "input")?;
+            to_value(org_unit_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_org_unit" => {
+            let id: String = arg(args, "id")?;
+            let input: OrgUnitUpdate = arg(args, "input")?;
+            to_value(org_unit_service::update(conn, &id, &input, actor)?)
+        }
+        "preview_move_org_unit" => {
+            let id: String = arg(args, "id")?;
+            let new_parent_id: String = arg(args, "newParentId")?;
+            to_value(org_unit_service::preview_move(conn, &require_workspace_id(conn)?, &id, &new_parent_id, actor)?)
+        }
+        "move_org_unit" => {
+            let id: String = arg(args, "id")?;
+            let new_parent_id: String = arg(args, "newParentId")?;
+            to_value(org_unit_service::move_unit(conn, &require_workspace_id(conn)?, &id, &new_parent_id, actor)?)
+        }
+        "delete_org_unit" => {
+            org_unit_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "list_work_teams" => to_value(work_team_service::list(conn, &require_workspace_id(conn)?)?),
+        "create_work_team" => {
+            let input: WorkTeamInput = arg(args, "input")?;
+            to_value(work_team_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_work_team" => {
+            let id: String = arg(args, "id")?;
+            let input: WorkTeamUpdate = arg(args, "input")?;
+            to_value(work_team_service::update(conn, &require_workspace_id(conn)?, &id, &input, actor)?)
+        }
+        "delete_work_team" => {
+            work_team_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "list_team_members" => {
+            let team_id: String = arg(args, "teamId")?;
+            to_value(work_team_service::list_members(conn, &team_id)?)
+        }
+        "add_team_member" => {
+            let team_id: String = arg(args, "teamId")?;
+            let user_id: String = arg(args, "userId")?;
+            let role_in_team: Option<String> = arg(args, "roleInTeam")?;
+            to_value(work_team_service::add_member(conn, &require_workspace_id(conn)?, &team_id, &user_id, role_in_team.as_deref(), actor)?)
+        }
+        "end_team_membership" => {
+            work_team_service::end_membership(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "get_record_owner" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let id: String = arg(args, "id")?;
+            to_value(ownership_service::get_owner(conn, &object_key, &id)?)
+        }
+        "set_record_owner" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let id: String = arg(args, "id")?;
+            let owner: OwnerRef = arg(args, "owner")?;
+            let owning_org_unit_id: Option<String> = arg(args, "owningOrgUnitId")?;
+            ownership_service::set_owner(conn, &require_workspace_id(conn)?, &object_key, &id, &owner, owning_org_unit_id.as_deref(), actor)?;
+            Ok(Value::Null)
+        }
+        "bulk_transfer_ownership_dry_run" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            let new_owner: OwnerRef = arg(args, "newOwner")?;
+            to_value(ownership_service::bulk_transfer_dry_run(conn, &require_workspace_id(conn)?, &object_key, &ids, &new_owner)?)
+        }
+        "bulk_transfer_ownership_commit" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let ids: Vec<String> = arg(args, "ids")?;
+            let new_owner: OwnerRef = arg(args, "newOwner")?;
+            let owning_org_unit_id: Option<String> = arg(args, "owningOrgUnitId")?;
+            to_value(ownership_service::bulk_transfer_commit(conn, &require_workspace_id(conn)?, &object_key, &ids, &new_owner, owning_org_unit_id.as_deref(), actor)?)
+        }
+        "list_user_org_units" => {
+            let user_id: String = arg(args, "userId")?;
+            to_value(user_repo::list_additional_org_units(conn, &user_id)?)
+        }
+        "set_user_primary_org_unit" => {
+            let user_id: String = arg(args, "userId")?;
+            let org_unit_id: String = arg(args, "orgUnitId")?;
+            user_repo::set_primary_org_unit(conn, &user_id, &org_unit_id)?;
+            Ok(Value::Null)
+        }
+        "add_user_org_unit" => {
+            let user_id: String = arg(args, "userId")?;
+            let org_unit_id: String = arg(args, "orgUnitId")?;
+            user_repo::add_additional_org_unit(conn, &require_workspace_id(conn)?, &user_id, &org_unit_id)?;
+            Ok(Value::Null)
+        }
+        "remove_user_org_unit" => {
+            let user_id: String = arg(args, "userId")?;
+            let org_unit_id: String = arg(args, "orgUnitId")?;
+            user_repo::remove_additional_org_unit(conn, &user_id, &org_unit_id)?;
             Ok(Value::Null)
         }
 

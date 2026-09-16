@@ -13,6 +13,7 @@ import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
@@ -613,6 +614,7 @@ function CompanyDetail({
         updatedAt={company.data.updated_at}
         updatedBy={company.data.updated_by}
       />
+      <OwnershipByline objectKey="Company" recordId={id} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (

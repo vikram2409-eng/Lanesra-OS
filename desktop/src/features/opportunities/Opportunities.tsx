@@ -9,6 +9,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
@@ -331,6 +332,7 @@ function OpportunityForm({
           updatedBy={existing.data.updated_by}
         />
       )}
+      {opportunityId && <OwnershipByline objectKey="Opportunity" recordId={opportunityId} />}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

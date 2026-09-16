@@ -17,6 +17,13 @@ pub struct CustomObjectDefinition {
     pub prefix: String,
     pub digits: i64,
     pub is_active: bool,
+    /// Enterprise Access Foundation, Phase 1 (spec §2.1) - one of
+    /// USER_TEAM_OWNED/ORG_OWNED/PARENT_CONTROLLED/SYSTEM_OWNED, see
+    /// `models::ownership::OwnershipMode`. Defaults to USER_TEAM_OWNED
+    /// (0055_custom_object_ownership_mode.sql), the right default for the
+    /// transactional/customer/work objects a Custom Object is normally
+    /// used to model.
+    pub ownership_mode: String,
     pub created_at: String,
     pub updated_at: String,
 }

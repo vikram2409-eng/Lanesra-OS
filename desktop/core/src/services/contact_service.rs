@@ -48,6 +48,7 @@ pub fn create(
     let id = new_uuid();
     let contact_number = numbering::allocate_number(conn, &workspace_id, &CONTACT)?;
     let contact = contact_repo::create(conn, &id, &workspace_id, &contact_number, input, actor_user_id)?;
+    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Contact", &contact.id, actor_user_id, None)?;
     audit_repo::record(
         conn,
         &workspace_id,

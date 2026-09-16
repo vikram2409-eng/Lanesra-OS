@@ -14,6 +14,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomObjectDefinition> {
         prefix: row.get("prefix")?,
         digits: row.get("digits")?,
         is_active: row.get("is_active")?,
+        ownership_mode: row.get("ownership_mode")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })
@@ -74,6 +75,19 @@ pub fn update(conn: &Connection, id: &str, input: &CustomObjectDefinitionUpdate,
             input.singular_label, input.plural_label, input.icon, input.prefix, input.digits,
             input.is_active, now_iso(), actor_user_id, id,
         ],
+    )?;
+    get(conn, id).map(|d| d.expect("just updated"))
+}
+
+/// Enterprise Access Foundation, Phase 1: the one field a Custom Object's
+/// existing edit form doesn't already cover - kept as its own setter
+/// rather than added to `CustomObjectDefinitionUpdate` so the existing
+/// admin object-edit flow (label/icon/prefix/digits/active) stays
+/// untouched by this migration.
+pub fn set_ownership_mode(conn: &Connection, id: &str, ownership_mode: &str, actor_user_id: Option<&str>) -> rusqlite::Result<CustomObjectDefinition> {
+    conn.execute(
+        "UPDATE custom_object_definitions SET ownership_mode = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
+        (ownership_mode, now_iso(), actor_user_id, id),
     )?;
     get(conn, id).map(|d| d.expect("just updated"))
 }

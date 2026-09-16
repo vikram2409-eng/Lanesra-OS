@@ -10,6 +10,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import { TabListCard } from "../../components/TabListCard";
@@ -486,6 +487,7 @@ function ContractDetail({
       </h2>
       <p style={{ color: "var(--text-muted)" }}>{c.contract_number}</p>
       <AuditByline createdAt={c.created_at} createdBy={c.created_by} updatedAt={c.updated_at} updatedBy={c.updated_by} />
+      <OwnershipByline objectKey="Contract" recordId={c.id} />
 
       <RelatedRecordSummary
         companyId={c.company_id}

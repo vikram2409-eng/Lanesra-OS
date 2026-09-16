@@ -55,6 +55,11 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (48, include_str!("migrations/0048_vector_search.sql")),
     (49, include_str!("migrations/0049_relationship_polymorphism_and_cross_record_conditions.sql")),
     (50, include_str!("migrations/0050_connector_agent_tools.sql")),
+    (51, include_str!("migrations/0051_organization_and_org_units.sql")),
+    (52, include_str!("migrations/0052_work_teams.sql")),
+    (53, include_str!("migrations/0053_users_org_units.sql")),
+    (54, include_str!("migrations/0054_ownership_fields.sql")),
+    (55, include_str!("migrations/0055_custom_object_ownership_mode.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -118,7 +123,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 50);
+        assert_eq!(version, 55);
 
         let table_count: i64 = conn
             .query_row(

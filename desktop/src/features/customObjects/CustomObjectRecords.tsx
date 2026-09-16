@@ -7,6 +7,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { GroupHeaderRow } from "../../components/GroupHeaderRow";
@@ -289,6 +290,7 @@ function RecordForm({
           updatedBy={existing.data.updated_by}
         />
       )}
+      {recordId && <OwnershipByline objectKey={definition.key} recordId={recordId} />}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

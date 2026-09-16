@@ -13,6 +13,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -363,6 +364,7 @@ function InvoiceDetail({
         {inv.invoice_number} <StatusBadge status={inv.status} />
       </h2>
       <AuditByline createdAt={inv.created_at} createdBy={inv.created_by} updatedAt={inv.updated_at} updatedBy={inv.updated_by} />
+      <OwnershipByline objectKey="Invoice" recordId={inv.id} />
       {error && <div className="error-banner">{error}</div>}
 
       <RelatedRecordSummary

@@ -13,6 +13,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -364,6 +365,7 @@ function QuoteDetail({
         {q.quote_number} <StatusBadge status={q.status} />
       </h2>
       <AuditByline createdAt={q.created_at} createdBy={q.created_by} updatedAt={q.updated_at} updatedBy={q.updated_by} />
+      <OwnershipByline objectKey="Quote" recordId={q.id} />
       {error && <div className="error-banner">{error}</div>}
 
       <RelatedRecordSummary

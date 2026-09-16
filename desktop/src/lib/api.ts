@@ -69,6 +69,19 @@ import type {
   Order,
   OrderInput,
   OrderWithLines,
+  Organization,
+  OrganizationUpdate,
+  OrgUnit,
+  OrgUnitInput,
+  OrgUnitMoveImpact,
+  OrgUnitUpdate,
+  OwnerRef,
+  OwnershipTransferDryRun,
+  RecordOwnership,
+  WorkTeam,
+  WorkTeamInput,
+  WorkTeamUpdate,
+  TeamMembership,
   Product,
   ProductInput,
   Quote,
@@ -560,6 +573,43 @@ export const api = {
     call<CustomObjectDefinition>("update_custom_object", { id, input }),
   deactivateCustomObject: (id: string) => call<CustomObjectDefinition>("deactivate_custom_object", { id }),
   deleteCustomObject: (id: string) => call<void>("delete_custom_object", { id }),
+
+  // Enterprise Access Foundation, Phase 1: Organization, Organization
+  // Units, Work Teams, Record Ownership (spec §1-2).
+  getOrganization: () => call<Organization>("get_organization"),
+  updateOrganization: (input: OrganizationUpdate) => call<Organization>("update_organization", { input }),
+
+  listOrgUnits: () => call<OrgUnit[]>("list_org_units"),
+  createOrgUnit: (input: OrgUnitInput) => call<OrgUnit>("create_org_unit", { input }),
+  updateOrgUnit: (id: string, input: OrgUnitUpdate) => call<OrgUnit>("update_org_unit", { id, input }),
+  previewMoveOrgUnit: (id: string, newParentId: string) =>
+    call<OrgUnitMoveImpact>("preview_move_org_unit", { id, newParentId }),
+  moveOrgUnit: (id: string, newParentId: string) => call<OrgUnit>("move_org_unit", { id, newParentId }),
+  deleteOrgUnit: (id: string) => call<void>("delete_org_unit", { id }),
+
+  listWorkTeams: () => call<WorkTeam[]>("list_work_teams"),
+  createWorkTeam: (input: WorkTeamInput) => call<WorkTeam>("create_work_team", { input }),
+  updateWorkTeam: (id: string, input: WorkTeamUpdate) => call<WorkTeam>("update_work_team", { id, input }),
+  deleteWorkTeam: (id: string) => call<void>("delete_work_team", { id }),
+  listTeamMembers: (teamId: string) => call<TeamMembership[]>("list_team_members", { teamId }),
+  addTeamMember: (teamId: string, userId: string, roleInTeam: string | null) =>
+    call<TeamMembership>("add_team_member", { teamId, userId, roleInTeam }),
+  endTeamMembership: (id: string) => call<void>("end_team_membership", { id }),
+
+  getRecordOwner: (objectKey: string, id: string) =>
+    call<RecordOwnership | null>("get_record_owner", { objectKey, id }),
+  setRecordOwner: (objectKey: string, id: string, owner: OwnerRef, owningOrgUnitId: string | null) =>
+    call<void>("set_record_owner", { objectKey, id, owner, owningOrgUnitId }),
+  bulkTransferOwnershipDryRun: (objectKey: string, ids: string[], newOwner: OwnerRef) =>
+    call<OwnershipTransferDryRun>("bulk_transfer_ownership_dry_run", { objectKey, ids, newOwner }),
+  bulkTransferOwnershipCommit: (objectKey: string, ids: string[], newOwner: OwnerRef, owningOrgUnitId: string | null) =>
+    call<BulkActionResult[]>("bulk_transfer_ownership_commit", { objectKey, ids, newOwner, owningOrgUnitId }),
+
+  listUserOrgUnits: (userId: string) => call<string[]>("list_user_org_units", { userId }),
+  setUserPrimaryOrgUnit: (userId: string, orgUnitId: string) =>
+    call<void>("set_user_primary_org_unit", { userId, orgUnitId }),
+  addUserOrgUnit: (userId: string, orgUnitId: string) => call<void>("add_user_org_unit", { userId, orgUnitId }),
+  removeUserOrgUnit: (userId: string, orgUnitId: string) => call<void>("remove_user_org_unit", { userId, orgUnitId }),
 
   listScreenLayouts: (entityType: string) => call<ScreenLayout[]>("list_screen_layouts", { entityType }),
   createScreenLayout: (input: ScreenLayoutInput) => call<ScreenLayout>("create_screen_layout", { input }),

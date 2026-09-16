@@ -53,6 +53,7 @@ pub fn create(
     let id = new_uuid();
     let contract_number = numbering::allocate_number(conn, &workspace_id, &CONTRACT)?;
     let contract = contract_repo::create(conn, &id, &workspace_id, &contract_number, input, actor_user_id)?;
+    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Contract", &contract.id, actor_user_id, input.owner_user_id.as_deref())?;
     audit_repo::record(
         conn,
         &workspace_id,

@@ -31,6 +31,7 @@ pub fn create(
     let id = new_uuid();
     let product_number = numbering::allocate_number(conn, workspace_id, &PRODUCT)?;
     let product = product_repo::create(conn, &id, workspace_id, &product_number, input, actor_user_id)?;
+    super::ownership_service::set_default_owner_on_create(conn, workspace_id, "Product", &product.id, actor_user_id, None)?;
     audit_repo::record(
         conn,
         workspace_id,
