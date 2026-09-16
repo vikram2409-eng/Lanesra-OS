@@ -260,7 +260,7 @@ export function AdminPanel() {
 
       {tab === "users" && <Users onOpenHelp={openHelpTopic} />}
       {tab === "organization" && <OrganizationAdmin />}
-      {tab === "orgUnits" && <OrgUnitsAdmin />}
+      {tab === "orgUnits" && <OrgUnitsAdmin onOpenHelp={openHelpTopic} />}
       {tab === "teams" && <WorkTeamsAdmin />}
 
       {tab === "profile" && workspace.data && (

@@ -23,7 +23,7 @@ const EMPTY_INPUT: OrgUnitInput = {
  * unit (no parent) can't be created, moved or deleted here - it's
  * provisioned once per workspace by the backend's own bootstrap.
  */
-export function OrgUnitsAdmin() {
+export function OrgUnitsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
   const [creatingUnderId, setCreatingUnderId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
@@ -40,8 +40,11 @@ export function OrgUnitsAdmin() {
 
   return (
     <div className="card">
-      <div className="toolbar">
+      <div className="toolbar" style={{ justifyContent: "space-between" }}>
         <h3 style={{ margin: 0 }}>Organization Units</h3>
+        <button className="btn btn-secondary" onClick={() => onOpenHelp("organization-and-org-units")}>
+          📖 Help
+        </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         The hierarchy every record's Owning Organization Unit scopes against - Divisions, Regions, Departments,
