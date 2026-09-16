@@ -386,6 +386,38 @@ function ensureAdminData(){
  if(!data.aiAgentPipelines)data.aiAgentPipelines=[];
  // AI & Agentic Layer, Phase 7d mirror - see aiEvalTab's own comment.
  if(!data.aiEvalSuites)data.aiEvalSuites=[];
+ // Seed a realistic default AI Agent Foundry sample the first time this
+ // workspace ever loads - matching the "sample workspace" convention every
+ // other section (companies, contacts, org units) already follows. Without
+ // this, the product's own lead pillar loaded completely empty on first
+ // visit: New pipeline/New suite are gated on "create an agent first" (see
+ // aiAgentPipelinesTab/aiEvalTab's own disabled-button checks) with no
+ // agent ever seeded to satisfy that, so clicking them appeared to do
+ // nothing. One-time only (aiFoundrySeeded), so deleting everything
+ // afterward doesn't silently bring it back.
+ if(!data.workspace.aiFoundrySeeded){
+  data.workspace.aiFoundrySeeded=true;
+  const researchSkillId='skl_'+uid();
+  data.aiSkills.push(stampCreate({id:researchSkillId,name:'Company research brief',description:'Summarize a company\'s industry, recent activity and open opportunities before an outreach call.',instructionsMd:'Look up the company by name, note its industry and status, list open opportunities and their stage/value, and flag anything overdue. Keep the summary under 150 words.',isActive:true}));
+  const researchId='agt_'+uid(), draftId='agt_'+uid(), reviewId='agt_'+uid(), supervisorId='agt_'+uid();
+  data.aiAgents.push(
+   stampCreate({id:researchId,name:'Research Analyst',icon:'🔎',description:'Looks up companies, contacts and open opportunities before a call.',systemPrompt:'You are a sales research analyst. Given a company or contact name, summarize what this workspace already knows about them - industry, status, open opportunities, recent activity - so a rep never opens a call cold.',actionNames:['list_records','get_record','search_records'],skillIds:[researchSkillId],delegateAgentIds:[],isActive:true,memoryMd:''}),
+   stampCreate({id:draftId,name:'Draft Writer',icon:'📥',description:'Turns raw research or notes into a polished first draft.',systemPrompt:'You are a concise business writer. Turn whatever research or notes you\'re given into a clear, well-structured first draft - a briefing, a summary, or an outreach message - ready for someone else to review.',actionNames:[],skillIds:[],delegateAgentIds:[],isActive:true,memoryMd:''}),
+   stampCreate({id:reviewId,name:'Quality Reviewer',icon:'🧠',description:'Reviews a draft for accuracy and clarity before it goes out.',systemPrompt:'You are a careful editor. Review the draft you\'re given for accuracy, tone and clarity. Reply "APPROVED" if it\'s ready, or explain exactly what to fix if it isn\'t.',actionNames:[],skillIds:[],delegateAgentIds:[],isActive:true,memoryMd:''}),
+   stampCreate({id:supervisorId,name:'Ops Supervisor',icon:'🤖',description:'Has no actions of its own - delegates everything to a specialist instead.',systemPrompt:'You are an operations supervisor. You don\'t look anything up yourself - hand every request to the specialist best suited to it.',actionNames:[],skillIds:[],delegateAgentIds:[researchId],isActive:true,memoryMd:''}),
+  );
+  // One pipeline per topology, so all three are explorable out of the box
+  // without an admin having to build one from scratch first.
+  data.aiAgentPipelines.push(
+   stampCreate({id:'pln_'+uid(),name:'Company Briefing',description:'Research a company, then turn the findings into a polished briefing.',topology:'sequential',steps:[{agentId:researchId,inputTemplate:'{{trigger_input}}',requiresApproval:false},{agentId:draftId,inputTemplate:'{{previous_output}}',requiresApproval:false}],isActive:true,runs:[]}),
+   stampCreate({id:'pln_'+uid(),name:'Consensus Estimate',description:'Two independent takes on the same question, reconciled by a synthesizer.',topology:'consensus',steps:[{agentId:researchId,inputTemplate:'{{trigger_input}}',requiresApproval:false},{agentId:draftId,inputTemplate:'{{trigger_input}}',requiresApproval:false},{agentId:reviewId,inputTemplate:'{{candidate_outputs}}',requiresApproval:true}],isActive:true,runs:[]}),
+   stampCreate({id:'pln_'+uid(),name:'Draft & Review Loop',description:'A drafter and a reviewer, looping until the reviewer approves.',topology:'peer_review',steps:[{agentId:draftId,inputTemplate:'{{trigger_input}}',requiresApproval:false},{agentId:reviewId,inputTemplate:'{{previous_output}}',requiresApproval:true}],isActive:true,runs:[]}),
+  );
+  data.aiEvalSuites.push(stampCreate({id:'evl_'+uid(),name:'Research Analyst quality check',description:'Golden cases checking the Research Analyst surfaces the right facts.',targetType:'agent',targetId:researchId,cases:[
+   {id:'ecs_'+uid(),inputText:'Tell me about BrightPath Logistics',successCriteria:'Mentions BrightPath and Logistics'},
+   {id:'ecs_'+uid(),inputText:'What do we know about Harbour Health Group?',successCriteria:'Mentions Harbour Health Group and its status or industry'},
+  ],runs:[]}));
+ }
  if(!data.aiSettings.vectorSearch)data.aiSettings.vectorSearch={embeddingModel:'',embeddedCount:0,pendingCount:0,lastReindexAt:null};
  if(data.aiSettings.otlpEndpoint===undefined)data.aiSettings.otlpEndpoint='';
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
@@ -6115,6 +6147,47 @@ function stepDurationMs(s){
  const ms=new Date(s.finishedAt).getTime()-new Date(s.startedAt).getTime();
  return Number.isFinite(ms)&&ms>=0?ms:null;
 }
+// AI & Agentic Layer, Phase 7f mirror - OTLP trace export/push. Real
+// per-step timing (start/finish already recorded on every run by simStep
+// above) shaped as a standard OTLP resourceSpans document, the same shape
+// the desktop edition's own trace export produces. "Push" has no real
+// collector to POST to from a static demo, so it's simulated - the JSON is
+// shown instead of a real network call, the same convention every other
+// "would call out" surface in this demo already follows (see gatewaySubTab's
+// own honesty note on this exact feature).
+function buildOtlpTrace(pipeline,run){
+ const toNano=iso=>{try{return String(BigInt(new Date(iso).getTime())*1000000n)}catch{return '0'}};
+ const traceId=(uid()+uid()).replace(/-/g,'').padEnd(32,'0').slice(0,32);
+ const spans=(run.steps||[]).map((s,i)=>({
+  traceId,
+  spanId:uid().replace(/-/g,'').padEnd(16,'0').slice(0,16),
+  name:`pipeline.step.${i+1}.${s.agentName}`,
+  kind:'SPAN_KIND_INTERNAL',
+  startTimeUnixNano:toNano(s.startedAt),
+  endTimeUnixNano:toNano(s.finishedAt),
+  attributes:[
+   {key:'lanesra.pipeline.name',value:{stringValue:pipeline.name}},
+   {key:'lanesra.pipeline.topology',value:{stringValue:pipeline.topology||'sequential'}},
+   {key:'lanesra.step.index',value:{intValue:i}},
+   {key:'lanesra.step.agent',value:{stringValue:s.agentName}},
+  ],
+ }));
+ return {resourceSpans:[{
+  resource:{attributes:[{key:'service.name',value:{stringValue:'lanesra-os-demo'}}]},
+  scopeSpans:[{scope:{name:'lanesra.ai_agent_pipelines'},spans}],
+ }]};
+}
+function renderOtlpTraceActions(pipeline,run,wrap){
+ const endpoint=(data.aiSettings||{}).otlpEndpoint||'';
+ wrap.innerHTML=`<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+  <button class="btn btn-secondary" id="exportOtlpBtn">Export as OTLP JSON</button>
+  <button class="btn btn-secondary" id="pushOtlpBtn" ${endpoint?'':'disabled'} title="${endpoint?`Simulated push to ${endpoint}`:'Set a collector endpoint in LLM & MCP → Gateway first'}">Push to collector</button>
+ </div><pre id="otlpTraceOutput" hidden style="margin-top:10px;max-height:260px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:10px;font-size:12px;white-space:pre-wrap"></pre>`;
+ const out=$('#otlpTraceOutput');
+ const show=json=>{out.textContent=JSON.stringify(json,null,2);out.hidden=false};
+ $('#exportOtlpBtn').onclick=()=>show(buildOtlpTrace(pipeline,run));
+ if(endpoint)$('#pushOtlpBtn').onclick=()=>{const trace=buildOtlpTrace(pipeline,run);show(trace);toast(`Simulated push to ${endpoint} - this static demo has no server to make a real POST from`)};
+}
 function pipelineTopologyLabel(topology){
  return {sequential:'Sequential',consensus:'Consensus',peer_review:'Peer review'}[topology||'sequential']||'Sequential';
 }
@@ -6144,7 +6217,8 @@ function aiAgentPipelinesTab(body){
   const input=prompt(`Input for "${p.name}" (used where a step references {{trigger_input}}):`,'')||'';
   const run=runAiAgentPipelineNow(p,input);
   const wrap=$('#pipelineRunWrap');
-  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name} <span class="badge">${run.status}</span></h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b>${stepDurationMs(s)!==null?` <small class="muted">(${stepDurationMs(s)}ms)</small>`:''}<br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}</div>`;
+  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name} <span class="badge">${run.status}</span></h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b>${stepDurationMs(s)!==null?` <small class="muted">(${stepDurationMs(s)}ms)</small>`:''}<br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}<div id="otlpTraceActionsWrap"></div></div>`;
+  renderOtlpTraceActions(p,run,$('#otlpTraceActionsWrap'));
  });
 }
 /* AI & Agentic Layer, Phase 7g: mirrors the desktop app's
