@@ -95,6 +95,7 @@ const seed = {
 const storeKey='lanesra-os-demo-v10';
 let data = JSON.parse(localStorage.getItem(storeKey)||'null') || structuredClone(seed);
 let current='dashboard';
+let onboardBannerSeen=false;
 let viewFilter=null;
 // Customer/Contact 360 (Phase 5): which record's detail page is open, if
 // any - {type:'companies'|'contacts', id}. Cleared by any real navigation
@@ -912,10 +913,38 @@ function landing(){
 }
 
 
+function closeMobileSidebar(){
+ const sidebar=$('#appSidebar'),backdrop=$('#sidebarBackdrop'),toggle=$('#mobileNavToggle');
+ if(!sidebar)return;
+ sidebar.classList.remove('open');
+ if(backdrop)backdrop.hidden=true;
+ if(toggle)toggle.setAttribute('aria-expanded','false');
+}
+// Item 9 (mobile nav): below 900px the sidebar collapses to a 76px
+// icon-only rail (styles.css) - fine once you know the icons, opaque to
+// a first-time visitor. This turns it into a real off-canvas drawer with
+// labels restored, rather than replacing the icon rail outright, so a
+// slow-to-hydrate page still shows *something* usable.
+function bindMobileSidebar(){
+ const toggle=$('#mobileNavToggle'),sidebar=$('#appSidebar'),backdrop=$('#sidebarBackdrop');
+ if(!toggle||!sidebar)return;
+ toggle.onclick=()=>{
+  const opening=!sidebar.classList.contains('open');
+  sidebar.classList.toggle('open',opening);
+  if(backdrop)backdrop.hidden=!opening;
+  toggle.setAttribute('aria-expanded',String(opening));
+ };
+ if(backdrop)backdrop.onclick=closeMobileSidebar;
+}
 function appShell(){
  document.title='Lanesra OS Demo';
- $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><aside class="sidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav" id="sideNav"></nav><div class="side-bottom"><div class="side-meta"><strong title="This number tracks every shipped improvement across the desktop app, this demo and the website. The desktop installer's own version (desktop-v0.13.0 on GitHub) is cut less often, only for a new installer build - see Releases for the full explanation.">Early Access v0.59.0 <a href="/releases" style="color:inherit;text-decoration:underline">ⓘ</a></strong><div class="side-product-links"><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
+ const startParam=new URLSearchParams(location.search).get('start');
+ if(startParam==='agents'){current='admin';adminView='tool';adminTab='aiAgents'}
+ else if(startParam==='objects'){current='admin';adminView='tool';adminTab='objects'}
+ else if(startParam==='apps'){current='admin';adminView='tool';adminTab='packages'}
+ $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div><aside class="sidebar" id="appSidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><nav class="side-nav" id="sideNav"></nav><div class="side-bottom"><div class="side-meta"><strong title="This number tracks every shipped improvement across the desktop app, this demo and the website. The desktop installer's own version (desktop-v0.13.0 on GitHub) is cut less often, only for a new installer build - see Releases for the full explanation.">Early Access v0.59.0 <a href="/releases" style="color:inherit;text-decoration:underline">ⓘ</a></strong><div class="side-product-links"><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div>`;
  renderSidebarNav();
+ bindMobileSidebar();
  $('#resetDemo').onclick=()=>{data=structuredClone(seed);ensureAdminData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored');refreshNotifBadge();renderView()};
  const searchInput=$('#globalSearch'), searchBox=$('#searchResults');
  const searchable=[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['products','Product / Service'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']];
@@ -989,8 +1018,8 @@ function renderSidebarNav(){
  const nav=$('#sideNav'); if(!nav)return;
  const apps=ensureApps().filter(a=>a.isPublished);
  const switcherHtml=apps.length?`<div class="side-app-switcher"><select id="appSwitcher" aria-label="Switch app"><option value="">All</option>${apps.map(a=>`<option value="${a.id}" ${a.id===activeAppId?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select></div>`:'';
- nav.innerHTML=`${switcherHtml}${navSections().map(k=>`<button data-nav="${k}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn"><b>⚙</b><span>Admin</span></button>`;
- document.querySelectorAll('[data-nav]').forEach(b=>{b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;if(current==='admin')adminView='landing';renderView()};b.classList.toggle('active',b.dataset.nav===current)});
+ nav.innerHTML=`${switcherHtml}${navSections().map(k=>`<button data-nav="${k}" aria-label="${labels[k]}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn" aria-label="Admin"><b>⚙</b><span>Admin</span></button>`;
+ document.querySelectorAll('[data-nav]').forEach(b=>{b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;if(current==='admin')adminView='landing';closeMobileSidebar();renderView()};b.classList.toggle('active',b.dataset.nav===current)});
  const switcher=$('#appSwitcher');
  if(switcher)switcher.onchange=e=>{
   activeAppId=e.target.value||null;
@@ -1062,7 +1091,9 @@ function dashboard(){
   :visibleKpis();
  const chartWidgets=effective?effective.filter(w=>w.kind==='chart'&&(data.customReports||[]).some(r=>r.id===w.config.reportId)):[];
  const listWidgets=effective?effective.filter(w=>w.kind==='record_list'):[];
- $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1>Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div><div class="kpi-grid">${kpis.map(k=>`<button class="kpi kpi-link" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value()}</div><span>View ${k.label.toLowerCase()} →</span></button>`).join('')}</div>${(chartWidgets.length||listWidgets.length)?`<div class="grid-2">${chartWidgets.map(dashboardChartWidgetHtml).join('')}${listWidgets.map(dashboardRecordListWidgetHtml).join('')}</div>`:''}<div class="grid-2"><section class="panel"><div class="panel-head"><h3>Pipeline snapshot</h3><button class="link-btn" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div>${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="deal"><div style="display:flex;justify-content:space-between"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</section><section class="panel"><div class="panel-head"><h3>Tasks requiring attention</h3><button class="link-btn" data-nav2="tasks" data-filter2="open">View tasks</button></div>${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="deal"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</section></div>`;
+ $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1>Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div>${onboardBannerSeen?'':`<div class="onboard-row" id="onboardRow"><div class="onboard-copy"><strong>This is the CRM side.</strong> Lanesra is also AI-native — see the rest in two clicks.</div><div class="onboard-actions"><button class="btn btn-secondary" data-onboard="agents">Build an AI Agent →</button><button class="btn btn-secondary" data-onboard="apps">Install an Industry App →</button><button class="onboard-dismiss" id="onboardDismiss" aria-label="Dismiss">×</button></div></div>`}<div class="kpi-grid">${kpis.map(k=>`<button class="kpi kpi-link" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value()}</div><span>View ${k.label.toLowerCase()} →</span></button>`).join('')}</div>${(chartWidgets.length||listWidgets.length)?`<div class="grid-2">${chartWidgets.map(dashboardChartWidgetHtml).join('')}${listWidgets.map(dashboardRecordListWidgetHtml).join('')}</div>`:''}<div class="grid-2"><section class="panel"><div class="panel-head"><h3>Pipeline snapshot</h3><button class="link-btn" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div>${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="deal"><div style="display:flex;justify-content:space-between"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</section><section class="panel"><div class="panel-head"><h3>Tasks requiring attention</h3><button class="link-btn" data-nav2="tasks" data-filter2="open">View tasks</button></div>${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="deal"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</section></div>`;
+ document.querySelectorAll('[data-onboard]').forEach(b=>b.onclick=()=>{const target=b.dataset.onboard;onboardBannerSeen=true;current='admin';adminView='tool';adminTab=target==='agents'?'aiAgents':'packages';renderView()});
+ if($('#onboardDismiss'))$('#onboardDismiss').onclick=()=>{onboardBannerSeen=true;$('#onboardRow').remove()};
  document.querySelectorAll('[data-kpi-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.kpiNav;viewFilter=b.dataset.kpiFilter;detailRecord=null;renderView()});
  document.querySelectorAll('[data-nav2]').forEach(b=>b.onclick=()=>{current=b.dataset.nav2;viewFilter=b.dataset.filter2||null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
