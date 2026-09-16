@@ -7,9 +7,11 @@
 //! needs to be async at all.
 //!
 //! `connection_type` is one of `"rest"` | `"webhook"` | `"sftp"` |
-//! `"postgres"` | `"mysql"` | `"sqlserver"` | `"odata"` | `"smtp"` (spec
-//! table 4, plus `mysql`/`sqlserver` added for Connector Template Library
-//! Phase 3 - see `mysql_service.rs`/`sqlserver_service.rs`). `auth_mode` is one
+//! `"postgres"` | `"mysql"` | `"sqlserver"` | `"mongodb"` | `"redis"` |
+//! `"odata"` | `"smtp"` (spec table 4, plus `mysql`/`sqlserver` added for
+//! Connector Template Library Phase 3 and `mongodb`/`redis` added for
+//! Phase 4 - see `mysql_service.rs`/`sqlserver_service.rs`/
+//! `mongodb_service.rs`/`redis_service.rs`). `auth_mode` is one
 //! of `"none"` | `"api_key"` | `"basic"` | `"bearer"` | `"custom_header"`
 //! | `"oauth2_client_credentials"` | `"oauth2_authorization_code"` |
 //! `"query_param"` (spec table 5, plus `query_param` added for
@@ -44,7 +46,7 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-pub const CONNECTION_TYPES: &[&str] = &["rest", "webhook", "sftp", "postgres", "mysql", "sqlserver", "odata", "smtp"];
+pub const CONNECTION_TYPES: &[&str] = &["rest", "webhook", "sftp", "postgres", "mysql", "sqlserver", "mongodb", "redis", "odata", "smtp"];
 const AUTH_MODES: &[&str] = &["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code", "query_param"];
 
 fn validate_types(connection_type: &str, auth_mode: &str) -> AppResult<()> {
@@ -233,6 +235,8 @@ pub async fn test_connection(conn: &Connection, workspace_id: &str, master_key: 
         "postgres" => super::postgres_service::test_connection(&connection, secret.as_deref()).await,
         "mysql" => super::mysql_service::test_connection(&connection, secret.as_deref()).await,
         "sqlserver" => super::sqlserver_service::test_connection(&connection, secret.as_deref()).await,
+        "mongodb" => super::mongodb_service::test_connection(&connection, secret.as_deref()).await,
+        "redis" => super::redis_service::test_connection(&connection, secret.as_deref()).await,
         "smtp" => super::smtp_service::test_connection(&connection, secret.as_deref()).await,
         other => Err(AppError::Validation(format!("No test implemented for connection type '{other}'"))),
     };

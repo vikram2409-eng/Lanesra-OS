@@ -637,13 +637,15 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   Added/Modified/Removed diff for objects/fields, a summarized
   added-count for everything else) before a package update is applied.
 - **Integration Hub**: AES-256-GCM-encrypted Connections (REST, SFTP,
-  PostgreSQL, MySQL/MariaDB, SQL Server, OData, SMTP - the last three
-  all pure-Rust wire-protocol drivers with no native client library
-  dependency), OpenAPI 3.x Connectors - importable from a
-  curated template gallery (19 templates across AI models, data
-  warehouses and SaaS tools - OpenAI, Cohere, Google Gemini, Snowflake,
-  Databricks, Slack, GitHub, SendGrid, HubSpot, Airtable, Notion, Stripe,
-  Twilio, Zendesk, Jira Cloud, PagerDuty, Datadog, Mailchimp, Shopify) or
+  PostgreSQL, MySQL/MariaDB, SQL Server, MongoDB, Redis, OData, SMTP -
+  the database drivers are all pure-Rust wire-protocol implementations
+  with no native client library dependency), OpenAPI 3.x Connectors -
+  importable from a curated template gallery (26 templates across AI
+  models, data warehouses and SaaS tools - OpenAI, Cohere, Google
+  Gemini, Snowflake, Databricks, Slack, GitHub, SendGrid, HubSpot,
+  Airtable, Notion, Stripe, Twilio, Zendesk, Jira Cloud, PagerDuty,
+  Datadog, Mailchimp, Shopify, GitLab, Confluence Cloud, Asana,
+  Freshdesk, Segment, Calendly, CircleCI) or
   a hand-pasted spec - usable as a Workflow Automation action or, once an
   admin opts a connector in, as an AI Agent Foundry tool via the Tool
   Bridge - read-only by default, write access

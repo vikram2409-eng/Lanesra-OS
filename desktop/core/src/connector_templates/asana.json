@@ -1,0 +1,48 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Asana",
+    "version": "1.0.0",
+    "description": "List and create tasks via the Asana API."
+  },
+  "servers": [{ "url": "https://app.asana.com" }],
+  "paths": {
+    "/api/1.0/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "summary": "List tasks in a project",
+        "parameters": [
+          { "name": "project", "in": "query", "required": true, "schema": { "type": "string" } }
+        ]
+      },
+      "post": {
+        "operationId": "createTask",
+        "summary": "Create a task",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "notes": { "type": "string" },
+                      "projects": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                      }
+                    }
+                  }
+                },
+                "required": ["data"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
