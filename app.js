@@ -137,6 +137,42 @@ function auditByline(r){
  if(r.updatedAt&&r.updatedAt!==r.createdAt)html+=` · Last updated by ${userName(r.updatedBy)} on ${new Date(r.updatedAt).toLocaleString()}`;
  return `<div class="muted" style="font-size:12px;margin-top:4px">${html}</div>`;
 }
+// Enterprise Access Foundation, Phase 1 mirror - see ownership_service.rs's
+// own doc comment: a record's owner is a User OR a Work Team
+// (ownerType/ownerId), resolved to a display name here the same way
+// userName() already resolves createdBy/updatedBy. Falls back to the
+// legacy free-text `owner` field for anything saved before this feature
+// existed and not yet backfilled (see ensureAdminData's own migration
+// step below), never showing a blank.
+function teamName(id){return (data.workTeams||[]).find(t=>t.id===id)?.name||'Unknown team'}
+function ownerName(r){
+ if(!r)return 'Unassigned';
+ if(r.ownerType&&r.ownerId)return r.ownerType==='TEAM'?teamName(r.ownerId):userName(r.ownerId);
+ return r.owner||'Unassigned';
+}
+function orgUnitName(id){return (data.orgUnits||[]).find(u=>u.id===id)?.name||''}
+// Every create path needs mandatory ownership fields stamped, not just
+// the shared record-modal save path - mirrors
+// ownership_service::set_default_owner_on_create exactly, including its
+// "inherit the triggering record's owner where there is one" behavior
+// (a workflow's create_record action, or the AI assistant's simulated
+// quick-create) - falling back to the current demo user otherwise, same
+// as a blank owner picker on a manual create form would.
+function defaultOwnershipFields(inheritFrom){
+ const ownerType=inheritFrom?.ownerType||'USER';
+ const ownerId=inheritFrom?.ownerId||CURRENT_USER_ID;
+ return {ownerType,ownerId,owningOrgUnitId:inheritFrom?.owningOrgUnitId||data.workspace.rootOrgUnitId,assignedAt:new Date().toISOString(),ownershipVersion:1,owner:ownerName({ownerType,ownerId})};
+}
+// "Owner: X · Y Region" - the Owner/Owning Organization Unit sibling to
+// auditByline above, shown wherever a record's created/updated byline
+// already shows (detail pages, the shared edit form for entities with no
+// detail page). Renders nothing for a record with no ownerType at all -
+// an Org Owned custom object has no individual owner to show (spec §2.1).
+function ownershipByline(r){
+ if(!r||!r.ownerType)return '';
+ const ou=r.owningOrgUnitId?orgUnitName(r.owningOrgUnitId):'';
+ return `<div class="muted" style="font-size:12px;margin-top:2px">Owner: ${ownerName(r)}${ou?` · ${ou}`:''}</div>`;
+}
 ensureAdminData();
 const numberRules={
  companies:{field:'customerNumber',prefix:'CUS',year:false,width:4},
@@ -280,7 +316,7 @@ function ensureAdminData(){
  if(!data.kpiPrefs)data.kpiPrefs=[];
  if(!data.notifications)data.notifications=[];
  if(!data.customObjects)data.customObjects=[];
- (data.customObjects||[]).forEach(o=>{if(o.active===undefined)o.active=true;if(!data[o.key])data[o.key]=[]});
+ (data.customObjects||[]).forEach(o=>{if(o.active===undefined)o.active=true;if(!data[o.key])data[o.key]=[];if(!o.ownershipMode)o.ownershipMode='USER_TEAM_OWNED'});
  if(!data.savedViews)data.savedViews=[];
  if(!data.relationshipDefinitions)data.relationshipDefinitions=[];
  if(!data.relationshipInstances)data.relationshipInstances=[];
@@ -378,6 +414,50 @@ function ensureAdminData(){
  // created or deleted).
  (data.relationshipInstances||[]).forEach(r=>{if(!r.createdAt){r.createdAt=new Date().toISOString();r.createdBy=CURRENT_USER_ID}});
  Object.values(data.numberingOverrides||{}).forEach(o=>{if(!o.createdAt)stampCreate(o)});
+ // Enterprise Access Foundation, Phase 1 mirror (spec §1-2) - see
+ // organization_service.rs/org_unit_service.rs's own doc comments for the
+ // design this copies: "Organization" is just the workspace plus a couple
+ // of extra fields, never a separate table/record, and every workspace
+ // gets exactly one root Organization Unit, created once here (the same
+ // lazy get_or_bootstrap the desktop edition uses - nothing else ever
+ // creates a second root). Idempotent and additive like every step above.
+ if(data.workspace.orgCode===undefined)data.workspace.orgCode=null;
+ if(data.workspace.orgStatus===undefined)data.workspace.orgStatus='Active';
+ if(data.workspace.rootOrgUnitId===undefined)data.workspace.rootOrgUnitId=null;
+ if(!data.orgUnits)data.orgUnits=[];
+ if(!data.workTeams)data.workTeams=[];
+ if(!data.teamMemberships)data.teamMemberships=[];
+ if(!data.workspace.rootOrgUnitId){
+  const rootId=uid();
+  const root=stampCreate({id:rootId,name:data.workspace.name,unitType:'Division',parentOrgUnitId:null,managerUserId:null,status:'Active',path:`/${rootId}/`,depth:0});
+  data.orgUnits.push(root);
+  data.workspace.rootOrgUnitId=root.id;
+  data.workspace.orgCode='ORG-'+uid().slice(0,6).toUpperCase();
+ }
+ (data.orgUnits||[]).forEach(u=>{if(!u.createdAt)stampCreate(u)});
+ (data.workTeams||[]).forEach(t=>{if(t.canOwnRecords===undefined)t.canOwnRecords=true;if(!t.createdAt)stampCreate(t)});
+ // Every user gets a home Organization Unit, defaulting to the root -
+ // mirrors migration 0053_users_org_units.sql's own backfill.
+ (data.users||[]).forEach(u=>{if(!u.primaryOrgUnitId)u.primaryOrgUnitId=data.workspace.rootOrgUnitId});
+ // Mandatory ownership system fields (spec §2.2) on every User/Team-owned
+ // object - ownerType/ownerId (record_owner_type/record_owner_id),
+ // owningOrgUnitId, assignedAt and ownershipVersion. Backfills from the
+ // legacy free-text `owner` field with a best-effort name match against
+ // data.users, exactly like migration 0054_ownership_fields.sql backfills
+ // record_owner_type/id from the desktop edition's legacy owner_user_id
+ // column - `owner` itself is kept afterwards as a read-only display
+ // shadow (recomputed by ownerName() on every future save, in recordModal
+ // below), never edited directly again.
+ [...AUDITED_BUILTIN_KEYS.map(k=>data[k]),...((data.customObjects||[]).map(o=>data[o.key]))].forEach(arr=>(arr||[]).forEach(r=>{
+  if(r.ownerType!==undefined)return;
+  const byName=r.owner?(data.users||[]).find(u=>u.name===r.owner):null;
+  r.ownerType='USER';
+  r.ownerId=byName?byName.id:(r.createdBy||CURRENT_USER_ID);
+  r.owningOrgUnitId=data.workspace.rootOrgUnitId;
+  r.assignedAt=r.createdAt||new Date().toISOString();
+  r.ownershipVersion=1;
+  r.owner=ownerName(r);
+ }));
  save();
 }
 const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓',reports:'▥',assistant:'💬'};
@@ -491,7 +571,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -503,7 +583,7 @@ const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],[
 // same reason (see AiSettingsAdmin.tsx's doc comment).
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering']},
- {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users']},
+ {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
@@ -607,7 +687,7 @@ function fieldsFnFor(key){
 // desktop edition's custom_records table exactly: auto number, name,
 // status, owner, notes) - everything object-specific comes from custom
 // fields, the same system every built-in entity already uses.
-function customObjectFields(){return [['number','Record ID','auto'],['name','Name'],['status','Status','select','Active|Inactive|Archived'],['owner','Owner'],['notes','Notes']]}
+function customObjectFields(){return [['number','Record ID','auto'],['name','Name'],['status','Status','select','Active|Inactive|Archived'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker'],['notes','Notes']]}
 function slugify(label){
  const parts=String(label).trim().split(/[^a-zA-Z0-9]+/).filter(Boolean);
  if(!parts.length)return 'field'+uid();
@@ -642,7 +722,11 @@ function fieldsFor(entityKey,builtinFn){return [...builtinFn(),...customFieldsFo
 // excludes the generated ID field and every relationship-picker field (those
 // need a record picker, not a plain value comparison) - mirrors the desktop
 // edition's core::domain::builtin_fields registry.
-const NON_TARGETABLE_TYPES=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation'];
+const NON_TARGETABLE_TYPES=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation','ownerPicker','orgUnitPicker'];
+// Enterprise Access Foundation, Phase 1 mirror: every built-in object is
+// User/Team Owned (spec §2.1) - the same fixed set
+// ownership_service::BUILTIN_OWNED_OBJECT_KEYS declares server-side.
+const OWNED_BUILTIN_KEYS=['companies','contacts','opportunities','products','quotes','orders','invoices','contracts','tasks'];
 function builtinFieldsFor(entityKey,{actionable}={}){
  const fn=fieldsFnFor(entityKey); if(!fn)return [];
  const tf=transitionFieldFor(entityKey);
@@ -1174,15 +1258,15 @@ function dashboard(){
 // instead of drifting further apart. Optional and additive - every new
 // field is undefined on existing seed/localStorage records, which
 // fieldHtml already renders as blank, so nothing migrates.
-function companyFields(){return [['customerNumber','Customer ID','auto'],['name','Company name'],['industry','Industry'],['city','City'],['owner','Owner'],['status','Status','select','Lead|Prospect|Customer|Inactive'],['phone','Phone'],['email','Email'],['website','Website'],['annualRevenue','Annual revenue','number'],['employeeCount','Employees','number'],['preferredContactMethod','Preferred contact method','select','Email|Phone|Text']]}
-function contactFields(){return [['contactNumber','Contact ID','auto'],['name','Full name'],['companyId','Company','relation','companies'],['role','Role'],['email','Email'],['phone','Phone'],['status','Status','select','Active|Inactive'],['mobile','Mobile'],['department','Department'],['preferredContactMethod','Preferred contact method','select','Email|Phone|Text'],['linkedin','LinkedIn (optional)']]}
-function opportunityFields(){return [['opportunityNumber','Opportunity ID','auto'],['title','Opportunity title'],['companyId','Customer','relation','companies'],['contactId','Primary contact (optional)','filteredContact'],['value','Value','number'],['stage','Stage','select','Lead|Qualified|Discovery|Proposal|Negotiation|Won|Lost'],['probability','Probability %','number'],['close','Expected close','date'],['owner','Owner'],['status','Status','select','Open|On Hold|Won|Lost'],['lostReason','Lost reason (optional)'],['nextStep','Next step (optional)']]}
-function productFields(){return [['productNumber','Product ID','auto'],['name','Name'],['sku','SKU'],['type','Type','select','Product|Service'],['category','Category'],['price','Unit price','number'],['tax','Tax %','number'],['status','Status','select','Active|Inactive'],['description','Description (optional)']]}
-function quoteFields(){return [['number','Quote number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['opportunityId','Opportunity (optional)','filteredOpportunity'],['status','Status','select','Draft|Sent|Accepted|Rejected|Expired'],['date','Quote date','date'],['valid','Valid until','date'],['discount','Discount %','number'],['terms','Terms (optional)']]}
-function orderFields(){return [['number','Order number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['quoteId','Source quote (optional)','filteredQuote'],['status','Status','select','Draft|Confirmed|In Progress|Completed|Cancelled'],['date','Order date','date'],['discount','Discount %','number']]}
-function invoiceFields(){return [['number','Invoice number','auto'],['companyId','Customer','relation','companies'],['orderId','Source order (optional)','filteredOrder'],['status','Status','select','Draft|Sent|Partially Paid|Paid|Overdue|Cancelled'],['due','Due date','date'],['discount','Discount %','number'],['paymentTerms','Payment terms (optional)'],['amountPaid','Amount paid','number']]}
-function contractFields(){return [['number','Contract number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['title','Title'],['value','Value','number'],['status','Status','select','Draft|Active|Renewal Due|Expired|Terminated'],['start','Start','date'],['end','End','date'],['owner','Owner'],['type','Contract type','select','Service Agreement|Support|License|NDA|Other'],['renewalDate','Renewal date (optional)','date'],['noticePeriodDays','Notice period (days)','number']]}
-function taskFields(){return [['taskNumber','Task ID','auto'],['title','Task title'],['relatedType','Related record type','select','General|Company|Contact|Opportunity|Quote|Order|Invoice|Contract'],['relatedId','Related record','dynamicRelation'],['owner','Owner'],['due','Due date','date'],['priority','Priority','select','Low|Medium|High|Urgent'],['status','Status','select','Open|In Progress|Completed|Cancelled'],['description','Description (optional)']]}
+function companyFields(){return [['customerNumber','Customer ID','auto'],['name','Company name'],['industry','Industry'],['city','City'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker'],['status','Status','select','Lead|Prospect|Customer|Inactive'],['phone','Phone'],['email','Email'],['website','Website'],['annualRevenue','Annual revenue','number'],['employeeCount','Employees','number'],['preferredContactMethod','Preferred contact method','select','Email|Phone|Text']]}
+function contactFields(){return [['contactNumber','Contact ID','auto'],['name','Full name'],['companyId','Company','relation','companies'],['role','Role'],['email','Email'],['phone','Phone'],['status','Status','select','Active|Inactive'],['mobile','Mobile'],['department','Department'],['preferredContactMethod','Preferred contact method','select','Email|Phone|Text'],['linkedin','LinkedIn (optional)'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker']]}
+function opportunityFields(){return [['opportunityNumber','Opportunity ID','auto'],['title','Opportunity title'],['companyId','Customer','relation','companies'],['contactId','Primary contact (optional)','filteredContact'],['value','Value','number'],['stage','Stage','select','Lead|Qualified|Discovery|Proposal|Negotiation|Won|Lost'],['probability','Probability %','number'],['close','Expected close','date'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker'],['status','Status','select','Open|On Hold|Won|Lost'],['lostReason','Lost reason (optional)'],['nextStep','Next step (optional)']]}
+function productFields(){return [['productNumber','Product ID','auto'],['name','Name'],['sku','SKU'],['type','Type','select','Product|Service'],['category','Category'],['price','Unit price','number'],['tax','Tax %','number'],['status','Status','select','Active|Inactive'],['description','Description (optional)'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker']]}
+function quoteFields(){return [['number','Quote number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['opportunityId','Opportunity (optional)','filteredOpportunity'],['status','Status','select','Draft|Sent|Accepted|Rejected|Expired'],['date','Quote date','date'],['valid','Valid until','date'],['discount','Discount %','number'],['terms','Terms (optional)'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker']]}
+function orderFields(){return [['number','Order number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['quoteId','Source quote (optional)','filteredQuote'],['status','Status','select','Draft|Confirmed|In Progress|Completed|Cancelled'],['date','Order date','date'],['discount','Discount %','number'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker']]}
+function invoiceFields(){return [['number','Invoice number','auto'],['companyId','Customer','relation','companies'],['orderId','Source order (optional)','filteredOrder'],['status','Status','select','Draft|Sent|Partially Paid|Paid|Overdue|Cancelled'],['due','Due date','date'],['discount','Discount %','number'],['paymentTerms','Payment terms (optional)'],['amountPaid','Amount paid','number'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker']]}
+function contractFields(){return [['number','Contract number','auto'],['companyId','Customer','relation','companies'],['contactId','Contact (optional)','filteredContact'],['title','Title'],['value','Value','number'],['status','Status','select','Draft|Active|Renewal Due|Expired|Terminated'],['start','Start','date'],['end','End','date'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker'],['type','Contract type','select','Service Agreement|Support|License|NDA|Other'],['renewalDate','Renewal date (optional)','date'],['noticePeriodDays','Notice period (days)','number']]}
+function taskFields(){return [['taskNumber','Task ID','auto'],['title','Task title'],['relatedType','Related record type','select','General|Company|Contact|Opportunity|Quote|Order|Invoice|Contract'],['relatedId','Related record','dynamicRelation'],['ownerRef','Owner','ownerPicker'],['owningOrgUnitId','Owning Org Unit','orgUnitPicker'],['due','Due date','date'],['priority','Priority','select','Low|Medium|High|Urgent'],['status','Status','select','Open|In Progress|Completed|Cancelled'],['description','Description (optional)']]}
 function pipeline(){
  let stages=['Lead','Qualified','Discovery','Proposal','Negotiation','Won','Lost'];
  if(viewFilter==='open')stages=['Lead','Qualified','Discovery','Proposal','Negotiation'];
@@ -1499,7 +1583,18 @@ function groupRows(arr,groupByField){
 // Custom Objects carry a demo `owner` field (Contacts doesn't); tagging
 // isn't offered at all since this demo has no tags concept on any entity
 // yet, stated here rather than faked.
-function bulkOwnerCapable(key){return key==='companies'||key==='tasks'||!!customObjectByKey(key)}
+// Enterprise Access Foundation, Phase 1 mirror: bulk reassignment is now
+// available on every User/Team-owned object, not just the 2 built-ins
+// this used to single out - the new ownership_service::bulk_transfer_commit
+// this mirrors is generic across every owned object_key. A custom object
+// set to a non-default Ownership Mode (Org Owned) has no individual owner
+// to reassign, so it's excluded here too, same as ownership_service::set_owner
+// itself would reject it.
+function bulkOwnerCapable(key){
+ const co=customObjectByKey(key);
+ if(co)return (co.ownershipMode||'USER_TEAM_OWNED')==='USER_TEAM_OWNED';
+ return OWNED_BUILTIN_KEYS.includes(key);
+}
 function selectionStore(){if(!window.__bulkSelection)window.__bulkSelection={};return window.__bulkSelection}
 function selectionFor(key){const s=selectionStore();if(!s[key])s[key]=new Set();return s[key]}
 function savedViewBarHtml(key,cfg,statusField){
@@ -1609,9 +1704,32 @@ function wireSavedViewsAndBulkActions(key,cfg,statusField){
  });
  $('#bulkOwner')?.addEventListener('click',()=>{
   const ids=[...sel];if(!ids.length)return;
-  bulkFieldModal('Reassign owner','<div class="field full"><label>Owner</label><input name="owner" placeholder="Leave blank to unassign"></div>',fd=>{
-   const owner=fd.get('owner')||'';
-   data[key].filter(r=>ids.includes(r.id)).forEach(r=>{r.owner=owner});
+  // Enterprise Access Foundation, Phase 1 mirror: a real owner picker
+  // (User or Team, like the per-record ownerPicker field) instead of a
+  // free-text name, plus an optional Owning Org Unit - mirrors
+  // ownership_service::bulk_transfer_commit's `new_owner: OwnerRef` +
+  // `owning_org_unit_id: Option<&str>`. Owning Org Unit is left
+  // "unchanged" by default rather than defaulting to the root, so a bulk
+  // owner reassignment never silently moves records across Org Units
+  // unless the admin explicitly asks it to.
+  const teams=(data.workTeams||[]).filter(t=>t.canOwnRecords&&t.status!=='Inactive');
+  const body=`<div class="field full"><label>New owner</label><select name="ownerRef" required>
+   <option value="">Select...</option>
+   <optgroup label="Users">${(data.users||[]).map(u=>`<option value="USER:${u.id}">${u.name}</option>`).join('')}</optgroup>
+   ${teams.length?`<optgroup label="Teams">${teams.map(t=>`<option value="TEAM:${t.id}">${t.name}</option>`).join('')}</optgroup>`:''}
+  </select></div>
+  <div class="field full"><label>Owning Org Unit</label><select name="owningOrgUnitId">${optionalOptions(data.orgUnits||[],'','Leave unchanged')}</select></div>`;
+  bulkFieldModal('Reassign owner',body,fd=>{
+   const ownerRef=fd.get('ownerRef');if(!ownerRef)return;
+   const [ownerType,ownerId]=ownerRef.split(':');
+   const owningOrgUnitId=fd.get('owningOrgUnitId')||'';
+   data[key].filter(r=>ids.includes(r.id)).forEach(r=>{
+    r.ownerType=ownerType;r.ownerId=ownerId;
+    if(owningOrgUnitId)r.owningOrgUnitId=owningOrgUnitId;
+    r.ownershipVersion=(r.ownershipVersion||0)+1;
+    r.assignedAt=new Date().toISOString();
+    r.owner=ownerName(r);
+   });
    save();toast(`Reassigned owner for ${ids.length} record(s)`);renderView();
   });
  });
@@ -1648,6 +1766,31 @@ function badgeMaybe(v){const vals=['Active','Inactive','Customer','Prospect','Le
 // (every call site outside the layout system), the pre-Phase-2 default
 // applies: only the "title" field is full-width.
 function fieldHtml(f,record,full){const [name,label,type,opts]=f;const extra=f[4];const val=record[name]??(!record.id&&extra?.defaultValue?extra.defaultValue:'');const help=extra?.helpText?`<small class="field-help">${extra.helpText}</small>`:'';const req=extra?.required?'required':(['name','title','number'].includes(name)?'required':'');const cls=`field${(full??name==='title')?' full':''}`;if(type==='auto')return `<div class="${cls}"><label>${label}</label><input name="${name}" value="${val}" readonly placeholder="Generated automatically"><small class="field-help">Generated when the record is saved</small></div>`;if(type==='select')return `<div class="${cls}"><label>${label}</label><select name="${name}" ${req}>${opts.split('|').map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>${help}</div>`;if(type==='relation')return selectHtml(name,label,data[opts],val,true,cls);if(type==='filteredContact')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="contact">${optionalOptions(data.contacts.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No contact')}</select></div>`;if(type==='filteredOpportunity')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="opportunity">${optionalOptions(data.opportunities.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No opportunity',x=>x.title)}</select></div>`;if(type==='filteredQuote')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="quote">${optionalOptions(data.quotes.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source quote',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='filteredOrder')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="order">${optionalOptions(data.orders.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source order',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='dynamicRelation')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-dynamic-related></select></div>`;
+ // Enterprise Access Foundation, Phase 1 mirror: a record's owner is a
+ // single picker over both Users and Work Teams (an "USER:<id>"/"TEAM:<id>"
+ // composite value, split back out in recordModal's submit handler) rather
+ // than the desktop edition's two separate ownerType/ownerId fields - one
+ // fewer control for the same real, structured relationship. The current
+ // value is read straight off record.ownerType/ownerId, not the generic
+ // `val` above (there's no literal record.ownerRef key to read), so
+ // editing an existing record's owner shows its real current owner, not
+ // "Unassigned". A brand-new record defaults to the current demo user
+ // (CURRENT_USER_ID), the same "creator becomes owner unless told
+ // otherwise" default `ownership_service::set_default_owner_on_create`
+ // applies server-side.
+ if(type==='ownerPicker'){
+  const cur=record.ownerType&&record.ownerId?`${record.ownerType}:${record.ownerId}`:(record.id?'':`USER:${CURRENT_USER_ID}`);
+  const teams=(data.workTeams||[]).filter(t=>t.canOwnRecords&&t.status!=='Inactive');
+  return `<div class="${cls}"><label>${label}</label><select name="${name}">
+   <option value="" ${cur===''?'selected':''}>Unassigned</option>
+   <optgroup label="Users">${(data.users||[]).map(u=>`<option value="USER:${u.id}" ${cur==='USER:'+u.id?'selected':''}>${u.name}</option>`).join('')}</optgroup>
+   ${teams.length?`<optgroup label="Teams">${teams.map(t=>`<option value="TEAM:${t.id}" ${cur==='TEAM:'+t.id?'selected':''}>${t.name}</option>`).join('')}</optgroup>`:''}
+  </select></div>`;
+ }
+ // Owning Organization Unit - optional (spec §2.2 allows NULL), so this
+ // uses optionalOptions like the filtered* relation pickers above rather
+ // than selectHtml's `required` default.
+ if(type==='orgUnitPicker')return `<div class="${cls}"><label>${label}</label><select name="${name}">${optionalOptions(data.orgUnits||[],val,'No Organization Unit')}</select></div>`;
  // Custom fields carry their own HTML5-native validation constraints - a
  // maxlength/pattern for text, min/max for number - so the browser blocks
  // an invalid save the same way desktop's server-side validation does,
@@ -1775,7 +1918,7 @@ function wireDetail360Nav(editHandler){
 function companyDetail(id){
  const c=byId('companies',id);
  if(!c){current='companies';detailRecord=null;return renderView()}
- const overviewFields=fieldsFor('companies',companyFields).filter(f=>f[0]!=='name');
+ const overviewFields=fieldsFor('companies',companyFields).filter(f=>f[0]!=='name'&&!['ownerPicker','orgUnitPicker'].includes(f[2]));
  const contacts=data.contacts.filter(x=>x.companyId===id);
  const opportunities=data.opportunities.filter(x=>x.companyId===id);
  const quotes=data.quotes.filter(x=>x.companyId===id);
@@ -1783,7 +1926,7 @@ function companyDetail(id){
  const invoices=data.invoices.filter(x=>x.companyId===id);
  const contracts=data.contracts.filter(x=>x.companyId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Company'&&x.relatedId===id);
- $('#view').innerHTML=`${detail360Header('Companies',c.name,c.customerNumber,`${badgeMaybe(c.status)}<span>Owner: ${c.owner||'Unassigned'}</span>`,auditByline(c))}
+ $('#view').innerHTML=`${detail360Header('Companies',c.name,c.customerNumber,`${badgeMaybe(c.status)}`,auditByline(c)+ownershipByline(c))}
  <div class="rule360-grid">
   <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewGroupsHtml('companies',overviewGroupsFor('companies',overviewFields),c)}</div></div>
   <div>
@@ -1804,13 +1947,13 @@ function companyDetail(id){
 function contactDetail(id){
  const c=byId('contacts',id);
  if(!c){current='contacts';detailRecord=null;return renderView()}
- const overviewFields=fieldsFor('contacts',contactFields).filter(f=>!['auto','relation'].includes(f[2])&&f[0]!=='name');
+ const overviewFields=fieldsFor('contacts',contactFields).filter(f=>!['auto','relation','ownerPicker','orgUnitPicker'].includes(f[2])&&f[0]!=='name');
  const opportunities=data.opportunities.filter(x=>x.contactId===id);
  const quotes=data.quotes.filter(x=>x.contactId===id);
  const orders=data.orders.filter(x=>x.contactId===id);
  const contracts=data.contracts.filter(x=>x.contactId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Contact'&&x.relatedId===id);
- $('#view').innerHTML=`${detail360Header('Contacts',c.name,c.contactNumber,`${badgeMaybe(c.status)}<span>${c.role||'—'}</span><a class="cell-link" data-nav-related="companies:${c.companyId}">${companyName(c.companyId)}</a>`,auditByline(c))}
+ $('#view').innerHTML=`${detail360Header('Contacts',c.name,c.contactNumber,`${badgeMaybe(c.status)}<span>${c.role||'—'}</span><a class="cell-link" data-nav-related="companies:${c.companyId}">${companyName(c.companyId)}</a>`,auditByline(c)+ownershipByline(c))}
  <div class="rule360-grid">
   <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewGroupsHtml('contacts',overviewGroupsFor('contacts',overviewFields),c)}</div></div>
   <div>
@@ -1884,6 +2027,13 @@ function recordRelatedDefs(key,r){
 // money() instead of the plain badgeMaybe() every other field gets.
 const MONEY_OVERVIEW_FIELDS={companies:['annualRevenue'],contracts:['value'],invoices:['amountPaid']};
 function overviewValueHtml(key,f,r){
+ // ownerPicker/orgUnitPicker are excluded from every detail page's
+ // Overview fields (shown instead via ownershipByline, next to
+ // auditByline) - handled here too as a defensive fallback, since
+ // r[f[0]] for 'ownerPicker' isn't a real stored key (ownerType/ownerId
+ // are) and 'orgUnitPicker's raw value is an internal id, not a name.
+ if(f[2]==='ownerPicker')return ownerName(r);
+ if(f[2]==='orgUnitPicker')return r[f[0]]?orgUnitName(r[f[0]]):'—';
  if((MONEY_OVERVIEW_FIELDS[key]||[]).includes(f[0])&&r[f[0]]!==undefined&&r[f[0]]!=='')return money(r[f[0]]);
  return badgeMaybe(r[f[0]]);
 }
@@ -1917,11 +2067,11 @@ function genericRecordDetail(key,id){
  const r=byId(key,id);
  if(!r){current=key;detailRecord=null;return renderView()}
  const fieldsFn=DETAIL_FIELDS_FN[key];
- const relationTypes=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation'];
+ const relationTypes=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation','ownerPicker','orgUnitPicker'];
  const overviewFields=fieldsFor(key,fieldsFn).filter(f=>!relationTypes.includes(f[2])&&f[0]!==DETAIL_TITLE_FIELD[key]);
  const isDoc=['quotes','orders','invoices'].includes(key);
  const linesHtml=isDoc?`<div class="panel" style="margin-bottom:16px"><h3 style="margin-top:0">Products & services</h3><div class="table-wrap"><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table></div><div class="line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="muted" style="font-size:13px;font-weight:400">· Balance ${money(docBalance(r))}</span>`:''}</div></div>`:'';
- $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],r[DETAIL_TITLE_FIELD[key]]||'—',DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r),auditByline(r))}
+ $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],r[DETAIL_TITLE_FIELD[key]]||'—',DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r),auditByline(r)+ownershipByline(r))}
  <div class="rule360-grid">
   <div>
    ${linesHtml}
@@ -1952,7 +2102,7 @@ function recordModal(key,fields,record={}){
  // there instead - only show it here, in the shared edit form, for
  // entities that have no separate detail view (opportunities, custom
  // object records).
- const auditHtml=(record.id&&!DETAIL_PAGE_ENTITIES.has(key))?auditByline(record):'';
+ const auditHtml=(record.id&&!DETAIL_PAGE_ENTITIES.has(key))?auditByline(record)+ownershipByline(record):'';
  // AI & Agentic Layer, Phase 3: Opportunity has no dedicated detail page
  // (unlike Company/Contact's companyDetail/contactDetail above), so its
  // Interactions card lives here instead - a sibling of the form, not
@@ -2005,6 +2155,24 @@ function recordModal(key,fields,record={}){
    if(activeRules.length&&!activeRules.some(r=>r.to===toVal&&(r.from===''||r.from===fromVal)))
     return alert(`"${fromVal||'—'} → ${toVal}" is not an allowed ${fieldLabelFor(key,tf)} transition. Configure allowed transitions in Admin → Status transitions.`);
   }
+ }
+ // Enterprise Access Foundation, Phase 1 mirror: split the ownerPicker's
+ // composite "USER:<id>"/"TEAM:<id>" value back into ownerType/ownerId,
+ // bump ownershipVersion/assignedAt only on an actual reassignment (never
+ // on every save - editing an unrelated field must never look like a
+ // transfer, mirrors ownership_repo::set_owner only ever being called when
+ // the owner truly changed) and recompute the legacy `owner` display
+ // string so every existing owner-reading call site (reports, detail
+ // headers, the AI assistant's simulated lookup) keeps working unchanged.
+ if('ownerRef' in obj){
+  const [ownerType,ownerId]=obj.ownerRef?obj.ownerRef.split(':'):[null,null];
+  delete obj.ownerRef;
+  const prevType=before?before.ownerType||null:null, prevId=before?before.ownerId||null:null;
+  const changed=!!ownerType&&(ownerType!==prevType||ownerId!==prevId);
+  obj.ownerType=ownerType;obj.ownerId=ownerId;
+  obj.ownershipVersion=changed?((before?.ownershipVersion||0)+1):(before?.ownershipVersion||0);
+  obj.assignedAt=changed?new Date().toISOString():(before?.assignedAt||null);
+  obj.owner=ownerName({ownerType,ownerId});
  }
  // Audit trail: every entity through this shared save path gets stamped
  // except users (the desktop User model carries no created_by/updated_by
@@ -2210,7 +2378,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -2319,6 +2487,214 @@ function roleModal(role){
   data.roles=data.roles.filter(r=>r.id!==role.id);save();closeModal();toast('Role deleted');renderView();
  };
 }
+// ---- Enterprise Access Foundation, Phase 1 (Organization, Organization
+// Units, Work Teams) --------------------------------------------------------
+// Mirrors the desktop edition's organization_service.rs/org_unit_service.rs/
+// work_team_service.rs exactly: "Organization" is a view over this demo's
+// own data.workspace plus a couple of extra fields (orgCode/orgStatus), not
+// a separate record; Organization Units are a real, single-rooted hierarchy
+// (materialized path + depth, same as the backend); Work Teams are a
+// first-class, record-owning principal distinct from a group. Real,
+// structured browser data throughout - simulated only in that there's no
+// server enforcing any of it.
+function organizationTab(body){
+ const w=data.workspace;
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Organization</h3><p class="muted">The single security tenant this workspace belongs to - every Organization Unit, Work Team and owned record rolls up under it.</p>
+ <table class="table" style="max-width:480px"><tbody>
+  <tr><th style="text-align:left;width:140px">Name</th><td>${w.name}</td></tr>
+  <tr><th style="text-align:left">Code</th><td><code>${w.orgCode||'—'}</code></td></tr>
+  <tr><th style="text-align:left">Status</th><td>${badgeMaybe(w.orgStatus)}</td></tr>
+ </tbody></table>
+ <form id="orgForm" class="form-grid" style="margin-top:16px;max-width:380px">
+  <div class="field"><label>Code</label><input name="orgCode" value="${w.orgCode||''}" required></div>
+  <div class="field"><label>Status</label><select name="orgStatus"><option value="Active" ${w.orgStatus==='Active'?'selected':''}>Active</option><option value="Inactive" ${w.orgStatus==='Inactive'?'selected':''}>Inactive</option></select></div>
+  <div class="field full"><button class="btn btn-primary" type="submit">Save</button></div>
+ </form></div>`;
+ $('#orgForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.orgCode.trim())return alert('Code is required.');
+  Object.assign(w,fd);save();toast('Organization updated');renderView();
+ };
+}
+const ORG_UNIT_TYPES=['Division','Region','Department','Branch','BusinessLine','Custom'];
+function orgUnitTypeOptions(sel){return ORG_UNIT_TYPES.map(t=>`<option value="${t}" ${sel===t?'selected':''}>${t}</option>`).join('')}
+// Every object type this workspace can own a record under - the fixed
+// built-ins plus every active Custom Object - used by the move-impact
+// preview, mirrors org_unit_service.rs's own `all_owned_object_keys`.
+function orgUnitOwnedCounts(unitIds){
+ const keys=[...OWNED_BUILTIN_KEYS,...activeCustomObjectKeys()];
+ const counts=[];
+ keys.forEach(k=>{
+  const n=(data[k]||[]).filter(r=>unitIds.includes(r.owningOrgUnitId)).length;
+  if(n)counts.push([k,n]);
+ });
+ return counts;
+}
+function orgUnitsTab(body){
+ const units=(data.orgUnits||[]).slice().sort((a,b)=>a.path.localeCompare(b.path));
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Organization Units</h3><p class="muted">The hierarchy every record's Owning Organization Unit scopes against. Every workspace has exactly one root unit; everything else nests under it.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>${units.map(u=>`<tr><td style="padding-left:${8+u.depth*20}px">${u.depth>0?'<span class="muted">└ </span>':''}${u.name}</td><td>${u.unitType}</td><td>${badgeMaybe(u.status)}</td><td><div class="actions"><button class="icon-btn" data-add-child="${u.id}">+ Child</button><button class="icon-btn" data-edit-unit="${u.id}">Edit</button>${u.parentOrgUnitId?`<button class="icon-btn" data-move-unit="${u.id}">Move</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>
+ </div>`;
+ body.querySelectorAll('[data-add-child]').forEach(b=>b.onclick=()=>orgUnitModal(null,b.dataset.addChild));
+ body.querySelectorAll('[data-edit-unit]').forEach(b=>b.onclick=()=>orgUnitModal(byId('orgUnits',b.dataset.editUnit)));
+ body.querySelectorAll('[data-move-unit]').forEach(b=>b.onclick=()=>moveOrgUnitModal(byId('orgUnits',b.dataset.moveUnit)));
+}
+function orgUnitModal(unit,parentId){
+ const isEdit=!!unit;
+ const isRoot=isEdit&&!unit.parentOrgUnitId;
+ const formBody=`<form id="unitForm" class="form-grid">
+ ${isEdit?`<div class="field full">${auditByline(unit)}</div>`:''}
+ <div class="field"><label>Name</label><input name="name" value="${unit?.name||''}" required ${isRoot?'readonly':''}></div>
+ <div class="field"><label>Type</label><select name="unitType" ${isRoot?'disabled':''}>${orgUnitTypeOptions(unit?.unitType||'Department')}</select></div>
+ ${isEdit&&!isRoot?`<div class="field"><label>Status</label><select name="status"><option value="Active" ${unit.status==='Active'?'selected':''}>Active</option><option value="Inactive" ${unit.status==='Inactive'?'selected':''}>Inactive</option></select></div>`:''}
+ ${isRoot?`<div class="field full"><small class="field-help">The root Organization Unit's name and type follow the Organization and can't be edited here.</small></div>`:''}
+ <div class="modal-actions">${isEdit&&!isRoot?`<button type="button" class="btn btn-secondary" data-delete-unit>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save':'Create'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit '${unit.name}'`:'New Organization Unit',formBody);
+ $('[data-close]').onclick=closeModal;
+ $('#unitForm').onsubmit=e=>{
+  e.preventDefault();
+  if(isRoot){closeModal();return}
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.name.trim())return alert('Name is required.');
+  if(isEdit){
+   Object.assign(unit,{name:fd.name,unitType:fd.unitType,status:fd.status});
+   stampUpdate(unit);
+  }else{
+   const parent=byId('orgUnits',parentId);
+   const id=uid();
+   data.orgUnits.push(stampCreate({id,name:fd.name,unitType:fd.unitType,parentOrgUnitId:parentId,managerUserId:null,status:'Active',path:`${parent.path}${id}/`,depth:parent.depth+1}));
+  }
+  save();closeModal();toast(isEdit?'Organization Unit saved':'Organization Unit created');renderAdminTab();
+ };
+ if(isEdit&&!isRoot){
+  $('[data-delete-unit]').onclick=()=>{
+   const children=(data.orgUnits||[]).filter(u=>u.parentOrgUnitId===unit.id);
+   if(children.length)return alert(`Can't delete '${unit.name}' - ${children.length} child Organization Unit(s) still exist. Move or delete them first.`);
+   if(!confirm(`Delete '${unit.name}'?`))return;
+   data.orgUnits=data.orgUnits.filter(u=>u.id!==unit.id);
+   save();closeModal();toast('Organization Unit deleted');renderAdminTab();
+  };
+ }
+}
+// Move-with-impact-preview (spec 1.2: "Moving an Organization Unit must
+// show an access-impact analysis before commit") - re-parenting rewrites
+// path/depth for the whole moved subtree in one pass, mirrors
+// org_unit_repo::update_path_for_subtree exactly.
+function moveOrgUnitModal(unit){
+ const allUnits=(data.orgUnits||[]).slice().sort((a,b)=>a.path.localeCompare(b.path));
+ const candidates=allUnits.filter(u=>u.id!==unit.id&&!u.path.startsWith(unit.path)&&u.id!==unit.parentOrgUnitId);
+ const formBody=`<div>
+ <div class="field full"><label>New parent</label><select id="moveTargetSelect"><option value="">Select a new parent...</option>${candidates.map(c=>`<option value="${c.id}">${'— '.repeat(c.depth)}${c.name}</option>`).join('')}</select></div>
+ <div id="movePreview"></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button type="button" class="btn btn-primary" id="confirmMove" disabled>Confirm move</button></div>
+ </div>`;
+ modal(`Move '${unit.name}'`,formBody);
+ $('[data-close]').onclick=closeModal;
+ const preview=$('#movePreview'), confirmBtn=$('#confirmMove');
+ $('#moveTargetSelect').onchange=e=>{
+  const targetId=e.target.value;
+  if(!targetId){preview.innerHTML='';confirmBtn.disabled=true;return}
+  const subtree=allUnits.filter(u=>u.path.startsWith(unit.path));
+  const counts=orgUnitOwnedCounts(subtree.map(u=>u.id));
+  preview.innerHTML=`<div style="margin:12px 0;padding:12px;border:1px solid var(--border,#e5e7eb);border-radius:8px">
+   <p style="margin-top:0"><strong>Impact:</strong> ${subtree.length-1} descendant unit(s) will move with it.</p>
+   ${counts.length?`<ul style="margin-bottom:0">${counts.map(([k,n])=>`<li>${n} ${labels[k]||k} record(s) owned under this subtree</li>`).join('')}</ul>`:'<p class="muted" style="margin-bottom:0">No records are owned under this subtree.</p>'}
+  </div>`;
+  confirmBtn.disabled=false;
+ };
+ confirmBtn.onclick=()=>{
+  const targetId=$('#moveTargetSelect').value;if(!targetId)return;
+  const newParent=byId('orgUnits',targetId);
+  const oldPrefix=unit.path;
+  const newPrefix=`${newParent.path}${unit.id}/`;
+  const depthDelta=(newParent.depth+1)-unit.depth;
+  (data.orgUnits||[]).forEach(u=>{
+   if(u.path.startsWith(oldPrefix)){u.path=newPrefix+u.path.slice(oldPrefix.length);u.depth+=depthDelta;stampUpdate(u)}
+  });
+  unit.parentOrgUnitId=newParent.id;
+  save();closeModal();toast(`Moved '${unit.name}' under '${newParent.name}'`);renderAdminTab();
+ };
+}
+const WORK_TEAM_TYPES=['Operational','Queue','Project','CrossFunctional','ExternalPartner'];
+function teamTypeOptions(sel){return WORK_TEAM_TYPES.map(t=>`<option value="${t}" ${sel===t?'selected':''}>${t}</option>`).join('')}
+function teamsTab(body){
+ const teams=data.workTeams||[];
+ const units=(data.orgUnits||[]).slice().sort((a,b)=>a.path.localeCompare(b.path));
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Work Teams</h3><button class="btn btn-primary" id="addTeam">+ New team</button></div><p class="muted">A named group of users that can own records as a unit - a queue, a project team, a partner desk. Distinct from an Organization Unit (a place in the hierarchy).</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Code</th><th>Type</th><th>Owns records</th><th>Status</th><th>Actions</th></tr></thead><tbody>${teams.map(t=>`<tr><td>${t.name}</td><td><code>${t.code}</code></td><td>${t.teamType}</td><td>${t.canOwnRecords?'Yes':'No'}</td><td>${badgeMaybe(t.status)}</td><td><div class="actions"><button class="icon-btn" data-members="${t.id}">Members</button><button class="icon-btn" data-edit-team="${t.id}">Edit</button></div></td></tr>`).join('')}</tbody></table>${teams.length?'':'<div class="empty">No Work Teams yet</div>'}</div>
+ </div>`;
+ $('#addTeam').onclick=()=>teamModal(null,units);
+ body.querySelectorAll('[data-edit-team]').forEach(b=>b.onclick=()=>teamModal(byId('workTeams',b.dataset.editTeam),units));
+ body.querySelectorAll('[data-members]').forEach(b=>b.onclick=()=>teamMembersModal(byId('workTeams',b.dataset.members)));
+}
+function teamModal(team,units){
+ const isEdit=!!team;
+ const formBody=`<form id="teamForm" class="form-grid">
+ ${isEdit?`<div class="field full">${auditByline(team)}</div>`:''}
+ <div class="field"><label>Name</label><input name="name" value="${team?.name||''}" required></div>
+ <div class="field"><label>Code</label><input name="code" value="${team?.code||''}" placeholder="EAST-SALES" required ${isEdit?'readonly':''}></div>
+ <div class="field"><label>Type</label><select name="teamType">${teamTypeOptions(team?.teamType||'Operational')}</select></div>
+ <div class="field"><label>Primary Organization Unit</label><select name="primaryOrgUnitId">${units.map(u=>`<option value="${u.id}" ${(team?.primaryOrgUnitId||units[0]?.id)===u.id?'selected':''}>${'— '.repeat(u.depth)}${u.name}</option>`).join('')}</select></div>
+ <div class="field full checkbox-row" style="padding:0"><label style="font-weight:normal"><input type="checkbox" name="canOwnRecords" value="true" ${team?.canOwnRecords!==false?'checked':''}> Can own records</label></div>
+ ${isEdit?`<div class="field"><label>Status</label><select name="status"><option value="Active" ${team.status==='Active'?'selected':''}>Active</option><option value="Inactive" ${team.status==='Inactive'?'selected':''}>Inactive</option></select></div>`:''}
+ <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-team>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save':'Create'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit ${team.name}`:'New Work Team',formBody);
+ $('[data-close]').onclick=closeModal;
+ $('#teamForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.name.trim())return alert('Name is required.');
+  if(!isEdit){
+   if(!fd.code.trim())return alert('Code is required.');
+   if((data.workTeams||[]).some(t=>t.code===fd.code))return alert(`A team with code '${fd.code}' already exists.`);
+  }
+  const obj={name:fd.name,teamType:fd.teamType,primaryOrgUnitId:fd.primaryOrgUnitId,canOwnRecords:fd.canOwnRecords==='true',status:fd.status||'Active'};
+  if(isEdit){Object.assign(team,obj);stampUpdate(team)}
+  else{data.workTeams.push(stampCreate({id:uid(),code:fd.code,...obj}))}
+  save();closeModal();toast(isEdit?'Work Team saved':'Work Team created');renderAdminTab();
+ };
+ if(isEdit){
+  $('[data-delete-team]').onclick=()=>{
+   const active=(data.teamMemberships||[]).filter(m=>m.teamId===team.id&&!m.effectiveTo);
+   if(active.length)return alert(`Can't delete '${team.name}' - ${active.length} active member(s) still belong to it. Remove them first.`);
+   if(!confirm(`Delete '${team.name}'?`))return;
+   data.workTeams=data.workTeams.filter(t=>t.id!==team.id);
+   save();closeModal();toast('Work Team deleted');renderAdminTab();
+  };
+ }
+}
+// Membership has its own effective dates and is deliberately independent
+// of record ownership - "Remove" only ever stamps effectiveTo, never
+// touches any record this team owns, mirrors
+// team_membership_repo::end_membership exactly.
+function teamMembersModal(team){
+ const active=(data.teamMemberships||[]).filter(m=>m.teamId===team.id&&!m.effectiveTo);
+ const memberIds=new Set(active.map(m=>m.userId));
+ const available=(data.users||[]).filter(u=>!memberIds.has(u.id));
+ const formBody=`<div>
+ <div style="display:flex;gap:8px;margin-bottom:12px">
+  <select id="addMemberSelect" style="flex:1">${available.length?`<option value="">Add a user...</option>${available.map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}`:'<option value="">No more users to add</option>'}</select>
+  <button class="btn btn-primary" id="addMemberBtn" ${available.length?'':'disabled'}>Add</button>
+ </div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>User</th><th>Member since</th><th></th></tr></thead><tbody>${active.map(m=>`<tr><td>${userName(m.userId)}</td><td>${new Date(m.effectiveFrom).toLocaleDateString()}</td><td><button class="icon-btn" data-end-membership="${m.id}">Remove</button></td></tr>`).join('')}</tbody></table>${active.length?'':'<div class="empty">No active members</div>'}</div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Close</button></div>
+ </div>`;
+ modal(`Members of '${team.name}'`,formBody);
+ $('[data-close]').onclick=closeModal;
+ if(available.length)$('#addMemberBtn').onclick=()=>{
+  const userId=$('#addMemberSelect').value;if(!userId)return;
+  data.teamMemberships.push({id:uid(),teamId:team.id,userId,roleInTeam:null,effectiveFrom:new Date().toISOString(),effectiveTo:null,createdAt:new Date().toISOString(),createdBy:CURRENT_USER_ID});
+  save();toast('Member added');closeModal();teamMembersModal(team);
+ };
+ document.querySelectorAll('[data-end-membership]').forEach(b=>b.onclick=()=>{
+  const m=byId('teamMemberships',b.dataset.endMembership);
+  m.effectiveTo=new Date().toISOString();
+  save();toast('Member removed');closeModal();teamMembersModal(team);
+ });
+}
 // ---- Custom Objects (admin extensibility) ---------------------------------
 // Lets an Administrator define a whole new business object at runtime -
 // Vendors, Assets, Projects - with no code change. Mirrors the desktop
@@ -2364,7 +2740,7 @@ function customObjectModal(obj){
    let key=rawKey,suffix=2;
    while((data.customObjects||[]).some(o=>o.key===key))key=`${rawKey}_${suffix++}`;
    const newId=uid();
-   data.customObjects.push({id:newId,key,label:fd.singular,labelPlural:fd.plural,icon:fd.icon,prefix,digits,active:true});
+   data.customObjects.push({id:newId,key,label:fd.singular,labelPlural:fd.plural,icon:fd.icon,prefix,digits,active:true,ownershipMode:'USER_TEAM_OWNED'});
    data[key]=[];
    tagLocalComponent('customObject',newId);
   }
@@ -6200,39 +6576,39 @@ function executeWorkflowAction(a,key,record){
   if(COMPANY_DEPENDENT_TYPES.includes(target)&&!companyId)return null;
   const today=new Date().toISOString().slice(0,10);
   if(target==='companies'){
-   data.companies.unshift({id:uid(),customerNumber:nextNumber('companies'),name,industry:'',city:'',owner:record.owner||'Unassigned',status:'Lead'});
+   data.companies.unshift({id:uid(),customerNumber:nextNumber('companies'),name,industry:'',city:'',status:'Lead',...defaultOwnershipFields(record)});
    return `created company "${name}"`;
   }
   if(target==='contacts'){
-   data.contacts.unshift({id:uid(),contactNumber:nextNumber('contacts'),name,companyId,role:'',email:'',phone:'',status:'Active'});
+   data.contacts.unshift({id:uid(),contactNumber:nextNumber('contacts'),name,companyId,role:'',email:'',phone:'',status:'Active',...defaultOwnershipFields(record)});
    return `created contact "${name}"`;
   }
   if(target==='opportunities'){
-   data.opportunities.unshift({id:uid(),opportunityNumber:nextNumber('opportunities'),title:name,companyId,contactId:'',value:0,stage:'Lead',probability:10,close:'',owner:record.owner||'Unassigned',status:'Open'});
+   data.opportunities.unshift({id:uid(),opportunityNumber:nextNumber('opportunities'),title:name,companyId,contactId:'',value:0,stage:'Lead',probability:10,close:'',status:'Open',...defaultOwnershipFields(record)});
    return `created opportunity "${name}"`;
   }
   if(target==='products'){
-   data.products.unshift({id:uid(),productNumber:nextNumber('products'),name,sku:'',type:'Product',category:'',price:0,tax:0,status:'Active'});
+   data.products.unshift({id:uid(),productNumber:nextNumber('products'),name,sku:'',type:'Product',category:'',price:0,tax:0,status:'Active',...defaultOwnershipFields(record)});
    return `created product "${name}"`;
   }
   if(target==='quotes'){
-   data.quotes.unshift({id:uid(),number:nextNumber('quotes'),companyId,contactId:'',opportunityId:'',status:'Draft',date:today,valid:''});
+   data.quotes.unshift({id:uid(),number:nextNumber('quotes'),companyId,contactId:'',opportunityId:'',status:'Draft',date:today,valid:'',...defaultOwnershipFields(record)});
    return `created quote for ${companyName(companyId)}`;
   }
   if(target==='orders'){
-   data.orders.unshift({id:uid(),number:nextNumber('orders'),companyId,contactId:'',quoteId:'',status:'Draft',date:today});
+   data.orders.unshift({id:uid(),number:nextNumber('orders'),companyId,contactId:'',quoteId:'',status:'Draft',date:today,...defaultOwnershipFields(record)});
    return `created order for ${companyName(companyId)}`;
   }
   if(target==='invoices'){
-   data.invoices.unshift({id:uid(),number:nextNumber('invoices'),companyId,orderId:'',status:'Draft',due:''});
+   data.invoices.unshift({id:uid(),number:nextNumber('invoices'),companyId,orderId:'',status:'Draft',due:'',...defaultOwnershipFields(record)});
    return `created invoice for ${companyName(companyId)}`;
   }
   if(target==='contracts'){
-   data.contracts.unshift({id:uid(),number:nextNumber('contracts'),companyId,contactId:'',title:name,value:0,status:'Draft',start:'',end:''});
+   data.contracts.unshift({id:uid(),number:nextNumber('contracts'),companyId,contactId:'',title:name,value:0,status:'Draft',start:'',end:'',...defaultOwnershipFields(record)});
    return `created contract "${name}"`;
   }
   if(target==='tasks'){
-   data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:name,relatedType:'General',relatedId:'',owner:record.owner||'Unassigned',due:today,priority:'Medium',status:'Open'});
+   data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:name,relatedType:'General',relatedId:'',due:today,priority:'Medium',status:'Open',...defaultOwnershipFields(record)});
    return `created task "${name}"`;
   }
   return null;
@@ -6326,7 +6702,7 @@ function executeWorkflowAction(a,key,record){
  // Custom objects aren't in relatedTypeFor (Tasks' relatedType dropdown is
  // a fixed built-ins-only list, matching desktop) - fall back to 'General'
  // rather than writing an unrecognized relatedType onto the created task.
- data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:a.taskTitle,relatedType:relatedTypeFor[key]||'General',relatedId:relatedTypeFor[key]?record.id:'',owner:record.owner||'Unassigned',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open'});
+ data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:a.taskTitle,relatedType:relatedTypeFor[key]||'General',relatedId:relatedTypeFor[key]?record.id:'',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open',...defaultOwnershipFields(record)});
  return `created task "${a.taskTitle}"`;
 }
 function workflowTab(body){
