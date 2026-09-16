@@ -36,6 +36,16 @@ pub fn get_current(conn: &Connection) -> rusqlite::Result<Option<Workspace>> {
         })
 }
 
+/// Team Workspace server mode can hold more than one workspace row per
+/// database, unlike the single-workspace Personal edition - used by
+/// organization_repo, which is keyed by workspace_id rather than
+/// "the current one".
+pub fn get_by_id(conn: &Connection, id: &str) -> rusqlite::Result<Option<Workspace>> {
+    conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
+        .map(Some)
+        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+}
+
 pub fn create(conn: &Connection, setup: &WorkspaceSetup) -> rusqlite::Result<Workspace> {
     let id = new_uuid();
     let now = now_iso();

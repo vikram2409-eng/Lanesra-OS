@@ -11,6 +11,7 @@ import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
@@ -655,6 +656,7 @@ function ContactDetail({
         {c.job_title ? ` · ${c.job_title}` : ""}
       </p>
       <AuditByline createdAt={c.created_at} createdBy={c.created_by} updatedAt={c.updated_at} updatedBy={c.updated_by} />
+      <OwnershipByline objectKey="Contact" recordId={c.id} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (

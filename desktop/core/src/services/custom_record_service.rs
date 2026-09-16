@@ -59,6 +59,7 @@ pub fn create(
     let display_number = allocate_number(conn, workspace_id, &def.key, &def.prefix, def.digits)?;
     let id = new_uuid();
     let record = custom_record_repo::create(conn, &id, workspace_id, &display_number, input, actor_user_id)?;
+    super::ownership_service::set_default_owner_on_create(conn, workspace_id, &def.key, &record.id, actor_user_id, input.owner_user_id.as_deref())?;
     audit_repo::record(
         conn,
         workspace_id,

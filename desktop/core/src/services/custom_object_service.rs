@@ -180,6 +180,17 @@ pub fn update(conn: &Connection, id: &str, input: &CustomObjectDefinitionUpdate,
     Ok(custom_object_repo::update(conn, id, input, actor_user_id)?)
 }
 
+/// Enterprise Access Foundation, Phase 1: change a Custom Object's
+/// Ownership Mode - see `models::ownership::OwnershipMode`.
+pub fn set_ownership_mode(conn: &Connection, id: &str, ownership_mode: &str, actor_user_id: Option<&str>) -> AppResult<CustomObjectDefinition> {
+    require_admin(conn, actor_user_id)?;
+    custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
+    if crate::models::ownership::OwnershipMode::from_str(ownership_mode).is_none() {
+        return Err(AppError::Validation(format!("'{ownership_mode}' is not a valid Ownership Mode")));
+    }
+    Ok(custom_object_repo::set_ownership_mode(conn, id, ownership_mode, actor_user_id)?)
+}
+
 /// Deactivating an object hides it from navigation and new-record creation
 /// but keeps its records, fields, rules and data fully intact - always
 /// allowed, since it's non-destructive (ADM-CO-10's "archive it" path).

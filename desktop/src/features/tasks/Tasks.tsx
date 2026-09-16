@@ -8,6 +8,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
@@ -591,6 +592,7 @@ function TaskDetail({
         {t.task_number} · {t.priority} priority
       </p>
       <AuditByline createdAt={t.created_at} createdBy={t.created_by} updatedAt={t.updated_at} updatedBy={t.updated_by} />
+      <OwnershipByline objectKey="Task" recordId={t.id} />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Details</h3>

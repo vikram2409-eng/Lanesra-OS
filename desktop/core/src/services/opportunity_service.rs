@@ -56,6 +56,7 @@ pub fn create(
         input,
         actor_user_id,
     )?;
+    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Opportunity", &opportunity.id, actor_user_id, input.owner_user_id.as_deref())?;
     audit_repo::record(
         conn,
         &workspace_id,

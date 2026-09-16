@@ -10,6 +10,7 @@ import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
@@ -343,6 +344,7 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
         {p.product_number} · {p.type}
       </p>
       <AuditByline createdAt={p.created_at} createdBy={p.created_by} updatedAt={p.updated_at} updatedBy={p.updated_by} />
+      <OwnershipByline objectKey="Product" recordId={p.id} />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Details</h3>

@@ -13,6 +13,7 @@ import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -348,6 +349,7 @@ function OrderDetail({
         {o.order_number} <StatusBadge status={o.status} />
       </h2>
       <AuditByline createdAt={o.created_at} createdBy={o.created_by} updatedAt={o.updated_at} updatedBy={o.updated_by} />
+      <OwnershipByline objectKey="Order" recordId={o.id} />
       {error && <div className="error-banner">{error}</div>}
 
       <RelatedRecordSummary

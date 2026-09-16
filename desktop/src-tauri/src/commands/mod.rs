@@ -29,6 +29,7 @@ pub mod notification_commands;
 pub mod numbering_commands;
 pub mod opportunity_commands;
 pub mod order_commands;
+pub mod organization_commands;
 pub mod product_commands;
 pub mod publisher_commands;
 pub mod quote_commands;

@@ -53,6 +53,7 @@ pub fn create(
     let id = new_uuid();
     let task_number = numbering::allocate_number(conn, workspace_id, &TASK)?;
     let task = task_repo::create(conn, &id, workspace_id, &task_number, input, actor_user_id)?;
+    super::ownership_service::set_default_owner_on_create(conn, workspace_id, "Task", &task.id, actor_user_id, input.owner_user_id.as_deref())?;
     audit_repo::record(
         conn,
         workspace_id,
