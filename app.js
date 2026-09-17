@@ -265,42 +265,59 @@ function migrateWorkflowRule(r){
  else if(actionType==='update_field'){action.updateFieldKey=r.updateFieldKey||'';action.updateValue=r.updateValue||'';action.updateCopyFrom=r.updateCopyFrom||''}
  r.actions=[action];
 }
-// ---- Roles & Permissions (enterprise RBAC) ---------------------------------
+// ---- Roles & Permissions: Access Control v1 (Phase 2) mirror ---------------
 // A named Role - the same Profile/Permission-Set shape Salesforce and most
-// enterprise SaaS use - sets, per object (every built-in plus every active
-// Custom Object), one of none/read/read_write, plus a separate AI &
-// Agent Access block (Assistant chat, AI Agent Foundry build access,
-// LLM & MCP settings management, and which named AI Agents a role can
-// open a Chat with). Real, structured configuration in this browser - a
-// user's `role` field is still just a name string matched against
-// data.roles, same shape usersTab always had, just backed by an editable
-// table instead of a fixed 3-value enum. Honesty note: the real desktop/
-// Team Workspace edition does NOT enforce a permission matrix like this
-// today - it only gates by whether a user's role list includes
-// "Administrator" (see chat_service.rs/user_service.rs) - so this models
-// a real, currently-unbuilt enterprise capability, not a shipped one.
-const OBJECT_PERMISSION_LEVELS=[['none','None'],['read','Read'],['read_write','Read/write']];
+// enterprise SaaS use - now carries the REAL capability x Record Scope grant
+// shape access_service.rs/access_role_service.rs enforce server-side, not
+// the earlier none/read/read_write placeholder this replaces. Each entry in
+// objectPermissions is keyed by an object_key (or '*' as the default any
+// object without its own row falls back to) and holds five capability
+// booleans (canCreate/canRead/canUpdate/canDelete/canAssign) plus a
+// recordScope (OWNER/TEAM/ORG_UNIT_AND_BELOW/ORGANIZATION - each a strict
+// superset of the one before it, exactly like the desktop RecordScope enum).
+// A user's `role` field stays a single name string matched against
+// data.roles - this demo's own long-standing single-role-per-user
+// convention - so, unlike the desktop's many-to-many user_access_roles
+// table with broadest-scope-wins folding across multiple roles, there is
+// only ever one role's grant to resolve per user here; capabilityGrantFor
+// below reflects that simplification directly rather than building an
+// unused folding step. A separate AI & Agent Access block (Assistant chat,
+// AI Agent Foundry build access, LLM & MCP settings management, and which
+// named AI Agents a role can open a Chat with) is unrelated to Access
+// Control v1 and untouched by this shape change.
+const RECORD_SCOPES=[['OWNER',"Owner only"],['TEAM',"Owner's Team"],['ORG_UNIT_AND_BELOW',"Owner's Org Unit and below"],['ORGANIZATION',"Organization-wide"]];
+function recordScopeLabel(s){return (RECORD_SCOPES.find(x=>x[0]===s)||[s,s])[1]}
+const CAPABILITIES=[['canCreate','Create'],['canRead','Read'],['canUpdate','Update'],['canDelete','Delete'],['canAssign','Assign']];
 function permissionObjectRows(){
  return [...Object.keys(numberRules).map(k=>[k,entityLabel(k)]),...activeCustomObjects().map(o=>[o.key,o.labelPlural])];
 }
+function accessGrant(overrides){return {canCreate:true,canRead:true,canUpdate:true,canDelete:true,canAssign:false,recordScope:'ORGANIZATION',...overrides}}
 function defaultRoles(){
  // Literal, not Object.keys(numberRules) - ensureAdminData() (and this fn
  // with it) runs at the very top of the script, before numberRules's own
  // `const` initializer further down has executed; reaching for it here
  // would throw a temporal-dead-zone error. Matches numberRules'/
  // AUDITED_BUILTIN_KEYS' own key set exactly.
- const allKeys=['companies','contacts','opportunities','products','quotes','orders','invoices','contracts','tasks'];
- const fullAccess=Object.fromEntries(allKeys.map(k=>[k,'read_write']));
- const readOnly=Object.fromEntries(allKeys.map(k=>[k,'read']));
- const salesAccess={...fullAccess};
- ['orders','invoices','contracts'].forEach(k=>salesAccess[k]='read');
+ // Sales Rep gets a sensible Team-scope default (can create/read/update/
+ // delete within their own team, never reassign ownership) with read-only
+ // overrides on the three downstream document types, mirroring the
+ // desktop's "Full Access"/"Standard User" split but adapted to this
+ // demo's three illustrative roles instead of two system roles.
  return [
   {id:'role_administrator',name:'Administrator',description:'Full read/write access to every object, plus every admin and AI tool.',isSystem:true,
-   objectPermissions:fullAccess,aiPermissions:{assistantAccess:true,agentFoundryAccess:true,manageAiSettings:true,allowedAgentIds:[]}},
-  {id:'role_sales_rep',name:'Sales Rep',description:'Manages companies, contacts, pipeline, products and quotes; read-only on orders, invoices and contracts.',isSystem:true,
-   objectPermissions:salesAccess,aiPermissions:{assistantAccess:true,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
+   objectPermissions:{'*':accessGrant({canDelete:true,canAssign:true,recordScope:'ORGANIZATION'})},
+   aiPermissions:{assistantAccess:true,agentFoundryAccess:true,manageAiSettings:true,allowedAgentIds:[]}},
+  {id:'role_sales_rep',name:'Sales Rep',description:'Manages companies, contacts, pipeline, products and quotes within their own team; read-only on orders, invoices and contracts.',isSystem:true,
+   objectPermissions:{
+    '*':accessGrant({recordScope:'TEAM'}),
+    orders:accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'TEAM'}),
+    invoices:accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'TEAM'}),
+    contracts:accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'TEAM'}),
+   },
+   aiPermissions:{assistantAccess:true,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
   {id:'role_viewer',name:'Viewer',description:'Read-only access across the workspace - no admin tools, no AI Agent Foundry.',isSystem:true,
-   objectPermissions:readOnly,aiPermissions:{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
+   objectPermissions:{'*':accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'ORGANIZATION'})},
+   aiPermissions:{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}},
  ];
 }
 function ensureAdminData(){
@@ -308,6 +325,28 @@ function ensureAdminData(){
  if(!data.users)data.users=[{id:'u1',name:'Maya Chen',email:'maya@northstar.example',role:'Administrator',status:'Active'}];
  if(!data.roles)data.roles=defaultRoles();
  (data.roles||[]).forEach(r=>{if(!r.objectPermissions)r.objectPermissions={};if(!r.aiPermissions)r.aiPermissions={assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]}});
+ // Access Control v1 (Phase 2) mirror: upgrade any role still carrying the
+ // old none/read/read_write string shape (persisted in an existing
+ // browser's localStorage from before this migration) into the real
+ // capability x Record Scope grant object - a one-time, idempotent
+ // backfill, same convention as every other data-shape upgrade in this
+ // function. A missing/empty objectPermissions on a pre-existing role gets
+ // a wildcard default so it isn't left silently permission-less.
+ (data.roles||[]).forEach(r=>{
+  const upgraded={};
+  let sawLegacyShape=false;
+  Object.entries(r.objectPermissions||{}).forEach(([key,val])=>{
+   if(typeof val==='string'){
+    sawLegacyShape=true;
+    upgraded[key]=val==='read_write'?accessGrant({recordScope:'ORGANIZATION'})
+     :val==='read'?accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'ORGANIZATION'})
+     :accessGrant({canCreate:false,canRead:false,canUpdate:false,canDelete:false,recordScope:'OWNER'});
+   }else{
+    upgraded[key]=val;
+   }
+  });
+  if(sawLegacyShape||!Object.keys(upgraded).length)r.objectPermissions=Object.keys(upgraded).length?upgraded:{'*':accessGrant({recordScope:'ORGANIZATION'})};
+ });
  if(!data.customFields)data.customFields=[];
  if(!data.fieldRules)data.fieldRules=[];
  if(!data.workflowRules)data.workflowRules=[];
@@ -603,7 +642,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -615,7 +654,7 @@ const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],[
 // same reason (see AiSettingsAdmin.tsx's doc comment).
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering']},
- {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy']},
+ {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
@@ -1756,14 +1795,25 @@ function wireSavedViewsAndBulkActions(key,cfg,statusField){
    const ownerRef=fd.get('ownerRef');if(!ownerRef)return;
    const [ownerType,ownerId]=ownerRef.split(':');
    const owningOrgUnitId=fd.get('owningOrgUnitId')||'';
+   // Access Control v1 (Phase 2) mirror: the one seam issue #141 names -
+   // Assign is checked per record, mirrors ownership_service::
+   // require_assign_capability + bulk_transfer_commit's own partial-success
+   // shape (some selected records can be outside the actor's Record Scope
+   // even when others aren't).
+   let denied=0;
    data[key].filter(r=>ids.includes(r.id)).forEach(r=>{
+    const decision=requireCapability(CURRENT_USER_ID,key,'canAssign',r);
+    if(!decision.allowed){denied++;return}
     r.ownerType=ownerType;r.ownerId=ownerId;
     if(owningOrgUnitId)r.owningOrgUnitId=owningOrgUnitId;
     r.ownershipVersion=(r.ownershipVersion||0)+1;
     r.assignedAt=new Date().toISOString();
     r.owner=ownerName(r);
    });
-   save();toast(`Reassigned owner for ${ids.length} record(s)`);renderView();
+   save();
+   const ok=ids.length-denied;
+   toast(denied?`Reassigned owner for ${ok} record(s); ${denied} skipped (outside your Access Role's scope)`:`Reassigned owner for ${ids.length} record(s)`);
+   renderView();
   });
  });
  $('#bulkExport')?.addEventListener('click',()=>{
@@ -2202,6 +2252,16 @@ function recordModal(key,fields,record={}){
   delete obj.ownerRef;
   const prevType=before?before.ownerType||null:null, prevId=before?before.ownerId||null:null;
   const changed=!!ownerType&&(ownerType!==prevType||ownerId!==prevId);
+  // Access Control v1 (Phase 2) mirror: the one seam issue #141 names -
+  // reassigning an existing record's owner requires Assign capability over
+  // *this* record's current scope, mirrors ownership_service::
+  // require_assign_capability. A brand-new record (no `before`) has no
+  // prior owner to reassign away from, so nothing to check yet - matches
+  // set_default_owner_on_create's own unchecked, always-allowed path.
+  if(changed&&before){
+   const decision=requireCapability(CURRENT_USER_ID,key,'canAssign',before);
+   if(!decision.allowed)return alert(decision.reason);
+  }
   obj.ownerType=ownerType;obj.ownerId=ownerId;
   obj.ownershipVersion=changed?((before?.ownershipVersion||0)+1):(before?.ownershipVersion||0);
   obj.assignedAt=changed?new Date().toISOString():(before?.assignedAt||null);
@@ -2411,7 +2471,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -2432,7 +2492,7 @@ function usersTab(body){
  body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Users</h3><button class="btn btn-primary" id="addUser">+ New user</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Org Unit</th><th>Status</th><th>Actions</th></tr></thead><tbody>${arr.map(u=>`<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td><td>${orgUnitName(u.primaryOrgUnitId)}</td><td>${badgeMaybe(u.status)}</td><td><div class="actions"><button class="icon-btn" data-edit="${u.id}">Edit</button><button class="icon-btn" data-del="${u.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${arr.length?'':'<div class="empty">No users yet</div>'}</div></div>
  <div class="panel" style="margin-top:16px">
  <div class="panel-head"><h3>Roles & permissions</h3><button class="btn btn-primary" id="addRole">+ New role</button></div>
- <p class="muted" style="font-size:13px">Enterprise-style role-based access control - the same Profile/Permission-Set shape Salesforce and most enterprise SaaS use: each role sets none/read/read-write per object, plus Assistant, AI Agent Foundry and per-Agent chat access. Real, structured configuration in this browser; the desktop edition today only gates by whether a user's role list includes Administrator - a per-object/per-AI-feature matrix like this isn't enforced server-side yet, a real gap, not glossed over.</p>
+ <p class="muted" style="font-size:13px">Access Control v1: each role sets, per object, Create/Read/Update/Delete/Assign plus a Record Scope (Owner only, Owner's Team, Owner's Org Unit and below, or Organization-wide) - the same capability x scope shape the desktop edition's Access Roles enforce, real and evaluated in this browser too. Reassigning a record's owner (below and on every record's edit form) is checked against it live; open the <b>Access Inspector</b> (Admin → Access) to see exactly why a check allowed or denied. AI & Agent Access stays its own separate, illustrative-only block, unrelated to Access Control v1.</p>
  <div class="table-wrap"><table class="table"><thead><tr><th>Role</th><th>Users</th><th>Object access</th><th>AI access</th><th>Actions</th></tr></thead><tbody>${roles.map(r=>`<tr><td><b>${r.name}</b>${r.isSystem?' <span class="badge">Built-in</span>':''}${r.description?`<br><small class="muted">${r.description}</small>`:''}</td><td>${arr.filter(u=>u.role===r.name).length}</td><td style="font-size:13px">${roleObjectSummary(r)}</td><td style="font-size:13px">${roleAiSummary(r)}</td><td><div class="actions"><button class="icon-btn" data-edit-role="${r.id}">Edit</button>${r.isSystem?'':`<button class="icon-btn" data-del-role="${r.id}">Delete</button>`}</div></td></tr>`).join('')}</tbody></table>${roles.length?'':'<div class="empty">No roles yet</div>'}</div>
  </div>`;
  $('#addUser').onclick=()=>recordModal('users',userFields());
@@ -2448,15 +2508,12 @@ function usersTab(body){
  });
 }
 function roleObjectSummary(r){
- const perms=Object.values(r.objectPermissions||{});
- const rw=perms.filter(p=>p==='read_write').length;
- const ro=perms.filter(p=>p==='read').length;
- const none=perms.filter(p=>p==='none').length;
- const parts=[];
- if(rw)parts.push(`${rw} read-write`);
- if(ro)parts.push(`${ro} read-only`);
- if(none)parts.push(`${none} no access`);
- return parts.join(', ')||'Not configured';
+ const def=(r.objectPermissions||{})['*'];
+ const overrides=Object.keys(r.objectPermissions||{}).filter(k=>k!=='*').length;
+ if(!def)return overrides?`${overrides} object override(s), no default`:'Not configured';
+ const caps=CAPABILITIES.filter(([k])=>def[k]).map(([,l])=>l);
+ const base=`Default: ${caps.length?caps.join('/'):'no access'} (${recordScopeLabel(def.recordScope)})`;
+ return overrides?`${base}, ${overrides} object override(s)`:base;
 }
 function roleAiSummary(r){
  const p=r.aiPermissions||{};
@@ -2473,15 +2530,17 @@ function roleModal(role){
  const perms=role?.objectPermissions||{};
  const ai=role?.aiPermissions||{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]};
  const agents=data.aiAgents||[];
- const matrixRows=objects.map(([key,label])=>{
-  const level=perms[key]||'none';
-  return `<tr><td>${label}</td>${OBJECT_PERMISSION_LEVELS.map(([lv])=>`<td style="text-align:center"><input type="radio" name="perm_${key}" value="${lv}" ${level===lv?'checked':''}></td>`).join('')}</tr>`;
- }).join('');
+ const grantRow=(key,label)=>{
+  const g=perms[key]||accessGrant({canCreate:key!=='*',canUpdate:key!=='*',canDelete:false,recordScope:'ORGANIZATION'});
+  return `<tr><td>${label}</td>${CAPABILITIES.map(([ck])=>`<td style="text-align:center"><input type="checkbox" name="cap_${key}_${ck}" ${g[ck]?'checked':''}></td>`).join('')}<td><select name="scope_${key}">${RECORD_SCOPES.map(([sv,sl])=>`<option value="${sv}" ${g.recordScope===sv?'selected':''}>${sl}</option>`).join('')}</select></td></tr>`;
+ };
+ const matrixRows=[grantRow('*','<b>Default (*)</b>'),...objects.map(([key,label])=>grantRow(key,label))].join('');
  const body=`<form id="roleForm" class="form-grid">
  <div class="field full"><label>Role name</label><input name="name" value="${role?.name||''}" required ${role?.isSystem?'readonly':''}>${role?.isSystem?'<small class="field-help">Built-in role names can\'t be changed - other configuration (like Screen Layout visibility) already targets them by name.</small>':''}</div>
  <div class="field full"><label>Description</label><input name="description" value="${role?.description||''}"></div>
  <div class="field full"><label>Object permissions</label>
-  <div class="table-wrap"><table class="perm-matrix"><thead><tr><th>Object</th>${OBJECT_PERMISSION_LEVELS.map(([,l])=>`<th>${l}</th>`).join('')}</tr></thead><tbody>${matrixRows}</tbody></table></div>
+  <small class="field-help">Every object type without its own row here falls back to the Default (*) row - the same wildcard-fallback rule <code>access_service::resolve_grant</code> uses server-side. Record Scope says how far Update/Delete/Assign reach: Owner only, the owner's Work Team, the owner's Organization Unit and below, or the whole Organization.</small>
+  <div class="table-wrap"><table class="perm-matrix"><thead><tr><th>Object</th>${CAPABILITIES.map(([,l])=>`<th>${l}</th>`).join('')}<th>Record Scope</th></tr></thead><tbody>${matrixRows}</tbody></table></div>
  </div>
  <div class="field full"><label>AI & Agent access</label>
   <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
@@ -2502,7 +2561,10 @@ function roleModal(role){
   if(!name)return alert('Role name is required.');
   if((data.roles||[]).some(r=>r.name===name&&r.id!==role?.id))return alert('A role with this name already exists.');
   const objectPermissions={};
-  objects.forEach(([key])=>{objectPermissions[key]=fd.get(`perm_${key}`)||'none'});
+  ['*',...objects.map(([key])=>key)].forEach(key=>{
+   objectPermissions[key]=Object.fromEntries(CAPABILITIES.map(([ck])=>[ck,fd.get(`cap_${key}_${ck}`)==='on']));
+   objectPermissions[key].recordScope=fd.get(`scope_${key}`)||'ORGANIZATION';
+  });
   const allowedAgentIds=Array.from(e.target.elements.allowedAgentIds?.selectedOptions||[]).map(o=>o.value);
   const obj={name,description:fd.get('description')||'',objectPermissions,aiPermissions:{assistantAccess:fd.get('assistantAccess')==='on',agentFoundryAccess:fd.get('agentFoundryAccess')==='on',manageAiSettings:fd.get('manageAiSettings')==='on',allowedAgentIds}};
   if(isEdit){
@@ -2518,6 +2580,108 @@ function roleModal(role){
   const usersWithRole=data.users.filter(u=>u.role===role.name).length;
   if(usersWithRole)return alert(`Can't delete "${role.name}" - ${usersWithRole} user(s) still have this role. Reassign them first.`);
   data.roles=data.roles.filter(r=>r.id!==role.id);save();closeModal();toast('Role deleted');renderView();
+ };
+}
+// ---- Access Control v1 (Phase 2) mirror: the evaluator ---------------------
+// Mirrors access_service.rs's "one evaluator, two callers" design exactly -
+// requireCapability (the enforcement seam, wired into the bulk owner
+// reassignment action and the record-edit ownerRef save path below) and the
+// Access Inspector tab both call explainAccess and get back the identical
+// decision, one enforced into an early-return/alert, the other narrated.
+// Simplified for this demo's single-role-per-user convention: data.users[].
+// role is one name, not a many-to-many join table, so there is only ever
+// one role's grant to resolve - no multi-role broadest-scope folding step
+// exists here because there is nothing to fold.
+function roleForUser(userId){const u=(data.users||[]).find(x=>x.id===userId);return u&&(data.roles||[]).find(r=>r.name===u.role)}
+function roleGrantFor(role,objectKey){if(!role)return null;const perms=role.objectPermissions||{};return perms[objectKey]||perms['*']||null}
+function isWithinTeamScopeFor(userId,record){
+ if(record.ownerType==='USER'&&record.ownerId===userId)return true;
+ const activeTeamsOf=uid2=>(data.teamMemberships||[]).filter(m=>m.userId===uid2&&!m.effectiveTo).map(m=>m.teamId);
+ if(record.ownerType==='TEAM')return activeTeamsOf(userId).includes(record.ownerId);
+ if(record.ownerType==='USER'){const mine=activeTeamsOf(userId),theirs=activeTeamsOf(record.ownerId);return mine.some(t=>theirs.includes(t))}
+ return false;
+}
+function isWithinOrgUnitScopeFor(userId,record){
+ if(!record.owningOrgUnitId)return false;
+ const user=(data.users||[]).find(u=>u.id===userId);
+ if(!user?.primaryOrgUnitId)return false;
+ const actorUnit=byId('orgUnits',user.primaryOrgUnitId), recordUnit=byId('orgUnits',record.owningOrgUnitId);
+ return !!(actorUnit&&recordUnit&&recordUnit.path.startsWith(actorUnit.path));
+}
+// Each level a strict superset of the one before it (Owner ⊂ Team ⊂
+// OrgUnitAndBelow ⊂ Organization) - only ever checks the named level
+// directly, same as access_service::scope_allows_record.
+function scopeAllowsRecordFor(scope,userId,record){
+ switch(scope){
+  case 'OWNER':return record.ownerType==='USER'&&record.ownerId===userId;
+  case 'TEAM':return isWithinTeamScopeFor(userId,record);
+  case 'ORG_UNIT_AND_BELOW':return isWithinTeamScopeFor(userId,record)||isWithinOrgUnitScopeFor(userId,record);
+  case 'ORGANIZATION':return true;
+  default:return false;
+ }
+}
+function explainAccess(userId,objectKey,capability,record){
+ const user=(data.users||[]).find(u=>u.id===userId);
+ const role=roleForUser(userId);
+ const grant=roleGrantFor(role,objectKey);
+ const capLabel=(CAPABILITIES.find(c=>c[0]===capability)||[capability,capability])[1];
+ const objLabel=labels[objectKey]||entityLabel?.(objectKey)||objectKey;
+ if(!role||!grant||!grant[capability]){
+  return {allowed:false,scope:null,roleName:role?role.name:null,userName:user?.name||'This user',
+   reason:`${user?user.name:'This user'}'s role (${role?role.name:'none'}) does not grant ${capLabel} on ${objLabel}.`};
+ }
+ if(!record){
+  return {allowed:true,scope:grant.recordScope,roleName:role.name,userName:user.name,
+   reason:`'${role.name}' grants ${capLabel} on ${objLabel} (${recordScopeLabel(grant.recordScope)} scope).`};
+ }
+ const allowed=scopeAllowsRecordFor(grant.recordScope,userId,record);
+ return {allowed,scope:grant.recordScope,roleName:role.name,userName:user.name,
+  reason:allowed
+   ?`'${role.name}' grants ${capLabel} on ${objLabel} within ${recordScopeLabel(grant.recordScope)} scope, which covers this record.`
+   :`The broadest grant found ('${role.name}', ${recordScopeLabel(grant.recordScope)} scope) doesn't cover this specific record.`};
+}
+function requireCapability(userId,objectKey,capability,record){return explainAccess(userId,objectKey,capability,record||null)}
+// Access Inspector - picks a user, object type, capability and optional
+// record, and renders the exact decision requireCapability itself would
+// enforce (same evaluator, narrated instead of short-circuited into an
+// alert) - mirrors the desktop edition's Access Inspector one-for-one.
+function accessInspectorTab(body){
+ const objects=permissionObjectRows();
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Access Inspector</h3><p class="muted">Answer "why can/can't this user do that" from the same evaluation the Reassign owner action and every record's edit form actually enforce - not a guess.</p>
+ <form id="inspectForm" class="form-grid">
+  <div class="field"><label>User</label><select name="userId">${(data.users||[]).map(u=>`<option value="${u.id}">${u.name} (${u.role})</option>`).join('')}</select></div>
+  <div class="field"><label>Object</label><select name="objectKey">${objects.map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></div>
+  <div class="field"><label>Capability</label><select name="capability">${CAPABILITIES.map(([k,l])=>`<option value="${k}" ${k==='canAssign'?'selected':''}>${l}</option>`).join('')}</select></div>
+  <div class="field"><label>Record (optional)</label><select name="recordId"><option value="">No specific record - just the grant</option></select></div>
+  <div class="field full"><button class="btn btn-primary" type="submit">Check access</button></div>
+ </form>
+ <div id="inspectResult"></div>
+ </div>`;
+ const recordSelect=$('[name=recordId]');
+ const fillRecords=()=>{
+  const key=$('[name=objectKey]').value;
+  const rows=data[key]||[];
+  recordSelect.innerHTML=`<option value="">No specific record - just the grant</option>${rows.map(r=>`<option value="${r.id}">${r.name||r.customerNumber||r.orderNumber||r.invoiceNumber||r.quoteNumber||r.id}</option>`).join('')}`;
+ };
+ $('[name=objectKey]').addEventListener('change',fillRecords);
+ fillRecords();
+ $('#inspectForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const userId=fd.get('userId'), objectKey=fd.get('objectKey'), capability=fd.get('capability'), recordId=fd.get('recordId');
+  const record=recordId?(data[objectKey]||[]).find(r=>r.id===recordId):null;
+  const decision=explainAccess(userId,objectKey,capability,record);
+  const user=(data.users||[]).find(u=>u.id===userId);
+  const role=roleForUser(userId);
+  $('#inspectResult').innerHTML=`<div style="margin-top:16px;padding:14px;border:1px solid var(--border,#e5e7eb);border-radius:8px">
+   <p style="margin-top:0"><span class="badge" style="background:${decision.allowed?'var(--success,#1a7f37)':'var(--danger,#c0392b)'};color:#fff">${decision.allowed?'Allowed':'Denied'}</span></p>
+   <table class="table" style="max-width:520px"><tbody>
+    <tr><th style="text-align:left;width:140px">Role checked</th><td>${role?role.name:'None held'}</td></tr>
+    <tr><th style="text-align:left">Matched scope</th><td>${decision.scope?recordScopeLabel(decision.scope):'—'}</td></tr>
+    ${record?`<tr><th style="text-align:left">Record</th><td>${record.name||record.customerNumber||record.id}</td></tr>`:''}
+   </tbody></table>
+   <p style="margin-bottom:0">${decision.reason}</p>
+  </div>`;
  };
 }
 // ---- Enterprise Access Foundation, Phase 1 (Organization, Organization
