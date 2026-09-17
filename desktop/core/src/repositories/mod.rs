@@ -58,6 +58,7 @@ pub mod task_repo;
 pub mod team_membership_repo;
 pub mod user_access_role_repo;
 pub mod user_repo;
+pub mod voice_repo;
 pub mod work_team_repo;
 pub mod workflow_repo;
 pub mod workspace_repo;

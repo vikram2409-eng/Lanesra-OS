@@ -14,7 +14,10 @@ pub fn hash_password(password: &str) -> AppResult<String> {
         .map_err(|e| AppError::Validation(format!("could not hash password: {e}")))
 }
 
-fn verify_password(password: &str, hash: &str) -> bool {
+/// `pub(crate)` rather than private: `voice_session_service` reuses this
+/// exact verifier for the Voice PIN - never a second hashing/verification
+/// scheme for what is, cryptographically, the same kind of secret.
+pub(crate) fn verify_password(password: &str, hash: &str) -> bool {
     match PasswordHash::new(hash) {
         Ok(parsed) => Argon2::default()
             .verify_password(password.as_bytes(), &parsed)

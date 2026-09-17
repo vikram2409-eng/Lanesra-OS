@@ -17,6 +17,7 @@ import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 import { ORDER_STATUSES, type CustomFieldValues, type Order, type OrderInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
@@ -311,6 +312,7 @@ function OrderDetail({
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const canWriteOrder = useCanWriteObject("Order");
+  useReportVoiceContext("Order", id);
   // convert_to_invoice is gated on Invoice write access, not Order (it
   // never touches the source order) - see app_service::
   // require_object_write_access's own doc comment on why a conversion

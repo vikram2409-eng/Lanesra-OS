@@ -12,6 +12,7 @@ use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::access_role::{AccessRole, AccessRoleGrant, AccessRoleGrantInput, AccessRoleInput, AccessRoleUpdate, CAPABILITIES, RECORD_SCOPES};
 use crate::repositories::{access_role_repo, user_access_role_repo, user_repo};
+use crate::services::voice_policy_service;
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -156,6 +157,7 @@ pub fn ensure_system_roles_seeded(conn: &Connection, workspace_id: &str) -> AppR
         &full_access.id,
         &AccessRoleGrantInput { object_key: "*".into(), can_create: true, can_read: true, can_update: true, can_delete: true, can_assign: true, record_scope: "ORGANIZATION".into() },
     )?;
+    voice_policy_service::ensure_full_access_binding(conn, workspace_id, &full_access.id)?;
     let standard_user = access_role_repo::create(
         conn,
         &new_uuid(),

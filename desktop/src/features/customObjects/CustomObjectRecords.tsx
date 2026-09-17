@@ -22,6 +22,7 @@ import {
 import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -62,6 +63,7 @@ export function CustomObjectRecords({
   const views = useSavedViews(definition.key);
   const fieldFilters = views.filters;
   const canWrite = useCanWriteObject(definition.key);
+  useReportVoiceContext(definition.key, view.mode === "edit" ? view.id : undefined);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["customRecords", definition.key] });

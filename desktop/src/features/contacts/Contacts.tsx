@@ -19,6 +19,7 @@ import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { GroupHeaderRow } from "../../components/GroupHeaderRow";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 import { formatCents } from "../../lib/money";
 import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
@@ -601,6 +602,7 @@ function ContactDetail({
 }) {
   const [tab, setTab] = useState<ContactTab>("overview");
   const canWrite = useCanWriteObject("Contact");
+  useReportVoiceContext("Contact", id);
   const contact = useQuery({ queryKey: ["contact", id], queryFn: () => api.getContact(id) });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });

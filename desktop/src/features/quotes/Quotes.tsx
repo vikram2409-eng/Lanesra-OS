@@ -17,6 +17,7 @@ import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 import { QUOTE_STATUSES, type CustomFieldValues, type Quote, type QuoteInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
@@ -328,6 +329,7 @@ function QuoteDetail({
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
   const canWriteQuote = useCanWriteObject("Quote");
+  useReportVoiceContext("Quote", id);
   // convert_to_order is gated on Order write access, not Quote (it never
   // touches the source quote) - see app_service::require_object_write_access's
   // own doc comment on why a conversion command gates on its destination type.

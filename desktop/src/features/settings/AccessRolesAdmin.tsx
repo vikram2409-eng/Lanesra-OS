@@ -2,9 +2,17 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
-import { RECORD_SCOPES } from "../../lib/types";
-import type { AccessRole, AccessRoleGrant, AccessRoleGrantInput, AccessRoleInput } from "../../lib/types";
+import { RECORD_SCOPES, MAX_ACTION_LEVELS, PROCESSING_BOUNDARIES } from "../../lib/types";
+import type {
+  AccessRole,
+  AccessRoleGrant,
+  AccessRoleGrantInput,
+  AccessRoleInput,
+  VoicePolicyBinding,
+  VoicePolicyBindingInput,
+} from "../../lib/types";
 import { AccessInspector } from "./AccessInspector";
+import { VoiceActivitySearch } from "../voice/VoiceActivitySearch";
 
 /** Every built-in object_key the ownership/access engine knows about -
  * mirrors `ownership_service::BUILTIN_OWNED_OBJECT_KEYS` on the backend.
@@ -29,6 +37,8 @@ export function AccessRolesAdmin() {
   const [grantsOfId, setGrantsOfId] = useState<string | null>(null);
   const [membersOfId, setMembersOfId] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
+  const [governingVoice, setGoverningVoice] = useState(false);
+  const [voiceActivity, setVoiceActivity] = useState(false);
   const queryClient = useQueryClient();
 
   const roles = useQuery({ queryKey: ["accessRoles"], queryFn: () => api.listAccessRoles() });
@@ -50,6 +60,24 @@ export function AccessRolesAdmin() {
             Access Inspector
           </button>
           <button
+            className="btn"
+            onClick={() => {
+              setGoverningVoice((v) => !v);
+              setVoiceActivity(false);
+            }}
+          >
+            Voice Governance
+          </button>
+          <button
+            className="btn"
+            onClick={() => {
+              setVoiceActivity((v) => !v);
+              setGoverningVoice(false);
+            }}
+          >
+            Voice Activity
+          </button>
+          <button
             className="btn btn-primary"
             onClick={() => {
               setCreating((v) => !v);
@@ -69,6 +97,8 @@ export function AccessRolesAdmin() {
       </p>
 
       {inspecting && <AccessInspector onClose={() => setInspecting(false)} />}
+      {governingVoice && <VoiceGovernancePanel roles={roles.data ?? []} onClose={() => setGoverningVoice(false)} />}
+      {voiceActivity && <VoiceActivitySearch onClose={() => setVoiceActivity(false)} />}
 
       {creating && (
         <RoleForm
@@ -454,5 +484,203 @@ function MembersPanel({ role, onClose }: { role: AccessRole; onClose: () => void
         </table>
       )}
     </div>
+  );
+}
+
+/**
+ * Voice Governance (Voice-First Mode PR 1): editing `voice_policy_bindings`
+ * per Access Role, plus one virtual "Default (all users)" row for the
+ * workspace-default binding (`access_role_id IS NULL`). This composes with -
+ * never replaces - the capability grants above: a Voice action still needs
+ * BOTH the matching Voice capability here AND the ordinary object capability
+ * from the Grants panel, exactly like `voice_policy_service::voice_capability_allows`
+ * is used alongside `access_service::require_capability` on the backend.
+ */
+function VoiceGovernancePanel({ roles, onClose }: { roles: AccessRole[]; onClose: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const bindings = useQuery({ queryKey: ["voicePolicyBindings"], queryFn: () => api.listVoicePolicyBindings() });
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["voicePolicyBindings"] });
+  }
+
+  const save = useMutation({
+    mutationFn: (input: VoicePolicyBindingInput) => api.upsertVoicePolicyBinding(input),
+    onSuccess: invalidate,
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this Voice policy"),
+  });
+
+  const bindingByRoleId = new Map((bindings.data ?? []).map((b) => [b.access_role_id, b]));
+
+  return (
+    <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
+      <div className="toolbar">
+        <h4 style={{ margin: 0 }}>Voice Governance</h4>
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+        Voice permissions can only narrow what a role can already do - they never grant access beyond that role's
+        own capability grants above. "Default (all users)" is the workspace-wide fallback for any role without its
+        own row below.
+      </p>
+      {error && <div className="error-banner">{error}</div>}
+      {bindings.isLoading && <p>Loading...</p>}
+      {bindings.data && (
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>Voice</th>
+                <th>Search</th>
+                <th>Create</th>
+                <th>Update</th>
+                <th>Act</th>
+                <th>Bulk act</th>
+                <th>External act</th>
+                <th>AI Agents</th>
+                <th>Max action level</th>
+                <th>Processing boundary</th>
+                <th>Unlock (min)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <VoiceGovernanceRow
+                label="Default (all users)"
+                accessRoleId={null}
+                binding={bindingByRoleId.get(null) ?? null}
+                onSave={(input) => save.mutate(input)}
+                saving={save.isPending}
+              />
+              {roles.map((r) => (
+                <VoiceGovernanceRow
+                  key={r.id}
+                  label={r.name}
+                  accessRoleId={r.id}
+                  binding={bindingByRoleId.get(r.id) ?? null}
+                  onSave={(input) => save.mutate(input)}
+                  saving={save.isPending}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VoiceGovernanceRow({
+  label,
+  accessRoleId,
+  binding,
+  onSave,
+  saving,
+}: {
+  label: string;
+  accessRoleId: string | null;
+  binding: VoicePolicyBinding | null;
+  onSave: (input: VoicePolicyBindingInput) => void;
+  saving: boolean;
+}) {
+  const [canUseVoice, setCanUseVoice] = useState(binding?.can_use_voice ?? false);
+  const [canSearch, setCanSearch] = useState(binding?.can_search ?? false);
+  const [canCreate, setCanCreate] = useState(binding?.can_create ?? false);
+  const [canUpdate, setCanUpdate] = useState(binding?.can_update ?? false);
+  const [canAct, setCanAct] = useState(binding?.can_act ?? false);
+  const [canBulkAct, setCanBulkAct] = useState(binding?.can_bulk_act ?? false);
+  const [canExternalAct, setCanExternalAct] = useState(binding?.can_external_act ?? false);
+  const [canUseAgents, setCanUseAgents] = useState(binding?.can_use_agents ?? false);
+  const [maxActionLevel, setMaxActionLevel] = useState(binding?.max_action_level ?? "ask_only");
+  const [processingBoundary, setProcessingBoundary] = useState(binding?.processing_boundary ?? "cloud");
+  const [maxUnlockMinutes, setMaxUnlockMinutes] = useState(binding?.max_unlock_minutes ?? 15);
+
+  return (
+    <tr>
+      <td>{accessRoleId === null ? <b>{label}</b> : label}</td>
+      <td>
+        <input type="checkbox" checked={canUseVoice} onChange={(e) => setCanUseVoice(e.target.checked)} />
+      </td>
+      <td>
+        <input type="checkbox" checked={canSearch} onChange={(e) => setCanSearch(e.target.checked)} />
+      </td>
+      <td>
+        <input type="checkbox" checked={canCreate} onChange={(e) => setCanCreate(e.target.checked)} />
+      </td>
+      <td>
+        <input type="checkbox" checked={canUpdate} onChange={(e) => setCanUpdate(e.target.checked)} />
+      </td>
+      <td>
+        <input type="checkbox" checked={canAct} onChange={(e) => setCanAct(e.target.checked)} />
+      </td>
+      <td>
+        <input type="checkbox" checked={canBulkAct} onChange={(e) => setCanBulkAct(e.target.checked)} />
+      </td>
+      <td>
+        <input type="checkbox" checked={canExternalAct} onChange={(e) => setCanExternalAct(e.target.checked)} />
+      </td>
+      <td>
+        <input type="checkbox" checked={canUseAgents} onChange={(e) => setCanUseAgents(e.target.checked)} />
+      </td>
+      <td>
+        <select value={maxActionLevel} onChange={(e) => setMaxActionLevel(e.target.value as typeof maxActionLevel)}>
+          {MAX_ACTION_LEVELS.map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <select
+          value={processingBoundary}
+          onChange={(e) => setProcessingBoundary(e.target.value as typeof processingBoundary)}
+        >
+          {PROCESSING_BOUNDARIES.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <input
+          type="number"
+          min={1}
+          style={{ width: 64 }}
+          value={maxUnlockMinutes}
+          onChange={(e) => setMaxUnlockMinutes(Number(e.target.value))}
+        />
+      </td>
+      <td>
+        <button
+          className="btn"
+          disabled={saving}
+          onClick={() =>
+            onSave({
+              access_role_id: accessRoleId,
+              can_use_voice: canUseVoice,
+              can_search: canSearch,
+              can_create: canCreate,
+              can_update: canUpdate,
+              can_act: canAct,
+              can_bulk_act: canBulkAct,
+              can_external_act: canExternalAct,
+              can_use_agents: canUseAgents,
+              max_action_level: maxActionLevel,
+              processing_boundary: processingBoundary,
+              max_unlock_minutes: maxUnlockMinutes,
+            })
+          }
+        >
+          Save
+        </button>
+      </td>
+    </tr>
   );
 }

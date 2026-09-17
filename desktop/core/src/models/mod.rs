@@ -40,6 +40,7 @@ pub mod solution_component;
 pub mod status_transition;
 pub mod task;
 pub mod user;
+pub mod voice;
 pub mod work_team;
 pub mod workflow;
 pub mod workspace;
