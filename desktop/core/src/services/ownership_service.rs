@@ -4,18 +4,20 @@
 //! - this service is the one place that reads/writes them, via
 //! `ownership_repo`'s generic object_key dispatch.
 //!
-//! `require_assign_capability` is a stated placeholder: the real
-//! per-object, per-scope "Assign" capability is Phase 2's Access Role
-//! engine. Until that exists, changing an owner or moving an Organization
-//! Unit requires the actor to hold the existing coarse "Administrator"
-//! role - one function, one seam, so Phase 2 only has to replace this
-//! function's body, not every call site.
+//! `require_assign_capability` was a stated placeholder for Phase 1: the
+//! real per-object, per-scope "Assign" capability is Access Control v1's
+//! Access Role engine (`access_service`). It now delegates there, scoped to
+//! the specific record being reassigned - the one seam that phase named,
+//! replaced without touching either of this function's two call sites'
+//! own shape.
 
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
+use crate::models::access_role::Capability;
 use crate::models::ownership::{OwnerRef, OwnershipIneligible, OwnershipMode, OwnershipTransferDryRun, RecordOwnership, OWNER_TYPE_TEAM, OWNER_TYPE_USER};
 use crate::repositories::{ownership_repo, user_repo, work_team_repo};
+use crate::services::access_service;
 use crate::services::bulk_action_service::BulkActionResult;
 use crate::services::custom_object_service;
 
@@ -55,15 +57,18 @@ pub fn ownership_mode_for(conn: &Connection, workspace_id: &str, object_key: &st
     Ok(OwnershipMode::from_str(&def.ownership_mode).unwrap_or(OwnershipMode::UserTeamOwned))
 }
 
-/// PLACEHOLDER for Phase 2's real Access Role "Assign" capability check -
-/// replace this function's body, not its callers, when that engine ships.
-pub fn require_assign_capability(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
+/// Real Access Role "Assign" capability check, scoped to the specific
+/// record being reassigned - delegates to `access_service::require_capability`,
+/// which resolves the actor's Access Roles' broadest granted scope for
+/// `object_key` and checks it covers `id`. Unlike ordinary create/read/
+/// update/delete (where `access_service::require_capability` treats a
+/// `None` actor as an unattributed system write and skips the check),
+/// reassigning an owner must always be attributed to a real person - so
+/// this function keeps its own explicit "Not authenticated" guard rather
+/// than inheriting that function's more permissive default.
+pub fn require_assign_capability(conn: &Connection, object_key: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can change record ownership (placeholder for the real Assign capability, coming in Phase 2)".into()));
-    }
-    Ok(())
+    access_service::require_capability(conn, Some(actor_id), object_key, Capability::Assign, Some(id))
 }
 
 pub fn get_owner(conn: &Connection, object_key: &str, id: &str) -> AppResult<Option<RecordOwnership>> {
@@ -103,7 +108,7 @@ pub fn set_owner(
     owning_org_unit_id: Option<&str>,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    require_assign_capability(conn, actor_user_id)?;
+    require_assign_capability(conn, object_key, id, actor_user_id)?;
     let mode = ownership_mode_for(conn, workspace_id, object_key)?;
     if mode != OwnershipMode::UserTeamOwned {
         return Err(AppError::Validation(format!("'{object_key}' is not User/Team Owned - it has no individual record owner to assign")));
@@ -191,7 +196,10 @@ pub fn bulk_transfer_commit(
     owning_org_unit_id: Option<&str>,
     actor_user_id: Option<&str>,
 ) -> AppResult<Vec<BulkActionResult>> {
-    require_assign_capability(conn, actor_user_id)?;
+    // No blanket capability check here - `set_owner`'s own per-id call to
+    // `require_assign_capability` below is already record-aware, so a mixed
+    // batch correctly fails only the ids outside the actor's granted scope
+    // rather than the whole batch failing (or succeeding) on one check.
     let dry_run = bulk_transfer_dry_run(conn, workspace_id, object_key, ids, new_owner)?;
     let mut results = Vec::new();
     for id in &dry_run.eligible_ids {

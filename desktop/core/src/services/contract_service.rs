@@ -3,9 +3,10 @@ use rusqlite::Connection;
 use crate::domain::ids::new_uuid;
 use crate::domain::numbering::{self, CONTRACT};
 use crate::domain::{AppError, AppResult};
+use crate::models::access_role::Capability;
 use crate::models::contract::{Contract, ContractInput, CONTRACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, contract_repo, quote_repo};
-use crate::services::{app_service, builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{access_service, app_service, builtin_field_service, status_transition_service, workflow_service};
 
 fn validate(conn: &Connection, input: &ContractInput) -> AppResult<String> {
     if input.title.trim().is_empty() {
@@ -50,6 +51,7 @@ pub fn create(
 ) -> AppResult<Contract> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Contract", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Contract", Capability::Create, None)?;
     let id = new_uuid();
     let contract_number = numbering::allocate_number(conn, &workspace_id, &CONTRACT)?;
     let contract = contract_repo::create(conn, &id, &workspace_id, &contract_number, input, actor_user_id)?;
@@ -88,6 +90,7 @@ pub fn update(
 ) -> AppResult<Contract> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Contract", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Contract", Capability::Update, Some(id))?;
     let before = get(conn, id)?;
     if before.status != input.status {
         status_transition_service::validate_transition(conn, &workspace_id, "Contract", &before.status, &input.status)?;
@@ -120,6 +123,7 @@ pub fn update(
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
     app_service::require_object_write_access(conn, &existing.workspace_id, "Contract", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Contract", Capability::Delete, Some(id))?;
     contract_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

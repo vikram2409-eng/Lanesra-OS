@@ -3193,3 +3193,79 @@ export interface OwnershipTransferDryRun {
   eligible_ids: string[];
   ineligible: OwnershipIneligible[];
 }
+
+// ---- Access Control v1: Access Roles, Record Scopes, Access Inspector ----
+
+export const CAPABILITIES = ["create", "read", "update", "delete", "assign"] as const;
+export type Capability = (typeof CAPABILITIES)[number];
+
+export const RECORD_SCOPES = ["OWNER", "TEAM", "ORG_UNIT_AND_BELOW", "ORGANIZATION"] as const;
+export type RecordScope = (typeof RECORD_SCOPES)[number];
+
+export interface AccessRole {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  is_system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessRoleInput {
+  name: string;
+  description: string;
+}
+
+export interface AccessRoleUpdate {
+  name: string;
+  description: string;
+}
+
+export interface AccessRoleGrant {
+  id: string;
+  access_role_id: string;
+  object_key: string;
+  can_create: boolean;
+  can_read: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  can_assign: boolean;
+  record_scope: RecordScope;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessRoleGrantInput {
+  object_key: string;
+  can_create: boolean;
+  can_read: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  can_assign: boolean;
+  record_scope: RecordScope;
+}
+
+export interface AccessDecision {
+  allowed: boolean;
+  scope: RecordScope | null;
+  matched_role: string | null;
+  reason: string;
+}
+
+export interface AccessRoleCheck {
+  role_name: string;
+  matched_object_key: string | null;
+  capability_granted: boolean;
+  scope: RecordScope | null;
+}
+
+export interface AccessInspectorResult {
+  actor_user_id: string;
+  object_key: string;
+  capability: string;
+  record_id: string | null;
+  record_summary: string | null;
+  roles_checked: AccessRoleCheck[];
+  decision: AccessDecision;
+}

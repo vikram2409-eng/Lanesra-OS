@@ -2,26 +2,34 @@ use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::access_role::Capability;
 use lanesra_core::models::task::{Task, TaskInput};
-use lanesra_core::services::task_service;
+use lanesra_core::services::{access_service, task_service};
 use crate::state::AppState;
 
 #[tauri::command]
 pub fn list_tasks(state: State<AppState>) -> AppResult<Vec<Task>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    task_service::list(&conn, &workspace_id)
+    let mut tasks = task_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Task", tasks.iter().map(|t| t.id.as_str()))?;
+    tasks.retain(|t| visible.contains(&t.id));
+    Ok(tasks)
 }
 
 #[tauri::command]
 pub fn list_tasks_by_related(state: State<AppState>, related_type: String, related_id: String) -> AppResult<Vec<Task>> {
     let conn = state.conn.lock().unwrap();
-    task_service::list_by_related(&conn, &related_type, &related_id)
+    let mut tasks = task_service::list_by_related(&conn, &related_type, &related_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Task", tasks.iter().map(|t| t.id.as_str()))?;
+    tasks.retain(|t| visible.contains(&t.id));
+    Ok(tasks)
 }
 
 #[tauri::command]
 pub fn get_task(state: State<AppState>, id: String) -> AppResult<Task> {
     let conn = state.conn.lock().unwrap();
+    access_service::require_capability(&conn, current_actor(&state).as_deref(), "Task", Capability::Read, Some(&id))?;
     task_service::get(&conn, &id)
 }
 

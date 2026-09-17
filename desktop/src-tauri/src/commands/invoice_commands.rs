@@ -2,20 +2,25 @@ use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::access_role::Capability;
 use lanesra_core::models::invoice::{Invoice, InvoiceInput, InvoiceWithLines, PaymentInput};
-use lanesra_core::services::invoice_service;
+use lanesra_core::services::{access_service, invoice_service};
 use crate::state::AppState;
 
 #[tauri::command]
 pub fn list_invoices(state: State<AppState>) -> AppResult<Vec<Invoice>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    invoice_service::list(&conn, &workspace_id)
+    let mut invoices = invoice_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Invoice", invoices.iter().map(|i| i.id.as_str()))?;
+    invoices.retain(|i| visible.contains(&i.id));
+    Ok(invoices)
 }
 
 #[tauri::command]
 pub fn get_invoice(state: State<AppState>, id: String) -> AppResult<InvoiceWithLines> {
     let conn = state.conn.lock().unwrap();
+    access_service::require_capability(&conn, current_actor(&state).as_deref(), "Invoice", Capability::Read, Some(&id))?;
     invoice_service::get(&conn, &id)
 }
 

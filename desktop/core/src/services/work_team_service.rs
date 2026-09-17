@@ -8,14 +8,13 @@ use rusqlite::Connection;
 use crate::domain::{AppError, AppResult};
 use crate::models::work_team::{TeamMembership, WorkTeam, WorkTeamInput, WorkTeamUpdate, WORK_TEAM_TYPES};
 use crate::repositories::{org_unit_repo, team_membership_repo, user_repo, work_team_repo};
+use crate::services::access_service;
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "WorkTeam" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can manage Work Teams".into()));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "WorkTeam", "Only an Administrator can manage Work Teams")
 }
 
 fn validate_common(conn: &Connection, workspace_id: &str, input_name: &str, team_type: &str, primary_org_unit_id: &str) -> AppResult<()> {

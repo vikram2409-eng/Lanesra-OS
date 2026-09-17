@@ -52,7 +52,7 @@ use crate::repositories::{
     ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, company_repo, contract_repo, custom_field_repo, custom_record_repo,
     integration_connection_ref_repo, notification_repo, opportunity_repo, relationship_repo, task_repo, user_repo, workflow_repo,
 };
-use crate::services::{builtin_field_service, company_service, custom_object_service, custom_record_service, entity_registry, task_service};
+use crate::services::{access_service, builtin_field_service, company_service, custom_object_service, custom_record_service, entity_registry, task_service};
 
 thread_local! {
     static WORKFLOW_DEPTH: Cell<u8> = const { Cell::new(0) };
@@ -79,13 +79,11 @@ impl Drop for DepthGuard {
     }
 }
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "Workflow" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can manage workflow automation".into()));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "Workflow", "Only an Administrator can manage workflow automation")
 }
 
 /// The valid values for `transition_field_for(entity_type)` - status for

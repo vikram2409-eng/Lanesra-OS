@@ -16,9 +16,9 @@ use crate::models::custom_field::{
 };
 use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
-    product_repo, quote_repo, task_repo, user_repo,
+    product_repo, quote_repo, task_repo,
 };
-use crate::services::{builtin_field_service, business_rule_service, workflow_service};
+use crate::services::{access_service, builtin_field_service, business_rule_service, workflow_service};
 
 /// Non-blocking notices from `set_entity_values` - a rule's blocking
 /// effects (`require`/`block_save`) are always an `Err`; these are the two
@@ -42,15 +42,11 @@ fn field_is_hidden(def: &CustomFieldDefinition, effect: Option<&str>) -> bool {
     }
 }
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "CustomField" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation(
-            "Only an Administrator can manage custom fields".into(),
-        ));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "CustomField", "Only an Administrator can manage custom fields")
 }
 
 /// Turns a label into a stable field key: lowercase, non-alphanumeric

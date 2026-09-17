@@ -30,9 +30,16 @@ use crate::models::app_definition::{
 };
 use crate::repositories::{app_definition_repo, dashboard_layout_repo, user_repo};
 use crate::repositories::user_repo::ROLES;
+use crate::services::access_service;
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "App" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
+/// Gates managing App Builder definitions themselves (create/update/publish/
+/// delete/grant); `require_object_write_access` below is the separate,
+/// already-configurable per-app record-write gate this doesn't change.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    super::user_service::require_admin(conn, actor_user_id)
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "App", "Only an Administrator can manage this App")
 }
 
 fn hydrate(row: (AppDefinition, String)) -> AppResult<AppDefinition> {

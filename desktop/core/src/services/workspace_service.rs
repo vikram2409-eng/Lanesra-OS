@@ -17,7 +17,7 @@ use crate::models::user::{NewUser, User};
 use crate::models::workspace::{DashboardKpiPrefs, Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate};
 use crate::repositories::{audit_repo, user_repo, workspace_repo};
 use crate::services::{
-    auth_service, company_service, contact_service, contract_service, invoice_service,
+    access_service, auth_service, company_service, contact_service, contract_service, invoice_service,
     opportunity_service, order_service, product_service, publisher_service, quote_service, task_service, user_service,
 };
 
@@ -27,15 +27,11 @@ use crate::services::{
 const MAX_LOGO_BYTES: usize = 256 * 1024;
 const ALLOWED_LOGO_MIME: &[&str] = &["image/png", "image/jpeg"];
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "Workspace" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation(
-            "Only an Administrator can edit the workspace profile".into(),
-        ));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "Workspace", "Only an Administrator can edit the workspace profile")
 }
 
 fn current(conn: &Connection) -> AppResult<Workspace> {

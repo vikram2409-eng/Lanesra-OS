@@ -13,15 +13,14 @@ use rusqlite::Connection;
 use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::CUSTOM_FIELD_ENTITY_TYPES;
 use crate::models::custom_object::{CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
-use crate::repositories::{custom_object_repo, custom_record_repo, user_repo};
+use crate::repositories::{custom_object_repo, custom_record_repo};
+use crate::services::access_service;
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "CustomObject" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can manage custom objects".into()));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "CustomObject", "Only an Administrator can manage custom objects")
 }
 
 /// True when `entity_type` is either one of the built-in Rust-level types,

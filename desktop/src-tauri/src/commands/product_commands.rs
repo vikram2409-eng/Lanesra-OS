@@ -2,20 +2,25 @@ use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::access_role::Capability;
 use lanesra_core::models::product::{Product, ProductInput};
-use lanesra_core::services::product_service;
+use lanesra_core::services::{access_service, product_service};
 use crate::state::AppState;
 
 #[tauri::command]
 pub fn list_products(state: State<AppState>) -> AppResult<Vec<Product>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    product_service::list(&conn, &workspace_id)
+    let mut products = product_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Product", products.iter().map(|p| p.id.as_str()))?;
+    products.retain(|p| visible.contains(&p.id));
+    Ok(products)
 }
 
 #[tauri::command]
 pub fn get_product(state: State<AppState>, id: String) -> AppResult<Product> {
     let conn = state.conn.lock().unwrap();
+    access_service::require_capability(&conn, current_actor(&state).as_deref(), "Product", Capability::Read, Some(&id))?;
     product_service::get(&conn, &id)
 }
 

@@ -86,7 +86,7 @@ fn recent_mode_returns_newest_first_for_any_entity_type() {
     let first = company_service::create(&conn, &ws, &company_input("First Co"), Some(&admin)).unwrap();
     let second = company_service::create(&conn, &ws, &company_input("Second Co"), Some(&admin)).unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 5, &HashMap::new()).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", None, 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].entity_id, second.id);
@@ -101,7 +101,7 @@ fn recent_mode_is_capped_at_the_max_row_limit_regardless_of_requested_limit() {
         company_service::create(&conn, &ws, &company_input(&format!("Co {i}")), Some(&admin)).unwrap();
     }
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 999, &HashMap::new()).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", None, 999, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 10); // MAX_ROWS, not the requested 999
 }
@@ -114,7 +114,7 @@ fn due_soon_mode_orders_open_tasks_by_nearest_due_date_and_excludes_closed_ones(
     task_service::create(&conn, &ws, &task_input("No due date", "Not Started", None), Some(&admin)).unwrap();
     task_service::create(&conn, &ws, &task_input("Already done", "Completed", Some("2026-08-20")), Some(&admin)).unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Task", "due_soon", 5, &HashMap::new()).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Task", "due_soon", None, 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].entity_id, soon.id);
@@ -139,7 +139,7 @@ fn due_soon_mode_orders_open_invoices_by_nearest_due_date_and_excludes_paid_ones
     )
     .unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Invoice", "due_soon", 5, &HashMap::new()).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Invoice", "due_soon", None, 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].entity_id, open.invoice.id);
@@ -150,7 +150,7 @@ fn due_soon_mode_falls_back_to_recent_for_entity_types_with_no_due_date() {
     let (conn, ws, admin) = setup_workspace();
     let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "due_soon", 5, &HashMap::new()).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "due_soon", None, 5, &HashMap::new()).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].entity_id, company.id);
@@ -159,7 +159,7 @@ fn due_soon_mode_falls_back_to_recent_for_entity_types_with_no_due_date() {
 #[test]
 fn an_entity_type_with_no_records_yet_returns_an_empty_list_not_an_error() {
     let (conn, ws, _admin) = setup_workspace();
-    let rows = dashboard_widget_service::run(&conn, &ws, "Contact", "recent", 5, &HashMap::new()).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Contact", "recent", None, 5, &HashMap::new()).unwrap();
     assert!(rows.is_empty());
 }
 
@@ -194,7 +194,7 @@ fn a_saved_views_filters_narrow_both_recent_and_due_soon_widget_rows() {
     let mut filters = HashMap::new();
     filters.insert(region_def.key.clone(), "West".to_string());
 
-    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", 5, &filters).unwrap();
+    let rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", None, 5, &filters).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].entity_id, west.id);

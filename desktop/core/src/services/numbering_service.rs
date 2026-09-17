@@ -12,7 +12,8 @@ use rusqlite::Connection;
 use crate::domain::numbering::{self, NumberingConfig};
 use crate::domain::{AppError, AppResult};
 use crate::models::numbering_override::{EffectiveNumbering, NumberingOverrideInput, NUMBERING_ENTITY_TYPES};
-use crate::repositories::{numbering_override_repo, user_repo};
+use crate::repositories::numbering_override_repo;
+use crate::services::access_service;
 
 const ENTITY_CONFIGS: &[(&str, &NumberingConfig)] = &[
     ("Company", &numbering::COMPANY),
@@ -30,13 +31,11 @@ fn config_for(entity_type: &str) -> Option<&'static NumberingConfig> {
     ENTITY_CONFIGS.iter().find(|(t, _)| *t == entity_type).map(|(_, c)| *c)
 }
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "NumberingOverride" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can change number formats".into()));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "NumberingOverride", "Only an Administrator can change number formats")
 }
 
 fn example_number(config: &NumberingConfig, prefix: &str, digits: i64) -> String {

@@ -5,6 +5,7 @@ import { api, ApiError } from "../../lib/api";
 import { Users } from "../users/Users";
 import { OrganizationAdmin } from "./OrganizationAdmin";
 import { OrgUnitsAdmin } from "./OrgUnitsAdmin";
+import { AccessRolesAdmin } from "./AccessRolesAdmin";
 import { WorkTeamsAdmin } from "./WorkTeamsAdmin";
 import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
 import { RelationshipsAdmin } from "./RelationshipsAdmin";
@@ -68,6 +69,7 @@ type AdminTab =
   | "organization"
   | "orgUnits"
   | "teams"
+  | "accessRoles"
   | "profile"
   | "objects"
   | "relationships"
@@ -96,6 +98,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "organization", label: "Organization" },
   { key: "orgUnits", label: "Organization Units" },
   { key: "teams", label: "Work Teams" },
+  { key: "accessRoles", label: "Access Roles" },
   { key: "profile", label: "Business profile" },
   { key: "objects", label: "Custom Objects" },
   { key: "relationships", label: "Relationships" },
@@ -145,7 +148,7 @@ function tabLabel(key: AdminTab): string {
 // than leaving it out until that consolidation actually happens.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
-  { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams"] },
+  { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles"] },
   { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields"] },
   { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
@@ -262,6 +265,7 @@ export function AdminPanel() {
       {tab === "organization" && <OrganizationAdmin />}
       {tab === "orgUnits" && <OrgUnitsAdmin onOpenHelp={openHelpTopic} />}
       {tab === "teams" && <WorkTeamsAdmin />}
+      {tab === "accessRoles" && <AccessRolesAdmin />}
 
       {tab === "profile" && workspace.data && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>

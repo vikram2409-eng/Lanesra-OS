@@ -14,16 +14,14 @@ use crate::models::relationship::{
     RelatedRecord, RelationshipDefinition, RelationshipDefinitionInput, RelationshipDefinitionUpdate, RelationshipInstance,
     DELETE_BEHAVIORS, RELATIONSHIP_TYPES,
 };
-use crate::repositories::{relationship_repo, user_repo};
-use crate::services::{custom_object_service, entity_registry};
+use crate::repositories::relationship_repo;
+use crate::services::{access_service, custom_object_service, entity_registry};
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "Relationship" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can manage relationships".into()));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "Relationship", "Only an Administrator can manage relationships")
 }
 
 fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<()> {

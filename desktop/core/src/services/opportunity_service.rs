@@ -7,8 +7,9 @@ use crate::models::opportunity::{
     Opportunity, OpportunityInput, OpportunityProduct, OpportunityProductInput,
     OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES,
 };
+use crate::models::access_role::Capability;
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo};
-use crate::services::{app_service, builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{access_service, app_service, builtin_field_service, status_transition_service, workflow_service};
 
 fn validate(conn: &Connection, input: &OpportunityInput) -> AppResult<String> {
     if input.name.trim().is_empty() {
@@ -46,6 +47,7 @@ pub fn create(
 ) -> AppResult<Opportunity> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Opportunity", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Create, None)?;
     let id = new_uuid();
     let opportunity_number = numbering::allocate_number(conn, &workspace_id, &OPPORTUNITY)?;
     let opportunity = opportunity_repo::create(
@@ -91,6 +93,7 @@ pub fn update(
 ) -> AppResult<Opportunity> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Opportunity", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Update, Some(id))?;
     let before = get(conn, id)?;
     if before.stage != input.stage {
         status_transition_service::validate_transition(conn, &workspace_id, "Opportunity", &before.stage, &input.stage)?;
@@ -144,6 +147,7 @@ pub fn set_products(
 ) -> AppResult<Vec<OpportunityProduct>> {
     let existing = get(conn, opportunity_id)?;
     app_service::require_object_write_access(conn, &existing.workspace_id, "Opportunity", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Update, Some(opportunity_id))?;
     Ok(opportunity_repo::set_products(conn, opportunity_id, products)?)
 }
 
@@ -154,6 +158,7 @@ pub fn list_products(conn: &Connection, opportunity_id: &str) -> AppResult<Vec<O
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
     app_service::require_object_write_access(conn, &existing.workspace_id, "Opportunity", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Delete, Some(id))?;
     opportunity_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

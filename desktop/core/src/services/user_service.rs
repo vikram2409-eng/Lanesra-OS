@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use crate::domain::{AppError, AppResult};
 use crate::models::user::{NewUser, PasswordChange, User, UserUpdate};
 use crate::repositories::{audit_repo, user_repo};
-use crate::services::auth_service;
+use crate::services::{access_role_service, auth_service};
 
 pub(crate) fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
@@ -82,6 +82,10 @@ pub fn create(
         &format!("Created user '{}'", record.username),
         None,
     )?;
+
+    // Access Control v1: a new user starts with a real Access Role
+    // immediately, not zero grants until an admin remembers to assign one.
+    access_role_service::assign_default_role_for_new_user(conn, workspace_id, &record.id, &input.roles)?;
 
     to_public(conn, &record.id)
 }

@@ -5,9 +5,10 @@ use crate::domain::ids::new_uuid;
 use crate::domain::money::{self, DocumentTotals};
 use crate::domain::numbering::{self, INVOICE};
 use crate::domain::{AppError, AppResult};
+use crate::models::access_role::Capability;
 use crate::models::invoice::{Invoice, InvoiceInput, InvoiceWithLines, PaymentInput, INVOICE_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, invoice_repo};
-use crate::services::{app_service, workflow_service};
+use crate::services::{access_service, app_service, workflow_service};
 
 /// ADM-WF: invoices have no owner of their own, so a workflow assigning
 /// to "the record's owner" resolves via the invoice's Company owner - the
@@ -71,6 +72,7 @@ pub fn create(
 ) -> AppResult<InvoiceWithLines> {
     let workspace_id = validate_relationships(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Invoice", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Invoice", Capability::Create, None)?;
 
     let calculations: Vec<_> = input
         .lines
@@ -149,6 +151,7 @@ fn set_status(
     }
     let existing = load(conn, id)?;
     app_service::require_object_write_access(conn, &existing.invoice.workspace_id, "Invoice", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Invoice", Capability::Update, Some(id))?;
     invoice_repo::update_status(conn, id, status, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -177,6 +180,7 @@ pub fn record_payment(
     }
     let existing = load(conn, invoice_id)?;
     app_service::require_object_write_access(conn, &existing.invoice.workspace_id, "Invoice", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Invoice", Capability::Update, Some(invoice_id))?;
     if matches!(existing.invoice.status.as_str(), "Void" | "Cancelled" | "Draft") {
         return Err(AppError::Validation(format!(
             "Cannot record a payment against a {} invoice",

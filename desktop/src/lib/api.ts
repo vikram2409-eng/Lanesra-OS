@@ -200,6 +200,14 @@ import type {
   WorkspaceLogo,
   WorkspaceSetup,
   WorkspaceUpdate,
+  AccessRole,
+  AccessRoleInput,
+  AccessRoleUpdate,
+  AccessRoleGrant,
+  AccessRoleGrantInput,
+  AccessDecision,
+  AccessInspectorResult,
+  Capability,
 } from "./types";
 
 export class ApiError extends Error {
@@ -610,6 +618,27 @@ export const api = {
     call<void>("set_user_primary_org_unit", { userId, orgUnitId }),
   addUserOrgUnit: (userId: string, orgUnitId: string) => call<void>("add_user_org_unit", { userId, orgUnitId }),
   removeUserOrgUnit: (userId: string, orgUnitId: string) => call<void>("remove_user_org_unit", { userId, orgUnitId }),
+
+  listAccessRoles: () => call<AccessRole[]>("list_access_roles"),
+  getAccessRole: (id: string) => call<AccessRole | null>("get_access_role", { id }),
+  createAccessRole: (input: AccessRoleInput) => call<AccessRole>("create_access_role", { input }),
+  updateAccessRole: (id: string, input: AccessRoleUpdate) => call<AccessRole>("update_access_role", { id, input }),
+  deleteAccessRole: (id: string) => call<void>("delete_access_role", { id }),
+  listAccessRoleGrants: (accessRoleId: string) => call<AccessRoleGrant[]>("list_access_role_grants", { accessRoleId }),
+  upsertAccessRoleGrant: (accessRoleId: string, input: AccessRoleGrantInput) =>
+    call<AccessRoleGrant>("upsert_access_role_grant", { accessRoleId, input }),
+  deleteAccessRoleGrant: (accessRoleId: string, objectKey: string) =>
+    call<void>("delete_access_role_grant", { accessRoleId, objectKey }),
+  listUserAccessRoles: (userId: string) => call<AccessRole[]>("list_user_access_roles", { userId }),
+  listAccessRoleAssignees: (accessRoleId: string) => call<string[]>("list_access_role_assignees", { accessRoleId }),
+  assignAccessRoleToUser: (userId: string, accessRoleId: string) =>
+    call<void>("assign_access_role_to_user", { userId, accessRoleId }),
+  removeAccessRoleFromUser: (userId: string, accessRoleId: string) =>
+    call<void>("remove_access_role_from_user", { userId, accessRoleId }),
+  checkCapability: (objectKey: string, capability: Capability, recordId: string | null) =>
+    call<AccessDecision>("check_capability", { objectKey, capability, recordId }),
+  inspectAccess: (objectKey: string, capability: Capability, recordId: string | null, actorUserId: string | null) =>
+    call<AccessInspectorResult>("inspect_access", { objectKey, capability, recordId, actorUserId }),
 
   listScreenLayouts: (entityType: string) => call<ScreenLayout[]>("list_screen_layouts", { entityType }),
   createScreenLayout: (input: ScreenLayoutInput) => call<ScreenLayout>("create_screen_layout", { input }),

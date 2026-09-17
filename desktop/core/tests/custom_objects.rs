@@ -277,7 +277,7 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
         },
         Some(&admin),
     ).unwrap();
-    let rows = custom_report_service::run(&conn, &report).unwrap();
+    let rows = custom_report_service::run(&conn, &report, None).unwrap();
     let by_group: HashMap<String, f64> = rows.into_iter().map(|r| (r.group, r.value)).collect();
     assert_eq!(by_group.get("Active"), Some(&1.0));
     assert_eq!(by_group.get("Inactive"), Some(&1.0));
@@ -339,9 +339,9 @@ fn effective_dating_service_answers_whether_a_record_is_valid_as_of_a_date() {
         &CustomReportInput { name: "Leases by status".into(), entity_type: lease.key.clone(), group_by_source: "builtin".into(), group_by_field: "status".into(), aggregate: "count".into(), sum_field_key: None },
         Some(&admin),
     ).unwrap();
-    let unfiltered = custom_report_service::run(&conn, &report).unwrap();
+    let unfiltered = custom_report_service::run(&conn, &report, None).unwrap();
     assert_eq!(unfiltered[0].value, 3.0);
-    let as_of_filtered = custom_report_service::run_with_as_of(&conn, &report, Some("2024-08-01")).unwrap();
+    let as_of_filtered = custom_report_service::run_with_as_of(&conn, &report, Some("2024-08-01"), None).unwrap();
     assert_eq!(as_of_filtered[0].value, 1.0);
 }
 
