@@ -11,13 +11,19 @@ use crate::state::AppState;
 pub fn list_contracts(state: State<AppState>) -> AppResult<Vec<Contract>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    contract_service::list(&conn, &workspace_id)
+    let mut contracts = contract_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Contract", contracts.iter().map(|c| c.id.as_str()))?;
+    contracts.retain(|c| visible.contains(&c.id));
+    Ok(contracts)
 }
 
 #[tauri::command]
 pub fn list_contracts_by_company(state: State<AppState>, company_id: String) -> AppResult<Vec<Contract>> {
     let conn = state.conn.lock().unwrap();
-    contract_service::list_by_company(&conn, &company_id)
+    let mut contracts = contract_service::list_by_company(&conn, &company_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Contract", contracts.iter().map(|c| c.id.as_str()))?;
+    contracts.retain(|c| visible.contains(&c.id));
+    Ok(contracts)
 }
 
 #[tauri::command]

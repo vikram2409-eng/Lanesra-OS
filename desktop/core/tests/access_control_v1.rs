@@ -1,12 +1,18 @@
+use std::collections::HashMap;
+
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::access_role::{AccessRoleGrantInput, AccessRoleInput, Capability, RecordScope};
 use lanesra_core::models::company::CompanyInput;
+use lanesra_core::models::custom_report::CustomReport;
 use lanesra_core::models::org_unit::OrgUnitInput;
 use lanesra_core::models::ownership::OwnerRef;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::work_team::WorkTeamInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{access_role_service, access_service, company_service, org_unit_service, organization_service, ownership_service, user_service, work_team_service, workspace_service};
+use lanesra_core::services::{
+    access_role_service, access_service, company_service, custom_report_service, dashboard_widget_service, org_unit_service,
+    organization_service, ownership_service, user_service, work_team_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -385,4 +391,101 @@ fn legacy_admin_check_is_additively_satisfied_by_an_explicit_access_role_grant()
         org_unit_service::create(&conn, &ws, &unit_input, Some(&admin)).is_ok(),
         "the Administrator bypass must remain completely unchanged"
     );
+}
+
+/// Narrows a rep down to an Owner-only grant (removing Standard User's
+/// broader Organization-scope default first, same reason
+/// `a_real_custom_role_can_narrow_below_standard_users_default` above
+/// does) and returns their id alongside a record they own and one they
+/// don't - the common fixture every list/search/dashboard/report
+/// enforcement test below needs.
+fn owner_scoped_rep_with_two_companies(conn: &rusqlite::Connection, ws: &str, admin: &str) -> (String, String, String) {
+    let rep = user_service::create(conn, ws, &non_admin_input("rep"), Some(admin)).unwrap();
+    let standard_user = access_role_service::list_roles_for_user(conn, &rep.id).unwrap().into_iter().find(|r| r.name == "Standard User").unwrap();
+    access_role_service::remove_from_user(conn, &rep.id, &standard_user.id, Some(admin)).unwrap();
+    let role = access_role_service::create(conn, ws, &AccessRoleInput { name: "Owner Reader".into(), description: "".into() }, Some(admin)).unwrap();
+    access_role_service::upsert_grant(
+        conn,
+        &role.id,
+        &AccessRoleGrantInput { object_key: "*".into(), can_create: true, can_read: true, can_update: false, can_delete: false, can_assign: false, record_scope: "OWNER".into() },
+        Some(admin),
+    )
+    .unwrap();
+    access_role_service::assign_to_user(conn, &rep.id, &role.id, Some(admin)).unwrap();
+
+    let reps_company = company_service::create(conn, ws, &company_input("Reps Co", Some(&rep.id)), Some(admin)).unwrap();
+    let admins_company = company_service::create(conn, ws, &company_input("Admins Co", None), Some(admin)).unwrap();
+    (rep.id, reps_company.id, admins_company.id)
+}
+
+#[test]
+fn filter_visible_narrows_a_list_to_the_actors_read_scope() {
+    let (conn, ws, admin) = setup_workspace();
+    let (rep_id, reps_company_id, admins_company_id) = owner_scoped_rep_with_two_companies(&conn, &ws, &admin);
+
+    let visible = access_service::filter_visible(&conn, Some(rep_id.as_str()), "Company", vec![reps_company_id.as_str(), admins_company_id.as_str()].into_iter()).unwrap();
+    assert_eq!(visible.len(), 1, "Owner scope must only include the record the actor owns");
+    assert!(visible.contains(&reps_company_id));
+
+    let unfiltered = access_service::filter_visible(&conn, None, "Company", vec![reps_company_id.as_str(), admins_company_id.as_str()].into_iter()).unwrap();
+    assert_eq!(unfiltered.len(), 2, "a None actor (system/unattributed) must stay unfiltered, matching require_capability's own convention");
+}
+
+#[test]
+fn filter_visible_mixed_narrows_a_mixed_result_set_across_object_types() {
+    let (conn, ws, admin) = setup_workspace();
+    let (rep_id, reps_company_id, admins_company_id) = owner_scoped_rep_with_two_companies(&conn, &ws, &admin);
+
+    // Global search's own shape: several object types in one result set,
+    // each resolved with its own object_key's grant.
+    let items = vec![("Company", reps_company_id.as_str()), ("Company", admins_company_id.as_str())];
+    let visible = access_service::filter_visible_mixed(&conn, Some(rep_id.as_str()), items.into_iter()).unwrap();
+    assert_eq!(visible.len(), 1);
+    assert!(visible.contains(&("Company".to_string(), reps_company_id)));
+}
+
+#[test]
+fn dashboard_recent_widget_only_shows_the_actors_visible_records() {
+    let (conn, ws, admin) = setup_workspace();
+    let (rep_id, reps_company_id, _admins_company_id) = owner_scoped_rep_with_two_companies(&conn, &ws, &admin);
+
+    let admin_rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", Some(&admin), 10, &HashMap::new()).unwrap();
+    assert_eq!(admin_rows.len(), 2, "Full Access (Organization scope) must see every record");
+
+    let rep_rows = dashboard_widget_service::run(&conn, &ws, "Company", "recent", Some(&rep_id), 10, &HashMap::new()).unwrap();
+    assert_eq!(rep_rows.len(), 1, "Owner scope must filter the widget before truncation, not just after");
+    assert_eq!(rep_rows[0].entity_id, reps_company_id);
+}
+
+#[test]
+fn custom_report_count_only_includes_the_actors_visible_records() {
+    let (conn, ws, admin) = setup_workspace();
+    let (rep_id, _reps_company_id, _admins_company_id) = owner_scoped_rep_with_two_companies(&conn, &ws, &admin);
+
+    let report = CustomReport {
+        id: String::new(),
+        workspace_id: ws.clone(),
+        name: "Companies by status".into(),
+        entity_type: "Company".into(),
+        group_by_source: "builtin".into(),
+        group_by_field: "status".into(),
+        aggregate: "count".into(),
+        sum_field_key: None,
+        created_at: String::new(),
+        created_by: None,
+        updated_at: String::new(),
+        updated_by: None,
+    };
+
+    let admin_rows = custom_report_service::run(&conn, &report, Some(&admin)).unwrap();
+    let admin_total: f64 = admin_rows.iter().map(|r| r.value).sum();
+    assert_eq!(admin_total, 2.0, "Full Access must count every record");
+
+    let rep_rows = custom_report_service::run(&conn, &report, Some(&rep_id)).unwrap();
+    let rep_total: f64 = rep_rows.iter().map(|r| r.value).sum();
+    assert_eq!(rep_total, 1.0, "a count report must never reveal a number that counts a record the viewer can't see");
+
+    let unfiltered_rows = custom_report_service::run(&conn, &report, None).unwrap();
+    let unfiltered_total: f64 = unfiltered_rows.iter().map(|r| r.value).sum();
+    assert_eq!(unfiltered_total, 2.0, "a None actor (e.g. the AI reporting preview path) stays unfiltered");
 }

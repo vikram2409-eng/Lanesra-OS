@@ -269,3 +269,57 @@ pub fn require_capability(conn: &Connection, actor_user_id: Option<&str>, object
         Err(AppError::Validation(result.decision.reason))
     }
 }
+
+/// Narrows a list of record ids down to the ones `actor_user_id`'s broadest
+/// Read grant on `object_key` actually covers - the list/search/dashboard/
+/// report-level companion to `require_capability`'s single-record gate.
+/// Reuses the identical `capability_grant_for` + `scope_allows_record`
+/// evaluation, just applied per id instead of short-circuited into an
+/// `Err`, the same "one evaluator, every caller" principle `explain_access`
+/// itself follows. `actor_user_id: None` is the same unattributed/system
+/// convention `require_capability` uses - nothing is filtered out.
+pub fn filter_visible<'a>(
+    conn: &Connection,
+    actor_user_id: Option<&str>,
+    object_key: &str,
+    ids: impl Iterator<Item = &'a str>,
+) -> AppResult<std::collections::HashSet<String>> {
+    let Some(actor_id) = actor_user_id else {
+        return Ok(ids.map(|s| s.to_string()).collect());
+    };
+    let scope = capability_grant_for(conn, actor_id, object_key, Capability::Read)?;
+    let Some(scope) = scope else {
+        return Ok(std::collections::HashSet::new());
+    };
+    let mut visible = std::collections::HashSet::new();
+    for id in ids {
+        if scope_allows_record(conn, scope, actor_id, object_key, id)? {
+            visible.insert(id.to_string());
+        }
+    }
+    Ok(visible)
+}
+
+/// The same filter as `filter_visible`, for a mixed result set spanning
+/// several object types at once (global search's own shape) - groups by
+/// object_key first so each type's Read grant is resolved once, not once
+/// per hit, then returns the set of (object_key, record_id) pairs that
+/// survived. Callers retain only the hits whose pair is present.
+pub fn filter_visible_mixed<'a>(
+    conn: &Connection,
+    actor_user_id: Option<&str>,
+    items: impl Iterator<Item = (&'a str, &'a str)>,
+) -> AppResult<std::collections::HashSet<(String, String)>> {
+    let mut by_type: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+    for (object_key, id) in items {
+        by_type.entry(object_key).or_default().push(id);
+    }
+    let mut visible = std::collections::HashSet::new();
+    for (object_key, ids) in by_type {
+        let ok_ids = filter_visible(conn, actor_user_id, object_key, ids.into_iter())?;
+        for id in ok_ids {
+            visible.insert((object_key.to_string(), id));
+        }
+    }
+    Ok(visible)
+}

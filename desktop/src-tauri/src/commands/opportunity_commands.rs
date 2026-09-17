@@ -13,7 +13,10 @@ use crate::state::AppState;
 pub fn list_opportunities(state: State<AppState>) -> AppResult<Vec<Opportunity>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    opportunity_service::list(&conn, &workspace_id)
+    let mut opportunities = opportunity_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Opportunity", opportunities.iter().map(|o| o.id.as_str()))?;
+    opportunities.retain(|o| visible.contains(&o.id));
+    Ok(opportunities)
 }
 
 #[tauri::command]
@@ -22,7 +25,10 @@ pub fn list_opportunities_by_company(
     company_id: String,
 ) -> AppResult<Vec<Opportunity>> {
     let conn = state.conn.lock().unwrap();
-    opportunity_service::list_by_company(&conn, &company_id)
+    let mut opportunities = opportunity_service::list_by_company(&conn, &company_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Opportunity", opportunities.iter().map(|o| o.id.as_str()))?;
+    opportunities.retain(|o| visible.contains(&o.id));
+    Ok(opportunities)
 }
 
 #[tauri::command]

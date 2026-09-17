@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::commands::require_workspace_id;
+use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
 use lanesra_core::services::dashboard_widget_service::{self, RecordListRow};
 use lanesra_core::services::saved_view_service;
@@ -25,5 +25,5 @@ pub fn run_dashboard_record_list(
         Some(id) => saved_view_service::get(&conn, id)?.map(|v| v.filters).unwrap_or_default(),
         None => Default::default(),
     };
-    dashboard_widget_service::run(&conn, &require_workspace_id(&conn)?, &entity_type, &mode, limit, &filters)
+    dashboard_widget_service::run(&conn, &require_workspace_id(&conn)?, &entity_type, &mode, current_actor(&state).as_deref(), limit, &filters)
 }

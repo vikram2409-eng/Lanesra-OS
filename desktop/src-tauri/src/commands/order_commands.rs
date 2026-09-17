@@ -12,7 +12,10 @@ use crate::state::AppState;
 pub fn list_orders(state: State<AppState>) -> AppResult<Vec<Order>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    order_service::list(&conn, &workspace_id)
+    let mut orders = order_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Order", orders.iter().map(|o| o.id.as_str()))?;
+    orders.retain(|o| visible.contains(&o.id));
+    Ok(orders)
 }
 
 #[tauri::command]

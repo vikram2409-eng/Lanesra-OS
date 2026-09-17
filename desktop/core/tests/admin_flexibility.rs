@@ -270,7 +270,7 @@ fn custom_report_counts_companies_grouped_by_status() {
     )
     .unwrap();
 
-    let rows = custom_report_service::run(&conn, &report).unwrap();
+    let rows = custom_report_service::run(&conn, &report, None).unwrap();
     let by_group: HashMap<_, _> = rows.into_iter().map(|r| (r.group, r.value)).collect();
     assert_eq!(by_group.get("Prospect"), Some(&2.0));
     assert_eq!(by_group.get("Active Customer"), Some(&1.0));
@@ -351,7 +351,7 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
     )
     .unwrap();
 
-    let rows = custom_report_service::run(&conn, &report).unwrap();
+    let rows = custom_report_service::run(&conn, &report, None).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].group, "EMEA");
     assert_eq!(rows[0].value, 80.0);

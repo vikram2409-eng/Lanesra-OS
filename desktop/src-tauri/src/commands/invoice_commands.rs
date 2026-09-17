@@ -11,7 +11,10 @@ use crate::state::AppState;
 pub fn list_invoices(state: State<AppState>) -> AppResult<Vec<Invoice>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    invoice_service::list(&conn, &workspace_id)
+    let mut invoices = invoice_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Invoice", invoices.iter().map(|i| i.id.as_str()))?;
+    invoices.retain(|i| visible.contains(&i.id));
+    Ok(invoices)
 }
 
 #[tauri::command]

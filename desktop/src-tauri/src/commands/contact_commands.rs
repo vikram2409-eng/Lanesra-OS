@@ -11,13 +11,19 @@ use crate::state::AppState;
 pub fn list_contacts(state: State<AppState>) -> AppResult<Vec<Contact>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    contact_service::list(&conn, &workspace_id)
+    let mut contacts = contact_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Contact", contacts.iter().map(|c| c.id.as_str()))?;
+    contacts.retain(|c| visible.contains(&c.id));
+    Ok(contacts)
 }
 
 #[tauri::command]
 pub fn list_contacts_by_company(state: State<AppState>, company_id: String) -> AppResult<Vec<Contact>> {
     let conn = state.conn.lock().unwrap();
-    contact_service::list_by_company(&conn, &company_id)
+    let mut contacts = contact_service::list_by_company(&conn, &company_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Contact", contacts.iter().map(|c| c.id.as_str()))?;
+    contacts.retain(|c| visible.contains(&c.id));
+    Ok(contacts)
 }
 
 #[tauri::command]

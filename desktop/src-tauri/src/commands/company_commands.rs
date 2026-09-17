@@ -11,7 +11,10 @@ use crate::state::AppState;
 pub fn list_companies(state: State<AppState>) -> AppResult<Vec<Company>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    company_service::list(&conn, &workspace_id)
+    let mut companies = company_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Company", companies.iter().map(|c| c.id.as_str()))?;
+    companies.retain(|c| visible.contains(&c.id));
+    Ok(companies)
 }
 
 #[tauri::command]

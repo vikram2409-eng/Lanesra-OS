@@ -12,7 +12,10 @@ use crate::state::AppState;
 pub fn list_quotes(state: State<AppState>) -> AppResult<Vec<Quote>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    quote_service::list(&conn, &workspace_id)
+    let mut quotes = quote_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Quote", quotes.iter().map(|q| q.id.as_str()))?;
+    quotes.retain(|q| visible.contains(&q.id));
+    Ok(quotes)
 }
 
 #[tauri::command]

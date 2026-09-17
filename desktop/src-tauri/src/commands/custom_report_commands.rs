@@ -36,7 +36,7 @@ pub fn run_custom_report(state: State<AppState>, id: String, as_of: Option<Strin
     let conn = state.conn.lock().unwrap();
     let report = lanesra_core::repositories::custom_report_repo::get(&conn, &id)?
         .ok_or_else(|| lanesra_core::domain::AppError::NotFound("Custom report".into()))?;
-    custom_report_service::run_with_as_of(&conn, &report, as_of.as_deref())
+    custom_report_service::run_with_as_of(&conn, &report, as_of.as_deref(), current_actor(&state).as_deref())
 }
 
 /// Whether `entity_type` is eligible for the "as of" filter above - an

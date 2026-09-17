@@ -11,13 +11,19 @@ use crate::state::AppState;
 pub fn list_tasks(state: State<AppState>) -> AppResult<Vec<Task>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    task_service::list(&conn, &workspace_id)
+    let mut tasks = task_service::list(&conn, &workspace_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Task", tasks.iter().map(|t| t.id.as_str()))?;
+    tasks.retain(|t| visible.contains(&t.id));
+    Ok(tasks)
 }
 
 #[tauri::command]
 pub fn list_tasks_by_related(state: State<AppState>, related_type: String, related_id: String) -> AppResult<Vec<Task>> {
     let conn = state.conn.lock().unwrap();
-    task_service::list_by_related(&conn, &related_type, &related_id)
+    let mut tasks = task_service::list_by_related(&conn, &related_type, &related_id)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Task", tasks.iter().map(|t| t.id.as_str()))?;
+    tasks.retain(|t| visible.contains(&t.id));
+    Ok(tasks)
 }
 
 #[tauri::command]

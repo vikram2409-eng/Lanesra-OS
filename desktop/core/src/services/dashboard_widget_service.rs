@@ -22,6 +22,7 @@ use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, custom_record_repo, invoice_repo, opportunity_repo,
     order_repo, product_repo, quote_repo, task_repo,
 };
+use crate::services::access_service;
 
 pub const RECORD_LIST_MODES: &[&str] = &["recent", "due_soon"];
 
@@ -57,12 +58,17 @@ fn matches_filters(conn: &Connection, entity_id: &str, filters: &HashMap<String,
     filters.iter().all(|(key, expected)| values.get(key).map(|actual| actual.eq_ignore_ascii_case(expected)).unwrap_or(false))
 }
 
-fn due_soon_tasks(conn: &Connection, workspace_id: &str, limit: usize, filters: &HashMap<String, String>) -> AppResult<Vec<RecordListRow>> {
+fn due_soon_tasks(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>, limit: usize, filters: &HashMap<String, String>) -> AppResult<Vec<RecordListRow>> {
     let mut tasks: Vec<_> = task_repo::list(conn, workspace_id)?
         .into_iter()
         .filter(|t| t.due_date.is_some() && t.status != "Completed" && t.status != "Cancelled" && matches_filters(conn, &t.id, filters))
         .collect();
     tasks.sort_by(|a, b| a.due_date.cmp(&b.due_date));
+    // Filtered by Access Role Read scope before truncation, not after - a
+    // widget shows at most MAX_ROWS records, so filtering post-truncation
+    // would under-fill it with fewer than the actor's real visible count.
+    let visible = access_service::filter_visible(conn, actor_user_id, "Task", tasks.iter().map(|t| t.id.as_str()))?;
+    tasks.retain(|t| visible.contains(&t.id));
     Ok(tasks
         .into_iter()
         .take(limit)
@@ -75,7 +81,7 @@ fn due_soon_tasks(conn: &Connection, workspace_id: &str, limit: usize, filters: 
         .collect())
 }
 
-fn due_soon_invoices(conn: &Connection, workspace_id: &str, limit: usize, filters: &HashMap<String, String>) -> AppResult<Vec<RecordListRow>> {
+fn due_soon_invoices(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>, limit: usize, filters: &HashMap<String, String>) -> AppResult<Vec<RecordListRow>> {
     let mut invoices: Vec<_> = invoice_repo::list(conn, workspace_id)?
         .into_iter()
         .filter(|inv| {
@@ -83,6 +89,8 @@ fn due_soon_invoices(conn: &Connection, workspace_id: &str, limit: usize, filter
         })
         .collect();
     invoices.sort_by(|a, b| a.due_date.cmp(&b.due_date));
+    let visible = access_service::filter_visible(conn, actor_user_id, "Invoice", invoices.iter().map(|i| i.id.as_str()))?;
+    invoices.retain(|i| visible.contains(&i.id));
     Ok(invoices
         .into_iter()
         .take(limit)
@@ -124,19 +132,21 @@ fn recent_rows(conn: &Connection, workspace_id: &str, entity_type: &str, filters
 /// `[1, MAX_ROWS]` regardless of what the widget's own config asks for.
 /// `filters` comes from the widget's optional Saved View data source (empty
 /// when the widget has none configured, in which case every row matches).
-pub fn run(conn: &Connection, workspace_id: &str, entity_type: &str, mode: &str, limit: i64, filters: &HashMap<String, String>) -> AppResult<Vec<RecordListRow>> {
+pub fn run(conn: &Connection, workspace_id: &str, entity_type: &str, mode: &str, actor_user_id: Option<&str>, limit: i64, filters: &HashMap<String, String>) -> AppResult<Vec<RecordListRow>> {
     let limit = (limit.max(1) as usize).min(MAX_ROWS);
 
     if mode == "due_soon" {
         match entity_type {
-            "Task" => return due_soon_tasks(conn, workspace_id, limit, filters),
-            "Invoice" => return due_soon_invoices(conn, workspace_id, limit, filters),
+            "Task" => return due_soon_tasks(conn, workspace_id, actor_user_id, limit, filters),
+            "Invoice" => return due_soon_invoices(conn, workspace_id, actor_user_id, limit, filters),
             _ => {} // falls through to "recent" below - no due date to sort by
         }
     }
 
     let mut rows = recent_rows(conn, workspace_id, entity_type, filters)?;
     rows.sort_by(|a, b| b.2.cmp(&a.2)); // newest created_at first
+    let visible = access_service::filter_visible(conn, actor_user_id, entity_type, rows.iter().map(|(id, _, _)| id.as_str()))?;
+    rows.retain(|(id, _, _)| visible.contains(id));
     Ok(rows
         .into_iter()
         .take(limit)

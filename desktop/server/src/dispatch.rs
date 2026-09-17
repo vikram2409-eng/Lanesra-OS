@@ -106,7 +106,12 @@ pub(crate) fn resolve_master_key(db_path: &std::path::Path) -> AppResult<[u8; 32
 /// the same key file `job_scheduler`/`events_stream` already read.
 pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&str>, master_key: &[u8; 32]) -> AppResult<Value> {
     match command {
-        "list_companies" => to_value(company_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_companies" => {
+            let mut companies = company_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Company", companies.iter().map(|c| c.id.as_str()))?;
+            companies.retain(|c| visible.contains(&c.id));
+            to_value(companies)
+        }
         "get_company" => {
             let id: String = arg(args, "id")?;
             access_service::require_capability(conn, actor, "Company", Capability::Read, Some(&id))?;
@@ -136,9 +141,17 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             )?)
         }
 
-        "list_contacts" => to_value(contact_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_contacts" => {
+            let mut contacts = contact_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Contact", contacts.iter().map(|c| c.id.as_str()))?;
+            contacts.retain(|c| visible.contains(&c.id));
+            to_value(contacts)
+        }
         "list_contacts_by_company" => {
-            to_value(contact_service::list_by_company(conn, &arg::<String>(args, "companyId")?)?)
+            let mut contacts = contact_service::list_by_company(conn, &arg::<String>(args, "companyId")?)?;
+            let visible = access_service::filter_visible(conn, actor, "Contact", contacts.iter().map(|c| c.id.as_str()))?;
+            contacts.retain(|c| visible.contains(&c.id));
+            to_value(contacts)
         }
         "get_contact" => {
             let id: String = arg(args, "id")?;
@@ -165,7 +178,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(contact_service::check_duplicates(conn, &company_id, &email, exclude_id.as_deref())?)
         }
 
-        "list_products" => to_value(product_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_products" => {
+            let mut products = product_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Product", products.iter().map(|p| p.id.as_str()))?;
+            products.retain(|p| visible.contains(&p.id));
+            to_value(products)
+        }
         "get_product" => {
             let id: String = arg(args, "id")?;
             access_service::require_capability(conn, actor, "Product", Capability::Read, Some(&id))?;
@@ -185,11 +203,18 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             Ok(Value::Null)
         }
 
-        "list_opportunities" => to_value(opportunity_service::list(conn, &require_workspace_id(conn)?)?),
-        "list_opportunities_by_company" => to_value(opportunity_service::list_by_company(
-            conn,
-            &arg::<String>(args, "companyId")?,
-        )?),
+        "list_opportunities" => {
+            let mut opportunities = opportunity_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Opportunity", opportunities.iter().map(|o| o.id.as_str()))?;
+            opportunities.retain(|o| visible.contains(&o.id));
+            to_value(opportunities)
+        }
+        "list_opportunities_by_company" => {
+            let mut opportunities = opportunity_service::list_by_company(conn, &arg::<String>(args, "companyId")?)?;
+            let visible = access_service::filter_visible(conn, actor, "Opportunity", opportunities.iter().map(|o| o.id.as_str()))?;
+            opportunities.retain(|o| visible.contains(&o.id));
+            to_value(opportunities)
+        }
         "get_opportunity" => {
             let id: String = arg(args, "id")?;
             access_service::require_capability(conn, actor, "Opportunity", Capability::Read, Some(&id))?;
@@ -218,7 +243,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             &arg::<String>(args, "opportunityId")?,
         )?),
 
-        "list_quotes" => to_value(quote_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_quotes" => {
+            let mut quotes = quote_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Quote", quotes.iter().map(|q| q.id.as_str()))?;
+            quotes.retain(|q| visible.contains(&q.id));
+            to_value(quotes)
+        }
         "get_quote" => {
             let id: String = arg(args, "id")?;
             access_service::require_capability(conn, actor, "Quote", Capability::Read, Some(&id))?;
@@ -237,7 +267,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(quote_service::convert_to_order(conn, &arg::<String>(args, "quoteId")?, actor)?)
         }
 
-        "list_orders" => to_value(order_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_orders" => {
+            let mut orders = order_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Order", orders.iter().map(|o| o.id.as_str()))?;
+            orders.retain(|o| visible.contains(&o.id));
+            to_value(orders)
+        }
         "get_order" => {
             let id: String = arg(args, "id")?;
             access_service::require_capability(conn, actor, "Order", Capability::Read, Some(&id))?;
@@ -256,7 +291,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(order_service::convert_to_invoice(conn, &arg::<String>(args, "orderId")?, actor)?)
         }
 
-        "list_invoices" => to_value(invoice_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_invoices" => {
+            let mut invoices = invoice_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Invoice", invoices.iter().map(|i| i.id.as_str()))?;
+            invoices.retain(|i| visible.contains(&i.id));
+            to_value(invoices)
+        }
         "get_invoice" => {
             let id: String = arg(args, "id")?;
             access_service::require_capability(conn, actor, "Invoice", Capability::Read, Some(&id))?;
@@ -277,9 +317,17 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             to_value(invoice_service::refresh_overdue(conn, &require_workspace_id(conn)?)?)
         }
 
-        "list_contracts" => to_value(contract_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_contracts" => {
+            let mut contracts = contract_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Contract", contracts.iter().map(|c| c.id.as_str()))?;
+            contracts.retain(|c| visible.contains(&c.id));
+            to_value(contracts)
+        }
         "list_contracts_by_company" => {
-            to_value(contract_service::list_by_company(conn, &arg::<String>(args, "companyId")?)?)
+            let mut contracts = contract_service::list_by_company(conn, &arg::<String>(args, "companyId")?)?;
+            let visible = access_service::filter_visible(conn, actor, "Contract", contracts.iter().map(|c| c.id.as_str()))?;
+            contracts.retain(|c| visible.contains(&c.id));
+            to_value(contracts)
         }
         "get_contract" => {
             let id: String = arg(args, "id")?;
@@ -300,11 +348,19 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             Ok(Value::Null)
         }
 
-        "list_tasks" => to_value(task_service::list(conn, &require_workspace_id(conn)?)?),
+        "list_tasks" => {
+            let mut tasks = task_service::list(conn, &require_workspace_id(conn)?)?;
+            let visible = access_service::filter_visible(conn, actor, "Task", tasks.iter().map(|t| t.id.as_str()))?;
+            tasks.retain(|t| visible.contains(&t.id));
+            to_value(tasks)
+        }
         "list_tasks_by_related" => {
             let related_type: String = arg(args, "relatedType")?;
             let related_id: String = arg(args, "relatedId")?;
-            to_value(task_service::list_by_related(conn, &related_type, &related_id)?)
+            let mut tasks = task_service::list_by_related(conn, &related_type, &related_id)?;
+            let visible = access_service::filter_visible(conn, actor, "Task", tasks.iter().map(|t| t.id.as_str()))?;
+            tasks.retain(|t| visible.contains(&t.id));
+            to_value(tasks)
         }
         "get_task" => {
             let id: String = arg(args, "id")?;
@@ -353,7 +409,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
 
         "global_search" => {
             let query: String = arg(args, "query")?;
-            to_value(search_service::global_search(conn, &require_workspace_id(conn)?, &query)?)
+            let mut results = search_service::global_search(conn, &require_workspace_id(conn)?, &query)?;
+            let visible = access_service::filter_visible_mixed(conn, actor, results.iter().map(|r| (r.entity_type.as_str(), r.entity_id.as_str())))?;
+            results.retain(|r| visible.contains(&(r.entity_type.clone(), r.entity_id.clone())));
+            to_value(results)
         }
         "list_audit_events" => {
             let entity_type: String = arg(args, "entityType")?;
@@ -579,7 +638,7 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let as_of: Option<String> = arg(args, "asOf")?;
             let report = lanesra_core::repositories::custom_report_repo::get(conn, &id)?
                 .ok_or_else(|| AppError::NotFound("Custom report".into()))?;
-            to_value(custom_report_service::run_with_as_of(conn, &report, as_of.as_deref())?)
+            to_value(custom_report_service::run_with_as_of(conn, &report, as_of.as_deref(), actor)?)
         }
         "is_effective_dated_entity_type" => {
             let entity_type: String = arg(args, "entityType")?;
@@ -862,7 +921,7 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
                 Some(id) => saved_view_service::get(conn, id)?.map(|v| v.filters).unwrap_or_default(),
                 None => Default::default(),
             };
-            to_value(dashboard_widget_service::run(conn, &require_workspace_id(conn)?, &entity_type, &mode, limit, &filters)?)
+            to_value(dashboard_widget_service::run(conn, &require_workspace_id(conn)?, &entity_type, &mode, actor, limit, &filters)?)
         }
 
         "import_industry_package" => {
@@ -1044,7 +1103,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
 
         "list_custom_records" => {
             let object_key: String = arg(args, "objectKey")?;
-            to_value(custom_record_service::list(conn, &require_workspace_id(conn)?, &object_key)?)
+            let mut records = custom_record_service::list(conn, &require_workspace_id(conn)?, &object_key)?;
+            let visible = access_service::filter_visible(conn, actor, &object_key, records.iter().map(|r| r.id.as_str()))?;
+            records.retain(|r| visible.contains(&r.id));
+            to_value(records)
         }
         "get_custom_record" => {
             let id: String = arg(args, "id")?;

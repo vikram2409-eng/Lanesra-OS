@@ -11,7 +11,10 @@ use lanesra_core::services::{access_service, custom_record_service};
 pub fn list_custom_records(state: State<AppState>, object_key: String) -> AppResult<Vec<CustomRecord>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = crate::commands::require_workspace_id(&conn)?;
-    custom_record_service::list(&conn, &workspace_id, &object_key)
+    let mut records = custom_record_service::list(&conn, &workspace_id, &object_key)?;
+    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), &object_key, records.iter().map(|r| r.id.as_str()))?;
+    records.retain(|r| visible.contains(&r.id));
+    Ok(records)
 }
 
 #[tauri::command]

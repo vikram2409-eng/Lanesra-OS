@@ -113,7 +113,12 @@ pub fn preview(conn: &Connection, workspace_id: &str, input: &CustomReportInput)
         updated_at: String::new(),
         updated_by: None,
     };
-    run(conn, &synthetic)
+    // preview() itself has no actor - its one caller (agent_service::
+    // ask_report) is an AI-agent action, which already runs unattributed
+    // (actor_user_id: None) throughout this codebase (see chat_service.rs's
+    // own create_record/update_record/archive_record), so unfiltered here
+    // is consistent, not a gap.
+    run(conn, &synthetic, None)
 }
 
 pub fn create(conn: &Connection, workspace_id: &str, input: &CustomReportInput, actor_user_id: Option<&str>) -> AppResult<CustomReport> {
@@ -184,8 +189,12 @@ fn list_builtin_values(conn: &Connection, workspace_id: &str, entity_type: &str)
 /// per distinct group value seen (a record with no value for the group-by
 /// custom field is bucketed under "(none)"). Unchanged behavior for every
 /// existing caller - see `run_with_as_of` for the effective-dating filter.
-pub fn run(conn: &Connection, report: &CustomReport) -> AppResult<Vec<CustomReportRow>> {
-    run_with_as_of(conn, report, None)
+/// `actor_user_id: None` (every existing test, and `preview`'s own
+/// AI-reporting caller) runs unfiltered - see `access_service::
+/// filter_visible`'s own doc comment for why that's the same unattributed/
+/// system convention `require_capability` already uses, not a new one.
+pub fn run(conn: &Connection, report: &CustomReport, actor_user_id: Option<&str>) -> AppResult<Vec<CustomReportRow>> {
+    run_with_as_of(conn, report, None, actor_user_id)
 }
 
 /// Same as `run`, additionally restricted to records whose stored
@@ -195,7 +204,12 @@ pub fn run(conn: &Connection, report: &CustomReport) -> AppResult<Vec<CustomRepo
 /// `report.entity_type` isn't effective-dated (see
 /// `effective_dating_service::is_effective_dated`) - same "don't silently
 /// ignore an inapplicable filter" stance the rest of this engine takes.
-pub fn run_with_as_of(conn: &Connection, report: &CustomReport, as_of: Option<&str>) -> AppResult<Vec<CustomReportRow>> {
+/// Access Control v1: `entity_ids` is narrowed to the actor's Read scope
+/// before aggregation, not after - a count/sum report must never reveal a
+/// number that counts a record the viewer isn't allowed to see, the same
+/// reasoning `dashboard_widget_service::run` filters before its own
+/// truncation for.
+pub fn run_with_as_of(conn: &Connection, report: &CustomReport, as_of: Option<&str>, actor_user_id: Option<&str>) -> AppResult<Vec<CustomReportRow>> {
     let entity_ids = if let Some(as_of) = as_of {
         let eligible = super::effective_dating_service::active_record_ids_as_of(conn, &report.workspace_id, &report.entity_type, as_of)?
             .into_iter()
@@ -207,6 +221,8 @@ pub fn run_with_as_of(conn: &Connection, report: &CustomReport, as_of: Option<&s
     } else {
         list_builtin_values(conn, &report.workspace_id, &report.entity_type)?
     };
+    let visible = access_service::filter_visible(conn, actor_user_id, &report.entity_type, entity_ids.iter().map(|(id, _)| id.as_str()))?;
+    let entity_ids: Vec<(String, String)> = entity_ids.into_iter().filter(|(id, _)| visible.contains(id)).collect();
 
     // group_key(entity_id, builtin_value) -> group label
     let group_of: Box<dyn Fn(&str, &str, &HashMap<String, String>) -> String> = if report.group_by_source == "builtin" {
