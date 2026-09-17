@@ -674,7 +674,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -686,7 +686,7 @@ const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],[
 // same reason (see AiSettingsAdmin.tsx's doc comment).
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering']},
- {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector','voice']},
+ {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector','voiceMode','voice']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
@@ -2509,7 +2509,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -2520,20 +2520,20 @@ function profileTab(body){
  <div class="field"><label>City / region</label><input name="city" value="${w.city||''}"></div>
  <div class="field"><label>Logo URL (optional)</label><input name="logo" value="${w.logo||''}" placeholder="https://…"></div>
  <div class="field full"><button class="btn btn-primary" type="submit">Save business profile</button></div>
- </form></div>
- ${voiceProfilePanelHtml()}`;
+ </form></div>`;
  $('#profileForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());Object.assign(data.workspace,obj);save();toast('Business profile updated');renderView()};
- wireVoiceProfilePanel(body);
 }
-// Voice-First Mode: PIN setup/reset + preferences + the full "My Voice
-// Activity" list (the topbar mic panel only ever shows the most recent 5 -
-// see voiceUnlockedHtml) live here, reachable from Admin → Workspace →
-// Business profile, same place workspace-wide settings already live.
-function voiceProfilePanelHtml(){
+// Voice-First Mode: its own dedicated admin tab (Admin → Access → Voice
+// Mode) for PIN setup/reset + preferences - previously tacked onto
+// Business profile, which read oddly for a personal security setting on a
+// workspace-branding screen. The activity log itself (the "My Voice
+// Activity" equivalent - there's only one simulated identity in this demo,
+// so a personal log and the workspace-wide one are the same data) lives in
+// the adjacent Voice Governance & Activity tab, not duplicated here.
+function voiceModeTab(body){
  const v=data.voice,p=v.preferences;
- const activity=v.activity||[];
- return `<div class="panel" style="margin-top:16px"><h3 style="margin-top:0">Voice-First Mode</h3>
- <p class="muted" style="font-size:13px">A hands-free command channel - "mark the CRM Modernization opportunity as Won", "create a task to follow up with Acme tomorrow" - planned, risk-classified and, for anything above a quick capture, confirmed before it changes any real data. Raw audio is never stored - only the resulting transcript.</p>
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Voice Mode</h3>
+ <p class="muted" style="font-size:13px">A hands-free command channel - "mark the CRM Modernization opportunity as Won", "create a task to follow up with Acme tomorrow" - planned, risk-classified and, for anything above a quick capture, confirmed before it changes any real data. Raw audio is never stored - only the resulting transcript. See <b>Voice Governance & Activity</b> for per-role permissions and the full command log.</p>
  <div class="form-grid">
   <div class="field"><label>${v.pinSet?'Reset PIN':'Set a PIN'}</label><form id="voicePinForm" style="display:flex;gap:8px"><input name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4 digits" style="flex:1"><button class="btn btn-secondary" type="submit">${v.pinSet?'Reset':'Set PIN'}</button></form></div>
   <div class="field"><label>Unlock duration</label><select id="voiceUnlockMinutes"><option value="5" ${p.unlockMinutes===5?'selected':''}>5 minutes</option><option value="15" ${p.unlockMinutes===15?'selected':''}>15 minutes</option><option value="30" ${p.unlockMinutes===30?'selected':''}>30 minutes</option></select></div>
@@ -2543,18 +2543,14 @@ function voiceProfilePanelHtml(){
   <div class="field"><label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input type="checkbox" id="voiceQuietMode" ${p.quietMode?'checked':''}> Quiet mode (never speak, even if enabled above)</label></div>
  </div>
  <p class="muted" style="font-size:12px">${v.pinSet?`PIN is set. ${v.session&&voiceSessionActive()?`Currently unlocked, ${voiceSessionMinutesLeft()} minute(s) left.`:'Currently locked.'}`:'No PIN set yet - the mic in the topbar will prompt you to create one.'}</p>
- <h4 style="margin-bottom:6px">My Voice Activity</h4>
- <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Transcript</th><th>Intent</th><th>Object</th><th>Risk</th><th>Status</th><th>Detail</th><th></th></tr></thead><tbody>${activity.map(a=>`<tr><td>${new Date(a.timestamp).toLocaleString()}</td><td>"${a.transcript}"</td><td>${a.intent}</td><td>${a.objectLabel||'—'}</td><td>${VOICE_RISK_LABELS[a.risk]||a.risk}</td><td>${badgeMaybe(a.status)||a.status}</td><td style="max-width:220px">${a.detail||''}</td><td>${a.status==='executed'&&a.undo?`<button class="link-btn" data-voice-undo="${a.id}">Undo</button>`:''}</td></tr>`).join('')}</tbody></table>${activity.length?'':'<div class="empty">No voice commands yet - open the mic in the topbar to try one.</div>'}</div>
  </div>`;
-}
-function wireVoiceProfilePanel(body){
  const savePrefs=()=>{
-  const p=data.voice.preferences;
-  p.unlockMinutes=Number($('#voiceUnlockMinutes',body).value)||15;
-  p.responseChannel=$('#voiceResponseChannel',body).value;
-  p.responseDetail=$('#voiceResponseDetail',body).value;
-  p.autoSpeak=$('#voiceAutoSpeak',body).checked;
-  p.quietMode=$('#voiceQuietMode',body).checked;
+  const prefs=data.voice.preferences;
+  prefs.unlockMinutes=Number($('#voiceUnlockMinutes',body).value)||15;
+  prefs.responseChannel=$('#voiceResponseChannel',body).value;
+  prefs.responseDetail=$('#voiceResponseDetail',body).value;
+  prefs.autoSpeak=$('#voiceAutoSpeak',body).checked;
+  prefs.quietMode=$('#voiceQuietMode',body).checked;
   save();toast('Voice preferences saved');
  };
  ['voiceUnlockMinutes','voiceResponseChannel','voiceResponseDetail'].forEach(id=>{const el=$('#'+id,body);if(el)el.onchange=savePrefs});
@@ -2567,7 +2563,6 @@ function wireVoiceProfilePanel(body){
   const wasSet=data.voice.pinSet;
   voiceSetPin(pin);toast(wasSet?'Voice PIN updated':'Voice PIN set');renderAdminTab();
  };
- body.querySelectorAll('[data-voice-undo]').forEach(b=>b.onclick=()=>{voiceUndoActivity(b.dataset.voiceUndo);renderAdminTab()});
 }
 function userFields(){return [['name','Full name'],['email','Email'],['role','Role','select',(data.roles||[]).map(r=>r.name).join('|')],['status','Status','select','Active|Inactive'],['primaryOrgUnitId','Organization Unit','orgUnitPicker']]}
 function usersTab(body){
@@ -2850,6 +2845,15 @@ const VOICE_RISK_ORDER=['none','low','medium','high','critical'];
 const VOICE_RISK_LABELS={none:'no risk (read/navigate)',low:'low risk (capture)',medium:'medium risk (field update)',high:'high risk (status transition / bulk)',critical:'critical risk (external / financial)'};
 const VOICE_LEVEL_LABELS={ask_only:'Ask only (search/navigate)',capture:'Capture (+ create tasks/notes)',act_with_confirmation:'Act with confirmation (+ updates, up to high risk)',act:'Act (full range, incl. critical)'};
 const VOICE_LEVEL_MAX_RISK={ask_only:'none',capture:'low',act_with_confirmation:'high',act:'critical'};
+// Every voice_status value the activity log can hold, rendered readably -
+// badgeMaybe's own whitelist (built for CRM record statuses) doesn't know
+// these, so an unmapped one used to fall back to a raw, unreadable
+// underscored string. 'blocked' and 'not_found' are kept visually distinct
+// on purpose: one is a real policy/risk refusal, the other just means the
+// resolver found nothing to act on - conflating them as the same pill
+// misrepresents a plain "couldn't find that" as a security denial.
+const VOICE_STATUS_LABELS={executed:'executed',blocked:'blocked',not_found:'not found',needs_clarification:'needs clarification',rejected:'rejected'};
+function voiceStatusBadge(status){return `<span class="badge" style="${status==='executed'?'background:var(--success,#1a7f37);color:#fff':status==='blocked'?'background:var(--danger,#c0392b);color:#fff':''}">${VOICE_STATUS_LABELS[status]||String(status).replace(/_/g,' ')}</span>`}
 const VOICE_CAP_LABELS={canUseVoice:'Use Voice-First Mode',canSearch:'Search/navigate by voice',canCreate:'Create records by voice',canUpdate:'Update records by voice',canAct:'Perform status/business actions by voice',canBulkAct:'Bulk actions by voice',canExternalAct:'External/financial actions by voice',canUseAgents:'Invoke AI Agents by voice'};
 function voiceRiskAllowedByLevel(level,risk){return VOICE_RISK_ORDER.indexOf(risk)<=VOICE_RISK_ORDER.indexOf(VOICE_LEVEL_MAX_RISK[level]||'none')}
 function voiceRequiredCapsFor(intent){return {NAVIGATE:['canSearch'],QUERY:['canSearch'],CREATE_TASK:['canCreate'],UPDATE_STATUS:['canUpdate','canAct']}[intent]||[]}
@@ -2860,7 +2864,7 @@ function voiceRequiredCapsFor(intent){return {NAVIGATE:['canSearch'],QUERY:['can
 // against the resolved record too, so both walls are real.
 function voiceCheckPolicy(requiredCaps,risk){
  const perms=roleVoicePermissions(roleForUser(CURRENT_USER_ID));
- if(!perms.canUseVoice)return {allowed:false,reason:"Voice-First Mode itself is switched off for this role. An admin can turn it on in Admin → Access → Voice Governance & Activity."};
+ if(!perms.canUseVoice)return {allowed:false,reason:"Voice-First Mode itself is switched off for this role. An admin can turn it on from Admin → Access → Users & roles, editing your role's Voice access."};
  for(const cap of requiredCaps)if(!perms[cap])return {allowed:false,reason:`This role's Voice permissions don't include "${VOICE_CAP_LABELS[cap]}".`};
  if(!voiceRiskAllowedByLevel(perms.maxActionLevel,risk))return {allowed:false,reason:`This command is ${VOICE_RISK_LABELS[risk]}, which exceeds this role's Voice action level ("${VOICE_LEVEL_LABELS[perms.maxActionLevel]||perms.maxActionLevel}").`};
  return {allowed:true};
@@ -2902,9 +2906,24 @@ function voiceResolveNavTarget(phrase){
 }
 function planNavigate(raw,phrase){
  const target=voiceResolveNavTarget(phrase);
- if(!target)return {raw,intent:'NAVIGATE',risk:'none',status:'not_found',message:`I couldn't find a screen matching "${phrase.trim()}".`};
- return {raw,intent:'NAVIGATE',risk:'none',status:'ready',objectType:target,objectLabel:labels[target]||target,
+ if(target)return {raw,intent:'NAVIGATE',risk:'none',status:'ready',objectType:target,objectLabel:labels[target]||target,
   execute:()=>{current=target;viewFilter=null;detailRecord=null;renderView();return {message:`Opened ${labels[target]||target}.`}}};
+ // No section/screen name matched ("companies", "the pipeline", ...) - fall
+ // back to resolving the phrase as a specific record by name, exactly like
+ // the desktop edition's own NAVIGATE intent ("open Northern Star" is the
+ // spec's own canonical example). Same exact/ambiguous/not-found handling
+ // as UPDATE_STATUS below - never silently guess on more than one match.
+ const {exact,partial}=voiceFindRecords(phrase);
+ const matches=exact.length?exact:partial;
+ if(!matches.length)return {raw,intent:'NAVIGATE',risk:'none',status:'not_found',message:`I couldn't find a screen or record matching "${phrase.trim()}".`};
+ if(matches.length>1)return {raw,intent:'NAVIGATE',risk:'none',status:'clarify',
+  message:`I found more than one match for "${phrase.trim()}" - which did you mean?`,
+  candidates:matches.slice(0,4).map(m=>({label:voiceRecordDisplay(m),resolve:()=>voiceFinalizePlan(planNavigateToRecord(raw,m))}))};
+ return planNavigateToRecord(raw,matches[0]);
+}
+function planNavigateToRecord(raw,match){
+ return {raw,intent:'NAVIGATE',risk:'none',status:'ready',objectType:match.key,objectLabel:voiceRecordDisplay(match),
+  execute:()=>{openRecordDetail(match.key,match.record.id);return {message:`Opened ${voiceRecordDisplay(match)}.`}}};
 }
 const VOICE_QUERY_ENTITIES=[['opportunities','opportunity','opportunities'],['companies','company','companies'],['contacts','contact','contacts'],['tasks','task','tasks'],['quotes','quote','quotes'],['orders','order','orders'],['invoices','invoice','invoices'],['contracts','contract','contracts'],['products','product','products']];
 function planQuery(raw,phrase){
@@ -3077,9 +3096,13 @@ function voiceHandlePlan(raw,plan,existingLogId){
   // item 4), so a plan merely awaiting a decision leaves no activity row.
   voiceActiveLogId=existingLogId;voicePendingPlan={kind:'confirm',raw,plan};
  }else if(plan.status==='blocked'||plan.status==='not_found'){
+  // Two genuinely different outcomes, logged as what they actually are -
+  // 'not_found' (couldn't resolve a screen/record) is not a policy denial
+  // and must never be shown as 'blocked' (a real permission/risk-level
+  // refusal), or a legitimate miss reads as a security block.
   const detail=plan.status==='not_found'?`Couldn't resolve: ${plan.message}`:plan.message;
-  if(existingLogId)voiceUpdateActivity(existingLogId,{status:'blocked',intent:plan.intent,objectType:plan.objectType||'',objectLabel:plan.objectLabel||'',risk:plan.risk,detail});
-  else voiceLogActivity({transcript:raw,intent:plan.intent,objectType:plan.objectType,objectLabel:plan.objectLabel,risk:plan.risk,status:'blocked',detail});
+  if(existingLogId)voiceUpdateActivity(existingLogId,{status:plan.status,intent:plan.intent,objectType:plan.objectType||'',objectLabel:plan.objectLabel||'',risk:plan.risk,detail});
+  else voiceLogActivity({transcript:raw,intent:plan.intent,objectType:plan.objectType,objectLabel:plan.objectLabel,risk:plan.risk,status:plan.status,detail});
   voiceActiveLogId=null;voicePendingPlan={kind:'result',raw,message:plan.message};
  }else{ // 'ready' - capture/navigate/query never need confirmation; execute now
   const result=plan.execute();
@@ -3114,8 +3137,9 @@ function voiceRejectPending(){
  voiceActiveLogId=null;voicePendingPlan={kind:'result',raw,message:'Rejected - no changes made.'};
  renderVoicePanel();
 }
-function voiceGotoSettings(){const p=$('#voicePanel');if(p)p.hidden=true;current='admin';adminView='tool';adminTab='profile';renderView()}
-function voiceDisabledHtml(){return `<div class="notif-head"><strong>Voice-First Mode</strong></div><div style="padding:12px 14px"><p style="font-size:13px;margin:0">Your role doesn't have Voice-First Mode access. An admin can turn it on in Admin → Access → Voice Governance & Activity.</p></div>`}
+function voiceGotoSettings(){const p=$('#voicePanel');if(p)p.hidden=true;current='admin';adminView='tool';adminTab='voiceMode';renderView()}
+function voiceGotoActivity(){const p=$('#voicePanel');if(p)p.hidden=true;current='admin';adminView='tool';adminTab='voice';renderView()}
+function voiceDisabledHtml(){return `<div class="notif-head"><strong>Voice-First Mode</strong></div><div style="padding:12px 14px"><p style="font-size:13px;margin:0">Your role doesn't have Voice-First Mode access. An admin can turn it on from Admin → Access → Users & roles, editing your role's Voice access.</p></div>`}
 function voiceSetupHtml(){
  return `<div class="notif-head"><strong>Voice-First Mode</strong></div>
  <div style="padding:12px 14px">
@@ -3173,7 +3197,7 @@ function voicePlanAreaHtml(pending){
 }
 function voiceActivityRowHtml(a){
  return `<div style="border-bottom:1px solid var(--line);padding:8px 0;font-size:12px">
-  <div style="display:flex;justify-content:space-between;gap:8px"><span>"${a.transcript}"</span><span class="badge">${a.status.replace('_',' ')}</span></div>
+  <div style="display:flex;justify-content:space-between;gap:8px"><span>"${a.transcript}"</span>${voiceStatusBadge(a.status)}</div>
   <div class="muted">${a.intent}${a.objectLabel?' · '+a.objectLabel:''} · ${VOICE_RISK_LABELS[a.risk]||a.risk} · ${new Date(a.timestamp).toLocaleString()}</div>
   ${a.detail?`<div>${a.detail}</div>`:''}
   ${a.status==='executed'&&a.undo?`<button type="button" class="link-btn" data-voice-undo="${a.id}">Undo</button>`:''}
@@ -3193,7 +3217,7 @@ function voiceUnlockedHtml(){
   ${voiceListening?`<div class="muted" style="font-size:12px">Listening… "${voiceInterimText||'…'}"</div>`:''}
   <div id="voicePlanArea">${voicePlanAreaHtml(voicePendingPlan)}</div>
   <div>
-   <div class="panel-head" style="margin-bottom:6px"><strong style="font-size:13px">Recent activity</strong><button type="button" class="link-btn" id="voiceGotoSettings" style="font-size:12px">Full activity & settings →</button></div>
+   <div class="panel-head" style="margin-bottom:6px"><strong style="font-size:13px">Recent activity</strong><button type="button" class="link-btn" id="voiceGotoActivity" style="font-size:12px">Full activity log →</button></div>
    ${recent.length?recent.map(voiceActivityRowHtml).join(''):'<div class="empty" style="padding:14px">No voice commands yet.</div>'}
   </div>
  </div>`;
@@ -3208,7 +3232,7 @@ function wireVoiceUnlocked(panel){
  const confirmBtn=$('#voiceConfirmBtn',panel);if(confirmBtn)confirmBtn.onclick=voiceConfirmPending;
  const rejectBtn=$('#voiceRejectBtn',panel);if(rejectBtn)rejectBtn.onclick=voiceRejectPending;
  panel.querySelectorAll('[data-voice-undo]').forEach(b=>b.onclick=()=>voiceUndoActivity(b.dataset.voiceUndo));
- const gotoBtn=$('#voiceGotoSettings',panel);if(gotoBtn)gotoBtn.onclick=voiceGotoSettings;
+ const gotoBtn=$('#voiceGotoActivity',panel);if(gotoBtn)gotoBtn.onclick=voiceGotoActivity;
 }
 function renderVoicePanel(){
  const panel=$('#voicePanel');if(!panel)return;
@@ -3223,9 +3247,10 @@ function renderVoicePanel(){
 function voiceTab(body){
  const activity=data.voice.activity||[];
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Voice Governance & Activity</h3>
- <p class="muted" style="font-size:13px">Voice permissions on the Roles & permissions table (Admin → Access → Users & roles) can only narrow what a role's ordinary object permissions already allow - never widen them. A role with no Update access on Opportunities still can't change a stage by voice even with every Voice toggle on. This screen is workspace-wide - every command from everyone (there is only one simulated identity in this demo, Maya Chen, so that's all you'll ever see here).</p>
- <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Transcript</th><th>Intent</th><th>Object</th><th>Risk</th><th>Status</th></tr></thead><tbody>${activity.map(a=>`<tr><td>${new Date(a.timestamp).toLocaleString()}</td><td>"${a.transcript}"</td><td>${a.intent}</td><td>${a.objectLabel||'—'}</td><td>${VOICE_RISK_LABELS[a.risk]||a.risk}</td><td>${badgeMaybe(a.status)||a.status}</td></tr>`).join('')}</tbody></table>${activity.length?'':'<div class="empty">No voice commands recorded yet.</div>'}</div>
+ <p class="muted" style="font-size:13px">Voice permissions on the Roles & permissions table (Admin → Access → Users & roles) can only narrow what a role's ordinary object permissions already allow - never widen them. A role with no Update access on Opportunities still can't change a stage by voice even with every Voice toggle on. This log is workspace-wide - every command from everyone (there is only one simulated identity in this demo, Maya Chen, so that's the one identity you'll ever see here).</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Transcript</th><th>Intent</th><th>Object</th><th>Risk</th><th>Status</th><th>Detail</th><th></th></tr></thead><tbody>${activity.map(a=>`<tr><td>${new Date(a.timestamp).toLocaleString()}</td><td>"${a.transcript}"</td><td>${a.intent}</td><td>${a.objectLabel||'—'}</td><td>${VOICE_RISK_LABELS[a.risk]||a.risk}</td><td>${voiceStatusBadge(a.status)}</td><td style="max-width:220px">${a.detail||''}</td><td>${a.status==='executed'&&a.undo?`<button class="link-btn" data-voice-undo="${a.id}">Undo</button>`:''}</td></tr>`).join('')}</tbody></table>${activity.length?'':'<div class="empty">No voice commands recorded yet - open the mic in the topbar to try one.</div>'}</div>
  </div>`;
+ body.querySelectorAll('[data-voice-undo]').forEach(b=>b.onclick=()=>{voiceUndoActivity(b.dataset.voiceUndo);renderAdminTab()});
 }
 // ---- Enterprise Access Foundation, Phase 1 (Organization, Organization
 // Units, Work Teams) --------------------------------------------------------
