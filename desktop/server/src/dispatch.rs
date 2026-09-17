@@ -48,6 +48,7 @@ use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate}
 use lanesra_core::models::solution::{SolutionInput, SolutionMemberInput, SolutionUpdate};
 use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
+use lanesra_core::models::voice::{ConfirmVoicePlanInput, SetVoicePinInput, VoicePolicyBindingInput, VoicePreferencesInput};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
@@ -69,7 +70,9 @@ use lanesra_core::services::{
     ownership_service,
     publisher_service, product_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
-    user_service, vector_search_service, webhook_service, work_team_service, workflow_service, workspace_service,
+    user_service, vector_search_service,
+    voice_audit_service, voice_execution_service, voice_policy_service, voice_provider_service, voice_session_service,
+    webhook_service, work_team_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -1578,6 +1581,92 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_ai_gateway_failover_events" => {
             let limit: i64 = arg(args, "limit")?;
             to_value(ai_gateway_service::recent_failover_events(conn, &require_workspace_id(conn)?, limit)?)
+        }
+
+        "get_voice_settings" => {
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::get_settings(conn, actor_id)?)
+        }
+        "set_voice_pin" => {
+            let input: SetVoicePinInput = arg(args, "input")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::set_pin(conn, actor_id, &input)?)
+        }
+        "update_voice_preferences" => {
+            let input: VoicePreferencesInput = arg(args, "input")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::update_preferences(conn, actor_id, &input)?)
+        }
+        "unlock_voice_session" => {
+            let pin: String = arg(args, "pin")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::unlock(conn, actor_id, &pin)?)
+        }
+        "get_current_voice_session" => {
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::current_session(conn, actor_id)?)
+        }
+        "extend_voice_session" => {
+            let session_id: String = arg(args, "sessionId")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::extend(conn, &session_id, actor_id)?)
+        }
+        "expire_voice_session" => {
+            let session_id: String = arg(args, "sessionId")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            voice_session_service::expire(conn, &session_id, actor_id)?;
+            Ok(Value::Null)
+        }
+        "set_voice_session_context" => {
+            let session_id: String = arg(args, "sessionId")?;
+            let object_key: Option<String> = arg(args, "objectKey")?;
+            let record_id: Option<String> = arg(args, "recordId")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::set_context(conn, &session_id, actor_id, object_key.as_deref(), record_id.as_deref())?)
+        }
+        "reset_voice_conversation" => {
+            let session_id: String = arg(args, "sessionId")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_session_service::reset_conversation(conn, &session_id, actor_id)?)
+        }
+        "submit_voice_command" => {
+            let session_id: String = arg(args, "sessionId")?;
+            let transcript: String = arg(args, "transcript")?;
+            let language: String = arg(args, "language")?;
+            let speech_confidence: Option<f64> = arg(args, "speechConfidence")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_execution_service::submit_command(conn, &session_id, actor_id, &transcript, &language, speech_confidence)?)
+        }
+        "confirm_voice_plan" => {
+            let session_id: String = arg(args, "sessionId")?;
+            let input: ConfirmVoicePlanInput = arg(args, "input")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_execution_service::confirm_plan(conn, &session_id, actor_id, &input)?)
+        }
+        "undo_voice_execution" => {
+            let execution_id: String = arg(args, "executionId")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            voice_execution_service::undo(conn, &execution_id, actor_id)?;
+            Ok(Value::Null)
+        }
+        "list_my_voice_activity" => {
+            let limit: i64 = arg(args, "limit")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            to_value(voice_audit_service::list_my_voice_activity(conn, actor_id, limit)?)
+        }
+        "search_voice_activity" => {
+            let limit: i64 = arg(args, "limit")?;
+            to_value(voice_audit_service::search_voice_activity(conn, &require_workspace_id(conn)?, actor, limit)?)
+        }
+        "list_voice_policy_bindings" => to_value(voice_policy_service::list_policy_bindings(conn, &require_workspace_id(conn)?)?),
+        "upsert_voice_policy_binding" => {
+            let input: VoicePolicyBindingInput = arg(args, "input")?;
+            to_value(voice_policy_service::upsert_policy_binding(conn, &require_workspace_id(conn)?, actor, &input)?)
+        }
+        "list_voice_providers" => to_value(voice_provider_service::list_providers(conn, &require_workspace_id(conn)?)?),
+        "voice_provider_health_check" => {
+            let provider_id: String = arg(args, "providerId")?;
+            to_value(voice_provider_service::health_check(conn, &require_workspace_id(conn)?, &provider_id)?)
         }
 
         other => Err(AppError::Validation(format!("Unknown command '{other}'"))),

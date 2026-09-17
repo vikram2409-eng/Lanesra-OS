@@ -732,6 +732,45 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   `access_foundation_ownership.rs`. Mirrored in the online demo
   (`app.js`) as real client-side state, same convention as every other
   demo-mirrored feature.
+- **Voice-First Mode (PR 1 of a 3-PR rollout)**: a 4-digit Voice PIN,
+  separate from the primary login password, unlocks a time-boxed Voice
+  session (5/15/30 minutes, admin-capped per Access Role) with lockout
+  after repeated failed attempts (`voice_session_service`). A new Voice
+  Governance admin panel adds 8 per-role capability toggles (Use Voice,
+  Search, Create, Update, Act, Bulk Act, External Act, Use AI Agents), a
+  Max Voice Action Level (Ask Only → Capture → Act with Confirmation →
+  Act) and a Processing Boundary label (Cloud/Approved Private/Local
+  Only - Local Only is a label today, with no real local speech adapter
+  behind it) via `voice_policy_service` - a second, narrower gate that
+  composes with the workspace's existing object-permission model,
+  narrowing what a role can already do and never widening it. A
+  metadata-driven planner (`voice_planner_service`) recognizes
+  NAVIGATE/QUERY/CREATE_TASK/CAPTURE/UPDATE_STATUS commands against live
+  object and status metadata rather than a fixed phrase table, so a new
+  Custom Object or status is voice-addressable with no new code;
+  `voice_entity_resolver` resolves a named record with an honest exact
+  match / clarifying question / not-found outcome, never a silent guess.
+  `voice_risk_service` classifies every command (none/low/medium/high/
+  critical) against the role's action level - reads and navigation
+  execute immediately, a write always shows an explicit Before → After
+  Confirm/Reject step, and the critical (delete-class) tier is
+  hard-blocked for Voice entirely in this release. `voice_execution_service`
+  routes every write through the exact same entity service the ordinary
+  UI/API already call, so Business Rules, Workflow Automation and
+  status-transition validation apply identically to a manual edit; a
+  status change or created task gets real Undo through those same
+  services, and `voice_audit_service` makes a full trail (transcript,
+  resolved intent/record, risk, outcome) queryable from My Voice
+  Activity and a new admin-only Voice Activity screen. Real speech I/O
+  via the Web Speech API ships alongside an always-visible "type
+  instead" fallback, and raw audio is never persisted in any form. See
+  `core/src/services/voice_*.rs`, `core/src/models/voice.rs`,
+  `core/src/db/migrations/0057_voice_mode_v1.sql`, and the dedicated
+  17-test suite in `core/tests/voice_mode_v1.rs`. Mirrored in the online
+  demo (`app.js`). Multi-turn conversational context, guided
+  step-by-step record creation, voice-triggered AI Agent runs, bulk/
+  external voice actions, industry voice vocabulary packs and real
+  local/on-device recognition are scoped to PR 2 and PR 3, not built yet.
 
 ## What's deferred to a later phase
 

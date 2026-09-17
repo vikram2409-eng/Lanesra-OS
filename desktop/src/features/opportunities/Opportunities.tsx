@@ -18,6 +18,7 @@ import type { Prefill } from "../../components/AppShell";
 import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STATUSES,
@@ -71,6 +72,7 @@ export function Opportunities({
   const views = useSavedViews("Opportunity");
   const fieldFilters = views.filters;
   const canWrite = useCanWriteObject("Opportunity");
+  useReportVoiceContext("Opportunity", view.mode === "edit" ? view.id : undefined);
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
 

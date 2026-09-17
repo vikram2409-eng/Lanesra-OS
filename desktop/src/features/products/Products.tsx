@@ -16,6 +16,7 @@ import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -322,6 +323,7 @@ function ProductForm({
  */
 function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void; onBack: () => void }) {
   const canWrite = useCanWriteObject("Product");
+  useReportVoiceContext("Product", id);
   const product = useQuery({ queryKey: ["product", id], queryFn: () => api.getProduct(id) });
 
   if (!product.data) return <p>Loading...</p>;

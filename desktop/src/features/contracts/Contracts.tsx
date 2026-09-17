@@ -15,6 +15,7 @@ import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 import { CONTRACT_STATUSES, type Contract, type ContractInput, type CustomFieldValues } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
@@ -462,6 +463,7 @@ function ContractDetail({
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const tasks = useQuery({ queryKey: ["tasksByRelated", "Contract", id], queryFn: () => api.listTasksByRelated("Contract", id) });
   const canWrite = useCanWriteObject("Contract");
+  useReportVoiceContext("Contract", id);
 
   if (!contract.data) return <p>Loading...</p>;
   const c = contract.data;

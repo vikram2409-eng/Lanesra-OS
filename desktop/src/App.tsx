@@ -21,6 +21,7 @@ import { AdminPanel } from "./features/settings/Settings";
 import { AssistantPage } from "./features/assistant/AssistantPage";
 import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
+import { VoiceContextProvider } from "./features/voice/VoiceContext";
 import { api } from "./lib/api";
 import type { User, Workspace } from "./lib/types";
 
@@ -149,6 +150,7 @@ function Ready({
   return (
     <SessionLock user={user}>
       <TaskReminderNotifier currentUserId={user.id} />
+      <VoiceContextProvider>
       <AppShell
         active={section}
         onNavigate={setSection}
@@ -204,6 +206,7 @@ function Ready({
           <CustomObjectRecords definition={activeCustomObject} prefill={prefill} onPrefillConsumed={clearPrefill} />
         )}
       </AppShell>
+      </VoiceContextProvider>
     </SessionLock>
   );
 }

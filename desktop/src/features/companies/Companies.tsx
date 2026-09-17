@@ -13,6 +13,7 @@ import { LayoutDetailFields } from "../../components/LayoutDetailFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 import { OwnershipByline } from "../../components/OwnershipByline";
 import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
@@ -548,6 +549,7 @@ function CompanyDetail({
 }) {
   const [tab, setTab] = useState<CompanyTab>("overview");
   const canWrite = useCanWriteObject("Company");
+  useReportVoiceContext("Company", id);
   const company = useQuery({ queryKey: ["company", id], queryFn: () => api.getCompany(id) });
   const contacts = useQuery({ queryKey: ["contactsByCompany", id], queryFn: () => api.listContactsByCompany(id) });
   const opportunities = useQuery({

@@ -209,6 +209,17 @@ import type {
   AccessDecision,
   AccessInspectorResult,
   Capability,
+  VoiceUserSettings,
+  SetVoicePinInput,
+  VoicePreferencesInput,
+  VoicePolicyBinding,
+  VoicePolicyBindingInput,
+  VoiceSession,
+  VoiceCommandOutcome,
+  ConfirmVoicePlanInput,
+  VoiceExecutionResult,
+  VoiceActivityEntry,
+  VoiceProviderProfile,
 } from "./types";
 
 export class ApiError extends Error {
@@ -641,6 +652,28 @@ export const api = {
     call<AccessDecision>("check_capability", { objectKey, capability, recordId }),
   inspectAccess: (objectKey: string, capability: Capability, recordId: string | null, actorUserId: string | null) =>
     call<AccessInspectorResult>("inspect_access", { objectKey, capability, recordId, actorUserId }),
+
+  getVoiceSettings: () => call<VoiceUserSettings>("get_voice_settings"),
+  setVoicePin: (input: SetVoicePinInput) => call<VoiceUserSettings>("set_voice_pin", { input }),
+  updateVoicePreferences: (input: VoicePreferencesInput) => call<VoiceUserSettings>("update_voice_preferences", { input }),
+  unlockVoiceSession: (pin: string) => call<VoiceSession>("unlock_voice_session", { pin }),
+  getCurrentVoiceSession: () => call<VoiceSession | null>("get_current_voice_session"),
+  extendVoiceSession: (sessionId: string) => call<VoiceSession>("extend_voice_session", { sessionId }),
+  expireVoiceSession: (sessionId: string) => call<void>("expire_voice_session", { sessionId }),
+  setVoiceSessionContext: (sessionId: string, objectKey: string | null, recordId: string | null) =>
+    call<VoiceSession>("set_voice_session_context", { sessionId, objectKey, recordId }),
+  resetVoiceConversation: (sessionId: string) => call<VoiceSession>("reset_voice_conversation", { sessionId }),
+  submitVoiceCommand: (sessionId: string, transcript: string, language: string, speechConfidence: number | null) =>
+    call<VoiceCommandOutcome>("submit_voice_command", { sessionId, transcript, language, speechConfidence }),
+  confirmVoicePlan: (sessionId: string, input: ConfirmVoicePlanInput) =>
+    call<VoiceExecutionResult>("confirm_voice_plan", { sessionId, input }),
+  undoVoiceExecution: (executionId: string) => call<void>("undo_voice_execution", { executionId }),
+  listMyVoiceActivity: (limit: number) => call<VoiceActivityEntry[]>("list_my_voice_activity", { limit }),
+  searchVoiceActivity: (limit: number) => call<VoiceActivityEntry[]>("search_voice_activity", { limit }),
+  listVoicePolicyBindings: () => call<VoicePolicyBinding[]>("list_voice_policy_bindings"),
+  upsertVoicePolicyBinding: (input: VoicePolicyBindingInput) => call<VoicePolicyBinding>("upsert_voice_policy_binding", { input }),
+  listVoiceProviders: () => call<VoiceProviderProfile[]>("list_voice_providers"),
+  voiceProviderHealthCheck: (providerId: string) => call<VoiceProviderProfile>("voice_provider_health_check", { providerId }),
 
   listScreenLayouts: (entityType: string) => call<ScreenLayout[]>("list_screen_layouts", { entityType }),
   createScreenLayout: (input: ScreenLayoutInput) => call<ScreenLayout>("create_screen_layout", { input }),

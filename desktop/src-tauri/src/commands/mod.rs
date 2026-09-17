@@ -43,6 +43,7 @@ pub mod solution_commands;
 pub mod status_transition_commands;
 pub mod task_commands;
 pub mod user_commands;
+pub mod voice_commands;
 pub mod workflow_commands;
 pub mod workspace_commands;
 

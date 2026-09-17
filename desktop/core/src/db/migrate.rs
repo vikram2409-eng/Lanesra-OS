@@ -61,6 +61,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (54, include_str!("migrations/0054_ownership_fields.sql")),
     (55, include_str!("migrations/0055_custom_object_ownership_mode.sql")),
     (56, include_str!("migrations/0056_access_roles.sql")),
+    (57, include_str!("migrations/0057_voice_mode_v1.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -124,7 +125,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 56);
+        assert_eq!(version, 57);
 
         let table_count: i64 = conn
             .query_row(

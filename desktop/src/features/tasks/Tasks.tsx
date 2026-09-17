@@ -25,6 +25,7 @@ import {
 import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 
 type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
@@ -552,6 +553,7 @@ function TaskDetail({
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
   const canWrite = useCanWriteObject("Task");
+  useReportVoiceContext("Task", id);
 
   if (!task.data) return <p>Loading...</p>;
   const t = task.data;

@@ -3296,3 +3296,223 @@ export interface AccessInspectorResult {
   roles_checked: AccessRoleCheck[];
   decision: AccessDecision;
 }
+
+// Voice-First Mode, PR 1 (spec: "Lanesra OS Voice-First Mode" v0.1 Voice
+// Assist + v0.2 Voice Actions). See `services::voice_execution_service`'s
+// own doc comment in desktop/core - every voice-triggered write goes
+// through the exact same entity service functions the UI/API already
+// call; these types mirror `models::voice` in desktop/core field-for-field.
+
+export const VOICE_CAPABILITIES = ["use_voice", "search", "create", "update", "act", "bulk_act", "external_act", "use_agents"] as const;
+export type VoiceCapability = (typeof VOICE_CAPABILITIES)[number];
+
+export const MAX_ACTION_LEVELS = ["ask_only", "capture", "act_with_confirmation", "act"] as const;
+export type MaxActionLevel = (typeof MAX_ACTION_LEVELS)[number];
+
+export const PROCESSING_BOUNDARIES = ["cloud", "approved_private", "local_only"] as const;
+export type ProcessingBoundary = (typeof PROCESSING_BOUNDARIES)[number];
+
+export type VoiceRisk = "none" | "low" | "medium" | "high" | "critical" | "blocked";
+
+export interface VoiceUserSettings {
+  user_id: string;
+  enabled: boolean;
+  pin_set: boolean;
+  pin_set_at: string | null;
+  failed_attempts: number;
+  locked_until: string | null;
+  response_channel: "text_only" | "voice_and_text";
+  spoken_detail: "short" | "normal" | "detailed";
+  auto_speak_confirmations: boolean;
+  quiet_mode: boolean;
+  unlock_duration_minutes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SetVoicePinInput {
+  pin: string;
+}
+
+export interface VoicePreferencesInput {
+  response_channel: "text_only" | "voice_and_text";
+  spoken_detail: "short" | "normal" | "detailed";
+  auto_speak_confirmations: boolean;
+  quiet_mode: boolean;
+  unlock_duration_minutes: number;
+}
+
+export interface VoicePolicyBinding {
+  id: string;
+  workspace_id: string;
+  access_role_id: string | null;
+  can_use_voice: boolean;
+  can_search: boolean;
+  can_create: boolean;
+  can_update: boolean;
+  can_act: boolean;
+  can_bulk_act: boolean;
+  can_external_act: boolean;
+  can_use_agents: boolean;
+  max_action_level: MaxActionLevel;
+  processing_boundary: ProcessingBoundary;
+  confidence_thresholds_json: string;
+  max_unlock_minutes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoicePolicyBindingInput {
+  access_role_id: string | null;
+  can_use_voice: boolean;
+  can_search: boolean;
+  can_create: boolean;
+  can_update: boolean;
+  can_act: boolean;
+  can_bulk_act: boolean;
+  can_external_act: boolean;
+  can_use_agents: boolean;
+  max_action_level: MaxActionLevel;
+  processing_boundary: ProcessingBoundary;
+  max_unlock_minutes: number;
+}
+
+export type VoiceSessionState =
+  | "locked"
+  | "ready"
+  | "listening"
+  | "processing"
+  | "needs_clarification"
+  | "awaiting_confirmation"
+  | "awaiting_approval"
+  | "speaking"
+  | "idle"
+  | "expired";
+
+export interface VoiceSession {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  state: VoiceSessionState;
+  unlocked_at: string;
+  expires_at: string;
+  context_object_key: string | null;
+  context_record_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoiceCommand {
+  id: string;
+  session_id: string;
+  workspace_id: string;
+  user_id: string;
+  transcript: string;
+  language: string;
+  speech_confidence: number | null;
+  status: string;
+  correlation_id: string;
+  created_at: string;
+}
+
+export interface ResolutionCandidate {
+  record_id: string;
+  label: string;
+}
+
+export interface VoiceResolution {
+  id: string;
+  command_id: string;
+  intent: string;
+  object_key: string | null;
+  record_reference_text: string | null;
+  resolved_record_id: string | null;
+  intent_confidence: number;
+  entity_confidence: number | null;
+  candidates: ResolutionCandidate[];
+  created_at: string;
+}
+
+export interface VoicePlanStep {
+  action: string;
+  object_key: string;
+  record_id: string | null;
+  fields: Record<string, string>;
+  description: string;
+}
+
+export interface VoiceActionPlanBody {
+  steps: VoicePlanStep[];
+}
+
+export interface VoiceActionPlan {
+  id: string;
+  command_id: string;
+  plan: VoiceActionPlanBody;
+  risk: VoiceRisk;
+  confirmation_required: boolean;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConfirmVoicePlanInput {
+  plan_id: string;
+  method: "voice" | "tap" | "reject";
+  edited_plan: VoiceActionPlanBody | null;
+}
+
+export interface VoiceExecution {
+  id: string;
+  plan_id: string;
+  step_index: number;
+  entity_type: string;
+  entity_id: string | null;
+  action: string;
+  result: "ok" | "error";
+  error_message: string | null;
+  undo_token: string | null;
+  undone_at: string | null;
+  correlation_id: string;
+  executed_at: string;
+}
+
+export interface VoiceExecutionResult {
+  plan_id: string;
+  status: string;
+  executions: VoiceExecution[];
+}
+
+export interface VoiceCommandOutcome {
+  command: VoiceCommand;
+  resolution: VoiceResolution | null;
+  plan: VoiceActionPlan | null;
+  clarification_question: string | null;
+  candidates: ResolutionCandidate[];
+  unsupported_reason: string | null;
+}
+
+export interface VoiceProviderProfile {
+  id: string;
+  workspace_id: string;
+  name: string;
+  kind: "web_speech" | "cloud" | "local";
+  privacy_class: "external" | "private" | "local";
+  is_default: boolean;
+  last_health_check_at: string | null;
+  last_health_status: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoiceActivityEntry {
+  command_id: string;
+  transcript: string;
+  intent: string | null;
+  object_key: string | null;
+  resolved_record_id: string | null;
+  plan_status: string | null;
+  risk: string | null;
+  user_id: string;
+  created_at: string;
+}

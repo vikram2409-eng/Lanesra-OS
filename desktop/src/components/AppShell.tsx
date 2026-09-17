@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { GlobalSearch } from "./GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
+import { VoiceModeButton } from "../features/voice/VoiceModeButton";
 import { api } from "../lib/api";
 import type { CustomObjectDefinition, User } from "../lib/types";
 
@@ -202,6 +203,7 @@ export function AppShell({
         <div className="topbar">
           <GlobalSearch customObjects={customObjects} onOpenResult={onOpenSearchResult} />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <VoiceModeButton />
             <NotificationBell />
             <button
               className="link-button"

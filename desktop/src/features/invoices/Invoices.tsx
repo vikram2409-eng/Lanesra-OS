@@ -17,6 +17,7 @@ import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
+import { useReportVoiceContext } from "../voice/VoiceContext";
 import type { CustomFieldValues, Invoice, InvoiceInput, PaymentInput } from "../../lib/types";
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
@@ -322,6 +323,7 @@ function InvoiceDetail({
   const [paymentMethod, setPaymentMethod] = useState("");
   const [printing, setPrinting] = useState(false);
   const canWrite = useCanWriteObject("Invoice");
+  useReportVoiceContext("Invoice", id);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["invoice", id] });
