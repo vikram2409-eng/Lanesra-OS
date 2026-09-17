@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use lanesra_core::domain::{AppError, AppResult};
+use lanesra_core::models::access_role::{AccessRoleGrantInput, AccessRoleInput, AccessRoleUpdate, Capability};
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput};
@@ -51,6 +52,7 @@ use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinition
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
 use lanesra_core::services::{
+    access_role_service, access_service,
     activity_service,
     ai_service,
     api_client_service, api_object_service,
@@ -105,7 +107,11 @@ pub(crate) fn resolve_master_key(db_path: &std::path::Path) -> AppResult<[u8; 32
 pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&str>, master_key: &[u8; 32]) -> AppResult<Value> {
     match command {
         "list_companies" => to_value(company_service::list(conn, &require_workspace_id(conn)?)?),
-        "get_company" => to_value(company_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_company" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Company", Capability::Read, Some(&id))?;
+            to_value(company_service::get(conn, &id)?)
+        }
         "create_company" => {
             let input: CompanyInput = arg(args, "input")?;
             to_value(company_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
@@ -134,7 +140,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_contacts_by_company" => {
             to_value(contact_service::list_by_company(conn, &arg::<String>(args, "companyId")?)?)
         }
-        "get_contact" => to_value(contact_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_contact" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Contact", Capability::Read, Some(&id))?;
+            to_value(contact_service::get(conn, &id)?)
+        }
         "create_contact" => {
             let input: ContactInput = arg(args, "input")?;
             to_value(contact_service::create(conn, &input, actor)?)
@@ -156,7 +166,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
 
         "list_products" => to_value(product_service::list(conn, &require_workspace_id(conn)?)?),
-        "get_product" => to_value(product_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_product" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Product", Capability::Read, Some(&id))?;
+            to_value(product_service::get(conn, &id)?)
+        }
         "create_product" => {
             let input: ProductInput = arg(args, "input")?;
             to_value(product_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
@@ -176,7 +190,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             conn,
             &arg::<String>(args, "companyId")?,
         )?),
-        "get_opportunity" => to_value(opportunity_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_opportunity" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Opportunity", Capability::Read, Some(&id))?;
+            to_value(opportunity_service::get(conn, &id)?)
+        }
         "create_opportunity" => {
             let input: OpportunityInput = arg(args, "input")?;
             to_value(opportunity_service::create(conn, &input, actor)?)
@@ -201,7 +219,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         )?),
 
         "list_quotes" => to_value(quote_service::list(conn, &require_workspace_id(conn)?)?),
-        "get_quote" => to_value(quote_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_quote" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Quote", Capability::Read, Some(&id))?;
+            to_value(quote_service::get(conn, &id)?)
+        }
         "create_quote" => {
             let input: QuoteInput = arg(args, "input")?;
             to_value(quote_service::create(conn, &input, actor)?)
@@ -216,7 +238,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
 
         "list_orders" => to_value(order_service::list(conn, &require_workspace_id(conn)?)?),
-        "get_order" => to_value(order_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_order" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Order", Capability::Read, Some(&id))?;
+            to_value(order_service::get(conn, &id)?)
+        }
         "create_order" => {
             let input: OrderInput = arg(args, "input")?;
             to_value(order_service::create(conn, &input, actor)?)
@@ -231,7 +257,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         }
 
         "list_invoices" => to_value(invoice_service::list(conn, &require_workspace_id(conn)?)?),
-        "get_invoice" => to_value(invoice_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_invoice" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Invoice", Capability::Read, Some(&id))?;
+            to_value(invoice_service::get(conn, &id)?)
+        }
         "create_invoice" => {
             let input: InvoiceInput = arg(args, "input")?;
             to_value(invoice_service::create(conn, &input, actor)?)
@@ -251,7 +281,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_contracts_by_company" => {
             to_value(contract_service::list_by_company(conn, &arg::<String>(args, "companyId")?)?)
         }
-        "get_contract" => to_value(contract_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_contract" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Contract", Capability::Read, Some(&id))?;
+            to_value(contract_service::get(conn, &id)?)
+        }
         "create_contract" => {
             let input: ContractInput = arg(args, "input")?;
             to_value(contract_service::create(conn, &input, actor)?)
@@ -272,7 +306,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let related_id: String = arg(args, "relatedId")?;
             to_value(task_service::list_by_related(conn, &related_type, &related_id)?)
         }
-        "get_task" => to_value(task_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_task" => {
+            let id: String = arg(args, "id")?;
+            access_service::require_capability(conn, actor, "Task", Capability::Read, Some(&id))?;
+            to_value(task_service::get(conn, &id)?)
+        }
         "create_task" => {
             let input: TaskInput = arg(args, "input")?;
             to_value(task_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
@@ -676,6 +714,78 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             Ok(Value::Null)
         }
 
+        "list_access_roles" => to_value(access_role_service::list(conn, &require_workspace_id(conn)?)?),
+        "get_access_role" => {
+            let id: String = arg(args, "id")?;
+            to_value(access_role_service::get(conn, &id)?)
+        }
+        "create_access_role" => {
+            let input: AccessRoleInput = arg(args, "input")?;
+            to_value(access_role_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_access_role" => {
+            let id: String = arg(args, "id")?;
+            let input: AccessRoleUpdate = arg(args, "input")?;
+            to_value(access_role_service::update(conn, &id, &input, actor)?)
+        }
+        "delete_access_role" => {
+            let id: String = arg(args, "id")?;
+            access_role_service::delete(conn, &id, actor)?;
+            Ok(Value::Null)
+        }
+        "list_access_role_grants" => {
+            let access_role_id: String = arg(args, "accessRoleId")?;
+            to_value(access_role_service::list_grants(conn, &access_role_id)?)
+        }
+        "upsert_access_role_grant" => {
+            let access_role_id: String = arg(args, "accessRoleId")?;
+            let input: AccessRoleGrantInput = arg(args, "input")?;
+            to_value(access_role_service::upsert_grant(conn, &access_role_id, &input, actor)?)
+        }
+        "delete_access_role_grant" => {
+            let access_role_id: String = arg(args, "accessRoleId")?;
+            let object_key: String = arg(args, "objectKey")?;
+            access_role_service::delete_grant(conn, &access_role_id, &object_key, actor)?;
+            Ok(Value::Null)
+        }
+        "list_user_access_roles" => {
+            let user_id: String = arg(args, "userId")?;
+            to_value(access_role_service::list_roles_for_user(conn, &user_id)?)
+        }
+        "list_access_role_assignees" => {
+            let access_role_id: String = arg(args, "accessRoleId")?;
+            to_value(access_role_service::list_assignee_user_ids(conn, &access_role_id)?)
+        }
+        "assign_access_role_to_user" => {
+            let user_id: String = arg(args, "userId")?;
+            let access_role_id: String = arg(args, "accessRoleId")?;
+            access_role_service::assign_to_user(conn, &user_id, &access_role_id, actor)?;
+            Ok(Value::Null)
+        }
+        "remove_access_role_from_user" => {
+            let user_id: String = arg(args, "userId")?;
+            let access_role_id: String = arg(args, "accessRoleId")?;
+            access_role_service::remove_from_user(conn, &user_id, &access_role_id, actor)?;
+            Ok(Value::Null)
+        }
+        "check_capability" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let capability: String = arg(args, "capability")?;
+            let record_id: Option<String> = arg(args, "recordId")?;
+            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            let cap = access_role_service::parse_capability_str(&capability)?;
+            to_value(access_service::explain_access(conn, actor_id, &object_key, cap, record_id.as_deref())?.decision)
+        }
+        "inspect_access" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let capability: String = arg(args, "capability")?;
+            let record_id: Option<String> = arg(args, "recordId")?;
+            let actor_user_id: Option<String> = arg(args, "actorUserId")?;
+            let actor_id = actor_user_id.as_deref().or(actor).ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+            let cap = access_role_service::parse_capability_str(&capability)?;
+            to_value(access_service::explain_access(conn, actor_id, &object_key, cap, record_id.as_deref())?)
+        }
+
         "list_screen_layouts" => {
             let entity_type: String = arg(args, "entityType")?;
             to_value(screen_layout_service::list_layouts(conn, &require_workspace_id(conn)?, &entity_type)?)
@@ -936,7 +1046,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let object_key: String = arg(args, "objectKey")?;
             to_value(custom_record_service::list(conn, &require_workspace_id(conn)?, &object_key)?)
         }
-        "get_custom_record" => to_value(custom_record_service::get(conn, &arg::<String>(args, "id")?)?),
+        "get_custom_record" => {
+            let id: String = arg(args, "id")?;
+            let record = custom_record_service::get(conn, &id)?;
+            access_service::require_capability(conn, actor, &record.object_key, Capability::Read, Some(&id))?;
+            to_value(record)
+        }
         "create_custom_record" => {
             let input: CustomRecordInput = arg(args, "input")?;
             to_value(custom_record_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)

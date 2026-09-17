@@ -1,3 +1,4 @@
+pub mod access_role_repo;
 pub mod activity_repo;
 pub mod ai_agent_pending_run_repo;
 pub mod ai_agent_pipeline_repo;
@@ -55,6 +56,7 @@ pub mod solution_repo;
 pub mod status_transition_repo;
 pub mod task_repo;
 pub mod team_membership_repo;
+pub mod user_access_role_repo;
 pub mod user_repo;
 pub mod work_team_repo;
 pub mod workflow_repo;

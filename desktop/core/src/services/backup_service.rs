@@ -14,7 +14,8 @@ use crate::db::{self, migrate};
 use crate::domain::ids::{new_uuid, now_iso};
 use crate::domain::{AppError, AppResult};
 use crate::models::backup::{BackupManifest, BackupPackage};
-use crate::repositories::{audit_repo, user_repo, workspace_repo};
+use crate::repositories::{audit_repo, workspace_repo};
+use crate::services::access_service;
 
 const FORMAT_VERSION: u32 = 1;
 const MANIFEST_ENTRY: &str = "manifest.json";
@@ -24,15 +25,13 @@ fn zip_err<E: std::fmt::Display>(e: E) -> AppError {
     AppError::Validation(format!("backup package error: {e}"))
 }
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "Backup" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
+/// Backup/restore touches the entire workspace, so this is a powerful grant
+/// to hand out - an admin choosing to configure it is opting in deliberately.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation(
-            "Only an Administrator can back up or restore the workspace".into(),
-        ));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "Backup", "Only an Administrator can back up or restore the workspace")
 }
 
 /// Snapshots the live database via SQLite's online backup API (safe to run

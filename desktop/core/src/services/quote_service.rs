@@ -4,9 +4,10 @@ use crate::domain::ids::new_uuid;
 use crate::domain::money::{self, DocumentTotals};
 use crate::domain::numbering::{self, QUOTE};
 use crate::domain::{AppError, AppResult};
+use crate::models::access_role::Capability;
 use crate::models::quote::{Quote, QuoteInput, QuoteWithLines, QUOTE_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo, quote_repo};
-use crate::services::{app_service, status_transition_service, workflow_service};
+use crate::services::{access_service, app_service, status_transition_service, workflow_service};
 
 /// Quotes have no owner of their own, so a workflow assigning to "the
 /// record's owner" resolves via the Quote's Company owner - the same
@@ -65,6 +66,7 @@ pub fn create(
 ) -> AppResult<QuoteWithLines> {
     let workspace_id = validate_relationships(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Quote", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Quote", Capability::Create, None)?;
 
     let calculations: Vec<_> = input
         .lines
@@ -134,6 +136,7 @@ pub fn set_status(
     }
     let existing = load(conn, id)?;
     app_service::require_object_write_access(conn, &existing.quote.workspace_id, "Quote", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Quote", Capability::Update, Some(id))?;
     if existing.quote.status != status {
         status_transition_service::validate_transition(conn, &existing.quote.workspace_id, "Quote", &existing.quote.status, status)?;
     }
@@ -171,6 +174,7 @@ pub fn convert_to_order(
     // gate is on Order write access, the same as calling order_service::
     // create directly would require.
     app_service::require_object_write_access(conn, &source.quote.workspace_id, "Order", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Order", Capability::Create, None)?;
 
     let order_id = new_uuid();
     let order_number = numbering::allocate_number(conn, &source.quote.workspace_id, &numbering::ORDER)?;

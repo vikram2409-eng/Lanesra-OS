@@ -3,9 +3,10 @@ use rusqlite::Connection;
 use crate::domain::ids::new_uuid;
 use crate::domain::numbering::{self, PRODUCT};
 use crate::domain::{AppError, AppResult};
+use crate::models::access_role::Capability;
 use crate::models::product::{Product, ProductInput, PRODUCT_TYPES};
 use crate::repositories::{audit_repo, product_repo};
-use crate::services::app_service;
+use crate::services::{access_service, app_service};
 
 fn validate(input: &ProductInput) -> AppResult<()> {
     if input.name.trim().is_empty() {
@@ -28,6 +29,7 @@ pub fn create(
 ) -> AppResult<Product> {
     validate(input)?;
     app_service::require_object_write_access(conn, workspace_id, "Product", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Product", Capability::Create, None)?;
     let id = new_uuid();
     let product_number = numbering::allocate_number(conn, workspace_id, &PRODUCT)?;
     let product = product_repo::create(conn, &id, workspace_id, &product_number, input, actor_user_id)?;
@@ -63,6 +65,7 @@ pub fn update(
     validate(input)?;
     let workspace_id = get(conn, id)?.workspace_id;
     app_service::require_object_write_access(conn, &workspace_id, "Product", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Product", Capability::Update, Some(id))?;
     let product = product_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -81,6 +84,7 @@ pub fn update(
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
     app_service::require_object_write_access(conn, &existing.workspace_id, "Product", actor_user_id)?;
+    access_service::require_capability(conn, actor_user_id, "Product", Capability::Delete, Some(id))?;
     product_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

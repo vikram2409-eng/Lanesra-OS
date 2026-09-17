@@ -10,16 +10,14 @@ use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::org_unit::{OrgUnit, OrgUnitInput, OrgUnitMoveImpact, OrgUnitUpdate, ORG_UNIT_TYPES};
-use crate::repositories::{org_unit_repo, user_repo};
-use crate::services::{custom_object_service, ownership_service};
+use crate::repositories::org_unit_repo;
+use crate::services::{access_service, custom_object_service, ownership_service};
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "OrgUnit" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can manage Organization Units".into()));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "OrgUnit", "Only an Administrator can manage Organization Units")
 }
 
 fn validate_shape(input_name: &str, unit_type: &str) -> AppResult<()> {

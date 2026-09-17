@@ -16,16 +16,15 @@ use crate::models::custom_report::{
 use crate::models::business_rule::builtin_trigger_field_for;
 use crate::repositories::{
     company_repo, contact_repo, contract_repo, custom_field_repo, custom_report_repo, invoice_repo, opportunity_repo,
-    order_repo, product_repo, quote_repo, task_repo, user_repo,
+    order_repo, product_repo, quote_repo, task_repo,
 };
+use crate::services::access_service;
 
+/// Administrator always passes (unchanged); a non-Administrator additionally
+/// passes with an explicit Access Role grant on "CustomReport" - see
+/// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    let roles = user_repo::roles_for_user(conn, actor_id)?;
-    if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can manage custom reports".into()));
-    }
-    Ok(())
+    access_service::require_admin_or_explicit_update(conn, actor_user_id, "CustomReport", "Only an Administrator can manage custom reports")
 }
 
 fn validate_shape(

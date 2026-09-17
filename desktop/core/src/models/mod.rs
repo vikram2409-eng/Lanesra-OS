@@ -1,3 +1,4 @@
+pub mod access_role;
 pub mod activity;
 pub mod agent;
 pub mod ai;

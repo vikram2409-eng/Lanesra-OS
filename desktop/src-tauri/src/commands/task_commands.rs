@@ -2,8 +2,9 @@ use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::access_role::Capability;
 use lanesra_core::models::task::{Task, TaskInput};
-use lanesra_core::services::task_service;
+use lanesra_core::services::{access_service, task_service};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -22,6 +23,7 @@ pub fn list_tasks_by_related(state: State<AppState>, related_type: String, relat
 #[tauri::command]
 pub fn get_task(state: State<AppState>, id: String) -> AppResult<Task> {
     let conn = state.conn.lock().unwrap();
+    access_service::require_capability(&conn, current_actor(&state).as_deref(), "Task", Capability::Read, Some(&id))?;
     task_service::get(&conn, &id)
 }
 

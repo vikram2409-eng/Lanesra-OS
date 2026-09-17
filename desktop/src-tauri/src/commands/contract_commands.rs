@@ -2,8 +2,9 @@ use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::access_role::Capability;
 use lanesra_core::models::contract::{Contract, ContractInput};
-use lanesra_core::services::contract_service;
+use lanesra_core::services::{access_service, contract_service};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -22,6 +23,7 @@ pub fn list_contracts_by_company(state: State<AppState>, company_id: String) -> 
 #[tauri::command]
 pub fn get_contract(state: State<AppState>, id: String) -> AppResult<Contract> {
     let conn = state.conn.lock().unwrap();
+    access_service::require_capability(&conn, current_actor(&state).as_deref(), "Contract", Capability::Read, Some(&id))?;
     contract_service::get(&conn, &id)
 }
 

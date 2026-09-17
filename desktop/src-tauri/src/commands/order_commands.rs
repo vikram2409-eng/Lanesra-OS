@@ -2,9 +2,10 @@ use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::access_role::Capability;
 use lanesra_core::models::invoice::InvoiceWithLines;
 use lanesra_core::models::order::{Order, OrderInput, OrderWithLines};
-use lanesra_core::services::order_service;
+use lanesra_core::services::{access_service, order_service};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -17,6 +18,7 @@ pub fn list_orders(state: State<AppState>) -> AppResult<Vec<Order>> {
 #[tauri::command]
 pub fn get_order(state: State<AppState>, id: String) -> AppResult<OrderWithLines> {
     let conn = state.conn.lock().unwrap();
+    access_service::require_capability(&conn, current_actor(&state).as_deref(), "Order", Capability::Read, Some(&id))?;
     order_service::get(&conn, &id)
 }
 
