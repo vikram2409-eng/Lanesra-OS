@@ -1278,6 +1278,9 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let is_active: bool = arg(args, "isActive")?;
             to_value(ai_orchestration_service::set_pipeline_active(conn, &id, is_active, actor)?)
         }
+        "get_ai_agent_pipeline_hierarchy" => {
+            to_value(lanesra_core::services::ai_agent_hierarchy_service::resolve(conn, &arg::<String>(args, "id")?)?)
+        }
         "create_ai_agent_trigger" => {
             let input: AiAgentTriggerInput = arg(args, "input")?;
             to_value(ai_orchestration_service::create_trigger(conn, &require_workspace_id(conn)?, &input, actor)?)

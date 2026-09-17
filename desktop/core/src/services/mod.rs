@@ -1,5 +1,6 @@
 pub mod activity_service;
 pub mod agent_service;
+pub mod ai_agent_hierarchy_service;
 pub mod ai_agent_service;
 pub mod ai_eval_service;
 pub mod ai_gateway_service;

@@ -73,6 +73,49 @@ pub struct AiAgentPipeline {
     pub updated_by: Option<String>,
 }
 
+/// AI & Agentic Layer: the Agent Hierarchy - one node per agent that could
+/// actually run as part of a Pipeline, combining two things this codebase
+/// already models separately into one picture: the Pipeline's own fixed
+/// step order (`step_order: Some(n)` - who runs deterministically), and
+/// each step's agent's own dynamic `delegate_agent_ids` (`step_order: None`
+/// - who that agent *may* call at runtime via `delegate_to_agent`, per
+/// `services::ai_agent_hierarchy_service`'s own doc comment). Not a new
+/// concept - a narration of two existing ones together, the same "read off
+/// what enforcement already does" principle `access_service::explain_access`
+/// uses for the Access Inspector.
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentHierarchyNode {
+    pub agent_id: String,
+    pub agent_name: String,
+    pub agent_icon: String,
+    pub agent_is_active: bool,
+    pub step_order: Option<i64>,
+    pub requires_approval: bool,
+    pub delegates: Vec<AgentHierarchyNode>,
+    /// `Some(reason)` when this node's own delegates were deliberately not
+    /// expanded further - the delegation-depth guard was reached, or
+    /// following this edge would revisit an agent already on the path to
+    /// it (a delegation cycle, only ever possible via data edited outside
+    /// the normal save path's own cycle warning). Never silently dropped -
+    /// the node itself still renders, just as a leaf.
+    pub truncated: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PipelineHierarchy {
+    pub pipeline_id: String,
+    pub pipeline_name: String,
+    pub topology: String,
+    /// One root per pipeline step, in `step_order` - not deduplicated by
+    /// agent, since the same agent used in two different steps means two
+    /// distinct things happening, not one.
+    pub roots: Vec<AgentHierarchyNode>,
+    /// A plain-language narration of the whole picture above - see
+    /// `ai_agent_hierarchy_service::describe_pipeline`'s own doc comment
+    /// for exactly what it says per topology.
+    pub description_md: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct AiAgentPipelineInput {
     pub name: String,

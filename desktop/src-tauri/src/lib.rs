@@ -284,6 +284,7 @@ pub fn run() {
             commands::ai_agent_pipeline_commands::create_ai_agent_pipeline,
             commands::ai_agent_pipeline_commands::update_ai_agent_pipeline,
             commands::ai_agent_pipeline_commands::set_ai_agent_pipeline_active,
+            commands::ai_agent_pipeline_commands::get_ai_agent_pipeline_hierarchy,
             commands::ai_agent_pipeline_commands::create_ai_agent_trigger,
             commands::ai_agent_pipeline_commands::list_ai_agent_triggers,
             commands::ai_agent_pipeline_commands::set_ai_agent_trigger_active,

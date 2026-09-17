@@ -171,7 +171,7 @@ const PEER_REVIEW_APPROVAL_MARKER: &str = "APPROVED";
 /// the run rather than looping forever - the same "stop and surface
 /// distinctly" guard Phase 7c's loop-detection already established for a
 /// single agent's own tool-calling loop.
-const MAX_PEER_REVIEW_ROUNDS: u8 = 3;
+pub(crate) const MAX_PEER_REVIEW_ROUNDS: u8 = 3;
 
 fn resolve_template(template: &str, previous_output: &str, trigger_input: &str) -> String {
     template.replace(PREVIOUS_OUTPUT_PLACEHOLDER, previous_output).replace(TRIGGER_INPUT_PLACEHOLDER, trigger_input)

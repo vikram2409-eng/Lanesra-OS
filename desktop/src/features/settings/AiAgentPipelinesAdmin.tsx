@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { AiTriggersPanel } from "./AiTriggersPanel";
-import type { AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentRunStep, PipelineStepInput } from "../../lib/types";
+import type { AgentHierarchyNode, AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentRunStep, PipelineStepInput } from "../../lib/types";
 
 // AI & Agentic Layer, Phase 6b: Orchestration - a deterministic, ordered
 // Pipeline of Agents (complementary to an Agent's own dynamic
@@ -74,6 +74,7 @@ export function AiAgentPipelinesAdmin() {
   const [editing, setEditing] = useState<AiAgentPipeline | null>(null);
   const [creating, setCreating] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [hierarchyFor, setHierarchyFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function invalidate() {
@@ -167,6 +168,9 @@ export function AiAgentPipelinesAdmin() {
                       <button className="btn btn-secondary" onClick={() => setExpanded(expanded === p.id ? null : p.id)}>
                         {expanded === p.id ? "Close" : "Run / Triggers / History"}
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setHierarchyFor(hierarchyFor === p.id ? null : p.id)} title="See which agents this pipeline runs, and who each of them may delegate to">
+                        {hierarchyFor === p.id ? "Close hierarchy" : "Agent Hierarchy"}
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setEditing(p)}>
                         Edit
                       </button>
@@ -184,6 +188,8 @@ export function AiAgentPipelinesAdmin() {
       </div>
 
       {expanded && pipelines.find((p) => p.id === expanded) && <PipelineDetail pipeline={pipelines.find((p) => p.id === expanded)!} agentName={agentName} />}
+
+      {hierarchyFor && pipelines.find((p) => p.id === hierarchyFor) && <PipelineHierarchyPanel pipeline={pipelines.find((p) => p.id === hierarchyFor)!} />}
 
       {(creating || editing) && (
         <AiAgentPipelineForm
@@ -343,6 +349,97 @@ function PipelineDetail({ pipeline, agentName }: { pipeline: AiAgentPipeline; ag
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Turns the small Markdown subset ai_agent_hierarchy_service::describe_pipeline
+// actually emits (**bold** spans and "- " bullet lines) into JSX, without
+// pulling in a full Markdown renderer for one narrow, backend-controlled shape.
+function renderInlineBold(text: string, keyPrefix: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? <b key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</b> : <span key={`${keyPrefix}-${i}`}>{part}</span>,
+  );
+}
+function renderDescriptionMd(md: string) {
+  const lines = md.split("\n");
+  const elements: JSX.Element[] = [];
+  let bulletBuffer: string[] = [];
+  const flushBullets = (key: string) => {
+    if (bulletBuffer.length === 0) return;
+    elements.push(
+      <ul key={key} style={{ margin: "4px 0 8px", paddingLeft: 20 }}>
+        {bulletBuffer.map((b, i) => (
+          <li key={i} style={{ fontSize: 13 }}>
+            {renderInlineBold(b, `${key}-li-${i}`)}
+          </li>
+        ))}
+      </ul>,
+    );
+    bulletBuffer = [];
+  };
+  lines.forEach((line, i) => {
+    if (line.startsWith("- ")) {
+      bulletBuffer.push(line.slice(2));
+      return;
+    }
+    flushBullets(`bullets-${i}`);
+    if (line.trim()) elements.push(<p key={i} style={{ fontSize: 13, margin: "4px 0" }}>{renderInlineBold(line, `p-${i}`)}</p>);
+  });
+  flushBullets("bullets-end");
+  return elements;
+}
+
+// The Agent Hierarchy: one node per pipeline step (fixed order) expanded
+// through that step's agent's own delegate_agent_ids (runtime-decided) -
+// see ai_agent_hierarchy_service.rs's own doc comment for the design.
+function AgentHierarchyTreeNode({ node, depth, roleLabel }: { node: AgentHierarchyNode; depth: number; roleLabel?: string }) {
+  return (
+    <div style={{ marginLeft: depth * 20, marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+        {depth > 0 && <span style={{ color: "var(--text-muted)" }}>↳ delegates to</span>}
+        <span>{node.agent_icon}</span>
+        <b style={{ color: node.agent_is_active ? undefined : "var(--large, #b23b3b)" }}>{node.agent_name}</b>
+        {roleLabel && <span className="badge">{roleLabel}</span>}
+        {!node.agent_is_active && <span className="badge badge-danger">Inactive</span>}
+        {node.requires_approval && <span className="badge badge-warning">Pauses for approval</span>}
+      </div>
+      {node.truncated && (
+        <div style={{ marginLeft: 20, fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>⚠ {node.truncated}</div>
+      )}
+      {node.delegates.map((d) => (
+        <AgentHierarchyTreeNode key={`${d.agent_id}-${depth}`} node={d} depth={depth + 1} />
+      ))}
+    </div>
+  );
+}
+
+function PipelineHierarchyPanel({ pipeline }: { pipeline: AiAgentPipeline }) {
+  const hierarchyQuery = useQuery({ queryKey: ["aiAgentPipelineHierarchy", pipeline.id], queryFn: () => api.getAiAgentPipelineHierarchy(pipeline.id) });
+  const hierarchy = hierarchyQuery.data;
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ marginTop: 0 }}>{pipeline.name} - Agent Hierarchy</h3>
+      <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 12px" }}>
+        Who this pipeline runs (its own step order), and who each of those agents may in turn call at runtime via their own "Can delegate to" setting -
+        the same two things Orchestration and an Agent's own delegation already do, shown together in one picture.
+      </p>
+      {hierarchyQuery.isLoading && <p style={{ fontSize: 13 }}>Loading...</p>}
+      {hierarchy && (
+        <>
+          <div className="panel" style={{ marginBottom: 12 }}>
+            <b style={{ fontSize: 13 }}>What's happening</b>
+            {renderDescriptionMd(hierarchy.description_md)}
+          </div>
+          <div>
+            {hierarchy.roots.map((root, i) => (
+              <AgentHierarchyTreeNode key={`${root.agent_id}-${i}`} node={root} depth={0} roleLabel={stepRoleLabel(pipeline.topology, i, hierarchy.roots.length)} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
