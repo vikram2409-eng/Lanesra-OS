@@ -2,6 +2,7 @@ pub mod access_role_service;
 pub mod access_service;
 pub mod activity_service;
 pub mod agent_service;
+pub mod ai_agent_hierarchy_service;
 pub mod ai_agent_service;
 pub mod ai_eval_service;
 pub mod ai_gateway_service;

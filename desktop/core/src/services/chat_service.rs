@@ -746,7 +746,10 @@ thread_local! {
     // safety net that matters here (see migration 0038's own comment).
     static AGENT_DELEGATION_DEPTH: Cell<u8> = const { Cell::new(0) };
 }
-const MAX_DELEGATION_DEPTH: u8 = 4;
+/// Also the depth bound `ai_agent_hierarchy_service` resolves a Pipeline's
+/// static delegation tree to - the runtime guard and the hierarchy view
+/// must agree on the same number, so it's exposed rather than duplicated.
+pub(crate) const MAX_DELEGATION_DEPTH: u8 = 4;
 
 struct DelegationDepthGuard;
 impl DelegationDepthGuard {

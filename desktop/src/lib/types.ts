@@ -2478,6 +2478,33 @@ export interface AiAgentPipelineInput {
   steps: PipelineStepInput[];
 }
 
+// AI & Agentic Layer: the Agent Hierarchy - who a pipeline's steps run
+// (fixed, `step_order` in order) and who each step's agent may in turn
+// delegate to at runtime (`delegate_agent_ids`, resolved recursively).
+// Mirrors core::models::ai_agent_pipeline::{AgentHierarchyNode,
+// PipelineHierarchy} 1:1. See PipelineHierarchyView.tsx.
+export interface AgentHierarchyNode {
+  agent_id: string;
+  agent_name: string;
+  agent_icon: string;
+  agent_is_active: boolean;
+  step_order: number | null;
+  requires_approval: boolean;
+  delegates: AgentHierarchyNode[];
+  // Set when this node's own delegates were deliberately not expanded
+  // further (the delegation-depth guard, or a cycle back to an agent
+  // already on this path) - the node itself still renders as a leaf.
+  truncated: string | null;
+}
+
+export interface PipelineHierarchy {
+  pipeline_id: string;
+  pipeline_name: string;
+  topology: PipelineTopology;
+  roots: AgentHierarchyNode[];
+  description_md: string;
+}
+
 export type AiAgentTargetType = "agent" | "pipeline";
 export type AiAgentTriggerType = "schedule" | "webhook";
 

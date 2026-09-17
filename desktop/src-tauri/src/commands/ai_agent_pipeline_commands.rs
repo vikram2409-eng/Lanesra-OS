@@ -12,8 +12,8 @@ use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::ai_agent_pipeline::{AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentTrigger, AiAgentTriggerInput};
-use lanesra_core::services::ai_orchestration_service;
+use lanesra_core::models::ai_agent_pipeline::{AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentTrigger, AiAgentTriggerInput, PipelineHierarchy};
+use lanesra_core::services::{ai_agent_hierarchy_service, ai_orchestration_service};
 
 #[tauri::command]
 pub fn list_ai_agent_pipelines(state: State<AppState>, active_only: bool) -> AppResult<Vec<AiAgentPipeline>> {
@@ -40,6 +40,15 @@ pub fn update_ai_agent_pipeline(state: State<AppState>, id: String, input: AiAge
 pub fn set_ai_agent_pipeline_active(state: State<AppState>, id: String, is_active: bool) -> AppResult<AiAgentPipeline> {
     let conn = state.conn.lock().unwrap();
     ai_orchestration_service::set_pipeline_active(&conn, &id, is_active, current_actor(&state).as_deref())
+}
+
+/// The Agent Hierarchy - who a Pipeline's steps run, and who each step's
+/// agent may in turn delegate to. See `ai_agent_hierarchy_service`'s own
+/// doc comment.
+#[tauri::command]
+pub fn get_ai_agent_pipeline_hierarchy(state: State<AppState>, id: String) -> AppResult<PipelineHierarchy> {
+    let conn = state.conn.lock().unwrap();
+    ai_agent_hierarchy_service::resolve(&conn, &id)
 }
 
 #[tauri::command]

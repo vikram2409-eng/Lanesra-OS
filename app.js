@@ -6369,8 +6369,9 @@ function aiAgentPipelinesTab(body){
  <div class="panel-head"><h3>Orchestration</h3><button class="btn btn-primary" id="addPipeline" ${agents.length?'':'disabled'}>+ New pipeline</button></div>
  <p class="muted" style="font-size:13px">A Pipeline runs agents under one of three topologies - <b>Sequential</b> (a fixed chain, step 2 can reference step 1's answer via <code>{{previous_output}}</code>), <b>Consensus</b> (every step but the last runs independently; the last synthesizes them via <code>{{candidate_outputs}}</code>), or <b>Peer review</b> (exactly 2 steps - a drafter and a reviewer - looping until approved). Any step can reference the trigger's own input via <code>{{trigger_input}}</code>. Deterministic and admin-authored, unlike an agent's own dynamic delegation.</p>
  ${agents.length?'':'<p class="empty-state">Create at least one AI Agent first.</p>'}
- <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Topology</th><th>Steps</th><th>Status</th><th>Actions</th></tr></thead><tbody>${pipelines.map(p=>`<tr><td><b>${p.name}</b>${p.description?`<br><small class="muted">${p.description}</small>`:''}</td><td><span class="badge">${pipelineTopologyLabel(p.topology)}</span></td><td>${pipelineStepsSummary(p,agents)}</td><td>${badgeMaybe(p.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-run-pipeline="${p.id}" ${p.isActive&&(p.steps||[]).length?'':'disabled'}>Run</button><button class="icon-btn" data-edit-pipeline="${p.id}">Edit</button><button class="icon-btn" data-toggle-pipeline="${p.id}">${p.isActive?'Deactivate':'Reactivate'}</button><button class="icon-btn" data-del-pipeline="${p.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${pipelines.length?'':'<div class="empty">No pipelines yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Topology</th><th>Steps</th><th>Status</th><th>Actions</th></tr></thead><tbody>${pipelines.map(p=>`<tr><td><b>${p.name}</b>${p.description?`<br><small class="muted">${p.description}</small>`:''}</td><td><span class="badge">${pipelineTopologyLabel(p.topology)}</span></td><td>${pipelineStepsSummary(p,agents)}</td><td>${badgeMaybe(p.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-run-pipeline="${p.id}" ${p.isActive&&(p.steps||[]).length?'':'disabled'}>Run</button><button class="icon-btn" data-hierarchy-pipeline="${p.id}" ${(p.steps||[]).length?'':'disabled'}>Hierarchy</button><button class="icon-btn" data-edit-pipeline="${p.id}">Edit</button><button class="icon-btn" data-toggle-pipeline="${p.id}">${p.isActive?'Deactivate':'Reactivate'}</button><button class="icon-btn" data-del-pipeline="${p.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${pipelines.length?'':'<div class="empty">No pipelines yet</div>'}</div>
  <div id="pipelineRunWrap"></div>
+ <div id="pipelineHierarchyWrap"></div>
  </div>`;
  $('#addPipeline').onclick=()=>aiAgentPipelineModal();
  body.querySelectorAll('[data-edit-pipeline]').forEach(b=>b.onclick=()=>aiAgentPipelineModal(pipelines.find(p=>p.id===b.dataset.editPipeline)));
@@ -6384,6 +6385,122 @@ function aiAgentPipelinesTab(body){
   wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name} <span class="badge">${run.status}</span></h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b>${stepDurationMs(s)!==null?` <small class="muted">(${stepDurationMs(s)}ms)</small>`:''}<br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}<div id="otlpTraceActionsWrap"></div></div>`;
   renderOtlpTraceActions(p,run,$('#otlpTraceActionsWrap'));
  });
+ body.querySelectorAll('[data-hierarchy-pipeline]').forEach(b=>b.onclick=()=>{
+  const p=pipelines.find(x=>x.id===b.dataset.hierarchyPipeline);
+  renderAgentHierarchyPanel(p,$('#pipelineHierarchyWrap'));
+ });
+}
+// AI & Agentic Layer: Agent Hierarchy - combines a Pipeline's own step
+// order (deterministic, admin-authored - see aiAgentPipelinesTab above)
+// with each step's agent's own delegateAgentIds (dynamic, runtime-decided
+// - the same field chatSimAgentReply's delegate_to_agent simulation above
+// uses) into one tree, plus a generated plain-language description.
+// Mirrors desktop's ai_agent_hierarchy_service.rs exactly, including its
+// depth guard - here matched to this demo's own delegation cap
+// (chatSimAgentReply's `depth<3`), not desktop's separate MAX_DELEGATION_DEPTH,
+// since each edition's hierarchy view should truncate at the same depth its
+// own runtime would actually stop at, never a borrowed number from the
+// other edition. Narrated instead of executed - same "one evaluator, every
+// caller" principle the Access Inspector uses for authorization.
+function resolveAgentHierarchyNode(agentId,stepOrder,requiresApproval,path,depth){
+ const agent=(data.aiAgents||[]).find(a=>a.id===agentId);
+ const agentName=agent?agent.name:'(deleted agent)';
+ const agentIcon=agent?agent.icon:'⚠';
+ const agentIsActive=agent?!!agent.isActive:false;
+ const delegateIds=agent?(agent.delegateAgentIds||[]):[];
+ if(path.includes(agentId)){
+  return {agentId,agentName,agentIcon,agentIsActive,stepOrder,requiresApproval,delegates:[],truncated:'Delegation cycle - this agent already appears earlier on this same path'};
+ }
+ if(depth>=3){
+  return {agentId,agentName,agentIcon,agentIsActive,stepOrder,requiresApproval,delegates:[],truncated:'Delegation depth limit (3) reached - matches this demo\'s own delegation guard, so a run could never actually go deeper than this either'};
+ }
+ path.push(agentId);
+ const delegates=delegateIds.map(id=>resolveAgentHierarchyNode(id,null,false,path,depth+1));
+ path.pop();
+ return {agentId,agentName,agentIcon,agentIsActive,stepOrder,requiresApproval,delegates,truncated:null};
+}
+function resolveAgentHierarchy(pipeline){
+ const roots=(pipeline.steps||[]).map((s,idx)=>resolveAgentHierarchyNode(s.agentId,idx,!!s.requiresApproval,[],0));
+ const descriptionMd=describeAgentHierarchy(pipeline.name,pipeline.topology||'sequential',roots);
+ return {roots,descriptionMd};
+}
+function agentHierarchyDelegateSummary(node){
+ if(!node.delegates.length)return '';
+ return ` (which may delegate to ${node.delegates.map(d=>d.agentName).join(', ')})`;
+}
+function describeAgentHierarchy(pipelineName,topology,roots){
+ if(!roots.length)return `**${pipelineName}** has no steps yet - add at least one to see how it runs.`;
+ const lines=[];
+ if(topology==='consensus'&&roots.length>=2){
+  const candidates=roots.slice(0,-1);
+  const synthesizer=roots[roots.length-1];
+  lines.push(`**${pipelineName}** runs ${candidates.length} candidate step(s) independently against the same input, then a synthesizer combines every candidate's answer into one.`);
+  candidates.forEach(c=>lines.push(`- Candidate: **${c.agentName}**${agentHierarchyDelegateSummary(c)}`));
+  lines.push(`- Synthesizer: **${synthesizer.agentName}**${agentHierarchyDelegateSummary(synthesizer)}, reads every candidate's answer via \`{{candidate_outputs}}\`.`);
+ }else if(topology==='peer_review'&&roots.length===2){
+  const drafter=roots[0],reviewer=roots[1];
+  lines.push(`**${pipelineName}** loops a drafter and a reviewer: **${drafter.agentName}**${agentHierarchyDelegateSummary(drafter)} drafts, **${reviewer.agentName}**${agentHierarchyDelegateSummary(reviewer)} critiques, the drafter revises from that critique - up to 3 rounds, until the reviewer's answer starts with "APPROVED".`);
+ }else{
+  lines.push(`**${pipelineName}** runs ${roots.length} step(s) in order, each one's output feeding the next via \`{{previous_output}}\`.`);
+  roots.forEach(r=>{
+   const stepLabel=r.stepOrder!=null?`Step ${r.stepOrder+1}`:'';
+   const pause=r.requiresApproval?" - pauses for an Administrator's approval before continuing":'';
+   lines.push(`- ${stepLabel}: **${r.agentName}**${agentHierarchyDelegateSummary(r)}${pause}`);
+  });
+ }
+ return lines.join('\n');
+}
+// Turns the small Markdown subset describeAgentHierarchy actually emits
+// (**bold** spans and "- " bullet lines) into HTML, without pulling in a
+// full Markdown renderer for one narrow, self-authored shape - mirrors
+// AiAgentPipelinesAdmin.tsx's renderInlineBold/renderDescriptionMd exactly.
+function renderInlineBoldMd(text){
+ return text.split(/(\*\*[^*]+\*\*)/g).map(part=>part.startsWith('**')&&part.endsWith('**')?`<b>${part.slice(2,-2)}</b>`:part).join('');
+}
+function renderDescriptionMdHtml(md){
+ const lines=md.split('\n');
+ const html=[];
+ let bulletBuffer=[];
+ const flushBullets=()=>{
+  if(!bulletBuffer.length)return;
+  html.push(`<ul style="margin:4px 0 8px;padding-left:20px">${bulletBuffer.map(b=>`<li style="font-size:13px">${renderInlineBoldMd(b)}</li>`).join('')}</ul>`);
+  bulletBuffer=[];
+ };
+ lines.forEach(line=>{
+  if(line.startsWith('- ')){bulletBuffer.push(line.slice(2));return}
+  flushBullets();
+  if(line.trim())html.push(`<p style="font-size:13px;margin:4px 0">${renderInlineBoldMd(line)}</p>`);
+ });
+ flushBullets();
+ return html.join('');
+}
+function stepRoleLabel(topology,i,total){
+ if(topology==='consensus')return i===total-1?'Synthesizer':`Candidate ${i+1}`;
+ if(topology==='peer_review')return i===0?'Drafter':'Reviewer';
+ return `Step ${i+1}`;
+}
+function agentHierarchyNodeHtml(node,depth,roleLabel){
+ const indent=depth*20;
+ const delegatedFrom=depth>0?'<span class="muted">↳ delegates to</span> ':'';
+ const roleBadge=roleLabel?` <span class="badge">${roleLabel}</span>`:'';
+ const inactiveBadge=node.agentIsActive?'':' <span class="badge badge-danger">Inactive</span>';
+ const approvalBadge=node.requiresApproval?' <span class="badge badge-warning">Pauses for approval</span>':'';
+ const truncatedHtml=node.truncated?`<div style="margin-left:20px;font-size:12px;color:var(--text-muted);font-style:italic">⚠ ${node.truncated}</div>`:'';
+ const childrenHtml=(node.delegates||[]).map(d=>agentHierarchyNodeHtml(d,depth+1)).join('');
+ return `<div style="margin-left:${indent}px;margin-top:4px">
+ <div style="display:flex;align-items:center;gap:6px;font-size:13px">${delegatedFrom}<span>${node.agentIcon}</span><b>${node.agentName}</b>${roleBadge}${inactiveBadge}${approvalBadge}</div>
+ ${truncatedHtml}
+ ${childrenHtml}
+ </div>`;
+}
+function renderAgentHierarchyPanel(pipeline,wrap){
+ const {roots,descriptionMd}=resolveAgentHierarchy(pipeline);
+ wrap.innerHTML=`<div class="panel" style="margin-top:16px">
+ <h4 style="margin-top:0">${pipeline.name} — Agent Hierarchy</h4>
+ <p class="muted" style="font-size:13px;margin:0 0 12px">Who this pipeline runs (its own step order), and who each of those agents may in turn call at runtime via their own "Delegates to" setting - the same two things Orchestration and an Agent's own delegation already do, shown together in one picture.</p>
+ <div class="panel" style="margin-bottom:12px"><b style="font-size:13px">What's happening</b>${renderDescriptionMdHtml(descriptionMd)}</div>
+ <div>${roots.map((root,i)=>agentHierarchyNodeHtml(root,0,stepRoleLabel(pipeline.topology||'sequential',i,roots.length))).join('')}</div>
+ </div>`;
 }
 /* AI & Agentic Layer, Phase 7g: mirrors the desktop app's
  * `stepSupportsApproval` exactly - a "needs approval" gate is only
@@ -7752,12 +7869,13 @@ const HELP_CATEGORIES=[
      {heading:'Try it',bodyHtml:`<p>Save the agent, then open the main <b>Assistant</b> page and pick it from the agent selector to chat with it directly - the same UI every user's own record-scoped chat uses, just pointed at this new persona and its own tools instead. From here, chain it with other agents in <a href="/help/orchestration-pipelines">Orchestration: Pipelines &amp; topologies</a>, or route it through <a href="/help/unified-ai-gateway">the Unified AI Gateway</a>.</p>`},
     ]},
    {slug:'orchestration-pipelines',title:'Orchestration: Pipelines & topologies',
-    summary:'Chain agents into a deterministic Pipeline - sequential, consensus or peer-review - with triggers, human-in-the-loop approval gates, and OTLP tracing on every run.',
+    summary:'Chain agents into a deterministic Pipeline - sequential, consensus or peer-review - with triggers, human-in-the-loop approval gates, OTLP tracing on every run, and an Agent Hierarchy view combining a pipeline\'s step order with each agent\'s own delegation.',
     sections:[
      {heading:'Pipelines vs. delegation',bodyHtml:`<p>An agent's own dynamic delegation (previous article) is a runtime decision the agent makes for itself. A <b>Pipeline</b>, built under <b>Admin → AI Agent Foundry → AI Agent Pipelines</b>, is the opposite: an admin-authored, fixed, ordered sequence of steps, each one calling a named agent, with a chosen <b>topology</b> controlling exactly how those steps relate to each other. The two are complementary, not redundant - a Pipeline step's own agent can still delegate mid-step if it's configured to.</p>`},
      {heading:'Sequential topology',bodyHtml:`<p>The default: each step runs after the previous one finishes, and any step's input can reference the literal trigger input or the placeholder <code>{{previous_output}}</code> - the immediately preceding step's real text output. A 3-step sequential pipeline - "research," then "draft," then "polish" - is the straightforward worked example: step 2's prompt embeds <code>{{previous_output}}</code> to receive step 1's research verbatim.</p>`},
      {heading:'Consensus topology',bodyHtml:`<p>Every step but the last runs <i>independently</i> against the same original trigger input - not chained to each other - producing several candidate answers to the same question. The final step is a <b>synthesizer</b>: its prompt embeds <code>{{candidate_outputs}}</code>, which is every earlier step's real candidate output joined together, and its job is to combine them into one answer. Use this when you want several independent takes (perhaps the same agent run three times with slightly different framing, or three different specialist agents) reconciled by a final judgment call, rather than one single unreviewed answer.</p>`},
      {heading:'Peer-review topology',bodyHtml:`<p>A drafter and a reviewer loop: the drafter produces an answer, the reviewer critiques it, and if the reviewer's reply doesn't start with the literal marker <b>APPROVED</b>, the drafter revises and the loop repeats. This is capped at <b>3 rounds</b> - if the reviewer still hasn't approved by then, the run ends with a clear failure rather than looping forever waiting for consensus that isn't coming.</p>`},
+     {heading:'Agent Hierarchy: seeing both kinds of "who runs" together',bodyHtml:`<p>A Pipeline's own step order and an agent's own dynamic delegation (previous article) are two separate things this codebase already tracks - the <b>Agent Hierarchy</b> view, opened from a Pipeline's own <b>Agent Hierarchy</b> button, combines them into one picture instead of leaving you to hold both in your head. It doesn't add a new concept: it resolves each step's agent, then walks that agent's own "Can delegate to" list recursively, and narrates the whole thing in plain language - the same evaluator the run itself would use, just explained instead of executed.</p><div class="callout callout-info"><p><b>Worked example</b> - a 3-step consensus Pipeline named "Renewal Risk Assessment": Step 1 candidate "Contract Reviewer" (which may delegate to "Clause Extractor"), Step 2 candidate "Usage Analyst", Step 3 synthesizer "Risk Synthesizer". The Agent Hierarchy view shows two trees under Step 1 and Step 2's candidates plus the synthesizer, with "Contract Reviewer" expanding one level further to show "Clause Extractor" beneath it, and a description reading: <i>"Renewal Risk Assessment runs 2 candidate step(s) independently against the same input, then a synthesizer combines every candidate's answer into one. Candidate: Contract Reviewer (which may delegate to Clause Extractor). Candidate: Usage Analyst. Synthesizer: Risk Synthesizer, reads every candidate's answer via {{candidate_outputs}}."</i></p></div><p>Two things it flags rather than hides: a <b>delegation cycle</b> (agent A delegates to B, which delegates back to A) shows the repeated agent as a leaf with an explanatory note instead of freezing the page, and a chain deeper than the runtime's own 4-level delegation guard is truncated at the exact same depth a real run would stop at - so the view never implies a delegation path that couldn't actually happen.</p>`},
      {heading:'Triggers & run history',bodyHtml:`<p>Fire a Pipeline (or a lone Agent) manually from its own screen, on a schedule, from an authenticated inbound webhook, or as a new <b>"Run AI agent"</b> Workflow Automation action - so a status change or a scheduled trigger elsewhere in the product can kick off an agent run without a person in the loop. Every run, whatever triggered it, writes to one unified run history with per-step results, so there's one place to review what an agent actually did, regardless of how it was invoked.</p>`},
      {heading:'Human-in-the-loop approval gates',bodyHtml:`<p>Any topology can be configured to pause for an Administrator's review at the one step that has a well-defined resume point for it: any step of a sequential chain, a consensus pipeline's synthesizer step, or a peer-review pipeline's reviewer step (checked every round, not just the first). A paused run sits in an <b>awaiting approval</b> state in the run history until an Administrator either <b>approves</b> it - optionally editing the paused step's own output before it feeds into the rest of the run - or <b>rejects</b> it outright, ending the run there.</p>`},
      {heading:'OTLP tracing',bodyHtml:`<p>Real per-step timing is recorded on every run and can be rendered as a standard OTLP <code>resourceSpans</code> trace - viewable as JSON from the run's own detail view, or pushed on demand to a collector endpoint you configure under <b>Admin → LLM &amp; MCP → Gateway</b>, so a Pipeline's behavior shows up in whatever observability stack you already run alongside the rest of your infrastructure.</p>`},
