@@ -11,9 +11,16 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::voice::{SetVoicePinInput, VoicePreferencesInput, VoiceSession, VoiceUserSettings};
+use crate::models::voice::{ConversationTurn, SetVoicePinInput, VoicePreferencesInput, VoiceSession, VoiceUserSettings};
 use crate::repositories::{audit_repo, user_repo, voice_repo};
 use crate::services::{auth_service, voice_policy_service};
+
+/// Multi-turn conversational context (spec §14) is deliberately bounded,
+/// not an ever-growing transcript - only the last few turns matter for
+/// resolving "it"/"that" going forward, and an unbounded history would be
+/// a real, if slow-building, data-growth and prompt-bloat concern with no
+/// offsetting benefit.
+const MAX_CONVERSATION_TURNS: usize = 5;
 
 /// After this many wrong PINs in a row, the PIN locks out for
 /// `PIN_LOCKOUT_MINUTES` and the user must fall back to full Lanesra
@@ -160,4 +167,35 @@ pub fn set_state(conn: &Connection, session_id: &str, user_id: &str, state: &str
     let session = require_owned_session(conn, session_id, user_id)?;
     voice_repo::set_session_state(conn, &session.id, state)?;
     Ok(voice_repo::get_session(conn, &session.id)?.expect("just updated"))
+}
+
+/// Voice-First Mode, PR 2 (part 2): the most recently referenced record
+/// still in this session's bounded conversation history - the object of
+/// "it"/"that" when the user isn't looking at that record's own screen
+/// (spec §14: a reference carried across a whole back-and-forth, not just
+/// the currently open record `context_object_key`/`context_record_id`
+/// already cover). Malformed/legacy `conversation_json` degrades to "no
+/// conversation context" rather than an error - this is a convenience
+/// fallback, never a required input.
+pub fn last_conversation_reference(conn: &Connection, session_id: &str) -> AppResult<Option<(String, String)>> {
+    let raw = voice_repo::get_session_conversation(conn, session_id)?;
+    let turns: Vec<ConversationTurn> = serde_json::from_str(&raw).unwrap_or_default();
+    Ok(turns.last().map(|t| (t.object_key.clone(), t.record_id.clone())))
+}
+
+/// Appends one resolved-record turn (spec §14), most-recent-last, capped
+/// at `MAX_CONVERSATION_TURNS` - never called for a command that didn't
+/// resolve to one specific record, so "it" is never left pointing at
+/// something aggregate or ambiguous.
+pub fn record_conversation_turn(conn: &Connection, session_id: &str, transcript: &str, intent: &str, object_key: &str, record_id: &str) -> AppResult<()> {
+    let raw = voice_repo::get_session_conversation(conn, session_id)?;
+    let mut turns: Vec<ConversationTurn> = serde_json::from_str(&raw).unwrap_or_default();
+    turns.push(ConversationTurn { transcript: transcript.to_string(), intent: intent.to_string(), object_key: object_key.to_string(), record_id: record_id.to_string() });
+    if turns.len() > MAX_CONVERSATION_TURNS {
+        let drop = turns.len() - MAX_CONVERSATION_TURNS;
+        turns.drain(0..drop);
+    }
+    let json = serde_json::to_string(&turns).map_err(|e| AppError::Validation(format!("could not serialize conversation turn: {e}")))?;
+    voice_repo::set_session_conversation(conn, session_id, &json)?;
+    Ok(())
 }

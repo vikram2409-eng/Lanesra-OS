@@ -192,6 +192,23 @@ pub struct VoiceSession {
     pub updated_at: String,
 }
 
+/// Voice-First Mode, PR 2 (part 2): one entry in a session's
+/// `conversation_json` (spec §14's multi-turn context) - the same shape
+/// `voice_entity_resolver`'s existing screen-context short-circuit already
+/// uses (`object_key`/`record_id`), just carried across a whole
+/// back-and-forth instead of only the record currently on screen. Only a
+/// command that actually resolved to one specific record gets a turn
+/// (`object_key`/`record_id` both `Some`) - a QUERY answered in aggregate
+/// ("how many open opportunities") has nothing for "it" to mean next, so
+/// it's honestly not recorded as a reference either.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationTurn {
+    pub transcript: String,
+    pub intent: String,
+    pub object_key: String,
+    pub record_id: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct VoiceCommand {
     pub id: String,

@@ -75,7 +75,20 @@ pub async fn submit_command(
     let correlation_id = new_uuid();
     let command = voice_repo::create_command(conn, &new_uuid(), session_id, &session.workspace_id, user_id, transcript, language, speech_confidence, &correlation_id)?;
 
-    let outcome = voice_planner_service::plan(conn, &session.workspace_id, transcript, session.context_object_key.as_deref(), session.context_record_id.as_deref())?;
+    // Voice-First Mode, PR 2 (part 2): the last record this session's own
+    // conversation actually resolved (spec §14) - a second, lower-priority
+    // fallback for "it"/"that" behind the record currently on screen, not
+    // a replacement for it. See `voice_entity_resolver::resolve_by_reference`'s
+    // own doc comment for the exact priority order.
+    let conversation_reference = voice_session_service::last_conversation_reference(conn, session_id)?;
+    let outcome = voice_planner_service::plan(
+        conn,
+        &session.workspace_id,
+        transcript,
+        session.context_object_key.as_deref(),
+        session.context_record_id.as_deref(),
+        conversation_reference.as_ref().map(|(k, r)| (k.as_str(), r.as_str())),
+    )?;
 
     match outcome {
         PlanOutcome::Unsupported { reason } => {
@@ -101,6 +114,15 @@ pub async fn submit_command(
                 entity_confidence,
                 &[],
             )?;
+
+            // A command that resolved to one specific record becomes this
+            // session's new "it"/"that" for whatever comes next - recorded
+            // regardless of how the risk/confirmation gate below decides,
+            // since the *reference* was still real even if the action on
+            // it isn't executed immediately (or is blocked/needs approval).
+            if let (Some(ok), Some(oid)) = (&object_key, &resolved_record_id) {
+                voice_session_service::record_conversation_turn(conn, session_id, transcript, &intent, ok, oid)?;
+            }
 
             let policy = voice_policy_service::effective_policy(conn, user_id)?;
             let risk_decision = voice_risk_service::decide(&plan, &policy);
