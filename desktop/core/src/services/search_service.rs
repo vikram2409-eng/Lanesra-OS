@@ -229,6 +229,159 @@ pub fn global_search(conn: &Connection, workspace_id: &str, query: &str) -> AppR
     Ok(out)
 }
 
+// --- Bounded edit-distance fuzzy fallback (spec §8.1's own named-but-not-
+// -built "fuzzy match" tier) ------------------------------------------------
+
+/// Results are still capped, same reasoning as `global_search`'s own
+/// `MAX_RESULTS` - a fuzzy pass over a large workspace could otherwise
+/// surface a long, low-quality tail.
+const MAX_FUZZY_RESULTS: usize = 10;
+/// Per-type candidate scan is bounded too (unlike `global_search`, this
+/// pass has no `LIKE` filter to narrow the SQL itself - every non-archived
+/// row of that type is a candidate) so a very large workspace can't turn a
+/// single voice command into an unbounded table scan.
+const FUZZY_MAX_CANDIDATES_PER_TYPE: i64 = 500;
+/// A normalized edit distance (Levenshtein distance divided by the longer
+/// of the two strings' lengths) at or below this counts as a plausible
+/// typo of the query - loose enough to forgive a couple of misspelled or
+/// transposed letters ("Atlas Construcion" -> "Atlas Construction"), tight
+/// enough that two genuinely different short names don't collide.
+const FUZZY_MAX_NORMALIZED_DISTANCE: f64 = 0.34;
+
+/// Plain iterative Levenshtein distance (edit distance: insertions,
+/// deletions, substitutions) - no external crate needed for a single
+/// small, well-known algorithm, and it keeps this fallback's only
+/// dependency the same `rusqlite`/`serde` this file already has.
+fn levenshtein(a: &[char], b: &[char]) -> usize {
+    let (n, m) = (a.len(), b.len());
+    if n == 0 {
+        return m;
+    }
+    if m == 0 {
+        return n;
+    }
+    let mut prev: Vec<usize> = (0..=m).collect();
+    let mut curr = vec![0usize; m + 1];
+    for i in 1..=n {
+        curr[0] = i;
+        for j in 1..=m {
+            let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[m]
+}
+
+/// `Some(normalized_distance)` when `title` is within `query`'s fuzzy
+/// tolerance, `None` otherwise - the normalized score doubles as the sort
+/// key fuzzy_search ranks by (lower = closer).
+fn fuzzy_score(query_chars: &[char], title: &str) -> Option<f64> {
+    let title_lower: Vec<char> = title.to_lowercase().chars().collect();
+    let dist = levenshtein(query_chars, &title_lower);
+    let longer = query_chars.len().max(title_lower.len()).max(1);
+    let normalized = dist as f64 / longer as f64;
+    if normalized <= FUZZY_MAX_NORMALIZED_DISTANCE {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
+/// The fallback tier `voice_entity_resolver::resolve_by_reference` reaches
+/// for only after `global_search`'s substring match already came back
+/// empty - a typo-tolerant pass over every core entity's own title field
+/// plus every active Custom Object's records (mirroring `global_search`'s
+/// exact per-type coverage, so a Custom Object from an installed Industry
+/// App is fuzzy-findable the same way a built-in record is, with no new
+/// code needed per object). Deliberately not the primary path: an exact or
+/// substring match is always more precise and cheaper than an edit-
+/// distance scan, so this only ever runs when that already found nothing.
+pub fn fuzzy_search(conn: &Connection, workspace_id: &str, query: &str) -> AppResult<Vec<SearchResult>> {
+    let query = query.trim();
+    if query.chars().count() < 2 {
+        return Ok(Vec::new());
+    }
+    let query_chars: Vec<char> = query.to_lowercase().chars().collect();
+    let mut scored: Vec<(f64, SearchResult)> = Vec::new();
+
+    let mut push = |entity_type: &str, entity_id: String, title: String, subtitle: Option<String>| {
+        if let Some(score) = fuzzy_score(&query_chars, &title) {
+            scored.push((score, SearchResult { entity_type: entity_type.into(), entity_id, title, subtitle }));
+        }
+    };
+
+    let mut stmt = conn.prepare("SELECT id, name, email, phone FROM companies WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?))
+    })? {
+        let (id, name, email, phone) = row?;
+        push("Company", id, name, email.or(phone));
+    }
+
+    let mut stmt = conn.prepare("SELECT id, first_name, last_name, email, phone FROM contacts WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?))
+    })? {
+        let (id, first, last, email, phone) = row?;
+        push("Contact", id, format!("{first} {last}").trim().to_string(), email.or(phone));
+    }
+
+    let mut stmt = conn.prepare("SELECT id, name FROM opportunities WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+        let (id, name) = row?;
+        push("Opportunity", id, name, None);
+    }
+
+    let mut stmt = conn.prepare("SELECT id, name, sku FROM products WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?)))? {
+        let (id, name, sku) = row?;
+        push("Product", id, name, sku);
+    }
+
+    let mut stmt = conn.prepare("SELECT id, title FROM contracts WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+        let (id, title) = row?;
+        push("Contract", id, title, None);
+    }
+
+    let mut stmt = conn.prepare("SELECT id, title FROM tasks WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+        let (id, title) = row?;
+        push("Task", id, title, None);
+    }
+
+    // Quotes/Orders/Invoices are number-identified, not name-identified -
+    // a formatted number ("Q-2024-0031") is exactly what a person reads
+    // off the record, so it's the fuzzy title too, same as global_search.
+    let mut stmt = conn.prepare("SELECT id, quote_number FROM quotes WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+        let (id, number) = row?;
+        push("Quote", id, number, None);
+    }
+    let mut stmt = conn.prepare("SELECT id, order_number FROM orders WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+        let (id, number) = row?;
+        push("Order", id, number, None);
+    }
+    let mut stmt = conn.prepare("SELECT id, invoice_number FROM invoices WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+        let (id, number) = row?;
+        push("Invoice", id, number, None);
+    }
+
+    for def in custom_object_service::list(conn, workspace_id, true)? {
+        let mut stmt = conn.prepare("SELECT id, primary_name FROM custom_records WHERE workspace_id = ?1 AND object_key = ?2 AND archived_at IS NULL LIMIT ?3")?;
+        for row in stmt.query_map(params![workspace_id, def.key, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+            let (id, name) = row?;
+            push(&def.key, id, name, None);
+        }
+    }
+
+    scored.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(scored.into_iter().take(MAX_FUZZY_RESULTS).map(|(_, r)| r).collect())
+}
+
 // --- Phase 7b: ranked full-text search over Custom Object records ---------
 
 /// One ranked hit from `search_custom_records` - `score` is FTS5's raw

@@ -821,6 +821,37 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   the one remaining item from the product spec's v0.3 - is the next
   slice; industry voice vocabulary packs and real local/on-device
   recognition are scoped to PR 3, not built yet.
+- **Voice-First Mode: bug fixes, Custom Object parity, fuzzy matching**:
+  a follow-up round from real user reports on the online demo. Fixed a
+  genuine mic-blocking bug - `netlify.toml`'s `Permissions-Policy` header
+  set `microphone=()` (an empty allowlist, denying every origin including
+  the site's own) instead of `microphone=(self)`, so the browser refused
+  every `SpeechRecognition` request before a permission prompt could even
+  appear; `voiceRecognition.onerror` in the demo also now surfaces an
+  honest reason (blocked mic, no hardware, no network) instead of
+  silently reverting to idle. Fixed `voiceSpeak()`'s speech synthesis for
+  real: it now only defers to a new tick when it actually needs to cancel
+  a still-speaking utterance (WebKit's same-tick cancel+speak bug), and
+  speaks synchronously, inside the original click handler, in the common
+  case - a *second*, separate iOS/WebKit quirk silently drops `speak()`
+  calls made outside a direct user gesture, which an earlier blanket
+  `setTimeout` fix had been doing unintentionally. Custom Object records
+  (including ones from an installed Industry App) are now genuinely
+  voice-addressable in the online demo - `voiceSearchableObjects()`
+  widens the demo's previously-hardcoded 6-object list to include every
+  active Custom Object (plus three built-ins, Invoice/Contract/Product,
+  the old list had silently dropped), matching what the desktop/server
+  edition already guaranteed via `entity_registry`/`global_search`
+  (VOICE-AC-06). Added a bounded Levenshtein edit-distance **fuzzy match**
+  tier (spec §8.1's own named-but-previously-unbuilt tier) on both
+  platforms - `search_service::fuzzy_search` (desktop/server) and an
+  identical algorithm in the demo - that only runs once an exact/substring
+  search already came back empty, and still only auto-resolves a single
+  close-enough candidate; more than one plausible typo still asks rather
+  than guessing (VOICE-AC-05). See `core/tests/voice_mode_v4.rs` (4 new
+  tests: a Custom Object record resolves like a built-in one, a single
+  close typo resolves, two plausible typos ask instead of guessing, and a
+  genuinely unrelated name still gets an honest "not found").
 
 ## What's deferred to a later phase
 
