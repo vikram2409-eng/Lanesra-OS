@@ -3204,6 +3204,21 @@ function voiceSpeak(message){
   setTimeout(()=>{try{synth.speak(new SpeechSynthesisUtterance(message))}catch(e){}},wasSpeaking?60:0);
  }catch(e){}
 }
+// Speech recognition failures used to just silently revert the mic icon to
+// idle with zero explanation - indistinguishable, from the user's side,
+// from "it isn't listening at all". A real cause (blocked mic permission,
+// no microphone hardware, no network reaching the browser's recognition
+// service) deserves an honest, visible reason, same "never silent" rule
+// this feature already applies to record resolution and policy blocks.
+function voiceRecognitionErrorMessage(code){
+ return {
+  'not-allowed':'Microphone access is blocked for this site - check your browser\'s site permissions (the padlock/info icon next to the address bar) and allow the microphone, then try again.',
+  'service-not-allowed':'Microphone access is blocked for this site - check your browser\'s site permissions and allow the microphone, then try again.',
+  'no-speech':'I didn\'t hear anything - try again, a bit closer to the mic.',
+  'audio-capture':'No microphone was found - check that one is connected, or use "type instead" below.',
+  'network':'Speech recognition needs an internet connection to reach the browser\'s recognition service - try again, or use "type instead" below.',
+ }[code]||'Voice recognition stopped unexpectedly - try again, or use "type instead" below.';
+}
 function voiceStartListening(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
  if(!SR)return;
@@ -3217,9 +3232,15 @@ function voiceStartListening(){
   if(final){voiceListening=false;voiceInterimText='';voiceSubmit(final)}
   else renderVoicePanel();
  };
- voiceRecognition.onerror=()=>{voiceListening=false;renderVoicePanel()};
+ voiceRecognition.onerror=e=>{
+  voiceListening=false;
+  // 'aborted' is a normal user-initiated stop (voiceStopListening, or
+  // navigating away mid-listen) - not a real failure, nothing to explain.
+  if(e.error!=='aborted')voicePendingPlan={kind:'result',raw:'',message:voiceRecognitionErrorMessage(e.error)};
+  renderVoicePanel();
+ };
  voiceRecognition.onend=()=>{if(voiceListening){voiceListening=false;renderVoicePanel()}};
- try{voiceRecognition.start()}catch(err){voiceListening=false;renderVoicePanel()}
+ try{voiceRecognition.start()}catch(err){voiceListening=false;voicePendingPlan={kind:'result',raw:'',message:voiceRecognitionErrorMessage()};renderVoicePanel()}
 }
 function voiceStopListening(){voiceListening=false;if(voiceRecognition){try{voiceRecognition.stop()}catch(e){}}renderVoicePanel()}
 function voiceHandlePlan(raw,plan,existingLogId){
