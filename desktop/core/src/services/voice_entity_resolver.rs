@@ -12,7 +12,10 @@
 //! hits are plausible" - one exact-title hit is an explicit identifier or
 //! an exact name (they look the same from here: `global_search` already
 //! matches on a record's own number field), more than one is always a
-//! clarification, never a silent guess (VOICE-AC-05).
+//! clarification, never a silent guess (VOICE-AC-05). When the substring
+//! match finds nothing at all, `search_service::fuzzy_search` provides one
+//! more, lower-confidence tier - a bounded edit-distance pass that
+//! tolerates a typo - before finally giving up.
 
 use rusqlite::Connection;
 
@@ -81,7 +84,35 @@ pub fn resolve_by_reference(
     };
 
     if results.is_empty() {
-        return Ok(ResolutionOutcome::NotFound);
+        // Substring match found nothing at all - fall back to a bounded,
+        // typo-tolerant edit-distance pass (spec §8.1's own named "fuzzy
+        // match" tier) before giving up. Still never silently guesses: one
+        // good fuzzy hit resolves (at a lower confidence than an exact or
+        // substring match), more than one always asks (VOICE-AC-05).
+        let all_fuzzy = search_service::fuzzy_search(conn, workspace_id, text)?;
+        let fuzzy: Vec<_> = match object_key_hint {
+            Some(hint) => all_fuzzy.into_iter().filter(|r| r.entity_type.eq_ignore_ascii_case(hint)).collect(),
+            None => all_fuzzy,
+        };
+        if fuzzy.is_empty() {
+            return Ok(ResolutionOutcome::NotFound);
+        }
+        if fuzzy.len() == 1 {
+            let r = &fuzzy[0];
+            return Ok(ResolutionOutcome::Resolved { record_id: r.entity_id.clone(), object_key: r.entity_type.clone(), confidence: 0.5 });
+        }
+        let candidates = fuzzy
+            .iter()
+            .take(6)
+            .map(|r| ResolutionCandidate {
+                record_id: r.entity_id.clone(),
+                label: match &r.subtitle {
+                    Some(s) => format!("{} ({} - {})", r.title, r.entity_type, s),
+                    None => format!("{} ({})", r.title, r.entity_type),
+                },
+            })
+            .collect();
+        return Ok(ResolutionOutcome::NeedsClarification { candidates });
     }
 
     let exact: Vec<_> = results.iter().filter(|r| r.title.eq_ignore_ascii_case(text)).collect();
