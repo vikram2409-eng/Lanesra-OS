@@ -40,6 +40,7 @@ pub fn resolve_by_reference(
     reference_text: &str,
     context_object_key: Option<&str>,
     context_record_id: Option<&str>,
+    conversation_reference: Option<(&str, &str)>,
 ) -> AppResult<ResolutionOutcome> {
     let text = reference_text.trim();
 
@@ -51,6 +52,17 @@ pub fn resolve_by_reference(
         if let (Some(ck), Some(cid)) = (context_object_key, context_record_id) {
             if object_key_hint.map(|h| h.eq_ignore_ascii_case(ck)).unwrap_or(true) && entity_registry::exists(conn, ck, cid)? {
                 return Ok(ResolutionOutcome::Resolved { record_id: cid.to_string(), object_key: ck.to_string(), confidence: 1.0 });
+            }
+        }
+        // Second priority (spec §14, PR 2): no record on screen matched,
+        // but "it"/"that" may still refer to whatever this session's own
+        // bounded conversation history last resolved a few turns back -
+        // real multi-turn context, not just the record currently open.
+        // Slightly lower confidence than a live on-screen record, since
+        // the user isn't looking straight at it anymore.
+        if let Some((ck, cid)) = conversation_reference {
+            if object_key_hint.map(|h| h.eq_ignore_ascii_case(ck)).unwrap_or(true) && entity_registry::exists(conn, ck, cid)? {
+                return Ok(ResolutionOutcome::Resolved { record_id: cid.to_string(), object_key: ck.to_string(), confidence: 0.9 });
             }
         }
         if text.is_empty() {

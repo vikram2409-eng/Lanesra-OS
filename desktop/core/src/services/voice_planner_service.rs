@@ -185,6 +185,7 @@ pub fn plan(
     transcript: &str,
     context_object_key: Option<&str>,
     context_record_id: Option<&str>,
+    conversation_reference: Option<(&str, &str)>,
 ) -> AppResult<PlanOutcome> {
     let text = transcript.trim();
     let lower = text.to_lowercase();
@@ -192,14 +193,14 @@ pub fn plan(
 
     if let Some(rest) = strip_any_prefix(&lower, NAVIGATE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, "NAVIGATE", |object_key, record_id| VoiceActionPlanBody {
+        return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference, "NAVIGATE", |object_key, record_id| VoiceActionPlanBody {
             steps: vec![VoicePlanStep { action: "navigate".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Open this {object_key} record") }],
         });
     }
 
     if let Some(rest) = strip_any_prefix(&lower, QUERY_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, "QUERY", |object_key, record_id| VoiceActionPlanBody {
+        return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference, "QUERY", |object_key, record_id| VoiceActionPlanBody {
             steps: vec![VoicePlanStep { action: "query".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Read-only summary of this {object_key} record") }],
         });
     }
@@ -227,12 +228,12 @@ pub fn plan(
 
     if let Some(rest) = strip_any_prefix(&lower, CAPTURE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return plan_capture(conn, workspace_id, &catalog, reference, context_object_key, context_record_id);
+        return plan_capture(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference);
     }
 
     if let Some(rest) = strip_any_prefix(&lower, UPDATE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return plan_update_status(conn, workspace_id, &catalog, reference, context_object_key, context_record_id);
+        return plan_update_status(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference);
     }
 
     if let Some(rest) = strip_any_prefix(&lower, RUN_PIPELINE_TRIGGERS) {
@@ -346,11 +347,12 @@ fn resolve_and_wrap(
     reference: &str,
     context_object_key: Option<&str>,
     context_record_id: Option<&str>,
+    conversation_reference: Option<(&str, &str)>,
     intent: &str,
     build: impl FnOnce(&str, &str) -> VoiceActionPlanBody,
 ) -> AppResult<PlanOutcome> {
     let hint = detect_object_key(catalog, &reference.to_lowercase()).map(|e| e.object_key.as_str().to_string());
-    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, hint.as_deref(), reference, context_object_key, context_record_id)? {
+    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, hint.as_deref(), reference, context_object_key, context_record_id, conversation_reference)? {
         ResolutionOutcome::Resolved { record_id, object_key, confidence } => Ok(PlanOutcome::Ready {
             plan: build(&object_key, &record_id),
             intent: intent.to_string(),
@@ -364,6 +366,7 @@ fn resolve_and_wrap(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn plan_update_status(
     conn: &Connection,
     workspace_id: &str,
@@ -371,6 +374,7 @@ fn plan_update_status(
     reference: &str,
     context_object_key: Option<&str>,
     context_record_id: Option<&str>,
+    conversation_reference: Option<(&str, &str)>,
 ) -> AppResult<PlanOutcome> {
     let lower = reference.to_lowercase();
 
@@ -402,7 +406,7 @@ fn plan_update_status(
     let reference_text = remainder.split_whitespace().filter(|w| !["as", "to", "the"].contains(w)).collect::<Vec<_>>().join(" ");
     let reference_text = if reference_text.trim().is_empty() { reference.to_string() } else { reference_text };
 
-    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, Some(&entry_owned), &reference_text, context_object_key, context_record_id)? {
+    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, Some(&entry_owned), &reference_text, context_object_key, context_record_id, conversation_reference)? {
         ResolutionOutcome::Resolved { record_id, object_key, confidence } => {
             let mut fields = std::collections::HashMap::new();
             fields.insert("status".to_string(), status_value.clone());
@@ -420,6 +424,7 @@ fn plan_update_status(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn plan_capture(
     conn: &Connection,
     workspace_id: &str,
@@ -427,6 +432,7 @@ fn plan_capture(
     reference: &str,
     context_object_key: Option<&str>,
     context_record_id: Option<&str>,
+    conversation_reference: Option<(&str, &str)>,
 ) -> AppResult<PlanOutcome> {
     // "Add an interaction to Contact ID 113609 that renewal email is
     // sent" - split on the first "that"/"saying"/"noting" into (who it's
@@ -446,7 +452,7 @@ fn plan_capture(
     let hint = detect_object_key(catalog, &target_part.to_lowercase()).map(|e| e.object_key.as_str().to_string());
     let target_text = if target_part.is_empty() { "this".to_string() } else { target_part.replace("to ", "").replace("on ", "").replace("for ", "").trim().to_string() };
 
-    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, hint.as_deref(), &target_text, context_object_key, context_record_id)? {
+    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, hint.as_deref(), &target_text, context_object_key, context_record_id, conversation_reference)? {
         ResolutionOutcome::Resolved { record_id, object_key, confidence } => {
             let mut fields = std::collections::HashMap::new();
             fields.insert("body".to_string(), body.clone());

@@ -206,7 +206,7 @@ fn resolves_exact_name_uniquely_and_flags_ambiguous_or_missing() {
     company_service::create(&conn, &ws, &company_input("Acme Robotics"), Some(&admin)).unwrap();
     company_service::create(&conn, &ws, &company_input("Acme Logistics"), Some(&admin)).unwrap();
 
-    match voice_entity_resolver::resolve_by_reference(&conn, &ws, Some("Company"), "Northern Star", None, None).unwrap() {
+    match voice_entity_resolver::resolve_by_reference(&conn, &ws, Some("Company"), "Northern Star", None, None, None).unwrap() {
         ResolutionOutcome::Resolved { object_key, confidence, .. } => {
             assert_eq!(object_key, "Company");
             assert!(confidence >= 0.9);
@@ -214,12 +214,12 @@ fn resolves_exact_name_uniquely_and_flags_ambiguous_or_missing() {
         other => panic!("expected Resolved, got {other:?}"),
     }
 
-    match voice_entity_resolver::resolve_by_reference(&conn, &ws, Some("Company"), "Acme", None, None).unwrap() {
+    match voice_entity_resolver::resolve_by_reference(&conn, &ws, Some("Company"), "Acme", None, None, None).unwrap() {
         ResolutionOutcome::NeedsClarification { candidates } => assert_eq!(candidates.len(), 2),
         other => panic!("expected NeedsClarification for an ambiguous name, got {other:?}"),
     }
 
-    match voice_entity_resolver::resolve_by_reference(&conn, &ws, Some("Company"), "Nonexistent Corp", None, None).unwrap() {
+    match voice_entity_resolver::resolve_by_reference(&conn, &ws, Some("Company"), "Nonexistent Corp", None, None, None).unwrap() {
         ResolutionOutcome::NotFound => {}
         other => panic!("expected NotFound, got {other:?}"),
     }
@@ -230,7 +230,7 @@ fn context_reference_short_circuits_to_the_record_in_view() {
     let (conn, ws, admin) = setup_workspace();
     let company = company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
 
-    match voice_entity_resolver::resolve_by_reference(&conn, &ws, None, "this", Some("Company"), Some(&company.id)).unwrap() {
+    match voice_entity_resolver::resolve_by_reference(&conn, &ws, None, "this", Some("Company"), Some(&company.id), None).unwrap() {
         ResolutionOutcome::Resolved { record_id, confidence, .. } => {
             assert_eq!(record_id, company.id);
             assert_eq!(confidence, 1.0);
@@ -244,7 +244,7 @@ fn context_reference_short_circuits_to_the_record_in_view() {
 #[test]
 fn plan_create_task_extracts_title_and_due_date() {
     let (conn, ws, _admin) = setup_workspace();
-    match voice_planner_service::plan(&conn, &ws, "create a task to follow up with Acme tomorrow", None, None).unwrap() {
+    match voice_planner_service::plan(&conn, &ws, "create a task to follow up with Acme tomorrow", None, None, None).unwrap() {
         PlanOutcome::Ready { plan, intent, .. } => {
             assert_eq!(intent, "CREATE");
             let step = &plan.steps[0];
@@ -262,7 +262,7 @@ fn plan_update_status_matches_object_noun_and_status_value() {
     let company = company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
     let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "CRM Modernization"), Some(&admin)).unwrap();
 
-    match voice_planner_service::plan(&conn, &ws, "mark CRM Modernization opportunity as Won", None, None).unwrap() {
+    match voice_planner_service::plan(&conn, &ws, "mark CRM Modernization opportunity as Won", None, None, None).unwrap() {
         PlanOutcome::Ready { plan, intent, object_key, resolved_record_id, .. } => {
             assert_eq!(intent, "UPDATE");
             assert_eq!(object_key.as_deref(), Some("Opportunity"));
@@ -284,7 +284,7 @@ fn plan_update_status_falls_back_to_session_context_object() {
     // No object noun spoken at all ("mark this Won") - the object type
     // comes entirely from the session's current-record context (spec §7),
     // and the reference resolves via that same context.
-    match voice_planner_service::plan(&conn, &ws, "mark this Won", Some("Opportunity"), Some(&opp.id)).unwrap() {
+    match voice_planner_service::plan(&conn, &ws, "mark this Won", Some("Opportunity"), Some(&opp.id), None).unwrap() {
         PlanOutcome::Ready { object_key, resolved_record_id, .. } => {
             assert_eq!(object_key.as_deref(), Some("Opportunity"));
             assert_eq!(resolved_record_id.as_deref(), Some(opp.id.as_str()));
@@ -298,7 +298,7 @@ fn plan_capture_logs_an_interaction_against_the_named_record() {
     let (conn, ws, admin) = setup_workspace();
     company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
 
-    match voice_planner_service::plan(&conn, &ws, "add an interaction to Northern Star that renewal call happened", None, None).unwrap() {
+    match voice_planner_service::plan(&conn, &ws, "add an interaction to Northern Star that renewal call happened", None, None, None).unwrap() {
         PlanOutcome::Ready { plan, intent, .. } => {
             assert_eq!(intent, "CAPTURE");
             let step = &plan.steps[0];
@@ -312,7 +312,7 @@ fn plan_capture_logs_an_interaction_against_the_named_record() {
 #[test]
 fn unrecognized_transcript_is_honestly_unsupported() {
     let (conn, ws, _admin) = setup_workspace();
-    match voice_planner_service::plan(&conn, &ws, "what's the weather like today", None, None).unwrap() {
+    match voice_planner_service::plan(&conn, &ws, "what's the weather like today", None, None, None).unwrap() {
         PlanOutcome::Unsupported { .. } => {}
         other => panic!("expected Unsupported for gibberish, got {other:?}"),
     }

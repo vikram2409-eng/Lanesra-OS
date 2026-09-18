@@ -797,6 +797,30 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   rest of the product spec's v0.3 - remain the next slice; industry
   voice vocabulary packs and real local/on-device recognition are scoped
   to PR 3, not built yet.
+- **Voice-First Mode, PR 2 (part 2): multi-turn conversational context**:
+  a reference like "it"/"that" now survives across a whole
+  back-and-forth, not just the record currently open on screen (spec
+  §14). `voice_session_service` reads and appends to each session's own
+  bounded `conversation_json` (5 turns max, capped the same way other
+  bounded lists already are in this codebase) - a turn is only recorded
+  when a command actually resolves to one specific record, so an
+  aggregate QUERY has nothing for "it" to mean next; recording happens
+  as soon as `voice_execution_service::submit_command` gets a resolved
+  plan, before the risk/capability gate runs, since the reference itself
+  was real even if the action on it is blocked or needs confirmation.
+  `voice_entity_resolver::resolve_by_reference` checks this session
+  history as a second, lower-confidence fallback (0.9 vs. the live
+  screen context's 1.0) - never a replacement for what's actually open
+  on screen. The existing `reset_conversation` action (spec's own
+  "Reset voice context") clears it without ending the session. See
+  `core/tests/voice_mode_v3.rs` (3 new tests: resolving "it" purely from
+  conversation history, screen context still winning when both are
+  present, and reset clearing the fallback). Mirrored in the online demo
+  (`app.js`), including a small "It currently means…" status line with a
+  one-click Reset context action. Guided step-by-step record creation -
+  the one remaining item from the product spec's v0.3 - is the next
+  slice; industry voice vocabulary packs and real local/on-device
+  recognition are scoped to PR 3, not built yet.
 
 ## What's deferred to a later phase
 
