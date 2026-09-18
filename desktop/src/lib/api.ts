@@ -663,10 +663,26 @@ export const api = {
   setVoiceSessionContext: (sessionId: string, objectKey: string | null, recordId: string | null) =>
     call<VoiceSession>("set_voice_session_context", { sessionId, objectKey, recordId }),
   resetVoiceConversation: (sessionId: string) => call<VoiceSession>("reset_voice_conversation", { sessionId }),
+  // Voice-First Mode, PR 2: a RUN_AGENT/RUN_PIPELINE command may call out
+  // to an LLM provider, so both of these are genuinely async now (same
+  // reasoning as sendAgentMessage/runAiAgentPipeline above) and go through
+  // callAdminAction instead of the generic dispatcher.
   submitVoiceCommand: (sessionId: string, transcript: string, language: string, speechConfidence: number | null) =>
-    call<VoiceCommandOutcome>("submit_voice_command", { sessionId, transcript, language, speechConfidence }),
+    callAdminAction<VoiceCommandOutcome>(
+      "submit_voice_command",
+      { sessionId, transcript, language, speechConfidence },
+      "POST",
+      `/api/admin/voice/sessions/${encodeURIComponent(sessionId)}/commands`,
+      { transcript, language, speechConfidence },
+    ),
   confirmVoicePlan: (sessionId: string, input: ConfirmVoicePlanInput) =>
-    call<VoiceExecutionResult>("confirm_voice_plan", { sessionId, input }),
+    callAdminAction<VoiceExecutionResult>(
+      "confirm_voice_plan",
+      { sessionId, input },
+      "POST",
+      `/api/admin/voice/sessions/${encodeURIComponent(sessionId)}/confirm`,
+      { input },
+    ),
   undoVoiceExecution: (executionId: string) => call<void>("undo_voice_execution", { executionId }),
   listMyVoiceActivity: (limit: number) => call<VoiceActivityEntry[]>("list_my_voice_activity", { limit }),
   searchVoiceActivity: (limit: number) => call<VoiceActivityEntry[]>("search_voice_activity", { limit }),

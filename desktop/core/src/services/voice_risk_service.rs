@@ -18,7 +18,7 @@ fn step_risk(action: &str) -> VoiceRisk {
         "navigate" | "query" => VoiceRisk::None,
         "log_activity" | "create_task" => VoiceRisk::Low,
         "update_status" | "update_custom_fields" => VoiceRisk::Medium,
-        "run_agent" => VoiceRisk::Medium,
+        "run_agent" | "run_pipeline" => VoiceRisk::Medium,
         "bulk_update" => VoiceRisk::High,
         "delete" => VoiceRisk::Blocked,
         _ => VoiceRisk::Medium,
@@ -37,15 +37,19 @@ pub fn classify(plan: &VoiceActionPlanBody) -> VoiceRisk {
 /// already possess"). `navigate`/`query` need only Voice Search, since
 /// they're read-only; every other step type currently emitted by
 /// `voice_planner_service` creates or changes a record, so it needs Voice
-/// Create/Update. `run_agent`/`bulk_update` aren't emitted by any planner
-/// yet (PR 2/3), but are mapped now so a future planner change can't
-/// accidentally skip this gate by omission.
+/// Create/Update. `run_agent`/`run_pipeline` (PR 2's RUN_AGENT intent) need
+/// Voice AI Agents specifically, on top of whatever the target agent's own
+/// admin-only/action-name restrictions already require - this is the
+/// composing, narrower gate, never a replacement for the agent's own
+/// checks. `bulk_update` isn't emitted by any planner yet (PR 3), but is
+/// mapped now so a future planner change can't accidentally skip this gate
+/// by omission.
 fn required_capability(action: &str) -> Option<&'static str> {
     match action {
         "navigate" | "query" => Some("search"),
         "create_task" | "log_activity" => Some("create"),
         "update_status" | "update_custom_fields" => Some("update"),
-        "run_agent" => Some("use_agents"),
+        "run_agent" | "run_pipeline" => Some("use_agents"),
         "bulk_update" => Some("bulk_act"),
         _ => None,
     }

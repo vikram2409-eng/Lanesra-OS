@@ -34,9 +34,10 @@ use serde_json::{json, Value};
 
 use lanesra_core::domain::AppError;
 use lanesra_core::models::agent::NlReportQuery;
+use lanesra_core::models::voice::ConfirmVoicePlanInput;
 use lanesra_core::services::{
     agent_service, ai_eval_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service,
-    integration_job_service, vector_search_service, webhook_service,
+    integration_job_service, vector_search_service, voice_execution_service, webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -61,6 +62,8 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
         .route("/api/admin/jobs/:id/run", post(run_integration_job_now))
         .route("/api/admin/external-objects/:object_key/preview", get(preview_external_object_records))
+        .route("/api/admin/voice/sessions/:session_id/commands", post(submit_voice_command))
+        .route("/api/admin/voice/sessions/:session_id/confirm", post(confirm_voice_plan))
 }
 
 fn err_json(status: StatusCode, message: &str) -> (StatusCode, Json<Value>) {
@@ -210,6 +213,44 @@ async fn run_ai_agent_pipeline_manual(State(state): State<SharedState>, jar: Coo
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
         ai_orchestration_service::run_manual(&conn, &workspace_id, &master_key, "pipeline", &id, &body.input, Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct SubmitVoiceCommandBody {
+    transcript: String,
+    language: String,
+    #[serde(default)]
+    speech_confidence: Option<f64>,
+}
+
+/// Voice-First Mode, PR 2: like `send_agent_chat_message`/
+/// `run_ai_agent_manual` above, `submit_voice_command`/`confirm_voice_plan`
+/// may now run a RUN_AGENT/RUN_PIPELINE step and so are genuinely async -
+/// `workspace_id` is discarded here since `voice_execution_service` derives
+/// it itself from the session/user row, exactly as the Tauri command does.
+async fn submit_voice_command(State(state): State<SharedState>, jar: CookieJar, Path(session_id): Path<String>, Json(body): Json<SubmitVoiceCommandBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (_workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        voice_execution_service::submit_command(&conn, &session_id, &actor, &body.transcript, &body.language, body.speech_confidence, &master_key).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct ConfirmVoicePlanBody {
+    input: ConfirmVoicePlanInput,
+}
+
+async fn confirm_voice_plan(State(state): State<SharedState>, jar: CookieJar, Path(session_id): Path<String>, Json(body): Json<ConfirmVoicePlanBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (_workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        voice_execution_service::confirm_plan(&conn, &session_id, &actor, &body.input, &master_key).await
     })
     .await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))

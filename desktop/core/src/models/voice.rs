@@ -300,6 +300,17 @@ pub struct VoiceExecutionResult {
     pub plan_id: String,
     pub status: String,
     pub executions: Vec<VoiceExecution>,
+    /// Voice-First Mode, PR 2: human-readable notes generated *at execution
+    /// time*, not persisted as their own column - today the only producer
+    /// is a RUN_AGENT/RUN_PIPELINE step, whose actual reply text has no
+    /// natural home in `voice_executions`' fixed columns (no schema change
+    /// in PR 2, per this feature's own scope guardrail). The full
+    /// conversation/run itself is never lost - it's still real chat/run
+    /// history, reachable via the agent's own `entity_id`/`entity_type` on
+    /// that execution row - this is only a same-response convenience so
+    /// the voice UI can speak/show the answer immediately.
+    #[serde(default)]
+    pub notes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

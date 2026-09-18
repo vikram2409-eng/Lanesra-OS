@@ -167,6 +167,7 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
   const [transcript, setTranscript] = useState("");
   const [typedText, setTypedText] = useState("");
   const [outcome, setOutcome] = useState<VoiceCommandOutcome | null>(null);
+  const [resultNotes, setResultNotes] = useState<string[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechSupported = !!getSpeechRecognitionCtor();
 
@@ -176,6 +177,7 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
     mutationFn: (args: { text: string; confidence: number | null }) => api.submitVoiceCommand(session.id, args.text, "en-US", args.confidence),
     onSuccess: (result) => {
       setOutcome(result);
+      setResultNotes([]);
       setTranscript("");
       setTypedText("");
       queryClient.invalidateQueries({ queryKey: ["myVoiceActivity"] });
@@ -190,6 +192,12 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
     mutationFn: (input: ConfirmVoicePlanInput) => api.confirmVoicePlan(session.id, input),
     onSuccess: (result) => {
       setOutcome((prev) => (prev ? { ...prev, plan: prev.plan ? { ...prev.plan, status: result.status } : prev.plan } : prev));
+      setResultNotes(result.notes);
+      // Voice-First Mode, PR 2: a RUN_AGENT/RUN_PIPELINE step's real reply
+      // only exists in this same response (see VoiceExecutionResult.notes'
+      // own doc comment) - speak it here, not in submit's onSuccess above,
+      // since the plan/answer text isn't known until *after* confirmation.
+      if (autoSpeak && result.notes.length > 0) speak(result.notes.join(". "));
       queryClient.invalidateQueries({ queryKey: ["myVoiceActivity"] });
     },
   });
@@ -287,7 +295,7 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
         </div>
       )}
 
-      {outcome && <OutcomePanel outcome={outcome} onConfirm={(input) => confirm.mutate(input)} confirming={confirm.isPending} />}
+      {outcome && <OutcomePanel outcome={outcome} notes={resultNotes} onConfirm={(input) => confirm.mutate(input)} confirming={confirm.isPending} />}
 
       <div style={{ marginTop: 12, borderTop: "1px solid var(--border, #eee)", paddingTop: 8 }}>
         <strong style={{ fontSize: 12 }}>My Voice Activity</strong>
@@ -305,7 +313,7 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
   );
 }
 
-function OutcomePanel({ outcome, onConfirm, confirming }: { outcome: VoiceCommandOutcome; onConfirm: (input: ConfirmVoicePlanInput) => void; confirming: boolean }) {
+function OutcomePanel({ outcome, notes, onConfirm, confirming }: { outcome: VoiceCommandOutcome; notes: string[]; onConfirm: (input: ConfirmVoicePlanInput) => void; confirming: boolean }) {
   if (outcome.unsupported_reason) {
     return <p style={{ fontSize: 13 }}>{outcome.unsupported_reason}</p>;
   }
@@ -349,7 +357,13 @@ function OutcomePanel({ outcome, onConfirm, confirming }: { outcome: VoiceComman
         </div>
       )}
       {plan.status === "awaiting_approval" && <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Waiting for an Administrator to approve this action.</p>}
-      {plan.status === "succeeded" && <p style={{ fontSize: 12, color: "var(--success, #2e7d32)" }}>Done.</p>}
+      {plan.status === "succeeded" && notes.length === 0 && <p style={{ fontSize: 12, color: "var(--success, #2e7d32)" }}>Done.</p>}
+      {plan.status === "succeeded" &&
+        notes.map((note, i) => (
+          <p key={i} className="panel" style={{ padding: 8, fontSize: 13, background: "var(--surface-alt, #f7f7fb)" }}>
+            {note}
+          </p>
+        ))}
       {plan.status === "partially_failed" && <p style={{ fontSize: 12, color: "var(--danger, #d64545)" }}>Only some steps completed - see My Voice Activity for details.</p>}
     </div>
   );

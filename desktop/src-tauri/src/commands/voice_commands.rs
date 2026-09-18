@@ -1,5 +1,6 @@
 use tauri::State;
 
+use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::{AppError, AppResult};
@@ -68,16 +69,33 @@ pub fn reset_voice_conversation(state: State<AppState>, session_id: String) -> A
     voice_session_service::reset_conversation(&conn, &session_id, &require_actor(&state)?)
 }
 
+// Voice-First Mode, PR 2: a RUN_AGENT/RUN_PIPELINE command may call out to
+// an LLM provider (`chat_service::send_agent_message`/
+// `ai_orchestration_service::run_manual`), so both of these are genuinely
+// async now - same reasoning, and the same `run_with_own_connection`
+// pattern, as `chat_commands::send_agent_message`'s own doc comment. Every
+// other voice command (unlock, context, activity, policy, ...) stays
+// plain sync above.
 #[tauri::command]
-pub fn submit_voice_command(state: State<AppState>, session_id: String, transcript: String, language: String, speech_confidence: Option<f64>) -> AppResult<VoiceCommandOutcome> {
-    let conn = state.conn.lock().unwrap();
-    voice_execution_service::submit_command(&conn, &session_id, &require_actor(&state)?, &transcript, &language, speech_confidence)
+pub async fn submit_voice_command(state: State<'_, AppState>, session_id: String, transcript: String, language: String, speech_confidence: Option<f64>) -> AppResult<VoiceCommandOutcome> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let user_id = require_actor(&state)?;
+    run_with_own_connection(db_path, move |conn| async move {
+        voice_execution_service::submit_command(&conn, &session_id, &user_id, &transcript, &language, speech_confidence, &master_key).await
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn confirm_voice_plan(state: State<AppState>, session_id: String, input: ConfirmVoicePlanInput) -> AppResult<VoiceExecutionResult> {
-    let conn = state.conn.lock().unwrap();
-    voice_execution_service::confirm_plan(&conn, &session_id, &require_actor(&state)?, &input)
+pub async fn confirm_voice_plan(state: State<'_, AppState>, session_id: String, input: ConfirmVoicePlanInput) -> AppResult<VoiceExecutionResult> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let user_id = require_actor(&state)?;
+    run_with_own_connection(db_path, move |conn| async move {
+        voice_execution_service::confirm_plan(&conn, &session_id, &user_id, &input, &master_key).await
+    })
+    .await
 }
 
 #[tauri::command]

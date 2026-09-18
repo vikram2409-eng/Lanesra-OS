@@ -13,6 +13,10 @@ use lanesra_core::services::{
     voice_planner_service, voice_policy_service, voice_session_service, workspace_service,
 };
 
+fn master_key() -> [u8; 32] {
+    [7u8; 32]
+}
+
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
     let setup = WorkspaceSetup {
@@ -318,32 +322,32 @@ fn unrecognized_transcript_is_honestly_unsupported() {
 // entity services (Access Control v1 + status transitions + audit all fire
 // exactly as a UI save would) --------------------------------------------
 
-#[test]
-fn navigate_executes_immediately_with_no_confirmation() {
+#[tokio::test]
+async fn navigate_executes_immediately_with_no_confirmation() {
     let (conn, ws, admin) = setup_workspace();
     let company = company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
     let user = make_voice_user(&conn, &ws, &admin, "navigator", full_voice_access());
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, &format!("open {}", company.name), "en-US", None).unwrap();
+    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, &format!("open {}", company.name), "en-US", None, &master_key()).await.unwrap();
     let plan = outcome.plan.expect("a NAVIGATE command should produce a plan");
     assert_eq!(plan.status, "succeeded", "read-only NAVIGATE should never need confirmation");
 }
 
-#[test]
-fn medium_risk_update_requires_confirmation_then_executes_and_can_be_undone() {
+#[tokio::test]
+async fn medium_risk_update_requires_confirmation_then_executes_and_can_be_undone() {
     let (conn, ws, admin) = setup_workspace();
     let company = company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
     let user = make_voice_user(&conn, &ws, &admin, "updater", full_voice_access());
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Northern Star Company as Inactive", "en-US", None).unwrap();
+    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Northern Star Company as Inactive", "en-US", None, &master_key()).await.unwrap();
     let plan = outcome.plan.expect("expected a plan");
     assert_eq!(plan.status, "awaiting_confirmation", "a status change is Medium risk and must always confirm");
 
-    let result = voice_execution_service::confirm_plan(&conn, &session.id, &user, &ConfirmVoicePlanInput { plan_id: plan.id.clone(), method: "tap".into(), edited_plan: None }).unwrap();
+    let result = voice_execution_service::confirm_plan(&conn, &session.id, &user, &ConfirmVoicePlanInput { plan_id: plan.id.clone(), method: "tap".into(), edited_plan: None }, &master_key()).await.unwrap();
     assert_eq!(result.status, "succeeded");
     assert_eq!(result.executions.len(), 1);
     let execution = &result.executions[0];
@@ -358,18 +362,18 @@ fn medium_risk_update_requires_confirmation_then_executes_and_can_be_undone() {
     assert_eq!(reverted.status, "Prospect", "undo must restore the pre-command value through a real compensating write");
 }
 
-#[test]
-fn rejecting_a_plan_never_executes_it() {
+#[tokio::test]
+async fn rejecting_a_plan_never_executes_it() {
     let (conn, ws, admin) = setup_workspace();
     let company = company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
     let user = make_voice_user(&conn, &ws, &admin, "rejecter", full_voice_access());
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Northern Star Company as Inactive", "en-US", None).unwrap();
+    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Northern Star Company as Inactive", "en-US", None, &master_key()).await.unwrap();
     let plan = outcome.plan.unwrap();
 
-    let result = voice_execution_service::confirm_plan(&conn, &session.id, &user, &ConfirmVoicePlanInput { plan_id: plan.id, method: "reject".into(), edited_plan: None }).unwrap();
+    let result = voice_execution_service::confirm_plan(&conn, &session.id, &user, &ConfirmVoicePlanInput { plan_id: plan.id, method: "reject".into(), edited_plan: None }, &master_key()).await.unwrap();
     assert_eq!(result.status, "rejected");
     assert!(result.executions.is_empty());
 
@@ -377,14 +381,14 @@ fn rejecting_a_plan_never_executes_it() {
     assert_eq!(unchanged.status, "Prospect");
 }
 
-#[test]
-fn act_level_skips_confirmation_on_low_risk_task_creation_and_undo_archives_it() {
+#[tokio::test]
+async fn act_level_skips_confirmation_on_low_risk_task_creation_and_undo_archives_it() {
     let (conn, ws, admin) = setup_workspace();
     let user = make_voice_user(&conn, &ws, &admin, "actlevel", VoicePolicyBindingInput { max_action_level: "act".into(), ..full_voice_access() });
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "create a task to call the customer tomorrow", "en-US", None).unwrap();
+    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "create a task to call the customer tomorrow", "en-US", None, &master_key()).await.unwrap();
     let plan = outcome.plan.expect("expected a plan");
     assert_eq!(plan.status, "succeeded", "Act level should skip confirmation for Low-risk task creation");
 
@@ -401,8 +405,8 @@ fn act_level_skips_confirmation_on_low_risk_task_creation_and_undo_archives_it()
     assert!(archived.archived_at.is_some(), "undo of a created task should archive it");
 }
 
-#[test]
-fn required_capability_is_enforced_even_when_max_action_level_would_otherwise_allow_it() {
+#[tokio::test]
+async fn required_capability_is_enforced_even_when_max_action_level_would_otherwise_allow_it() {
     let (conn, ws, admin) = setup_workspace();
     let company = company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
     // "act" is the most permissive Max Action Level, but can_update is off -
@@ -412,7 +416,7 @@ fn required_capability_is_enforced_even_when_max_action_level_would_otherwise_al
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Northern Star Company as Inactive", "en-US", None).unwrap();
+    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Northern Star Company as Inactive", "en-US", None, &master_key()).await.unwrap();
     assert!(outcome.plan.is_none(), "a capability-blocked command must not produce an executable plan");
     let reason = outcome.unsupported_reason.expect("expected a blocked reason");
     assert!(reason.contains("Voice Update"), "expected the reason to name the missing capability, got: {reason}");
@@ -421,8 +425,8 @@ fn required_capability_is_enforced_even_when_max_action_level_would_otherwise_al
     assert_eq!(unchanged.status, "Prospect", "a blocked command must never touch the record");
 }
 
-#[test]
-fn ambiguous_reference_asks_for_clarification_instead_of_guessing() {
+#[tokio::test]
+async fn ambiguous_reference_asks_for_clarification_instead_of_guessing() {
     let (conn, ws, admin) = setup_workspace();
     company_service::create(&conn, &ws, &company_input("Acme Robotics"), Some(&admin)).unwrap();
     company_service::create(&conn, &ws, &company_input("Acme Logistics"), Some(&admin)).unwrap();
@@ -430,7 +434,7 @@ fn ambiguous_reference_asks_for_clarification_instead_of_guessing() {
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Acme Company as Inactive", "en-US", None).unwrap();
+    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Acme Company as Inactive", "en-US", None, &master_key()).await.unwrap();
     assert!(outcome.plan.is_none());
     assert!(outcome.clarification_question.is_some());
     assert_eq!(outcome.candidates.len(), 2);

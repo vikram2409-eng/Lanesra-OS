@@ -29,7 +29,7 @@ use crate::models::order::ORDER_STATUSES;
 use crate::models::quote::QUOTE_STATUSES;
 use crate::models::task::TASK_STATUSES;
 use crate::models::voice::{ResolutionCandidate, VoiceActionPlanBody, VoicePlanStep};
-use crate::services::{custom_field_service, custom_object_service, voice_entity_resolver};
+use crate::services::{ai_agent_service, ai_orchestration_service, custom_field_service, custom_object_service, voice_entity_resolver};
 use voice_entity_resolver::ResolutionOutcome;
 
 // A tiny helper module so a catalog entry can hold either a `&'static str`
@@ -102,6 +102,15 @@ const QUERY_TRIGGERS: &[&str] = &["summarize ", "summarise ", "tell me about ", 
 const CREATE_TASK_TRIGGERS: &[&str] = &["create a task ", "create task ", "add a task ", "add task ", "schedule a task ", "remind me to "];
 const CAPTURE_TRIGGERS: &[&str] = &["add an interaction ", "add interaction ", "log a call ", "log an email ", "log a message ", "note that ", "add a note ", "add note "];
 const UPDATE_TRIGGERS: &[&str] = &["mark ", "set ", "update ", "change "];
+/// Voice-First Mode, PR 2: RUN_AGENT (spec v0.4 "Voice & AI Agents") - the
+/// same design principle as every other intent: Voice is a new *caller*
+/// into the existing chat/orchestration entry points
+/// (`chat_service::send_agent_message`/`ai_orchestration_service::run_manual`),
+/// never a second agent-runtime. "delegate to " is deliberately generic
+/// (no "agent"/"pipeline" noun required) since a spoken name usually makes
+/// the target obvious on its own.
+const RUN_AGENT_TRIGGERS: &[&str] = &["ask agent ", "ask the agent ", "ask ", "run agent ", "delegate to agent ", "delegate to "];
+const RUN_PIPELINE_TRIGGERS: &[&str] = &["run pipeline ", "run the pipeline ", "trigger pipeline "];
 
 fn strip_any_prefix<'a>(text: &'a str, prefixes: &[&str]) -> Option<&'a str> {
     for p in prefixes {
@@ -226,9 +235,107 @@ pub fn plan(
         return plan_update_status(conn, workspace_id, &catalog, reference, context_object_key, context_record_id);
     }
 
+    if let Some(rest) = strip_any_prefix(&lower, RUN_PIPELINE_TRIGGERS) {
+        let reference = &text[text.len() - rest.len()..];
+        return plan_run_pipeline(conn, workspace_id, reference);
+    }
+
+    if let Some(rest) = strip_any_prefix(&lower, RUN_AGENT_TRIGGERS) {
+        let reference = &text[text.len() - rest.len()..];
+        return plan_run_agent(conn, workspace_id, reference);
+    }
+
     Ok(PlanOutcome::Unsupported {
-        reason: "I didn't recognize a command there. Try things like \"open Northern Star\", \"mark this Opportunity Won\", or \"create a task to follow up tomorrow\".".into(),
+        reason: "I didn't recognize a command there. Try things like \"open Northern Star\", \"mark this Opportunity Won\", \"create a task to follow up tomorrow\", or \"ask the Sales Coach agent to summarize this deal\".".into(),
     })
+}
+
+/// Splits "<name> to|with|that|: <message>" into (name, message) - the same
+/// permissive "first separator keyword wins" shape `plan_capture` already
+/// uses for "add an interaction to X that Y happened", so a spoken agent/
+/// pipeline name doesn't need any special quoting convention. `" with "`
+/// covers the Pipeline phrasing ("run pipeline Lead Triage with this lead");
+/// the others cover the Agent phrasing ("ask the Sales Coach agent to ...").
+fn split_name_and_message(reference: &str) -> (String, String) {
+    let lower = reference.to_lowercase();
+    let split_at = [" to ", " with ", " that ", ": ", " saying "].iter().find_map(|kw| lower.find(kw).map(|i| (i, kw.len())));
+    match split_at {
+        Some((idx, kw_len)) => (reference[..idx].trim().to_string(), reference[idx + kw_len..].trim().to_string()),
+        None => (String::new(), String::new()),
+    }
+}
+
+/// RUN_AGENT (spec v0.4): resolves a spoken agent name against this
+/// workspace's real `ai_agent_service::list` - never a fixed roster - and
+/// hands the rest of the sentence to it verbatim as a chat turn. Voice
+/// never talks to an LLM provider itself; it only calls
+/// `chat_service::send_agent_message`, the exact same function the AI
+/// Agent Foundry chat panel calls (see `voice_execution_service`'s own
+/// design-principle doc comment).
+fn plan_run_agent(conn: &Connection, workspace_id: &str, reference: &str) -> AppResult<PlanOutcome> {
+    let (name_part, message) = split_name_and_message(reference);
+    if name_part.is_empty() || message.is_empty() {
+        return Ok(PlanOutcome::Unsupported { reason: "Try \"ask <agent name> to <what you want>\", e.g. \"ask the Sales Coach agent to summarize this deal\".".into() });
+    }
+    let name_lower = name_part.to_lowercase();
+    let name_lower = name_lower.trim_start_matches("the ").trim_end_matches(" agent").trim();
+    let agents = ai_agent_service::list(conn, workspace_id, true)?;
+    let matches: Vec<_> = agents.into_iter().filter(|a| { let n = a.name.to_lowercase(); n.contains(name_lower) || name_lower.contains(n.as_str()) }).collect();
+    match matches.len() {
+        0 => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find an AI Agent named \"{name_part}\" - check the name under AI Agent Foundry.") }),
+        1 => {
+            let agent = &matches[0];
+            let mut fields = std::collections::HashMap::new();
+            fields.insert("message".to_string(), message.clone());
+            Ok(PlanOutcome::Ready {
+                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "run_agent".into(), object_key: "AiAgent".into(), record_id: Some(agent.id.clone()), fields, description: format!("Ask {} agent: \"{}\"", agent.name, message) }] },
+                intent: "RUN_AGENT".into(),
+                object_key: Some("AiAgent".into()),
+                resolved_record_id: Some(agent.id.clone()),
+                intent_confidence: 0.85,
+                entity_confidence: Some(1.0),
+            })
+        }
+        _ => Ok(PlanOutcome::NeedsClarification {
+            question: format!("More than one Agent matches \"{name_part}\" - which one did you mean?"),
+            candidates: matches.into_iter().map(|a| ResolutionCandidate { record_id: a.id, label: a.name }).collect(),
+        }),
+    }
+}
+
+/// RUN_AGENT's Pipeline counterpart - same shape, resolved against
+/// `ai_orchestration_service::list_pipelines` and executed through
+/// `ai_orchestration_service::run_manual`, never a second orchestration
+/// engine for Voice.
+fn plan_run_pipeline(conn: &Connection, workspace_id: &str, reference: &str) -> AppResult<PlanOutcome> {
+    let (name_part, message) = split_name_and_message(reference);
+    if name_part.is_empty() || message.is_empty() {
+        return Ok(PlanOutcome::Unsupported { reason: "Try \"run pipeline <name> with <input>\", e.g. \"run pipeline Lead Triage with this new lead\".".into() });
+    }
+    let name_lower = name_part.to_lowercase();
+    let name_lower = name_lower.trim_start_matches("the ").trim_end_matches(" pipeline").trim();
+    let pipelines = ai_orchestration_service::list_pipelines(conn, workspace_id, true)?;
+    let matches: Vec<_> = pipelines.into_iter().filter(|p| { let n = p.name.to_lowercase(); n.contains(name_lower) || name_lower.contains(n.as_str()) }).collect();
+    match matches.len() {
+        0 => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find a Pipeline named \"{name_part}\" - check the name under Orchestration.") }),
+        1 => {
+            let pipeline = &matches[0];
+            let mut fields = std::collections::HashMap::new();
+            fields.insert("message".to_string(), message.clone());
+            Ok(PlanOutcome::Ready {
+                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "run_pipeline".into(), object_key: "AiAgentPipeline".into(), record_id: Some(pipeline.id.clone()), fields, description: format!("Run {} pipeline: \"{}\"", pipeline.name, message) }] },
+                intent: "RUN_AGENT".into(),
+                object_key: Some("AiAgentPipeline".into()),
+                resolved_record_id: Some(pipeline.id.clone()),
+                intent_confidence: 0.85,
+                entity_confidence: Some(1.0),
+            })
+        }
+        _ => Ok(PlanOutcome::NeedsClarification {
+            question: format!("More than one Pipeline matches \"{name_part}\" - which one did you mean?"),
+            candidates: matches.into_iter().map(|p| ResolutionCandidate { record_id: p.id, label: p.name }).collect(),
+        }),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
