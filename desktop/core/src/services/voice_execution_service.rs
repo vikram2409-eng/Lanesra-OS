@@ -34,8 +34,9 @@ use crate::models::task::TaskInput;
 use crate::models::voice::{ConfirmVoicePlanInput, ResolutionCandidate, VoiceActionPlan, VoiceCommand, VoiceExecutionResult, VoiceResolution};
 use crate::repositories::voice_repo;
 use crate::services::{
-    activity_service, company_service, contact_service, contract_service, custom_field_service, custom_record_service, opportunity_service,
-    order_service, quote_service, task_service, voice_planner_service, voice_policy_service, voice_risk_service, voice_session_service,
+    activity_service, ai_orchestration_service, chat_service, company_service, contact_service, contract_service, custom_field_service,
+    custom_record_service, opportunity_service, order_service, quote_service, task_service, voice_planner_service, voice_policy_service,
+    voice_risk_service, voice_session_service,
 };
 use crate::services::voice_planner_service::PlanOutcome;
 
@@ -58,7 +59,16 @@ pub struct VoiceCommandOutcome {
 /// (spec §21). Always requires an active, unlocked Voice Session
 /// (`voice_session_service::require_active_session` is the one gate every
 /// path here goes through first).
-pub fn submit_command(conn: &Connection, session_id: &str, user_id: &str, transcript: &str, language: &str, speech_confidence: Option<f64>) -> AppResult<VoiceCommandOutcome> {
+#[allow(clippy::too_many_arguments)]
+pub async fn submit_command(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+    transcript: &str,
+    language: &str,
+    speech_confidence: Option<f64>,
+    master_key: &[u8; 32],
+) -> AppResult<VoiceCommandOutcome> {
     let session = voice_session_service::require_active_session(conn, session_id, user_id)?;
     voice_session_service::set_state(conn, session_id, user_id, "processing")?;
 
@@ -115,7 +125,7 @@ pub fn submit_command(conn: &Connection, session_id: &str, user_id: &str, transc
                 // No confirmation needed (read-only, or Act-level low risk) -
                 // execute immediately, same as the UI never asking "are you
                 // sure?" before a plain read.
-                let result = run_plan(conn, &plan_row, user_id, &correlation_id)?;
+                let result = run_plan(conn, &plan_row, user_id, &correlation_id, master_key).await?;
                 voice_session_service::set_state(conn, session_id, user_id, "idle")?;
                 let final_plan = voice_repo::get_plan(conn, &plan_row.id)?.unwrap_or(plan_row);
                 let _ = result;
@@ -131,7 +141,7 @@ pub fn submit_command(conn: &Connection, session_id: &str, user_id: &str, transc
 /// Records the user's response to an `awaiting_confirmation` plan and, if
 /// confirmed, executes it. `edited_plan` (spec §14: "No, I said Won") lets
 /// the caller correct the plan without re-running the planner from scratch.
-pub fn confirm_plan(conn: &Connection, session_id: &str, user_id: &str, input: &ConfirmVoicePlanInput) -> AppResult<VoiceExecutionResult> {
+pub async fn confirm_plan(conn: &Connection, session_id: &str, user_id: &str, input: &ConfirmVoicePlanInput, master_key: &[u8; 32]) -> AppResult<VoiceExecutionResult> {
     let session = voice_session_service::require_active_session(conn, session_id, user_id)?;
     let plan_row = voice_repo::get_plan(conn, &input.plan_id)?.ok_or_else(|| AppError::NotFound("Voice action plan".into()))?;
     if plan_row.status != "awaiting_confirmation" {
@@ -151,7 +161,7 @@ pub fn confirm_plan(conn: &Connection, session_id: &str, user_id: &str, input: &
     if outcome == "rejected" {
         voice_repo::set_plan_status(conn, &plan_row.id, "rejected")?;
         voice_session_service::set_state(conn, session_id, user_id, "idle")?;
-        return Ok(VoiceExecutionResult { plan_id: plan_row.id, status: "rejected".into(), executions: vec![] });
+        return Ok(VoiceExecutionResult { plan_id: plan_row.id, status: "rejected".into(), executions: vec![], notes: vec![] });
     }
 
     let plan_row = if let Some(edited) = &input.edited_plan {
@@ -166,20 +176,24 @@ pub fn confirm_plan(conn: &Connection, session_id: &str, user_id: &str, input: &
     };
 
     let correlation_id = voice_repo::get_command(conn, &plan_row.command_id)?.map(|c| c.correlation_id).unwrap_or_else(new_uuid);
-    let result = run_plan(conn, &plan_row, user_id, &correlation_id)?;
+    let result = run_plan(conn, &plan_row, user_id, &correlation_id, master_key).await?;
     voice_session_service::set_state(conn, &session.id, user_id, "idle")?;
     Ok(result)
 }
 
-fn run_plan(conn: &Connection, plan_row: &VoiceActionPlan, actor_user_id: &str, correlation_id: &str) -> AppResult<VoiceExecutionResult> {
+async fn run_plan(conn: &Connection, plan_row: &VoiceActionPlan, actor_user_id: &str, correlation_id: &str, master_key: &[u8; 32]) -> AppResult<VoiceExecutionResult> {
     voice_repo::set_plan_status(conn, &plan_row.id, "executing")?;
     let mut any_failed = false;
+    let mut notes = Vec::new();
 
     for (idx, step) in plan_row.plan.steps.iter().enumerate() {
-        let outcome = execute_step(conn, step, actor_user_id, correlation_id);
+        let outcome = execute_step(conn, step, actor_user_id, correlation_id, master_key).await;
         match outcome {
-            Ok((entity_id, undo_token)) => {
+            Ok((entity_id, undo_token, note)) => {
                 voice_repo::create_execution(conn, &new_uuid(), &plan_row.id, idx as i64, &step.object_key, entity_id.as_deref(), &step.action, "ok", None, undo_token.as_deref(), correlation_id)?;
+                if let Some(note) = note {
+                    notes.push(note);
+                }
             }
             Err(e) => {
                 voice_repo::create_execution(conn, &new_uuid(), &plan_row.id, idx as i64, &step.object_key, step.record_id.as_deref(), &step.action, "error", Some(&e.to_string()), None, correlation_id)?;
@@ -194,7 +208,7 @@ fn run_plan(conn: &Connection, plan_row: &VoiceActionPlan, actor_user_id: &str, 
     let final_status = if any_failed { "partially_failed" } else { "succeeded" };
     voice_repo::set_plan_status(conn, &plan_row.id, final_status)?;
     let executions = voice_repo::list_executions_for_plan(conn, &plan_row.id)?;
-    Ok(VoiceExecutionResult { plan_id: plan_row.id.clone(), status: final_status.to_string(), executions })
+    Ok(VoiceExecutionResult { plan_id: plan_row.id.clone(), status: final_status.to_string(), executions, notes })
 }
 
 #[derive(Serialize, Deserialize)]
@@ -207,11 +221,18 @@ struct UndoPayload {
 
 /// Executes one typed step against the real entity services - the only
 /// function in this crate that turns a voice plan into an actual database
-/// write. Returns `(entity_id_written, undo_token)`.
-fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanStep, actor_user_id: &str, _correlation_id: &str) -> AppResult<(Option<String>, Option<String>)> {
+/// write. Returns `(entity_id_written, undo_token, note)` - `note` is an
+/// execution-time-only string (never persisted as its own column, see
+/// `VoiceExecutionResult::notes`'s own doc comment), used today only by
+/// RUN_AGENT/RUN_PIPELINE to carry the agent's actual reply text back to
+/// the caller. Most existing entity-service calls are still plain sync
+/// code; only the `run_agent`/`run_pipeline` arms actually `.await`
+/// anything, but the whole function is `async` so both kinds of step can
+/// share one execution loop (`run_plan`) and one typed step shape.
+async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanStep, actor_user_id: &str, _correlation_id: &str, master_key: &[u8; 32]) -> AppResult<(Option<String>, Option<String>, Option<String>)> {
     let actor = Some(actor_user_id);
     match step.action.as_str() {
-        "navigate" | "query" => Ok((step.record_id.clone(), None)),
+        "navigate" | "query" => Ok((step.record_id.clone(), None, None)),
 
         "create_task" => {
             let workspace_id = task_workspace_id(conn, actor_user_id)?;
@@ -228,7 +249,7 @@ fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanStep, a
             };
             let task = task_service::create(conn, &workspace_id, &input, actor)?;
             let undo = serde_json::to_string(&UndoPayload { action: "archive_task".into(), object_key: "Task".into(), record_id: task.id.clone(), previous_value: None }).ok();
-            Ok((Some(task.id), undo))
+            Ok((Some(task.id), undo, None))
         }
 
         "log_activity" => {
@@ -248,7 +269,7 @@ fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanStep, a
             // this codebase - honestly no undo is offered here rather than
             // fabricating one (spec §22 already excludes "actions already
             // consumed downstream" from automatic Undo).
-            Ok((Some(activity.id), None))
+            Ok((Some(activity.id), None, None))
         }
 
         "update_status" => {
@@ -256,7 +277,7 @@ fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanStep, a
             let Some(new_status) = step.fields.get("status").cloned() else { return Err(AppError::Validation("No status value in plan".into())) };
             let previous = update_status_for_object(conn, &step.object_key, &record_id, &new_status, actor)?;
             let undo = serde_json::to_string(&UndoPayload { action: "revert_status".into(), object_key: step.object_key.clone(), record_id: record_id.clone(), previous_value: Some(previous) }).ok();
-            Ok((Some(record_id), undo))
+            Ok((Some(record_id), undo, None))
         }
 
         "update_custom_fields" => {
@@ -265,7 +286,40 @@ fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanStep, a
             if let Some(first_error) = notices.errors.first() {
                 return Err(AppError::Validation(first_error.clone()));
             }
-            Ok((Some(record_id), None))
+            Ok((Some(record_id), None, None))
+        }
+
+        // Voice-First Mode, PR 2 (RUN_AGENT): calls the exact same
+        // `chat_service::send_agent_message` the AI Agent Foundry chat
+        // panel calls - no second agent-runtime, per this module's own
+        // design principle. No undo path (a chat turn isn't a record
+        // write); the full conversation stays in that agent's own real
+        // chat history, reachable via `entity_id` (the agent's own id).
+        "run_agent" => {
+            let Some(agent_id) = step.record_id.clone() else { return Err(AppError::Validation("No Agent selected".into())) };
+            let workspace_id = task_workspace_id(conn, actor_user_id)?;
+            let message = step.fields.get("message").cloned().unwrap_or_default();
+            let messages = chat_service::send_agent_message(conn, &workspace_id, master_key, actor_user_id, &agent_id, &message).await?;
+            let reply = messages.iter().rev().find_map(|m| if m.role == "assistant" { m.content.clone() } else { None }).unwrap_or_else(|| "(no reply)".into());
+            Ok((Some(agent_id), None, Some(reply)))
+        }
+
+        // RUN_AGENT's Pipeline counterpart - calls the exact same
+        // `ai_orchestration_service::run_manual` a manual "Run now" click
+        // in Orchestration calls. `entity_id` is the resulting run's own
+        // id, so the full step-by-step trace stays reachable from Voice
+        // Activity exactly like a manually triggered run would be.
+        "run_pipeline" => {
+            let Some(pipeline_id) = step.record_id.clone() else { return Err(AppError::Validation("No Pipeline selected".into())) };
+            let workspace_id = task_workspace_id(conn, actor_user_id)?;
+            let message = step.fields.get("message").cloned().unwrap_or_default();
+            let run = ai_orchestration_service::run_manual(conn, &workspace_id, master_key, "pipeline", &pipeline_id, &message, actor).await?;
+            let note = match run.status.as_str() {
+                "succeeded" => run.steps.last().and_then(|s| s.output_text.clone()).unwrap_or_else(|| "Pipeline finished with no output".into()),
+                "awaiting_approval" => "Pipeline is now awaiting an Administrator's approval on one of its steps.".into(),
+                other => format!("Pipeline run ended with status \"{other}\"{}", run.error.as_deref().map(|e| format!(": {e}")).unwrap_or_default()),
+            };
+            Ok((Some(run.id.clone()), None, Some(note)))
         }
 
         other => Err(AppError::Validation(format!("Unsupported voice action '{other}'"))),

@@ -767,10 +767,36 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   `core/src/services/voice_*.rs`, `core/src/models/voice.rs`,
   `core/src/db/migrations/0057_voice_mode_v1.sql`, and the dedicated
   17-test suite in `core/tests/voice_mode_v1.rs`. Mirrored in the online
-  demo (`app.js`). Multi-turn conversational context, guided
-  step-by-step record creation, voice-triggered AI Agent runs, bulk/
-  external voice actions, industry voice vocabulary packs and real
-  local/on-device recognition are scoped to PR 2 and PR 3, not built yet.
+  demo (`app.js`).
+- **Voice-First Mode, PR 2 (part 1): RUN_AGENT**: a new RUN_AGENT intent
+  ("ask the Research Analyst agent to summarize a company", "run
+  pipeline Lead Triage with this new lead") resolves a spoken Agent or
+  Pipeline name against the real `ai_agent_service`/
+  `ai_orchestration_service` catalogs and calls the exact same entry
+  points the AI Agent Foundry's own chat panel and Orchestration's "Run
+  now" button call (`chat_service::send_agent_message`/
+  `ai_orchestration_service::run_manual`) - never a second, Voice-only
+  agent runtime. Classified Medium risk under `voice_risk_service`'s
+  existing table (this release fills in an arm the classifier already
+  anticipated), so it always shows an explicit Confirm/Reject step with
+  the agent's or pipeline's real answer spoken back once confirmed,
+  gated by the `Use AI Agents` Voice capability on top of whatever
+  admin-only/action-name restriction the target Agent already has;
+  running a Pipeline manually stays Administrator-gated exactly like the
+  existing "Run now" button. `submit_command`/`confirm_plan` are now
+  genuinely async (they may call an LLM provider), so both the desktop
+  Tauri commands and the Team Workspace server route move to the same
+  `run_with_own_connection`/admin-action pattern `send_agent_message`
+  already established, instead of the plain-sync path every other Voice
+  command still uses; the agent/pipeline's reply has no column in the
+  fixed PR 1 schema (no migration in this pass), so it rides back as a
+  same-response-only `notes` field on `VoiceExecutionResult`. See
+  `core/tests/voice_mode_v2.rs` (5 new tests, exercising a real stubbed
+  LLM provider end to end). Mirrored in the online demo. Multi-turn
+  conversational context and guided step-by-step record creation - the
+  rest of the product spec's v0.3 - remain the next slice; industry
+  voice vocabulary packs and real local/on-device recognition are scoped
+  to PR 3, not built yet.
 
 ## What's deferred to a later phase
 

@@ -3481,6 +3481,7 @@ export interface VoiceExecutionResult {
   plan_id: string;
   status: string;
   executions: VoiceExecution[];
+  notes: string[];
 }
 
 export interface VoiceCommandOutcome {

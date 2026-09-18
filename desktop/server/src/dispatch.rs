@@ -48,7 +48,7 @@ use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate}
 use lanesra_core::models::solution::{SolutionInput, SolutionMemberInput, SolutionUpdate};
 use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
-use lanesra_core::models::voice::{ConfirmVoicePlanInput, SetVoicePinInput, VoicePolicyBindingInput, VoicePreferencesInput};
+use lanesra_core::models::voice::{SetVoicePinInput, VoicePolicyBindingInput, VoicePreferencesInput};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
@@ -1629,20 +1629,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
             to_value(voice_session_service::reset_conversation(conn, &session_id, actor_id)?)
         }
-        "submit_voice_command" => {
-            let session_id: String = arg(args, "sessionId")?;
-            let transcript: String = arg(args, "transcript")?;
-            let language: String = arg(args, "language")?;
-            let speech_confidence: Option<f64> = arg(args, "speechConfidence")?;
-            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-            to_value(voice_execution_service::submit_command(conn, &session_id, actor_id, &transcript, &language, speech_confidence)?)
-        }
-        "confirm_voice_plan" => {
-            let session_id: String = arg(args, "sessionId")?;
-            let input: ConfirmVoicePlanInput = arg(args, "input")?;
-            let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-            to_value(voice_execution_service::confirm_plan(conn, &session_id, actor_id, &input)?)
-        }
+        // Voice-First Mode, PR 2: `submit_voice_command`/`confirm_voice_plan`
+        // may now run a RUN_AGENT/RUN_PIPELINE step, which calls out to an
+        // LLM provider - genuinely async, so like `send_agent_message`/
+        // `run_manual` above, they live in `admin_actions.rs` instead.
         "undo_voice_execution" => {
             let execution_id: String = arg(args, "executionId")?;
             let actor_id = actor.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
