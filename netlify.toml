@@ -37,4 +37,11 @@
     X-Frame-Options = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    # microphone=(self): Voice-First Mode's own SpeechRecognition needs it -
+    # an empty microphone=() allowlist (this site's previous setting) blocks
+    # mic capture for every origin including this one, so the browser fails
+    # the request before the user is ever asked, with no permission prompt
+    # at all. Still denies every third-party origin (no bare "self" plus
+    # others), and camera/geolocation stay fully locked down - neither is
+    # used anywhere in this product.
+    Permissions-Policy = "camera=(), microphone=(self), geolocation=()"
