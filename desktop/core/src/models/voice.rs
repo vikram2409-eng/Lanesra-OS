@@ -268,6 +268,16 @@ pub struct VoiceResolution {
 /// `None`, a CREATE. `action` names the underlying operation
 /// (`"update_fields"`, `"create_record"`, `"log_activity"`, `"create_task"`,
 /// `"run_agent"`, ...) that `voice_execution_service` dispatches on.
+///
+/// `description` is the normal-detail phrasing (spoken and displayed today,
+/// unchanged from PR 1/2). `brief_description`/`detail_note` are PR 3's
+/// (spec §16) real content for the `"short"`/`"detailed"` tiers of a user's
+/// `spoken_detail` preference - never fabricated filler, only ever text this
+/// same step's own planner function already had the facts to say. Only
+/// consumed by what's about to be *spoken* (`VoiceModeButton`'s `speak()`/
+/// app.js's `voiceSpeak` mirror) - the confirmation panel's on-screen list
+/// always shows the full `description`, since a written list isn't the
+/// thing `spoken_detail` is about.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoicePlanStep {
     pub action: String,
@@ -275,6 +285,8 @@ pub struct VoicePlanStep {
     pub record_id: Option<String>,
     pub fields: std::collections::HashMap<String, String>,
     pub description: String,
+    pub brief_description: String,
+    pub detail_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

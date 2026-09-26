@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import type { ConfirmVoicePlanInput, VoiceCommandOutcome } from "../../lib/types";
 import { useVoiceContext } from "./VoiceContext";
+import { spokenTextForNotes, spokenTextForSteps } from "./phrasing";
 
 // The browser's own Speech Recognition API - not typed in lib.dom.d.ts, and
 // vendor-prefixed in every browser that ships it today. This is the one
@@ -79,10 +80,18 @@ export function VoiceModeButton() {
       <button
         className="btn"
         onClick={() => setOpen((v) => !v)}
-        title="Voice Mode"
+        title={settings.data?.quiet_mode ? "Voice Mode (Quiet Mode is on - responses are silenced)" : "Voice Mode"}
         style={{ position: "relative" }}
       >
         🎙️
+        {settings.data?.quiet_mode && (
+          <span
+            aria-label="Quiet Mode is on"
+            style={{ position: "absolute", top: -2, right: -2, fontSize: 10, lineHeight: 1, background: "var(--surface, #fff)", borderRadius: "50%" }}
+          >
+            🔇
+          </span>
+        )}
       </button>
       {open && (
         <div
@@ -96,7 +105,13 @@ export function VoiceModeButton() {
           ) : !activeSession ? (
             <UnlockPanel onUnlocked={() => queryClient.invalidateQueries({ queryKey: ["voiceSession"] })} />
           ) : (
-            <UnlockedPanel session={activeSession} autoSpeak={settings.data.auto_speak_confirmations} onClose={() => setOpen(false)} />
+            <UnlockedPanel
+              session={activeSession}
+              autoSpeak={settings.data.auto_speak_confirmations}
+              quietMode={settings.data.quiet_mode}
+              spokenDetail={settings.data.spoken_detail}
+              onClose={() => setOpen(false)}
+            />
           )}
         </div>
       )}
@@ -161,7 +176,24 @@ function riskBadgeClass(risk: string) {
   return "";
 }
 
-function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string; context_object_key: string | null; context_record_id: string | null }; autoSpeak: boolean; onClose: () => void }) {
+function UnlockedPanel({
+  session,
+  autoSpeak,
+  quietMode,
+  spokenDetail,
+  onClose,
+}: {
+  session: { id: string; context_object_key: string | null; context_record_id: string | null };
+  autoSpeak: boolean;
+  quietMode: boolean;
+  spokenDetail: "short" | "normal" | "detailed";
+  onClose: () => void;
+}) {
+  // Quiet Mode always wins over auto-speak, exactly like `voice_repo`'s own
+  // stored preference implies ("never speak, even if enabled above") - a
+  // bug fix, not just UI polish: nothing downstream of this file ever
+  // checked `quiet_mode` before, so turning it on silently did nothing.
+  const canSpeak = autoSpeak && !quietMode;
   const queryClient = useQueryClient();
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -182,9 +214,9 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
       setTypedText("");
       queryClient.invalidateQueries({ queryKey: ["myVoiceActivity"] });
       const plan = result.plan;
-      if (autoSpeak && plan) speak(plan.plan.steps.map((s) => s.description).join(". "));
-      else if (autoSpeak && result.clarification_question) speak(result.clarification_question);
-      else if (autoSpeak && result.unsupported_reason) speak(result.unsupported_reason);
+      if (canSpeak && plan) speak(spokenTextForSteps(plan.plan.steps, spokenDetail));
+      else if (canSpeak && result.clarification_question) speak(result.clarification_question);
+      else if (canSpeak && result.unsupported_reason) speak(result.unsupported_reason);
     },
   });
 
@@ -197,7 +229,7 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
       // only exists in this same response (see VoiceExecutionResult.notes'
       // own doc comment) - speak it here, not in submit's onSuccess above,
       // since the plan/answer text isn't known until *after* confirmation.
-      if (autoSpeak && result.notes.length > 0) speak(result.notes.join(". "));
+      if (canSpeak && result.notes.length > 0) speak(spokenTextForNotes(result.notes, spokenDetail));
       queryClient.invalidateQueries({ queryKey: ["myVoiceActivity"] });
     },
   });
@@ -246,7 +278,14 @@ function UnlockedPanel({ session, autoSpeak, onClose }: { session: { id: string;
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h4 style={{ margin: 0 }}>Voice Mode</h4>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <h4 style={{ margin: 0 }}>Voice Mode</h4>
+          {quietMode && (
+            <span className="badge" title="Quiet Mode is on - responses are silenced, even with Auto-speak on">
+              🔇 Quiet Mode
+            </span>
+          )}
+        </div>
         <button className="link-button" style={{ fontSize: 12 }} onClick={() => api.resetVoiceConversation(session.id).then(() => setOutcome(null))}>
           Reset context
         </button>

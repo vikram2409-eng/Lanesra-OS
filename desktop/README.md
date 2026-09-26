@@ -933,8 +933,45 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   Company chosen first, which this single linear loop doesn't resolve yet,
   so asking to create one of those names the gap directly. See
   `core/tests/voice_mode_v5.rs` (6 new tests) and mirrored in full in the
-  online demo. Industry Voice Packs + Platform Polish (PR 3, GitHub issue
-  #161) is the next and final slice of the voice rollout.
+  online demo.
+- **Voice-First Mode, PR 3: industry voice packs, Quiet Mode fixed & real
+  response-detail levels** (GitHub issue #161, the final slice of the
+  three-PR voice rollout): `voice_planner_service`'s catalog now reads every
+  installed Industry App's own select-type status fields (Property
+  Management's Unit "Occupancy Status" - Vacant/Reserved/Occupied/
+  Maintenance/Inactive, and the equivalent on every other reference
+  package) alongside the generic Active/Inactive/Archived column every
+  Custom Object already shares, so "mark unit Riverside 5A as Occupied"
+  writes through that specific field via the same
+  `custom_field_service::set_entity_values` seam a manual edit uses - the
+  generic column is still checked first, so a value present on both (like
+  "Inactive") keeps resolving there. Building this surfaced and fixed two
+  real, pre-existing bugs: `set_entity_values` was being called with a
+  single-field patch map by the status-update path, which its own
+  required-field validation reads as every other field on the record
+  suddenly being blank (fixed by merging with the record's existing stored
+  values first); and status-value matching used plain substring
+  `.contains()`, so "Active" silently matched inside "Inactive" for any
+  object whose vocabulary contains both (fixed with a longest-match-wins
+  comparison). Separately: Quiet Mode never actually silenced anything on
+  the desktop app before this release - stored and round-tripped through
+  Personal Settings, but no `speak()` call anywhere ever checked it - fixed
+  at the one seam that matters (`VoiceModeButton.tsx`'s
+  `autoSpeak && !quietMode` gate), plus a visible 🔇 indicator on the mic
+  button, the unlocked panel's header, and Personal Settings. And the
+  stored `spoken_detail` preference ("short"/"normal"/"detailed") is real
+  phrasing logic for the first time: each plan step now carries a normal
+  `description` (unchanged) plus a genuinely terser `brief_description` and
+  a genuinely fuller `detail_note` - never fabricated, only ever facts the
+  planner already had - consumed by a shared `spokenTextForStep`/
+  `spokenTextForSteps` helper at the exact point `VoiceModeButton.tsx`'s
+  `speak()` assembles what to say. See `core/tests/voice_mode_v6.rs` (2 new
+  tests, industry vocabulary) and `core/tests/voice_mode_v7.rs` (3 new
+  tests, response-detail phrasing), and mirrored in full in the online
+  demo. This completes the product spec's full v0.1-v1.0 Voice-First Mode
+  rollout - real local/on-device speech recognition is the one honestly
+  named remaining gap (Local Only stays a Processing Boundary label with no
+  adapter behind it).
 
 ## What's deferred to a later phase
 
