@@ -852,6 +852,32 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   tests: a Custom Object record resolves like a built-in one, a single
   close typo resolves, two plausible typos ask instead of guessing, and a
   genuinely unrelated name still gets an honest "not found").
+- **Voice-First Mode: honest speech failures + a full conversational voice
+  UX** (online demo): two more rounds of "spoken responses are still
+  silent" reports meant the earlier same-tick cancel/speak fix wasn't the
+  whole story - it fixed a real bug, but gave no way to tell a genuinely
+  dead speech backend (no TTS voices installed, an unsupported browser)
+  apart from "working, just quiet." `voiceSpeak()` is rewritten to wire the
+  utterance's own `onstart`/`onend`/`onerror` events, plus a defensive
+  ~4-second safety-timeout for when none of those ever fire at all, so the
+  UI can never sit silently in a "speaking" state forever - it now shows a
+  one-time, honest "spoken responses don't seem to be working on this
+  device/browser" notice and moves on. Every voice response is now spoken,
+  not just a completed action - clarifying questions, confirmation prompts,
+  policy blocks and "couldn't find that" misses all speak too. The demo's
+  Voice-First Mode panel is rebuilt from a small notification-style
+  dropdown into a full-screen conversational overlay (ChatGPT/Siri/Gemini
+  voice-mode style): a state-driven animated orb (idle/listening/
+  thinking/speaking), a live scrolling transcript, and a genuinely
+  hands-free loop - listening starts the moment the overlay opens, and
+  automatically resumes after every spoken reply to a completed command.
+  Clarify/confirm prompts are the deliberate exception: spoken aloud, but
+  never auto-resuming listening, since a free-form spoken answer to "which
+  one did you mean?" isn't parsed - tapping a candidate card or
+  Confirm/Reject is still required, an honest scope limit rather than a
+  guess. Demo-only in this pass (a client-side interaction/UX layer over
+  PR 1-3's already-real planner/resolver/risk/execution logic - no
+  backend or schema changes needed).
 
 ## What's deferred to a later phase
 
