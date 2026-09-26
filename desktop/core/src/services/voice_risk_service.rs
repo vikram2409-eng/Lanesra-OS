@@ -16,7 +16,7 @@ use crate::services::voice_policy_service::EffectivePolicy;
 fn step_risk(action: &str) -> VoiceRisk {
     match action {
         "navigate" | "query" => VoiceRisk::None,
-        "log_activity" | "create_task" => VoiceRisk::Low,
+        "log_activity" | "create_task" | "create_record" => VoiceRisk::Low,
         "update_status" | "update_custom_fields" => VoiceRisk::Medium,
         "run_agent" | "run_pipeline" => VoiceRisk::Medium,
         "bulk_update" => VoiceRisk::High,
@@ -47,7 +47,7 @@ pub fn classify(plan: &VoiceActionPlanBody) -> VoiceRisk {
 fn required_capability(action: &str) -> Option<&'static str> {
     match action {
         "navigate" | "query" => Some("search"),
-        "create_task" | "log_activity" => Some("create"),
+        "create_task" | "log_activity" | "create_record" => Some("create"),
         "update_status" | "update_custom_fields" => Some("update"),
         "run_agent" | "run_pipeline" => Some("use_agents"),
         "bulk_update" => Some("bulk_act"),

@@ -913,6 +913,28 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   near-silent "unlock" utterance spoken directly from the mic button's own
   click handler before anything async (starting recognition) runs - the
   standard workaround for this exact iOS Safari behavior.
+- **Voice-First Mode, PR 2 (part 3): guided step-by-step record creation**
+  (GitHub issue #160): a new CREATE intent ("create a company Acme Corp",
+  or just "create a company") asks for whatever's still missing one field
+  at a time - the name first if it wasn't given, then any required custom
+  field, in the same order the record form itself would present them -
+  instead of requiring everything crammed into a single utterance. Each
+  turn's partial answer is held on the Voice session (new
+  `pending_create_json` column, migration `0058_voice_pending_create`,
+  alongside PR 2 part 2's `conversation_json`); a plain cancel word
+  ("never mind", "stop", "forget it") abandons the flow honestly, leaving
+  nothing half-created. The final step runs through the exact same real
+  entity service a manual create already uses - `company_service::create`/
+  `custom_record_service::create` plus `custom_field_service::set_entity_values`
+  for any custom fields collected along the way - never a second,
+  voice-only validation path. Scoped honestly to Company (no required
+  relationship) and any Custom Object (VOICE-AC-06: zero new code) -
+  Contact, Opportunity, Quote, Order, Contract and Task all need a related
+  Company chosen first, which this single linear loop doesn't resolve yet,
+  so asking to create one of those names the gap directly. See
+  `core/tests/voice_mode_v5.rs` (6 new tests) and mirrored in full in the
+  online demo. Industry Voice Packs + Platform Polish (PR 3, GitHub issue
+  #161) is the next and final slice of the voice rollout.
 
 ## What's deferred to a later phase
 

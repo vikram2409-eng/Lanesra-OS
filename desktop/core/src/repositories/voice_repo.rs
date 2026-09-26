@@ -300,6 +300,18 @@ pub fn set_session_conversation(conn: &Connection, id: &str, conversation_json: 
     Ok(())
 }
 
+/// Voice-First Mode, PR 2 (part 3): the session's in-progress guided
+/// CREATE, if one exists - `NULL` (mapped to `None`) is the normal "no
+/// create in progress" state, not an error.
+pub fn get_session_pending_create(conn: &Connection, id: &str) -> rusqlite::Result<Option<String>> {
+    conn.query_row("SELECT pending_create_json FROM voice_sessions WHERE id = ?1", [id], |r| r.get(0))
+}
+
+pub fn set_session_pending_create(conn: &Connection, id: &str, pending_create_json: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute("UPDATE voice_sessions SET pending_create_json = ?1, updated_at = ?2 WHERE id = ?3", (pending_create_json, now_iso(), id))?;
+    Ok(())
+}
+
 // ---- voice_commands -------------------------------------------------------
 
 fn map_command(row: &rusqlite::Row) -> rusqlite::Result<VoiceCommand> {

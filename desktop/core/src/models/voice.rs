@@ -209,6 +209,23 @@ pub struct ConversationTurn {
     pub record_id: String,
 }
 
+/// Voice-First Mode, PR 2 (part 3): one in-progress guided CREATE (spec's
+/// v0.3 "ask for missing required fields one at a time" item) - kept on the
+/// session in its own `pending_create_json` column, the same "one bounded
+/// JSON blob on `voice_sessions`" convention `conversation_json` already
+/// established. `fields` accumulates one answer per turn as the user works
+/// through `asking_key`; cleared the moment the create either finishes (a
+/// `Ready` plan) or is abandoned (any other outcome - a fresh, unrelated
+/// command never gets misread as an answer to a stale question).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingCreate {
+    pub object_key: String,
+    pub fields: std::collections::HashMap<String, String>,
+    pub asking_key: String,
+    pub asking_label: String,
+    pub asking_type: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct VoiceCommand {
     pub id: String,

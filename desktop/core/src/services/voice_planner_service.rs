@@ -28,7 +28,7 @@ use crate::models::opportunity::OPPORTUNITY_STAGES;
 use crate::models::order::ORDER_STATUSES;
 use crate::models::quote::QUOTE_STATUSES;
 use crate::models::task::TASK_STATUSES;
-use crate::models::voice::{ResolutionCandidate, VoiceActionPlanBody, VoicePlanStep};
+use crate::models::voice::{PendingCreate, ResolutionCandidate, VoiceActionPlanBody, VoicePlanStep};
 use crate::services::{ai_agent_service, ai_orchestration_service, custom_field_service, custom_object_service, voice_entity_resolver};
 use voice_entity_resolver::ResolutionOutcome;
 
@@ -100,6 +100,21 @@ fn detect_status_value(entry: &CatalogEntry, text_lower: &str) -> Option<String>
 const NAVIGATE_TRIGGERS: &[&str] = &["open ", "show me ", "show ", "pull up ", "find ", "go to ", "navigate to "];
 const QUERY_TRIGGERS: &[&str] = &["summarize ", "summarise ", "tell me about ", "what is ", "what's ", "describe "];
 const CREATE_TASK_TRIGGERS: &[&str] = &["create a task ", "create task ", "add a task ", "add task ", "schedule a task ", "remind me to "];
+/// Voice-First Mode, PR 2 (part 3): generic CREATE for anything that isn't
+/// a Task (which `CREATE_TASK_TRIGGERS` above already owns, checked first
+/// in `plan()` so "create a task ..." never falls through to here).
+const CREATE_TRIGGERS: &[&str] = &["create a ", "create an ", "add a ", "add an ", "new "];
+/// The core objects a guided voice CREATE does *not* support yet, named
+/// honestly rather than silently failing to resolve: each one's own real
+/// `Input` struct requires a related record (a Company, for Contact/
+/// Opportunity/Quote/Order/Contract) that a single linear "ask the next
+/// missing field" loop doesn't resolve - that's real follow-on work (voice
+/// lookup-type fields), not implied by this pass. Company has no such
+/// relationship (only `name` is required), so it's the one core object
+/// supported here alongside every Custom Object, which by construction
+/// only ever requires `primary_name` (VOICE-AC-06: no new code needed for
+/// an admin-defined object).
+const CREATE_UNSUPPORTED_CORE_OBJECTS: &[&str] = &["Contact", "Opportunity", "Quote", "Order", "Contract", "Task"];
 const CAPTURE_TRIGGERS: &[&str] = &["add an interaction ", "add interaction ", "log a call ", "log an email ", "log a message ", "note that ", "add a note ", "add note "];
 const UPDATE_TRIGGERS: &[&str] = &["mark ", "set ", "update ", "change "];
 /// Voice-First Mode, PR 2: RUN_AGENT (spec v0.4 "Voice & AI Agents") - the
@@ -175,6 +190,14 @@ fn extract_due_date(text: &str) -> (Option<String>, String) {
 pub enum PlanOutcome {
     Ready { plan: VoiceActionPlanBody, intent: String, object_key: Option<String>, resolved_record_id: Option<String>, intent_confidence: f64, entity_confidence: Option<f64> },
     NeedsClarification { question: String, candidates: Vec<ResolutionCandidate> },
+    /// Voice-First Mode, PR 2 (part 3): a guided CREATE still has at least
+    /// one required field left to ask about - distinct from
+    /// `NeedsClarification` (which always offers a fixed list of existing
+    /// records to pick from): here the caller expects a free-text/spoken
+    /// answer to `question`, and `pending` is what `voice_execution_service`
+    /// persists so the *next* transcript is read as that answer rather than
+    /// re-parsed as a brand-new command.
+    NeedsMoreInfo { question: String, pending: PendingCreate },
     Unsupported { reason: String },
 }
 
@@ -186,9 +209,19 @@ pub fn plan(
     context_object_key: Option<&str>,
     context_record_id: Option<&str>,
     conversation_reference: Option<(&str, &str)>,
+    pending_create: Option<&PendingCreate>,
 ) -> AppResult<PlanOutcome> {
     let text = transcript.trim();
     let lower = text.to_lowercase();
+
+    // A guided CREATE already in progress takes this transcript as the
+    // answer to whichever field it last asked about - never re-parsed
+    // against NAVIGATE/UPDATE/... triggers below, the same way a plain
+    // English conversation doesn't restart from scratch mid-sentence.
+    if let Some(pending) = pending_create {
+        return continue_guided_create(conn, workspace_id, text, pending);
+    }
+
     let catalog = full_catalog(conn, workspace_id)?;
 
     if let Some(rest) = strip_any_prefix(&lower, NAVIGATE_TRIGGERS) {
@@ -226,9 +259,21 @@ pub fn plan(
         });
     }
 
+    // CAPTURE's own triggers ("add an interaction ", "add a note ", ...)
+    // are checked before the generic CREATE_TRIGGERS below - both "add an "
+    // and "add a " are deliberately broad (any object noun can follow), so
+    // checking CREATE first would shadow every CAPTURE phrase that also
+    // starts with "add a"/"add an" (the more specific phrase must win, same
+    // reasoning as CREATE_TASK_TRIGGERS being checked ahead of this generic
+    // CREATE_TRIGGERS above).
     if let Some(rest) = strip_any_prefix(&lower, CAPTURE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
         return plan_capture(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference);
+    }
+
+    if let Some(rest) = strip_any_prefix(&lower, CREATE_TRIGGERS) {
+        let reference = &text[text.len() - rest.len()..];
+        return plan_create_record(conn, workspace_id, &catalog, reference);
     }
 
     if let Some(rest) = strip_any_prefix(&lower, UPDATE_TRIGGERS) {
@@ -469,6 +514,163 @@ fn plan_capture(
         ResolutionOutcome::NeedsClarification { candidates } => Ok(PlanOutcome::NeedsClarification { question: "Which record should this interaction be logged against?".into(), candidates }),
         ResolutionOutcome::NotFound => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find a record matching \"{target_text}\".") }),
     }
+}
+
+/// Voice-First Mode, PR 2 (part 3): "create a <object> <name>" / "add a
+/// <object> ..." - the object noun is detected the same way every other
+/// intent detects it (`detect_object_key`), then stripped from the
+/// reference so whatever's left (if anything) is taken as the record's
+/// name/title, exactly the same "everything after the noun is the value"
+/// shape `CREATE_TASK_TRIGGERS` already uses for a Task's title.
+fn plan_create_record(conn: &Connection, workspace_id: &str, catalog: &[CatalogEntry], reference: &str) -> AppResult<PlanOutcome> {
+    let lower = reference.to_lowercase();
+    let Some(entry) = detect_object_key(catalog, &lower) else {
+        return Ok(PlanOutcome::Unsupported { reason: "I couldn't tell what kind of record to create - try naming it, e.g. \"create a company Acme Corp\" or \"create a Unit\".".into() });
+    };
+    let object_key = entry.object_key.as_str().to_string();
+    if CREATE_UNSUPPORTED_CORE_OBJECTS.contains(&object_key.as_str()) {
+        return Ok(PlanOutcome::Unsupported {
+            reason: format!("Voice can't create a {object_key} yet - {object_key} records need a related Company chosen first, which voice doesn't support in this release. Try \"create a company\" or a custom object instead."),
+        });
+    }
+
+    // Strip the first matching noun (case-insensitively) from the
+    // *original*-case reference, so a given name keeps its real casing
+    // ("Acme Corp", not "acme corp") - `detect_object_key` above only
+    // needed the lowercased copy to find which noun matched.
+    let mut remainder_orig = reference.to_string();
+    let remainder_lower = lower.clone();
+    if let Some(pos) = entry.nouns.iter().find_map(|n| remainder_lower.find(n.as_str()).map(|p| (p, n.len()))) {
+        let (pos, len) = pos;
+        remainder_orig = format!("{}{}", &remainder_orig[..pos], &remainder_orig[pos + len..]);
+    }
+    let given_name = remainder_orig.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    let (name_key, _) = create_name_field(conn, workspace_id, &object_key)?;
+    let mut fields = std::collections::HashMap::new();
+    if !given_name.is_empty() {
+        fields.insert(name_key, given_name);
+    }
+    build_guided_create_outcome(conn, workspace_id, &object_key, fields)
+}
+
+/// The one field every guided create always starts by asking about if it
+/// wasn't already given in the initial utterance - `name` for the one core
+/// object supported here (Company), `primary_name` for any Custom Object
+/// (the field every custom record has unconditionally, per
+/// `CustomRecordInput`/VOICE-AC-06 - no per-object configuration needed).
+fn create_name_field(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<(String, String)> {
+    if object_key == "Company" {
+        return Ok(("name".to_string(), "company name".to_string()));
+    }
+    let label = custom_object_service::list(conn, workspace_id, true)?
+        .into_iter()
+        .find(|d| d.key == object_key)
+        .map(|d| d.singular_label)
+        .unwrap_or_else(|| object_key.to_string());
+    Ok(("primary_name".to_string(), format!("{} name", label.to_lowercase())))
+}
+
+/// The single loop every turn of a guided create runs through: is the
+/// name-like field filled in yet, then is every `required` custom field on
+/// this object filled in yet (in their own `sort_order`, matching the order
+/// the record form itself would present them) - the first one still
+/// missing is what gets asked about next. Once nothing is left, builds the
+/// final `create_record` plan step. Reused identically for both the very
+/// first utterance and every follow-up answer (`continue_guided_create`
+/// below), so there is exactly one place that decides "what's still
+/// missing" - never two copies to keep in sync.
+fn build_guided_create_outcome(conn: &Connection, workspace_id: &str, object_key: &str, fields: std::collections::HashMap<String, String>) -> AppResult<PlanOutcome> {
+    let (name_key, name_label) = create_name_field(conn, workspace_id, object_key)?;
+    if fields.get(&name_key).map(|v| v.trim().is_empty()).unwrap_or(true) {
+        let pending = PendingCreate { object_key: object_key.to_string(), fields, asking_key: name_key, asking_label: name_label.clone(), asking_type: "text".to_string() };
+        return Ok(PlanOutcome::NeedsMoreInfo { question: format!("What should the {name_label} be?"), pending });
+    }
+
+    let mut defs = custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
+    defs.sort_by_key(|d| d.sort_order);
+    for def in defs.iter().filter(|d| d.required) {
+        if fields.get(&def.key).map(|v| v.trim().is_empty()).unwrap_or(true) {
+            let hint = match def.field_type.as_str() {
+                "select" if !def.options.is_empty() => format!(" (one of: {})", def.options.join(", ")),
+                "boolean" => " (yes or no)".to_string(),
+                _ => String::new(),
+            };
+            let pending = PendingCreate { object_key: object_key.to_string(), fields, asking_key: def.key.clone(), asking_label: def.label.clone(), asking_type: def.field_type.clone() };
+            return Ok(PlanOutcome::NeedsMoreInfo { question: format!("What's the {}{hint}?", def.label), pending });
+        }
+    }
+
+    let display = fields.get(&name_key).cloned().unwrap_or_default();
+    Ok(PlanOutcome::Ready {
+        plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "create_record".into(), object_key: object_key.to_string(), record_id: None, fields, description: format!("Create {object_key} \"{display}\"") }] },
+        intent: "CREATE".into(),
+        object_key: Some(object_key.to_string()),
+        resolved_record_id: None,
+        intent_confidence: 0.9,
+        entity_confidence: None,
+    })
+}
+
+/// Best-effort normalization of a spoken/typed answer against its field's
+/// own type, mirroring the vocabulary this module already uses elsewhere
+/// (`detect_status_value`'s case-insensitive option match,
+/// `resolve_date_phrase`'s today/tomorrow/weekday words) - never a hard
+/// requirement: a value this can't normalize still flows through as typed,
+/// and the real save-time validation in
+/// `custom_field_service::set_entity_values` (run at execution, not here)
+/// is the actual enforcement backstop, exactly like every other field this
+/// codebase validates - this function only tries to make the common
+/// spoken forms ("yes", "tomorrow", an option's own wording) land cleanly.
+fn normalize_answer(conn: &Connection, workspace_id: &str, object_key: &str, field_key: &str, field_type: &str, raw: &str) -> AppResult<String> {
+    match field_type {
+        "select" => {
+            let defs = custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
+            if let Some(def) = defs.iter().find(|d| d.key == field_key) {
+                let lower = raw.to_lowercase();
+                if let Some(opt) = def.options.iter().find(|o| o.to_lowercase() == lower || lower.contains(&o.to_lowercase())) {
+                    return Ok(opt.clone());
+                }
+            }
+            Ok(raw.to_string())
+        }
+        "boolean" => {
+            let lower = raw.to_lowercase();
+            if ["yes", "true", "yeah", "yep", "sure"].contains(&lower.as_str()) {
+                Ok("true".to_string())
+            } else if ["no", "false", "nope", "nah"].contains(&lower.as_str()) {
+                Ok("false".to_string())
+            } else {
+                Ok(raw.to_string())
+            }
+        }
+        "date" => Ok(resolve_date_phrase(raw).unwrap_or_else(|| raw.to_string())),
+        _ => Ok(raw.to_string()),
+    }
+}
+
+/// One turn of an already-in-progress guided create: `answer_text` is
+/// read as the answer to `pending.asking_key`, never re-parsed against any
+/// intent trigger (spec's own "guided, one field at a time" shape - see
+/// this module's top-level `plan()` doc comment). A plain cancel word
+/// abandons the create outright (returned as `Unsupported`, which is what
+/// makes `voice_execution_service::submit_command` clear the pending state
+/// - see its own doc comment) rather than forcing the user to answer a
+/// question about a record they no longer want.
+fn continue_guided_create(conn: &Connection, workspace_id: &str, answer_text: &str, pending: &PendingCreate) -> AppResult<PlanOutcome> {
+    let raw = answer_text.trim();
+    let lower = raw.to_lowercase();
+    if ["cancel", "never mind", "nevermind", "stop", "forget it"].contains(&lower.as_str()) {
+        return Ok(PlanOutcome::Unsupported { reason: format!("Okay, cancelled creating that {}.", pending.object_key) });
+    }
+    if raw.is_empty() {
+        return Ok(PlanOutcome::NeedsMoreInfo { question: format!("I still need the {} - what should it be?", pending.asking_label), pending: pending.clone() });
+    }
+
+    let value = normalize_answer(conn, workspace_id, &pending.object_key, &pending.asking_key, &pending.asking_type, raw)?;
+    let mut fields = pending.fields.clone();
+    fields.insert(pending.asking_key.clone(), value);
+    build_guided_create_outcome(conn, workspace_id, &pending.object_key, fields)
 }
 
 /// Public helper `voice_execution_service`/the Tauri layer use to look up a
