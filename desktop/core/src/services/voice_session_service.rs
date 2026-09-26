@@ -11,7 +11,7 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::voice::{ConversationTurn, SetVoicePinInput, VoicePreferencesInput, VoiceSession, VoiceUserSettings};
+use crate::models::voice::{ConversationTurn, PendingCreate, SetVoicePinInput, VoicePreferencesInput, VoiceSession, VoiceUserSettings};
 use crate::repositories::{audit_repo, user_repo, voice_repo};
 use crate::services::{auth_service, voice_policy_service};
 
@@ -197,5 +197,30 @@ pub fn record_conversation_turn(conn: &Connection, session_id: &str, transcript:
     }
     let json = serde_json::to_string(&turns).map_err(|e| AppError::Validation(format!("could not serialize conversation turn: {e}")))?;
     voice_repo::set_session_conversation(conn, session_id, &json)?;
+    Ok(())
+}
+
+/// Voice-First Mode, PR 2 (part 3): this session's in-progress guided
+/// CREATE, if any - malformed/legacy JSON degrades to "no create in
+/// progress" the same way `last_conversation_reference` treats malformed
+/// `conversation_json`, never an error.
+pub fn get_pending_create(conn: &Connection, session_id: &str) -> AppResult<Option<PendingCreate>> {
+    let raw = voice_repo::get_session_pending_create(conn, session_id)?;
+    Ok(raw.and_then(|s| serde_json::from_str(&s).ok()))
+}
+
+/// Persists (or clears, when `pending` is `None`) this session's
+/// in-progress guided CREATE - called once per turn from
+/// `voice_execution_service::submit_command`, right after planning: a
+/// `NeedsMoreInfo` outcome stores the updated state so the next transcript
+/// is read as this question's answer; every other outcome clears it, so a
+/// finished or abandoned create can never leak into an unrelated later
+/// command.
+pub fn set_pending_create(conn: &Connection, session_id: &str, pending: Option<&PendingCreate>) -> AppResult<()> {
+    let json = match pending {
+        Some(p) => Some(serde_json::to_string(p).map_err(|e| AppError::Validation(format!("could not serialize pending create: {e}")))?),
+        None => None,
+    };
+    voice_repo::set_session_pending_create(conn, session_id, json.as_deref())?;
     Ok(())
 }

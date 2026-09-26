@@ -28,7 +28,7 @@ use crate::models::activity::ActivityInput;
 use crate::models::company::CompanyInput;
 use crate::models::contact::ContactInput;
 use crate::models::contract::ContractInput;
-use crate::models::custom_record::CustomRecordUpdate;
+use crate::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use crate::models::opportunity::OpportunityInput;
 use crate::models::task::TaskInput;
 use crate::models::voice::{ConfirmVoicePlanInput, ResolutionCandidate, VoiceActionPlan, VoiceCommand, VoiceExecutionResult, VoiceResolution};
@@ -81,6 +81,12 @@ pub async fn submit_command(
     // a replacement for it. See `voice_entity_resolver::resolve_by_reference`'s
     // own doc comment for the exact priority order.
     let conversation_reference = voice_session_service::last_conversation_reference(conn, session_id)?;
+    // Voice-First Mode, PR 2 (part 3): a guided create already in progress
+    // on this session - when present, `plan()` reads this transcript as
+    // the answer to whichever field it last asked about instead of a
+    // brand-new command (see `voice_planner_service::plan`'s own doc
+    // comment on this parameter).
+    let pending_create = voice_session_service::get_pending_create(conn, session_id)?;
     let outcome = voice_planner_service::plan(
         conn,
         &session.workspace_id,
@@ -88,7 +94,19 @@ pub async fn submit_command(
         session.context_object_key.as_deref(),
         session.context_record_id.as_deref(),
         conversation_reference.as_ref().map(|(k, r)| (k.as_str(), r.as_str())),
+        pending_create.as_ref(),
     )?;
+
+    // Persist the *updated* guided-create state when there's still a field
+    // left to ask about; clear it for every other outcome (finished,
+    // abandoned, or a plain unrelated command that was never continuing a
+    // create in the first place) - see `voice_session_service::set_pending_create`'s
+    // own doc comment for why this always runs, not just when one existed
+    // going in.
+    match &outcome {
+        PlanOutcome::NeedsMoreInfo { pending, .. } => voice_session_service::set_pending_create(conn, session_id, Some(pending))?,
+        _ => voice_session_service::set_pending_create(conn, session_id, None)?,
+    }
 
     match outcome {
         PlanOutcome::Unsupported { reason } => {
@@ -100,6 +118,16 @@ pub async fn submit_command(
             voice_repo::set_command_status(conn, &command.id, "needs_clarification")?;
             voice_session_service::set_state(conn, session_id, user_id, "needs_clarification")?;
             Ok(VoiceCommandOutcome { command, resolution: None, plan: None, clarification_question: Some(question), candidates, unsupported_reason: None })
+        }
+        // Voice-First Mode, PR 2 (part 3): a guided create still needs at
+        // least one more field - the pending state was already persisted
+        // above; this is otherwise the same shape as NeedsClarification
+        // (a question, no plan yet), just never offering a candidate list
+        // since the expected answer is free text, not a pick.
+        PlanOutcome::NeedsMoreInfo { question, .. } => {
+            voice_repo::set_command_status(conn, &command.id, "needs_clarification")?;
+            voice_session_service::set_state(conn, session_id, user_id, "needs_clarification")?;
+            Ok(VoiceCommandOutcome { command, resolution: None, plan: None, clarification_question: Some(question), candidates: vec![], unsupported_reason: None })
         }
         PlanOutcome::Ready { plan, intent, object_key, resolved_record_id, intent_confidence, entity_confidence } => {
             let resolution = voice_repo::create_resolution(
@@ -274,6 +302,49 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
             Ok((Some(task.id), undo, None))
         }
 
+        // Voice-First Mode, PR 2 (part 3): the guided create's own final
+        // step - `object_key` is either "Company" (the one core object
+        // supported here) or a Custom Object key; either way, the record
+        // is created through the exact same real service every manual
+        // create already calls (this module's own design principle), and
+        // any custom-field values the guided loop collected are applied
+        // through `custom_field_service::set_entity_values` right after -
+        // the same two-seam sequence `update_custom_fields` already uses,
+        // just for a brand-new record instead of an existing one.
+        "create_record" => {
+            let workspace_id = task_workspace_id(conn, actor_user_id)?;
+            if step.object_key == "Company" {
+                let name = step.fields.get("name").cloned().unwrap_or_default();
+                let input = CompanyInput {
+                    name,
+                    status: "Prospect".into(),
+                    owner_user_id: Some(actor_user_id.to_string()),
+                    tax_number: None,
+                    billing_address: None,
+                    shipping_address: None,
+                    tags: None,
+                    notes: None,
+                    phone: None,
+                    email: None,
+                    website: None,
+                    annual_revenue_cents: None,
+                    employee_count: None,
+                    preferred_contact_method: None,
+                };
+                let company = company_service::create(conn, &workspace_id, &input, actor)?;
+                apply_guided_create_custom_fields(conn, "Company", &company.id, &step.fields, "name", actor)?;
+                let undo = serde_json::to_string(&UndoPayload { action: "archive_company".into(), object_key: "Company".into(), record_id: company.id.clone(), previous_value: None }).ok();
+                Ok((Some(company.id), undo, None))
+            } else {
+                let primary_name = step.fields.get("primary_name").cloned().unwrap_or_default();
+                let input = CustomRecordInput { object_key: step.object_key.clone(), primary_name, status: "Active".into(), owner_user_id: Some(actor_user_id.to_string()), notes: None };
+                let record = custom_record_service::create(conn, &workspace_id, &input, actor)?;
+                apply_guided_create_custom_fields(conn, &step.object_key, &record.id, &step.fields, "primary_name", actor)?;
+                let undo = serde_json::to_string(&UndoPayload { action: "archive_custom_record".into(), object_key: step.object_key.clone(), record_id: record.id.clone(), previous_value: None }).ok();
+                Ok((Some(record.id), undo, None))
+            }
+        }
+
         "log_activity" => {
             let Some(record_id) = &step.record_id else { return Err(AppError::Validation("No record to log this interaction against".into())) };
             let input = ActivityInput {
@@ -346,6 +417,33 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
 
         other => Err(AppError::Validation(format!("Unsupported voice action '{other}'"))),
     }
+}
+
+/// The guided-create loop's own `apply_custom_fields` step (see the
+/// `"create_record"` arm above): the collected answers include the one
+/// name-field key already consumed by the entity's own `create` call, so
+/// this filters that key out and, if anything real is left, applies it
+/// through the exact same seam `update_custom_fields` uses for an existing
+/// record - `custom_field_service::set_entity_values` - so Business Rules
+/// (block/require/default/set) run identically for a brand-new record.
+fn apply_guided_create_custom_fields(
+    conn: &Connection,
+    object_key: &str,
+    record_id: &str,
+    fields: &std::collections::HashMap<String, String>,
+    name_field_key: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
+    let custom_fields: std::collections::HashMap<String, String> =
+        fields.iter().filter(|(k, _)| k.as_str() != name_field_key).map(|(k, v)| (k.clone(), v.clone())).collect();
+    if custom_fields.is_empty() {
+        return Ok(());
+    }
+    let notices = custom_field_service::set_entity_values(conn, object_key, record_id, &custom_fields, actor_user_id)?;
+    if let Some(first_error) = notices.errors.first() {
+        return Err(AppError::Validation(first_error.clone()));
+    }
+    Ok(())
 }
 
 fn task_workspace_id(conn: &Connection, actor_user_id: &str) -> AppResult<String> {
@@ -460,6 +558,12 @@ pub fn undo(conn: &Connection, execution_id: &str, actor_user_id: &str) -> AppRe
         "revert_status" => {
             let previous = payload.previous_value.ok_or_else(|| AppError::Validation("No previous value recorded".into()))?;
             update_status_for_object(conn, &payload.object_key, &payload.record_id, &previous, Some(actor_user_id))?;
+        }
+        "archive_company" => {
+            company_service::archive(conn, &payload.record_id, Some(actor_user_id))?;
+        }
+        "archive_custom_record" => {
+            custom_record_service::archive(conn, &payload.record_id, Some(actor_user_id))?;
         }
         other => return Err(AppError::Validation(format!("Unknown undo action '{other}'"))),
     }
