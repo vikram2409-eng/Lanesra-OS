@@ -878,6 +878,22 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   guess. Demo-only in this pass (a client-side interaction/UX layer over
   PR 1-3's already-real planner/resolver/risk/execution logic - no
   backend or schema changes needed).
+- **Voice-First Mode: fixed the real root cause of silent speech on
+  iOS/WebKit** (online demo): the safety-timeout above correctly caught the
+  failure on a real device, but a user report showed it was still firing
+  every time on iOS - the timeout was masking, not fixing, the actual bug.
+  Root cause: `voiceSpeak()` built its `SpeechSynthesisUtterance` as a plain
+  local variable with no reference held anywhere else, and iOS/WebKit
+  (every iOS browser - Safari, Chrome, Gemini - runs on WebKit under
+  Apple's rules) has a long-documented bug where exactly that pattern lets
+  the JS engine garbage-collect the utterance mid-speech, silently killing
+  it with zero events fired - indistinguishable from a dead speech
+  backend. Fixed by holding a persistent, module-scope reference to the
+  in-flight utterance until it genuinely settles (a real `onend`/`onerror`,
+  or the safety-timeout finally giving up), the standard documented
+  workaround; the honest safety-timeout notice stays as a backstop for a
+  genuinely unsupported browser, it just shouldn't be the common case on
+  iOS anymore.
 
 ## What's deferred to a later phase
 
