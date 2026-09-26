@@ -45,3 +45,29 @@
     # others), and camera/geolocation stay fully locked down - neither is
     # used anywhere in this product.
     Permissions-Policy = "camera=(), microphone=(self), geolocation=()"
+
+# app.js/index.html/styles.css change on nearly every release, and the
+# ?v=X.Y.Z cache-busting query string on the <script> tag only helps a
+# browser that actually re-fetches index.html itself first - several
+# mobile/in-app browsers (iOS Safari and WebKit-based "Chrome"/"Gemini"
+# browsers among them) have been observed serving a stale disk-cached copy
+# of these exact files even across a normal reload, no query string in
+# sight to bust. `no-cache` (not `no-store`) keeps the browser's copy but
+# forces a conditional revalidation request (If-None-Match/If-Modified-
+# Since) on every load, so a stale copy can only ever survive until the
+# very next request reaches Netlify - a real fix rather than relying on
+# every future release remembering to bump a version number.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/app.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/styles.css"
+  [headers.values]
+    Cache-Control = "no-cache"

@@ -894,6 +894,25 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   workaround; the honest safety-timeout notice stays as a backstop for a
   genuinely unsupported browser, it just shouldn't be the common case on
   iOS anymore.
+- **Voice-First Mode: silent speech, round three - a caching fix and a
+  second real WebKit bug** (online demo): a device report showed the exact
+  same notice still firing after the fix above - two separate causes, both
+  real. This site's static assets (`index.html`/`app.js`/`styles.css`) had
+  no explicit cache-control policy, so several mobile/in-app WebKit
+  browsers can keep serving a stale disk-cached copy across an ordinary
+  reload regardless of the `?v=X.Y.Z` query-string bump on the script tag;
+  `netlify.toml` now sets `Cache-Control: no-cache` on all three, forcing a
+  revalidation request on every load - a systemic fix for every future
+  release, not just this one. Separately, and genuinely distinct from the
+  utterance-GC bug: `speechSynthesis` only ever produces real audio in a
+  page session where its first `speak()` call happened synchronously
+  inside a trusted user tap, not an async callback - which is exactly what
+  a `SpeechRecognition` result handler is. A session where the user's
+  first-ever interaction was by voice (not typed) could therefore stay
+  silently mute regardless of the GC fix. Fixed with a one-time,
+  near-silent "unlock" utterance spoken directly from the mic button's own
+  click handler before anything async (starting recognition) runs - the
+  standard workaround for this exact iOS Safari behavior.
 
 ## What's deferred to a later phase
 
