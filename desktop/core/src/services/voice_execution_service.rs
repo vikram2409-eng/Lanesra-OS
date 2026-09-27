@@ -32,7 +32,7 @@ use crate::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use crate::models::opportunity::OpportunityInput;
 use crate::models::task::TaskInput;
 use crate::models::voice::{ConfirmVoicePlanInput, ResolutionCandidate, VoiceActionPlan, VoiceCommand, VoiceExecutionResult, VoiceResolution};
-use crate::repositories::voice_repo;
+use crate::repositories::{custom_field_repo, voice_repo};
 use crate::services::{
     activity_service, ai_orchestration_service, chat_service, company_service, contact_service, contract_service, custom_field_service,
     custom_record_service, opportunity_service, order_service, quote_service, task_service, voice_planner_service, voice_policy_service,
@@ -267,6 +267,14 @@ struct UndoPayload {
     object_key: String,
     record_id: String,
     previous_value: Option<String>,
+    /// Voice-First Mode, PR 3: which field a "revert_status" undo writes
+    /// `previous_value` back to - `None`/`"status"` means the generic
+    /// column every object already had; anything else names one of a
+    /// Custom Object's own industry-vocabulary select fields (see
+    /// `voice_planner_service::detect_status_value`). `#[serde(default)]`
+    /// so an undo token minted before this field existed still decodes.
+    #[serde(default)]
+    status_field_key: Option<String>,
 }
 
 /// Executes one typed step against the real entity services - the only
@@ -298,7 +306,7 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
                 related_id: None,
             };
             let task = task_service::create(conn, &workspace_id, &input, actor)?;
-            let undo = serde_json::to_string(&UndoPayload { action: "archive_task".into(), object_key: "Task".into(), record_id: task.id.clone(), previous_value: None }).ok();
+            let undo = serde_json::to_string(&UndoPayload { action: "archive_task".into(), object_key: "Task".into(), record_id: task.id.clone(), previous_value: None, status_field_key: None }).ok();
             Ok((Some(task.id), undo, None))
         }
 
@@ -333,14 +341,14 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
                 };
                 let company = company_service::create(conn, &workspace_id, &input, actor)?;
                 apply_guided_create_custom_fields(conn, "Company", &company.id, &step.fields, "name", actor)?;
-                let undo = serde_json::to_string(&UndoPayload { action: "archive_company".into(), object_key: "Company".into(), record_id: company.id.clone(), previous_value: None }).ok();
+                let undo = serde_json::to_string(&UndoPayload { action: "archive_company".into(), object_key: "Company".into(), record_id: company.id.clone(), previous_value: None, status_field_key: None }).ok();
                 Ok((Some(company.id), undo, None))
             } else {
                 let primary_name = step.fields.get("primary_name").cloned().unwrap_or_default();
                 let input = CustomRecordInput { object_key: step.object_key.clone(), primary_name, status: "Active".into(), owner_user_id: Some(actor_user_id.to_string()), notes: None };
                 let record = custom_record_service::create(conn, &workspace_id, &input, actor)?;
                 apply_guided_create_custom_fields(conn, &step.object_key, &record.id, &step.fields, "primary_name", actor)?;
-                let undo = serde_json::to_string(&UndoPayload { action: "archive_custom_record".into(), object_key: step.object_key.clone(), record_id: record.id.clone(), previous_value: None }).ok();
+                let undo = serde_json::to_string(&UndoPayload { action: "archive_custom_record".into(), object_key: step.object_key.clone(), record_id: record.id.clone(), previous_value: None, status_field_key: None }).ok();
                 Ok((Some(record.id), undo, None))
             }
         }
@@ -368,8 +376,15 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
         "update_status" => {
             let Some(record_id) = step.record_id.clone() else { return Err(AppError::Validation("No record to update".into())) };
             let Some(new_status) = step.fields.get("status").cloned() else { return Err(AppError::Validation("No status value in plan".into())) };
-            let previous = update_status_for_object(conn, &step.object_key, &record_id, &new_status, actor)?;
-            let undo = serde_json::to_string(&UndoPayload { action: "revert_status".into(), object_key: step.object_key.clone(), record_id: record_id.clone(), previous_value: Some(previous) }).ok();
+            // Voice-First Mode, PR 3: `status_field_key` is only ever
+            // something other than "status" for a Custom Object whose
+            // spoken value matched one of its own industry-vocabulary
+            // select fields (voice_planner_service::detect_status_value) -
+            // every core object's arm below still ignores it and writes
+            // its own hardcoded field, unaffected.
+            let status_field_key = step.fields.get("status_field_key").cloned();
+            let previous = update_status_for_object(conn, &step.object_key, &record_id, &new_status, status_field_key.as_deref(), actor)?;
+            let undo = serde_json::to_string(&UndoPayload { action: "revert_status".into(), object_key: step.object_key.clone(), record_id: record_id.clone(), previous_value: Some(previous), status_field_key }).ok();
             Ok((Some(record_id), undo, None))
         }
 
@@ -457,8 +472,10 @@ fn task_workspace_id(conn: &Connection, actor_user_id: &str) -> AppResult<String
 /// `update`/`set_status` - status_transition_service's transition check,
 /// Access Control, and workflow triggers all run exactly as a UI save
 /// would (see this module's own doc comment). Returns the *previous* value
-/// so a later Undo can revert to it.
-fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str, new_status: &str, actor: Option<&str>) -> AppResult<String> {
+/// so a later Undo can revert to it. `status_field_key` is only consulted
+/// by the Custom Object arm (`_` below) - every core object here already
+/// writes its own hardcoded field regardless of what the planner passed.
+fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str, new_status: &str, status_field_key: Option<&str>, actor: Option<&str>) -> AppResult<String> {
     match object_key {
         "Company" => {
             let c = company_service::get(conn, record_id)?;
@@ -527,15 +544,44 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
             order_service::set_status(conn, record_id, new_status, actor)?;
             Ok(previous)
         }
-        _ => {
-            // Custom object - the fixed Active/Inactive/Archived vocabulary
-            // every custom record shares (models::custom_object::CUSTOM_RECORD_STATUSES).
-            let r = custom_record_service::get(conn, record_id)?;
-            let previous = r.status.clone();
-            let update = CustomRecordUpdate { primary_name: r.primary_name, status: new_status.to_string(), owner_user_id: r.owner_user_id, notes: r.notes };
-            custom_record_service::update(conn, record_id, &update, actor)?;
-            Ok(previous)
-        }
+        _ => match status_field_key.filter(|k| *k != "status") {
+            // Voice-First Mode, PR 3 (industry voice vocabulary packs): the
+            // spoken value matched one of this Custom Object's own
+            // select-type fields (e.g. Property Management's Unit
+            // "Occupancy Status") rather than the generic column below -
+            // applies through the exact same `custom_field_service::set_entity_values`
+            // seam an existing record's own field edit already uses, never
+            // a second, voice-only write path.
+            Some(field_key) => {
+                let before = custom_field_repo::get_values(conn, record_id)?;
+                let previous = before.get(field_key).cloned().unwrap_or_default();
+                // `set_entity_values` validates against exactly the map
+                // it's given (only filling *its own* stored defaults for a
+                // key genuinely absent from it) - it isn't a partial
+                // patch, so this starts from the record's full current
+                // values (same as a real edit form submitting every
+                // visible field together) rather than sending only the
+                // one field this command actually changed, which would
+                // otherwise misreport every *other* required custom field
+                // on this object as newly blank.
+                let mut values = before.clone();
+                values.insert(field_key.to_string(), new_status.to_string());
+                let notices = custom_field_service::set_entity_values(conn, object_key, record_id, &values, actor)?;
+                if let Some(first_error) = notices.errors.first() {
+                    return Err(AppError::Validation(first_error.clone()));
+                }
+                Ok(previous)
+            }
+            // The fixed Active/Inactive/Archived vocabulary every custom
+            // record shares (models::custom_object::CUSTOM_RECORD_STATUSES).
+            None => {
+                let r = custom_record_service::get(conn, record_id)?;
+                let previous = r.status.clone();
+                let update = CustomRecordUpdate { primary_name: r.primary_name, status: new_status.to_string(), owner_user_id: r.owner_user_id, notes: r.notes };
+                custom_record_service::update(conn, record_id, &update, actor)?;
+                Ok(previous)
+            }
+        },
     }
 }
 
@@ -557,7 +603,7 @@ pub fn undo(conn: &Connection, execution_id: &str, actor_user_id: &str) -> AppRe
         }
         "revert_status" => {
             let previous = payload.previous_value.ok_or_else(|| AppError::Validation("No previous value recorded".into()))?;
-            update_status_for_object(conn, &payload.object_key, &payload.record_id, &previous, Some(actor_user_id))?;
+            update_status_for_object(conn, &payload.object_key, &payload.record_id, &previous, payload.status_field_key.as_deref(), Some(actor_user_id))?;
         }
         "archive_company" => {
             company_service::archive(conn, &payload.record_id, Some(actor_user_id))?;

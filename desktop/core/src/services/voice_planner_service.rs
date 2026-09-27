@@ -58,26 +58,52 @@ struct CatalogEntry {
     object_key: Str,
     nouns: Vec<String>,
     status_values: Vec<String>,
+    /// Voice-First Mode, PR 3 (industry voice vocabulary packs): a Custom
+    /// Object's own select-type custom fields, each carried as (field_key,
+    /// real configured options) - e.g. Property Management's Unit carries
+    /// `("unit_stage", ["Vacant", "Reserved", "Occupied", ...])`. Always
+    /// empty for a core built-in object (its status/stage field is one of
+    /// the fixed `*_STATUSES`/`*_STAGES` consts above, not a custom field).
+    /// This is what lets "mark Unit 200 as Occupied" resolve against an
+    /// installed Industry App's *own* vocabulary the same honest,
+    /// metadata-driven way built-in status values already do - never a
+    /// second, hardcoded per-package phrase table.
+    extra_status_fields: Vec<(String, Vec<String>)>,
 }
 
 fn core_catalog() -> Vec<CatalogEntry> {
     vec![
-        CatalogEntry { object_key: Str::Static("Company"), nouns: vec!["company".into(), "companies".into(), "customer".into(), "account".into()], status_values: COMPANY_STATUSES.iter().map(|s| s.to_string()).collect() },
-        CatalogEntry { object_key: Str::Static("Contact"), nouns: vec!["contact".into(), "contacts".into(), "person".into()], status_values: CONTACT_STATUSES.iter().map(|s| s.to_string()).collect() },
-        CatalogEntry { object_key: Str::Static("Opportunity"), nouns: vec!["opportunity".into(), "opportunities".into(), "deal".into()], status_values: OPPORTUNITY_STAGES.iter().map(|s| s.to_string()).collect() },
-        CatalogEntry { object_key: Str::Static("Quote"), nouns: vec!["quote".into(), "quotes".into()], status_values: QUOTE_STATUSES.iter().map(|s| s.to_string()).collect() },
-        CatalogEntry { object_key: Str::Static("Order"), nouns: vec!["order".into(), "orders".into()], status_values: ORDER_STATUSES.iter().map(|s| s.to_string()).collect() },
-        CatalogEntry { object_key: Str::Static("Contract"), nouns: vec!["contract".into(), "contracts".into(), "agreement".into()], status_values: CONTRACT_STATUSES.iter().map(|s| s.to_string()).collect() },
-        CatalogEntry { object_key: Str::Static("Task"), nouns: vec!["task".into(), "tasks".into(), "to-do".into(), "todo".into()], status_values: TASK_STATUSES.iter().map(|s| s.to_string()).collect() },
+        CatalogEntry { object_key: Str::Static("Company"), nouns: vec!["company".into(), "companies".into(), "customer".into(), "account".into()], status_values: COMPANY_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
+        CatalogEntry { object_key: Str::Static("Contact"), nouns: vec!["contact".into(), "contacts".into(), "person".into()], status_values: CONTACT_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
+        CatalogEntry { object_key: Str::Static("Opportunity"), nouns: vec!["opportunity".into(), "opportunities".into(), "deal".into()], status_values: OPPORTUNITY_STAGES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
+        CatalogEntry { object_key: Str::Static("Quote"), nouns: vec!["quote".into(), "quotes".into()], status_values: QUOTE_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
+        CatalogEntry { object_key: Str::Static("Order"), nouns: vec!["order".into(), "orders".into()], status_values: ORDER_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
+        CatalogEntry { object_key: Str::Static("Contract"), nouns: vec!["contract".into(), "contracts".into(), "agreement".into()], status_values: CONTRACT_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
+        CatalogEntry { object_key: Str::Static("Task"), nouns: vec!["task".into(), "tasks".into(), "to-do".into(), "todo".into()], status_values: TASK_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
     ]
 }
 
 fn full_catalog(conn: &Connection, workspace_id: &str) -> AppResult<Vec<CatalogEntry>> {
     let mut catalog = core_catalog();
     for def in custom_object_service::list(conn, workspace_id, true)? {
+        // Every select-type custom field on this object is a candidate
+        // "status-like" vocabulary - an Industry App (or a hand-built
+        // Custom Object) typically names exactly one such field per
+        // object ("Occupancy Status", "Claim Status", ...), but there's no
+        // separate "this is THE status field" marker anywhere in the data
+        // model (custom objects don't participate in Status Transition
+        // rules the way core objects do), so every select field is offered
+        // and `detect_status_value` below resolves which one a spoken
+        // value actually belongs to.
+        let extra_status_fields = custom_field_service::list_definitions(conn, workspace_id, &def.key, true)?
+            .into_iter()
+            .filter(|f| f.field_type == "select" && !f.options.is_empty())
+            .map(|f| (f.key, f.options))
+            .collect();
         catalog.push(CatalogEntry {
             nouns: vec![def.singular_label.to_lowercase(), def.plural_label.to_lowercase()],
             status_values: CUSTOM_RECORD_STATUSES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields,
             object_key: Str::Owned(def.key),
         });
     }
@@ -90,11 +116,41 @@ fn detect_object_key<'a>(catalog: &'a [CatalogEntry], text_lower: &str) -> Optio
     catalog.iter().find(|e| e.nouns.iter().any(|n| text_lower.contains(n.as_str())))
 }
 
+/// The longest (most specific) value in `options` that appears in
+/// `text_lower`, or none - never the first, since a plain substring check
+/// alone would let a shorter value hiding inside a longer one win by
+/// accident ("Active" is itself a substring of "Inactive"; a shorter,
+/// unrelated status could just as easily sit inside a longer real one on
+/// some other object's own vocabulary). Longest-match is a real
+/// disambiguation rule here, not a first-match convenience the way
+/// `detect_object_key` above's noun check still legitimately is (an
+/// object's nouns are never substrings of each other).
+fn longest_matching_value(options: &[String], text_lower: &str) -> Option<String> {
+    options.iter().filter(|v| text_lower.contains(&v.to_lowercase())).max_by_key(|v| v.len()).cloned()
+}
+
 /// Finds a status/stage value the transcript names, constrained to one
-/// catalog entry's own vocabulary - a plain case-insensitive substring
-/// match against each valid value ("Won", "Under Review", ...).
-fn detect_status_value(entry: &CatalogEntry, text_lower: &str) -> Option<String> {
-    entry.status_values.iter().find(|v| text_lower.contains(&v.to_lowercase())).cloned()
+/// catalog entry's own vocabulary - a case-insensitive substring match
+/// against each valid value ("Won", "Under Review", ...), preferring the
+/// longest match (see `longest_matching_value`). Returns the matched value
+/// alongside which field it belongs to: `"status"` for every core object's
+/// fixed vocabulary and every Custom Object's own generic Active/Inactive/
+/// Archived column, or a specific custom field key when the value only
+/// belongs to one of that object's own industry-vocabulary select fields
+/// (checked in field-definition order; the first field with a match wins -
+/// cross-field ambiguity between two different industry fields sharing a
+/// value is a real edge case this doesn't resolve, unlike the
+/// same-list case above).
+fn detect_status_value(entry: &CatalogEntry, text_lower: &str) -> Option<(String, String)> {
+    if let Some(v) = longest_matching_value(&entry.status_values, text_lower) {
+        return Some((v, "status".to_string()));
+    }
+    for (field_key, options) in &entry.extra_status_fields {
+        if let Some(v) = longest_matching_value(options, text_lower) {
+            return Some((v, field_key.clone()));
+        }
+    }
+    None
 }
 
 const NAVIGATE_TRIGGERS: &[&str] = &["open ", "show me ", "show ", "pull up ", "find ", "go to ", "navigate to "];
@@ -227,14 +283,14 @@ pub fn plan(
     if let Some(rest) = strip_any_prefix(&lower, NAVIGATE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
         return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference, "NAVIGATE", |object_key, record_id| VoiceActionPlanBody {
-            steps: vec![VoicePlanStep { action: "navigate".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Open this {object_key} record") }],
+            steps: vec![VoicePlanStep { action: "navigate".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Open this {object_key} record"), brief_description: format!("Opening {object_key}"), detail_note: None }],
         });
     }
 
     if let Some(rest) = strip_any_prefix(&lower, QUERY_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
         return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference, "QUERY", |object_key, record_id| VoiceActionPlanBody {
-            steps: vec![VoicePlanStep { action: "query".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Read-only summary of this {object_key} record") }],
+            steps: vec![VoicePlanStep { action: "query".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Read-only summary of this {object_key} record"), brief_description: "Summary".into(), detail_note: None }],
         });
     }
 
@@ -250,7 +306,7 @@ pub fn plan(
             fields.insert("due_date".to_string(), d.clone());
         }
         return Ok(PlanOutcome::Ready {
-            plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "create_task".into(), object_key: "Task".into(), record_id: None, fields, description: format!("Create task \"{title}\"{}", due_date.as_deref().map(|d| format!(" due {d}")).unwrap_or_default()) }] },
+            plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "create_task".into(), object_key: "Task".into(), record_id: None, fields, description: format!("Create task \"{title}\"{}", due_date.as_deref().map(|d| format!(" due {d}")).unwrap_or_default()), brief_description: format!("New task: {title}"), detail_note: due_date.as_deref().map(|d| format!("No other fields are set on this task besides its title and its due date of {d}.")) }] },
             intent: "CREATE".into(),
             object_key: Some("Task".into()),
             resolved_record_id: None,
@@ -334,7 +390,7 @@ fn plan_run_agent(conn: &Connection, workspace_id: &str, reference: &str) -> App
             let mut fields = std::collections::HashMap::new();
             fields.insert("message".to_string(), message.clone());
             Ok(PlanOutcome::Ready {
-                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "run_agent".into(), object_key: "AiAgent".into(), record_id: Some(agent.id.clone()), fields, description: format!("Ask {} agent: \"{}\"", agent.name, message) }] },
+                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "run_agent".into(), object_key: "AiAgent".into(), record_id: Some(agent.id.clone()), fields, description: format!("Ask {} agent: \"{}\"", agent.name, message), brief_description: format!("Asking {}", agent.name), detail_note: Some("The agent's reply is spoken once it responds, after you confirm.".into()) }] },
                 intent: "RUN_AGENT".into(),
                 object_key: Some("AiAgent".into()),
                 resolved_record_id: Some(agent.id.clone()),
@@ -369,7 +425,7 @@ fn plan_run_pipeline(conn: &Connection, workspace_id: &str, reference: &str) -> 
             let mut fields = std::collections::HashMap::new();
             fields.insert("message".to_string(), message.clone());
             Ok(PlanOutcome::Ready {
-                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "run_pipeline".into(), object_key: "AiAgentPipeline".into(), record_id: Some(pipeline.id.clone()), fields, description: format!("Run {} pipeline: \"{}\"", pipeline.name, message) }] },
+                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "run_pipeline".into(), object_key: "AiAgentPipeline".into(), record_id: Some(pipeline.id.clone()), fields, description: format!("Run {} pipeline: \"{}\"", pipeline.name, message), brief_description: format!("Running {} pipeline", pipeline.name), detail_note: Some("The pipeline's result is spoken once it finishes, after you confirm.".into()) }] },
                 intent: "RUN_AGENT".into(),
                 object_key: Some("AiAgentPipeline".into()),
                 resolved_record_id: Some(pipeline.id.clone()),
@@ -435,8 +491,12 @@ fn plan_update_status(
     };
     let entry_owned = entry.object_key.as_str().to_string();
 
-    let Some(status_value) = detect_status_value(entry, &lower) else {
-        return Ok(PlanOutcome::Unsupported { reason: format!("I didn't catch a valid status for {entry_owned} - valid values are: {}.", entry.status_values.join(", ")) });
+    let Some((status_value, status_field_key)) = detect_status_value(entry, &lower) else {
+        let mut all_values = entry.status_values.clone();
+        for (_, options) in &entry.extra_status_fields {
+            all_values.extend(options.iter().cloned());
+        }
+        return Ok(PlanOutcome::Unsupported { reason: format!("I didn't catch a valid status for {entry_owned} - valid values are: {}.", all_values.join(", ")) });
     };
 
     // Whatever's left after removing the object noun and the status value
@@ -455,8 +515,15 @@ fn plan_update_status(
         ResolutionOutcome::Resolved { record_id, object_key, confidence } => {
             let mut fields = std::collections::HashMap::new();
             fields.insert("status".to_string(), status_value.clone());
+            // Only meaningful for a Custom Object ("status" itself when
+            // the value matched the generic Active/Inactive/Archived
+            // column) - voice_execution_service's core-object arms ignore
+            // this marker entirely, since each already writes to its own
+            // hardcoded field.
+            let human_field = if status_field_key == "status" { "status".to_string() } else { status_field_key.replace('_', " ") };
+            fields.insert("status_field_key".to_string(), status_field_key);
             Ok(PlanOutcome::Ready {
-                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "update_status".into(), object_key: object_key.clone(), record_id: Some(record_id.clone()), fields, description: format!("Set {object_key} status to {status_value}") }] },
+                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "update_status".into(), object_key: object_key.clone(), record_id: Some(record_id.clone()), fields, description: format!("Set {object_key} status to {status_value}"), brief_description: format!("Status: {status_value}"), detail_note: Some(format!("This only changes the {human_field} field on this {object_key} record - nothing else is affected.")) }] },
                 intent: "UPDATE".into(),
                 object_key: Some(object_key),
                 resolved_record_id: Some(record_id),
@@ -503,7 +570,7 @@ fn plan_capture(
             fields.insert("body".to_string(), body.clone());
             fields.insert("channel".to_string(), "message".to_string());
             Ok(PlanOutcome::Ready {
-                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "log_activity".into(), object_key: object_key.clone(), record_id: Some(record_id.clone()), fields, description: format!("Log an interaction on this {object_key}: \"{body}\"") }] },
+                plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "log_activity".into(), object_key: object_key.clone(), record_id: Some(record_id.clone()), fields, description: format!("Log an interaction on this {object_key}: \"{body}\""), brief_description: format!("Logging a note on this {object_key}"), detail_note: Some("This only adds a new interaction entry - it doesn't change any of this record's own fields.".into()) }] },
                 intent: "CAPTURE".into(),
                 object_key: Some(object_key),
                 resolved_record_id: Some(record_id),
@@ -602,8 +669,10 @@ fn build_guided_create_outcome(conn: &Connection, workspace_id: &str, object_key
     }
 
     let display = fields.get(&name_key).cloned().unwrap_or_default();
+    let extra_fields: Vec<String> = fields.iter().filter(|(k, _)| *k != &name_key).map(|(k, v)| format!("{}: {v}", k.replace('_', " "))).collect();
+    let detail_note = if extra_fields.is_empty() { None } else { Some(format!("Also sets {}.", extra_fields.join(", "))) };
     Ok(PlanOutcome::Ready {
-        plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "create_record".into(), object_key: object_key.to_string(), record_id: None, fields, description: format!("Create {object_key} \"{display}\"") }] },
+        plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "create_record".into(), object_key: object_key.to_string(), record_id: None, fields, description: format!("Create {object_key} \"{display}\""), brief_description: format!("New {object_key}: {display}"), detail_note }] },
         intent: "CREATE".into(),
         object_key: Some(object_key.to_string()),
         resolved_record_id: None,

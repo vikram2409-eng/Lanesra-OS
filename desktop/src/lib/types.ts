@@ -3439,6 +3439,8 @@ export interface VoicePlanStep {
   record_id: string | null;
   fields: Record<string, string>;
   description: string;
+  brief_description: string;
+  detail_note: string | null;
 }
 
 export interface VoiceActionPlanBody {
