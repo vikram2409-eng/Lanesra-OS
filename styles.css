@@ -915,3 +915,84 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 .org-hierarchy-team{margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:10px}
 .org-hierarchy-list{margin:4px 0 0;padding-left:20px;font-size:13px}
 .org-hierarchy-list li{margin-bottom:2px}
+
+/* Homepage redesign: grouped nav dropdowns */
+.nav-links{align-items:center}
+.nav-item{position:relative}
+.nav-drop-btn{background:none;border:0;font:inherit;font-weight:600;color:inherit;cursor:pointer;display:flex;align-items:center;gap:5px;padding:8px 0}
+.nav-drop-btn:hover,.nav-item.open .nav-drop-btn{color:var(--brand)}
+.nav-caret{font-size:10px;transition:transform .15s ease}
+.nav-item.open .nav-caret{transform:rotate(180deg)}
+.nav-dropdown{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);min-width:240px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px;display:none;flex-direction:column;z-index:30}
+.nav-item.open .nav-dropdown{display:flex}
+.nav-dropdown a{padding:9px 12px;border-radius:8px;font-size:14px;font-weight:600;color:var(--text);white-space:nowrap}
+.nav-dropdown a:hover{background:var(--accent-soft);color:var(--brand)}
+.nav-github{padding:9px 14px;font-size:13px}
+@media(min-width:901px){.nav-item:hover .nav-dropdown{display:flex}}
+@media(max-width:900px){.nav-github{display:none}}
+.drawer-group{border-bottom:1px solid var(--line)}
+.drawer-group summary{padding:13px 4px;font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+.drawer-group summary::-webkit-details-marker{display:none}
+.drawer-group summary::after{content:'+';font-weight:400}
+.drawer-group[open] summary::after{content:'−'}
+.drawer-group a{display:block;padding:10px 4px 10px 14px;font-size:14px}
+
+/* Homepage redesign: Seven Platform Capabilities grid */
+.capability-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.capability-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);padding:26px;transition:.2s ease}
+.capability-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lift);border-color:#3a3f47}
+.capability-card .cap-icon{width:44px;height:44px;border-radius:13px;background:var(--accent-soft);color:var(--brand);display:grid;place-items:center;font-size:20px;margin-bottom:14px}
+.capability-card h3{margin:0 0 8px;font-size:17px}
+.capability-card p{margin:0 0 10px;color:var(--muted);font-size:14px;line-height:1.6}
+.capability-card a{font-size:13px;font-weight:700;color:var(--brand)}
+@media(max-width:900px){.capability-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.capability-grid{grid-template-columns:1fr}}
+
+/* Homepage redesign: Unified Platform Architecture layered diagram */
+.arch-diagram{display:flex;flex-direction:column;gap:10px;margin:0 0 30px}
+.arch-layer{border:1px solid var(--line);border-radius:16px;padding:16px 20px;background:var(--panel);text-align:center;position:relative}
+.arch-layer .arch-label{font-weight:800;font-size:15px}
+.arch-layer .arch-sub{font-size:13px;color:var(--muted);margin-top:3px}
+.arch-layer.arch-agents{background:var(--accent-soft);border-color:var(--brand)}
+.arch-layer.arch-runtime{background:var(--ink-soft)}
+.arch-arrow{align-self:center;color:var(--muted);font-size:18px;line-height:1}
+.arch-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.arch-row .arch-layer{padding:14px}
+.proof-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:900px;margin:0 auto}
+.proof-list li{list-style:none;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:14px;display:flex;gap:10px;align-items:flex-start}
+.proof-list li:before{content:'✓';color:var(--brand2);font-weight:900}
+@media(max-width:620px){.arch-row{grid-template-columns:1fr}.proof-list{grid-template-columns:1fr}}
+
+/* Homepage redesign: Low-Code Application Platform stage progression */
+.stage-row{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding-bottom:6px}
+.stage-card{flex:1;min-width:150px;border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel)}
+.stage-card .stage-n{font-size:11px;font-weight:800;color:var(--brand);text-transform:uppercase;letter-spacing:.05em}
+.stage-card h4{margin:6px 0 8px;font-size:15px}
+.stage-card p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.55}
+.stage-arrow{align-self:center;color:var(--muted);flex:0 0 auto}
+@media(max-width:900px){.stage-row{flex-direction:column}.stage-arrow{transform:rotate(90deg);align-self:flex-start;margin-left:20px}}
+
+/* Homepage redesign: Industry Packages grid with status badges */
+.industry-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.industry-card{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel);transition:.2s ease}
+.industry-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift);border-color:#3a3f47}
+.industry-card h4{margin:0 0 6px;font-size:14.5px}
+.industry-card p{margin:0 0 10px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.industry-badge{display:inline-block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:999px;background:var(--accent-soft);color:var(--brand)}
+@media(max-width:900px){.industry-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.industry-grid{grid-template-columns:1fr}}
+
+/* Homepage redesign: Voice-First transcript demo */
+.transcript-demo{max-width:640px;margin:0 auto;border:1px solid var(--line);border-radius:20px;background:var(--panel);padding:22px;display:flex;flex-direction:column;gap:14px}
+.transcript-line{display:flex;gap:12px;align-items:flex-start}
+.transcript-avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:14px;flex:0 0 auto;font-weight:800}
+.transcript-line.you .transcript-avatar{background:var(--accent-soft);color:var(--brand)}
+.transcript-line.lanesra .transcript-avatar{background:var(--ink-soft);color:var(--brand2)}
+.transcript-bubble{background:var(--surface-alt);border:1px solid var(--line);border-radius:14px;padding:12px 15px;font-size:14px;line-height:1.6}
+.transcript-line.you .transcript-bubble{background:var(--accent-soft)}
+.feature-chip-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:22px}
+.feature-chip{font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+
+/* Homepage redesign: sovereignty 3-column + final CTA */
+.sovereignty-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:900px){.capability-grid,.industry-grid,.sovereignty-cols,.arch-row{grid-template-columns:repeat(2,1fr)}.sovereignty-cols{grid-template-columns:1fr}}
