@@ -723,15 +723,51 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   `owner_user_id` column present on five tables is kept, read-only, as a
   rollback safety net rather than dropped (SQLite can't rename/drop a
   column safely without a full table rebuild). The "assign" capability
-  check is a deliberate placeholder (`ownership_service::require_assign_capability`,
-  requiring the existing Administrator role) - the real capability+scope
-  Access Role engine is Phase 2, not built yet. See
+  check was a deliberate placeholder (`ownership_service::require_assign_capability`,
+  requiring the existing Administrator role) at the time this phase shipped -
+  the real capability+scope Access Role engine is Phase 2, described in the
+  next bullet, which since replaced it. See
   `core/src/services/organization_service.rs`, `org_unit_service.rs`,
   `work_team_service.rs`, `ownership_service.rs`, and
   `core/tests/access_foundation_org_structure.rs` /
   `access_foundation_ownership.rs`. Mirrored in the online demo
   (`app.js`) as real client-side state, same convention as every other
   demo-mirrored feature.
+- **Access Control v1: capability-scoped Access Roles, Record Scopes & an Access Inspector**
+  (Phase 2 of the Access Foundation): replaces the Phase 1 placeholder above
+  with a real engine - named, composable Access Roles carrying a capability
+  set (per-object Create/Read/Update/Delete/Assign) and a Record Scope
+  (Owner-only, Owner's Team, Owner's Org Unit and below, or
+  Organization-wide). Every workspace lazily bootstraps a Full Access role
+  (existing Administrators) and a Standard User role (everyone else, seeded
+  at Organization scope so existing CRUD behavior never regresses) the
+  first time any check runs. A follow-up pass wired record-level
+  Create/Read/Update/Delete gating into all 10 owned business objects and
+  Custom Object records, migrated a dozen pre-existing `require_admin`-style
+  checks in other subsystems onto the new engine additively (the legacy
+  Administrator role still always passes; a non-Administrator can only
+  additionally act with an explicit grant, never a wildcard fallback), and
+  closed the one remaining gap: list screens, global search, dashboard
+  record-list widgets and custom report counts/sums are now narrowed to
+  each viewer's Access Role Read scope too, reusing the identical evaluator
+  (`access_service::filter_visible`) single-record enforcement already
+  calls. An Access Inspector answers "why can/can't this user see this
+  record" from the exact same evaluation trace enforcement uses, not a
+  second guess. See `core/src/services/access_role_service.rs`,
+  `access_service.rs`, migration `0056_access_roles.sql`, and
+  `core/tests/access_control_v1.rs`. Mirrored in the online demo (`app.js`)
+  - Access Roles admin, Record Scopes, an Access Inspector.
+- **Agent Hierarchy view**: a Pipeline's own step order and an agent's own
+  dynamic delegation (Agent Foundry, above) are two separate things this
+  codebase already tracked, held only in a maintainer's head until now. A
+  new Agent Hierarchy view, opened from any Pipeline, resolves each step's
+  agent and walks that agent's own "Can delegate to" list recursively,
+  rendering both as one tree with a plain-language narration - the same
+  evaluator a real run would use, just explained instead of executed. A
+  delegation cycle shows the repeated agent as a leaf with an explanatory
+  note rather than freezing the page, and a chain deeper than the
+  runtime's own 4-level delegation guard is truncated at that exact
+  depth. Mirrored in the online demo.
 - **Voice-First Mode (PR 1 of a 3-PR rollout)**: a 4-digit Voice PIN,
   separate from the primary login password, unlocks a time-boxed Voice
   session (5/15/30 minutes, admin-capped per Access Role) with lockout
@@ -981,12 +1017,12 @@ docker run -p 8080:8080 -v lanesra-data:/data \
 - The Approval Framework, Data Quality Center, and Form Builder sections
   of the v1.3 spec - each is its own substantial subsystem, out of scope
   for the phases done so far
-- Access Foundation Phases 2-6 from the Enterprise Requirements
-  Specification (Organization/Org Units/Work Teams/ownership shipped
-  above is Phase 1 only): Access Control v1 (capability+scope Access
-  Roles, Record Scopes, an Access Inspector), v1.1 (Field Access
-  Policies, Capability Packs/Bundles, Access Groups, Record Grants), v1.2
-  (Record Access Policies, stronger bulk-reassignment audit), AI Access
+- Access Foundation Phases 3-6 from the Enterprise Requirements
+  Specification (Phase 1 - Organization/Org Units/Work Teams/ownership -
+  and Phase 2 - Access Control v1's capability+scope Access Roles, Record
+  Scopes and an Access Inspector - have both shipped, above): v1.1 (Field
+  Access Policies, Capability Packs/Bundles, Access Groups, Record Grants),
+  v1.2 (Record Access Policies, stronger bulk-reassignment audit), AI Access
   v1 (AI Action Levels, Agent/Integration Identities, data boundaries),
   and Enterprise Identity v2 (OIDC/SAML/SCIM, external users) - tracked
   as GitHub issues, not built yet
