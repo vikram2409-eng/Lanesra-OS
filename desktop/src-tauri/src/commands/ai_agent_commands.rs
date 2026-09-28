@@ -9,8 +9,9 @@ use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
-use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiAgentMemorySnapshot, AiSkill, AiSkillInput};
-use lanesra_core::services::ai_agent_service;
+use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiAgentMemorySnapshot, AiAgentVersion, AiAgentVersionInput, AiSkill, AiSkillInput};
+use lanesra_core::models::ai_approval::{AiApproval, AiApprovalInput, AiApprovalResolution};
+use lanesra_core::services::{agent_version_service, ai_agent_service, approval_service};
 
 #[tauri::command]
 pub fn list_ai_agents(state: State<AppState>, active_only: bool) -> AppResult<Vec<AiAgentDefinition>> {
@@ -75,6 +76,57 @@ pub fn get_ai_agent_token_usage(state: State<AppState>, id: String) -> AppResult
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     ai_agent_service::token_usage_today(&conn, &id, &workspace_id)
+}
+
+// --- AI Agent Platform v2, Phase 1: version lifecycle + approvals -----
+
+#[tauri::command]
+pub fn list_ai_agent_versions(state: State<AppState>, agent_id: String) -> AppResult<Vec<AiAgentVersion>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    agent_version_service::list_versions(&conn, &agent_id, &workspace_id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn create_ai_agent_version_draft(state: State<AppState>, agent_id: String, input: AiAgentVersionInput) -> AppResult<AiAgentVersion> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    agent_version_service::create_draft(&conn, &agent_id, &workspace_id, &input, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn update_ai_agent_version_draft(state: State<AppState>, agent_id: String, version_id: String, input: AiAgentVersionInput) -> AppResult<AiAgentVersion> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    agent_version_service::update_draft(&conn, &agent_id, &workspace_id, &version_id, &input, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn transition_ai_agent_version_status(state: State<AppState>, agent_id: String, version_id: String, new_status: String) -> AppResult<AiAgentVersion> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    agent_version_service::transition_status(&conn, &agent_id, &workspace_id, &version_id, &new_status, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn list_ai_approvals(state: State<AppState>, status: Option<String>) -> AppResult<Vec<AiApproval>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    approval_service::list(&conn, &workspace_id, status.as_deref(), current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn create_ai_approval(state: State<AppState>, input: AiApprovalInput) -> AppResult<AiApproval> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    approval_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn resolve_ai_approval(state: State<AppState>, id: String, resolution: AiApprovalResolution) -> AppResult<AiApproval> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    approval_service::resolve(&conn, &id, &workspace_id, &resolution, current_actor(&state).as_deref())
 }
 
 #[tauri::command]

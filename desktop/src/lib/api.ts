@@ -24,6 +24,11 @@ import type {
   AiAgentMemoryUpdate,
   AiAgentMemorySnapshot,
   AiAgentGuardrailsUpdate,
+  AiAgentVersion,
+  AiAgentVersionInput,
+  AiApproval,
+  AiApprovalInput,
+  AiApprovalResolution,
   AiSkill,
   AiSkillInput,
   AiAgentPipeline,
@@ -370,6 +375,20 @@ export const api = {
   setAiAgentMemory: (id: string, input: AiAgentMemoryUpdate) => call<AiAgentDefinition>("set_ai_agent_memory", { id, input }),
   listAiAgentMemoryHistory: (id: string) => call<AiAgentMemorySnapshot[]>("list_ai_agent_memory_history", { id }),
   setAiAgentGuardrails: (id: string, input: AiAgentGuardrailsUpdate) => call<AiAgentDefinition>("set_ai_agent_guardrails", { id, input }),
+
+  // AI Agent Platform v2, Phase 1: the Draft -> Test -> Published ->
+  // Deprecated -> Disabled version lifecycle, and the durable approval
+  // inbox - all plain CRUD/reads.
+  listAiAgentVersions: (agentId: string) => call<AiAgentVersion[]>("list_ai_agent_versions", { agentId }),
+  createAiAgentVersionDraft: (agentId: string, input: AiAgentVersionInput) => call<AiAgentVersion>("create_ai_agent_version_draft", { agentId, input }),
+  updateAiAgentVersionDraft: (agentId: string, versionId: string, input: AiAgentVersionInput) =>
+    call<AiAgentVersion>("update_ai_agent_version_draft", { agentId, versionId, input }),
+  transitionAiAgentVersionStatus: (agentId: string, versionId: string, newStatus: string) =>
+    call<AiAgentVersion>("transition_ai_agent_version_status", { agentId, versionId, newStatus }),
+  listAiApprovals: (status: string | null) => call<AiApproval[]>("list_ai_approvals", { status }),
+  createAiApproval: (input: AiApprovalInput) => call<AiApproval>("create_ai_approval", { input }),
+  resolveAiApproval: (id: string, resolution: AiApprovalResolution) => call<AiApproval>("resolve_ai_approval", { id, resolution }),
+
   listAiSkills: (activeOnly: boolean) => call<AiSkill[]>("list_ai_skills", { activeOnly }),
   createAiSkill: (input: AiSkillInput) => call<AiSkill>("create_ai_skill", { input }),
   updateAiSkill: (id: string, input: AiSkillInput) => call<AiSkill>("update_ai_skill", { id, input }),

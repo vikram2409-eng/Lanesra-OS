@@ -46,9 +46,9 @@ use rusqlite::Connection;
 use serde_json::{json, Value};
 
 use crate::domain::{AppError, AppResult};
-use crate::models::ai_agent::AiAgentDefinition;
+use crate::models::ai_agent::{validate_output_schema, AiAgentDefinition};
 use crate::models::chat::ChatMessage;
-use crate::repositories::{ai_agent_repo, ai_token_usage_repo, chat_repo};
+use crate::repositories::{ai_agent_repo, ai_agent_version_repo, ai_token_usage_repo, audit_repo, chat_repo};
 use crate::services::ai_gateway_service;
 use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
 use crate::services::api_object_service;
@@ -984,9 +984,20 @@ pub async fn run_agent_once(
     }
     let tools = agent_tools(conn, agent)?;
     let system_prompt = agent_system_prompt(conn, agent)?;
+    // AI Agent Platform v2, Phase 1: this run's Structured Output contract,
+    // if the agent's current Published version declares one - `None` is
+    // exactly today's free-form-text behavior. Resolved once up front
+    // (immutable for the life of this run, same as `tools`/`system_prompt`
+    // above), not re-read per round.
+    let output_schema: Option<Value> = agent
+        .current_version_id
+        .as_deref()
+        .and_then(|id| ai_agent_version_repo::get(conn, id).ok().flatten())
+        .and_then(|v| v.output_schema);
 
     let mut history = seed_history;
     let mut produced = Vec::new();
+    let mut structured_output_repaired = false;
     // Phase 7c: loop-detection guardrail (`guardrails.md`'s own "if the
     // same skill is invoked 3 times with identical parameters, terminate
     // the loop and escalate" example) - tracks only the case of a round
@@ -1010,6 +1021,32 @@ pub async fn run_agent_once(
         let outcome = gateway_outcome.outcome;
         match outcome {
             CompletionOutcome::Text(text) => {
+                if let Some(schema) = &output_schema {
+                    let violations = match serde_json::from_str::<Value>(&text) {
+                        Ok(parsed) => validate_output_schema(schema, &parsed),
+                        Err(e) => vec![format!("Response is not valid JSON: {e}")],
+                    };
+                    if !violations.is_empty() && !structured_output_repaired {
+                        // One repair retry (spec'd, not indefinite): tell
+                        // the model exactly what's wrong and let the next
+                        // round of this same loop re-dispatch - if it's
+                        // still wrong after that, the second attempt's
+                        // text is returned as-is rather than looping
+                        // forever on a model that can't self-correct.
+                        structured_output_repaired = true;
+                        let assistant_msg = synthetic_message("assistant", Some(&text), None, None);
+                        history.push(assistant_msg.clone());
+                        produced.push(assistant_msg);
+                        let repair_prompt = format!(
+                            "Your last response didn't conform to the required output schema:\n{}\n\nRespond again with ONLY valid JSON matching the schema, no other text.",
+                            violations.join("\n")
+                        );
+                        let repair_msg = synthetic_message("user", Some(&repair_prompt), None, None);
+                        history.push(repair_msg.clone());
+                        produced.push(repair_msg);
+                        continue;
+                    }
+                }
                 produced.push(synthetic_message("assistant", Some(&text), None, None));
                 return Ok(AgentRunOutcome { final_text: text, produced });
             }
@@ -1039,10 +1076,29 @@ pub async fn run_agent_once(
                 produced.push(assistant_msg);
                 for call in calls {
                     let result = execute_agent_tool(conn, workspace_id, master_key, actor, agent, &call).await;
+                    let ok = result.is_ok();
                     let content = match result {
                         Ok(value) => value.to_string(),
                         Err(e) => format!("Error: {e}"),
                     };
+                    // AI Agent Platform v2, Phase 1: agent identity attached
+                    // to the audit trail alongside the initiating user, not
+                    // in place of it - the entity-service call this tool
+                    // dispatches to (e.g. `company_service::update`) already
+                    // wrote its own `actor`-attributed audit event via the
+                    // same `audit_repo::record`; this is an additional,
+                    // additive row so "which agent" is answerable too. Never
+                    // fails the tool call itself if this write fails.
+                    let _ = audit_repo::record(
+                        conn,
+                        workspace_id,
+                        actor,
+                        "ai_agent_tool_call",
+                        Some("ai_agent"),
+                        Some(&agent.id),
+                        &format!("Agent '{}' called '{}'{}", agent.name, call.name, if ok { "" } else { " (failed)" }),
+                        None,
+                    );
                     let tool_msg = synthetic_message("tool", Some(&content), None, Some(&call.id));
                     history.push(tool_msg.clone());
                     produced.push(tool_msg);

@@ -2372,6 +2372,8 @@ export interface AiAgentDefinition {
   /** Phase 7a: `null` means this agent still dispatches through the plain workspace default. */
   model_routing: AiAgentModelRouting | null;
   is_active: boolean;
+  /** AI Agent Platform v2, Phase 1: this agent's current Published version. */
+  current_version_id: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -2424,6 +2426,72 @@ export interface AiSkillInput {
   name: string;
   description: string;
   instructions_md: string;
+}
+
+// AI Agent Platform v2, Phase 1: an immutable-once-Published snapshot of
+// an agent's persona/instructions/tools/model routing/Structured Output
+// contract - core::models::ai_agent::AiAgentVersion 1:1.
+export interface AiAgentVersion {
+  id: string;
+  agent_id: string;
+  version_number: number;
+  /** 'draft' | 'test' | 'published' | 'deprecated' | 'disabled'. */
+  status: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  system_prompt: string;
+  memory_md: string;
+  guardrails_md: string;
+  action_names: string[];
+  delegate_agent_ids: string[];
+  skill_ids: string[];
+  model_routing: AiAgentModelRouting | null;
+  /** A JSON Schema this version's Structured Output must conform to - `null` means free-form text. */
+  output_schema: unknown | null;
+  created_at: string;
+  created_by: string | null;
+  published_at: string | null;
+}
+
+export interface AiAgentVersionInput {
+  name: string;
+  description: string | null;
+  icon: string;
+  system_prompt: string;
+  action_names: string[];
+  delegate_agent_ids: string[];
+  skill_ids: string[];
+  model_routing: AiAgentModelRouting | null;
+  output_schema: unknown | null;
+}
+
+// AI Agent Platform v2, Phase 1: a durable, generalized pending-action row
+// - core::models::ai_approval::AiApproval 1:1.
+export interface AiApproval {
+  id: string;
+  workspace_id: string;
+  subject_type: string;
+  subject_id: string;
+  proposal: unknown;
+  /** 'pending' | 'approved' | 'rejected'. */
+  status: string;
+  requested_by: string | null;
+  resolved_by: string | null;
+  resolution_notes: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface AiApprovalInput {
+  subject_type: string;
+  subject_id: string;
+  proposal: unknown;
+}
+
+export interface AiApprovalResolution {
+  approve: boolean;
+  resolution_notes: string | null;
 }
 
 // --- AI & Agentic Layer, Phase 6b - orchestration on top of Phase 6a's
