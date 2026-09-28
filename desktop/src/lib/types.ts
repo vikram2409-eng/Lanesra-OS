@@ -3377,6 +3377,22 @@ export interface VoicePolicyBindingInput {
   max_unlock_minutes: number;
 }
 
+// An optional, workspace-wide LLM-backed conversational fallback for
+// commands the deterministic planner doesn't recognize -
+// core::models::voice::VoiceLlmSettings 1:1.
+export interface VoiceLlmSettings {
+  workspace_id: string;
+  enabled: boolean;
+  provider_id: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface VoiceLlmSettingsInput {
+  enabled: boolean;
+  provider_id: string | null;
+}
+
 export type VoiceSessionState =
   | "locked"
   | "ready"

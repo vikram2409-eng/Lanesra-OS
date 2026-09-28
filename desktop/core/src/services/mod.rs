@@ -74,6 +74,8 @@ pub mod vector_search_service;
 pub mod voice_audit_service;
 pub mod voice_entity_resolver;
 pub mod voice_execution_service;
+pub mod voice_llm_planner_service;
+pub mod voice_llm_service;
 pub mod voice_planner_service;
 pub mod voice_policy_service;
 pub mod voice_provider_service;

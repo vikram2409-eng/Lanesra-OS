@@ -54,7 +54,7 @@ mod str_or_owned {
 }
 use str_or_owned::Str;
 
-struct CatalogEntry {
+pub(crate) struct CatalogEntry {
     object_key: Str,
     nouns: Vec<String>,
     status_values: Vec<String>,
@@ -83,7 +83,25 @@ fn core_catalog() -> Vec<CatalogEntry> {
     ]
 }
 
-fn full_catalog(conn: &Connection, workspace_id: &str) -> AppResult<Vec<CatalogEntry>> {
+/// A compact, plain-text rendering of `full_catalog` - what
+/// `voice_llm_planner_service` puts in its rewrite prompt so the LLM knows
+/// which objects/statuses actually exist in this workspace, without that
+/// module needing access to `CatalogEntry`'s own private fields.
+pub(crate) fn catalog_summary(catalog: &[CatalogEntry]) -> String {
+    catalog
+        .iter()
+        .map(|e| {
+            let mut line = format!("- {} (say: {})", e.object_key.as_str(), e.nouns.join(", "));
+            if !e.status_values.is_empty() {
+                line.push_str(&format!(" - statuses: {}", e.status_values.join(", ")));
+            }
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub(crate) fn full_catalog(conn: &Connection, workspace_id: &str) -> AppResult<Vec<CatalogEntry>> {
     let mut catalog = core_catalog();
     for def in custom_object_service::list(conn, workspace_id, true)? {
         // Every select-type custom field on this object is a candidate

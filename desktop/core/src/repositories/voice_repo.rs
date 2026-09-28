@@ -612,3 +612,33 @@ pub fn search_activity_for_workspace(conn: &Connection, workspace_id: &str, limi
     let rows = stmt.query_map((workspace_id, limit), map_activity)?.collect();
     rows
 }
+
+// ---- Voice-First Mode: an optional LLM-backed conversational layer -------
+
+fn map_llm_settings(row: &rusqlite::Row) -> rusqlite::Result<VoiceLlmSettings> {
+    Ok(VoiceLlmSettings {
+        workspace_id: row.get("workspace_id")?,
+        enabled: row.get("enabled")?,
+        provider_id: row.get("provider_id")?,
+        updated_at: row.get("updated_at")?,
+        updated_by: row.get("updated_by")?,
+    })
+}
+
+/// `None` when a workspace has never touched this setting - the caller
+/// (`voice_llm_service::get_settings`) is the one that turns that into an
+/// honest "disabled, no provider" default rather than this repo layer
+/// silently fabricating a row that was never actually saved.
+pub fn get_llm_settings(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<VoiceLlmSettings>> {
+    conn.query_row("SELECT * FROM voice_llm_settings WHERE workspace_id = ?1", [workspace_id], map_llm_settings).optional()
+}
+
+pub fn upsert_llm_settings(conn: &Connection, workspace_id: &str, input: &VoiceLlmSettingsInput, actor_user_id: Option<&str>) -> rusqlite::Result<VoiceLlmSettings> {
+    let now = now_iso();
+    conn.execute(
+        "INSERT INTO voice_llm_settings (workspace_id, enabled, provider_id, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(workspace_id) DO UPDATE SET enabled = excluded.enabled, provider_id = excluded.provider_id, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
+        rusqlite::params![workspace_id, input.enabled, input.provider_id, now, actor_user_id],
+    )?;
+    Ok(get_llm_settings(conn, workspace_id)?.expect("just upserted"))
+}

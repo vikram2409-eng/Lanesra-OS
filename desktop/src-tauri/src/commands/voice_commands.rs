@@ -5,11 +5,11 @@ use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::voice::{
-    ConfirmVoicePlanInput, SetVoicePinInput, VoiceActivityEntry, VoiceExecutionResult, VoicePolicyBinding, VoicePolicyBindingInput,
-    VoicePreferencesInput, VoiceProviderProfile, VoiceSession, VoiceUserSettings,
+    ConfirmVoicePlanInput, SetVoicePinInput, VoiceActivityEntry, VoiceExecutionResult, VoiceLlmSettings, VoiceLlmSettingsInput,
+    VoicePolicyBinding, VoicePolicyBindingInput, VoicePreferencesInput, VoiceProviderProfile, VoiceSession, VoiceUserSettings,
 };
 use lanesra_core::services::voice_execution_service::VoiceCommandOutcome;
-use lanesra_core::services::{voice_audit_service, voice_execution_service, voice_policy_service, voice_provider_service, voice_session_service};
+use lanesra_core::services::{voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service, voice_session_service};
 
 fn require_actor(state: &State<AppState>) -> AppResult<String> {
     current_actor(state).ok_or_else(|| AppError::Validation("Not authenticated".into()))
@@ -127,6 +127,20 @@ pub fn upsert_voice_policy_binding(state: State<AppState>, input: VoicePolicyBin
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     voice_policy_service::upsert_policy_binding(&conn, &workspace_id, current_actor(&state).as_deref(), &input)
+}
+
+#[tauri::command]
+pub fn get_voice_llm_settings(state: State<AppState>) -> AppResult<VoiceLlmSettings> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    voice_llm_service::get_settings(&conn, &workspace_id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn upsert_voice_llm_settings(state: State<AppState>, input: VoiceLlmSettingsInput) -> AppResult<VoiceLlmSettings> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    voice_llm_service::upsert_settings(&conn, &workspace_id, &input, current_actor(&state).as_deref())
 }
 
 #[tauri::command]
