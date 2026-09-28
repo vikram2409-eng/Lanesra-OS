@@ -217,6 +217,8 @@ import type {
   VoiceUserSettings,
   SetVoicePinInput,
   VoicePreferencesInput,
+  VoiceLlmSettings,
+  VoiceLlmSettingsInput,
   VoicePolicyBinding,
   VoicePolicyBindingInput,
   VoiceSession,
@@ -707,6 +709,8 @@ export const api = {
   searchVoiceActivity: (limit: number) => call<VoiceActivityEntry[]>("search_voice_activity", { limit }),
   listVoicePolicyBindings: () => call<VoicePolicyBinding[]>("list_voice_policy_bindings"),
   upsertVoicePolicyBinding: (input: VoicePolicyBindingInput) => call<VoicePolicyBinding>("upsert_voice_policy_binding", { input }),
+  getVoiceLlmSettings: () => call<VoiceLlmSettings>("get_voice_llm_settings"),
+  upsertVoiceLlmSettings: (input: VoiceLlmSettingsInput) => call<VoiceLlmSettings>("upsert_voice_llm_settings", { input }),
   listVoiceProviders: () => call<VoiceProviderProfile[]>("list_voice_providers"),
   voiceProviderHealthCheck: (providerId: string) => call<VoiceProviderProfile>("voice_provider_health_check", { providerId }),
 

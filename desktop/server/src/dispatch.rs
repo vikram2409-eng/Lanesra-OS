@@ -49,7 +49,7 @@ use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate}
 use lanesra_core::models::solution::{SolutionInput, SolutionMemberInput, SolutionUpdate};
 use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
-use lanesra_core::models::voice::{SetVoicePinInput, VoicePolicyBindingInput, VoicePreferencesInput};
+use lanesra_core::models::voice::{SetVoicePinInput, VoiceLlmSettingsInput, VoicePolicyBindingInput, VoicePreferencesInput};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
@@ -73,7 +73,7 @@ use lanesra_core::services::{
     publisher_service, product_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
     user_service, vector_search_service,
-    voice_audit_service, voice_execution_service, voice_policy_service, voice_provider_service, voice_session_service,
+    voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service, voice_session_service,
     webhook_service, work_team_service, workflow_service, workspace_service,
 };
 
@@ -1695,6 +1695,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "upsert_voice_policy_binding" => {
             let input: VoicePolicyBindingInput = arg(args, "input")?;
             to_value(voice_policy_service::upsert_policy_binding(conn, &require_workspace_id(conn)?, actor, &input)?)
+        }
+        "get_voice_llm_settings" => to_value(voice_llm_service::get_settings(conn, &require_workspace_id(conn)?, actor)?),
+        "upsert_voice_llm_settings" => {
+            let input: VoiceLlmSettingsInput = arg(args, "input")?;
+            to_value(voice_llm_service::upsert_settings(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
         "list_voice_providers" => to_value(voice_provider_service::list_providers(conn, &require_workspace_id(conn)?)?),
         "voice_provider_health_check" => {

@@ -373,6 +373,31 @@ pub struct VoiceProviderProfile {
     pub updated_at: String,
 }
 
+/// An optional, workspace-wide LLM-backed conversational fallback for
+/// commands the deterministic `voice_planner_service::plan()` doesn't
+/// recognize - see `voice_llm_planner_service`'s own doc comment for the
+/// full "rewrite, never resolve or execute" design. `enabled: false` (the
+/// default for every workspace, including one on a build that pre-dates
+/// this migration) is the exact same behavior Voice Mode has always had -
+/// this is additive, never a change to what worked before it existed.
+#[derive(Debug, Clone, Serialize)]
+pub struct VoiceLlmSettings {
+    pub workspace_id: String,
+    pub enabled: bool,
+    /// `None` uses the plain workspace `ai_settings` default - the same
+    /// "None means default, not skip" convention `AiAgentModelRouting`'s
+    /// own tiers already use.
+    pub provider_id: Option<String>,
+    pub updated_at: String,
+    pub updated_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct VoiceLlmSettingsInput {
+    pub enabled: bool,
+    pub provider_id: Option<String>,
+}
+
 /// One row of "My Voice Activity" / the admin Voice Activity search - a
 /// denormalized join of command+resolution+plan for display, not a stored
 /// table of its own.

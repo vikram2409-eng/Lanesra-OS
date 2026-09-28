@@ -8,6 +8,8 @@ import type {
   AccessRoleGrant,
   AccessRoleGrantInput,
   AccessRoleInput,
+  AiProvider,
+  VoiceLlmSettingsInput,
   VoicePolicyBinding,
   VoicePolicyBindingInput,
 } from "../../lib/types";
@@ -569,6 +571,71 @@ function VoiceGovernancePanel({ roles, onClose }: { roles: AccessRole[]; onClose
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      <ConversationalVoicePanel />
+    </div>
+  );
+}
+
+/**
+ * Voice-First Mode: an optional, workspace-wide LLM-backed conversational
+ * fallback (`voice_llm_settings`) - see `voice_llm_planner_service`'s own
+ * doc comment for what this actually does once enabled. Disabled by
+ * default for every workspace; a user still needs the "AI Agents" Voice
+ * capability above for it to ever trigger for them.
+ */
+function ConversationalVoicePanel() {
+  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery({ queryKey: ["voiceLlmSettings"], queryFn: () => api.getVoiceLlmSettings() });
+  const providersQuery = useQuery({ queryKey: ["aiProviders"], queryFn: () => api.listAiProviders(true) });
+  const providers: AiProvider[] = providersQuery.data ?? [];
+
+  const save = useMutation({
+    mutationFn: (input: VoiceLlmSettingsInput) => api.upsertVoiceLlmSettings(input),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["voiceLlmSettings"] });
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this setting"),
+  });
+
+  const settings = settingsQuery.data;
+  if (!settings) return null;
+
+  return (
+    <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <h4 style={{ margin: "0 0 4px" }}>Conversational Voice (optional)</h4>
+      <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+        When a spoken command doesn't match a recognized phrasing, send it to an LLM to rewrite into one of the supported command shapes
+        (or ask a clarifying question) - it never resolves a record or takes an action itself, the rewritten command still goes through
+        the exact same entity resolution, risk check and confirmation as a manually-phrased one. Only applies to a user whose "AI Agents"
+        Voice capability above is also checked.
+      </p>
+      {error && <div className="error-banner">{error}</div>}
+      <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={(e) => save.mutate({ enabled: e.target.checked, provider_id: settings.provider_id })}
+        />
+        Enable conversational fallback
+      </label>
+      {settings.enabled && (
+        <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ fontSize: 13 }}>Provider:</label>
+          <select
+            value={settings.provider_id ?? ""}
+            onChange={(e) => save.mutate({ enabled: true, provider_id: e.target.value || null })}
+          >
+            <option value="">— Workspace default —</option>
+            {providers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.provider})
+              </option>
+            ))}
+          </select>
         </div>
       )}
     </div>

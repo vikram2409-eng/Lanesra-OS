@@ -35,8 +35,8 @@ use crate::models::voice::{ConfirmVoicePlanInput, ResolutionCandidate, VoiceActi
 use crate::repositories::{custom_field_repo, voice_repo};
 use crate::services::{
     activity_service, ai_orchestration_service, chat_service, company_service, contact_service, contract_service, custom_field_service,
-    custom_record_service, opportunity_service, order_service, quote_service, task_service, voice_planner_service, voice_policy_service,
-    voice_risk_service, voice_session_service,
+    custom_record_service, opportunity_service, order_service, quote_service, task_service, voice_llm_planner_service, voice_planner_service,
+    voice_policy_service, voice_risk_service, voice_session_service,
 };
 use crate::services::voice_planner_service::PlanOutcome;
 
@@ -107,6 +107,37 @@ pub async fn submit_command(
         PlanOutcome::NeedsMoreInfo { pending, .. } => voice_session_service::set_pending_create(conn, session_id, Some(pending))?,
         _ => voice_session_service::set_pending_create(conn, session_id, None)?,
     }
+
+    // Voice-First Mode: an optional, workspace-wide LLM-backed
+    // conversational fallback (see `voice_llm_planner_service`'s own doc
+    // comment) - tried only when the deterministic planner genuinely
+    // couldn't understand the transcript, and only for a user whose Voice
+    // policy already grants `use_agents` (the same trust tier as letting
+    // Voice run an AI Agent). Its result, if any, replaces the plain
+    // Unsupported outcome; everything below this still runs against
+    // whatever `outcome` ends up holding, so a rewritten command goes
+    // through the exact same risk/confirmation/execution path a
+    // manually-phrased one would.
+    let outcome = match outcome {
+        PlanOutcome::Unsupported { reason } => {
+            let fallback = if voice_policy_service::voice_capability_allows(conn, user_id, "use_agents")? {
+                voice_llm_planner_service::try_plan(
+                    conn,
+                    &session.workspace_id,
+                    master_key,
+                    transcript,
+                    session.context_object_key.as_deref(),
+                    session.context_record_id.as_deref(),
+                    conversation_reference.as_ref().map(|(k, r)| (k.as_str(), r.as_str())),
+                )
+                .await?
+            } else {
+                None
+            };
+            fallback.unwrap_or(PlanOutcome::Unsupported { reason })
+        }
+        other => other,
+    };
 
     match outcome {
         PlanOutcome::Unsupported { reason } => {

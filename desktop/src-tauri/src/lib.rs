@@ -394,6 +394,8 @@ pub fn run() {
             commands::voice_commands::search_voice_activity,
             commands::voice_commands::list_voice_policy_bindings,
             commands::voice_commands::upsert_voice_policy_binding,
+            commands::voice_commands::get_voice_llm_settings,
+            commands::voice_commands::upsert_voice_llm_settings,
             commands::voice_commands::list_voice_providers,
             commands::voice_commands::voice_provider_health_check,
         ])

@@ -54,16 +54,18 @@ pub struct GatewayOutcome {
     pub served_by: &'static str,
 }
 
-struct ResolvedTier {
-    provider: String,
-    base_url: Option<String>,
-    model: String,
-    api_key: String,
+pub(crate) struct ResolvedTier {
+    pub(crate) provider: String,
+    pub(crate) base_url: Option<String>,
+    pub(crate) model: String,
+    pub(crate) api_key: String,
 }
 
 /// `None` resolves to the workspace's plain `ai_settings` row - see this
-/// module's own doc comment on why that's "the default," not "skip."
-fn resolve_tier(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], provider_id: Option<&str>) -> AppResult<ResolvedTier> {
+/// module's own doc comment on why that's "the default," not "skip." Also
+/// used directly by `voice_llm_planner_service` (a non-agent caller that
+/// still wants a specific `ai_providers` row resolved the same way).
+pub(crate) fn resolve_tier(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], provider_id: Option<&str>) -> AppResult<ResolvedTier> {
     match provider_id {
         Some(pid) => {
             let provider = ai_provider_repo::get(conn, pid)?.ok_or_else(|| AppError::Validation(format!("Configured AI provider '{pid}' no longer exists")))?;
