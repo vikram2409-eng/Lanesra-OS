@@ -81,6 +81,10 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor
     validate_agent_input(conn, workspace_id, None, input)?;
     let id = crate::domain::ids::new_uuid();
     let created = ai_agent_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
+    // AI Agent Platform v2, Phase 1: gives this agent its v1 Published
+    // version so it's never left versionless - see
+    // `ai_agent_repo::create_initial_version`'s own doc comment.
+    ai_agent_repo::create_initial_version(conn, &created, actor_user_id)?;
     // Phase 7c: makes this agent a Solution-addable component the moment
     // it's created, same "every component-creating service function tags
     // itself to 'local'" convention `custom_object_service::create`/
