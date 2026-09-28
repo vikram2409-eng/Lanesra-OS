@@ -125,6 +125,45 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentIn
     get(conn, id).map(|a| a.expect("just inserted"))
 }
 
+/// AI Agent Platform v2, Phase 1: gives a just-created agent its
+/// backfilled-equivalent v1 Published version, so a newly created agent
+/// is never left versionless the way migration `0059_ai_agent_versioning
+/// .sql`'s own one-time backfill only covers agents that already existed
+/// when it ran. Mirrors that migration's backfill shape exactly (version
+/// 1, status `published`, a snapshot of the row as just inserted) - not
+/// yet a real Draft/Test/Publish lifecycle (that's
+/// `services::agent_version_service`, not written yet), just the same
+/// "every agent has at least one version" invariant applied going
+/// forward as well as backward.
+pub fn create_initial_version(conn: &Connection, agent: &AiAgentDefinition, actor_user_id: Option<&str>) -> rusqlite::Result<String> {
+    let version_id = format!("v1-{}", agent.id);
+    let now = now_iso();
+    let action_names_json = serde_json::to_string(&agent.action_names).unwrap_or_else(|_| "[]".into());
+    let delegate_agent_ids_json = serde_json::to_string(&agent.delegate_agent_ids).unwrap_or_else(|_| "[]".into());
+    let skill_ids_json = serde_json::to_string(&agent.skill_ids).unwrap_or_else(|_| "[]".into());
+    conn.execute(
+        "INSERT INTO ai_agent_versions (id, agent_id, version_number, status, name, description, icon, system_prompt, memory_md, guardrails_md, action_names_json, delegate_agent_ids_json, skill_ids_json, created_at, created_by, published_at)
+         VALUES (?1, ?2, 1, 'published', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?12)",
+        rusqlite::params![
+            version_id,
+            agent.id,
+            agent.name,
+            agent.description,
+            agent.icon,
+            agent.system_prompt,
+            agent.memory_md,
+            agent.guardrails_md,
+            action_names_json,
+            delegate_agent_ids_json,
+            skill_ids_json,
+            now,
+            actor_user_id,
+        ],
+    )?;
+    conn.execute("UPDATE ai_agents SET current_version_id = ?1 WHERE id = ?2", rusqlite::params![version_id, agent.id])?;
+    Ok(version_id)
+}
+
 pub fn update(conn: &Connection, id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentDefinition> {
     let now = now_iso();
     let action_names_json = serde_json::to_string(&input.action_names).unwrap_or_else(|_| "[]".into());

@@ -162,6 +162,30 @@ pub struct AiAgentModelRouting {
     pub force_air_gapped_for: Vec<String>,
 }
 
+/// AI Agent Platform v2, Phase 1: a logical, per-workspace name (e.g.
+/// `"primary"`, `"fast"`, `"cheap"`) bound to a concrete `AiProvider` -
+/// the indirection an agent version or a packaged Solution references
+/// instead of hard-coding a provider row that may not exist (or may mean
+/// something different) in another workspace. See migration
+/// `0059_ai_agent_versioning.sql`'s own doc comment.
+#[derive(Debug, Clone, Serialize)]
+pub struct AiAgentModelRef {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub provider_id: String,
+    pub created_at: String,
+    pub created_by: Option<String>,
+    pub updated_at: String,
+    pub updated_by: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiAgentModelRefInput {
+    pub name: String,
+    pub provider_id: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct AiGatewayFailoverEvent {
     pub id: String,

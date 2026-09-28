@@ -120,3 +120,48 @@ pub struct AiSkillInput {
     pub description: String,
     pub instructions_md: String,
 }
+
+/// AI Agent Platform v2, Phase 1: one immutable-once-`published` snapshot
+/// of an agent's persona/instructions/tools/model routing/Structured
+/// Output contract - see migration `0059_ai_agent_versioning.sql`'s own
+/// doc comment for why `ai_agents` keeps its own columns unchanged
+/// alongside this (an additive parallel history, not a breaking
+/// cutover) and `services::agent_version_service` (not yet written) for
+/// the Draft -> Test -> Published -> Deprecated -> Disabled lifecycle
+/// this row's `status` moves through.
+#[derive(Debug, Clone, Serialize)]
+pub struct AiAgentVersion {
+    pub id: String,
+    pub agent_id: String,
+    pub version_number: i64,
+    pub status: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: String,
+    pub system_prompt: String,
+    pub memory_md: String,
+    pub guardrails_md: String,
+    pub action_names: Vec<String>,
+    pub delegate_agent_ids: Vec<String>,
+    pub skill_ids: Vec<String>,
+    pub model_routing: Option<AiAgentModelRouting>,
+    /// A JSON Schema this version's Structured Output must conform to -
+    /// `None` means free-form text, exactly today's behavior.
+    pub output_schema: Option<serde_json::Value>,
+    pub created_at: String,
+    pub created_by: Option<String>,
+    pub published_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AiAgentVersionInput {
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: String,
+    pub system_prompt: String,
+    pub action_names: Vec<String>,
+    pub delegate_agent_ids: Vec<String>,
+    pub skill_ids: Vec<String>,
+    pub model_routing: Option<AiAgentModelRouting>,
+    pub output_schema: Option<serde_json::Value>,
+}
