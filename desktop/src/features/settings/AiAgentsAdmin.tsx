@@ -5,7 +5,17 @@ import { api, ApiError } from "../../lib/api";
 import { ChatPanel } from "../../components/ChatPanel";
 import { AiTriggersPanel } from "./AiTriggersPanel";
 import { agentRequiresAdmin } from "../../lib/aiAgents";
-import type { AgentConnectorToolOption, AiAgentDefinition, AiAgentInput, AiAgentModelRouting, AiProvider, AiSkill } from "../../lib/types";
+import type {
+  AgentConnectorToolOption,
+  AiAgentDefinition,
+  AiAgentInput,
+  AiAgentModelRouting,
+  AiAgentVersion,
+  AiAgentVersionInput,
+  AiApproval,
+  AiProvider,
+  AiSkill,
+} from "../../lib/types";
 
 // Phase 7a: the DLP classes an agent's forced-air-gap list can name -
 // hand-mirrored from `dlp_service::CLASSES`, the same "hardcoded mirror
@@ -103,6 +113,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
   const [guardrailsFor, setGuardrailsFor] = useState<AiAgentDefinition | null>(null);
   const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
+  const [versionsFor, setVersionsFor] = useState<AiAgentDefinition | null>(null);
   const [triggersFor, setTriggersFor] = useState<AiAgentDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -220,6 +231,9 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                       <button className="btn btn-secondary" onClick={() => setRoutingFor(a)}>
                         Routing{a.model_routing && <span className="badge badge-success" style={{ marginLeft: 4 }}>on</span>}
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setVersionsFor(a)}>
+                        Versions
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setTriggersFor(triggersFor?.id === a.id ? null : a)}>
                         Triggers
                       </button>
@@ -292,6 +306,10 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
           pending={saveRouting.isPending}
         />
       )}
+
+      {versionsFor && <VersionsPanel agent={versionsFor} agents={agents} skills={skills} connectorTools={connectorTools} />}
+
+      <ApprovalsPanel />
 
       {triggersFor && (
         <div className="card" style={{ marginTop: 16 }}>
@@ -755,6 +773,409 @@ function AiAgentForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// --- AI Agent Platform v2, Phase 1: version lifecycle + approvals ---------
+
+/**
+ * Draft -> Test -> Published -> Deprecated -> Disabled for one agent's
+ * versions - see `agent_version_service`'s own doc comment for the legal
+ * transition table. A Published version is an immutable historical
+ * snapshot (its content can no longer be edited), which is why "Edit"
+ * only appears for a Draft/Test row.
+ */
+const VERSION_NEXT_ACTIONS: Record<string, [string, string][]> = {
+  draft: [
+    ["test", "Move to Test"],
+    ["disabled", "Disable"],
+  ],
+  test: [
+    ["draft", "Back to Draft"],
+    ["published", "Publish"],
+    ["disabled", "Disable"],
+  ],
+  published: [["deprecated", "Deprecate"]],
+  deprecated: [
+    ["published", "Re-publish"],
+    ["disabled", "Disable"],
+  ],
+  disabled: [],
+};
+
+function VersionsPanel({
+  agent,
+  agents,
+  skills,
+  connectorTools,
+}: {
+  agent: AiAgentDefinition;
+  agents: AiAgentDefinition[];
+  skills: AiSkill[];
+  connectorTools: AgentConnectorToolOption[];
+}) {
+  const queryClient = useQueryClient();
+  const versionsQuery = useQuery({ queryKey: ["aiAgentVersions", agent.id], queryFn: () => api.listAiAgentVersions(agent.id) });
+  const versions = versionsQuery.data ?? [];
+  const [drafting, setDrafting] = useState(false);
+  const [editingVersion, setEditingVersion] = useState<AiAgentVersion | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["aiAgentVersions", agent.id] });
+    queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
+  }
+
+  const createDraft = useMutation({
+    mutationFn: (input: AiAgentVersionInput) => api.createAiAgentVersionDraft(agent.id, input),
+    onSuccess: () => {
+      setDrafting(false);
+      setError(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create this draft"),
+  });
+  const updateDraft = useMutation({
+    mutationFn: ({ versionId, input }: { versionId: string; input: AiAgentVersionInput }) => api.updateAiAgentVersionDraft(agent.id, versionId, input),
+    onSuccess: () => {
+      setEditingVersion(null);
+      setError(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this draft"),
+  });
+  const transition = useMutation({
+    mutationFn: ({ versionId, newStatus }: { versionId: string; newStatus: string }) => api.transitionAiAgentVersionStatus(agent.id, versionId, newStatus),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not change this version's status"),
+  });
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <h3 style={{ margin: 0 }}>
+          {agent.icon} {agent.name}'s versions
+        </h3>
+        <button className="btn btn-primary" onClick={() => setDrafting(true)}>
+          + New draft
+        </button>
+      </div>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        Draft → Test → Published → Deprecated → Disabled. A Published version is an immutable snapshot of exactly what ran - publishing a
+        new one automatically deprecates whichever version was Published before it.
+      </p>
+      {error && <div className="error-banner">{error}</div>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>v</th>
+              <th>Status</th>
+              <th>Name</th>
+              <th>Created</th>
+              <th>Published</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {versions.map((v) => (
+              <tr key={v.id}>
+                <td>{v.version_number}</td>
+                <td>
+                  <span className={`badge${v.status === "published" ? " badge-success" : ""}`}>{v.status}</span>
+                  {agent.current_version_id === v.id && (
+                    <span className="badge badge-success" style={{ marginLeft: 4 }}>
+                      current
+                    </span>
+                  )}
+                </td>
+                <td>{v.name}</td>
+                <td style={{ fontSize: 12 }}>{new Date(v.created_at).toLocaleString()}</td>
+                <td style={{ fontSize: 12 }}>{v.published_at ? new Date(v.published_at).toLocaleString() : "—"}</td>
+                <td>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {(v.status === "draft" || v.status === "test") && (
+                      <button className="btn btn-secondary" onClick={() => setEditingVersion(v)}>
+                        Edit
+                      </button>
+                    )}
+                    {VERSION_NEXT_ACTIONS[v.status]?.map(([status, label]) => (
+                      <button
+                        key={status}
+                        className="btn btn-secondary"
+                        disabled={transition.isPending}
+                        onClick={() => transition.mutate({ versionId: v.id, newStatus: status })}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {versionsQuery.isLoading && <div className="empty-state">Loading versions...</div>}
+        {!versionsQuery.isLoading && versions.length === 0 && <div className="empty-state">No versions yet.</div>}
+      </div>
+
+      {(drafting || editingVersion) && (
+        <VersionDraftForm
+          agent={agent}
+          agents={agents}
+          skills={skills}
+          connectorTools={connectorTools}
+          initial={editingVersion ?? undefined}
+          onCancel={() => {
+            setDrafting(false);
+            setEditingVersion(null);
+          }}
+          onSubmit={(input) => (editingVersion ? updateDraft.mutate({ versionId: editingVersion.id, input }) : createDraft.mutate(input))}
+          pending={createDraft.isPending || updateDraft.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+function VersionDraftForm({
+  agent,
+  agents,
+  skills,
+  connectorTools,
+  initial,
+  onCancel,
+  onSubmit,
+  pending,
+}: {
+  agent: AiAgentDefinition;
+  agents: AiAgentDefinition[];
+  skills: AiSkill[];
+  connectorTools: AgentConnectorToolOption[];
+  initial?: AiAgentVersion;
+  onCancel: () => void;
+  onSubmit: (input: AiAgentVersionInput) => void;
+  pending: boolean;
+}) {
+  const [name, setName] = useState(initial?.name ?? agent.name);
+  const [description, setDescription] = useState(initial?.description ?? agent.description ?? "");
+  const [icon, setIcon] = useState(initial?.icon ?? agent.icon);
+  const [systemPrompt, setSystemPrompt] = useState(initial?.system_prompt ?? agent.system_prompt);
+  const [actionNames, setActionNames] = useState<string[]>(initial?.action_names ?? agent.action_names);
+  const [delegateIds, setDelegateIds] = useState<string[]>(initial?.delegate_agent_ids ?? agent.delegate_agent_ids);
+  const [skillIds, setSkillIds] = useState<string[]>(initial?.skill_ids ?? agent.skill_ids);
+  const [outputSchemaText, setOutputSchemaText] = useState(initial?.output_schema ? JSON.stringify(initial.output_schema, null, 2) : "");
+  const [schemaError, setSchemaError] = useState<string | null>(null);
+
+  function toggle(list: string[], setList: (v: string[]) => void, value: string) {
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
+  }
+
+  const delegateChoices = agents.filter((a) => a.is_active && a.id !== agent.id);
+
+  function submit() {
+    let output_schema: unknown | null = null;
+    if (outputSchemaText.trim()) {
+      try {
+        output_schema = JSON.parse(outputSchemaText);
+      } catch {
+        setSchemaError("Output schema must be valid JSON (or left blank for free-form text)");
+        return;
+      }
+    }
+    setSchemaError(null);
+    onSubmit({
+      name,
+      description: description || null,
+      icon,
+      system_prompt: systemPrompt,
+      action_names: actionNames,
+      delegate_agent_ids: delegateIds,
+      skill_ids: skillIds,
+      model_routing: initial?.model_routing ?? agent.model_routing,
+      output_schema,
+    });
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ marginTop: 0 }}>{initial ? `Editing v${initial.version_number} (${initial.status})` : "New draft version"}</h3>
+      <div className="form-grid">
+        <div className="field">
+          <label>Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="field">
+          <label>Icon</label>
+          <select value={icon} onChange={(e) => setIcon(e.target.value)}>
+            {ICON_CHOICES.map((i) => (
+              <option key={i} value={i}>
+                {i}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field full">
+          <label>Description (optional)</label>
+          <input value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+        <div className="field full">
+          <label>Persona / instructions</label>
+          <textarea style={{ width: "100%", minHeight: 100 }} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} required />
+        </div>
+        <div className="field full">
+          <label>Actions</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <b style={{ fontSize: 12 }}>Records</b>
+              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                {RECORD_ACTIONS.map(([n, label]) => (
+                  <label key={n} style={{ display: "block", fontSize: 13 }}>
+                    <input type="checkbox" checked={actionNames.includes(n)} onChange={() => toggle(actionNames, setActionNames, n)} /> {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <b style={{ fontSize: 12 }}>Admin</b>
+              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                {ADMIN_ACTIONS.map(([n, label]) => (
+                  <label key={n} style={{ display: "block", fontSize: 13 }}>
+                    <input type="checkbox" checked={actionNames.includes(n)} onChange={() => toggle(actionNames, setActionNames, n)} /> {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          {connectorTools.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <b style={{ fontSize: 12 }}>Connector Actions</b>
+              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                {connectorTools.map((t) => (
+                  <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                    <input type="checkbox" checked={actionNames.includes(t.tool_name)} onChange={() => toggle(actionNames, setActionNames, t.tool_name)} />{" "}
+                    {t.connector_name}: {t.action_display_name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        {skills.length > 0 && (
+          <div className="field full">
+            <label>Skills</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {skills.map((s) => (
+                <label key={s.id} style={{ fontSize: 13 }}>
+                  <input type="checkbox" checked={skillIds.includes(s.id)} onChange={() => toggle(skillIds, setSkillIds, s.id)} /> {s.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        {delegateChoices.length > 0 && (
+          <div className="field full">
+            <label>Can delegate to</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {delegateChoices.map((a) => (
+                <label key={a.id} style={{ fontSize: 13 }}>
+                  <input type="checkbox" checked={delegateIds.includes(a.id)} onChange={() => toggle(delegateIds, setDelegateIds, a.id)} /> {a.icon}{" "}
+                  {a.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="field full">
+          <label>Structured Output JSON Schema (optional)</label>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+            When set, this version's final answer must conform to this JSON Schema - checked automatically, with one repair attempt if it
+            doesn't. Leave blank for today's plain free-form text.
+          </p>
+          <textarea
+            style={{ width: "100%", minHeight: 100, fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+            placeholder={'{\n  "type": "object",\n  "required": ["answer"],\n  "properties": { "answer": { "type": "string" } }\n}'}
+            value={outputSchemaText}
+            onChange={(e) => setOutputSchemaText(e.target.value)}
+          />
+          {schemaError && <div className="error-banner" style={{ marginTop: 6 }}>{schemaError}</div>}
+        </div>
+        <div className="field full" style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-primary" type="button" onClick={submit} disabled={pending}>
+            {pending ? "Saving..." : "Save draft"}
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The workspace-wide durable approval inbox (`ai_approvals`) - Phase 1
+ * ships the table and this review surface; nothing yet auto-creates an
+ * approval (Phase 2's Tool-Call Firewall and later phases are what
+ * actually route sensitive actions through it). Collapsed by default,
+ * same reasoning as `MemoryHistoryPanel` above.
+ */
+function ApprovalsPanel() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const pendingQuery = useQuery({
+    queryKey: ["aiApprovals", "pending"],
+    queryFn: () => api.listAiApprovals("pending"),
+    enabled: open,
+  });
+  const approvals = pendingQuery.data ?? [];
+
+  const resolve = useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) => api.resolveAiApproval(id, { approve, resolution_notes: null }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["aiApprovals"] }),
+  });
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ margin: 0 }}>Pending Approvals</h3>
+        <button className="btn btn-secondary" onClick={() => setOpen((o) => !o)}>
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        A durable, workspace-wide queue of proposed actions awaiting a human decision - the foundation the Tool-Call Firewall and other
+        later phases route sensitive actions through.
+      </p>
+      {open && (
+        <div>
+          {pendingQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading...</p>}
+          {!pendingQuery.isLoading && approvals.length === 0 && <div className="empty-state">Nothing pending right now.</div>}
+          {approvals.map((a: AiApproval) => (
+            <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
+                {a.subject_type} · {new Date(a.created_at).toLocaleString()}
+                {a.requested_by && ` · requested by ${a.requested_by}`}
+              </div>
+              <pre style={{ margin: "0 0 8px", whiteSpace: "pre-wrap", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>
+                {JSON.stringify(a.proposal, null, 2)}
+              </pre>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn btn-primary" disabled={resolve.isPending} onClick={() => resolve.mutate({ id: a.id, approve: true })}>
+                  Approve
+                </button>
+                <button className="btn btn-secondary" disabled={resolve.isPending} onClick={() => resolve.mutate({ id: a.id, approve: false })}>
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

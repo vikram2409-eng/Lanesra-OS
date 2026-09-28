@@ -26,6 +26,7 @@ fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
         skill_ids: Vec::new(),
         model_routing: None,
         is_active: row.get("is_active")?,
+        current_version_id: row.get("current_version_id")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
