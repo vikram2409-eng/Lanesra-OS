@@ -83,7 +83,11 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor
     let created = ai_agent_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
     // AI Agent Platform v2, Phase 1: gives this agent its v1 Published
     // version so it's never left versionless - see
-    // `ai_agent_repo::create_initial_version`'s own doc comment.
+    // `ai_agent_repo::create_initial_version`'s own doc comment. This sets
+    // `current_version_id` on the row `created` was already fetched from,
+    // so it's re-fetched afterward - otherwise every freshly created
+    // agent would be handed back to its caller (and to the frontend that
+    // just rendered it) with a stale `current_version_id: None`.
     ai_agent_repo::create_initial_version(conn, &created, actor_user_id)?;
     // Phase 7c: makes this agent a Solution-addable component the moment
     // it's created, same "every component-creating service function tags
@@ -92,7 +96,7 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor
     // install's own retag pass corrects this afterward for an agent that
     // came from a package instead of an admin's own hand.
     super::solution_component_service::tag_local(conn, workspace_id, "ai_agent", &created.id, actor_user_id)?;
-    Ok(created)
+    Ok(ai_agent_repo::get(conn, &created.id)?.expect("just created"))
 }
 
 pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {

@@ -12,8 +12,9 @@ use lanesra_core::models::access_role::{AccessRoleGrantInput, AccessRoleInput, A
 use lanesra_core::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate, AppPermissionInput};
 use lanesra_core::models::activity::ActivityInput;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput};
-use lanesra_core::models::ai_agent::{AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiSkillInput};
+use lanesra_core::models::ai_agent::{AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiAgentVersionInput, AiSkillInput};
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
+use lanesra_core::models::ai_approval::{AiApprovalInput, AiApprovalResolution};
 use lanesra_core::models::ai_eval::AiEvalSuiteInput;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
@@ -55,6 +56,7 @@ use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
 use lanesra_core::services::{
     access_role_service, access_service,
     activity_service,
+    agent_version_service, approval_service,
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
@@ -1412,6 +1414,47 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let input: AiAgentGuardrailsUpdate = arg(args, "input")?;
             to_value(ai_agent_service::set_guardrails(conn, &id, &input.guardrails_md, actor)?)
         }
+
+        // AI Agent Platform v2, Phase 1: the Draft -> Test -> Published ->
+        // Deprecated -> Disabled lifecycle for an agent's versions, and
+        // the durable approval inbox - see `agent_version_service`/
+        // `approval_service`'s own doc comments.
+        "list_ai_agent_versions" => {
+            let agent_id: String = arg(args, "agentId")?;
+            to_value(agent_version_service::list_versions(conn, &agent_id, &require_workspace_id(conn)?, actor)?)
+        }
+        "create_ai_agent_version_draft" => {
+            let agent_id: String = arg(args, "agentId")?;
+            let input: AiAgentVersionInput = arg(args, "input")?;
+            to_value(agent_version_service::create_draft(conn, &agent_id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_ai_agent_version_draft" => {
+            let agent_id: String = arg(args, "agentId")?;
+            let version_id: String = arg(args, "versionId")?;
+            let input: AiAgentVersionInput = arg(args, "input")?;
+            to_value(agent_version_service::update_draft(conn, &agent_id, &require_workspace_id(conn)?, &version_id, &input, actor)?)
+        }
+        "transition_ai_agent_version_status" => {
+            let agent_id: String = arg(args, "agentId")?;
+            let version_id: String = arg(args, "versionId")?;
+            let new_status: String = arg(args, "newStatus")?;
+            to_value(agent_version_service::transition_status(conn, &agent_id, &require_workspace_id(conn)?, &version_id, &new_status, actor)?)
+        }
+
+        "list_ai_approvals" => {
+            let status: Option<String> = arg(args, "status")?;
+            to_value(approval_service::list(conn, &require_workspace_id(conn)?, status.as_deref(), actor)?)
+        }
+        "create_ai_approval" => {
+            let input: AiApprovalInput = arg(args, "input")?;
+            to_value(approval_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "resolve_ai_approval" => {
+            let id: String = arg(args, "id")?;
+            let resolution: AiApprovalResolution = arg(args, "resolution")?;
+            to_value(approval_service::resolve(conn, &id, &require_workspace_id(conn)?, &resolution, actor)?)
+        }
+
         "list_ai_skills" => {
             let active_only: bool = arg(args, "activeOnly")?;
             to_value(ai_agent_service::list_skills(conn, &require_workspace_id(conn)?, active_only)?)

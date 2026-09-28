@@ -53,6 +53,14 @@ pub struct AiAgentDefinition {
     /// payload" shape `memory_md`/`set_memory` already established.
     pub model_routing: Option<AiAgentModelRouting>,
     pub is_active: bool,
+    /// AI Agent Platform v2, Phase 1: this agent's current Published
+    /// version (`ai_agents.current_version_id`) - `None` only ever
+    /// transiently, between a fresh `ai_agent_repo::create` insert and the
+    /// `create_initial_version` call right after it; every agent a caller
+    /// can actually observe has one. `chat_service::run_agent_once` reads
+    /// it to find this run's Structured Output contract
+    /// (`AiAgentVersion.output_schema`), if any.
+    pub current_version_id: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -164,4 +172,85 @@ pub struct AiAgentVersionInput {
     pub skill_ids: Vec<String>,
     pub model_routing: Option<AiAgentModelRouting>,
     pub output_schema: Option<serde_json::Value>,
+}
+
+/// A deliberately small JSON Schema subset (`type`, `required`,
+/// `properties`, `items`, `enum`) - enough to gate an agent version's
+/// Structured Output contract (`chat_service::run_agent_once`'s one
+/// repair-retry loop) without pulling in a full schema-validation crate for
+/// one call site. Returns every violation found (not just the first), each
+/// as a human-readable `path: problem` string, so a repair prompt can name
+/// exactly what to fix.
+pub fn validate_output_schema(schema: &serde_json::Value, instance: &serde_json::Value) -> Vec<String> {
+    let mut errors = Vec::new();
+    validate_node(schema, instance, "$", &mut errors);
+    errors
+}
+
+fn validate_node(schema: &serde_json::Value, instance: &serde_json::Value, path: &str, errors: &mut Vec<String>) {
+    let Some(schema_obj) = schema.as_object() else { return };
+
+    if let Some(expected_type) = schema_obj.get("type").and_then(|t| t.as_str()) {
+        let matches = match expected_type {
+            "object" => instance.is_object(),
+            "array" => instance.is_array(),
+            "string" => instance.is_string(),
+            "number" => instance.is_number(),
+            "integer" => instance.is_i64() || instance.is_u64(),
+            "boolean" => instance.is_boolean(),
+            "null" => instance.is_null(),
+            _ => true,
+        };
+        if !matches {
+            errors.push(format!("{path}: expected type '{expected_type}', got {}", type_name(instance)));
+            return;
+        }
+    }
+
+    if let Some(allowed) = schema_obj.get("enum").and_then(|e| e.as_array()) {
+        if !allowed.contains(instance) {
+            errors.push(format!("{path}: value is not one of the allowed enum values"));
+        }
+    }
+
+    if let Some(required) = schema_obj.get("required").and_then(|r| r.as_array()) {
+        if let Some(obj) = instance.as_object() {
+            for key in required {
+                if let Some(key) = key.as_str() {
+                    if !obj.contains_key(key) {
+                        errors.push(format!("{path}: missing required property '{key}'"));
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(properties) = schema_obj.get("properties").and_then(|p| p.as_object()) {
+        if let Some(obj) = instance.as_object() {
+            for (key, sub_schema) in properties {
+                if let Some(value) = obj.get(key) {
+                    validate_node(sub_schema, value, &format!("{path}.{key}"), errors);
+                }
+            }
+        }
+    }
+
+    if let Some(items_schema) = schema_obj.get("items") {
+        if let Some(arr) = instance.as_array() {
+            for (i, item) in arr.iter().enumerate() {
+                validate_node(items_schema, item, &format!("{path}[{i}]"), errors);
+            }
+        }
+    }
+}
+
+fn type_name(v: &serde_json::Value) -> &'static str {
+    match v {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "boolean",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
 }
