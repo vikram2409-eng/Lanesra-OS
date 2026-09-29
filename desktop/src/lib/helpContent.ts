@@ -256,6 +256,38 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         ],
       },
       {
+        slug: "agent-versioning-and-approvals",
+        title: "Agent Versioning & the Approval Service",
+        summary: "The Draft → Test → Published → Deprecated → Disabled lifecycle, Structured Output, and the durable Approval inbox.",
+        sections: [
+          {
+            heading: "Why versions",
+            bodyHtml:
+              "<p>Editing an agent used to change it in place, with no stable snapshot a Pipeline step or a Workflow's \"Run AI agent\" action could keep pointing at, and no record of what an agent actually was when it produced a past answer. Every agent now carries a real version history from its own <b>Versions</b> tab, alongside its everyday edit screen.</p>",
+          },
+          {
+            heading: "The five states",
+            bodyHtml:
+              "<p><b>Draft</b> (still editable) → <b>Test</b> (frozen for review) → <b>Published</b> (the one version in effect, immutable from the moment it's published - publishing a new one auto-deprecates the prior one, so there's only ever one) → <b>Deprecated</b> (re-publishable, a rollback path) → <b>Disabled</b> (retired, a dead end). Every pre-existing agent was auto-backfilled with a single Published \"v1\" - nothing was left versionless.</p>",
+          },
+          {
+            heading: "Structured Output",
+            bodyHtml:
+              "<p>A version can declare a JSON Schema its final answer must conform to. A malformed first attempt gets exactly one repair retry (shown its own invalid output plus the validation error) before falling back to plain text. Leave it unset and behavior is exactly today's free-form text.</p>",
+          },
+          {
+            heading: "The Approval Service",
+            bodyHtml:
+              "<p>A durable, workspace-wide <b>Pending Approvals</b> inbox - \"something needs a human decision,\" generalized beyond one Pipeline step's own pause flag. Anyone can request one; only an Administrator can approve or reject, and a resolved approval can't be re-resolved. Each entry snapshots exactly what was proposed, so deciding later never depends on the record still looking the same.</p>",
+          },
+          {
+            heading: "Agent identity in the audit trail",
+            bodyHtml:
+              "<p>Every write an agent makes is now attributed to that agent's own identity alongside the initiating user - \"which agent changed this\" is answerable directly.</p>",
+          },
+        ],
+      },
+      {
         slug: "extending-the-foundry",
         title: "Extending the Foundry",
         summary: "External MCP clients, Solution export/import, firing Pipelines from automation, and the REST API underneath.",
