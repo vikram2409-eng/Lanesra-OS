@@ -34,10 +34,11 @@ use serde_json::{json, Value};
 
 use lanesra_core::domain::AppError;
 use lanesra_core::models::agent::NlReportQuery;
+use lanesra_core::models::ai_knowledge::KnowledgeSourceInput;
 use lanesra_core::models::voice::ConfirmVoicePlanInput;
 use lanesra_core::services::{
-    agent_service, ai_eval_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service,
-    graph_runtime_service, integration_job_service, vector_search_service, voice_execution_service, webhook_service,
+    agent_service, ai_eval_service, ai_knowledge_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service,
+    external_object_service, graph_runtime_service, integration_job_service, vector_search_service, voice_execution_service, webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -61,6 +62,9 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/execution-graph-runs/:id/resume", post(resume_graph_run_admin))
         .route("/api/admin/execution-graph-runs/:id/approve", post(resolve_graph_run_approval_admin))
         .route("/api/admin/execution-graph-runs/:id/cancel", post(cancel_graph_run_admin))
+        .route("/api/admin/knowledge-sources", post(create_knowledge_source_admin))
+        .route("/api/admin/knowledge-sources/:id", post(update_knowledge_source_admin))
+        .route("/api/admin/knowledge/search", post(search_knowledge_admin))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -265,6 +269,43 @@ async fn cancel_graph_run_admin(State(state): State<SharedState>, jar: CookieJar
     let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move { graph_runtime_service::cancel_run(&conn, &workspace_id, &id, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+/// AI Agent Platform v2, Phase 4: creating/updating a Knowledge Source
+/// chunks and embeds its content against the workspace's configured
+/// provider - genuinely async, so (like the graph-run routes above) these
+/// are their own routes rather than plain-sync `/api/invoke` dispatch
+/// entries.
+async fn create_knowledge_source_admin(State(state): State<SharedState>, jar: CookieJar, Json(input): Json<KnowledgeSourceInput>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { ai_knowledge_service::create_source(&conn, &workspace_id, &master_key, &input, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn update_knowledge_source_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(input): Json<KnowledgeSourceInput>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { ai_knowledge_service::update_source(&conn, &workspace_id, &master_key, &id, &input, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchKnowledgeBody {
+    query: String,
+    #[serde(default)]
+    collection_id: Option<String>,
+}
+
+/// The admin Knowledge panel's own "test this search" preview - calls the
+/// exact same `search_knowledge` function an agent's `search_knowledge`
+/// tool call does.
+async fn search_knowledge_admin(State(state): State<SharedState>, jar: CookieJar, Json(body): Json<SearchKnowledgeBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, _actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { ai_knowledge_service::search_knowledge(&conn, &workspace_id, &master_key, &body.query, body.collection_id.as_deref(), 10).await })
+        .await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 

@@ -5,6 +5,7 @@ pub mod ai_agent_commands;
 pub mod ai_agent_pipeline_commands;
 pub mod ai_commands;
 pub mod ai_eval_commands;
+pub mod ai_memory_commands;
 pub mod ai_provider_commands;
 pub mod app_commands;
 pub mod audit_commands;

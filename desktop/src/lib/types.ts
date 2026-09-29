@@ -2539,6 +2539,10 @@ export interface AiAgentPolicy {
   agent_id: string | null;
   require_approval_at_or_above: RiskLevel | null;
   blocked_tool_names: string[];
+  // AI Agent Platform v2, Phase 4: whether a 'restricted'-classified
+  // ai_memory_service::remember write under this policy's scope is
+  // excluded from durable persistence. Defaults true (excluded).
+  exclude_restricted_memory: boolean;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -2548,6 +2552,7 @@ export interface AiAgentPolicy {
 export interface AiAgentPolicyInput {
   require_approval_at_or_above: RiskLevel | null;
   blocked_tool_names: string[];
+  exclude_restricted_memory: boolean;
 }
 
 // --- AI & Agentic Layer, Phase 6b - orchestration on top of Phase 6a's
@@ -3775,4 +3780,73 @@ export interface GraphRun {
   started_at: string;
   finished_at: string | null;
   nodes: RunNode[];
+}
+
+// --- AI Agent Platform v2, Phase 4: Memory Architecture & Document RAG.
+// Mirrors core::models::ai_memory / core::models::ai_knowledge 1:1.
+
+export type MemoryType = "session" | "working" | "entity";
+export type MemoryClassification = "standard" | "sensitive" | "restricted";
+
+export interface MemoryItem {
+  id: string;
+  workspace_id: string;
+  memory_type: MemoryType;
+  agent_id: string | null;
+  session_key: string | null;
+  run_id: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  content: string;
+  source: string;
+  confidence: number | null;
+  classification: MemoryClassification;
+  created_at: string;
+  created_by: string | null;
+  expires_at: string | null;
+  last_used_at: string | null;
+}
+
+export interface KnowledgeCollection {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface KnowledgeCollectionInput {
+  name: string;
+  description?: string | null;
+}
+
+export interface KnowledgeSource {
+  id: string;
+  workspace_id: string;
+  collection_id: string | null;
+  name: string;
+  content: string;
+  status: "indexed" | "failed";
+  chunk_count: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface KnowledgeSourceInput {
+  name: string;
+  content: string;
+  collection_id?: string | null;
+}
+
+export interface KnowledgeSearchHit {
+  source_id: string;
+  source_name: string;
+  chunk_index: number;
+  content: string;
+  similarity: number;
 }

@@ -204,7 +204,11 @@ async fn run_step(
             return Err(AppError::Validation(missing_agent_msg.to_string()));
         }
     };
-    match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, input_text).await {
+    // AI Agent Platform v2, Phase 4: this Pipeline run's own id scopes
+    // Working Memory - a real, durable run row, unlike an interactive chat
+    // message.
+    let memory_context = crate::models::ai_memory::AgentMemoryContext { session_key: None, run_id: Some(run_id.to_string()) };
+    match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, input_text, &memory_context).await {
         Ok(outcome) => {
             let finished_at = crate::domain::ids::now_iso();
             let tool_calls = outcome.produced.iter().filter(|m| m.role == "tool").count() as i64;

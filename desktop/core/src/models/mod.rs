@@ -7,6 +7,8 @@ pub mod ai_agent_pipeline;
 pub mod ai_agent_policy;
 pub mod ai_approval;
 pub mod ai_eval;
+pub mod ai_knowledge;
+pub mod ai_memory;
 pub mod ai_tool_registry;
 pub mod app_definition;
 pub mod audit;

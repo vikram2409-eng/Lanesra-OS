@@ -7,6 +7,8 @@ pub mod ai_agent_hierarchy_service;
 pub mod ai_agent_service;
 pub mod ai_eval_service;
 pub mod ai_gateway_service;
+pub mod ai_knowledge_service;
+pub mod ai_memory_service;
 pub mod ai_orchestration_service;
 pub mod ai_provider_service;
 pub mod ai_service;
