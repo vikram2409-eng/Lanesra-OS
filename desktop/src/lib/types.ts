@@ -3659,3 +3659,120 @@ export interface VoiceActivityEntry {
   user_id: string;
   created_at: string;
 }
+
+// --- AI Agent Platform v2, Phase 3: the Shared Execution Graph Runtime.
+// Mirrors core::models::execution_graph / core::models::graph_run 1:1.
+// No visual canvas UI consumes these yet (tracked separately) - a graph
+// is authored via these types/api calls directly, or via
+// execution_graph_service::graph_from_workflow/graph_from_pipeline, until
+// that later phase lands.
+
+export type GraphNodeType = "trigger" | "condition" | "action" | "agent" | "router" | "parallel_split" | "join" | "approval" | "delay" | "transform" | "loop" | "end";
+
+export interface GraphNode {
+  id: string;
+  graph_id: string;
+  node_key: string;
+  node_type: GraphNodeType;
+  config_json: string;
+  position_x: number | null;
+  position_y: number | null;
+  sort_order: number;
+}
+
+export interface GraphNodeInput {
+  node_key: string;
+  node_type: GraphNodeType;
+  config_json: string;
+  position_x?: number | null;
+  position_y?: number | null;
+  sort_order?: number;
+}
+
+export interface GraphEdge {
+  id: string;
+  graph_id: string;
+  from_node_id: string;
+  to_node_id: string;
+  branch_label: string | null;
+  sort_order: number;
+}
+
+export interface GraphEdgeInput {
+  from_node_key: string;
+  to_node_key: string;
+  branch_label?: string | null;
+  sort_order?: number;
+}
+
+export interface ExecutionGraph {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  status: "draft" | "published" | "disabled";
+  version: number;
+  source_kind: "workflow" | "pipeline" | null;
+  source_id: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface ExecutionGraphInput {
+  name: string;
+  description?: string | null;
+  nodes: GraphNodeInput[];
+  edges: GraphEdgeInput[];
+}
+
+export type GraphRunStatus =
+  | "queued"
+  | "planning"
+  | "running"
+  | "waiting_tool"
+  | "waiting_agent"
+  | "waiting_approval"
+  | "waiting_scheduled"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface RunNode {
+  id: string;
+  run_id: string;
+  node_id: string;
+  node_key: string;
+  node_type: GraphNodeType;
+  attempt: number;
+  status: "running" | "waiting_approval" | "completed" | "failed" | "skipped";
+  input_json: string | null;
+  output_json: string | null;
+  error_message: string | null;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface GraphRun {
+  id: string;
+  workspace_id: string;
+  graph_id: string;
+  status: GraphRunStatus;
+  trigger_input: string;
+  context_json: string;
+  current_node_id: string | null;
+  pending_approval_id: string | null;
+  resume_at: string | null;
+  error_message: string | null;
+  triggered_by: string | null;
+  source_entity_type: string | null;
+  source_entity_id: string | null;
+  steps_executed: number;
+  started_at: string;
+  finished_at: string | null;
+  nodes: RunNode[];
+}

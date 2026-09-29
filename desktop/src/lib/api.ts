@@ -33,6 +33,9 @@ import type {
   AiAgentPolicyInput,
   AiToolRegistryOverride,
   AiToolRegistryOverrideInput,
+  ExecutionGraph,
+  ExecutionGraphInput,
+  GraphRun,
   AiSkill,
   AiSkillInput,
   AiAgentPipeline,
@@ -404,6 +407,22 @@ export const api = {
   listAiToolRegistryOverrides: () => call<AiToolRegistryOverride[]>("list_ai_tool_registry_overrides", {}),
   setAiToolRegistryOverride: (input: AiToolRegistryOverrideInput) => call<AiToolRegistryOverride>("set_ai_tool_registry_override", { input }),
   clearAiToolRegistryOverride: (toolName: string) => call<void>("clear_ai_tool_registry_override", { toolName }),
+
+  // AI Agent Platform v2, Phase 3: the Shared Execution Graph Runtime.
+  // No visual canvas UI consumes these yet - a graph is authored via
+  // these calls directly until that later phase lands.
+  listExecutionGraphs: () => call<ExecutionGraph[]>("list_execution_graphs", {}),
+  getExecutionGraph: (id: string) => call<ExecutionGraph>("get_execution_graph", { id }),
+  createExecutionGraph: (input: ExecutionGraphInput) => call<ExecutionGraph>("create_execution_graph", { input }),
+  updateExecutionGraph: (id: string, input: ExecutionGraphInput) => call<ExecutionGraph>("update_execution_graph", { id, input }),
+  publishExecutionGraph: (id: string) => call<ExecutionGraph>("publish_execution_graph", { id }),
+  setExecutionGraphDisabled: (id: string, disabled: boolean) => call<ExecutionGraph>("set_execution_graph_disabled", { id, disabled }),
+  getGraphRun: (id: string) => call<GraphRun>("get_graph_run", { id }),
+  listGraphRuns: (graphId: string) => call<GraphRun[]>("list_graph_runs", { graphId }),
+  startGraphRun: (graphId: string, triggerInput: string) => call<GraphRun>("start_graph_run", { graphId, triggerInput }),
+  resumeGraphRun: (id: string) => call<GraphRun>("resume_graph_run", { id }),
+  resolveGraphRunApproval: (id: string, approve: boolean, notes?: string | null) => call<GraphRun>("resolve_graph_run_approval", { id, approve, notes: notes ?? null }),
+  cancelGraphRun: (id: string) => call<GraphRun>("cancel_graph_run", { id }),
 
   listAiSkills: (activeOnly: boolean) => call<AiSkill[]>("list_ai_skills", { activeOnly }),
   createAiSkill: (input: AiSkillInput) => call<AiSkill>("create_ai_skill", { input }),

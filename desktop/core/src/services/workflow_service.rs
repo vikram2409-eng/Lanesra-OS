@@ -1174,8 +1174,14 @@ fn write_update_field_value(
     }
 }
 
+/// `pub(crate)`, not `pub`, so this stays this module's own dispatch table
+/// (matched against `ACTION_TYPES`) rather than a second public entry
+/// point - `services::graph_runtime_service`'s Action node executor is the
+/// one other caller, reusing this exact function so a graph's Action node
+/// and a Workflow's action list can never drift onto two different
+/// implementations of the same `action_type`.
 #[allow(clippy::too_many_arguments)]
-fn apply_action(
+pub(crate) fn apply_action(
     conn: &Connection,
     workspace_id: &str,
     action_type: &str,
