@@ -14,7 +14,9 @@ use lanesra_core::models::activity::ActivityInput;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput};
 use lanesra_core::models::ai_agent::{AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiAgentVersionInput, AiSkillInput};
 use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTriggerInput};
+use lanesra_core::models::ai_agent_policy::AiAgentPolicyInput;
 use lanesra_core::models::ai_approval::{AiApprovalInput, AiApprovalResolution};
+use lanesra_core::models::ai_tool_registry::AiToolRegistryOverrideInput;
 use lanesra_core::models::ai_eval::AiEvalSuiteInput;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
@@ -56,7 +58,7 @@ use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
 use lanesra_core::services::{
     access_role_service, access_service,
     activity_service,
-    agent_version_service, approval_service,
+    agent_version_service, approval_service, policy_engine_service, tool_registry_service,
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
@@ -1453,6 +1455,31 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let id: String = arg(args, "id")?;
             let resolution: AiApprovalResolution = arg(args, "resolution")?;
             to_value(approval_service::resolve(conn, &id, &require_workspace_id(conn)?, &resolution, actor)?)
+        }
+
+        // AI Agent Platform v2, Phase 2: a unified Policy Engine (the
+        // Tool-Call Firewall's decision, gated by risk level and an
+        // explicit blocklist) plus the risk-classification overrides it
+        // checks - see `policy_engine_service`/`tool_registry_service`'s
+        // own doc comments.
+        "get_ai_agent_policy" => {
+            let agent_id: Option<String> = arg(args, "agentId")?;
+            to_value(policy_engine_service::get_policy(conn, &require_workspace_id(conn)?, agent_id.as_deref(), actor)?)
+        }
+        "list_ai_agent_policies" => to_value(policy_engine_service::list_policies(conn, &require_workspace_id(conn)?, actor)?),
+        "upsert_ai_agent_policy" => {
+            let agent_id: Option<String> = arg(args, "agentId")?;
+            let input: AiAgentPolicyInput = arg(args, "input")?;
+            to_value(policy_engine_service::upsert_policy(conn, &require_workspace_id(conn)?, agent_id.as_deref(), &input, actor)?)
+        }
+        "list_ai_tool_registry_overrides" => to_value(tool_registry_service::list_overrides(conn, &require_workspace_id(conn)?, actor)?),
+        "set_ai_tool_registry_override" => {
+            let input: AiToolRegistryOverrideInput = arg(args, "input")?;
+            to_value(tool_registry_service::set_override(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "clear_ai_tool_registry_override" => {
+            let tool_name: String = arg(args, "toolName")?;
+            to_value(tool_registry_service::clear_override(conn, &require_workspace_id(conn)?, &tool_name, actor)?)
         }
 
         "list_ai_skills" => {

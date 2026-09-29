@@ -47,11 +47,13 @@ use serde_json::{json, Value};
 
 use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent::{validate_output_schema, AiAgentDefinition};
+use crate::models::ai_agent_policy::PolicyDecision;
 use crate::models::chat::ChatMessage;
 use crate::repositories::{ai_agent_repo, ai_agent_version_repo, ai_token_usage_repo, audit_repo, chat_repo};
 use crate::services::ai_gateway_service;
 use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
 use crate::services::api_object_service;
+use crate::services::policy_engine_service;
 
 const MAX_ROUNDS: u8 = 8;
 
@@ -701,7 +703,36 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
     Err(AppError::Validation("This is taking more steps than expected - try asking again, or break the request into smaller parts.".into()))
 }
 
+/// The Tool-Call Firewall: checked by both `execute_tool` and
+/// `execute_agent_tool` immediately before dispatching, never inside a
+/// dispatcher itself - `policy_engine_service::evaluate` is where the
+/// actual decision is computed, this is only where it's enforced.
+/// `Ok(())` means dispatch as normal; `Err` carries the exact message the
+/// model/user sees in place of the tool's real result. `agent_id` is
+/// `None` for the fixed "records"/"admin" chat assistants, which have no
+/// agent identity of their own - only a workspace-default policy can
+/// govern those.
+fn apply_tool_firewall(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, actor: Option<&str>, name: &str, arguments: &Value) -> AppResult<()> {
+    let source = tool_source(name);
+    match policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)? {
+        PolicyDecision::Allow => Ok(()),
+        PolicyDecision::Deny { risk_level } => {
+            Err(AppError::Validation(format!("'{name}' is blocked by this workspace's agent policy (risk level: {}).", risk_level.as_str())))
+        }
+        PolicyDecision::RequireApproval { risk_level } => {
+            policy_engine_service::record_pending_tool_call(conn, workspace_id, agent_id, name, arguments, risk_level, actor)?;
+            Err(AppError::Validation(format!(
+                "'{name}' requires administrator approval under this workspace's agent policy (risk level: {}) - a pending approval has been recorded for an administrator to review.",
+                risk_level.as_str()
+            )))
+        }
+    }
+}
+
 async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, mode: &str, call: &RequestedToolCall) -> AppResult<Value> {
+    if mode == "records" || mode == "admin" {
+        apply_tool_firewall(conn, workspace_id, None, actor, &call.name, &call.arguments)?;
+    }
     match mode {
         "records" => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments).await,
         // Admin mode's own tool list is the records catalog plus the
@@ -927,9 +958,14 @@ fn execute_agent_tool<'a>(
                 Ok(json!({"answer": outcome.final_text}))
             }
             other => match tool_source(other) {
-                Some("record") => dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments).await,
-                Some("admin") => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
-                Some("connector_read" | "connector_write") => super::connector_tool_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
+                Some(src @ ("record" | "admin" | "connector_read" | "connector_write")) => {
+                    apply_tool_firewall(conn, workspace_id, Some(&agent.id), actor, other, &call.arguments)?;
+                    match src {
+                        "record" => dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments).await,
+                        "admin" => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
+                        _ => super::connector_tool_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
+                    }
+                }
                 _ => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
             },
         }

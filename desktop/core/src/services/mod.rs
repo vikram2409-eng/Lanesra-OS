@@ -13,6 +13,8 @@ pub mod ai_service;
 pub mod app_service;
 pub mod approval_service;
 pub mod audit_service;
+pub mod policy_engine_service;
+pub mod tool_registry_service;
 pub mod auth_service;
 pub mod backup_service;
 pub mod bulk_action_service;

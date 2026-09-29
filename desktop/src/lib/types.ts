@@ -2494,6 +2494,62 @@ export interface AiApprovalResolution {
   resolution_notes: string | null;
 }
 
+// AI Agent Platform v2, Phase 2: the risk taxonomy the Policy Engine's
+// Tool-Call Firewall evaluates every tool call against -
+// core::models::ai_tool_registry::RiskLevel 1:1, broadest-last.
+export type RiskLevel = "read" | "low_write" | "write" | "external_action" | "destructive" | "privileged";
+
+export const RISK_LEVELS: RiskLevel[] = ["read", "low_write", "write", "external_action", "destructive", "privileged"];
+
+export const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
+  read: "Read",
+  low_write: "Low write",
+  write: "Write",
+  external_action: "External action",
+  destructive: "Destructive",
+  privileged: "Privileged",
+};
+
+// A per-workspace override of a tool's default risk classification -
+// core::models::ai_tool_registry::AiToolRegistryOverride 1:1.
+export interface AiToolRegistryOverride {
+  id: string;
+  workspace_id: string;
+  tool_name: string;
+  risk_level: RiskLevel;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiToolRegistryOverrideInput {
+  tool_name: string;
+  risk_level: RiskLevel;
+}
+
+// One policy row per (workspace, agent), or the workspace-wide default
+// when agent_id is null - core::models::ai_agent_policy::AiAgentPolicy
+// 1:1. See policy_engine_service's own doc comment for how a policy is
+// resolved and evaluated; no policy anywhere in a workspace means every
+// tool call is Allowed, unchanged from before this feature existed.
+export interface AiAgentPolicy {
+  id: string;
+  workspace_id: string;
+  agent_id: string | null;
+  require_approval_at_or_above: RiskLevel | null;
+  blocked_tool_names: string[];
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AiAgentPolicyInput {
+  require_approval_at_or_above: RiskLevel | null;
+  blocked_tool_names: string[];
+}
+
 // --- AI & Agentic Layer, Phase 6b - orchestration on top of Phase 6a's
 // Agents. Mirrors core::models::ai_agent_pipeline 1:1. See
 // AiAgentPipelinesAdmin.tsx / AiTriggersPanel.tsx.

@@ -29,6 +29,10 @@ import type {
   AiApproval,
   AiApprovalInput,
   AiApprovalResolution,
+  AiAgentPolicy,
+  AiAgentPolicyInput,
+  AiToolRegistryOverride,
+  AiToolRegistryOverrideInput,
   AiSkill,
   AiSkillInput,
   AiAgentPipeline,
@@ -390,6 +394,16 @@ export const api = {
   listAiApprovals: (status: string | null) => call<AiApproval[]>("list_ai_approvals", { status }),
   createAiApproval: (input: AiApprovalInput) => call<AiApproval>("create_ai_approval", { input }),
   resolveAiApproval: (id: string, resolution: AiApprovalResolution) => call<AiApproval>("resolve_ai_approval", { id, resolution }),
+
+  // AI Agent Platform v2, Phase 2: a unified Policy Engine + the Tool
+  // Registry risk overrides it checks. `agentId: null` reads/writes the
+  // workspace-wide default policy.
+  getAiAgentPolicy: (agentId: string | null) => call<AiAgentPolicy | null>("get_ai_agent_policy", { agentId }),
+  listAiAgentPolicies: () => call<AiAgentPolicy[]>("list_ai_agent_policies", {}),
+  upsertAiAgentPolicy: (agentId: string | null, input: AiAgentPolicyInput) => call<AiAgentPolicy>("upsert_ai_agent_policy", { agentId, input }),
+  listAiToolRegistryOverrides: () => call<AiToolRegistryOverride[]>("list_ai_tool_registry_overrides", {}),
+  setAiToolRegistryOverride: (input: AiToolRegistryOverrideInput) => call<AiToolRegistryOverride>("set_ai_tool_registry_override", { input }),
+  clearAiToolRegistryOverride: (toolName: string) => call<void>("clear_ai_tool_registry_override", { toolName }),
 
   listAiSkills: (activeOnly: boolean) => call<AiSkill[]>("list_ai_skills", { activeOnly }),
   createAiSkill: (input: AiSkillInput) => call<AiSkill>("create_ai_skill", { input }),

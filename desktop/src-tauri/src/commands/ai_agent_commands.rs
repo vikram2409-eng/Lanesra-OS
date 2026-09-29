@@ -10,8 +10,10 @@ use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiAgentMemorySnapshot, AiAgentVersion, AiAgentVersionInput, AiSkill, AiSkillInput};
+use lanesra_core::models::ai_agent_policy::{AiAgentPolicy, AiAgentPolicyInput};
 use lanesra_core::models::ai_approval::{AiApproval, AiApprovalInput, AiApprovalResolution};
-use lanesra_core::services::{agent_version_service, ai_agent_service, approval_service};
+use lanesra_core::models::ai_tool_registry::{AiToolRegistryOverride, AiToolRegistryOverrideInput};
+use lanesra_core::services::{agent_version_service, ai_agent_service, approval_service, policy_engine_service, tool_registry_service};
 
 #[tauri::command]
 pub fn list_ai_agents(state: State<AppState>, active_only: bool) -> AppResult<Vec<AiAgentDefinition>> {
@@ -127,6 +129,51 @@ pub fn resolve_ai_approval(state: State<AppState>, id: String, resolution: AiApp
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     approval_service::resolve(&conn, &id, &workspace_id, &resolution, current_actor(&state).as_deref())
+}
+
+// --- AI Agent Platform v2, Phase 2: Policy Engine + Tool Registry -----
+
+/// `agent_id: None` reads/writes the workspace-wide default policy.
+#[tauri::command]
+pub fn get_ai_agent_policy(state: State<AppState>, agent_id: Option<String>) -> AppResult<Option<AiAgentPolicy>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    policy_engine_service::get_policy(&conn, &workspace_id, agent_id.as_deref(), current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn list_ai_agent_policies(state: State<AppState>) -> AppResult<Vec<AiAgentPolicy>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    policy_engine_service::list_policies(&conn, &workspace_id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn upsert_ai_agent_policy(state: State<AppState>, agent_id: Option<String>, input: AiAgentPolicyInput) -> AppResult<AiAgentPolicy> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    policy_engine_service::upsert_policy(&conn, &workspace_id, agent_id.as_deref(), &input, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn list_ai_tool_registry_overrides(state: State<AppState>) -> AppResult<Vec<AiToolRegistryOverride>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_registry_service::list_overrides(&conn, &workspace_id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn set_ai_tool_registry_override(state: State<AppState>, input: AiToolRegistryOverrideInput) -> AppResult<AiToolRegistryOverride> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_registry_service::set_override(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn clear_ai_tool_registry_override(state: State<AppState>, tool_name: String) -> AppResult<()> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_registry_service::clear_override(&conn, &workspace_id, &tool_name, current_actor(&state).as_deref())
 }
 
 #[tauri::command]
