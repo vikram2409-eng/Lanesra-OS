@@ -5,16 +5,21 @@ import { api, ApiError } from "../../lib/api";
 import { ChatPanel } from "../../components/ChatPanel";
 import { AiTriggersPanel } from "./AiTriggersPanel";
 import { agentRequiresAdmin } from "../../lib/aiAgents";
+import { RISK_LEVELS, RISK_LEVEL_LABELS } from "../../lib/types";
 import type {
   AgentConnectorToolOption,
   AiAgentDefinition,
   AiAgentInput,
   AiAgentModelRouting,
+  AiAgentPolicy,
+  AiAgentPolicyInput,
   AiAgentVersion,
   AiAgentVersionInput,
   AiApproval,
   AiProvider,
   AiSkill,
+  AiToolRegistryOverride,
+  RiskLevel,
 } from "../../lib/types";
 
 // Phase 7a: the DLP classes an agent's forced-air-gap list can name -
@@ -310,6 +315,8 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
       {versionsFor && <VersionsPanel agent={versionsFor} agents={agents} skills={skills} connectorTools={connectorTools} />}
 
       <ApprovalsPanel />
+
+      <PolicyEnginePanel agents={agents} />
 
       {triggersFor && (
         <div className="card" style={{ marginTop: 16 }}>
@@ -1176,6 +1183,173 @@ function ApprovalsPanel() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * AI Agent Platform v2, Phase 2: the Tool-Call Firewall's own decision,
+ * editable per-agent or as a workspace-wide default (agentId "" ->
+ * `null`), plus the risk-classification overrides it checks. No policy
+ * anywhere in a workspace means every tool call is Allowed, unchanged
+ * from before this feature existed - the same "purely additive" default
+ * every other governance surface in this codebase (Voice Governance,
+ * DLP routing) already follows.
+ */
+function PolicyEnginePanel({ agents }: { agents: AiAgentDefinition[] }) {
+  const [open, setOpen] = useState(false);
+  const [agentId, setAgentId] = useState("");
+
+  const policyQuery = useQuery({
+    queryKey: ["aiAgentPolicy", agentId || null],
+    queryFn: () => api.getAiAgentPolicy(agentId || null),
+    enabled: open,
+  });
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ margin: 0 }}>Policy Engine</h3>
+        <button className="btn btn-secondary" onClick={() => setOpen((o) => !o)}>
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        Checked before every tool call dispatches - the exact same dispatcher a manual edit already uses, this only decides whether it
+        runs at all. A blocklist denies a tool name outright; a risk threshold queues anything at or above it as a durable Pending Approval
+        instead of running immediately.
+      </p>
+      {open && (
+        <div>
+          <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}>
+            Policy for{" "}
+            <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+              <option value="">Workspace default</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.icon} {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {policyQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading...</p>}
+          {policyQuery.isSuccess && <PolicyEditor key={agentId} agentId={agentId || null} policy={policyQuery.data ?? null} />}
+          <ToolRegistryOverridesSection />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiAgentPolicy | null }) {
+  const queryClient = useQueryClient();
+  const [threshold, setThreshold] = useState<RiskLevel | "">(policy?.require_approval_at_or_above ?? "");
+  const [blockedText, setBlockedText] = useState((policy?.blocked_tool_names ?? []).join(", "));
+
+  const save = useMutation({
+    mutationFn: () => {
+      const input: AiAgentPolicyInput = {
+        require_approval_at_or_above: threshold === "" ? null : threshold,
+        blocked_tool_names: blockedText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      };
+      return api.upsertAiAgentPolicy(agentId, input);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["aiAgentPolicy"] }),
+  });
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 16 }}>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}>
+        Require administrator approval at or above{" "}
+        <select value={threshold} onChange={(e) => setThreshold(e.target.value as RiskLevel | "")}>
+          <option value="">Never (default)</option>
+          {RISK_LEVELS.map((r) => (
+            <option key={r} value={r}>
+              {RISK_LEVEL_LABELS[r]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}>
+        Blocked tool names (comma-separated, denied outright regardless of risk level)
+        <input
+          style={{ width: "100%", marginTop: 4 }}
+          value={blockedText}
+          onChange={(e) => setBlockedText(e.target.value)}
+          placeholder="e.g. create_api_client, archive_record"
+        />
+      </label>
+      <button className="btn btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
+        {save.isPending ? "Saving..." : "Save policy"}
+      </button>
+    </div>
+  );
+}
+
+function ToolRegistryOverridesSection() {
+  const queryClient = useQueryClient();
+  const overridesQuery = useQuery({ queryKey: ["aiToolRegistryOverrides"], queryFn: () => api.listAiToolRegistryOverrides() });
+  const [toolName, setToolName] = useState("");
+  const [riskLevel, setRiskLevel] = useState<RiskLevel>("write");
+
+  const setOverride = useMutation({
+    mutationFn: () => api.setAiToolRegistryOverride({ tool_name: toolName.trim(), risk_level: riskLevel }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["aiToolRegistryOverrides"] });
+      setToolName("");
+    },
+  });
+  const clearOverride = useMutation({
+    mutationFn: (name: string) => api.clearAiToolRegistryOverride(name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["aiToolRegistryOverrides"] }),
+  });
+
+  const overrides = overridesQuery.data ?? [];
+
+  return (
+    <div>
+      <h4 style={{ marginBottom: 4 }}>Tool risk overrides</h4>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        Every tool name already has a sensible built-in risk classification (a list_*/get_* lookup is Read, an ordinary record create/
+        update is Low write, a workspace-configuration change is Write, and so on) - a row here reclassifies one specific tool name away
+        from that default.
+      </p>
+      {overrides.length === 0 && <div className="empty-state">No overrides - every tool uses its built-in default.</div>}
+      {overrides.map((o: AiToolRegistryOverride) => (
+        <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <code style={{ fontSize: 12 }}>{o.tool_name}</code>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{RISK_LEVEL_LABELS[o.risk_level]}</span>
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 12 }}
+            onClick={() => clearOverride.mutate(o.tool_name)}
+            disabled={clearOverride.isPending}
+          >
+            Revert to default
+          </button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <input
+          style={{ flex: 1 }}
+          placeholder="tool name, e.g. create_record"
+          value={toolName}
+          onChange={(e) => setToolName(e.target.value)}
+        />
+        <select value={riskLevel} onChange={(e) => setRiskLevel(e.target.value as RiskLevel)}>
+          {RISK_LEVELS.map((r) => (
+            <option key={r} value={r}>
+              {RISK_LEVEL_LABELS[r]}
+            </option>
+          ))}
+        </select>
+        <button className="btn btn-primary" onClick={() => setOverride.mutate()} disabled={!toolName.trim() || setOverride.isPending}>
+          Set override
+        </button>
+      </div>
     </div>
   );
 }
