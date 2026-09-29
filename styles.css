@@ -996,3 +996,10 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 /* Homepage redesign: sovereignty 3-column + final CTA */
 .sovereignty-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 @media(max-width:900px){.capability-grid,.industry-grid,.sovereignty-cols,.arch-row{grid-template-columns:repeat(2,1fr)}.sovereignty-cols{grid-template-columns:1fr}}
+
+/* Hero intro video: mute/unmute toggle */
+.hero-video-wrap{position:relative}
+.hero-video-sound{position:absolute;bottom:16px;right:16px;width:40px;height:40px;border-radius:50%;
+  background:rgba(10,10,10,.55);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.18);
+  color:#fff;font-size:17px;display:grid;place-items:center;cursor:pointer;transition:.15s ease}
+.hero-video-sound:hover{background:rgba(10,10,10,.75);transform:scale(1.06)}
