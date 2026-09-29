@@ -52,6 +52,7 @@ use lanesra_core::models::solution::{SolutionInput, SolutionMemberInput, Solutio
 use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::voice::{SetVoicePinInput, VoiceLlmSettingsInput, VoicePolicyBindingInput, VoicePreferencesInput};
+use lanesra_core::models::execution_graph::ExecutionGraphInput;
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
@@ -67,7 +68,9 @@ use lanesra_core::services::{
     contact_service, contract_service,
     custom_field_service, custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service, data_exchange_service,
+    execution_graph_service,
     external_object_service,
+    graph_runtime_service,
     industry_package_service,
     integration_job_service, integration_log_service,
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
@@ -1556,6 +1559,43 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let target_id: String = arg(args, "targetId")?;
             let limit: i64 = arg(args, "limit")?;
             to_value(ai_orchestration_service::list_runs(conn, &target_type, &target_id, limit)?)
+        }
+
+        // AI Agent Platform v2, Phase 3: Execution Graph CRUD/publish and
+        // run history are plain sync; `start_graph_run`/`resume_graph_run`/
+        // `resolve_graph_run_approval`/`cancel_graph_run` (may invoke an
+        // Agent node) are genuinely async, so they're their own routes in
+        // `admin_actions.rs`.
+        "list_execution_graphs" => to_value(execution_graph_service::list(conn, &require_workspace_id(conn)?, actor)?),
+        "get_execution_graph" => {
+            let id: String = arg(args, "id")?;
+            to_value(execution_graph_service::get(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "create_execution_graph" => {
+            let input: ExecutionGraphInput = arg(args, "input")?;
+            to_value(execution_graph_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_execution_graph" => {
+            let id: String = arg(args, "id")?;
+            let input: ExecutionGraphInput = arg(args, "input")?;
+            to_value(execution_graph_service::update(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "publish_execution_graph" => {
+            let id: String = arg(args, "id")?;
+            to_value(execution_graph_service::publish(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "set_execution_graph_disabled" => {
+            let id: String = arg(args, "id")?;
+            let disabled: bool = arg(args, "disabled")?;
+            to_value(execution_graph_service::set_disabled(conn, &id, &require_workspace_id(conn)?, disabled, actor)?)
+        }
+        "get_graph_run" => {
+            let id: String = arg(args, "id")?;
+            to_value(graph_runtime_service::get_run(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "list_graph_runs" => {
+            let graph_id: String = arg(args, "graphId")?;
+            to_value(graph_runtime_service::list_runs_for_graph(conn, &graph_id, &require_workspace_id(conn)?, actor)?)
         }
 
         // AI & Agentic Layer, Phase 7e: rejecting a paused run and

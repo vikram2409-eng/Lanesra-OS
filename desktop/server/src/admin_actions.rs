@@ -37,7 +37,7 @@ use lanesra_core::models::agent::NlReportQuery;
 use lanesra_core::models::voice::ConfirmVoicePlanInput;
 use lanesra_core::services::{
     agent_service, ai_eval_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service, external_object_service,
-    integration_job_service, vector_search_service, voice_execution_service, webhook_service,
+    graph_runtime_service, integration_job_service, vector_search_service, voice_execution_service, webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -57,6 +57,10 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/ai-agent-runs/:id/approve", post(approve_ai_agent_pending_step))
         .route("/api/admin/ai-agent-runs/:id/push-otlp", post(push_ai_agent_run_otlp))
         .route("/api/admin/ai/vector-search/reindex", post(reindex_vector_search))
+        .route("/api/admin/execution-graphs/:id/run", post(start_graph_run_admin))
+        .route("/api/admin/execution-graph-runs/:id/resume", post(resume_graph_run_admin))
+        .route("/api/admin/execution-graph-runs/:id/approve", post(resolve_graph_run_approval_admin))
+        .route("/api/admin/execution-graph-runs/:id/cancel", post(cancel_graph_run_admin))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -215,6 +219,52 @@ async fn run_ai_agent_pipeline_manual(State(state): State<SharedState>, jar: Coo
         ai_orchestration_service::run_manual(&conn, &workspace_id, &master_key, "pipeline", &id, &body.input, Some(&actor)).await
     })
     .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn start_graph_run_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(body): Json<RunAiAgentBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        graph_runtime_service::start_run(&conn, &workspace_id, &master_key, &id, &body.input, Some(&actor), None, None, None).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn resume_graph_run_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { graph_runtime_service::resume_run(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct ResolveGraphRunApprovalBody {
+    approve: bool,
+    #[serde(default)]
+    notes: Option<String>,
+}
+
+async fn resolve_graph_run_approval_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<ResolveGraphRunApprovalBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        graph_runtime_service::resolve_approval(&conn, &workspace_id, &master_key, &id, body.approve, body.notes.as_deref(), Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn cancel_graph_run_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { graph_runtime_service::cancel_run(&conn, &workspace_id, &id, Some(&actor)).await }).await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 

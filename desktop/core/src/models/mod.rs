@@ -22,6 +22,8 @@ pub mod custom_record;
 pub mod custom_report;
 pub mod dashboard;
 pub mod dashboard_layout;
+pub mod execution_graph;
+pub mod graph_run;
 pub mod industry_package;
 pub mod integration;
 pub mod invoice;
