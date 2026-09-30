@@ -288,6 +288,104 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         ],
       },
       {
+        slug: "policy-engine-tool-call-firewall",
+        title: "Policy Engine & the Tool-Call Firewall",
+        summary: "Risk-classify every tool an agent can call, set an approval threshold and blocklist, and see how it formalizes the one dispatch point every tool call already ran through.",
+        sections: [
+          {
+            heading: "The Tool Registry: six risk tiers",
+            bodyHtml:
+              "<p>Every tool a chat turn can call - native, Connector-bridged, or discovered from an external MCP server - carries one risk classification, defaulted by tool name and overridable from this panel: <b>Read, Low-Write, Write, External-Action, Destructive, Privileged</b>.</p>",
+          },
+          {
+            heading: "A Policy: threshold + blocklist",
+            bodyHtml:
+              "<p>A Policy sets a require-approval threshold (any call at or above a chosen tier queues as a durable Pending Approval instead of executing) plus an outright blocklist of specific tool names, denied no matter what an agent's own Actions checklist allows. No Policy configured means an agent behaves exactly as it always has.</p>",
+          },
+          {
+            heading: "The Tool-Call Firewall",
+            bodyHtml:
+              "<p>Not a second enforcement path - it formalizes the same dispatch every tool call already ran through into named stages: schema → permission → policy → approval (only if queued) → execute → audit. A restricted <code>remember</code> call is checked the same way before it's persisted.</p>",
+          },
+        ],
+      },
+      {
+        slug: "execution-graph-agent-teams",
+        title: "Shared Execution Graph & Agent Teams",
+        summary: "The durable, checkpointed graph runtime under every Workflow and Pipeline, plus a free-form canvas for authoring one by hand as a named Agent Team.",
+        sections: [
+          {
+            heading: "One runtime, three faces",
+            bodyHtml:
+              "<p>Workflow triggers/conditions/actions and a Pipeline's sequential/consensus/peer-review topologies now both run on one shared graph engine with 12 node types (Trigger, Condition, Action, Agent, Router, Parallel Split, Join, Approval, Delay, Transform, Loop, End). Nothing you already built changed behavior - each existing shape maps onto this engine, proven to produce identical output first.</p>",
+          },
+          {
+            heading: "Durable, resumable runs",
+            bodyHtml:
+              "<p>Every node transition is checkpointed as it happens - kill the process mid-run and the next tick resumes from the last completed node, not from the start.</p>",
+          },
+          {
+            heading: "The Agent Teams canvas",
+            bodyHtml:
+              "<p>A free-form drag-and-drop canvas for wiring any node type into a graph directly, with a property panel matching each node's real configuration field-for-field. A team follows the same Draft → Test → Published → Deprecated → Disabled lifecycle as an agent version, with the engine's own pre-publish validator (unreachable nodes, a missing Join, a cycle, an unbounded Loop) surfaced as inline canvas warnings. Its own Runs tab starts, approves, rejects or resumes a run.</p>",
+          },
+        ],
+      },
+      {
+        slug: "memory-architecture-document-rag",
+        title: "Memory Architecture & Document RAG",
+        summary: "Session, Working and Entity memory alongside an agent's own persistent Memory, plus chunked, embedded Knowledge Sources any agent's search_knowledge call can cite.",
+        sections: [
+          {
+            heading: "Four memory types",
+            bodyHtml:
+              "<p><b>Agent Memory</b> (unchanged, the agent's own persistent document) plus three new itemized types: <b>Session</b> (one conversation, 6h TTL, injected ambiently), <b>Working</b> (one run, 1h TTL, rejected outside a run), and <b>Entity</b> (tied to a specific record, no expiry, forgotten only by explicit admin action).</p>",
+          },
+          {
+            heading: "remember and get_memory",
+            bodyHtml:
+              "<p>Two always-available tools let an agent write and retrieve Session/Working/Entity items explicitly. Only Session Memory is ever injected ambiently - the rest is retrieved deliberately, never dumped wholesale into a prompt. A restricted write is checked against the Policy Engine's exclude-restricted-memory flag first.</p>",
+          },
+          {
+            heading: "Memory Inspector",
+            bodyHtml:
+              "<p>This panel lets an Administrator list, filter by type or entity, and forget any item workspace-wide - the one place to audit what agents have actually remembered.</p>",
+          },
+          {
+            heading: "Document RAG",
+            bodyHtml:
+              "<p>Paste a source's full text under a named Collection - no file upload or binary parsing yet, an honest scope line. It's chunked and embedded synchronously using the same embeddings call Vector Search already uses; re-saving re-chunks and re-embeds in place. A new <code>search_knowledge</code> tool ranks chunks by cosine similarity and always cites the source it came from.</p>",
+          },
+        ],
+      },
+      {
+        slug: "mcp-client-connect-external-server",
+        title: "Connect to an external MCP server",
+        summary: "Point Lanesra at someone else's MCP server and opt its tools in as agent-callable - the same protocol the native MCP server speaks, now running in reverse.",
+        sections: [
+          {
+            heading: "Add a server connection",
+            bodyHtml:
+              "<p>This panel reuses the same Connection secret handling every other integration uses - a server's URL and any auth token are encrypted at rest, never returned in plaintext.</p>",
+          },
+          {
+            heading: "Discovery is real JSON-RPC",
+            bodyHtml:
+              "<p>Saving a server issues a real <code>initialize</code> handshake followed by <code>tools/list</code> - not a stub. Re-running discovery reconciles the catalog against whatever an admin already hand-flagged; it never silently resets a tool's read-only/write/enabled choice.</p>",
+          },
+          {
+            heading: "Two-level write gating",
+            bodyHtml:
+              "<p>An MCP-sourced tool can only be called destructively if both the server connection and that individual tool are explicitly marked write-capable - stricter than a native tool's single checkbox, since an external server is code you don't control.</p>",
+          },
+          {
+            heading: "Same firewall, same audit trail",
+            bodyHtml:
+              "<p>Every allowlisted MCP tool dispatches through the identical Tool-Call Firewall every native and Connector-bridged tool uses, and every call is logged through the same table a Connector call already uses.</p>",
+          },
+        ],
+      },
+      {
         slug: "extending-the-foundry",
         title: "Extending the Foundry",
         summary: "External MCP clients, Solution export/import, firing Pipelines from automation, and the REST API underneath.",

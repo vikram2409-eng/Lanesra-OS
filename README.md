@@ -20,10 +20,14 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 - **Chat Assistant** — a conversational assistant with real tool access to your records, and, for an Administrator, to the admin configuration surface itself, including an agent context primer (relationship metadata and a live platform overview) so an agent understands how your own workspace is actually built
 - **Context Layer & Vector Search** — real change history for an agent's own Memory, ranked full-text search over Custom Object records (SQLite FTS5), and optional embeddings-based semantic search via your own already-configured provider — no bundled vector database
 - **Agent Versioning & Approvals** — a real Draft → Test → Published → Deprecated → Disabled lifecycle per agent (a Published version is an immutable snapshot, optionally declaring a Structured Output JSON-schema contract), plus a durable, workspace-wide Approval inbox generalizing "something needs a human decision" beyond a single Pipeline step
+- **Policy Engine & Tool-Call Firewall** — a Tool Registry classifying every tool (native, Connector-bridged or MCP-sourced) into one of six risk tiers, a workspace/per-agent Policy setting a require-approval threshold and blocklist on top of it, and a formalized `schema → permission → policy → approval → execute → audit` dispatch every tool call already runs through — governance in front of the same write, never a second enforcement path
+- **Shared Execution Graph Runtime & Agent Teams** — a durable, checkpointed graph engine (Trigger/Condition/Action/Agent/Router/Parallel Split/Join/Approval/Delay/Transform/Loop/End nodes) now underlying every Workflow and Pipeline, resumable after a kill mid-run, plus a free-form drag-and-drop **Agent Teams** canvas to author one by hand with the same Draft → Publish lifecycle and a Runs viewer
+- **Memory Architecture & Document RAG** — Session, Working and Entity memory (each scoped, TTL'd and Policy-gated) alongside an agent's own persistent Memory document, written/read via explicit `remember`/`get_memory` tool calls; Knowledge Collections and Sources are chunked, embedded and searchable via `search_knowledge`, which always returns a source citation
 
-**MCP — connect external AI agents and scripts:**
+**MCP — connect external AI agents and scripts, or call out to theirs:**
 
 - **Native Model Context Protocol server** — a stateless `POST /mcp` endpoint over JSON-RPC 2.0, exposing your Custom Objects, records and business logic to Claude Desktop, an IDE agent, or any MCP-capable client, authenticated with the same scoped API keys the REST API already uses
+- **MCP client** — the same protocol in reverse: connect an external MCP server as a Connection, discover its tools via real `initialize`/`tools/list` JSON-RPC calls, and opt them in as agent-callable tools (read-only by default, a two-level write gate for anything destructive) through the identical Tool-Call Firewall above
 - **CLI** — a companion `lanesra` command-line tool giving humans and shell scripts that same access without an agent in the loop, over the same REST API
 
 **No-Code Platform — make it yours:**
