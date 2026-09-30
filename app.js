@@ -680,7 +680,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -703,7 +703,7 @@ const ADMIN_CATEGORIES=[
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
- {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval']},
+ {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
 ];
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -2579,7 +2579,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -7629,6 +7629,387 @@ function renderMemoryInspectorSection(wrap){
   data.aiMemoryItems.push({id:'mem_'+uid(),memoryType:$('#kmNewMemoryType').value,content,classification:'standard',source:'user_provided',createdAt:new Date().toISOString()});
   save();renderMemoryInspectorSection(wrap);
  };
+}
+// ---- AI Agent Platform v2, Phase 5b mirror ---------------------------------
+// Agent Team Builder: a real, free-form drag-and-drop graph canvas over six
+// of the real desktop edition's twelve Execution Graph node types (Trigger/
+// Condition/Action/Agent/Approval/End - the linear-plus-branching-plus-
+// approval-gate core of the story), not the full Router/Parallel-Split/
+// Join/Delay/Transform/Loop set - the same "a representative subset, not
+// the full production catalog" scope choice this demo's curated Connector
+// gallery already makes. Nodes/edges are real, structured, position-
+// tracked browser data (data.aiExecutionGraphs); "Start run" walks the
+// graph node-by-node against conditionsMatch (this file's own real
+// condition evaluator, shared with Business Rules/Workflow Automation),
+// producing a genuine per-node run trace (data.aiGraphRuns) - not a canned
+// animation. An Action/Agent node's own effect is honestly simulated (a
+// recorded note, not a real record write or LLM call) since this demo has
+// no server-side executor behind it, matching every other "real shape, no
+// real wire" section already in this file.
+const AGENT_TEAM_NODE_TYPES={
+ trigger:{label:'Trigger',color:'#16a34a',rule:'single'},
+ condition:{label:'Condition',color:'#4f7cff',rule:'true_false'},
+ action:{label:'Action',color:'#d97706',rule:'single'},
+ agent:{label:'Agent',color:'#9333ea',rule:'single'},
+ approval:{label:'Approval',color:'#dc2626',rule:'approved_rejected'},
+ end:{label:'End',color:'#94a3b8',rule:'none'},
+};
+const AGENT_TEAM_PALETTE=['trigger','condition','action','agent','approval','end'];
+function ensureExecutionGraphs(){if(!data.aiExecutionGraphs)data.aiExecutionGraphs=[];if(!data.aiGraphRuns)data.aiGraphRuns=[]}
+let agentTeamView={kind:'list'};
+function agentTeamsTab(body){
+ ensureExecutionGraphs();
+ if(agentTeamView.kind==='editor')return renderAgentTeamEditor(body,agentTeamView.graphId);
+ if(agentTeamView.kind==='runs')return renderAgentTeamRuns(body,agentTeamView.graphId);
+ renderAgentTeamList(body);
+}
+function openAgentTeamEditor(graphId){agentTeamView={kind:'editor',graphId,selected:null,connectFrom:null,zoom:1};renderAdminTab()}
+function openAgentTeamRuns(graphId){agentTeamView={kind:'runs',graphId};renderAdminTab()}
+function backToAgentTeamList(){agentTeamView={kind:'list'};renderAdminTab()}
+function renderAgentTeamList(body){
+ const graphs=data.aiExecutionGraphs;
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Agent Teams</h3><button class="btn btn-primary" id="newAgentTeam">+ New team</button></div>
+ <p class="muted" style="font-size:13px">A team is an Execution Graph: named agents, conditions and control flow wired into one durable, versioned run - the same graph engine a migrated Workflow or Orchestration Pipeline runs on in the real edition. A Draft graph can be freely edited; Publishing checks its shape (exactly one Trigger, every branch node has all its required edges, every node reachable) and makes it immutable from then on.</p>
+ ${graphs.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Status</th><th>Version</th><th>Nodes</th><th>Actions</th></tr></thead><tbody>${graphs.map(g=>`<tr><td><button class="link-btn" data-open-team="${g.id}">${g.name}</button>${g.description?`<br><span class="muted" style="font-size:12px">${g.description}</span>`:''}</td><td>${badgeMaybe(g.status)}</td><td>v${g.version}</td><td>${g.nodes.length}</td><td><div class="actions"><button class="icon-btn" data-runs-team="${g.id}">Runs</button>${g.status!=='draft'?`<button class="icon-btn" data-toggle-team="${g.id}">${g.status==='disabled'?'Enable':'Disable'}</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No agent teams yet - click "+ New team" to build one.</div>'}
+ </div>`;
+ $('#newAgentTeam').onclick=()=>{
+  const id='grf_'+uid();
+  data.aiExecutionGraphs.push({id,name:'New Agent Team',description:'',status:'draft',version:1,
+   nodes:[{key:'trigger_1',type:'trigger',config:{},x:40,y:40},{key:'end_1',type:'end',config:{},x:40,y:220}],
+   edges:[]});
+  save();openAgentTeamEditor(id);
+ };
+ body.querySelectorAll('[data-open-team]').forEach(b=>b.onclick=()=>openAgentTeamEditor(b.dataset.openTeam));
+ body.querySelectorAll('[data-runs-team]').forEach(b=>b.onclick=()=>openAgentTeamRuns(b.dataset.runsTeam));
+ body.querySelectorAll('[data-toggle-team]').forEach(b=>b.onclick=()=>{
+  const g=graphs.find(x=>x.id===b.dataset.toggleTeam); if(!g)return;
+  g.status=g.status==='disabled'?'published':'disabled'; save(); renderAgentTeamList(body);
+ });
+}
+function agentTeamGraph(graphId){return data.aiExecutionGraphs.find(g=>g.id===graphId)}
+function agentTeamNextKey(nodes,type){let n=1;while(nodes.some(x=>x.key===`${type}_${n}`))n+=1;return `${type}_${n}`}
+function agentTeamDefaultConfig(type){
+ if(type==='condition')return {matchType:'all',conditions:[]};
+ if(type==='action')return {note:''};
+ if(type==='agent')return {agentId:'',inputTemplate:''};
+ if(type==='approval')return {subjectType:'execution_graph_node'};
+ return {};
+}
+function agentTeamSummary(n){
+ if(n.type==='condition')return `${(n.config.conditions||[]).length} condition(s), match ${n.config.matchType||'all'}`;
+ if(n.type==='action')return n.config.note||'(no note)';
+ if(n.type==='agent'){const a=(data.aiAgents||[]).find(x=>x.id===n.config.agentId);return a?`${a.icon} ${a.name}`:'no agent selected'}
+ if(n.type==='approval')return n.config.subjectType||'';
+ return '';
+}
+function renderAgentTeamEditor(body,graphId){
+ const g=agentTeamGraph(graphId);
+ if(!g){backToAgentTeamList();return}
+ const isDraft=g.status==='draft';
+ const st=agentTeamView;
+ const selectedNode=g.nodes.find(n=>n.key===st.selected)||null;
+ const canvasW=Math.max(1200,...g.nodes.map(n=>n.x+240));
+ const canvasH=Math.max(700,...g.nodes.map(n=>n.y+140));
+ const center=n=>({x:n.x+100,y:n.y+28});
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head" style="align-items:flex-start">
+ <div style="flex:1;min-width:200px">
+ <button class="link-btn" id="backToTeams">&larr; Agent Teams</button>
+ ${isDraft?`<input id="teamNameInput" value="${g.name}" style="display:block;font-size:18px;font-weight:600;margin:6px 0;width:100%;max-width:320px">`:`<h3 style="margin:6px 0">${g.name}</h3>`}
+ ${badgeMaybe(g.status)} <span class="muted" style="font-size:12px">v${g.version}</span>
+ </div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap">
+ <button class="btn" id="teamRunsBtn">Runs</button>
+ ${isDraft?'<button class="btn btn-primary" id="teamSaveBtn">Save name</button><button class="btn" id="teamPublishBtn">Publish</button>':''}
+ </div>
+ </div>
+ ${isDraft?`<textarea id="teamDescInput" rows="2" style="width:100%;margin-bottom:10px" placeholder="What does this team do?">${g.description||''}</textarea>`:`<p class="muted" style="font-size:13px">${g.status==='published'?'A published graph is immutable - disable it from the list and build a new team to change its shape.':'This team is disabled.'}</p>`}
+ <div id="teamErrorWrap"></div>
+ <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
+ <div>
+ ${isDraft?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">${AGENT_TEAM_PALETTE.map(t=>`<button class="btn" style="border-color:${AGENT_TEAM_NODE_TYPES[t].color}" data-add-node="${t}">+ ${AGENT_TEAM_NODE_TYPES[t].label}</button>`).join('')}</div>`:''}
+ ${st.connectFrom?`<div style="background:rgba(79,124,255,.12);border:1px solid var(--accent,#4f7cff);color:var(--accent,#4f7cff);border-radius:8px;padding:6px 10px;font-size:12px;margin-bottom:8px">Connecting from <b>${st.connectFrom}</b> - click a target node, or press Esc to cancel.</div>`:''}
+ <div class="workflow-canvas-wrap" style="max-height:560px;overflow:auto">
+ <div style="position:relative;width:${canvasW}px;height:${canvasH}px;transform:scale(${st.zoom});transform-origin:top left">
+ <svg width="${canvasW}" height="${canvasH}" style="position:absolute;top:0;left:0;pointer-events:none">
+ <defs><marker id="teamArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs>
+ ${g.edges.map((e,i)=>{
+   const from=g.nodes.find(n=>n.key===e.from),to=g.nodes.find(n=>n.key===e.to);
+   if(!from||!to)return '';
+   const a=center(from),b=center(to),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+   return `<g style="pointer-events:all"><line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#teamArrow)"/>${e.label?`<text x="${mx}" y="${my-4}" font-size="10" text-anchor="middle" fill="#94a3b8">${e.label}</text>`:''}${isDraft?`<g transform="translate(${mx},${my})" style="cursor:pointer" data-del-edge="${i}"><circle r="7" fill="var(--surface,#fff)" stroke="#94a3b8"/><text text-anchor="middle" dy="3" font-size="9" fill="#94a3b8">×</text></g>`:''}</g>`;
+  }).join('')}
+ </svg>
+ ${g.nodes.map(n=>{
+   const meta=AGENT_TEAM_NODE_TYPES[n.type];
+   return `<div class="workflow-node" data-team-node="${n.key}" style="position:absolute;left:${n.x}px;top:${n.y}px;width:200px;cursor:${isDraft?'grab':'default'};${st.selected===n.key?`box-shadow:0 0 0 2px ${meta.color}`:''}">
+   <div class="workflow-node-head" style="background:${meta.color}26;color:${meta.color}">${meta.label}</div>
+   <div class="workflow-node-body"><strong>${n.key}</strong><small>${agentTeamSummary(n)}</small></div>
+   ${meta.rule!=='none'&&isDraft?`<button data-connect-from="${n.key}" title="Connect to another node" style="position:absolute;right:-10px;bottom:-10px;width:22px;height:22px;border-radius:50%;border:1px solid #94a3b8;background:var(--surface,#fff);cursor:pointer;font-size:11px;line-height:1">&rarr;</button>`:''}
+   </div>`;
+  }).join('')}
+ </div>
+ </div>
+ <div class="workflow-zoom-controls"><button class="btn" id="teamZoomIn">+</button><button class="btn" id="teamZoomOut">&minus;</button></div>
+ </div>
+ <div id="teamPropertyPanel" style="border:1px solid var(--line);border-radius:10px;padding:12px;min-height:200px"></div>
+ </div>
+ </div>`;
+ $('#backToTeams').onclick=backToAgentTeamList;
+ $('#teamRunsBtn').onclick=()=>openAgentTeamRuns(g.id);
+ const saveBtn=$('#teamSaveBtn'); if(saveBtn)saveBtn.onclick=()=>{g.name=$('#teamNameInput').value.trim()||'Untitled team';g.description=$('#teamDescInput').value.trim();save();toast('Team saved');renderAgentTeamEditor(body,graphId)};
+ const pubBtn=$('#teamPublishBtn'); if(pubBtn)pubBtn.onclick=()=>{
+  const err=agentTeamValidateForPublish(g);
+  if(err){$('#teamErrorWrap').innerHTML=`<div class="error-banner">${err}</div>`;return}
+  g.status='published';save();toast('Team published');renderAgentTeamEditor(body,graphId);
+ };
+ $('#teamZoomIn').onclick=()=>{st.zoom=Math.min(1.5,Math.round((st.zoom+0.1)*10)/10);renderAgentTeamEditor(body,graphId)};
+ $('#teamZoomOut').onclick=()=>{st.zoom=Math.max(0.5,Math.round((st.zoom-0.1)*10)/10);renderAgentTeamEditor(body,graphId)};
+ body.querySelectorAll('[data-add-node]').forEach(b=>b.onclick=()=>{
+  const type=b.dataset.addNode,key=agentTeamNextKey(g.nodes,type);
+  const idx=g.nodes.length;
+  g.nodes.push({key,type,config:agentTeamDefaultConfig(type),x:40+(idx%4)*240,y:40+Math.floor(idx/4)*140});
+  st.selected=key;save();renderAgentTeamEditor(body,graphId);
+ });
+ body.querySelectorAll('[data-del-edge]').forEach(el=>el.onclick=()=>{g.edges.splice(Number(el.dataset.delEdge),1);save();renderAgentTeamEditor(body,graphId)});
+ body.querySelectorAll('[data-connect-from]').forEach(b=>b.onclick=e=>{e.stopPropagation();st.connectFrom=b.dataset.connectFrom;renderAgentTeamEditor(body,graphId)});
+ body.querySelectorAll('[data-team-node]').forEach(el=>{
+  el.onclick=()=>agentTeamNodeClicked(body,graphId,el.dataset.teamNode);
+  if(isDraft)agentTeamMakeDraggable(el,g,body,graphId);
+ });
+ if(st.connectFrom){
+  const onKey=ev=>{if(ev.key==='Escape'){st.connectFrom=null;renderAgentTeamEditor(body,graphId)}document.removeEventListener('keydown',onKey)};
+  document.addEventListener('keydown',onKey);
+ }
+ renderAgentTeamPropertyPanel(body,graphId,selectedNode,isDraft);
+}
+function agentTeamMakeDraggable(el,g,body,graphId){
+ el.addEventListener('mousedown',e=>{
+  if(e.target.closest('[data-connect-from]'))return;
+  const node=g.nodes.find(n=>n.key===el.dataset.teamNode); if(!node)return;
+  const startX=e.clientX,startY=e.clientY,ox=node.x,oy=node.y;
+  let moved=false;
+  const onMove=ev=>{
+   moved=true;
+   node.x=Math.max(0,ox+(ev.clientX-startX));
+   node.y=Math.max(0,oy+(ev.clientY-startY));
+   el.style.left=node.x+'px'; el.style.top=node.y+'px';
+  };
+  const onUp=()=>{
+   document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp);
+   if(moved){save();renderAgentTeamEditor(body,graphId)}
+  };
+  document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);
+ });
+}
+function agentTeamNodeClicked(body,graphId,key){
+ const g=agentTeamGraph(graphId); const st=agentTeamView;
+ if(g.status!=='draft'){st.selected=key;renderAgentTeamEditor(body,graphId);return}
+ if(st.connectFrom){
+  if(st.connectFrom===key){st.connectFrom=null;renderAgentTeamEditor(body,graphId);return}
+  const source=g.nodes.find(n=>n.key===st.connectFrom);
+  const rule=AGENT_TEAM_NODE_TYPES[source.type].rule;
+  const existing=g.edges.filter(e=>e.from===st.connectFrom);
+  if(rule==='none'){toast('An End node cannot have an outgoing edge');st.connectFrom=null;renderAgentTeamEditor(body,graphId);return}
+  if(rule==='single'){
+   if(existing.length){toast(`'${st.connectFrom}' already has an outgoing edge - delete it first`);st.connectFrom=null;renderAgentTeamEditor(body,graphId);return}
+   g.edges.push({from:st.connectFrom,to:key,label:null});st.connectFrom=null;save();renderAgentTeamEditor(body,graphId);return;
+  }
+  const pair=rule==='true_false'?['true','false']:['approved','rejected'];
+  const remaining=pair.filter(l=>!existing.some(e=>e.label===l));
+  if(!remaining.length){toast(`'${st.connectFrom}' already has both of its required outgoing edges`);st.connectFrom=null;renderAgentTeamEditor(body,graphId);return}
+  const label=remaining.length===1?remaining[0]:prompt(`Which branch: ${remaining.join(' or ')}?`,remaining[0]);
+  if(!remaining.includes(label)){st.connectFrom=null;renderAgentTeamEditor(body,graphId);return}
+  g.edges.push({from:st.connectFrom,to:key,label});st.connectFrom=null;save();renderAgentTeamEditor(body,graphId);return;
+ }
+ st.selected=key;renderAgentTeamEditor(body,graphId);
+}
+function renderAgentTeamPropertyPanel(body,graphId,node,isDraft){
+ const wrap=$('#teamPropertyPanel'); if(!wrap)return;
+ if(!node){wrap.innerHTML='<p class="muted">Select a node to edit its configuration.</p>';return}
+ const meta=AGENT_TEAM_NODE_TYPES[node.type];
+ let extra='';
+ if(node.type==='condition'){
+  extra=`<div class="field"><label>Match <select id="npMatchType" ${isDraft?'':'disabled'}><option value="all" ${node.config.matchType==='all'?'selected':''}>All (AND)</option><option value="any" ${node.config.matchType==='any'?'selected':''}>Any (OR)</option></select></label></div>
+  ${(node.config.conditions||[]).map((c,i)=>`<div style="display:flex;gap:4px;margin-bottom:6px"><input data-cond-field="${i}" value="${c.fieldKey||''}" placeholder="trigger field" ${isDraft?'':'disabled'} style="flex:1;min-width:0"><select data-cond-op="${i}" ${isDraft?'':'disabled'}>${CONDITION_OPERATORS_DEMO.map(o=>`<option value="${o}" ${c.operator===o?'selected':''}>${o}</option>`).join('')}</select><input data-cond-value="${i}" value="${c.value||''}" placeholder="value" ${isDraft?'':'disabled'} style="flex:1;min-width:0">${isDraft?`<button class="icon-btn" data-cond-del="${i}">×</button>`:''}</div>`).join('')}
+  ${isDraft?'<button class="btn" id="npAddCondition">+ Add condition</button>':''}`;
+ } else if(node.type==='action'){
+  extra=`<div class="field"><label>What this action does</label><textarea id="npActionNote" rows="3" ${isDraft?'':'disabled'} placeholder="e.g. Send a follow-up email">${node.config.note||''}</textarea></div>`;
+ } else if(node.type==='agent'){
+  extra=`<div class="field"><label>Agent</label><select id="npAgentId" ${isDraft?'':'disabled'}><option value="">Select an agent...</option>${(data.aiAgents||[]).map(a=>`<option value="${a.id}" ${node.config.agentId===a.id?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select></div>
+  <div class="field"><label>Input template</label><textarea id="npInputTemplate" rows="2" ${isDraft?'':'disabled'} placeholder="e.g. Summarize: {{trigger_input}}">${node.config.inputTemplate||''}</textarea></div>`;
+ } else if(node.type==='approval'){
+  extra=`<div class="field"><label>Subject type</label><input id="npSubjectType" value="${node.config.subjectType||''}" ${isDraft?'':'disabled'}></div>`;
+ }
+ wrap.innerHTML=`<div class="field"><label>Node key</label><input id="npNodeKey" value="${node.key}" ${isDraft?'':'disabled'}></div>
+ <p class="muted" style="font-size:12px">${meta.label} node.</p>
+ ${extra}
+ ${isDraft?'<button class="btn btn-danger" id="npDeleteNode" style="margin-top:14px">Delete node</button>':''}`;
+ const keyInput=$('#npNodeKey'); if(keyInput)keyInput.onblur=()=>agentTeamRenameNode(body,graphId,node.key,keyInput.value.trim());
+ const delBtn=$('#npDeleteNode'); if(delBtn)delBtn.onclick=()=>{
+  const g=agentTeamGraph(graphId);
+  g.nodes=g.nodes.filter(n=>n.key!==node.key);
+  g.edges=g.edges.filter(e=>e.from!==node.key&&e.to!==node.key);
+  agentTeamView.selected=null;save();renderAgentTeamEditor(body,graphId);
+ };
+ const matchSel=$('#npMatchType'); if(matchSel)matchSel.onchange=()=>{node.config.matchType=matchSel.value;save()};
+ const addCond=$('#npAddCondition'); if(addCond)addCond.onclick=()=>{
+  node.config.conditions=node.config.conditions||[]; node.config.conditions.push({fieldKey:'',operator:'equals',value:''});
+  save();renderAgentTeamPropertyPanel(body,graphId,node,isDraft);
+ };
+ wrap.querySelectorAll('[data-cond-del]').forEach(b=>b.onclick=()=>{node.config.conditions.splice(Number(b.dataset.condDel),1);save();renderAgentTeamPropertyPanel(body,graphId,node,isDraft)});
+ wrap.querySelectorAll('[data-cond-field]').forEach(el=>el.onchange=()=>{node.config.conditions[Number(el.dataset.condField)].fieldKey=el.value;save()});
+ wrap.querySelectorAll('[data-cond-op]').forEach(el=>el.onchange=()=>{node.config.conditions[Number(el.dataset.condOp)].operator=el.value;save()});
+ wrap.querySelectorAll('[data-cond-value]').forEach(el=>el.onchange=()=>{node.config.conditions[Number(el.dataset.condValue)].value=el.value;save()});
+ const noteEl=$('#npActionNote'); if(noteEl)noteEl.onchange=()=>{node.config.note=noteEl.value;save();renderAgentTeamEditor(body,graphId)};
+ const agentSel=$('#npAgentId'); if(agentSel)agentSel.onchange=()=>{node.config.agentId=agentSel.value;save();renderAgentTeamEditor(body,graphId)};
+ const tplEl=$('#npInputTemplate'); if(tplEl)tplEl.onchange=()=>{node.config.inputTemplate=tplEl.value;save()};
+ const subjEl=$('#npSubjectType'); if(subjEl)subjEl.onchange=()=>{node.config.subjectType=subjEl.value;save()};
+}
+const CONDITION_OPERATORS_DEMO=['equals','not_equals','contains','not_contains','starts_with','ends_with','is_empty','is_not_empty','greater_than','less_than'];
+function agentTeamRenameNode(body,graphId,oldKey,newKey){
+ if(!newKey||newKey===oldKey)return;
+ const g=agentTeamGraph(graphId);
+ if(g.nodes.some(n=>n.key===newKey)){toast(`A node named '${newKey}' already exists`);renderAgentTeamEditor(body,graphId);return}
+ g.nodes.find(n=>n.key===oldKey).key=newKey;
+ g.edges.forEach(e=>{if(e.from===oldKey)e.from=newKey;if(e.to===oldKey)e.to=newKey});
+ agentTeamView.selected=newKey;save();renderAgentTeamEditor(body,graphId);
+}
+// Mirrors execution_graph_service::validate_for_publish's own core shape
+// checks over this demo's reduced six-type node set: exactly one Trigger,
+// every node's required outgoing edge(s) present, every node reachable
+// from the Trigger, at least one reachable End.
+function agentTeamValidateForPublish(g){
+ if(!g.nodes.length)return 'A graph needs at least one node';
+ const triggers=g.nodes.filter(n=>n.type==='trigger');
+ if(triggers.length!==1)return `A graph must have exactly one Trigger node (found ${triggers.length})`;
+ for(const n of g.nodes){
+  const meta=AGENT_TEAM_NODE_TYPES[n.type];
+  const outs=g.edges.filter(e=>e.from===n.key);
+  if(meta.rule==='single'&&outs.length!==1)return `'${n.type}' node '${n.key}' must have exactly one outgoing edge`;
+  if(meta.rule==='true_false'){
+   const labels=new Set(outs.map(e=>e.label));
+   if(outs.length!==2||!labels.has('true')||!labels.has('false'))return `Condition node '${n.key}' must have exactly a 'true' and a 'false' outgoing edge`;
+  }
+  if(meta.rule==='approved_rejected'){
+   const labels=new Set(outs.map(e=>e.label));
+   if(outs.length!==2||!labels.has('approved')||!labels.has('rejected'))return `Approval node '${n.key}' must have exactly an 'approved' and a 'rejected' outgoing edge`;
+  }
+  if(meta.rule==='none'&&outs.length)return `End node '${n.key}' must have no outgoing edges`;
+ }
+ const triggerKey=triggers[0].key;
+ const reachable=new Set([triggerKey]); const queue=[triggerKey];
+ while(queue.length){
+  const cur=queue.pop();
+  g.edges.filter(e=>e.from===cur).forEach(e=>{if(!reachable.has(e.to)){reachable.add(e.to);queue.push(e.to)}});
+ }
+ const unreachable=g.nodes.filter(n=>!reachable.has(n.key)).map(n=>n.key);
+ if(unreachable.length)return `Unreachable node(s) from the trigger: ${unreachable.join(', ')}`;
+ if(!g.nodes.some(n=>n.type==='end'&&reachable.has(n.key)))return 'A graph must have at least one reachable End node';
+ return null;
+}
+// ---- Runs -------------------------------------------------------------
+function renderAgentTeamRuns(body,graphId){
+ const g=agentTeamGraph(graphId);
+ if(!g){backToAgentTeamList();return}
+ const runs=data.aiGraphRuns.filter(r=>r.graphId===graphId).sort((a,b)=>b.startedAt.localeCompare(a.startedAt));
+ body.innerHTML=`<div class="panel">
+ <button class="link-btn" id="backToTeamEditor">&larr; ${g.name}</button>
+ <h3>Runs: ${g.name}</h3>
+ ${g.status==='published'?`<div style="display:flex;gap:8px;margin-bottom:14px"><textarea id="runTriggerInput" rows="2" style="flex:1" placeholder='Trigger input, e.g. {"deal_id":"..."}'>{}</textarea><button class="btn btn-primary" id="startRunBtn">Start run</button></div>`:'<p class="muted">Publish this team before starting a run.</p>'}
+ <div id="runsListWrap"></div>
+ </div>`;
+ $('#backToTeamEditor').onclick=()=>openAgentTeamEditor(graphId);
+ const startBtn=$('#startRunBtn'); if(startBtn)startBtn.onclick=()=>{
+  let triggerInput={};
+  try{triggerInput=JSON.parse($('#runTriggerInput').value||'{}')}catch{toast('Trigger input must be valid JSON');return}
+  agentTeamStartRun(g,triggerInput);
+  renderAgentTeamRuns(body,graphId);
+ };
+ renderAgentTeamRunsList(body,graphId,runs);
+}
+function renderAgentTeamRunsList(body,graphId,runs){
+ const wrap=$('#runsListWrap');
+ wrap.innerHTML=runs.length?runs.map(r=>`<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+  <div>${badgeMaybe(r.status)} <button class="link-btn" data-toggle-run="${r.id}">${new Date(r.startedAt).toLocaleString()}</button> <span class="muted">&middot; ${r.stepsExecuted} step(s)</span></div>
+  <div class="actions">${r.status==='waiting_approval'?`<button class="icon-btn" data-approve-run="${r.id}">Approve</button><button class="icon-btn" data-reject-run="${r.id}">Reject</button>`:''}</div>
+  </div>
+  ${r.errorMessage?`<div class="muted" style="color:#b23b3b;font-size:12px">${r.errorMessage}</div>`:''}
+  <div id="runDetail_${r.id}"></div>
+ </div>`).join(''):'<div class="empty">No runs yet.</div>';
+ wrap.querySelectorAll('[data-toggle-run]').forEach(b=>b.onclick=()=>{
+  const el=$(`#runDetail_${b.dataset.toggleRun}`);
+  const r=runs.find(x=>x.id===b.dataset.toggleRun);
+  el.innerHTML=el.innerHTML?'':`<div class="table-wrap" style="margin-top:8px"><table class="table"><thead><tr><th>Node</th><th>Type</th><th>Status</th><th>Output</th></tr></thead><tbody>${r.nodeRuns.map(n=>`<tr><td>${n.nodeKey}</td><td>${n.nodeType}</td><td>${n.status}</td><td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.output||''}</td></tr>`).join('')}</tbody></table></div>`;
+ });
+ wrap.querySelectorAll('[data-approve-run]').forEach(b=>b.onclick=()=>{agentTeamResolveApproval(b.dataset.approveRun,true);renderAgentTeamRuns(body,graphId)});
+ wrap.querySelectorAll('[data-reject-run]').forEach(b=>b.onclick=()=>{agentTeamResolveApproval(b.dataset.rejectRun,false);renderAgentTeamRuns(body,graphId)});
+}
+function agentTeamStartRun(g,triggerInput){
+ const run={id:'run_'+uid(),graphId:g.id,status:'running',triggerInput,ctx:{...triggerInput},currentNodeKey:g.nodes.find(n=>n.type==='trigger').key,stepsExecuted:0,startedAt:new Date().toISOString(),finishedAt:null,errorMessage:null,nodeRuns:[]};
+ data.aiGraphRuns.unshift(run);
+ agentTeamStepRun(g,run);
+ save();
+ return run;
+}
+// Walks node-by-node from run.currentNodeKey until it hits an End node
+// (completed), an Approval node (pauses for a real Approve/Reject, mirroring
+// the real edition's approval gate), or a shape error (failed) - a genuine
+// per-node trace, not a canned animation.
+function agentTeamStepRun(g,run){
+ while(true){
+  const node=g.nodes.find(n=>n.key===run.currentNodeKey);
+  if(!node){run.status='failed';run.errorMessage=`Node '${run.currentNodeKey}' no longer exists`;run.finishedAt=new Date().toISOString();return}
+  run.stepsExecuted+=1;
+  if(node.type==='trigger'){
+   run.nodeRuns.push({nodeKey:node.key,nodeType:node.type,status:'completed',output:''});
+   const next=g.edges.find(e=>e.from===node.key);
+   if(!next){run.status='failed';run.errorMessage=`No outgoing edge from '${node.key}'`;run.finishedAt=new Date().toISOString();return}
+   run.currentNodeKey=next.to;continue;
+  }
+  if(node.type==='condition'){
+   const result=conditionsMatch(node.config.matchType||'all',(node.config.conditions||[]).map(c=>({fieldKey:c.fieldKey,operator:c.operator,value:c.value})),run.ctx);
+   run.nodeRuns.push({nodeKey:node.key,nodeType:node.type,status:'completed',output:`result: ${result}`});
+   const next=g.edges.find(e=>e.from===node.key&&e.label===(result?'true':'false'));
+   if(!next){run.status='failed';run.errorMessage=`No '${result}' edge from '${node.key}'`;run.finishedAt=new Date().toISOString();return}
+   run.currentNodeKey=next.to;continue;
+  }
+  if(node.type==='action'){
+   run.nodeRuns.push({nodeKey:node.key,nodeType:node.type,status:'completed',output:`(simulated) ${node.config.note||'action ran'}`});
+   const next=g.edges.find(e=>e.from===node.key);
+   if(!next){run.status='failed';run.errorMessage=`No outgoing edge from '${node.key}'`;run.finishedAt=new Date().toISOString();return}
+   run.currentNodeKey=next.to;continue;
+  }
+  if(node.type==='agent'){
+   const a=(data.aiAgents||[]).find(x=>x.id===node.config.agentId);
+   run.nodeRuns.push({nodeKey:node.key,nodeType:node.type,status:'completed',output:a?`(simulated) asked ${a.name} - see the Chat tab for a live reply`:'no agent selected'});
+   const next=g.edges.find(e=>e.from===node.key);
+   if(!next){run.status='failed';run.errorMessage=`No outgoing edge from '${node.key}'`;run.finishedAt=new Date().toISOString();return}
+   run.currentNodeKey=next.to;continue;
+  }
+  if(node.type==='approval'){
+   run.nodeRuns.push({nodeKey:node.key,nodeType:node.type,status:'waiting_approval',output:''});
+   run.status='waiting_approval';
+   return;
+  }
+  if(node.type==='end'){
+   run.nodeRuns.push({nodeKey:node.key,nodeType:node.type,status:'completed',output:''});
+   run.status='completed';run.finishedAt=new Date().toISOString();
+   return;
+  }
+  run.status='failed';run.errorMessage=`Unknown node type '${node.type}'`;run.finishedAt=new Date().toISOString();
+  return;
+ }
+}
+function agentTeamResolveApproval(runId,approve){
+ const run=data.aiGraphRuns.find(r=>r.id===runId); if(!run||run.status!=='waiting_approval')return;
+ const g=agentTeamGraph(run.graphId);
+ const next=g.edges.find(e=>e.from===run.currentNodeKey&&e.label===(approve?'approved':'rejected'));
+ if(!next){run.status='failed';run.errorMessage=`No '${approve?'approved':'rejected'}' edge from '${run.currentNodeKey}'`;run.finishedAt=new Date().toISOString();save();return}
+ run.currentNodeKey=next.to; run.status='running';
+ agentTeamStepRun(g,run);
+ save();
 }
 // AI & Agentic Layer, Phase 7c: guardrailsMd is a free-text operational-
 // boundary statement injected into this agent's system prompt alongside
