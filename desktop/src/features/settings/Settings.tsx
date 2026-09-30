@@ -26,6 +26,7 @@ import { AiAgentsAdmin } from "./AiAgentsAdmin";
 import { AiSkillsAdmin } from "./AiSkillsAdmin";
 import { AiAgentPipelinesAdmin } from "./AiAgentPipelinesAdmin";
 import { AiEvalSuitesAdmin } from "./AiEvalSuitesAdmin";
+import { AgentTeamsAdmin } from "./AgentTeamsAdmin";
 import { HelpAdmin } from "./HelpAdmin";
 import { ChatPanel } from "../../components/ChatPanel";
 import type { Workspace, WorkspaceUpdate } from "../../lib/types";
@@ -91,6 +92,7 @@ type AdminTab =
   | "aiSkills"
   | "aiAgentPipelines"
   | "aiEvalSuites"
+  | "agentTeams"
   | "help";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
@@ -120,6 +122,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "aiSkills", label: "Skills" },
   { key: "aiAgentPipelines", label: "Orchestration" },
   { key: "aiEvalSuites", label: "Evaluations" },
+  { key: "agentTeams", label: "Agent Teams" },
   { key: "help", label: "Help" },
 ];
 
@@ -163,7 +166,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
     label: "AI Agent Foundry",
     icon: "🏭",
     note: "Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other",
-    items: ["aiAgents", "aiSkills", "aiAgentPipelines", "aiEvalSuites"],
+    items: ["aiAgents", "aiSkills", "aiAgentPipelines", "aiEvalSuites", "agentTeams"],
   },
   {
     key: "help",
@@ -295,6 +298,7 @@ export function AdminPanel() {
       {tab === "aiSkills" && <AiSkillsAdmin />}
       {tab === "aiAgentPipelines" && <AiAgentPipelinesAdmin />}
       {tab === "aiEvalSuites" && <AiEvalSuitesAdmin />}
+      {tab === "agentTeams" && <AgentTeamsAdmin />}
       {tab === "help" && <HelpAdmin initialTopicSlug={helpTopicSlug} />}
     </div>
   );

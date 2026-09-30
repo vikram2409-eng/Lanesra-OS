@@ -1002,6 +1002,177 @@ tr:hover td {
   justify-content: center;
 }
 
+/* AI Agent Platform v2, Phase 5b: the Agent Team Builder's free-form
+   canvas - a genuine node-drag/SVG-connector graph editor, unlike
+   Workflow Automation's own fixed linear canvas above. Reuses that
+   canvas's dotted-grid background and sticky zoom-controls placement,
+   the only two things worth reusing from a fixed layout. */
+.graph-editor-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.graph-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.graph-connect-banner {
+  background: rgba(79, 124, 255, 0.12);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.graph-canvas-wrap {
+  position: relative;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 640px;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.graph-canvas {
+  position: relative;
+  transform-origin: top left;
+}
+
+.graph-edges-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.graph-edges-svg g {
+  pointer-events: all;
+}
+
+.graph-node {
+  position: absolute;
+  width: 220px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.graph-node:active {
+  cursor: grabbing;
+}
+
+.graph-node-selected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.graph-node-head {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.graph-node-body {
+  padding: 8px 10px;
+}
+
+.graph-node-body strong {
+  display: block;
+  font-size: 13px;
+}
+
+.graph-node-body small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.graph-node-connect {
+  position: absolute;
+  right: -12px;
+  bottom: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.graph-zoom-controls {
+  position: sticky;
+  float: right;
+  bottom: 12px;
+  margin-right: 12px;
+  margin-top: -48px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: fit-content;
+}
+
+.graph-zoom-controls .btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.graph-property-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  padding: 12px;
+  min-height: 200px;
+}
+
+.graph-condition-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+
+.graph-condition-row input,
+.graph-condition-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.graph-router-branch {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.graph-run-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
 @media print {
   body > *:not(#print-root) {
     display: none !important;
