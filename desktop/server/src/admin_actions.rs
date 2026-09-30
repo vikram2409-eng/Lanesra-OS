@@ -38,7 +38,7 @@ use lanesra_core::models::ai_knowledge::KnowledgeSourceInput;
 use lanesra_core::models::voice::ConfirmVoicePlanInput;
 use lanesra_core::services::{
     agent_service, ai_eval_service, ai_knowledge_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service,
-    external_object_service, graph_runtime_service, integration_job_service, vector_search_service, voice_execution_service, webhook_service,
+    external_object_service, graph_runtime_service, integration_job_service, mcp_client_service, vector_search_service, voice_execution_service, webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -65,6 +65,7 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/knowledge-sources", post(create_knowledge_source_admin))
         .route("/api/admin/knowledge-sources/:id", post(update_knowledge_source_admin))
         .route("/api/admin/knowledge/search", post(search_knowledge_admin))
+        .route("/api/admin/mcp-servers/:id/discover", post(discover_mcp_tools_admin))
         .route("/api/admin/connections/:id/test", post(test_connection))
         .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
@@ -306,6 +307,17 @@ async fn search_knowledge_admin(State(state): State<SharedState>, jar: CookieJar
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move { ai_knowledge_service::search_knowledge(&conn, &workspace_id, &master_key, &body.query, body.collection_id.as_deref(), 10).await })
         .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+/// AI Agent Platform v2 (GitHub issue #170, backend half): a real
+/// `initialize`/`tools/list` handshake against the external MCP server -
+/// genuinely async, so (like the Knowledge Source routes above) this is
+/// its own route rather than plain-sync `/api/invoke` dispatch.
+async fn discover_mcp_tools_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { mcp_client_service::discover_tools(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 

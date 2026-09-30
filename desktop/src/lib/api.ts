@@ -43,6 +43,11 @@ import type {
   KnowledgeSource,
   KnowledgeSourceInput,
   KnowledgeSearchHit,
+  McpServer,
+  McpServerInput,
+  McpServerUpdate,
+  McpTool,
+  AgentMcpToolOption,
   AiSkill,
   AiSkillInput,
   AiAgentPipeline,
@@ -448,6 +453,20 @@ export const api = {
   createKnowledgeSource: (input: KnowledgeSourceInput) => call<KnowledgeSource>("create_knowledge_source", { input }),
   updateKnowledgeSource: (id: string, input: KnowledgeSourceInput) => call<KnowledgeSource>("update_knowledge_source", { id, input }),
   searchKnowledgePreview: (query: string, collectionId?: string | null) => call<KnowledgeSearchHit[]>("search_knowledge_preview", { query, collectionId: collectionId ?? null }),
+
+  // AI Agent Platform v2 (GitHub issue #170, backend half): the MCP
+  // client role - `discoverMcpTools` is its own invoke name since it's
+  // a real handshake against the external server (async, same split as
+  // the Knowledge Source calls above).
+  createMcpServer: (input: McpServerInput) => call<McpServer>("create_mcp_server", { input }),
+  listMcpServers: () => call<McpServer[]>("list_mcp_servers", {}),
+  getMcpServer: (id: string) => call<McpServer>("get_mcp_server", { id }),
+  updateMcpServer: (id: string, input: McpServerUpdate) => call<McpServer>("update_mcp_server", { id, input }),
+  deleteMcpServer: (id: string) => call<void>("delete_mcp_server", { id }),
+  listMcpTools: (id: string) => call<McpTool[]>("list_mcp_tools", { id }),
+  setMcpToolFlags: (id: string, toolName: string, isWrite: boolean, enabled: boolean) => call<void>("set_mcp_tool_flags", { id, toolName, isWrite, enabled }),
+  listAgentMcpTools: () => call<AgentMcpToolOption[]>("list_agent_mcp_tools", {}),
+  discoverMcpTools: (id: string) => call<McpTool[]>("discover_mcp_tools", { id }),
 
   listAiSkills: (activeOnly: boolean) => call<AiSkill[]>("list_ai_skills", { activeOnly }),
   createAiSkill: (input: AiSkillInput) => call<AiSkill>("create_ai_skill", { input }),

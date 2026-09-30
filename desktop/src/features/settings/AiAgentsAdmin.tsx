@@ -8,6 +8,7 @@ import { agentRequiresAdmin } from "../../lib/aiAgents";
 import { RISK_LEVELS, RISK_LEVEL_LABELS } from "../../lib/types";
 import type {
   AgentConnectorToolOption,
+  AgentMcpToolOption,
   AiAgentDefinition,
   AiAgentInput,
   AiAgentModelRouting,
@@ -27,6 +28,10 @@ import type {
   KnowledgeSearchHit,
   MemoryItem,
   MemoryType,
+  McpServer,
+  McpServerInput,
+  McpServerUpdate,
+  McpTool,
 } from "../../lib/types";
 
 // Phase 7a: the DLP classes an agent's forced-air-gap list can name -
@@ -114,10 +119,15 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
   // an admin has opted into agent-tool use), so it's fetched rather than
   // hand-mirrored - see `connector_tool_service::list_options`.
   const connectorToolsQuery = useQuery({ queryKey: ["agentConnectorTools"], queryFn: () => api.listAgentConnectorTools() });
+  // AI Agent Platform v2 (GitHub issue #170, backend half): the MCP
+  // client role's own eligible-tools catalog - same "fetched, not
+  // hand-mirrored" reasoning as connectorToolsQuery above.
+  const mcpToolsQuery = useQuery({ queryKey: ["agentMcpTools"], queryFn: () => api.listAgentMcpTools() });
   const agents = agentsQuery.data ?? [];
   const skills = skillsQuery.data ?? [];
   const providers = providersQuery.data ?? [];
   const connectorTools = connectorToolsQuery.data ?? [];
+  const mcpTools = mcpToolsQuery.data ?? [];
 
   const [editing, setEditing] = useState<AiAgentDefinition | null>(null);
   const [creating, setCreating] = useState(false);
@@ -268,6 +278,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
           agents={agents}
           skills={skills}
           connectorTools={connectorTools}
+          mcpTools={mcpTools}
           onCancel={() => {
             setCreating(false);
             setEditing(null);
@@ -319,13 +330,15 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
         />
       )}
 
-      {versionsFor && <VersionsPanel agent={versionsFor} agents={agents} skills={skills} connectorTools={connectorTools} />}
+      {versionsFor && <VersionsPanel agent={versionsFor} agents={agents} skills={skills} connectorTools={connectorTools} mcpTools={mcpTools} />}
 
       <ApprovalsPanel />
 
       <PolicyEnginePanel agents={agents} />
 
       <KnowledgeAndMemoryPanel />
+
+      <McpServersPanel />
 
       {triggersFor && (
         <div className="card" style={{ marginTop: 16 }}>
@@ -620,6 +633,7 @@ function AiAgentForm({
   agents,
   skills,
   connectorTools,
+  mcpTools,
   onCancel,
   onSubmit,
   pending,
@@ -628,6 +642,7 @@ function AiAgentForm({
   agents: AiAgentDefinition[];
   skills: AiSkill[];
   connectorTools: AgentConnectorToolOption[];
+  mcpTools: AgentMcpToolOption[];
   onCancel: () => void;
   onSubmit: (input: AiAgentInput) => void;
   pending: boolean;
@@ -754,6 +769,24 @@ function AiAgentForm({
               </div>
             </div>
           )}
+          {mcpTools.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <b style={{ fontSize: 12 }}>MCP Tools</b>
+              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                {mcpTools.map((t) => (
+                  <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                    <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
+                    {t.mcp_server_name}: {t.tool_description || t.tool_name.split(":").pop()}
+                    {t.requires_admin && (
+                      <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
+                        Administrator
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         {skills.length > 0 && (
           <div className="field full">
@@ -825,11 +858,13 @@ function VersionsPanel({
   agents,
   skills,
   connectorTools,
+  mcpTools,
 }: {
   agent: AiAgentDefinition;
   agents: AiAgentDefinition[];
   skills: AiSkill[];
   connectorTools: AgentConnectorToolOption[];
+  mcpTools: AgentMcpToolOption[];
 }) {
   const queryClient = useQueryClient();
   const versionsQuery = useQuery({ queryKey: ["aiAgentVersions", agent.id], queryFn: () => api.listAiAgentVersions(agent.id) });
@@ -945,6 +980,7 @@ function VersionsPanel({
           agents={agents}
           skills={skills}
           connectorTools={connectorTools}
+          mcpTools={mcpTools}
           initial={editingVersion ?? undefined}
           onCancel={() => {
             setDrafting(false);
@@ -963,6 +999,7 @@ function VersionDraftForm({
   agents,
   skills,
   connectorTools,
+  mcpTools,
   initial,
   onCancel,
   onSubmit,
@@ -972,6 +1009,7 @@ function VersionDraftForm({
   agents: AiAgentDefinition[];
   skills: AiSkill[];
   connectorTools: AgentConnectorToolOption[];
+  mcpTools: AgentMcpToolOption[];
   initial?: AiAgentVersion;
   onCancel: () => void;
   onSubmit: (input: AiAgentVersionInput) => void;
@@ -1075,6 +1113,19 @@ function VersionDraftForm({
                   <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
                     <input type="checkbox" checked={actionNames.includes(t.tool_name)} onChange={() => toggle(actionNames, setActionNames, t.tool_name)} />{" "}
                     {t.connector_name}: {t.action_display_name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {mcpTools.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <b style={{ fontSize: 12 }}>MCP Tools</b>
+              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                {mcpTools.map((t) => (
+                  <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                    <input type="checkbox" checked={actionNames.includes(t.tool_name)} onChange={() => toggle(actionNames, setActionNames, t.tool_name)} />{" "}
+                    {t.mcp_server_name}: {t.tool_description || t.tool_name.split(":").pop()}
                   </label>
                 ))}
               </div>
@@ -1596,6 +1647,308 @@ function MemoryInspectorSection() {
             {item.source} - {item.created_at}
             {item.expires_at ? ` - expires ${item.expires_at}` : ""}
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// AI Agent Platform v2 (GitHub issue #170, backend half): the MCP
+// client role - an admin registers an external MCP server (URL + auth),
+// discovers its tools with a real `initialize`/`tools/list` handshake,
+// then opts individual tools into the agent Actions checklist above
+// (KnowledgeAndMemoryPanel's own "always-visible admin sub-panel"
+// convention, not a tab).
+function McpServersPanel() {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const serversQuery = useQuery({ queryKey: ["mcpServers"], queryFn: () => api.listMcpServers(), enabled: open });
+  const servers = serversQuery.data ?? [];
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<McpServer | null>(null);
+  const [toolsFor, setToolsFor] = useState<McpServer | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["mcpServers"] });
+    queryClient.invalidateQueries({ queryKey: ["agentMcpTools"] });
+  }
+
+  const create = useMutation({
+    mutationFn: (input: McpServerInput) => api.createMcpServer(input),
+    onSuccess: () => {
+      setCreating(false);
+      setError(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not add this MCP server"),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: McpServerUpdate }) => api.updateMcpServer(id, input),
+    onSuccess: () => {
+      setEditing(null);
+      setError(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this MCP server"),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteMcpServer(id),
+    onSuccess: invalidate,
+  });
+  const discover = useMutation({
+    mutationFn: (id: string) => api.discoverMcpTools(id),
+    onSuccess: invalidate,
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not reach this MCP server"),
+  });
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ margin: 0 }}>MCP Servers</h3>
+        <button className="btn btn-secondary" onClick={() => setOpen((o) => !o)}>
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        The MCP <em>client</em> role - Lanesra calling out to an external MCP server, the mirror image of the MCP server role this
+        workspace already exposes (Admin → LLM & MCP). Discover a server's tools, then opt individual ones into an agent's Actions
+        checklist above.
+      </p>
+      {open && (
+        <div>
+          {error && <div className="error-banner">{error}</div>}
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>URL</th>
+                  <th>Last discovery</th>
+                  <th>Agent tools</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {servers.map((s) => (
+                  <tr key={s.id}>
+                    <td>{s.name}</td>
+                    <td style={{ fontSize: 12 }}>{s.base_url}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {s.last_discovery_status ? (
+                        <span className={`badge${s.last_discovery_status === "connected" ? " badge-success" : " badge-danger"}`}>
+                          {s.last_discovery_status}
+                        </span>
+                      ) : (
+                        "never"
+                      )}
+                      {s.last_discovery_message && <div style={{ color: "var(--text-muted)" }}>{s.last_discovery_message}</div>}
+                    </td>
+                    <td>
+                      <span className={`badge${s.agent_tools_enabled ? " badge-success" : ""}`}>{s.agent_tools_enabled ? "on" : "off"}</span>
+                      {s.agent_write_tools_enabled && (
+                        <span className="badge badge-danger" style={{ marginLeft: 4 }}>
+                          write
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button className="btn btn-secondary" onClick={() => discover.mutate(s.id)} disabled={discover.isPending}>
+                          {discover.isPending ? "Discovering..." : "Discover tools"}
+                        </button>
+                        <button className="btn btn-secondary" onClick={() => setToolsFor(s)}>
+                          Tools
+                        </button>
+                        <button className="btn btn-secondary" onClick={() => setEditing(s)}>
+                          Edit
+                        </button>
+                        <button className="btn btn-secondary" onClick={() => remove.mutate(s.id)} disabled={remove.isPending}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!serversQuery.isLoading && servers.length === 0 && <div className="empty-state">No MCP servers configured yet.</div>}
+          </div>
+          <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={() => setCreating(true)}>
+            + Add MCP server
+          </button>
+
+          {(creating || editing) && (
+            <McpServerForm
+              initial={editing ?? undefined}
+              onCancel={() => {
+                setCreating(false);
+                setEditing(null);
+              }}
+              onSubmit={(input) =>
+                editing
+                  ? update.mutate({ id: editing.id, input: { ...input, agent_tools_enabled: editing.agent_tools_enabled, agent_write_tools_enabled: editing.agent_write_tools_enabled } })
+                  : create.mutate(input)
+              }
+              pending={create.isPending || update.isPending}
+            />
+          )}
+
+          {toolsFor && (
+            <McpToolsPanel
+              server={toolsFor}
+              onClose={() => setToolsFor(null)}
+              onGatesChanged={(input) => update.mutate({ id: toolsFor.id, input })}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const AUTH_MODE_CHOICES: [string, string][] = [
+  ["none", "None"],
+  ["bearer", "Bearer token"],
+  ["api_key", "API key (X-Api-Key header)"],
+  ["basic", "Basic auth (user:pass)"],
+  ["custom_header", "Custom header (Name:Value)"],
+];
+
+function McpServerForm({
+  initial,
+  onCancel,
+  onSubmit,
+  pending,
+}: {
+  initial?: McpServer;
+  onCancel: () => void;
+  onSubmit: (input: McpServerInput) => void;
+  pending: boolean;
+}) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "");
+  const [authMode, setAuthMode] = useState(initial?.auth_mode ?? "none");
+  const [secretValue, setSecretValue] = useState("");
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginTop: 12 }}>
+      <h4 style={{ marginTop: 0 }}>{initial ? `Edit ${initial.name}` : "New MCP server"}</h4>
+      <form
+        className="form-grid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit({ name: name.trim(), base_url: baseUrl.trim(), auth_mode: authMode, secret_value: secretValue || null });
+        }}
+      >
+        <div className="field">
+          <label>Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="field">
+          <label>Server URL</label>
+          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://example.com/mcp" required />
+        </div>
+        <div className="field">
+          <label>Auth mode</label>
+          <select value={authMode} onChange={(e) => setAuthMode(e.target.value)}>
+            {AUTH_MODE_CHOICES.map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {authMode !== "none" && (
+          <div className="field">
+            <label>{initial?.auth_mode === authMode ? "New secret (leave blank to keep current)" : "Secret"}</label>
+            <input type="password" value={secretValue} onChange={(e) => setSecretValue(e.target.value)} />
+          </div>
+        )}
+        <div className="field full" style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={pending}>
+            {pending ? "Saving..." : initial ? "Save server" : "Add server"}
+          </button>
+          <button className="btn btn-secondary" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function McpToolsPanel({
+  server,
+  onClose,
+  onGatesChanged,
+}: {
+  server: McpServer;
+  onClose: () => void;
+  onGatesChanged: (input: McpServerUpdate) => void;
+}) {
+  const queryClient = useQueryClient();
+  const toolsQuery = useQuery({ queryKey: ["mcpTools", server.id], queryFn: () => api.listMcpTools(server.id) });
+  const tools = toolsQuery.data ?? [];
+
+  const setFlags = useMutation({
+    mutationFn: ({ toolName, isWrite, enabled }: { toolName: string; isWrite: boolean; enabled: boolean }) => api.setMcpToolFlags(server.id, toolName, isWrite, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcpTools", server.id] });
+      queryClient.invalidateQueries({ queryKey: ["agentMcpTools"] });
+    },
+  });
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginTop: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h4 style={{ margin: 0 }}>{server.name}'s tools</h4>
+        <button className="btn btn-secondary" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <div style={{ display: "flex", gap: 16, margin: "8px 0" }}>
+        <label style={{ fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={server.agent_tools_enabled}
+            onChange={(e) =>
+              onGatesChanged({ name: server.name, base_url: server.base_url ?? "", auth_mode: server.auth_mode, agent_tools_enabled: e.target.checked, agent_write_tools_enabled: server.agent_write_tools_enabled })
+            }
+          />{" "}
+          Expose enabled tools to agents
+        </label>
+        <label style={{ fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={server.agent_write_tools_enabled}
+            onChange={(e) =>
+              onGatesChanged({ name: server.name, base_url: server.base_url ?? "", auth_mode: server.auth_mode, agent_tools_enabled: server.agent_tools_enabled, agent_write_tools_enabled: e.target.checked })
+            }
+          />{" "}
+          Also allow tools flagged as a write/mutating action
+        </label>
+      </div>
+      {toolsQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading...</p>}
+      {tools.length === 0 && !toolsQuery.isLoading && <div className="empty-state">No tools discovered yet - use "Discover tools" first.</div>}
+      {tools.map((t: McpTool) => (
+        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, marginBottom: 6, padding: 6, background: "var(--surface-2, #f5f5f5)", borderRadius: 6 }}>
+          <label style={{ flex: 1 }}>
+            <input
+              type="checkbox"
+              checked={t.enabled}
+              onChange={(e) => setFlags.mutate({ toolName: t.tool_name, isWrite: t.is_write, enabled: e.target.checked })}
+            />{" "}
+            <strong>{t.tool_name}</strong> {t.description && <span style={{ color: "var(--text-muted)" }}>- {t.description}</span>}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={t.is_write}
+              onChange={(e) => setFlags.mutate({ toolName: t.tool_name, isWrite: e.target.checked, enabled: t.enabled })}
+            />{" "}
+            Write/mutating
+          </label>
         </div>
       ))}
     </div>

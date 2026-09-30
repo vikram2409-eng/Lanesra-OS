@@ -3850,3 +3850,62 @@ export interface KnowledgeSearchHit {
   content: string;
   similarity: number;
 }
+
+// AI Agent Platform v2 (GitHub issue #170, backend half): the MCP
+// client role - an admin-configured external MCP server (an
+// integration_connections row under the hood, connection_type "mcp")
+// plus its own last-discovered tools - see `mcp_client_service` (Rust).
+export interface McpServer {
+  id: string;
+  workspace_id: string;
+  connection_id: string;
+  name: string;
+  base_url: string | null;
+  auth_mode: string;
+  agent_tools_enabled: boolean;
+  agent_write_tools_enabled: boolean;
+  last_discovered_at: string | null;
+  last_discovery_status: "connected" | "failed" | null;
+  last_discovery_message: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface McpServerInput {
+  name: string;
+  base_url: string;
+  auth_mode: string;
+  secret_value?: string | null;
+}
+
+export interface McpServerUpdate {
+  name: string;
+  base_url: string;
+  auth_mode: string;
+  secret_value?: string | null;
+  agent_tools_enabled: boolean;
+  agent_write_tools_enabled: boolean;
+}
+
+export interface McpTool {
+  id: string;
+  mcp_server_id: string;
+  tool_name: string;
+  description: string;
+  input_schema_json: string;
+  is_write: boolean;
+  enabled: boolean;
+  discovered_at: string;
+}
+
+// The MCP-client mirror of AgentConnectorToolOption above - see
+// `mcp_client_service::list_options` (Rust).
+export interface AgentMcpToolOption {
+  tool_name: string;
+  mcp_server_id: string;
+  mcp_server_name: string;
+  tool_description: string;
+  requires_admin: boolean;
+}
