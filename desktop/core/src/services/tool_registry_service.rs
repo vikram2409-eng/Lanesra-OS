@@ -49,8 +49,8 @@ pub fn default_risk_for(tool_name: &str, source: Option<&str>) -> RiskLevel {
         return risk;
     }
     match source {
-        Some("connector_read") => RiskLevel::Read,
-        Some("connector_write") => RiskLevel::ExternalAction,
+        Some("connector_read" | "mcp_read") => RiskLevel::Read,
+        Some("connector_write" | "mcp_write") => RiskLevel::ExternalAction,
         _ => {
             if tool_name.starts_with("list_") || tool_name.starts_with("get_") || tool_name.contains("search_") {
                 RiskLevel::Read

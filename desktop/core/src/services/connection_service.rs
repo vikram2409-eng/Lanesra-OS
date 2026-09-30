@@ -34,7 +34,7 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-pub const CONNECTION_TYPES: &[&str] = &["rest", "webhook", "sftp", "postgres", "odata", "smtp"];
+pub const CONNECTION_TYPES: &[&str] = &["rest", "webhook", "sftp", "postgres", "odata", "smtp", "mcp"];
 const AUTH_MODES: &[&str] = &["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code"];
 
 fn validate_types(connection_type: &str, auth_mode: &str) -> AppResult<()> {

@@ -54,6 +54,7 @@ use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, Use
 use lanesra_core::models::voice::{SetVoicePinInput, VoiceLlmSettingsInput, VoicePolicyBindingInput, VoicePreferencesInput};
 use lanesra_core::models::execution_graph::ExecutionGraphInput;
 use lanesra_core::models::ai_knowledge::KnowledgeCollectionInput;
+use lanesra_core::models::ai_mcp::{McpServerInput, McpServerUpdate};
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
@@ -72,7 +73,7 @@ use lanesra_core::services::{
     execution_graph_service,
     external_object_service,
     graph_runtime_service,
-    ai_knowledge_service, ai_memory_service,
+    ai_knowledge_service, ai_memory_service, mcp_client_service,
     industry_package_service,
     integration_job_service, integration_log_service,
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
@@ -1644,6 +1645,43 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             ai_knowledge_service::delete_source(conn, &require_workspace_id(conn)?, &id, actor)?;
             to_value(())
         }
+
+        // AI Agent Platform v2 (GitHub issue #170, backend half): MCP
+        // client CRUD + tool-allowlist management are all plain sync;
+        // `discover_mcp_tools` (a real handshake against the external
+        // server) is its own route in `admin_actions.rs`.
+        "create_mcp_server" => {
+            let input: McpServerInput = arg(args, "input")?;
+            to_value(mcp_client_service::create_server(conn, &require_workspace_id(conn)?, master_key, &input, actor)?)
+        }
+        "list_mcp_servers" => to_value(mcp_client_service::list_servers(conn, &require_workspace_id(conn)?, actor)?),
+        "get_mcp_server" => {
+            let id: String = arg(args, "id")?;
+            to_value(mcp_client_service::get_server(conn, &require_workspace_id(conn)?, &id, actor)?)
+        }
+        "update_mcp_server" => {
+            let id: String = arg(args, "id")?;
+            let input: McpServerUpdate = arg(args, "input")?;
+            to_value(mcp_client_service::update_server(conn, &require_workspace_id(conn)?, master_key, &id, &input, actor)?)
+        }
+        "delete_mcp_server" => {
+            let id: String = arg(args, "id")?;
+            mcp_client_service::delete_server(conn, &require_workspace_id(conn)?, &id, actor)?;
+            to_value(())
+        }
+        "list_mcp_tools" => {
+            let id: String = arg(args, "id")?;
+            to_value(mcp_client_service::list_tools(conn, &require_workspace_id(conn)?, &id, actor)?)
+        }
+        "set_mcp_tool_flags" => {
+            let id: String = arg(args, "id")?;
+            let tool_name: String = arg(args, "toolName")?;
+            let is_write: bool = arg(args, "isWrite")?;
+            let enabled: bool = arg(args, "enabled")?;
+            mcp_client_service::set_tool_flags(conn, &require_workspace_id(conn)?, &id, &tool_name, is_write, enabled, actor)?;
+            to_value(())
+        }
+        "list_agent_mcp_tools" => to_value(mcp_client_service::list_options(conn, &require_workspace_id(conn)?)?),
 
         // AI & Agentic Layer, Phase 7e: rejecting a paused run and
         // exporting its trace are both plain sync; `approve_ai_agent_

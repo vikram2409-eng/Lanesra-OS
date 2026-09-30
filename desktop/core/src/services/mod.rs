@@ -42,6 +42,7 @@ pub mod industry_package_service;
 pub mod integration_job_service;
 pub mod integration_log_service;
 pub mod mapping_service;
+pub mod mcp_client_service;
 pub mod api_client_service;
 pub mod api_object_service;
 pub mod connection_ref_service;

@@ -7381,9 +7381,11 @@ function aiAgentsTab(body){
  <div id="agentVersionsWrap"></div>
  <div id="policyEngineWrap"></div>
  <div id="knowledgeMemoryWrap"></div>
+ <div id="mcpServersWrap"></div>
  </div>`;
  renderPolicyEnginePanel(agents,$('#policyEngineWrap'));
  renderKnowledgeMemoryPanel(agents,$('#knowledgeMemoryWrap'));
+ renderMcpServersPanel($('#mcpServersWrap'));
  $('#addAgent').onclick=()=>aiAgentModal();
  body.querySelectorAll('[data-edit-agent]').forEach(b=>b.onclick=()=>aiAgentModal(agents.find(a=>a.id===b.dataset.editAgent)));
  body.querySelectorAll('[data-toggle-agent]').forEach(b=>b.onclick=()=>{const a=agents.find(x=>x.id===b.dataset.toggleAgent);a.isActive=!a.isActive;save();renderView()});
@@ -7629,6 +7631,117 @@ function renderMemoryInspectorSection(wrap){
   data.aiMemoryItems.push({id:'mem_'+uid(),memoryType:$('#kmNewMemoryType').value,content,classification:'standard',source:'user_provided',createdAt:new Date().toISOString()});
   save();renderMemoryInspectorSection(wrap);
  };
+}
+// ---- AI Agent Platform v2, Phase 5a mirror ---------------------------------
+// MCP client role: an admin-configured external MCP server (name/base URL/
+// auth mode, reusing the same auth-mode shape Integration Hub's own
+// Connections already use) plus the tools that server's own tools/list
+// handshake returns - real, structured browser data mirroring
+// ai_mcp_servers/ai_mcp_tools 1:1. Same two-level write gating as the real
+// edition: a tool only becomes an agent-callable write tool when both its
+// own "Write" checkbox AND that server's "Allow write tools" checkbox are
+// on - read-only is always the default. "Discover tools" is a local
+// simulation (a fixed, plausible tool list, honestly labeled) - this
+// static demo has no server to make a real outbound tools/list POST from,
+// the same "real shape, no real wire" line the Connections/Connectors
+// sections above already draw. Re-discovering preserves any Write/Enabled
+// flags already set on a matching tool name, mirroring
+// ai_mcp_repo::replace_tools's own reconciliation.
+const MCP_AUTH_LABELS={none:'None',bearer:'Bearer token',api_key:'API key (X-Api-Key)',basic:'Basic auth',custom_header:'Custom header'};
+const MCP_SIMULATED_TOOL_SETS=[
+ [['list_orders','List orders from the connected system'],['get_order','Fetch one order by id'],['create_shipment','Create a shipment for an order']],
+ [['search_tickets','Search support tickets'],['get_ticket','Fetch one ticket by id'],['update_ticket_status','Change a ticket status']],
+ [['list_files','List files in a folder'],['read_file','Read one file’s contents'],['write_file','Create or overwrite a file']],
+];
+function ensureMcpServers(){if(!data.aiMcpServers)data.aiMcpServers=[];if(!data.aiMcpTools)data.aiMcpTools=[]}
+function renderMcpServersPanel(wrap){
+ ensureMcpServers();
+ const servers=data.aiMcpServers;
+ wrap.innerHTML=`<div class="panel" style="margin-top:16px">
+ <div class="panel-head"><h3 style="margin:0">MCP Servers</h3><button class="btn btn-primary" id="addMcpServer">+ Add MCP server</button></div>
+ <p class="muted" style="font-size:13px">The MCP client role: connect an external MCP server so its tools become agent-callable, the mirror image of this workspace's own MCP server (Admin → LLM &amp; MCP) that exposes Lanesra's tools out to a client like Claude Desktop. "Discover tools" below simulates the tools/list handshake with a plausible result - this static demo has no server to make a real outbound call from; the desktop/Team Workspace edition performs a real JSON-RPC 2.0 request.</p>
+ ${servers.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Base URL</th><th>Auth</th><th>Last discovery</th><th>Agent tools</th><th>Actions</th></tr></thead><tbody>${servers.map(s=>{
+   const toolCount=data.aiMcpTools.filter(t=>t.mcpServerId===s.id).length;
+   const statusBadge=s.lastDiscoveryStatus==='success'?badgeMaybe('Discovered'):(s.lastDiscoveryStatus==='error'?'<span class="badge badge-danger">Failed</span>':'<span class="muted">Never run</span>');
+   return `<tr><td><strong>${s.name}</strong></td><td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><code>${s.baseUrl}</code></td><td>${MCP_AUTH_LABELS[s.authMode]}</td><td>${statusBadge}${s.lastDiscoveryMessage?`<br><span class="muted" style="font-size:11px">${s.lastDiscoveryMessage}</span>`:''}</td><td>${s.agentToolsEnabled?badgeMaybe(`${toolCount} tool${toolCount===1?'':'s'}`):'<span class="muted">Off</span>'}${s.agentWriteToolsEnabled?' <span class="badge">+write</span>':''}</td><td><div class="actions"><button class="icon-btn" data-discover-mcp="${s.id}">Discover tools</button><button class="icon-btn" data-tools-mcp="${s.id}">Tools (${toolCount})</button><button class="icon-btn" data-edit-mcp="${s.id}">Edit</button><button class="icon-btn" data-del-mcp="${s.id}">Delete</button></div></td></tr>`;
+  }).join('')}</tbody></table></div>`:'<div class="empty">No MCP servers configured yet.</div>'}
+ <div id="mcpToolsPanelWrap" style="margin-top:14px"></div>
+ </div>`;
+ $('#addMcpServer').onclick=()=>mcpServerModal();
+ wrap.querySelectorAll('[data-edit-mcp]').forEach(b=>b.onclick=()=>mcpServerModal(servers.find(s=>s.id===b.dataset.editMcp)));
+ wrap.querySelectorAll('[data-del-mcp]').forEach(b=>b.onclick=()=>{
+  if(!confirm('Delete this MCP server? Its discovered tools go with it - this does not affect any real data.'))return;
+  data.aiMcpServers=data.aiMcpServers.filter(s=>s.id!==b.dataset.delMcp);
+  data.aiMcpTools=data.aiMcpTools.filter(t=>t.mcpServerId!==b.dataset.delMcp);
+  save();renderMcpServersPanel(wrap);
+ });
+ wrap.querySelectorAll('[data-discover-mcp]').forEach(b=>b.onclick=()=>discoverMcpTools(b.dataset.discoverMcp,wrap));
+ wrap.querySelectorAll('[data-tools-mcp]').forEach(b=>b.onclick=()=>renderMcpToolsSection(servers.find(s=>s.id===b.dataset.toolsMcp),$('#mcpToolsPanelWrap'),wrap));
+}
+function mcpServerModal(server){
+ const isEdit=!!server;
+ const authMode=server?.authMode||'none';
+ const body=`<form id="mcpServerForm" class="form-grid">
+ <div class="field full"><label>Server name</label><input name="name" value="${server?.name||''}" required></div>
+ <div class="field full"><label>Base URL</label><input name="baseUrl" type="url" value="${server?.baseUrl||''}" placeholder="https://mcp.example.com/mcp" required></div>
+ <div class="field"><label>Auth</label><select name="authMode" id="mcpAuthSelect">${Object.keys(MCP_AUTH_LABELS).map(a=>`<option value="${a}" ${authMode===a?'selected':''}>${MCP_AUTH_LABELS[a]}</option>`).join('')}</select></div>
+ <div class="field full" id="mcpAuthValueWrap" ${authMode==='none'?'hidden':''}><label>Secret</label><input name="secretValue" value="${server?.secretValue||''}" placeholder="Stored in this browser only"></div>
+ <div class="modal-actions">${isEdit?'<button type="button" class="btn btn-secondary" data-delete-mcp>Delete</button>':''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save server':'Add server'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit MCP server: ${server.name}`:'New MCP server',body);
+ $('[data-close]').onclick=closeModal;
+ $('#mcpAuthSelect').onchange=e=>{$('#mcpAuthValueWrap').hidden=e.target.value==='none'};
+ $('#mcpServerForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(isEdit){Object.assign(server,{name:fd.name,baseUrl:fd.baseUrl,authMode:fd.authMode,secretValue:fd.secretValue||''})}
+  else{data.aiMcpServers.push({id:'mcp_'+uid(),name:fd.name,baseUrl:fd.baseUrl,authMode:fd.authMode,secretValue:fd.secretValue||'',agentToolsEnabled:false,agentWriteToolsEnabled:false,lastDiscoveryStatus:null,lastDiscoveryMessage:null,createdAt:new Date().toISOString()})}
+  save();closeModal();toast(isEdit?'MCP server saved':'MCP server added');renderAdminTab();
+ };
+ if(isEdit){$('[data-delete-mcp]').onclick=()=>{
+  if(!confirm('Delete this MCP server?'))return;
+  data.aiMcpServers=data.aiMcpServers.filter(s=>s.id!==server.id);
+  data.aiMcpTools=data.aiMcpTools.filter(t=>t.mcpServerId!==server.id);
+  save();closeModal();toast('MCP server deleted');renderAdminTab();
+ }}
+}
+// Simulated tools/list result - a fixed, deterministic (by server id) pick
+// from a small set of plausible tool catalogs, since this static demo has
+// no real MCP server to call. Preserves any tool already discovered here
+// (its isWrite/enabled flags), mirroring ai_mcp_repo::replace_tools's own
+// "don't reset an admin's prior classification on re-discovery" rule.
+function discoverMcpTools(serverId,panelWrap){
+ const server=data.aiMcpServers.find(s=>s.id===serverId); if(!server)return;
+ const setIdx=Math.abs(serverId.split('').reduce((h,c)=>h*31+c.charCodeAt(0),0))%MCP_SIMULATED_TOOL_SETS.length;
+ const discovered=MCP_SIMULATED_TOOL_SETS[setIdx];
+ const existing=data.aiMcpTools.filter(t=>t.mcpServerId===serverId);
+ data.aiMcpTools=data.aiMcpTools.filter(t=>t.mcpServerId!==serverId);
+ discovered.forEach(([toolName,description])=>{
+  const prior=existing.find(t=>t.toolName===toolName);
+  data.aiMcpTools.push({id:prior?.id||'mcpt_'+uid(),mcpServerId:serverId,toolName,description,isWrite:prior?.isWrite||false,enabled:prior?prior.enabled:false,discoveredAt:new Date().toISOString()});
+ });
+ server.lastDiscoveryStatus='success';
+ server.lastDiscoveryMessage=`Discovered ${discovered.length} tool${discovered.length===1?'':'s'} (simulated - no real network call was made)`;
+ save();toast('Tool discovery simulated');renderMcpServersPanel(panelWrap);
+}
+function renderMcpToolsSection(server,wrap,panelWrap){
+ if(!server){wrap.innerHTML='';return}
+ const tools=data.aiMcpTools.filter(t=>t.mcpServerId===server.id);
+ wrap.innerHTML=`<div style="border:1px solid var(--border,#333);border-radius:8px;padding:10px">
+ <div style="display:flex;justify-content:space-between;align-items:center"><h4 style="margin:0">Tools - ${server.name}</h4><button class="btn btn-secondary" style="font-size:12px" id="mcpToolsClose">Close</button></div>
+ <label style="font-size:13px;display:block;margin:10px 0"><input type="checkbox" id="mcpGateAgentTools" ${server.agentToolsEnabled?'checked':''}> Expose this server's enabled tools as agent tools</label>
+ <label style="font-size:13px;display:block;margin-bottom:10px"><input type="checkbox" id="mcpGateWriteTools" ${server.agentWriteToolsEnabled?'checked':''}> Allow write-classified tools to run as agent tools (both this AND a tool's own Write flag must be on)</label>
+ ${tools.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Tool</th><th>Description</th><th>Enabled</th><th>Write</th></tr></thead><tbody>${tools.map(t=>`<tr><td><code style="font-size:12px">${t.toolName}</code></td><td class="muted" style="font-size:12px">${t.description||''}</td><td><input type="checkbox" data-mcp-tool-enabled="${t.id}" ${t.enabled?'checked':''}></td><td><input type="checkbox" data-mcp-tool-write="${t.id}" ${t.isWrite?'checked':''}></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No tools discovered yet - click Discover tools above.</div>'}
+ </div>`;
+ $('#mcpToolsClose').onclick=()=>{wrap.innerHTML=''};
+ $('#mcpGateAgentTools').onchange=e=>{server.agentToolsEnabled=e.target.checked;save();renderMcpServersPanel(panelWrap);renderMcpToolsSection(server,wrap,panelWrap)};
+ $('#mcpGateWriteTools').onchange=e=>{server.agentWriteToolsEnabled=e.target.checked;save();renderMcpServersPanel(panelWrap);renderMcpToolsSection(server,wrap,panelWrap)};
+ wrap.querySelectorAll('[data-mcp-tool-enabled]').forEach(cb=>cb.onchange=()=>{
+  const t=data.aiMcpTools.find(x=>x.id===cb.dataset.mcpToolEnabled); if(t){t.enabled=cb.checked;save();renderMcpServersPanel(panelWrap)}
+ });
+ wrap.querySelectorAll('[data-mcp-tool-write]').forEach(cb=>cb.onchange=()=>{
+  const t=data.aiMcpTools.find(x=>x.id===cb.dataset.mcpToolWrite); if(t){t.isWrite=cb.checked;save();renderMcpServersPanel(panelWrap)}
+ });
 }
 // AI & Agentic Layer, Phase 7c: guardrailsMd is a free-text operational-
 // boundary statement injected into this agent's system prompt alongside
