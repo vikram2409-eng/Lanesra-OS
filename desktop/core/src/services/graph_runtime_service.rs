@@ -314,7 +314,11 @@ async fn execute_node(
                 record!("failed", Some(&input_text), None, Some(&msg));
                 return Err(AppError::Validation(msg));
             };
-            match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, &input_text).await {
+            // AI Agent Platform v2, Phase 4: this graph run's own id scopes
+            // Working Memory the same way an Orchestration Pipeline's run
+            // id does (see `ai_orchestration_service`'s own call site).
+            let memory_context = crate::models::ai_memory::AgentMemoryContext { session_key: None, run_id: Some(run.id.clone()) };
+            match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, &input_text, &memory_context).await {
                 Ok(outcome) => {
                     context.insert(node.node_key.clone(), json!({"output": outcome.final_text}));
                     record!("completed", Some(&input_text), Some(&json!({"output": outcome.final_text}).to_string()), None);

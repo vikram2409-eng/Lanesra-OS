@@ -36,6 +36,13 @@ import type {
   ExecutionGraph,
   ExecutionGraphInput,
   GraphRun,
+  MemoryType,
+  MemoryItem,
+  KnowledgeCollection,
+  KnowledgeCollectionInput,
+  KnowledgeSource,
+  KnowledgeSourceInput,
+  KnowledgeSearchHit,
   AiSkill,
   AiSkillInput,
   AiAgentPipeline,
@@ -423,6 +430,24 @@ export const api = {
   resumeGraphRun: (id: string) => call<GraphRun>("resume_graph_run", { id }),
   resolveGraphRunApproval: (id: string, approve: boolean, notes?: string | null) => call<GraphRun>("resolve_graph_run_approval", { id, approve, notes: notes ?? null }),
   cancelGraphRun: (id: string) => call<GraphRun>("cancel_graph_run", { id }),
+
+  // AI Agent Platform v2, Phase 4: Memory Inspector + Document RAG
+  // (Knowledge Collections/Sources). Source create/update/search call the
+  // embeddings provider, so their invoke names differ from the plain-sync
+  // ones - see dispatch.rs/admin_actions.rs's own split.
+  listMemoryItems: (memoryType?: MemoryType | null, entityType?: string | null, entityId?: string | null) =>
+    call<MemoryItem[]>("list_memory_items", { memoryType: memoryType ?? null, entityType: entityType ?? null, entityId: entityId ?? null }),
+  forgetMemoryItem: (id: string) => call<void>("forget_memory_item", { id }),
+  listKnowledgeCollections: () => call<KnowledgeCollection[]>("list_knowledge_collections", {}),
+  createKnowledgeCollection: (input: KnowledgeCollectionInput) => call<KnowledgeCollection>("create_knowledge_collection", { input }),
+  updateKnowledgeCollection: (id: string, input: KnowledgeCollectionInput) => call<KnowledgeCollection>("update_knowledge_collection", { id, input }),
+  deleteKnowledgeCollection: (id: string) => call<void>("delete_knowledge_collection", { id }),
+  listKnowledgeSources: (collectionId?: string | null) => call<KnowledgeSource[]>("list_knowledge_sources", { collectionId: collectionId ?? null }),
+  getKnowledgeSource: (id: string) => call<KnowledgeSource>("get_knowledge_source", { id }),
+  deleteKnowledgeSource: (id: string) => call<void>("delete_knowledge_source", { id }),
+  createKnowledgeSource: (input: KnowledgeSourceInput) => call<KnowledgeSource>("create_knowledge_source", { input }),
+  updateKnowledgeSource: (id: string, input: KnowledgeSourceInput) => call<KnowledgeSource>("update_knowledge_source", { id, input }),
+  searchKnowledgePreview: (query: string, collectionId?: string | null) => call<KnowledgeSearchHit[]>("search_knowledge_preview", { query, collectionId: collectionId ?? null }),
 
   listAiSkills: (activeOnly: boolean) => call<AiSkill[]>("list_ai_skills", { activeOnly }),
   createAiSkill: (input: AiSkillInput) => call<AiSkill>("create_ai_skill", { input }),

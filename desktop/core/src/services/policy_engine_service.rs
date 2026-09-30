@@ -74,6 +74,28 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, t
     }
 }
 
+/// AI Agent Platform v2, Phase 4: the memory-write sibling of `evaluate`
+/// above - "may this content be persisted to memory" isn't a tool call
+/// (there's no `tool_name`/risk-tier concept for a piece of text), so it
+/// doesn't fit through `evaluate`'s `tool_registry_service::effective_risk`
+/// path or `PolicyDecision`'s `RiskLevel`-carrying shape unmodified. Reuses
+/// the same resolved `AiAgentPolicy` row; returns a plain `bool` rather
+/// than `PolicyDecision` since memory has only two outcomes, never a
+/// `RequireApproval` - there's no pending-approval concept meaningful for a
+/// background memory capture the way there is for an explicit tool call.
+/// Called by `ai_memory_service::remember` before a write, in front of
+/// `ai_memory_repo::create`, never in place of it - the same "governance
+/// layer, not a second enforcement path" principle this module's own top
+/// doc comment states.
+pub fn evaluate_memory_write(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, classification: &str) -> AppResult<bool> {
+    if classification != "restricted" {
+        return Ok(true);
+    }
+    let policy = resolve_policy(conn, workspace_id, agent_id)?;
+    let excludes_restricted = policy.map(|p| p.exclude_restricted_memory).unwrap_or(true);
+    Ok(!excludes_restricted)
+}
+
 /// Records the durable, auditable paper trail for a `RequireApproval`
 /// decision - see this module's own doc comment for why this doesn't
 /// (yet) pause and resume the calling run.

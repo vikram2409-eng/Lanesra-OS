@@ -53,6 +53,7 @@ use lanesra_core::models::status_transition::StatusTransitionInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser, PasswordChange, UserUpdate};
 use lanesra_core::models::voice::{SetVoicePinInput, VoiceLlmSettingsInput, VoicePolicyBindingInput, VoicePreferencesInput};
 use lanesra_core::models::execution_graph::ExecutionGraphInput;
+use lanesra_core::models::ai_knowledge::KnowledgeCollectionInput;
 use lanesra_core::models::workflow::{WorkflowDefinitionInput, WorkflowDefinitionUpdate};
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceLogo, WorkspaceUpdate};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
@@ -71,6 +72,7 @@ use lanesra_core::services::{
     execution_graph_service,
     external_object_service,
     graph_runtime_service,
+    ai_knowledge_service, ai_memory_service,
     industry_package_service,
     integration_job_service, integration_log_service,
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
@@ -1596,6 +1598,51 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_graph_runs" => {
             let graph_id: String = arg(args, "graphId")?;
             to_value(graph_runtime_service::list_runs_for_graph(conn, &graph_id, &require_workspace_id(conn)?, actor)?)
+        }
+
+        // AI Agent Platform v2, Phase 4: Memory Inspector listing/delete and
+        // Knowledge Collection/Source CRUD are all plain sync;
+        // `create_knowledge_source`/`update_knowledge_source`/
+        // `search_knowledge_preview` call the embeddings provider, so
+        // they're their own routes in `admin_actions.rs`.
+        "list_memory_items" => {
+            let memory_type: Option<String> = arg(args, "memoryType")?;
+            let entity_type: Option<String> = arg(args, "entityType")?;
+            let entity_id: Option<String> = arg(args, "entityId")?;
+            to_value(ai_memory_service::list_all(conn, &require_workspace_id(conn)?, memory_type.as_deref(), entity_type.as_deref(), entity_id.as_deref(), actor)?)
+        }
+        "forget_memory_item" => {
+            let id: String = arg(args, "id")?;
+            ai_memory_service::forget(conn, &require_workspace_id(conn)?, &id, actor)?;
+            to_value(())
+        }
+        "list_knowledge_collections" => to_value(ai_knowledge_service::list_collections(conn, &require_workspace_id(conn)?, actor)?),
+        "create_knowledge_collection" => {
+            let input: KnowledgeCollectionInput = arg(args, "input")?;
+            to_value(ai_knowledge_service::create_collection(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_knowledge_collection" => {
+            let id: String = arg(args, "id")?;
+            let input: KnowledgeCollectionInput = arg(args, "input")?;
+            to_value(ai_knowledge_service::update_collection(conn, &require_workspace_id(conn)?, &id, &input, actor)?)
+        }
+        "delete_knowledge_collection" => {
+            let id: String = arg(args, "id")?;
+            ai_knowledge_service::delete_collection(conn, &require_workspace_id(conn)?, &id, actor)?;
+            to_value(())
+        }
+        "list_knowledge_sources" => {
+            let collection_id: Option<String> = arg(args, "collectionId")?;
+            to_value(ai_knowledge_service::list_sources(conn, &require_workspace_id(conn)?, collection_id.as_deref(), actor)?)
+        }
+        "get_knowledge_source" => {
+            let id: String = arg(args, "id")?;
+            to_value(ai_knowledge_service::get_source(conn, &require_workspace_id(conn)?, &id, actor)?)
+        }
+        "delete_knowledge_source" => {
+            let id: String = arg(args, "id")?;
+            ai_knowledge_service::delete_source(conn, &require_workspace_id(conn)?, &id, actor)?;
+            to_value(())
         }
 
         // AI & Agentic Layer, Phase 7e: rejecting a paused run and

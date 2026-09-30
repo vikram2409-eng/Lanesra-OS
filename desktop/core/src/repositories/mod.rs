@@ -9,6 +9,8 @@ pub mod ai_agent_version_repo;
 pub mod ai_approval_repo;
 pub mod ai_eval_repo;
 pub mod ai_gateway_failover_repo;
+pub mod ai_knowledge_repo;
+pub mod ai_memory_repo;
 pub mod ai_provider_repo;
 pub mod ai_settings_repo;
 pub mod ai_token_usage_repo;

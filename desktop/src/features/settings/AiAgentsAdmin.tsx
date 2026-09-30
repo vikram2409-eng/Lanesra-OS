@@ -20,6 +20,13 @@ import type {
   AiSkill,
   AiToolRegistryOverride,
   RiskLevel,
+  KnowledgeCollection,
+  KnowledgeCollectionInput,
+  KnowledgeSource,
+  KnowledgeSourceInput,
+  KnowledgeSearchHit,
+  MemoryItem,
+  MemoryType,
 } from "../../lib/types";
 
 // Phase 7a: the DLP classes an agent's forced-air-gap list can name -
@@ -317,6 +324,8 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
       <ApprovalsPanel />
 
       <PolicyEnginePanel agents={agents} />
+
+      <KnowledgeAndMemoryPanel />
 
       {triggersFor && (
         <div className="card" style={{ marginTop: 16 }}>
@@ -1245,6 +1254,7 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
   const queryClient = useQueryClient();
   const [threshold, setThreshold] = useState<RiskLevel | "">(policy?.require_approval_at_or_above ?? "");
   const [blockedText, setBlockedText] = useState((policy?.blocked_tool_names ?? []).join(", "));
+  const [excludeRestrictedMemory, setExcludeRestrictedMemory] = useState(policy?.exclude_restricted_memory ?? true);
 
   const save = useMutation({
     mutationFn: () => {
@@ -1254,6 +1264,7 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean),
+        exclude_restricted_memory: excludeRestrictedMemory,
       };
       return api.upsertAiAgentPolicy(agentId, input);
     },
@@ -1281,6 +1292,10 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
           onChange={(e) => setBlockedText(e.target.value)}
           placeholder="e.g. create_api_client, archive_record"
         />
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}>
+        <input type="checkbox" checked={excludeRestrictedMemory} onChange={(e) => setExcludeRestrictedMemory(e.target.checked)} style={{ marginRight: 6 }} />
+        Exclude 'restricted'-classified content from durable memory (Session/Working/Entity - remember tool)
       </label>
       <button className="btn btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
         {save.isPending ? "Saving..." : "Save policy"}
@@ -1350,6 +1365,239 @@ function ToolRegistryOverridesSection() {
           Set override
         </button>
       </div>
+    </div>
+  );
+}
+
+const MEMORY_TYPE_LABELS: Record<MemoryType, string> = { session: "Session", working: "Working", entity: "Entity" };
+
+/// AI Agent Platform v2, Phase 4: Knowledge Collections/Sources (Document
+/// RAG) and the admin Memory Inspector for Session/Working/Entity Memory -
+/// same collapsible-card convention as PolicyEnginePanel above. Agent
+/// Memory (memory_md) already has its own editor/history panel elsewhere
+/// on this page - unaffected by this section.
+function KnowledgeAndMemoryPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ margin: 0 }}>Knowledge & Memory</h3>
+        <button className="btn btn-secondary" onClick={() => setOpen((o) => !o)}>
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        Document RAG (curated Knowledge Sources any agent's search_knowledge tool can cite) and the three itemized memory types
+        (Session/Working/Entity) a remember/get_memory tool call writes and reads - distinct from an agent's own single persistent Memory
+        document above.
+      </p>
+      {open && (
+        <div>
+          <KnowledgeSection />
+          <MemoryInspectorSection />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KnowledgeSection() {
+  const queryClient = useQueryClient();
+  const collectionsQuery = useQuery({ queryKey: ["knowledgeCollections"], queryFn: () => api.listKnowledgeCollections() });
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>("");
+  const sourcesQuery = useQuery({
+    queryKey: ["knowledgeSources", selectedCollectionId || null],
+    queryFn: () => api.listKnowledgeSources(selectedCollectionId || null),
+  });
+
+  const [newCollectionName, setNewCollectionName] = useState("");
+  const createCollection = useMutation({
+    mutationFn: () => api.createKnowledgeCollection({ name: newCollectionName.trim() } as KnowledgeCollectionInput),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["knowledgeCollections"] });
+      setNewCollectionName("");
+    },
+  });
+  const deleteCollection = useMutation({
+    mutationFn: (id: string) => api.deleteKnowledgeCollection(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["knowledgeCollections"] });
+      setSelectedCollectionId("");
+    },
+  });
+
+  const [sourceName, setSourceName] = useState("");
+  const [sourceContent, setSourceContent] = useState("");
+  const createSource = useMutation({
+    mutationFn: () =>
+      api.createKnowledgeSource({ name: sourceName.trim(), content: sourceContent, collection_id: selectedCollectionId || null } as KnowledgeSourceInput),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
+      setSourceName("");
+      setSourceContent("");
+    },
+  });
+  const deleteSource = useMutation({
+    mutationFn: (id: string) => api.deleteKnowledgeSource(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] }),
+  });
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<KnowledgeSearchHit[] | null>(null);
+  const runSearch = useMutation({
+    mutationFn: () => api.searchKnowledgePreview(searchQuery, selectedCollectionId || null),
+    onSuccess: (hits) => setSearchResults(hits),
+  });
+
+  const collections = collectionsQuery.data ?? [];
+  const sources = sourcesQuery.data ?? [];
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 16 }}>
+      <h4 style={{ marginTop: 0, marginBottom: 4 }}>Document RAG - Knowledge Collections & Sources</h4>
+      <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+        Text content only in this pass - paste or generate the source's own content, no file upload/parsing yet. Chunked and embedded via
+        this workspace's configured provider; every search_knowledge result cites its source name.
+      </p>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+        <label style={{ fontSize: 13 }}>
+          Collection{" "}
+          <select value={selectedCollectionId} onChange={(e) => setSelectedCollectionId(e.target.value)}>
+            <option value="">All / unfiled</option>
+            {collections.map((c: KnowledgeCollection) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedCollectionId && (
+          <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => deleteCollection.mutate(selectedCollectionId)} disabled={deleteCollection.isPending}>
+            Delete this collection
+          </button>
+        )}
+        <input style={{ flex: 1, minWidth: 160 }} placeholder="New collection name" value={newCollectionName} onChange={(e) => setNewCollectionName(e.target.value)} />
+        <button className="btn btn-secondary" onClick={() => createCollection.mutate()} disabled={!newCollectionName.trim() || createCollection.isPending}>
+          Add collection
+        </button>
+      </div>
+
+      {sourcesQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading sources...</p>}
+      {sources.length === 0 && !sourcesQuery.isLoading && <div className="empty-state">No knowledge sources yet.</div>}
+      {sources.map((s: KnowledgeSource) => (
+        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <strong style={{ fontSize: 13 }}>{s.name}</strong>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            {s.chunk_count} chunk{s.chunk_count === 1 ? "" : "s"} - {s.status}
+          </span>
+          <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => deleteSource.mutate(s.id)} disabled={deleteSource.isPending}>
+            Delete
+          </button>
+        </div>
+      ))}
+
+      <div style={{ marginTop: 10 }}>
+        <input style={{ width: "100%", marginBottom: 6 }} placeholder="New source name" value={sourceName} onChange={(e) => setSourceName(e.target.value)} />
+        <textarea
+          style={{ width: "100%", minHeight: 80, marginBottom: 6 }}
+          placeholder="Source content (plain text)"
+          value={sourceContent}
+          onChange={(e) => setSourceContent(e.target.value)}
+        />
+        <button className="btn btn-primary" onClick={() => createSource.mutate()} disabled={!sourceName.trim() || !sourceContent.trim() || createSource.isPending}>
+          {createSource.isPending ? "Chunking & embedding..." : "Add source"}
+        </button>
+        {createSource.isError && <p style={{ fontSize: 12, color: "var(--danger, #c0392b)" }}>{(createSource.error as ApiError)?.message ?? "Failed to add source"}</p>}
+      </div>
+
+      <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input style={{ flex: 1 }} placeholder="Test search_knowledge with a query..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          <button className="btn btn-secondary" onClick={() => runSearch.mutate()} disabled={!searchQuery.trim() || runSearch.isPending}>
+            Search
+          </button>
+        </div>
+        {searchResults && (
+          <div style={{ marginTop: 8 }}>
+            {searchResults.length === 0 && <div className="empty-state">No matches.</div>}
+            {searchResults.map((hit, i) => (
+              <div key={i} style={{ fontSize: 12, marginBottom: 8, padding: 6, background: "var(--surface-2, #f5f5f5)", borderRadius: 6 }}>
+                <div style={{ fontWeight: 600 }}>
+                  {hit.source_name} (chunk {hit.chunk_index}, similarity {hit.similarity.toFixed(3)})
+                </div>
+                <div>{hit.content}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MemoryInspectorSection() {
+  const queryClient = useQueryClient();
+  const [memoryType, setMemoryType] = useState<MemoryType | "">("");
+  const [entityType, setEntityType] = useState("");
+  const [entityId, setEntityId] = useState("");
+
+  const itemsQuery = useQuery({
+    queryKey: ["memoryItems", memoryType || null, entityType || null, entityId || null],
+    queryFn: () => api.listMemoryItems(memoryType || null, entityType || null, entityId || null),
+  });
+
+  const forget = useMutation({
+    mutationFn: (id: string) => api.forgetMemoryItem(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["memoryItems"] }),
+  });
+
+  const items = itemsQuery.data ?? [];
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10 }}>
+      <h4 style={{ marginTop: 0, marginBottom: 4 }}>Memory Inspector</h4>
+      <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+        Every Session/Working/Entity item any agent's remember tool has written - inspect and delete retained memory, per this issue's own
+        governance requirement.
+      </p>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <select value={memoryType} onChange={(e) => setMemoryType(e.target.value as MemoryType | "")}>
+          <option value="">All types</option>
+          {(Object.keys(MEMORY_TYPE_LABELS) as MemoryType[]).map((t) => (
+            <option key={t} value={t}>
+              {MEMORY_TYPE_LABELS[t]}
+            </option>
+          ))}
+        </select>
+        <input style={{ width: 140 }} placeholder="Entity type (e.g. Company)" value={entityType} onChange={(e) => setEntityType(e.target.value)} />
+        <input style={{ width: 160 }} placeholder="Entity id" value={entityId} onChange={(e) => setEntityId(e.target.value)} />
+      </div>
+      {itemsQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading...</p>}
+      {items.length === 0 && !itemsQuery.isLoading && <div className="empty-state">No memory items match these filters.</div>}
+      {items.map((item: MemoryItem) => (
+        <div key={item.id} style={{ fontSize: 12, marginBottom: 8, padding: 6, background: "var(--surface-2, #f5f5f5)", borderRadius: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>
+              <strong>{MEMORY_TYPE_LABELS[item.memory_type]}</strong>
+              {item.entity_type && item.entity_id && (
+                <span>
+                  {" "}
+                  - {item.entity_type} #{item.entity_id}
+                </span>
+              )}
+              {item.classification !== "standard" && <span> - {item.classification}</span>}
+            </span>
+            <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => forget.mutate(item.id)} disabled={forget.isPending}>
+              Forget
+            </button>
+          </div>
+          <div style={{ marginTop: 4 }}>{item.content}</div>
+          <div style={{ color: "var(--text-muted)", marginTop: 2 }}>
+            {item.source} - {item.created_at}
+            {item.expires_at ? ` - expires ${item.expires_at}` : ""}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

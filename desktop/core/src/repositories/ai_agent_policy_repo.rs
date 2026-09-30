@@ -19,6 +19,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentPolicy> {
         agent_id: row.get("agent_id")?,
         require_approval_at_or_above: require_approval.and_then(|s| RiskLevel::from_str(&s)),
         blocked_tool_names: serde_json::from_str(&blocked_json).unwrap_or_default(),
+        exclude_restricted_memory: row.get::<_, i64>("exclude_restricted_memory")? != 0,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -49,18 +50,19 @@ pub fn upsert(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, inp
     let now = now_iso();
     let require_approval = input.require_approval_at_or_above.map(|r| r.as_str());
     let blocked_json = serde_json::to_string(&input.blocked_tool_names).unwrap_or_else(|_| "[]".into());
+    let exclude_restricted_memory = input.exclude_restricted_memory as i64;
     let existing = get(conn, workspace_id, agent_id)?;
     if let Some(existing) = existing {
         conn.execute(
-            "UPDATE ai_agent_policies SET require_approval_at_or_above = ?1, blocked_tool_names_json = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?5",
-            rusqlite::params![require_approval, blocked_json, now, actor_user_id, existing.id],
+            "UPDATE ai_agent_policies SET require_approval_at_or_above = ?1, blocked_tool_names_json = ?2, exclude_restricted_memory = ?3, updated_at = ?4, updated_by = ?5 WHERE id = ?6",
+            rusqlite::params![require_approval, blocked_json, exclude_restricted_memory, now, actor_user_id, existing.id],
         )?;
     } else {
         let id = new_uuid();
         conn.execute(
-            "INSERT INTO ai_agent_policies (id, workspace_id, agent_id, require_approval_at_or_above, blocked_tool_names_json, created_at, created_by, updated_at, updated_by)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?6, ?7)",
-            rusqlite::params![id, workspace_id, agent_id, require_approval, blocked_json, now, actor_user_id],
+            "INSERT INTO ai_agent_policies (id, workspace_id, agent_id, require_approval_at_or_above, blocked_tool_names_json, exclude_restricted_memory, created_at, created_by, updated_at, updated_by)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?7, ?8)",
+            rusqlite::params![id, workspace_id, agent_id, require_approval, blocked_json, exclude_restricted_memory, now, actor_user_id],
         )?;
     }
     Ok(get(conn, workspace_id, agent_id)?.expect("just upserted"))

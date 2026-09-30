@@ -22,6 +22,12 @@ pub struct AiAgentPolicy {
     /// Tool names always denied outright under this policy, regardless
     /// of risk level.
     pub blocked_tool_names: Vec<String>,
+    /// AI Agent Platform v2, Phase 4 (migration 0063): whether a
+    /// `'restricted'`-classified `ai_memory_service::remember` write under
+    /// this policy's scope is excluded from durable persistence rather
+    /// than stored. Defaults `true` (excluded) - see
+    /// `services::policy_engine_service::evaluate_memory_write`.
+    pub exclude_restricted_memory: bool,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -32,6 +38,12 @@ pub struct AiAgentPolicy {
 pub struct AiAgentPolicyInput {
     pub require_approval_at_or_above: Option<RiskLevel>,
     pub blocked_tool_names: Vec<String>,
+    #[serde(default = "default_exclude_restricted_memory")]
+    pub exclude_restricted_memory: bool,
+}
+
+fn default_exclude_restricted_memory() -> bool {
+    true
 }
 
 /// What `policy_engine_service::evaluate` decided for one tool call.

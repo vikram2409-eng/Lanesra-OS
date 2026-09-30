@@ -48,9 +48,12 @@ use serde_json::{json, Value};
 use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent::{validate_output_schema, AiAgentDefinition};
 use crate::models::ai_agent_policy::PolicyDecision;
+use crate::models::ai_memory::{AgentMemoryContext, MemoryItemInput};
 use crate::models::chat::ChatMessage;
 use crate::repositories::{ai_agent_repo, ai_agent_version_repo, ai_token_usage_repo, audit_repo, chat_repo};
 use crate::services::ai_gateway_service;
+use crate::services::ai_knowledge_service;
+use crate::services::ai_memory_service;
 use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
 use crate::services::api_object_service;
 use crate::services::policy_engine_service;
@@ -845,6 +848,29 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
         object_schema(),
     ));
 
+    // AI Agent Platform v2, Phase 4: the three itemized memory types
+    // (Session/Working/Entity) on top of update_memory's own workspace-wide
+    // Agent Memory above - see models::ai_memory's own doc comment for
+    // exactly what each type is scoped by. Always offered, like
+    // update_memory - `remember`/`get_memory` simply error with a clear
+    // message if the calling context can't scope the requested type (e.g.
+    // `working` memory outside a real Pipeline/Graph run).
+    tools.push(tool(
+        "remember",
+        "Save a durable fact as one of three scoped memory types (distinct from update_memory's single persistent document above). Arguments: memory_type ('session' = this conversation with this user, 'working' = this specific automated run only, 'entity' = a durable fact about one CRM record, tied to it forever), content, entity_type + entity_id (required only for memory_type='entity', e.g. entity_type='Company'), confidence (0.0-1.0, optional), classification ('standard'|'sensitive'|'restricted', default 'standard' - 'restricted' content may be excluded by this workspace's policy).",
+        object_schema(),
+    ));
+    tools.push(tool(
+        "get_memory",
+        "Recall previously remembered items of one scoped memory type. Arguments: memory_type ('session'|'working'|'entity'), entity_type + entity_id (required only for memory_type='entity').",
+        object_schema(),
+    ));
+    tools.push(tool(
+        "search_knowledge",
+        "Search this workspace's curated Knowledge Sources (documents an administrator has added) for passages relevant to a question - always cite the source name in your answer when you use a result. Arguments: query, collection_id (optional, narrows to one named collection).",
+        object_schema(),
+    ));
+
     if !agent.skill_ids.is_empty() {
         let mut names = Vec::new();
         for skill_id in &agent.skill_ids {
@@ -885,11 +911,28 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
 /// anything yet) and a short name+description catalog of its attached
 /// Skills - the same "short description up front, full content only on
 /// demand via use_skill" shape this session's own Skill tool uses.
-fn agent_system_prompt(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<String> {
+///
+/// AI Agent Platform v2, Phase 4: Session Memory is injected ambiently
+/// here (a short, bounded list) since it's this agent's own ongoing
+/// relationship with this specific user - ordinary conversational context,
+/// the same way `memory_md` already is. Entity and Working Memory are
+/// deliberately NOT dumped in here - they're queried on demand via
+/// `get_memory` - the "never dump an entire table into a prompt"
+/// structured-retrieval discipline this issue's own scope text asks for;
+/// unlike Session Memory, they aren't naturally singular/small per turn.
+fn agent_system_prompt(conn: &Connection, agent: &AiAgentDefinition, memory_context: &AgentMemoryContext) -> AppResult<String> {
     let mut prompt = agent.system_prompt.clone();
     if !agent.memory_md.trim().is_empty() {
         prompt.push_str("\n\nYour persistent memory from prior runs (revise it with update_memory whenever something worth remembering happens):\n\n");
         prompt.push_str(&agent.memory_md);
+    }
+    if let Ok(items) = ai_memory_service::list_context(conn, &agent.id, "session", None, None, memory_context) {
+        if !items.is_empty() {
+            prompt.push_str("\n\nThings you remember about this specific conversation (from remember, memory_type='session'):\n");
+            for item in &items {
+                prompt.push_str(&format!("- {}\n", item.content));
+            }
+        }
     }
     if !agent.guardrails_md.trim().is_empty() {
         prompt.push_str("\n\nOperational guardrails (must not be violated):\n\n");
@@ -921,6 +964,7 @@ fn execute_agent_tool<'a>(
     actor: Option<&'a str>,
     agent: &'a AiAgentDefinition,
     call: &'a RequestedToolCall,
+    memory_context: &'a AgentMemoryContext,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AppResult<Value>> + 'a>> {
     Box::pin(async move {
         match call.name.as_str() {
@@ -928,6 +972,24 @@ fn execute_agent_tool<'a>(
                 let content = required_str(&call.arguments, "content")?;
                 ai_agent_repo::update_memory(conn, &agent.id, content, "agent").map_err(AppError::from)?;
                 Ok(json!({"memory_updated": true}))
+            }
+            "remember" => {
+                let input: MemoryItemInput = serde_json::from_value(call.arguments.clone()).map_err(|e| AppError::Validation(format!("invalid arguments: {e}")))?;
+                let item = ai_memory_service::remember(conn, workspace_id, &agent.id, &input, memory_context, "agent")?;
+                Ok(json!({"remembered": true, "id": item.id}))
+            }
+            "get_memory" => {
+                let memory_type = required_str(&call.arguments, "memory_type")?;
+                let entity_type = call.arguments.get("entity_type").and_then(|v| v.as_str());
+                let entity_id = call.arguments.get("entity_id").and_then(|v| v.as_str());
+                let items = ai_memory_service::list_context(conn, &agent.id, memory_type, entity_type, entity_id, memory_context)?;
+                Ok(json!({"items": items.iter().map(|i| json!({"content": i.content, "source": i.source, "confidence": i.confidence, "created_at": i.created_at})).collect::<Vec<_>>()}))
+            }
+            "search_knowledge" => {
+                let query = required_str(&call.arguments, "query")?;
+                let collection_id = call.arguments.get("collection_id").and_then(|v| v.as_str());
+                let hits = ai_knowledge_service::search_knowledge(conn, workspace_id, master_key, query, collection_id, 5).await?;
+                Ok(json!({"results": hits.iter().map(|h| json!({"source_name": h.source_name, "content": h.content, "similarity": h.similarity})).collect::<Vec<_>>()}))
             }
             "use_skill" => {
                 let skill_name = required_str(&call.arguments, "name")?;
@@ -954,7 +1016,10 @@ fn execute_agent_tool<'a>(
                 }
                 let target = target.ok_or_else(|| AppError::Validation(format!("'{agent_name}' isn't one of this agent's delegate sub-agents")))?;
                 let seed = vec![synthetic_message("user", Some(input), None, None)];
-                let outcome = run_agent_once(conn, workspace_id, master_key, actor, &target, seed).await?;
+                // Delegation preserves the same memory context - a
+                // sub-agent's `remember`/`get_memory` calls scope to the
+                // same session/run its supervisor is already running in.
+                let outcome = run_agent_once(conn, workspace_id, master_key, actor, &target, seed, memory_context).await?;
                 Ok(json!({"answer": outcome.final_text}))
             }
             other => match tool_source(other) {
@@ -1000,9 +1065,10 @@ pub async fn run_agent_once_with_text(
     actor: Option<&str>,
     agent: &AiAgentDefinition,
     input_text: &str,
+    memory_context: &AgentMemoryContext,
 ) -> AppResult<AgentRunOutcome> {
     let seed = vec![synthetic_message("user", Some(input_text), None, None)];
-    run_agent_once(conn, workspace_id, master_key, actor, agent, seed).await
+    run_agent_once(conn, workspace_id, master_key, actor, agent, seed, memory_context).await
 }
 
 pub async fn run_agent_once(
@@ -1012,6 +1078,7 @@ pub async fn run_agent_once(
     actor: Option<&str>,
     agent: &AiAgentDefinition,
     seed_history: Vec<ChatMessage>,
+    memory_context: &AgentMemoryContext,
 ) -> AppResult<AgentRunOutcome> {
     let _depth_guard = DelegationDepthGuard::enter()
         .ok_or_else(|| AppError::Validation("Delegation depth limit reached - simplify this agent's delegation chain".into()))?;
@@ -1019,7 +1086,7 @@ pub async fn run_agent_once(
         require_admin(conn, actor)?;
     }
     let tools = agent_tools(conn, agent)?;
-    let system_prompt = agent_system_prompt(conn, agent)?;
+    let system_prompt = agent_system_prompt(conn, agent, memory_context)?;
     // AI Agent Platform v2, Phase 1: this run's Structured Output contract,
     // if the agent's current Published version declares one - `None` is
     // exactly today's free-form-text behavior. Resolved once up front
@@ -1111,7 +1178,7 @@ pub async fn run_agent_once(
                 history.push(assistant_msg.clone());
                 produced.push(assistant_msg);
                 for call in calls {
-                    let result = execute_agent_tool(conn, workspace_id, master_key, actor, agent, &call).await;
+                    let result = execute_agent_tool(conn, workspace_id, master_key, actor, agent, &call, memory_context).await;
                     let ok = result.is_ok();
                     let content = match result {
                         Ok(value) => value.to_string(),
@@ -1167,7 +1234,12 @@ pub async fn send_agent_message(conn: &Connection, workspace_id: &str, master_ke
     appended.push(chat_repo::append_message(conn, &conversation.id, "user", Some(text), None, None)?);
 
     let history = chat_repo::list_messages(conn, &conversation.id)?;
-    let outcome = run_agent_once(conn, workspace_id, master_key, Some(user_id), &agent, history).await?;
+    // AI Agent Platform v2, Phase 4: this conversation's own durable id is
+    // exactly the "session" Session Memory is scoped by - this agent's
+    // ongoing relationship with this user, the same conversation row
+    // `get_or_create_conversation` already keeps stable across messages.
+    let memory_context = AgentMemoryContext { session_key: Some(conversation.id.clone()), run_id: None };
+    let outcome = run_agent_once(conn, workspace_id, master_key, Some(user_id), &agent, history, &memory_context).await?;
     for msg in outcome.produced {
         appended.push(chat_repo::append_message(
             conn,
