@@ -27,6 +27,7 @@ fn validate_action_names(conn: &Connection, workspace_id: &str, action_names: &[
     // workspace-scoped catalog here rather than let a stale/bogus name
     // through to be silently dropped later by `chat_service::agent_tools`.
     let mut connector_names: Option<Vec<String>> = None;
+    let mut mcp_names: Option<Vec<String>> = None;
     for name in action_names {
         match super::chat_service::tool_source(name) {
             Some("connector_read" | "connector_write") => {
@@ -34,6 +35,14 @@ fn validate_action_names(conn: &Connection, workspace_id: &str, action_names: &[
                     connector_names = Some(super::connector_tool_service::agent_tool_names(conn, workspace_id)?);
                 }
                 if !connector_names.as_ref().unwrap().contains(name) {
+                    return Err(AppError::Validation(format!("'{name}' isn't currently available as an agent tool")));
+                }
+            }
+            Some("mcp_read" | "mcp_write") => {
+                if mcp_names.is_none() {
+                    mcp_names = Some(super::mcp_client_service::agent_tool_names(conn, workspace_id)?);
+                }
+                if !mcp_names.as_ref().unwrap().contains(name) {
                     return Err(AppError::Validation(format!("'{name}' isn't currently available as an agent tool")));
                 }
             }

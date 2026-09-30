@@ -68,6 +68,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (61, include_str!("migrations/0061_agent_policy_engine.sql")),
     (62, include_str!("migrations/0062_execution_graph_runtime.sql")),
     (63, include_str!("migrations/0063_memory_architecture.sql")),
+    (64, include_str!("migrations/0064_mcp_client.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -131,7 +132,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 63);
+        assert_eq!(version, 64);
 
         let table_count: i64 = conn
             .query_row(

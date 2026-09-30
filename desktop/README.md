@@ -679,9 +679,50 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   already-configured OpenAI-compatible or Google Gemini provider
   (Anthropic has no embeddings API), stored as plain SQLite BLOBs and
   compared by cosine similarity in Rust rather than a bundled vector
-  database. See `core/src/services/chat_service.rs`,
-  `ai_agent_service.rs`, `ai_gateway_service.rs`, `search_service.rs`,
-  `vector_search_service.rs`, `server/src/mcp.rs`.
+  database. AI Agent Platform v2 adds five more phases on top. Phase 1:
+  every agent carries a real Draft → Test → Published → Deprecated →
+  Disabled version lifecycle (`agent_version_service.rs`) - a Published
+  version is an immutable snapshot, optionally declaring a Structured
+  Output JSON-schema contract validated with one repair retry - plus a
+  durable, workspace-wide Approval Service (`approval_service.rs`)
+  generalizing "something needs a human decision" beyond a single
+  Pipeline step's own pause flag; every agent-driven write is attributed
+  to that agent's own identity in the audit trail alongside the
+  initiating user. Phase 2: a Tool Registry (`tool_registry_service.rs`)
+  classifies every tool - native, Connector-bridged or MCP-sourced -
+  into one of six risk tiers (Read/Low-Write/Write/External-Action/
+  Destructive/Privileged), and a unified Policy Engine
+  (`policy_engine_service.rs`) sets a workspace/per-agent
+  require-approval threshold and blocklist on top, formalizing
+  `chat_service::execute_tool` into a named
+  schema→permission→policy→approval→execute→audit Tool-Call Firewall -
+  the same dispatch every call already ran through, not a second path.
+  Phase 3: a shared, durable, checkpointed Execution Graph Runtime
+  (`execution_graph_service.rs`, `graph_runtime_service.rs`, 12 node
+  types) now underlies every Workflow and Pipeline - each existing
+  topology is expressed as a specific graph shape, proven byte-for-byte
+  equivalent to the pre-migration code path, with checkpoint-and-resume
+  after every node transition. Phase 4: itemized Session/Working/Entity
+  memory (`ai_memory_service.rs`, each scoped/TTL'd/Policy-gated) join
+  the existing Agent Memory document via new `remember`/`get_memory`
+  tools, and Document RAG (`ai_knowledge_service.rs`) chunks and embeds
+  admin-pasted Knowledge Sources on the same embeddings path Vector
+  Search already established, searched via a citation-returning
+  `search_knowledge` tool. Phase 5a: an MCP client role
+  (`mcp_client_service.rs`) lets a workspace connect an external MCP
+  server as a Connection, discover its tools via real
+  `initialize`/`tools/list` JSON-RPC calls, and opt them into the same
+  Tool-Call Firewall with a two-level write gate. Phase 5b: a visual,
+  free-form drag-and-drop Agent Teams canvas (Admin → AI Agent Foundry →
+  Agent Teams) authors an Execution Graph directly, with the same
+  Draft → Publish lifecycle and a Runs viewer. See
+  `core/src/services/chat_service.rs`, `ai_agent_service.rs`,
+  `ai_gateway_service.rs`, `search_service.rs`, `vector_search_service.rs`,
+  `agent_version_service.rs`, `approval_service.rs`,
+  `tool_registry_service.rs`, `policy_engine_service.rs`,
+  `execution_graph_service.rs`, `graph_runtime_service.rs`,
+  `ai_memory_service.rs`, `ai_knowledge_service.rs`,
+  `mcp_client_service.rs`, `server/src/mcp.rs`.
 - **Engine hardening (platform primitives, not one industry vertical)**:
   five gaps `reference_packages.rs`'s own doc comment had been
   accumulating across the twelve shipped industry packages, closed

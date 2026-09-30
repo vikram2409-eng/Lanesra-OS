@@ -351,6 +351,10 @@ pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
         Some("connector_read")
     } else if name.starts_with("connector_write_action:") {
         Some("connector_write")
+    } else if name.starts_with("mcp_tool:") {
+        Some("mcp_read")
+    } else if name.starts_with("mcp_write_tool:") {
+        Some("mcp_write")
     } else {
         None
     }
@@ -362,7 +366,7 @@ pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
 /// `mode == "admin"` gate `send_message` already has, just keyed off a
 /// computed set instead of a literal mode string.
 pub(crate) fn agent_requires_admin(action_names: &[String]) -> bool {
-    action_names.iter().any(|n| matches!(tool_source(n), Some("admin" | "connector_write")))
+    action_names.iter().any(|n| matches!(tool_source(n), Some("admin" | "connector_write" | "mcp_write")))
 }
 
 fn to_val<T: serde::Serialize>(r: AppResult<T>) -> AppResult<Value> {
@@ -836,10 +840,11 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
     // be a bare `fn() -> Vec<ToolSpec>` - built fresh per call, same as
     // they are.
     let all_connector = super::connector_tool_service::agent_tools(conn, &agent.workspace_id)?;
+    let all_mcp = super::mcp_client_service::agent_tools(conn, &agent.workspace_id)?;
     let mut tools: Vec<ToolSpec> = agent
         .action_names
         .iter()
-        .filter_map(|name| all_record.iter().chain(all_admin.iter()).chain(all_connector.iter()).find(|t| &t.name == name).cloned())
+        .filter_map(|name| all_record.iter().chain(all_admin.iter()).chain(all_connector.iter()).chain(all_mcp.iter()).find(|t| &t.name == name).cloned())
         .collect();
 
     tools.push(tool(
@@ -1023,12 +1028,13 @@ fn execute_agent_tool<'a>(
                 Ok(json!({"answer": outcome.final_text}))
             }
             other => match tool_source(other) {
-                Some(src @ ("record" | "admin" | "connector_read" | "connector_write")) => {
+                Some(src @ ("record" | "admin" | "connector_read" | "connector_write" | "mcp_read" | "mcp_write")) => {
                     apply_tool_firewall(conn, workspace_id, Some(&agent.id), actor, other, &call.arguments)?;
                     match src {
                         "record" => dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments).await,
                         "admin" => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
-                        _ => super::connector_tool_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
+                        "connector_read" | "connector_write" => super::connector_tool_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
+                        _ => super::mcp_client_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
                     }
                 }
                 _ => Err(AppError::Validation(format!("Unknown tool '{other}'"))),

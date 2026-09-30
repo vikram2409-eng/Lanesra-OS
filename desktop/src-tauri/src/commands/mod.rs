@@ -28,6 +28,7 @@ pub mod execution_graph_commands;
 pub mod industry_package_commands;
 pub mod integration_commands;
 pub mod invoice_commands;
+pub mod mcp_client_commands;
 pub mod notification_commands;
 pub mod numbering_commands;
 pub mod opportunity_commands;

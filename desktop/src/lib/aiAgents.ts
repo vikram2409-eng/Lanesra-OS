@@ -58,8 +58,13 @@ const ADMIN_ACTION_NAMES = new Set([
 // ADMIN_ACTION_NAMES set above.
 const CONNECTOR_WRITE_ACTION_PREFIX = "connector_write_action:";
 
+// AI Agent Platform v2 (GitHub issue #170, backend half): the MCP client
+// role's own write-tool prefix - same self-describing-by-name mirror as
+// the Connector one above.
+const MCP_WRITE_TOOL_PREFIX = "mcp_write_tool:";
+
 export function agentRequiresAdmin(actionNames: string[]): boolean {
-  return actionNames.some((n) => ADMIN_ACTION_NAMES.has(n) || n.startsWith(CONNECTOR_WRITE_ACTION_PREFIX));
+  return actionNames.some((n) => ADMIN_ACTION_NAMES.has(n) || n.startsWith(CONNECTOR_WRITE_ACTION_PREFIX) || n.startsWith(MCP_WRITE_TOOL_PREFIX));
 }
 
 export function agentUsableBy(agent: AiAgentDefinition, isAdmin: boolean): boolean {
