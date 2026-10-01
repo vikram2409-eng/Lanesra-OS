@@ -10,6 +10,13 @@ pub enum AppError {
     Validation(String),
     #[error("{0}")]
     Conflict(String),
+    /// A tool call denied or queued for approval by
+    /// `policy_engine_service::evaluate` (the Tool-Call Firewall) -
+    /// distinct from a plain `Validation` error so a run's own
+    /// `policy_violations_count` (AI Agent Platform v2, Phase 6a) can be
+    /// counted deterministically, not inferred by matching on error text.
+    #[error("{0}")]
+    PolicyBlocked(String),
 }
 
 // Tauri command errors must be Serialize; we expose them to the frontend as
@@ -25,6 +32,7 @@ impl Serialize for AppError {
             AppError::NotFound(_) => "not_found",
             AppError::Validation(_) => "validation",
             AppError::Conflict(_) => "conflict",
+            AppError::PolicyBlocked(_) => "policy_blocked",
         };
         let mut state = serializer.serialize_struct("AppError", 2)?;
         state.serialize_field("kind", kind)?;

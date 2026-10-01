@@ -51,6 +51,7 @@ pub(crate) fn error_status(e: &AppError) -> StatusCode {
         AppError::Validation(_) => StatusCode::BAD_REQUEST,
         AppError::Conflict(_) => StatusCode::CONFLICT,
         AppError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        AppError::PolicyBlocked(_) => StatusCode::FORBIDDEN,
     }
 }
 

@@ -38,6 +38,7 @@ fn map_step_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentRunStep> {
         output_text: row.get("output_text")?,
         error: row.get("error")?,
         tool_calls_count: row.get("tool_calls_count")?,
+        policy_violations_count: row.get("policy_violations_count")?,
         started_at: row.get("started_at")?,
         finished_at: row.get("finished_at")?,
     })
@@ -88,12 +89,13 @@ pub fn append_run_step(
     output_text: Option<&str>,
     error: Option<&str>,
     tool_calls_count: i64,
+    policy_violations_count: i64,
     started_at: &str,
     finished_at: &str,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO ai_agent_run_steps (id, run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count, started_at, finished_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        (crate::domain::ids::new_uuid(), run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count, started_at, finished_at),
+        "INSERT INTO ai_agent_run_steps (id, run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count, policy_violations_count, started_at, finished_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        (crate::domain::ids::new_uuid(), run_id, agent_id, step_order, input_text, output_text, error, tool_calls_count, policy_violations_count, started_at, finished_at),
     )?;
     Ok(())
 }

@@ -724,11 +724,11 @@ fn apply_tool_firewall(conn: &Connection, workspace_id: &str, agent_id: Option<&
     match policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)? {
         PolicyDecision::Allow => Ok(()),
         PolicyDecision::Deny { risk_level } => {
-            Err(AppError::Validation(format!("'{name}' is blocked by this workspace's agent policy (risk level: {}).", risk_level.as_str())))
+            Err(AppError::PolicyBlocked(format!("'{name}' is blocked by this workspace's agent policy (risk level: {}).", risk_level.as_str())))
         }
         PolicyDecision::RequireApproval { risk_level } => {
             policy_engine_service::record_pending_tool_call(conn, workspace_id, agent_id, name, arguments, risk_level, actor)?;
-            Err(AppError::Validation(format!(
+            Err(AppError::PolicyBlocked(format!(
                 "'{name}' requires administrator approval under this workspace's agent policy (risk level: {}) - a pending approval has been recorded for an administrator to review.",
                 risk_level.as_str()
             )))
@@ -1051,6 +1051,12 @@ fn execute_agent_tool<'a>(
 pub struct AgentRunOutcome {
     pub final_text: String,
     pub produced: Vec<ChatMessage>,
+    /// AI Agent Platform v2, Phase 6a: how many tool calls in this run were
+    /// denied or queued for approval by the Tool-Call Firewall
+    /// (`AppError::PolicyBlocked`) - what the eval harness's
+    /// `policy_compliance` evaluator type checks, deterministically, no
+    /// judge call needed.
+    pub policy_violations: i64,
 }
 
 /// The tool-calling loop, run once against a single `AiAgentDefinition`,
@@ -1117,6 +1123,10 @@ pub async fn run_agent_once(
     // actually runs a third time.
     let mut repeat_streak: u8 = 0;
     let mut last_call: Option<(String, Value)> = None;
+    // AI Agent Platform v2, Phase 6a: counts `AppError::PolicyBlocked`
+    // outcomes only, not every tool error - a tool that genuinely fails
+    // (a bad argument, a deleted record) isn't a policy violation.
+    let mut policy_violations: i64 = 0;
 
     for _round in 0..MAX_ROUNDS {
         // Phase 7a: every agent run goes through the Gateway, not
@@ -1157,7 +1167,7 @@ pub async fn run_agent_once(
                     }
                 }
                 produced.push(synthetic_message("assistant", Some(&text), None, None));
-                return Ok(AgentRunOutcome { final_text: text, produced });
+                return Ok(AgentRunOutcome { final_text: text, produced, policy_violations });
             }
             CompletionOutcome::ToolCalls { raw_assistant, calls } => {
                 match calls.first().filter(|_| calls.len() == 1) {
@@ -1186,6 +1196,9 @@ pub async fn run_agent_once(
                 for call in calls {
                     let result = execute_agent_tool(conn, workspace_id, master_key, actor, agent, &call, memory_context).await;
                     let ok = result.is_ok();
+                    if matches!(&result, Err(AppError::PolicyBlocked(_))) {
+                        policy_violations += 1;
+                    }
                     let content = match result {
                         Ok(value) => value.to_string(),
                         Err(e) => format!("Error: {e}"),

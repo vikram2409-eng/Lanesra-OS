@@ -15,6 +15,7 @@ fn map_suite_row(row: &rusqlite::Row) -> rusqlite::Result<AiEvalSuite> {
         description: row.get("description")?,
         target_type: row.get("target_type")?,
         target_id: row.get("target_id")?,
+        evaluator_type: row.get("evaluator_type")?,
         cases: Vec::new(), // filled in by `hydrate`
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
@@ -52,9 +53,9 @@ fn replace_cases(conn: &Connection, suite_id: &str, cases: &[AiEvalCaseInput]) -
 pub fn create_suite(conn: &Connection, id: &str, workspace_id: &str, input: &AiEvalSuiteInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiEvalSuite> {
     let now = now_iso();
     conn.execute(
-        "INSERT INTO ai_eval_suites (id, workspace_id, name, description, target_type, target_id, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?7, ?8)",
-        (id, workspace_id, &input.name, &input.description, &input.target_type, &input.target_id, &now, actor_user_id),
+        "INSERT INTO ai_eval_suites (id, workspace_id, name, description, target_type, target_id, evaluator_type, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?8, ?9)",
+        (id, workspace_id, &input.name, &input.description, &input.target_type, &input.target_id, &input.evaluator_type, &now, actor_user_id),
     )?;
     replace_cases(conn, id, &input.cases)?;
     get_suite(conn, id).map(|s| s.expect("just inserted"))
@@ -63,8 +64,8 @@ pub fn create_suite(conn: &Connection, id: &str, workspace_id: &str, input: &AiE
 pub fn update_suite(conn: &Connection, id: &str, input: &AiEvalSuiteInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiEvalSuite> {
     let now = now_iso();
     conn.execute(
-        "UPDATE ai_eval_suites SET name = ?1, description = ?2, target_type = ?3, target_id = ?4, updated_at = ?5, updated_by = ?6 WHERE id = ?7",
-        (&input.name, &input.description, &input.target_type, &input.target_id, &now, actor_user_id, id),
+        "UPDATE ai_eval_suites SET name = ?1, description = ?2, target_type = ?3, target_id = ?4, evaluator_type = ?5, updated_at = ?6, updated_by = ?7 WHERE id = ?8",
+        (&input.name, &input.description, &input.target_type, &input.target_id, &input.evaluator_type, &now, actor_user_id, id),
     )?;
     replace_cases(conn, id, &input.cases)?;
     get_suite(conn, id).map(|s| s.expect("just updated"))
