@@ -164,6 +164,11 @@ pub struct AiAgentRunStep {
     pub output_text: Option<String>,
     pub error: Option<String>,
     pub tool_calls_count: i64,
+    /// AI Agent Platform v2, Phase 6a: how many of this step's tool calls
+    /// were denied or queued for approval by the Tool-Call Firewall - what
+    /// the eval harness's `policy_compliance` evaluator type sums across
+    /// every step in a run.
+    pub policy_violations_count: i64,
     /// Phase 7e: real wall-clock timing for this step's agent call - the
     /// tracing primitive `run_to_otlp_json`'s spans are built from.
     /// `None` only for a step recorded before this phase's migration.

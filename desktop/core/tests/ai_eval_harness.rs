@@ -11,10 +11,12 @@ use std::sync::{Arc, Mutex};
 
 use lanesra_core::models::ai::AiSettingsInput;
 use lanesra_core::models::ai_agent::AiAgentInput;
+use lanesra_core::models::ai_agent_policy::AiAgentPolicyInput;
 use lanesra_core::models::ai_eval::{AiEvalCaseInput, AiEvalSuiteInput};
+use lanesra_core::models::ai_tool_registry::RiskLevel;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{ai_agent_service, ai_eval_service, ai_service, user_service, workspace_service};
+use lanesra_core::services::{agent_version_service, ai_agent_service, ai_eval_service, ai_service, policy_engine_service, user_service, workspace_service};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = lanesra_core::db::open_in_memory_db().unwrap();
@@ -52,6 +54,10 @@ fn configure_anthropic_key(conn: &rusqlite::Connection, workspace_id: &str, admi
 
 fn anthropic_text_body(text: &str) -> String {
     serde_json::json!({"content": [{"type": "text", "text": text}]}).to_string()
+}
+
+fn anthropic_tool_use_body(id: &str, name: &str, input: serde_json::Value) -> String {
+    serde_json::json!({"content": [{"type": "tool_use", "id": id, "name": name, "input": input}]}).to_string()
 }
 
 fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str) -> lanesra_core::models::ai_agent::AiAgentDefinition {
@@ -111,6 +117,7 @@ fn spawn_sequence_stub(bodies: Vec<String>) -> (u16, Arc<Mutex<Vec<String>>>) {
 fn two_case_suite_input(agent_id: &str) -> AiEvalSuiteInput {
     AiEvalSuiteInput {
         name: "Arithmetic & geography".into(), description: Some("Two simple golden cases".into()), target_type: "agent".into(), target_id: agent_id.into(),
+        evaluator_type: "task_completion".into(),
         cases: vec![
             AiEvalCaseInput { input_text: "What is 2+2?".into(), success_criteria: "The response states the number 4.".into() },
             AiEvalCaseInput { input_text: "What is the capital of France?".into(), success_criteria: "The response names Paris.".into() },
@@ -202,6 +209,130 @@ async fn running_a_suite_grades_each_case_against_the_targets_real_response() {
     assert_eq!(history[0].id, run.id);
 }
 
+// --- AI Agent Platform v2, Phase 6a: evaluator type expansion ----------
+
+#[tokio::test]
+async fn structured_output_evaluator_validates_against_the_agents_declared_schema_with_no_judge_call() {
+    let (conn, ws, admin) = setup_workspace();
+    let agent = make_agent(&conn, &ws, &admin, "Summarizer");
+    let schema = serde_json::json!({"type": "object", "required": ["answer"], "properties": {"answer": {"type": "string"}}});
+    let draft = agent_version_service::create_draft(
+        &conn, &agent.id, &ws,
+        &lanesra_core::models::ai_agent::AiAgentVersionInput {
+            name: "Summarizer".into(), description: None, icon: "🤖".into(), system_prompt: "You are Summarizer.".into(),
+            action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], model_routing: None, output_schema: Some(schema),
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    agent_version_service::transition_status(&conn, &agent.id, &ws, &draft.id, "test", Some(&admin)).unwrap();
+    agent_version_service::transition_status(&conn, &agent.id, &ws, &draft.id, "published", Some(&admin)).unwrap();
+
+    let suite = ai_eval_service::create_suite(
+        &conn, &ws,
+        &AiEvalSuiteInput {
+            name: "Structured output check".into(), description: None, target_type: "agent".into(), target_id: agent.id.clone(),
+            evaluator_type: "structured_output".into(),
+            cases: vec![AiEvalCaseInput { input_text: "Summarize this".into(), success_criteria: String::new() }],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    // Only one provider call (the target's own reply) - no judge call for
+    // this evaluator type, the whole point of it being deterministic.
+    let (port, captured) = spawn_sequence_stub(vec![anthropic_text_body(r#"{"answer": "Paris"}"#)]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+    let run = ai_eval_service::run_suite(&conn, &ws, &master_key(), &suite.id, Some(&admin)).await.unwrap();
+    assert_eq!(captured.lock().unwrap().len(), 1, "expected no judge call for structured_output");
+    assert_eq!(run.passed_count, 1);
+    assert_eq!(run.failed_count, 0);
+    assert!(run.results[0].judge_reasoning.as_deref().unwrap_or_default().contains("conforms"));
+
+    // A response missing the required property fails. This agent's own
+    // Structured Output repair-retry (chat_service::run_agent_once, Phase
+    // 1) already makes one extra attempt before giving up - genuine
+    // existing behavior, not an eval judge call - so two provider calls
+    // are expected here, still no third (judge) call.
+    let (port2, captured2) = spawn_sequence_stub(vec![anthropic_text_body(r#"{"wrong_key": "oops"}"#)]);
+    configure_anthropic_key(&conn, &ws, &admin, port2);
+    let run2 = ai_eval_service::run_suite(&conn, &ws, &master_key(), &suite.id, Some(&admin)).await.unwrap();
+    assert_eq!(captured2.lock().unwrap().len(), 2, "expected the repair-retry's two calls, no third judge call");
+    assert_eq!(run2.failed_count, 1);
+    assert!(run2.results[0].judge_reasoning.as_deref().unwrap_or_default().contains("missing required property"));
+
+    // An agent with no declared schema records an error, not a guessed
+    // pass/fail.
+    let unschema_agent = make_agent(&conn, &ws, &admin, "No Schema Agent");
+    let unschema_suite = ai_eval_service::create_suite(
+        &conn, &ws,
+        &AiEvalSuiteInput {
+            name: "No schema".into(), description: None, target_type: "agent".into(), target_id: unschema_agent.id.clone(),
+            evaluator_type: "structured_output".into(),
+            cases: vec![AiEvalCaseInput { input_text: "hi".into(), success_criteria: String::new() }],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    let (port3, _c3) = spawn_sequence_stub(vec![anthropic_text_body("hello there")]);
+    configure_anthropic_key(&conn, &ws, &admin, port3);
+    let run3 = ai_eval_service::run_suite(&conn, &ws, &master_key(), &unschema_suite.id, Some(&admin)).await.unwrap();
+    assert_eq!(run3.failed_count, 1);
+    assert!(run3.results[0].error.as_deref().unwrap_or_default().contains("no Structured Output schema declared"));
+}
+
+#[tokio::test]
+async fn policy_compliance_evaluator_checks_for_a_blocked_tool_call_with_no_judge_call() {
+    let (conn, ws, admin) = setup_workspace();
+    let agent = ai_agent_service::create(
+        &conn, &ws,
+        &AiAgentInput { name: "Lister".into(), description: None, icon: "🤖".into(), system_prompt: "You list objects.".into(), action_names: vec!["list_objects".into()], delegate_agent_ids: vec![], skill_ids: vec![] },
+        Some(&admin),
+    )
+    .unwrap();
+
+    let suite = ai_eval_service::create_suite(
+        &conn, &ws,
+        &AiEvalSuiteInput {
+            name: "Policy compliance check".into(), description: None, target_type: "agent".into(), target_id: agent.id.clone(),
+            evaluator_type: "policy_compliance".into(),
+            cases: vec![AiEvalCaseInput { input_text: "list every object".into(), success_criteria: String::new() }],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    // No policy configured yet - the tool call dispatches cleanly, so the
+    // run passes.
+    let (port, captured) = spawn_sequence_stub(vec![anthropic_tool_use_body("t1", "list_objects", serde_json::json!({})), anthropic_text_body("Here they are.")]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+    let run = ai_eval_service::run_suite(&conn, &ws, &master_key(), &suite.id, Some(&admin)).await.unwrap();
+    assert_eq!(captured.lock().unwrap().len(), 2, "target run's own two rounds, no third judge call");
+    assert_eq!(run.passed_count, 1);
+    assert_eq!(run.failed_count, 0);
+
+    // Block the tool outright under this agent's policy - the same call
+    // now trips the Tool-Call Firewall, and the eval records it as a
+    // failure with no judge call either.
+    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    let (port2, captured2) = spawn_sequence_stub(vec![anthropic_tool_use_body("t2", "list_objects", serde_json::json!({})), anthropic_text_body("Understood, I won't do that.")]);
+    configure_anthropic_key(&conn, &ws, &admin, port2);
+    let run2 = ai_eval_service::run_suite(&conn, &ws, &master_key(), &suite.id, Some(&admin)).await.unwrap();
+    assert_eq!(captured2.lock().unwrap().len(), 2);
+    assert_eq!(run2.passed_count, 0);
+    assert_eq!(run2.failed_count, 1);
+    assert!(run2.results[0].judge_reasoning.as_deref().unwrap_or_default().contains("blocked or required approval"));
+
+    // A require-approval threshold at or below the tool's own risk level
+    // (read, for list_objects) also counts as a violation - not just an
+    // outright blocklist entry.
+    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Read), blocked_tool_names: vec![], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    let (port3, _c3) = spawn_sequence_stub(vec![anthropic_tool_use_body("t3", "list_objects", serde_json::json!({})), anthropic_text_body("Noted - awaiting approval.")]);
+    configure_anthropic_key(&conn, &ws, &admin, port3);
+    let run3 = ai_eval_service::run_suite(&conn, &ws, &master_key(), &suite.id, Some(&admin)).await.unwrap();
+    assert_eq!(run3.failed_count, 1);
+}
+
 #[tokio::test]
 async fn a_malformed_judge_reply_is_graded_as_failed_not_silently_passed() {
     let (conn, ws, admin) = setup_workspace();
@@ -210,6 +341,7 @@ async fn a_malformed_judge_reply_is_graded_as_failed_not_silently_passed() {
         &conn, &ws,
         &AiEvalSuiteInput {
             name: "One case".into(), description: None, target_type: "agent".into(), target_id: agent.id.clone(),
+            evaluator_type: "task_completion".into(),
             cases: vec![AiEvalCaseInput { input_text: "hello".into(), success_criteria: "says hello back".into() }],
         },
         Some(&admin),

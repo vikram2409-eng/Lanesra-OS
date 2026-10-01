@@ -19,7 +19,7 @@ use rusqlite::Connection;
 use crate::domain::ids::now_iso;
 use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent::{AiAgentVersion, AiAgentVersionInput};
-use crate::repositories::{ai_agent_repo, ai_agent_version_repo};
+use crate::repositories::{ai_agent_repo, ai_agent_version_repo, ai_eval_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -138,6 +138,26 @@ pub fn transition_status(conn: &Connection, agent_id: &str, workspace_id: &str, 
     }
 
     if new_status == "published" {
+        // AI Agent Platform v2, Phase 6a (AI-AC-12): a policy_compliance
+        // Eval Suite targeting this agent whose most recent run still has
+        // a failure blocks publish outright - "zero critical policy
+        // violations" from issue #171's own acceptance criteria. A suite
+        // with no run yet, or any other evaluator type, never blocks -
+        // opt-in governance, the same shape Phase 2's Policy Engine
+        // itself uses (no policy configured, no gating).
+        for suite in ai_eval_repo::list_suites(conn, workspace_id)? {
+            if suite.target_type != "agent" || suite.target_id != agent_id || suite.evaluator_type != "policy_compliance" {
+                continue;
+            }
+            if let Some(last_run) = ai_eval_repo::list_runs_for_suite(conn, &suite.id, 1)?.into_iter().next() {
+                if last_run.failed_count > 0 {
+                    return Err(AppError::Validation(format!(
+                        "Can't publish: Eval Suite '{}' (policy_compliance) has a failing run - resolve the policy violation and re-run before publishing.",
+                        suite.name
+                    )));
+                }
+            }
+        }
         if let Some(current_id) = &agent.current_version_id {
             if current_id != version_id {
                 if let Some(current) = ai_agent_version_repo::get(conn, current_id)? {

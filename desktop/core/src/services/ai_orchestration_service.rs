@@ -200,7 +200,7 @@ async fn run_step(
         Some(a) => a,
         None => {
             let finished_at = crate::domain::ids::now_iso();
-            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(missing_agent_msg), 0, &started_at, &finished_at)?;
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(missing_agent_msg), 0, 0, &started_at, &finished_at)?;
             return Err(AppError::Validation(missing_agent_msg.to_string()));
         }
     };
@@ -212,13 +212,13 @@ async fn run_step(
         Ok(outcome) => {
             let finished_at = crate::domain::ids::now_iso();
             let tool_calls = outcome.produced.iter().filter(|m| m.role == "tool").count() as i64;
-            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, Some(&outcome.final_text), None, tool_calls, &started_at, &finished_at)?;
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, Some(&outcome.final_text), None, tool_calls, outcome.policy_violations, &started_at, &finished_at)?;
             Ok(outcome.final_text)
         }
         Err(e) => {
             let finished_at = crate::domain::ids::now_iso();
             let msg = e.to_string();
-            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(&msg), 0, &started_at, &finished_at)?;
+            ai_agent_run_repo::append_run_step(conn, run_id, agent_id, step_order, input_text, None, Some(&msg), 0, 0, &started_at, &finished_at)?;
             Err(AppError::Validation(msg))
         }
     }
@@ -646,6 +646,7 @@ pub fn run_to_otlp_json(run: &AiAgentRun) -> serde_json::Value {
                 {"key": "lanesra.agent_id", "value": {"stringValue": step.agent_id}},
                 {"key": "lanesra.step_order", "value": {"intValue": step.step_order.to_string()}},
                 {"key": "lanesra.tool_calls_count", "value": {"intValue": step.tool_calls_count.to_string()}},
+                {"key": "lanesra.policy_violations_count", "value": {"intValue": step.policy_violations_count.to_string()}},
                 {"key": "lanesra.error", "value": {"stringValue": step.error.clone().unwrap_or_default()}},
             ],
         }));

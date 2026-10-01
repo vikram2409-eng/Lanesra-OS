@@ -2708,6 +2708,15 @@ export interface AiEvalCaseInput {
   success_criteria: string;
 }
 
+// AI Agent Platform v2, Phase 6a: which check `run_suite` runs -
+// 'task_completion' (the original, only evaluator this harness ever had -
+// an LLM-as-judge call) or two deterministic, no-judge-call types reusing
+// data this codebase already tracks: 'structured_output' (validates
+// against the target agent's declared output schema, Agent targets only)
+// and 'policy_compliance' (checks the run had no Tool-Call Firewall
+// denial/required-approval).
+export type AiEvalEvaluatorType = "task_completion" | "structured_output" | "policy_compliance";
+
 export interface AiEvalSuite {
   id: string;
   workspace_id: string;
@@ -2715,6 +2724,7 @@ export interface AiEvalSuite {
   description: string | null;
   target_type: AiAgentTargetType;
   target_id: string;
+  evaluator_type: AiEvalEvaluatorType;
   cases: AiEvalCase[];
   created_at: string;
   created_by: string | null;
@@ -2727,6 +2737,7 @@ export interface AiEvalSuiteInput {
   description: string | null;
   target_type: AiAgentTargetType;
   target_id: string;
+  evaluator_type: AiEvalEvaluatorType;
   cases: AiEvalCaseInput[];
 }
 

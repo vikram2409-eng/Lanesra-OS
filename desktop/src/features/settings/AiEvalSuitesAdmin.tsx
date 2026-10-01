@@ -2,15 +2,22 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
-import type { AiAgentTargetType, AiEvalCaseInput, AiEvalRun, AiEvalSuite, AiEvalSuiteInput } from "../../lib/types";
+import type { AiAgentTargetType, AiEvalCaseInput, AiEvalEvaluatorType, AiEvalRun, AiEvalSuite, AiEvalSuiteInput } from "../../lib/types";
 
 // AI & Agentic Layer, Phase 7d: a real Evaluation Harness - a named
 // Suite of golden test Cases (an input plus a plain-English success
 // criteria) run against one Agent or Pipeline, graded by an LLM-as-judge
 // call rather than a brittle exact-match comparison an open-ended agent
-// response could never satisfy.
+// response could never satisfy. AI Agent Platform v2, Phase 6a adds two
+// more, deterministic evaluator types - see EVALUATOR_LABELS below.
+const EVALUATOR_LABELS: Record<AiEvalEvaluatorType, string> = {
+  task_completion: "Task Completion (LLM judge)",
+  structured_output: "Structured Output (schema check)",
+  policy_compliance: "Policy Compliance (no judge call)",
+};
+
 function emptyInput(): AiEvalSuiteInput {
-  return { name: "", description: "", target_type: "agent", target_id: "", cases: [] };
+  return { name: "", description: "", target_type: "agent", target_id: "", evaluator_type: "task_completion", cases: [] };
 }
 
 export function AiEvalSuitesAdmin() {
@@ -85,6 +92,7 @@ export function AiEvalSuitesAdmin() {
               <tr>
                 <th>Name</th>
                 <th>Target</th>
+                <th>Evaluator</th>
                 <th>Cases</th>
                 <th></th>
               </tr>
@@ -97,6 +105,7 @@ export function AiEvalSuitesAdmin() {
                     {s.description && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{s.description}</div>}
                   </td>
                   <td>{targetName(s.target_type, s.target_id)}</td>
+                  <td style={{ fontSize: 12 }}>{EVALUATOR_LABELS[s.evaluator_type] ?? s.evaluator_type}</td>
                   <td>{s.cases.length}</td>
                   <td>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -160,7 +169,7 @@ function SuiteDetail({ suite }: { suite: AiEvalSuite }) {
         {run.isPending ? "Running..." : "Run suite"}
       </button>
       {error && <div className="error-banner">{error}</div>}
-      {result && <RunResult run={result} />}
+      {result && <RunResult run={result} evaluatorType={suite.evaluator_type} />}
 
       <div style={{ marginTop: 12 }}>
         <b style={{ fontSize: 13 }}>Recent runs</b>
@@ -178,7 +187,8 @@ function SuiteDetail({ suite }: { suite: AiEvalSuite }) {
   );
 }
 
-function RunResult({ run }: { run: AiEvalRun }) {
+function RunResult({ run, evaluatorType }: { run: AiEvalRun; evaluatorType: AiEvalEvaluatorType }) {
+  const isDeterministic = evaluatorType !== "task_completion";
   return (
     <div style={{ marginTop: 12, marginBottom: 12 }}>
       <p style={{ fontSize: 13 }}>
@@ -192,9 +202,9 @@ function RunResult({ run }: { run: AiEvalRun }) {
             <span className={`badge${r.passed ? " badge-success" : " badge-danger"}`}>{r.passed ? "PASS" : "FAIL"}</span>
             <b>{r.input_text}</b>
           </div>
-          <div style={{ color: "var(--text-muted)" }}>criteria: {r.success_criteria}</div>
+          {!isDeterministic && <div style={{ color: "var(--text-muted)" }}>criteria: {r.success_criteria}</div>}
           {r.actual_output && <div>response: {r.actual_output}</div>}
-          {r.judge_reasoning && <div style={{ color: "var(--text-muted)" }}>judge: {r.judge_reasoning}</div>}
+          {r.judge_reasoning && <div style={{ color: "var(--text-muted)" }}>{isDeterministic ? "note" : "judge"}: {r.judge_reasoning}</div>}
           {r.error && <div style={{ color: "var(--large, #b23b3b)" }}>error: {r.error}</div>}
         </div>
       ))}
@@ -224,6 +234,7 @@ function AiEvalSuiteForm({
           description: initial.description,
           target_type: initial.target_type,
           target_id: initial.target_id,
+          evaluator_type: initial.evaluator_type,
           cases: initial.cases.map((c) => ({ input_text: c.input_text, success_criteria: c.success_criteria })),
         }
       : emptyInput(),
@@ -283,18 +294,41 @@ function AiEvalSuiteForm({
           </select>
         </div>
         <div className="field full">
+          <label>Evaluator type</label>
+          <select
+            value={input.evaluator_type}
+            onChange={(e) => setInput({ ...input, evaluator_type: e.target.value as AiEvalEvaluatorType })}
+          >
+            <option value="task_completion">{EVALUATOR_LABELS.task_completion}</option>
+            <option value="structured_output" disabled={input.target_type !== "agent"}>
+              {EVALUATOR_LABELS.structured_output}
+              {input.target_type !== "agent" ? " - Agent target only" : ""}
+            </option>
+            <option value="policy_compliance">{EVALUATOR_LABELS.policy_compliance}</option>
+          </select>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>
+            {input.evaluator_type === "task_completion"
+              ? "Each case is graded by an LLM-as-judge call against its success criteria."
+              : input.evaluator_type === "structured_output"
+                ? "No judge call - checks the response against the target agent's declared Structured Output schema (set one on its current version first)."
+                : "No judge call - checks whether the run had any tool call blocked or queued for approval by the Tool-Call Firewall. A failing run here blocks publishing a new agent version until resolved."}
+          </p>
+        </div>
+        <div className="field full">
           <label>Cases</label>
           {input.cases.length === 0 && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No cases yet.</p>}
           {input.cases.map((c, i) => (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap" }}>
               <span style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>{i + 1}.</span>
               <input style={{ flex: 1, minWidth: 200 }} value={c.input_text} onChange={(e) => updateCase(i, { input_text: e.target.value })} placeholder="Input to send the target" />
-              <input
-                style={{ flex: 1, minWidth: 200 }}
-                value={c.success_criteria}
-                onChange={(e) => updateCase(i, { success_criteria: e.target.value })}
-                placeholder="What a correct response looks like"
-              />
+              {input.evaluator_type === "task_completion" && (
+                <input
+                  style={{ flex: 1, minWidth: 200 }}
+                  value={c.success_criteria}
+                  onChange={(e) => updateCase(i, { success_criteria: e.target.value })}
+                  placeholder="What a correct response looks like"
+                />
+              )}
               <button type="button" className="icon-btn" onClick={() => removeCase(i)}>
                 ✕
               </button>
