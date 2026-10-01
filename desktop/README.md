@@ -1013,6 +1013,27 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   rollout - real local/on-device speech recognition is the one honestly
   named remaining gap (Local Only stays a Processing Boundary label with no
   adapter behind it).
+- **UX/UI Modernization, Phase B: Shared Visual Builder Framework** - the
+  second shipped sub-issue (#192) of the UX/UI Modernization epic (#190).
+  The canvas mechanics `AgentTeamsAdmin.tsx`'s Agent Team Builder (Phase
+  5b) already proved in production - pan/zoom, pointer-drag node
+  repositioning, SVG edge rendering with a delete-on-click marker, and a
+  click-to-connect interaction - move out of that one screen into a
+  standalone `desktop/src/components/visualBuilder/` module:
+  `useCanvasZoom`, `useNodeDrag` (generic over any node shape via a
+  caller-supplied key extractor), `useConnectMode` and the presentational
+  `VisualBuilderCanvas`/`VisualBuilderZoomControls`. The real design work
+  was generalizing per-node-type edge rules: Execution Graph's 7 distinct
+  rules collapse into one `ConnectionRule` shape with exactly 5 variants
+  (`single`, `multi`, `fixed_labels`, `free_label`, `none`) a future
+  builder describes via its own `ruleFor(nodeKey)` callback, rather than
+  hard-coding Execution-Graph-specific labels into shared code.
+  `AgentTeamsAdmin.tsx` itself is the only consumer today, refactored onto
+  this framework with the exact same CSS classes, DOM nesting and
+  interaction feel as before - zero behavior change, verified by a clean
+  typecheck and production build. Workflow Studio 2.0 and Business Rule
+  Board 2.0 (next under epic #190) are this framework's first two real
+  additional consumers; frontend-only, no backend/Rust changes.
 
 ## What's deferred to a later phase
 

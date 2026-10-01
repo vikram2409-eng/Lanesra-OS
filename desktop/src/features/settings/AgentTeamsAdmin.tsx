@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -16,6 +15,10 @@ import type {
   GraphRun,
   WorkflowActionType,
 } from "../../lib/types";
+import { useCanvasZoom } from "../../components/visualBuilder/useCanvasZoom";
+import { useNodeDrag } from "../../components/visualBuilder/useNodeDrag";
+import { useConnectMode, type ConnectionRule } from "../../components/visualBuilder/useConnectMode";
+import { VisualBuilderCanvas, VisualBuilderZoomControls, type CanvasEdgeView } from "../../components/visualBuilder/VisualBuilderCanvas";
 
 // AI Agent Platform v2, Phase 5b (GitHub issue #170, UI half): a genuine
 // free-form canvas authoring Phase 3's Execution Graphs - the node
@@ -40,21 +43,19 @@ import type {
 // Automation's own rich per-action-type builder a second time here - an
 // honest, smaller-but-real simplification, not a fake one.
 
-type EdgeRule = "single" | "true_false" | "approved_rejected" | "body_exit" | "branch" | "multi" | "none";
-
-const NODE_TYPE_META: Record<GraphNodeType, { label: string; color: string; rule: EdgeRule }> = {
-  trigger: { label: "Trigger", color: "#16a34a", rule: "single" },
-  condition: { label: "Condition", color: "#4f7cff", rule: "true_false" },
-  router: { label: "Router", color: "#0891b2", rule: "branch" },
-  action: { label: "Action", color: "#d97706", rule: "single" },
-  agent: { label: "Agent", color: "#9333ea", rule: "single" },
-  approval: { label: "Approval", color: "#dc2626", rule: "approved_rejected" },
-  delay: { label: "Delay", color: "#64748b", rule: "single" },
-  transform: { label: "Transform", color: "#0284c7", rule: "single" },
-  loop: { label: "Loop", color: "#65a30d", rule: "body_exit" },
-  parallel_split: { label: "Parallel Split", color: "#db2777", rule: "multi" },
-  join: { label: "Join", color: "#db2777", rule: "single" },
-  end: { label: "End", color: "#94a3b8", rule: "none" },
+const NODE_TYPE_META: Record<GraphNodeType, { label: string; color: string; rule: ConnectionRule }> = {
+  trigger: { label: "Trigger", color: "#16a34a", rule: { kind: "single" } },
+  condition: { label: "Condition", color: "#4f7cff", rule: { kind: "fixed_labels", labels: ["true", "false"] } },
+  router: { label: "Router", color: "#0891b2", rule: { kind: "free_label" } },
+  action: { label: "Action", color: "#d97706", rule: { kind: "single" } },
+  agent: { label: "Agent", color: "#9333ea", rule: { kind: "single" } },
+  approval: { label: "Approval", color: "#dc2626", rule: { kind: "fixed_labels", labels: ["approved", "rejected"] } },
+  delay: { label: "Delay", color: "#64748b", rule: { kind: "single" } },
+  transform: { label: "Transform", color: "#0284c7", rule: { kind: "single" } },
+  loop: { label: "Loop", color: "#65a30d", rule: { kind: "fixed_labels", labels: ["body", "exit"] } },
+  parallel_split: { label: "Parallel Split", color: "#db2777", rule: { kind: "multi" } },
+  join: { label: "Join", color: "#db2777", rule: { kind: "single" } },
+  end: { label: "End", color: "#94a3b8", rule: { kind: "none" } },
 };
 const PALETTE: GraphNodeType[] = ["trigger", "condition", "router", "action", "agent", "approval", "delay", "transform", "loop", "parallel_split", "join", "end"];
 
@@ -271,12 +272,8 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
   const [nodes, setNodes] = useState<EditNode[]>([{ node_key: "trigger_1", node_type: "trigger", config: {}, x: 40, y: 40 }, { node_key: "end_1", node_type: "end", config: {}, x: 40, y: 220 }]);
   const [edges, setEdges] = useState<EditEdge[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [connectFrom, setConnectFrom] = useState<string | null>(null);
-  const [pendingChoice, setPendingChoice] = useState<{ from: string; to: string; options: string[] } | null>(null);
-  const [zoom, setZoom] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
-  const dragRef = useRef<{ key: string; startX: number; startY: number; nodeX: number; nodeY: number } | null>(null);
 
   useEffect(() => {
     if (existingQuery.data && loadedFor !== existingQuery.data.id) {
@@ -291,32 +288,17 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
   const isDraft = graphMeta.status === "draft";
   const readOnly = !isDraft;
 
-  useEffect(() => {
-    function onMove(e: PointerEvent) {
-      if (!dragRef.current) return;
-      const d = dragRef.current;
-      const dx = (e.clientX - d.startX) / zoom;
-      const dy = (e.clientY - d.startY) / zoom;
-      setNodes((prev) => prev.map((n) => (n.node_key === d.key ? { ...n, x: Math.max(0, d.nodeX + dx), y: Math.max(0, d.nodeY + dy) } : n)));
-    }
-    function onUp() {
-      dragRef.current = null;
-    }
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-  }, [zoom]);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setConnectFrom(null);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  const { zoom, zoomIn, zoomOut } = useCanvasZoom();
+  const { startDrag } = useNodeDrag<EditNode>(setNodes, zoom, readOnly, (n) => n.node_key);
+  const { connectFrom, pendingChoice, startConnecting, cancelConnecting, resolveChoice, targetClicked } = useConnectMode({
+    edges: edges.map((e) => ({ from: e.from_node_key, to: e.to_node_key, label: e.branch_label })),
+    ruleFor: (nodeKey) => {
+      const n = nodes.find((x) => x.node_key === nodeKey);
+      return n ? NODE_TYPE_META[n.node_type].rule : { kind: "none" };
+    },
+    onError: setError,
+    onComplete: completeConnection,
+  });
 
   const createMutation = useMutation({
     mutationFn: (input: ExecutionGraphInput) => api.createExecutionGraph(input),
@@ -385,8 +367,6 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
 
   function completeConnection(from: string, to: string, label: string | null) {
     setEdges((prev) => [...prev, { from_node_key: from, to_node_key: to, branch_label: label }]);
-    setConnectFrom(null);
-    setPendingChoice(null);
   }
 
   function handleNodeClicked(key: string) {
@@ -394,69 +374,8 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
       setSelected(key);
       return;
     }
-    if (connectFrom) {
-      if (connectFrom === key) {
-        setConnectFrom(null);
-        return;
-      }
-      const source = nodes.find((n) => n.node_key === connectFrom);
-      if (!source) {
-        setConnectFrom(null);
-        return;
-      }
-      const rule = NODE_TYPE_META[source.node_type].rule;
-      const existing = edges.filter((e) => e.from_node_key === connectFrom);
-      if (rule === "none") {
-        setError("An End node cannot have an outgoing edge");
-        setConnectFrom(null);
-        return;
-      }
-      if (rule === "single") {
-        if (existing.length > 0) {
-          setError(`'${connectFrom}' already has an outgoing edge - delete it first`);
-          setConnectFrom(null);
-          return;
-        }
-        completeConnection(connectFrom, key, null);
-        return;
-      }
-      if (rule === "multi") {
-        if (existing.some((e) => e.to_node_key === key)) {
-          setError("That connection already exists");
-          setConnectFrom(null);
-          return;
-        }
-        completeConnection(connectFrom, key, null);
-        return;
-      }
-      if (rule === "true_false" || rule === "approved_rejected" || rule === "body_exit") {
-        const pair = rule === "true_false" ? ["true", "false"] : rule === "approved_rejected" ? ["approved", "rejected"] : ["body", "exit"];
-        const remaining = pair.filter((l) => !existing.some((e) => e.branch_label === l));
-        if (remaining.length === 0) {
-          setError(`'${connectFrom}' already has both of its required outgoing edges`);
-          setConnectFrom(null);
-          return;
-        }
-        if (remaining.length === 1) {
-          completeConnection(connectFrom, key, remaining[0]);
-          return;
-        }
-        setPendingChoice({ from: connectFrom, to: key, options: remaining });
-        return;
-      }
-      if (rule === "branch") {
-        setPendingChoice({ from: connectFrom, to: key, options: [] });
-        return;
-      }
-    }
+    if (connectFrom && targetClicked(key)) return;
     setSelected(key);
-  }
-
-  function startDrag(e: ReactPointerEvent, key: string) {
-    if (readOnly) return;
-    const n = nodes.find((x) => x.node_key === key);
-    if (!n) return;
-    dragRef.current = { key, startX: e.clientX, startY: e.clientY, nodeX: n.x, nodeY: n.y };
   }
 
   const canvasWidth = Math.max(1400, ...nodes.map((n) => n.x + 260));
@@ -558,53 +477,30 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
             </div>
           )}
           <div className="graph-canvas-wrap">
-            <div className="graph-canvas" style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${zoom})` }}>
-              <svg className="graph-edges-svg" width={canvasWidth} height={canvasHeight}>
-                <defs>
-                  <marker id="graph-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                    <path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)" />
-                  </marker>
-                </defs>
-                {edges.map((e, i) => {
-                  const from = nodes.find((n) => n.node_key === e.from_node_key);
-                  const to = nodes.find((n) => n.node_key === e.to_node_key);
-                  if (!from || !to) return null;
-                  const a = centerOf(from);
-                  const b = centerOf(to);
-                  const midX = (a.x + b.x) / 2;
-                  const midY = (a.y + b.y) / 2;
-                  return (
-                    <g key={`${e.from_node_key}->${e.to_node_key}-${e.branch_label ?? ""}-${i}`}>
-                      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--text-muted)" strokeWidth={1.5} markerEnd="url(#graph-arrow)" />
-                      {e.branch_label && (
-                        <text x={midX} y={midY - 4} fontSize={10} textAnchor="middle" fill="var(--text-muted)">
-                          {e.branch_label}
-                        </text>
-                      )}
-                      {isDraft && (
-                        <g
-                          transform={`translate(${midX},${midY})`}
-                          style={{ cursor: "pointer" }}
-                          onClick={() => setEdges((prev) => prev.filter((_, xi) => xi !== i))}
-                        >
-                          <circle r={7} fill="var(--bg-elevated)" stroke="var(--border)" />
-                          <text textAnchor="middle" dy={3} fontSize={9} fill="var(--text-muted)">
-                            ×
-                          </text>
-                        </g>
-                      )}
-                    </g>
-                  );
-                })}
-              </svg>
-              {nodes.map((n) => {
+            <VisualBuilderCanvas<EditNode>
+              nodes={nodes}
+              zoom={zoom}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+              editable={isDraft}
+              onEdgeDelete={(key) => setEdges((prev) => prev.filter((_, xi) => String(xi) !== key))}
+              edges={edges.reduce<CanvasEdgeView[]>((acc, e, i) => {
+                const from = nodes.find((n) => n.node_key === e.from_node_key);
+                const to = nodes.find((n) => n.node_key === e.to_node_key);
+                if (!from || !to) return acc;
+                const a = centerOf(from);
+                const b = centerOf(to);
+                acc.push({ key: String(i), fromX: a.x, fromY: a.y, toX: b.x, toY: b.y, label: e.branch_label });
+                return acc;
+              }, [])}
+              renderNode={(n) => {
                 const meta = NODE_TYPE_META[n.node_type];
                 return (
                   <div
                     key={n.node_key}
                     className={`graph-node ${selected === n.node_key ? "graph-node-selected" : ""}`}
                     style={{ left: n.x, top: n.y, borderColor: selected === n.node_key ? meta.color : undefined }}
-                    onPointerDown={(e) => startDrag(e, n.node_key)}
+                    onPointerDown={(e) => startDrag(e, n)}
                     onClick={() => handleNodeClicked(n.node_key)}
                   >
                     <div className="graph-node-head" style={{ background: `${meta.color}26`, color: meta.color }}>
@@ -614,14 +510,14 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
                       <strong>{n.node_key}</strong>
                       <small>{summarizeNode(n)}</small>
                     </div>
-                    {meta.rule !== "none" && isDraft && (
+                    {meta.rule.kind !== "none" && isDraft && (
                       <button
                         className="graph-node-connect"
                         title="Connect to another node"
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setConnectFrom(n.node_key);
+                          startConnecting(n.node_key);
                         }}
                       >
                         →
@@ -629,12 +525,9 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
                     )}
                   </div>
                 );
-              })}
-            </div>
-            <div className="graph-zoom-controls">
-              <button className="btn" type="button" title="Zoom in" onClick={() => setZoom((z) => Math.min(1.5, Math.round((z + 0.1) * 10) / 10))}>+</button>
-              <button className="btn" type="button" title="Zoom out" onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}>−</button>
-            </div>
+              }}
+            />
+            <VisualBuilderZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
           </div>
         </div>
 
@@ -654,21 +547,21 @@ function GraphEditor({ graphId, onBack, onOpenRuns }: { graphId: string | null; 
       </div>
 
       {pendingChoice && (
-        <div className="modal-overlay" onClick={() => { setPendingChoice(null); setConnectFrom(null); }}>
+        <div className="modal-overlay" onClick={cancelConnecting}>
           <div className="modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
             <h4 style={{ marginTop: 0 }}>{pendingChoice.options.length > 0 ? "Which branch?" : "Branch label"}</h4>
             {pendingChoice.options.length > 0 ? (
               <div style={{ display: "flex", gap: 8 }}>
                 {pendingChoice.options.map((opt) => (
-                  <button key={opt} className="btn btn-primary" onClick={() => completeConnection(pendingChoice.from, pendingChoice.to, opt)}>
+                  <button key={opt} className="btn btn-primary" onClick={() => resolveChoice(opt)}>
                     {opt}
                   </button>
                 ))}
               </div>
             ) : (
-              <BranchLabelForm onSubmit={(label) => completeConnection(pendingChoice.from, pendingChoice.to, label)} />
+              <BranchLabelForm onSubmit={(label) => resolveChoice(label)} />
             )}
-            <button className="btn" style={{ marginTop: 10 }} onClick={() => { setPendingChoice(null); setConnectFrom(null); }}>
+            <button className="btn" style={{ marginTop: 10 }} onClick={cancelConnecting}>
               Cancel
             </button>
           </div>
