@@ -52,3 +52,4 @@ pub mod voice;
 pub mod work_team;
 pub mod workflow;
 pub mod workspace;
+pub mod workspace_theme;

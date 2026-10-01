@@ -23,6 +23,7 @@ import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecord
 import { Account } from "./features/account/Account";
 import { VoiceContextProvider } from "./features/voice/VoiceContext";
 import { api } from "./lib/api";
+import { applyThemeTokens } from "./lib/applyTheme";
 import type { User, Workspace } from "./lib/types";
 
 type BootState =
@@ -45,6 +46,10 @@ export function App() {
       const user = await api.currentUser();
       if (user) {
         setBoot({ phase: "ready", workspace, user });
+        api
+          .getPublishedTheme()
+          .then((theme) => theme && applyThemeTokens(theme.tokens))
+          .catch(() => {});
       } else {
         setBoot({ phase: "login", workspace });
       }

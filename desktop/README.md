@@ -1013,6 +1013,30 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   rollout - real local/on-device speech recognition is the one honestly
   named remaining gap (Local Only stays a Processing Boundary label with no
   adapter behind it).
+- **UX/UI Modernization, Phase A: Design Tokens & Theme Studio** - the
+  first shipped sub-issue (#191) of the new UX/UI Modernization epic
+  (#190); until this, workspace branding was a logo upload and nothing
+  else. A new `workspace_themes` table (migration
+  `0066_workspace_theme_studio.sql`) stores a full Draft/Published/Archived
+  version history per workspace, a SQLite partial unique index enforcing
+  exactly one Published row at a time - the same versioning discipline
+  Agent Versioning already established, reused rather than reinvented.
+  Admin → Theme Studio (desktop and online demo) starts from one of 4
+  curated presets (Orbit, Slate, Ember, Aurora - exact hex values from the
+  UX/UI spec) or from scratch, editing brand colors, typography, shape and
+  density with a live preview. `theme_service.rs` owns every rule
+  (contrast validation, publish gating, admin check); the repository layer
+  is raw CRUD only. Publish runs a real hand-written WCAG 2.x contrast
+  check (sRGB linearization + relative luminance + contrast ratio) across
+  3 representative text/surface pairs, requiring 4.5:1 - a theme that
+  fails stays a Draft, with no override. Rollback never mutates history:
+  it creates a brand-new Draft carrying an older version's tokens and
+  publishes that. A workspace that never publishes a theme keeps exactly
+  its pre-Theme-Studio look - this feature is purely additive. See
+  `core/tests/workspace_theme_studio.rs` (8 tests covering presets,
+  contrast validation, the save/publish/rollback/delete lifecycle, the
+  one-published-row invariant, and the admin-only check), and mirrored in
+  the online demo including live runtime re-theming on publish.
 - **UX/UI Modernization, Phase B: Shared Visual Builder Framework** - the
   second shipped sub-issue (#192) of the UX/UI Modernization epic (#190).
   The canvas mechanics `AgentTeamsAdmin.tsx`'s Agent Team Builder (Phase
@@ -1031,9 +1055,10 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   `AgentTeamsAdmin.tsx` itself is the only consumer today, refactored onto
   this framework with the exact same CSS classes, DOM nesting and
   interaction feel as before - zero behavior change, verified by a clean
-  typecheck and production build. Workflow Studio 2.0 and Business Rule
-  Board 2.0 (next under epic #190) are this framework's first two real
-  additional consumers; frontend-only, no backend/Rust changes.
+  typecheck and production build. Still open under epic #190: Workflow
+  Studio 2.0, Business Rule Board 2.0 and Screen Builder 2.0 (this
+  framework's first real additional consumers), then Agent Studio 2.0
+  polish and an Admin Control Center & Runtime UX modernization pass.
 
 ## What's deferred to a later phase
 

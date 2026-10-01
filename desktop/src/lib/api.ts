@@ -96,6 +96,11 @@ import type {
   OrderWithLines,
   Organization,
   OrganizationUpdate,
+  ThemePreset,
+  ThemeTokens,
+  ThemeContrastIssue,
+  WorkspaceTheme,
+  WorkspaceThemeInput,
   OrgUnit,
   OrgUnitInput,
   OrgUnitMoveImpact,
@@ -697,6 +702,17 @@ export const api = {
   // Units, Work Teams, Record Ownership (spec §1-2).
   getOrganization: () => call<Organization>("get_organization"),
   updateOrganization: (input: OrganizationUpdate) => call<Organization>("update_organization", { input }),
+
+  // UX/UI Modernization, Phase A (issue #191): Design Tokens & Theme Studio.
+  listThemePresets: () => call<ThemePreset[]>("list_theme_presets"),
+  getPublishedTheme: () => call<WorkspaceTheme | null>("get_published_theme"),
+  listThemeVersions: () => call<WorkspaceTheme[]>("list_theme_versions"),
+  validateThemeTokens: (tokens: ThemeTokens) => call<ThemeContrastIssue[]>("validate_theme_tokens", { tokens }),
+  saveThemeDraft: (existingId: string | null, input: WorkspaceThemeInput) =>
+    call<WorkspaceTheme>("save_theme_draft", { existingId, input }),
+  publishTheme: (id: string) => call<WorkspaceTheme>("publish_theme", { id }),
+  rollbackTheme: (fromVersion: number) => call<WorkspaceTheme>("rollback_theme", { fromVersion }),
+  deleteThemeDraft: (id: string) => call<void>("delete_theme_draft", { id }),
 
   listOrgUnits: () => call<OrgUnit[]>("list_org_units"),
   createOrgUnit: (input: OrgUnitInput) => call<OrgUnit>("create_org_unit", { input }),

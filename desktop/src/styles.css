@@ -2,15 +2,21 @@
   color-scheme: light dark;
   --bg: #0f1420;
   --bg-elevated: #161d2e;
+  --surface-sidebar: var(--bg-elevated);
   --border: #2a3550;
   --text: #e6ebf5;
   --text-muted: #94a3b8;
   --accent: #4f7cff;
+  --accent-secondary: #4f7cff;
   --accent-contrast: #ffffff;
   --danger: #ef4444;
   --success: #22c55e;
   --warning: #f59e0b;
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --info: #3b82f6;
+  --font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --base-font-size: 14px;
+  font-family: var(--font-family);
+  font-size: var(--base-font-size);
 }
 
 @media (prefers-color-scheme: light) {
@@ -22,6 +28,15 @@
     --text-muted: #5b6572;
   }
 }
+
+/* UX/UI Modernization, Phase A (issue #191): Theme Studio overrides every
+   var above except --accent-contrast (no modeled token for it yet) via
+   inline styles on :root - see lib/applyTheme.ts. A workspace with no
+   Published theme never has those inline styles set, so it keeps exactly
+   this static palette. Shape (radius_scale) and density are stored and
+   previewed in Theme Studio but not yet retrofitted across this
+   stylesheet's ~15 hardcoded border-radius/spacing rules - a named
+   follow-up, not silently claimed here. */
 
 * {
   box-sizing: border-box;
@@ -57,7 +72,7 @@ textarea {
 }
 
 .sidebar {
-  background: var(--bg-elevated);
+  background: var(--surface-sidebar);
   border-right: 1px solid var(--border);
   padding: 16px 12px;
   display: flex;
