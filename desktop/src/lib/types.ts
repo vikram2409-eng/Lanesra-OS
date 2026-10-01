@@ -3920,3 +3920,78 @@ export interface AgentMcpToolOption {
   tool_description: string;
   requires_admin: boolean;
 }
+
+// UX/UI Modernization, Phase A (issue #191): Design Tokens & Theme Studio.
+// Mirrors `models::workspace_theme` (Rust) 1:1.
+export const THEME_STATUSES = ["draft", "published", "archived"] as const;
+export type ThemeStatus = (typeof THEME_STATUSES)[number];
+
+export const THEME_PRESET_KEYS = ["orbit", "slate", "ember", "aurora"] as const;
+export type ThemePresetKey = (typeof THEME_PRESET_KEYS)[number];
+
+export const RADIUS_SCALES = ["sharp", "soft", "rounded"] as const;
+export type RadiusScale = (typeof RADIUS_SCALES)[number];
+
+export const DENSITY_SCALES = ["comfortable", "compact", "dense"] as const;
+export type DensityScale = (typeof DENSITY_SCALES)[number];
+
+export interface ThemeColorTokens {
+  brand_primary: string;
+  brand_secondary: string;
+  surface_app: string;
+  surface_card: string;
+  surface_sidebar: string;
+  border_default: string;
+  text_primary: string;
+  text_secondary: string;
+  status_success: string;
+  status_warning: string;
+  status_danger: string;
+  status_info: string;
+}
+
+export interface ThemeTypographyTokens {
+  font_family: string;
+  base_size_px: number;
+}
+
+export interface ThemeShapeTokens {
+  radius_scale: string;
+}
+
+export interface ThemeTokens {
+  color: ThemeColorTokens;
+  typography: ThemeTypographyTokens;
+  shape: ThemeShapeTokens;
+  density: string;
+}
+
+export interface WorkspaceTheme {
+  id: string;
+  workspace_id: string;
+  name: string;
+  status: string;
+  version: number;
+  preset_key: string | null;
+  tokens: ThemeTokens;
+  created_at: string;
+  created_by: string | null;
+  published_at: string | null;
+  published_by: string | null;
+}
+
+export interface WorkspaceThemeInput {
+  name: string;
+  preset_key: string | null;
+  tokens: ThemeTokens;
+}
+
+export interface ThemeContrastIssue {
+  pair_label: string;
+  ratio: number;
+  required_ratio: number;
+}
+
+// (preset_key, display_name, character_blurb, tokens) - see
+// `theme_service::built_in_presets` (Rust).
+export type ThemePreset = [string, string, string, ThemeTokens];

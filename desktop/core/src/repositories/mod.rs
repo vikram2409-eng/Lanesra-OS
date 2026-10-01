@@ -71,3 +71,4 @@ pub mod voice_repo;
 pub mod work_team_repo;
 pub mod workflow_repo;
 pub mod workspace_repo;
+pub mod workspace_theme_repo;

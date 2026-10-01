@@ -41,6 +41,7 @@ use lanesra_core::models::integration::{
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::org_unit::{OrgUnitInput, OrgUnitUpdate};
 use lanesra_core::models::organization::OrganizationUpdate;
+use lanesra_core::models::workspace_theme::{ThemeTokens, WorkspaceThemeInput};
 use lanesra_core::models::ownership::OwnerRef;
 use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::work_team::{WorkTeamInput, WorkTeamUpdate};
@@ -82,7 +83,7 @@ use lanesra_core::services::{
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
     user_service, vector_search_service,
     voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service, voice_session_service,
-    webhook_service, work_team_service, workflow_service, workspace_service,
+    theme_service, webhook_service, work_team_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -685,6 +686,37 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let input: OrganizationUpdate = arg(args, "input")?;
             to_value(organization_service::update(conn, &require_workspace_id(conn)?, &input, actor)?)
         }
+        "list_theme_presets" => to_value(
+            theme_service::built_in_presets()
+                .into_iter()
+                .map(|(key, name, blurb, tokens)| (key.to_string(), name.to_string(), blurb.to_string(), tokens))
+                .collect::<Vec<(String, String, String, ThemeTokens)>>(),
+        ),
+        "get_published_theme" => to_value(theme_service::get_published(conn, &require_workspace_id(conn)?)?),
+        "list_theme_versions" => to_value(theme_service::list_versions(conn, &require_workspace_id(conn)?)?),
+        "validate_theme_tokens" => {
+            let tokens: ThemeTokens = arg(args, "tokens")?;
+            to_value(theme_service::validate_tokens(&tokens))
+        }
+        "save_theme_draft" => {
+            let existing_id: Option<String> = arg(args, "existingId")?;
+            let input: WorkspaceThemeInput = arg(args, "input")?;
+            to_value(theme_service::save_draft(conn, &require_workspace_id(conn)?, existing_id.as_deref(), &input, actor)?)
+        }
+        "publish_theme" => {
+            let id: String = arg(args, "id")?;
+            to_value(theme_service::publish(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "rollback_theme" => {
+            let from_version: i64 = arg(args, "fromVersion")?;
+            to_value(theme_service::rollback_to_version(conn, &require_workspace_id(conn)?, from_version, actor)?)
+        }
+        "delete_theme_draft" => {
+            let id: String = arg(args, "id")?;
+            theme_service::delete_draft(conn, &id, &require_workspace_id(conn)?, actor)?;
+            Ok(Value::Null)
+        }
+
         "list_org_units" => to_value(org_unit_service::list_tree(conn, &require_workspace_id(conn)?)?),
         "create_org_unit" => {
             let input: OrgUnitInput = arg(args, "input")?;

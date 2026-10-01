@@ -38,6 +38,7 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 - **Workflow Automation** — trigger on a status or field change, a date reached or overdue (any custom object's own date field, not just a fixed built-in set), or a schedule; create a task, assign an owner, create a related record, update a field, or post an in-app notification
 - **Custom fields** with validation (min/max, length, regex) and capability flags, on every major object, built-in or custom
 - **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
+- **Theme Studio** — brand colors, typography, shape and density for the whole workspace, from 4 curated presets or from scratch, with Draft → Published → Archived versioning, rollback, and a real WCAG contrast check gating every publish
 
 **Organization & Access Control — who owns what, and who reports to whom:**
 

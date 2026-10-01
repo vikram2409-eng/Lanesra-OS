@@ -90,6 +90,7 @@ pub mod voice_policy_service;
 pub mod voice_provider_service;
 pub mod voice_risk_service;
 pub mod voice_session_service;
+pub mod theme_service;
 pub mod webhook_service;
 pub mod work_team_service;
 pub mod workflow_service;
