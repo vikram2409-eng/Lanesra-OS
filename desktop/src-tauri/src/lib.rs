@@ -122,6 +122,7 @@ pub fn run() {
             commands::workflow_commands::duplicate_workflow_rule,
             commands::workflow_commands::list_workflow_rule_versions,
             commands::workflow_commands::restore_workflow_rule_version,
+            commands::workflow_commands::upgrade_workflow_to_graph,
             commands::notification_commands::list_notifications,
             commands::notification_commands::mark_notification_read,
             commands::notification_commands::mark_all_notifications_read,

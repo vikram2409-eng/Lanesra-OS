@@ -670,6 +670,7 @@ export const api = {
   listWorkflowRuleVersions: (workflowId: string) => call<WorkflowRuleVersion[]>("list_workflow_rule_versions", { workflowId }),
   restoreWorkflowRuleVersion: (workflowId: string, versionId: string) =>
     call<WorkflowDefinition>("restore_workflow_rule_version", { workflowId, versionId }),
+  upgradeWorkflowToGraph: (workflowId: string) => call<WorkflowDefinition>("upgrade_workflow_to_graph", { workflowId }),
 
   listNotifications: (unreadOnly: boolean) => call<Notification[]>("list_notifications", { unreadOnly }),
   markNotificationRead: (id: string) => call<void>("mark_notification_read", { id }),

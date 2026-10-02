@@ -32,6 +32,8 @@ import {
   type WorkflowConditionInput,
   type WorkflowDefinitionInput,
 } from "../../lib/types";
+import { WorkflowGraphEditor } from "./WorkflowGraphEditor";
+import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from "../../lib/workflowTemplates";
 
 const TRIGGER_LABELS: Record<TriggerType, string> = {
   record_created: "Record created",
@@ -188,6 +190,8 @@ export function WorkflowAutomationAdmin() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyForId, setHistoryForId] = useState<string | null>(null);
   const [appFilter, setAppFilter] = useState<"all" | "none" | string>("all");
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [templateOverrides, setTemplateOverrides] = useState<ReturnType<WorkflowTemplate["build"]> | null>(null);
   const queryClient = useQueryClient();
 
   const apps = useApps();
@@ -240,14 +244,54 @@ export function WorkflowAutomationAdmin() {
         <button
           className="btn btn-primary"
           onClick={() => {
-            setCreating((v) => !v);
             setEditingId(null);
             setHistoryForId(null);
+            setShowTemplatePicker(true);
           }}
         >
           + New workflow
         </button>
       </div>
+
+      {showTemplatePicker && (
+        <div className="modal-overlay" onClick={() => setShowTemplatePicker(false)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+            <h4 style={{ marginTop: 0 }}>Start from a template?</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                className="btn"
+                style={{ textAlign: "left" }}
+                onClick={() => {
+                  setTemplateOverrides(null);
+                  setCreating(true);
+                  setShowTemplatePicker(false);
+                }}
+              >
+                <strong>Blank workflow</strong>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Start from an empty Trigger/Conditions/Actions form.</div>
+              </button>
+              {WORKFLOW_TEMPLATES.map((t) => (
+                <button
+                  key={t.key}
+                  className="btn"
+                  style={{ textAlign: "left" }}
+                  onClick={() => {
+                    setTemplateOverrides(t.build(transitionValuesForEntity(entityType)[0] ?? null));
+                    setCreating(true);
+                    setShowTemplatePicker(false);
+                  }}
+                >
+                  <strong>{t.label}</strong>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{t.description}</div>
+                </button>
+              ))}
+            </div>
+            <button className="btn" style={{ marginTop: 10 }} onClick={() => setShowTemplatePicker(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         Trigger an action - create a task, update a field, assign an owner, create a record (optionally linked),
         update a field on a linked record, or send a notification - when a record is created, updated, changes
@@ -295,22 +339,43 @@ export function WorkflowAutomationAdmin() {
           aiAgents={aiAgents.data ?? []}
           aiAgentPipelines={aiAgentPipelines.data ?? []}
           apps={appList}
-          initial={{
-            entity_type: entityType, name: "", description: null, trigger_type: "status_changed",
-            trigger_status: transitionValuesForEntity(entityType)[0] ?? null, trigger_field_key: null, trigger_field_source: "custom",
-            trigger_offset_days: 0, match_type: "all", priority: 0, app_id: newWorkflowAppId, conditions: [], actions: [emptyAction(activeDefs[0]?.key ?? "")],
-          }}
+          initial={
+            templateOverrides
+              ? {
+                  entity_type: entityType, name: "", description: null, trigger_field_key: null, trigger_field_source: "custom",
+                  priority: 0, app_id: newWorkflowAppId, ...templateOverrides,
+                }
+              : {
+                  entity_type: entityType, name: "", description: null, trigger_type: "status_changed",
+                  trigger_status: transitionValuesForEntity(entityType)[0] ?? null, trigger_field_key: null, trigger_field_source: "custom",
+                  trigger_offset_days: 0, match_type: "all", priority: 0, app_id: newWorkflowAppId, conditions: [], actions: [emptyAction(activeDefs[0]?.key ?? "")],
+                }
+          }
           submitLabel="Add workflow"
           onSubmit={(input) => api.createWorkflowRule(input)}
           onDone={() => {
             invalidate();
             setCreating(false);
+            setTemplateOverrides(null);
           }}
-          onCancel={() => setCreating(false)}
+          onCancel={() => {
+            setCreating(false);
+            setTemplateOverrides(null);
+          }}
         />
       )}
 
-      {editing && !historyWorkflow && (
+      {editing && editing.graph_id && !historyWorkflow && (
+        <WorkflowGraphEditor
+          graphId={editing.graph_id}
+          entityType={entityType}
+          agents={aiAgents.data ?? []}
+          pipelines={aiAgentPipelines.data ?? []}
+          onBack={() => setEditingId(null)}
+        />
+      )}
+
+      {editing && !editing.graph_id && !historyWorkflow && (
         <WorkflowForm
           entityType={entityType}
           customFields={activeDefs}
@@ -320,6 +385,10 @@ export function WorkflowAutomationAdmin() {
           aiAgents={aiAgents.data ?? []}
           aiAgentPipelines={aiAgentPipelines.data ?? []}
           apps={appList}
+          workflowId={editing.id}
+          onUpgraded={() => {
+            invalidate();
+          }}
           initial={{
             entity_type: entityType, name: editing.name, description: editing.description, trigger_type: editing.trigger_type,
             trigger_status: editing.trigger_status, trigger_field_key: editing.trigger_field_key, trigger_field_source: editing.trigger_field_source,
@@ -807,6 +876,8 @@ function WorkflowForm({
   onDone,
   onCancel,
   showActiveToggle,
+  workflowId,
+  onUpgraded,
 }: {
   entityType: string;
   // `field_type` (beyond the narrower `{key,label}` shape every sibling
@@ -828,6 +899,11 @@ function WorkflowForm({
   onDone: () => void;
   onCancel: () => void;
   showActiveToggle?: boolean;
+  /** Workflow Studio 2.0 (issue #193): only set when editing an already-
+   * saved workflow (never while creating a new one - there's nothing to
+   * upgrade yet) - enables the "Upgrade to graph" action below. */
+  workflowId?: string;
+  onUpgraded?: () => void;
 }) {
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description ?? "");
@@ -892,6 +968,19 @@ function WorkflowForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this workflow"),
   });
 
+  const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
+  const upgrade = useMutation({
+    mutationFn: () => api.upgradeWorkflowToGraph(workflowId as string),
+    onSuccess: () => {
+      setConfirmingUpgrade(false);
+      onUpgraded?.();
+    },
+    onError: (err) => {
+      setConfirmingUpgrade(false);
+      setError(err instanceof ApiError ? err.message : "Could not upgrade this workflow");
+    },
+  });
+
   const triggerSummary = describeTrigger(entityType, triggerType, triggerStatus, triggerFieldKey, triggerOffsetDays);
 
   return (
@@ -909,6 +998,11 @@ function WorkflowForm({
           <button className="btn" type="button" onClick={() => setTesting((v) => !v)}>
             {testing ? "Hide test" : "Test run"}
           </button>
+          {workflowId && (
+            <button className="btn" type="button" title="Switch/Loop/Parallel/Join/Run Agent Team/Evaluate Result need the new canvas" onClick={() => setConfirmingUpgrade(true)}>
+              Upgrade to graph
+            </button>
+          )}
           {showActiveToggle && (
             <button className="btn" type="button" disabled={save.isPending} onClick={() => save.mutate(!isActive)}>
               {isActive ? "Deactivate" : "Activate"}
@@ -927,6 +1021,28 @@ function WorkflowForm({
 
       {error && <div className="error-banner">{error}</div>}
       {testing && <TestWorkflowPanel entityType={entityType} customFields={customFields} />}
+      {confirmingUpgrade && (
+        <div className="modal-overlay" onClick={() => setConfirmingUpgrade(false)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <h4 style={{ marginTop: 0 }}>Upgrade to graph?</h4>
+            <p style={{ fontSize: 13 }}>
+              This creates a Draft Execution Graph from this workflow's current trigger/conditions/actions and switches it onto the new canvas, where you
+              can add Switch, Loop, Parallel, Join, Run Agent, Run Agent Team and Evaluate Result nodes. This workflow stops firing until you publish the
+              new graph. <strong>This can't be undone</strong> - the trigger/conditions/actions form you're looking at now won't be editable again for
+              this workflow.
+            </p>
+            {error && <div className="error-banner">{error}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn" type="button" onClick={() => setConfirmingUpgrade(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" type="button" disabled={upgrade.isPending} onClick={() => upgrade.mutate()}>
+                Upgrade
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form
         id="workflow-form"

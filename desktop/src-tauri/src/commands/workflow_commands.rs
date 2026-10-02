@@ -72,3 +72,12 @@ pub fn restore_workflow_rule_version(state: State<AppState>, workflow_id: String
     let conn = state.conn.lock().unwrap();
     workflow_service::restore_version(&conn, &workflow_id, &version_id, current_actor(&state).as_deref())
 }
+
+/// Workflow Studio 2.0 (issue #193): the one-way "upgrade to graph" action
+/// - see `workflow_service::upgrade_to_graph`'s own doc comment.
+#[tauri::command]
+pub fn upgrade_workflow_to_graph(state: State<AppState>, workflow_id: String) -> AppResult<WorkflowDefinition> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    workflow_service::upgrade_to_graph(&conn, &workspace_id, &workflow_id, current_actor(&state).as_deref())
+}

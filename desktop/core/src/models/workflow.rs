@@ -139,6 +139,15 @@ pub struct WorkflowDefinition {
     /// Per-app scoped automation - see `BusinessRule::app_id`'s doc
     /// comment for the full rationale; identical mechanism.
     pub app_id: Option<String>,
+    /// Workflow Studio 2.0 (issue #193): `None` forever unless an admin
+    /// explicitly upgrades this workflow (`workflow_service::
+    /// upgrade_to_graph`) to a hand-editable Execution Graph with node
+    /// types this engine's own flat trigger/conditions/actions model has
+    /// no room for (Switch/Loop/Parallel/Join/Run Agent/Run Agent Team/
+    /// Evaluate Result). Set, `run_workflow` dispatches to
+    /// `graph_runtime_service::start_run` instead of this struct's own
+    /// `conditions`/`actions` - see `run_workflow`'s own doc comment.
+    pub graph_id: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,

@@ -1055,10 +1055,51 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   `AgentTeamsAdmin.tsx` itself is the only consumer today, refactored onto
   this framework with the exact same CSS classes, DOM nesting and
   interaction feel as before - zero behavior change, verified by a clean
-  typecheck and production build. Still open under epic #190: Workflow
-  Studio 2.0, Business Rule Board 2.0 and Screen Builder 2.0 (this
-  framework's first real additional consumers), then Agent Studio 2.0
-  polish and an Admin Control Center & Runtime UX modernization pass.
+  typecheck and production build; frontend-only, no backend/Rust changes.
+  Workflow Studio 2.0 (below) is this framework's first real additional
+  consumer.
+- **UX/UI Modernization, Workflow Studio 2.0** (issue #193): rebuilds
+  Admin → Workflow Automation's canvas onto the Shared Visual Builder
+  Framework (#192) without migrating a single existing saved Workflow's
+  execution path - `workflow_definitions.graph_id` (migration 0067) stays
+  `NULL` forever unless an admin explicitly opts in
+  (`workflow_service::upgrade_to_graph`), so every pre-existing Workflow
+  keeps firing through the exact same flat Trigger/Conditions/Actions
+  executor it always has, proven by a dedicated parity test
+  (`core/tests/workflow_studio_v2.rs`) rather than only by construction.
+  Upgrading seeds a Draft Execution Graph from the workflow's current
+  shape (`execution_graph_service::graph_from_workflow`) and switches
+  `run_workflow` to enqueue a `graph_pending_runs` row instead - the same
+  enqueue-and-drain shape `run_ai_agent`/`call_connector_action` already
+  established, since a record-save context can't call the async graph
+  runtime directly. The upgraded canvas exposes the Execution Graph
+  runtime's full 14-node palette (the original 12 plus two additions this
+  issue needed: `run_agent_team`, calling an existing Orchestration
+  Pipeline through the identical `run_triggered` entry point a schedule
+  Trigger already uses, and `evaluate_result`, grading an upstream node's
+  output with the same LLM-as-judge call the Evaluation Harness's
+  `run_suite` uses, then branching on a `pass`/`fail` edge) - Switch
+  (`router`), Loop, Parallel, Join and Run Agent were all already real in
+  the runtime, just never surfaced by this builder's UI before now. Also
+  new: a typed variable reference panel (click-to-copy `{{field}}`/
+  `{{node_key}}` tokens), a client-side Test Run that walks the in-memory
+  graph shape against a sample record and highlights the path as far as
+  it can be known without executing anything (it stops cleanly at the
+  first node whose branch depends on a real runtime outcome - an Agent's
+  actual output, an Approval, Loop or Parallel Split - rather than
+  guessing), and 5 starter templates (Approval Flow, Status Automation,
+  Scheduled Follow-up, Integration Sync, Agent-Assisted Process). The
+  graph-editing screen itself (`WorkflowGraphEditor.tsx`) reuses
+  `AgentTeamsAdmin.tsx`'s own generic `NodePropertyPanel`/
+  `BranchLabelForm`/`GraphRunsView` rather than a duplicate copy; the
+  per-node-type metadata and pure graph-editing helpers both screens share
+  were extracted into `components/visualBuilder/graphNodeMeta.ts`. Online
+  demo mirror is deliberately scoped to the 5 starter templates only - the
+  demo's Workflow Automation engine has no Execution Graph runtime
+  equivalent at all, so a true graph canvas there would mean porting that
+  whole runtime to JS first, named honestly as a desktop-only gap rather
+  than faked. Business Rule Board 2.0 and Screen Builder 2.0 (next under
+  epic #190) remain this framework's next real consumers.
 
 ## What's deferred to a later phase
 

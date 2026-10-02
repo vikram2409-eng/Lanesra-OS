@@ -422,6 +422,39 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
     Ok(workflow_repo::update(conn, &created.id, &deactivate, actor_user_id)?)
 }
 
+/// Workflow Studio 2.0 (issue #193): the one-way, one-time "upgrade this
+/// workflow to the new canvas" action - seeds an Execution Graph **Draft**
+/// from this workflow's current trigger/conditions/flat-actions shape
+/// (`execution_graph_service::graph_from_workflow`) and persists its id
+/// onto the workflow row. Deliberately left as a Draft, not auto-published
+/// like `execution_graph_service::create_from_source`'s own parity-test
+/// use of this same mapping - the whole point of upgrading is to then
+/// hand-edit it (add Switch/Loop/Parallel/Join/Run Agent/Run Agent Team/
+/// Evaluate Result nodes), and a graph is immutable once published, the
+/// same Draft/Published discipline every other versioned object in this
+/// codebase already uses. Until the admin publishes the upgraded graph,
+/// this workflow stops firing (`graph_runtime_service::start_run`
+/// requires a published graph) - an honest, visible consequence of
+/// "mid-upgrade," not a silent gap.
+///
+/// Irreversible by design: from this point on, the admin edits the graph
+/// itself (Admin → Workflow Automation's canvas, backed by
+/// `execution_graph_service::update`/`publish`) - this struct's own
+/// `conditions`/`actions` fields are never read again for this workflow
+/// (see `run_workflow`'s own doc comment).
+pub fn upgrade_to_graph(conn: &Connection, workspace_id: &str, workflow_id: &str, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+    require_admin(conn, actor_user_id)?;
+    let wf = workflow_repo::get(conn, workflow_id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
+    if wf.graph_id.is_some() {
+        return Err(AppError::Validation("This workflow has already been upgraded to a graph".into()));
+    }
+    let input = crate::services::execution_graph_service::graph_from_workflow(&wf);
+    let graph_id = new_uuid();
+    let graph = crate::repositories::execution_graph_repo::create_with_source(conn, &graph_id, workspace_id, &input, "workflow", workflow_id, actor_user_id)?;
+    workflow_repo::set_graph_id(conn, workflow_id, &graph.id)?;
+    workflow_repo::get(conn, workflow_id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))
+}
+
 /// Admin UX polish (spec §10): human-readable descriptions of every active
 /// workflow on `entity_type` that watches (trigger_field_key or a
 /// condition's field/comparison field) or writes (an action's
@@ -589,7 +622,7 @@ pub fn fire_event(
         if !trigger_matches || !workflow_matches(conn, entity_type, entity_id, wf, &ctx)? {
             continue;
         }
-        run_workflow(conn, workspace_id, wf, entity_type, entity_id, fallback_owner_user_id, actor_user_id)?;
+        run_workflow(conn, workspace_id, wf, entity_type, entity_id, &ctx, fallback_owner_user_id, actor_user_id)?;
         fired += 1;
     }
     Ok(fired)
@@ -628,7 +661,7 @@ pub fn fire_field_changed(
         if !changed_field_keys.iter().any(|k| k == watched) || !workflow_matches(conn, entity_type, entity_id, wf, &ctx)? {
             continue;
         }
-        run_workflow(conn, workspace_id, wf, entity_type, entity_id, fallback_owner_user_id, actor_user_id)?;
+        run_workflow(conn, workspace_id, wf, entity_type, entity_id, &ctx, fallback_owner_user_id, actor_user_id)?;
         fired += 1;
     }
     Ok(fired)
@@ -670,7 +703,7 @@ pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Optio
             if !workflow_matches(conn, &wf.entity_type, &entity_id, &wf, &ctx)? {
                 continue;
             }
-            run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, None, actor_user_id)?;
+            run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, &ctx, None, actor_user_id)?;
             fired += 1;
         }
     }
@@ -688,7 +721,7 @@ pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Optio
             if !workflow_matches(conn, &wf.entity_type, &entity_id, &wf, &ctx)? {
                 continue;
             }
-            run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, None, actor_user_id)?;
+            run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, &ctx, None, actor_user_id)?;
             fired += 1;
         }
         workflow_repo::set_last_scheduled_run(conn, &wf.id, &today)?;
@@ -1415,15 +1448,35 @@ pub(crate) fn apply_action(
     }
 }
 
+/// Workflow Studio 2.0 (issue #193): a workflow upgraded onto the
+/// Execution Graph runtime (`wf.graph_id` set - see
+/// `upgrade_to_graph`) never runs its own flat `actions` list here;
+/// instead it's queued for `graph_runtime_service::start_run` (an async
+/// fn this sync, record-save-time entry point can't call directly - same
+/// enqueue-not-inline shape `call_connector_action`/`run_ai_agent`
+/// already established just above). A workflow that has never been
+/// upgraded (`graph_id` stays `None` forever unless an admin explicitly
+/// opts in) runs through the exact same flat executor as before this
+/// issue, completely unchanged - this is what makes this issue's
+/// mandatory parity gate true by construction.
 fn run_workflow(
     conn: &Connection,
     workspace_id: &str,
     wf: &WorkflowDefinition,
     entity_type: &str,
     entity_id: &str,
+    ctx: &HashMap<String, String>,
     fallback_owner_user_id: Option<&str>,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
+    if let Some(graph_id) = &wf.graph_id {
+        let trigger_input = serde_json::to_string(ctx).unwrap_or_else(|_| "{}".to_string());
+        crate::repositories::graph_pending_run_repo::enqueue(
+            conn, &new_uuid(), workspace_id, graph_id, &trigger_input, Some("workflow"), Some(entity_type), Some(entity_id),
+        )?;
+        workflow_repo::record_run(conn, workspace_id, &wf.id, entity_type, Some(entity_id), &wf.trigger_type, "success", Some("queued graph run"), None)?;
+        return Ok(());
+    }
     let mut summaries = Vec::new();
     let mut errors = Vec::new();
     for action in &wf.actions {

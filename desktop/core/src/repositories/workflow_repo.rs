@@ -48,6 +48,7 @@ fn map_header(row: &rusqlite::Row) -> rusqlite::Result<WorkflowDefinition> {
         is_protected: row.get("is_protected")?,
         last_scheduled_run_at: row.get("last_scheduled_run_at")?,
         app_id: row.get("app_id")?,
+        graph_id: row.get("graph_id")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -234,6 +235,15 @@ pub fn record_run(
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         rusqlite::params![new_uuid(), workspace_id, workflow_id, entity_type, entity_id, trigger_type, now_iso(), outcome, actions_summary, error_message],
     )?;
+    Ok(())
+}
+
+/// Workflow Studio 2.0 (issue #193) - see `WorkflowDefinition::graph_id`'s
+/// own doc comment. Never cleared once set: an upgraded workflow stays on
+/// the graph runtime (the admin edits the graph itself from then on, via
+/// `execution_graph_service::update`/`publish`, not this field again).
+pub fn set_graph_id(conn: &Connection, workflow_id: &str, graph_id: &str) -> rusqlite::Result<()> {
+    conn.execute("UPDATE workflow_definitions SET graph_id = ?1 WHERE id = ?2", (graph_id, workflow_id))?;
     Ok(())
 }
 

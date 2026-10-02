@@ -90,9 +90,14 @@ pub fn list_runs(conn: &Connection, suite_id: &str, limit: i64) -> AppResult<Vec
     Ok(ai_eval_repo::list_runs_for_suite(conn, suite_id, limit)?)
 }
 
-const JUDGE_SYSTEM_PROMPT: &str = "You are a strict, impartial grader for an AI system's test suite. You will be given a task the AI was asked to do, a stated success criteria, and the AI's actual response. Decide whether the response satisfies the criteria - do not reward a well-written answer that misses the criteria, and do not penalize a correct answer for an unrelated style choice. Respond with exactly one word on the first line, PASS or FAIL, followed by exactly one sentence of reasoning on the next line. Output nothing else.";
+pub(crate) const JUDGE_SYSTEM_PROMPT: &str = "You are a strict, impartial grader for an AI system's test suite. You will be given a task the AI was asked to do, a stated success criteria, and the AI's actual response. Decide whether the response satisfies the criteria - do not reward a well-written answer that misses the criteria, and do not penalize a correct answer for an unrelated style choice. Respond with exactly one word on the first line, PASS or FAIL, followed by exactly one sentence of reasoning on the next line. Output nothing else.";
 
-fn build_judge_message(input_text: &str, success_criteria: &str, actual_output: &str) -> String {
+/// `pub(crate)`: also the judge call Workflow Studio 2.0's `evaluate_result`
+/// graph node type uses (`graph_runtime_service.rs`) to grade an upstream
+/// node's output against an admin-supplied success criteria - the same
+/// grading primitive this module's own `run_suite` uses for a Suite Case,
+/// generalized to a one-off piece of text instead of a re-run target.
+pub(crate) fn build_judge_message(input_text: &str, success_criteria: &str, actual_output: &str) -> String {
     format!("Task input:\n{input_text}\n\nSuccess criteria:\n{success_criteria}\n\nActual response:\n{actual_output}\n\nDoes the actual response satisfy the success criteria?")
 }
 
@@ -101,7 +106,7 @@ fn build_judge_message(input_text: &str, success_criteria: &str, actual_output: 
 /// FAIL (a malformed judge reply is graded as failing, not silently
 /// ignored - the same fail-closed default `ai_agent_run_repo::start_run`'s
 /// own doc comment already reasons about for an interrupted run).
-fn parse_judge_reply(reply: &str) -> (bool, String) {
+pub(crate) fn parse_judge_reply(reply: &str) -> (bool, String) {
     let mut lines = reply.lines().map(str::trim).filter(|l| !l.is_empty());
     let verdict_line = lines.next().unwrap_or("");
     let passed = verdict_line.eq_ignore_ascii_case("PASS");

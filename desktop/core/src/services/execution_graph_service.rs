@@ -171,6 +171,12 @@ pub fn validate_for_publish(graph: &ExecutionGraph) -> AppResult<()> {
                     return Err(AppError::Validation(format!("Condition node '{}' must have exactly a 'true' and a 'false' outgoing edge", node.node_key)));
                 }
             }
+            "evaluate_result" => {
+                let labels: HashSet<&str> = outs.iter().filter_map(|(_, l)| *l).collect();
+                if outs.len() != 2 || !labels.contains("pass") || !labels.contains("fail") {
+                    return Err(AppError::Validation(format!("Evaluate Result node '{}' must have exactly a 'pass' and a 'fail' outgoing edge", node.node_key)));
+                }
+            }
             "approval" => {
                 let labels: HashSet<&str> = outs.iter().filter_map(|(_, l)| *l).collect();
                 if outs.len() != 2 || !labels.contains("approved") || !labels.contains("rejected") {
