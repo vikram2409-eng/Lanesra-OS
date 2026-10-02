@@ -185,6 +185,10 @@ pub async fn drain_pending_async_work(state: State<'_, AppState>) -> AppResult<(
         // AI & Agentic Layer, Phase 7g: same drain the server's
         // `job_scheduler.rs` tick runs, here on desktop's own poll.
         let _ = lanesra_core::services::vector_search_service::drain_pending_embeddings(&conn, &workspace_id, &master_key, 50).await;
+        // Workflow Studio 2.0 (issue #193): same enqueue-and-drain shape as
+        // the two drains just above, for a Workflow upgraded onto the
+        // Execution Graph runtime.
+        let _ = lanesra_core::services::graph_runtime_service::drain_pending_graph_runs(&conn, &workspace_id, &master_key, 50).await;
         Ok(())
     })
     .await

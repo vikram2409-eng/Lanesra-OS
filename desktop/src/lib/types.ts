@@ -1317,6 +1317,12 @@ export interface WorkflowDefinition {
   last_scheduled_run_at: string | null;
   /** Per-app scoped automation - see `BusinessRule.app_id`'s doc comment. */
   app_id: string | null;
+  /** Workflow Studio 2.0 (issue #193): `null` unless this workflow has
+   * been upgraded onto the Execution Graph runtime (`upgradeWorkflowToGraph`)
+   * - see the Rust model's own doc comment. Once set, `conditions`/`actions`
+   * below are no longer what actually runs; the admin edits the graph
+   * itself (`graph_id`) instead. */
+  graph_id: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -3683,7 +3689,22 @@ export interface VoiceActivityEntry {
 // execution_graph_service::graph_from_workflow/graph_from_pipeline, until
 // that later phase lands.
 
-export type GraphNodeType = "trigger" | "condition" | "action" | "agent" | "router" | "parallel_split" | "join" | "approval" | "delay" | "transform" | "loop" | "end";
+export type GraphNodeType =
+  | "trigger"
+  | "condition"
+  | "action"
+  | "agent"
+  | "router"
+  | "parallel_split"
+  | "join"
+  | "approval"
+  | "delay"
+  | "transform"
+  | "loop"
+  | "end"
+  // Workflow Studio 2.0 (issue #193) additions.
+  | "run_agent_team"
+  | "evaluate_result";
 
 export interface GraphNode {
   id: string;

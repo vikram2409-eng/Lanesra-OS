@@ -605,6 +605,10 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let version_id: String = arg(args, "versionId")?;
             to_value(workflow_service::restore_version(conn, &workflow_id, &version_id, actor)?)
         }
+        "upgrade_workflow_to_graph" => {
+            let workflow_id: String = arg(args, "workflowId")?;
+            to_value(workflow_service::upgrade_to_graph(conn, &require_workspace_id(conn)?, &workflow_id, actor)?)
+        }
 
         "list_notifications" => {
             let unread_only: bool = arg(args, "unreadOnly")?;

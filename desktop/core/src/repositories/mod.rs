@@ -29,6 +29,7 @@ pub mod custom_record_repo;
 pub mod custom_report_repo;
 pub mod dashboard_layout_repo;
 pub mod execution_graph_repo;
+pub mod graph_pending_run_repo;
 pub mod graph_run_repo;
 pub mod industry_package_repo;
 pub mod integration_api_client_repo;

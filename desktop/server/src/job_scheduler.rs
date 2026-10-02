@@ -46,7 +46,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use lanesra_core::services::{ai_orchestration_service, connector_execution_service, integration_job_service, secret_service, vector_search_service};
+use lanesra_core::services::{ai_orchestration_service, connector_execution_service, graph_runtime_service, integration_job_service, secret_service, vector_search_service};
 
 /// Spawns the scheduler loop on its own OS thread and returns
 /// immediately - call once from `main`, after the primary workspace
@@ -117,6 +117,12 @@ async fn tick(conn: &rusqlite::Connection, key_file_path: &std::path::Path) -> R
     // function already has for its own not-yet-configured case.
     if let Err(e) = vector_search_service::drain_pending_embeddings(conn, &workspace.id, &master_key, 50).await {
         tracing::error!(error = %e, "drain_pending_embeddings (vector search) failed");
+    }
+    // Workflow Studio 2.0 (issue #193): same "enqueue now, drain later"
+    // shape as drain_pending_runs above, for a Workflow upgraded onto the
+    // Execution Graph runtime (`workflow_service::upgrade_to_graph`).
+    if let Err(e) = graph_runtime_service::drain_pending_graph_runs(conn, &workspace.id, &master_key, 50).await {
+        tracing::error!(error = %e, "drain_pending_graph_runs (Workflow Studio 2.0) failed");
     }
     Ok(())
 }

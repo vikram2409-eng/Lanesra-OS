@@ -62,6 +62,22 @@
 //!   not silently reinterpreted.
 //! - `end`: terminal - the run completes without dispatching an `end`
 //!   node's own executor (there is nothing to execute).
+//! - `run_agent_team` (Workflow Studio 2.0, issue #193): resolves
+//!   `input_template` exactly like an `agent` node, then calls
+//!   `ai_orchestration_service::run_triggered` against the configured
+//!   `pipeline_id` - the same entry point a schedule/webhook trigger
+//!   already uses for a Pipeline run, so an agent team invoked from a
+//!   graph node and one invoked directly never drift onto two
+//!   implementations. Only a `succeeded` run continues down the node's
+//!   one outgoing edge; a pipeline run that itself pauses on an approval
+//!   (`awaiting_approval`) fails this node with a clear message - nested
+//!   pause-inside-pause isn't supported in this phase, named honestly
+//!   rather than silently mishandled.
+//! - `evaluate_result` (Workflow Studio 2.0, issue #193): grades an
+//!   upstream node's recorded output against a `success_criteria` with
+//!   the exact same LLM-as-judge call `ai_eval_service::run_suite` uses
+//!   for a Suite Case, then follows the `pass`/`fail` branch-labeled
+//!   edge - the same two-outcome shape `condition` already established.
 
 use std::collections::HashMap;
 
@@ -74,7 +90,7 @@ use crate::models::ai_approval::AiApprovalInput;
 use crate::models::execution_graph::{is_single_unconditional_outgoing, ExecutionGraph, GraphNode};
 use crate::models::graph_run::GraphRun;
 use crate::repositories::{ai_agent_repo, execution_graph_repo, graph_run_repo};
-use crate::services::{approval_service, chat_service, workflow_service};
+use crate::services::{ai_eval_service, ai_orchestration_service, ai_service, approval_service, chat_service, workflow_service};
 
 /// Policy-configurable in a later phase (see issue #168's own "Concurrency"
 /// note); a fixed default for this one, applied uniformly regardless of
@@ -257,6 +273,21 @@ async fn execute_node(
 
     match node.node_type.as_str() {
         "trigger" => {
+            // Workflow Studio 2.0 (issue #193): a workflow-sourced graph's
+            // `trigger_input` is the triggering record's built field
+            // context (builtin + custom values), JSON-encoded as a flat
+            // object by `workflow_service::run_workflow` - seeded into
+            // `context` here so a `condition`/`router` node's plain
+            // `field_key` (not a `trigger_input.field_key` token) resolves
+            // against the record exactly like `workflow_service::
+            // workflow_matches` already does for the un-upgraded flat
+            // path. A no-op for every other graph source (an ordinary
+            // `trigger_input` string isn't a JSON object).
+            if let Ok(Value::Object(map)) = serde_json::from_str::<Value>(&run.trigger_input) {
+                for (k, v) in map {
+                    context.entry(k).or_insert(v);
+                }
+            }
             record!("completed", None, None, None);
             Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
         }
@@ -394,6 +425,64 @@ async fn execute_node(
             }
             record!("completed", None, Some(&json!({"mode": mode, "ok_count": ok_count, "total": results.len()}).to_string()), None);
             Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+        }
+        "run_agent_team" => {
+            let pipeline_id = config.get("pipeline_id").and_then(|v| v.as_str()).unwrap_or_default();
+            let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default();
+            let input_text = resolve_run_template(input_template, &run.trigger_input, context);
+            match ai_orchestration_service::run_triggered(
+                conn,
+                workspace_id,
+                master_key,
+                "pipeline",
+                pipeline_id,
+                actor,
+                &input_text,
+                Some("execution_graph"),
+                run.source_entity_type.as_deref(),
+                run.source_entity_id.as_deref(),
+            )
+            .await
+            {
+                Ok(pipeline_run) if pipeline_run.status == "succeeded" => {
+                    let output = pipeline_run.steps.last().and_then(|s| s.output_text.clone()).unwrap_or_default();
+                    context.insert(node.node_key.clone(), json!({"output": output}));
+                    record!("completed", Some(&input_text), Some(&json!({"output": output}).to_string()), None);
+                    Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+                }
+                Ok(pipeline_run) => {
+                    let msg = format!(
+                        "Agent Team run did not complete (status: {}) - a nested pause (e.g. an approval inside the pipeline) is not supported inside a Run Agent Team node in this phase",
+                        pipeline_run.status
+                    );
+                    record!("failed", Some(&input_text), None, Some(&msg));
+                    Err(AppError::Validation(msg))
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    record!("failed", Some(&input_text), None, Some(&msg));
+                    Err(e)
+                }
+            }
+        }
+        "evaluate_result" => {
+            let source_node_key = config.get("source_node_key").and_then(|v| v.as_str()).unwrap_or_default();
+            let success_criteria = config.get("success_criteria").and_then(|v| v.as_str()).unwrap_or_default();
+            let actual_output = lookup_token(source_node_key, &run.trigger_input, context);
+            let judge_message = ai_eval_service::build_judge_message(&run.trigger_input, success_criteria, &actual_output);
+            match ai_service::complete(conn, workspace_id, master_key, ai_eval_service::JUDGE_SYSTEM_PROMPT, &judge_message).await {
+                Ok(reply) => {
+                    let (passed, reasoning) = ai_eval_service::parse_judge_reply(&reply);
+                    let label = if passed { "pass" } else { "fail" };
+                    record!("completed", Some(&actual_output), Some(&json!({"passed": passed, "reasoning": reasoning}).to_string()), None);
+                    Ok(NodeOutcome::Continue(branch_outgoing(graph, &node.id, label)?.to_string()))
+                }
+                Err(e) => {
+                    let msg = format!("The judge call itself failed: {e}");
+                    record!("failed", Some(&actual_output), None, Some(&msg));
+                    Err(AppError::Validation(msg))
+                }
+            }
         }
         other => Err(AppError::Validation(format!("unsupported node_type '{other}'"))),
     }
@@ -610,4 +699,25 @@ pub fn list_runs_for_graph(conn: &Connection, graph_id: &str, workspace_id: &str
         return Err(AppError::NotFound("Execution graph".into()));
     }
     Ok(graph_run_repo::list_runs_for_graph(conn, graph_id, 50)?)
+}
+
+/// Workflow Studio 2.0 (issue #193): the async drain for
+/// `run_workflow`'s own enqueue into `graph_pending_runs` - mirrors
+/// `ai_orchestration_service::drain_pending_runs`'s identical shape. A
+/// single item's failure (a bad graph shape, a provider error) is
+/// recorded on its own `ai_runs` row via `start_run`'s existing error
+/// handling and never aborts the batch.
+pub async fn drain_pending_graph_runs(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], limit: i64) -> AppResult<usize> {
+    let batch = crate::repositories::graph_pending_run_repo::list_batch(conn, workspace_id, limit)?;
+    let mut drained = 0;
+    for item in &batch {
+        let _ = start_run(
+            conn, workspace_id, master_key, &item.graph_id, &item.trigger_input, None,
+            item.triggered_by.as_deref(), item.source_entity_type.as_deref(), item.source_entity_id.as_deref(),
+        )
+        .await;
+        crate::repositories::graph_pending_run_repo::delete(conn, &item.id)?;
+        drained += 1;
+    }
+    Ok(drained)
 }
