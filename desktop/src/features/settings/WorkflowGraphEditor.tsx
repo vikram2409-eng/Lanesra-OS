@@ -451,6 +451,12 @@ function GraphCanvas({
               Connecting from <strong>{connectFrom}</strong> - click a target node, or press Esc to cancel.
             </div>
           )}
+          {!connectFrom && isDraft && nodes.length > 0 && edges.length === 0 && (
+            <div className="graph-hint-banner">
+              Nodes on the canvas aren't connected until you link them: click the <strong>→</strong> button on a node, then
+              click the node it should lead to.
+            </div>
+          )}
           <div className="graph-canvas-wrap">
             <VisualBuilderCanvas<EditNode>
               nodes={nodes}

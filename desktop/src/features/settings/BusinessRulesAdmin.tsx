@@ -5,6 +5,8 @@ import { api, ApiError } from "../../lib/api";
 import { AppScopeFilter, AppScopeSelect, matchesAppFilter, useApps } from "../../components/AppScope";
 import { BuiltinValueInput } from "../../components/BuiltinValueInput";
 import { describeGroupedConditions, groupConditionIndices, newGroupId } from "../../lib/conditionGroups";
+import { describeConflict, findRuleConflicts } from "../../lib/businessRuleConflicts";
+import { BUSINESS_RULE_TEMPLATES, type BusinessRuleTemplate } from "../../lib/businessRuleTemplates";
 import {
   builtinFieldsFor,
   builtinTriggerFieldFor,
@@ -21,7 +23,9 @@ import {
   VALUELESS_OPERATORS,
   type ActionType,
   type AppDefinition,
+  type BusinessRule,
   type BusinessRuleActionInput,
+  type BusinessRuleBranchRole,
   type BusinessRuleConditionInput,
   type BusinessRuleInput,
   type ConditionOperator,
@@ -69,6 +73,16 @@ const ACTION_LEGEND: { title: string; types: ActionType[] }[] = [
   { title: "Field behavior", types: ["show", "hide", "lock", "editable", "set_value", "clear_value", "set_default"] },
   { title: "Other", types: ["restrict_choices"] },
 ];
+
+/** Plain array move, used by the lane board's native HTML5 drag-and-drop to
+ * reorder conditions/actions within a lane. */
+function reorder<T>(list: T[], from: number, to: number): T[] {
+  if (from === to) return list;
+  const next = list.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
 
 function emptyCondition(entityType: string): BusinessRuleConditionInput {
   return {
@@ -145,9 +159,18 @@ function describeAction(entityType: string, a: BusinessRuleActionInput, labelByK
  * live form feedback for the cosmetic field-behavior actions (see
  * lib/businessRules.ts).
  */
+/** Chain ordering: the "if" head first, then every "else_if" in priority
+ * order, the terminal "else" (if any) last - the same left-to-right reading
+ * order the board lays the lane-sets out in. */
+function branchRank(role: BusinessRuleBranchRole): number {
+  return role === "if" ? 0 : role === "else_if" ? 1 : 2;
+}
+
 export function BusinessRulesAdmin() {
   const [entityType, setEntityType] = useState<string>(CUSTOM_FIELD_ENTITY_TYPES[0]);
   const [creating, setCreating] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<BusinessRuleTemplate | null>(null);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [historyForId, setHistoryForId] = useState<string | null>(null);
   const [appFilter, setAppFilter] = useState<"all" | "none" | string>("all");
@@ -161,6 +184,14 @@ export function BusinessRulesAdmin() {
     onSuccess: (copy) => {
       queryClient.invalidateQueries({ queryKey: ["businessRules"] });
       setEditingId(copy.id);
+    },
+  });
+
+  const addBranch = useMutation({
+    mutationFn: (vars: { parentId: string; role: "else_if" | "else" }) => api.createBusinessRuleBranch(vars.parentId, vars.role),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ["businessRules"] });
+      setEditingId(created.id);
     },
   });
 
@@ -185,6 +216,26 @@ export function BusinessRulesAdmin() {
   const historyRule = rules.data?.find((r) => r.id === historyForId) ?? null;
   const visibleRules = (rules.data ?? []).filter((r) => matchesAppFilter(r.app_id, appFilter));
   const newRuleAppId = appFilter !== "all" && appFilter !== "none" ? appFilter : null;
+  const conflicts = findRuleConflicts(rules.data ?? []);
+
+  const chainId = editing ? editing.branch_group_id ?? editing.id : null;
+  const chain = chainId
+    ? (rules.data ?? [])
+        .filter((r) => r.id === chainId || r.branch_group_id === chainId)
+        .sort((a, b) => branchRank(a.branch_role) - branchRank(b.branch_role) || a.priority - b.priority)
+    : [];
+  const chainHasElse = chain.some((r) => r.branch_role === "else");
+  const lastChainMember = chain[chain.length - 1] ?? null;
+
+  function startCreating(template: BusinessRuleTemplate | null) {
+    setPendingTemplate(template);
+    setCreating(true);
+    setShowTemplatePicker(false);
+    setEditingId(null);
+    setHistoryForId(null);
+  }
+
+  const newRuleSeed = pendingTemplate ? pendingTemplate.build(entityType, activeDefs) : null;
 
   return (
     <div className="card">
@@ -193,16 +244,21 @@ export function BusinessRulesAdmin() {
         <button
           className="btn btn-primary"
           onClick={() => {
-            setCreating((v) => !v);
+            if (creating) {
+              setCreating(false);
+            } else {
+              setShowTemplatePicker(true);
+            }
             setEditingId(null);
             setHistoryForId(null);
           }}
         >
-          + New rule
+          {creating ? "Cancel" : "+ New rule"}
         </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
-        Build an IF (AND/OR conditions) / THEN (actions) rule against any built-in or custom field on {currentLabel}.
+        Build an IF (AND/OR conditions) / THEN (actions) rule against any built-in or custom field on {currentLabel} - drag
+        conditions into the IF lane and effects into the THEN lane, then branch to ELSE IF/ELSE lanes for more complex rules.
         The higher-priority rule wins when two rules disagree about the same target field.
       </p>
 
@@ -223,6 +279,38 @@ export function BusinessRulesAdmin() {
         ))}
       </div>
 
+      {showTemplatePicker && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="toolbar">
+            <h4 style={{ margin: 0 }}>Start a new rule</h4>
+            <button className="btn" onClick={() => setShowTemplatePicker(false)}>Close</button>
+          </div>
+          <div className="rule-template-grid">
+            <button className="rule-template-card" onClick={() => startCreating(null)}>
+              <h4>Start from scratch</h4>
+              <p>A blank IF/THEN rule - pick every condition and action yourself.</p>
+            </button>
+            {BUSINESS_RULE_TEMPLATES.map((t) => (
+              <button key={t.key} className="rule-template-card" onClick={() => startCreating(t)}>
+                <h4>{t.label}</h4>
+                <p>{t.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {conflicts.length > 0 && !creating && !editing && !historyRule && (
+        <div className="rule-conflict-banner" style={{ marginBottom: 16 }}>
+          <strong>{conflicts.length} possible rule conflict{conflicts.length > 1 ? "s" : ""} on {currentLabel}</strong>
+          <ul>
+            {conflicts.map((c, i) => (
+              <li key={i}>{describeConflict(c, fieldLabel(entityType, c.fieldSource, c.fieldKey, labelByKey))}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {historyRule && (
         <RuleHistoryPanel
           entityType={entityType}
@@ -242,48 +330,87 @@ export function BusinessRulesAdmin() {
           customFields={activeDefs}
           relationshipDefs={relationshipDefs.data ?? []}
           apps={appList}
+          branchRole="if"
           initial={{
-            entity_type: entityType, name: "", description: null, match_type: "all", priority: 0,
+            entity_type: entityType, name: newRuleSeed?.name ?? "", description: null,
+            match_type: newRuleSeed?.match_type ?? "all", priority: 0,
             effective_start_date: null, effective_end_date: null, app_id: newRuleAppId,
-            conditions: [emptyCondition(entityType)], actions: [emptyAction(entityType, activeDefs)],
+            conditions: newRuleSeed?.conditions ?? [emptyCondition(entityType)],
+            actions: newRuleSeed?.actions ?? [emptyAction(entityType, activeDefs)],
           }}
           submitLabel="Add rule"
           onSubmit={(input) => api.createBusinessRule(input)}
           onDone={() => {
             invalidate();
             setCreating(false);
+            setPendingTemplate(null);
           }}
-          onCancel={() => setCreating(false)}
+          onCancel={() => {
+            setCreating(false);
+            setPendingTemplate(null);
+          }}
         />
       )}
 
       {editing && !historyRule && (
-        <RuleForm
-          entityType={entityType}
-          customFields={activeDefs}
-          relationshipDefs={relationshipDefs.data ?? []}
-          apps={appList}
-          initial={{
-            entity_type: entityType, name: editing.name, description: editing.description, match_type: editing.match_type,
-            priority: editing.priority, effective_start_date: editing.effective_start_date, effective_end_date: editing.effective_end_date,
-            app_id: editing.app_id,
-            conditions: editing.conditions.map((c) => ({
-              field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
-              compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
-              relationship_definition_id: c.relationship_definition_id,
-            })),
-            actions: editing.actions.map((a) => ({ action_type: a.action_type, target_field_key: a.target_field_key, target_field_source: a.target_field_source, action_value: a.action_value, message: a.message })),
-            is_active: editing.is_active,
-          }}
-          submitLabel="Save"
-          onSubmit={(input, isActive) => api.updateBusinessRule(editing.id, { ...input, is_active: isActive })}
-          onDone={() => {
-            invalidate();
-            setEditingId(null);
-          }}
-          onCancel={() => setEditingId(null)}
-          showActiveToggle
-        />
+        <div className="rule-board">
+          <div className="rule-chain">
+            {chain.map((member) =>
+              member.id === editing.id ? (
+                <div className="rule-lane-set" key={member.id}>
+                  <RuleForm
+                    entityType={entityType}
+                    customFields={activeDefs}
+                    relationshipDefs={relationshipDefs.data ?? []}
+                    apps={appList}
+                    branchRole={member.branch_role}
+                    initial={{
+                      entity_type: entityType, name: editing.name, description: editing.description, match_type: editing.match_type,
+                      priority: editing.priority, effective_start_date: editing.effective_start_date, effective_end_date: editing.effective_end_date,
+                      app_id: editing.app_id,
+                      conditions: editing.conditions.map((c) => ({
+                        field_source: c.field_source, field_key: c.field_key, operator: c.operator, value: c.value,
+                        compare_field_source: c.compare_field_source, compare_field_key: c.compare_field_key, group_id: c.group_id,
+                        relationship_definition_id: c.relationship_definition_id,
+                      })),
+                      actions: editing.actions.map((a) => ({ action_type: a.action_type, target_field_key: a.target_field_key, target_field_source: a.target_field_source, action_value: a.action_value, message: a.message })),
+                      is_active: editing.is_active,
+                    }}
+                    submitLabel="Save"
+                    onSubmit={(input, isActive) => api.updateBusinessRule(editing.id, { ...input, is_active: isActive })}
+                    onDone={() => {
+                      invalidate();
+                      setEditingId(null);
+                    }}
+                    onCancel={() => setEditingId(null)}
+                    showActiveToggle
+                    allowEmptyConditions={member.branch_role === "else"}
+                  />
+                </div>
+              ) : (
+                <RuleBranchSummaryCard
+                  key={member.id}
+                  entityType={entityType}
+                  rule={member}
+                  labelByKey={labelByKey}
+                  onEdit={() => setEditingId(member.id)}
+                />
+              ),
+            )}
+            {lastChainMember && (
+              <div className="rule-lane-set" style={{ width: 220, justifyContent: "center" }}>
+                <button className="btn" disabled={addBranch.isPending} onClick={() => addBranch.mutate({ parentId: lastChainMember.id, role: "else_if" })}>
+                  + Add ELSE IF
+                </button>
+                {!chainHasElse && (
+                  <button className="btn" disabled={addBranch.isPending} onClick={() => addBranch.mutate({ parentId: lastChainMember.id, role: "else" })}>
+                    + Add ELSE
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {!creating && !editing && !historyRule && <AppScopeFilter apps={appList} value={appFilter} onChange={setAppFilter} />}
@@ -299,6 +426,7 @@ export function BusinessRulesAdmin() {
           <thead>
             <tr>
               <th>Rule</th>
+              <th>Branch</th>
               <th>If</th>
               <th>Then</th>
               <th>Priority</th>
@@ -311,7 +439,8 @@ export function BusinessRulesAdmin() {
             {visibleRules.map((r) => (
               <tr key={r.id}>
                 <td>{r.name}</td>
-                <td>{describeGroupedConditions(r.conditions, r.match_type, (c) => describeCondition(entityType, c, labelByKey))}</td>
+                <td>{r.branch_group_id ? <span className={`rule-branch-badge ${r.branch_role}`}>{r.branch_role.replace("_", " ")}</span> : "—"}</td>
+                <td>{r.conditions.length === 0 ? <em>always</em> : describeGroupedConditions(r.conditions, r.match_type, (c) => describeCondition(entityType, c, labelByKey))}</td>
                 <td>{r.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</td>
                 <td>{r.priority}</td>
                 <td>{r.app_id ? appList.find((a) => a.id === r.app_id)?.name ?? "—" : <span style={{ color: "var(--text-muted)" }}>Workspace-wide</span>}</td>
@@ -337,6 +466,43 @@ export function BusinessRulesAdmin() {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+/** A collapsed, read-only lane-set for a chain member that isn't the one
+ * currently being edited - click "Edit this branch" to swap into it (one
+ * rule is edited at a time; the whole chain stays visible either way). */
+function RuleBranchSummaryCard({
+  entityType,
+  rule,
+  labelByKey,
+  onEdit,
+}: {
+  entityType: string;
+  rule: BusinessRule;
+  labelByKey: Map<string, string>;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="rule-lane-set">
+      <div className="rule-lane-set-header">
+        <span className={`rule-branch-badge ${rule.branch_role}`}>{rule.branch_role.replace("_", " ")}</span>
+        <strong style={{ fontSize: 13 }}>{rule.name}</strong>
+      </div>
+      <div className="rule-lane">
+        <div className="rule-lane-title">If</div>
+        <p style={{ fontSize: 13, margin: 0 }}>
+          {rule.conditions.length === 0 ? "Always (no conditions)" : describeGroupedConditions(rule.conditions, rule.match_type, (c) => describeCondition(entityType, c, labelByKey))}
+        </p>
+      </div>
+      <div className="rule-lane">
+        <div className="rule-lane-title">Then</div>
+        <p style={{ fontSize: 13, margin: 0 }}>{rule.actions.map((a) => describeAction(entityType, a, labelByKey)).join("; ")}</p>
+      </div>
+      <button className="btn" type="button" onClick={onEdit}>
+        Edit this branch
+      </button>
     </div>
   );
 }
@@ -609,6 +775,8 @@ function RuleForm({
   onDone,
   onCancel,
   showActiveToggle,
+  branchRole = "if",
+  allowEmptyConditions = false,
 }: {
   entityType: string;
   customFields: CustomFieldLite[];
@@ -620,6 +788,13 @@ function RuleForm({
   onDone: () => void;
   onCancel: () => void;
   showActiveToggle?: boolean;
+  /** Business Rule Board 2.0: which lane-set this rule is in its chain -
+   * purely a badge/label, "if" (the default) when this rule isn't part of
+   * a chain at all. */
+  branchRole?: BusinessRuleBranchRole;
+  /** True only for an "else" branch - lets the IF lane sit empty ("always
+   * matches") instead of requiring at least one condition. */
+  allowEmptyConditions?: boolean;
 }) {
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description ?? "");
@@ -633,6 +808,10 @@ function RuleForm({
   const [isActive, setIsActive] = useState(initial.is_active ?? true);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draggedUnit, setDraggedUnit] = useState<number | null>(null);
+  const [unitDropIndex, setUnitDropIndex] = useState<number | null>(null);
+  const [draggedAction, setDraggedAction] = useState<number | null>(null);
+  const [actionDropIndex, setActionDropIndex] = useState<number | null>(null);
 
   const save = useMutation({
     mutationFn: (nextActive: boolean) =>
@@ -667,6 +846,65 @@ function RuleForm({
   }
   const conditionUnits = groupConditionIndices(conditions);
 
+  /** Drops the unit being dragged into gap `to` (0..conditionUnits.length,
+   * the position *between* rendered units/dropzones) - reordering whole
+   * units (a lone condition, or a whole OR group moving together) rather
+   * than individual conditions, matching the issue's "drag conditions/
+   * groups into the IF lane" wording. Flattens the reordered units back
+   * into a flat conditions array, preserving each group's internal order. */
+  function dropConditionUnit(to: number) {
+    if (draggedUnit === null) return;
+    const adjusted = to > draggedUnit ? to - 1 : to;
+    const reordered = reorder(conditionUnits, draggedUnit, adjusted);
+    setConditions(reordered.flatMap((u) => (u.kind === "single" ? [conditions[u.index]] : u.indices.map((i) => conditions[i]))));
+    setDraggedUnit(null);
+    setUnitDropIndex(null);
+  }
+
+  function dropAction(to: number) {
+    if (draggedAction === null) return;
+    const adjusted = to > draggedAction ? to - 1 : to;
+    setActions(reorder(actions, draggedAction, adjusted));
+    setDraggedAction(null);
+    setActionDropIndex(null);
+  }
+
+  function ConditionDropZone({ index }: { index: number }) {
+    return (
+      <div
+        className={`rule-lane-dropzone${unitDropIndex === index ? " drop-over" : ""}`}
+        onDragOver={(e) => {
+          if (draggedUnit === null) return;
+          e.preventDefault();
+          setUnitDropIndex(index);
+        }}
+        onDragLeave={() => setUnitDropIndex((v) => (v === index ? null : v))}
+        onDrop={(e) => {
+          e.preventDefault();
+          dropConditionUnit(index);
+        }}
+      />
+    );
+  }
+
+  function ActionDropZone({ index }: { index: number }) {
+    return (
+      <div
+        className={`rule-lane-dropzone${actionDropIndex === index ? " drop-over" : ""}`}
+        onDragOver={(e) => {
+          if (draggedAction === null) return;
+          e.preventDefault();
+          setActionDropIndex(index);
+        }}
+        onDragLeave={() => setActionDropIndex((v) => (v === index ? null : v))}
+        onDrop={(e) => {
+          e.preventDefault();
+          dropAction(index);
+        }}
+      />
+    );
+  }
+
   // Rule summary panel: computed live from the form state below, not
   // stored separately - "what will this rule actually do" at a glance.
   const fieldLabels = Array.from(
@@ -684,6 +922,7 @@ function RuleForm({
         <div>
           <div className="builder-breadcrumb">Business Rules / {name || "New rule"}</div>
           <div className="builder-title-row">
+            {branchRole !== "if" && <span className={`rule-branch-badge ${branchRole}`}>{branchRole.replace("_", " ")}</span>}
             <h2>{name || "New rule"}</h2>
             {showActiveToggle && <span className={`badge${isActive ? " badge-success" : ""}`}>{isActive ? "Active" : "Inactive"}</span>}
           </div>
@@ -702,7 +941,7 @@ function RuleForm({
             className="btn btn-primary"
             type="submit"
             form="business-rule-form"
-            disabled={save.isPending || conditions.length === 0 || actions.length === 0}
+            disabled={save.isPending || (conditions.length === 0 && !allowEmptyConditions) || actions.length === 0}
           >
             {submitLabel}
           </button>
@@ -756,23 +995,37 @@ function RuleForm({
           </div>
         </div>
 
-        <div className="builder-layout">
-          <div>
-            <div className="builder-section">
-              <div className="builder-section-title">
-                <span className="step-badge">1</span> Conditions
-              </div>
-              <div className="form-field" style={{ maxWidth: 260, marginBottom: 10 }}>
-                <label>Match</label>
-                <select value={matchType} onChange={(e) => setMatchType(e.target.value as MatchType)}>
-                  {MATCH_TYPES.map((m) => (
-                    <option key={m} value={m}>{m === "all" ? "All conditions (AND)" : "Any condition (OR)"}</option>
-                  ))}
-                </select>
-              </div>
-              {conditionUnits.map((u, ui) => (
-                <div key={u.kind === "single" ? `s${u.index}` : `g${u.groupId}`}>
-                  {ui > 0 && <div className="builder-and-divider">{matchType === "all" ? "AND" : "OR"}</div>}
+        <div className="rule-ifthen-row">
+          <div className="rule-lane">
+            <div className="rule-lane-title">If</div>
+            <div className="form-field" style={{ maxWidth: 260, marginBottom: 10 }}>
+              <label>Match</label>
+              <select value={matchType} onChange={(e) => setMatchType(e.target.value as MatchType)}>
+                {MATCH_TYPES.map((m) => (
+                  <option key={m} value={m}>{m === "all" ? "All conditions (AND)" : "Any condition (OR)"}</option>
+                ))}
+              </select>
+            </div>
+            {conditionUnits.length === 0 && allowEmptyConditions && (
+              <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                Always matches - this branch runs whenever nothing earlier in its chain did. Add a condition below if you
+                want this branch to need one.
+              </p>
+            )}
+            <ConditionDropZone index={0} />
+            {conditionUnits.map((u, ui) => (
+              <div key={u.kind === "single" ? `s${u.index}` : `g${u.groupId}`}>
+                {ui > 0 && <div className="builder-and-divider">{matchType === "all" ? "AND" : "OR"}</div>}
+                <div
+                  className={`rule-lane-card${draggedUnit === ui ? " dragging" : ""}`}
+                  draggable
+                  onDragStart={() => setDraggedUnit(ui)}
+                  onDragEnd={() => {
+                    setDraggedUnit(null);
+                    setUnitDropIndex(null);
+                  }}
+                >
+                  <span className="rule-drag-handle" title="Drag to reorder">⠿</span>
                   {u.kind === "single" ? (
                     <ConditionRow
                       entityType={entityType}
@@ -809,57 +1062,79 @@ function RuleForm({
                     </div>
                   )}
                 </div>
-              ))}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
-                  + Add condition
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  title="Add two conditions that are OR'd together into one unit before the Match setting above applies"
-                  onClick={() => {
-                    const gid = newGroupId();
-                    setConditions([...conditions, { ...emptyCondition(entityType), group_id: gid }, { ...emptyCondition(entityType), group_id: gid }]);
-                  }}
-                >
-                  + OR group
-                </button>
+                <ConditionDropZone index={ui + 1} />
               </div>
-            </div>
-
-            <div className="builder-section">
-              <div className="builder-section-title">
-                <span className="step-badge">2</span> Actions
-              </div>
-              <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: -4 }}>
-                Choose what should happen when the conditions above are met - one rule can have several actions.
-              </p>
-              {actions.map((a, i) => (
-                <ActionRow
-                  key={i}
-                  entityType={entityType}
-                  customFields={customFields}
-                  action={a}
-                  onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
-                  onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
-                />
-              ))}
-              <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(entityType, customFields)])}>
-                + Add action
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" type="button" onClick={() => setConditions([...conditions, emptyCondition(entityType)])}>
+                + Add condition
+              </button>
+              <button
+                className="btn"
+                type="button"
+                title="Add two conditions that are OR'd together into one unit before the Match setting above applies"
+                onClick={() => {
+                  const gid = newGroupId();
+                  setConditions([...conditions, { ...emptyCondition(entityType), group_id: gid }, { ...emptyCondition(entityType), group_id: gid }]);
+                }}
+              >
+                + OR group
               </button>
             </div>
           </div>
 
-          <div className="builder-summary-panel">
-            <h4>Rule summary</h4>
-            <div className="summary-row"><span className="label">Applies to</span><span className="value">{entityTypeLabel(entityType)}</span></div>
-            <div className="summary-row"><span className="label">Execute on</span><span className="value">Create and edit</span></div>
-            <div className="summary-row"><span className="label">Field dependency</span><span className="value">{fieldLabels.length > 0 ? fieldLabels.join(", ") : "None"}</span></div>
-            <div className="summary-row"><span className="label">Priority</span><span className="value">{priority}</span></div>
-            <div className="summary-row"><span className="label">Stop processing</span><span className="value">{blocksSave ? "Yes (block save)" : "No"}</span></div>
+          <div className="rule-lane">
+            <div className="rule-lane-title">Then</div>
+            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: -2 }}>
+              What happens when the conditions on the left are met - one rule can have several effects.
+            </p>
+            <ActionDropZone index={0} />
+            {actions.map((a, i) => (
+              <div key={i}>
+                <div
+                  className={`rule-lane-card${draggedAction === i ? " dragging" : ""}`}
+                  draggable
+                  onDragStart={() => setDraggedAction(i)}
+                  onDragEnd={() => {
+                    setDraggedAction(null);
+                    setActionDropIndex(null);
+                  }}
+                >
+                  <span className="rule-drag-handle" title="Drag to reorder">⠿</span>
+                  <ActionRow
+                    entityType={entityType}
+                    customFields={customFields}
+                    action={a}
+                    onChange={(next) => setActions(actions.map((x, idx) => (idx === i ? next : x)))}
+                    onRemove={() => setActions(actions.filter((_, idx) => idx !== i))}
+                  />
+                </div>
+                <ActionDropZone index={i + 1} />
+              </div>
+            ))}
+            <button className="btn" type="button" onClick={() => setActions([...actions, emptyAction(entityType, customFields)])}>
+              + Add action
+            </button>
+          </div>
+        </div>
 
-            <h4>Action types you can use</h4>
+        <div className="builder-summary-panel" style={{ marginTop: 16 }}>
+          <h4>Rule summary</h4>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: -6 }}>
+            {conditions.length === 0
+              ? "Always"
+              : `If ${describeGroupedConditions(conditions, matchType, (c) => describeCondition(entityType, c, new Map(customFields.map((f) => [f.key, f.label]))))}`}
+            {" → "}
+            {actions.map((a) => describeAction(entityType, a, new Map(customFields.map((f) => [f.key, f.label])))).join("; ") || "no actions yet"}
+          </p>
+          <div className="summary-row"><span className="label">Applies to</span><span className="value">{entityTypeLabel(entityType)}</span></div>
+          <div className="summary-row"><span className="label">Execute on</span><span className="value">Create and edit</span></div>
+          <div className="summary-row"><span className="label">Field dependency</span><span className="value">{fieldLabels.length > 0 ? fieldLabels.join(", ") : "None"}</span></div>
+          <div className="summary-row"><span className="label">Priority</span><span className="value">{priority}</span></div>
+          <div className="summary-row"><span className="label">Stop processing</span><span className="value">{blocksSave ? "Yes (block save)" : "No"}</span></div>
+
+          <h4>Action types you can use</h4>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             {ACTION_LEGEND.map((group) => (
               <div className="legend-group" key={group.title}>
                 <div className="legend-group-title">{group.title}</div>
@@ -874,7 +1149,7 @@ function RuleForm({
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button className="btn" type="button" onClick={onCancel}>
             Cancel
           </button>

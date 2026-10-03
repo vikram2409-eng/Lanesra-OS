@@ -52,3 +52,11 @@ pub fn restore_business_rule_version(state: State<AppState>, rule_id: String, ve
     let conn = state.conn.lock().unwrap();
     business_rule_service::restore_version(&conn, &rule_id, &version_id, current_actor(&state).as_deref())
 }
+
+/// Business Rule Board 2.0 (issue #194): links a new ELSE IF/ELSE sibling
+/// into `rule_id`'s visual chain.
+#[tauri::command]
+pub fn create_business_rule_branch(state: State<AppState>, rule_id: String, role: String) -> AppResult<BusinessRule> {
+    let conn = state.conn.lock().unwrap();
+    business_rule_service::create_rule_branch(&conn, &rule_id, &role, current_actor(&state).as_deref())
+}

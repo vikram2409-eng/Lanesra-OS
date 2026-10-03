@@ -648,6 +648,8 @@ export const api = {
   listBusinessRuleVersions: (ruleId: string) => call<BusinessRuleVersion[]>("list_business_rule_versions", { ruleId }),
   restoreBusinessRuleVersion: (ruleId: string, versionId: string) =>
     call<BusinessRule>("restore_business_rule_version", { ruleId, versionId }),
+  createBusinessRuleBranch: (ruleId: string, role: "else_if" | "else") =>
+    call<BusinessRule>("create_business_rule_branch", { ruleId, role }),
 
   listStatusTransitions: (entityType: string) => call<StatusTransition[]>("list_status_transitions", { entityType }),
   createStatusTransition: (input: StatusTransitionInput) => call<StatusTransition>("create_status_transition", { input }),
