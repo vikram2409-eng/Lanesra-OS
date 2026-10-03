@@ -439,6 +439,7 @@ export const api = {
   createExecutionGraph: (input: ExecutionGraphInput) => call<ExecutionGraph>("create_execution_graph", { input }),
   updateExecutionGraph: (id: string, input: ExecutionGraphInput) => call<ExecutionGraph>("update_execution_graph", { id, input }),
   publishExecutionGraph: (id: string) => call<ExecutionGraph>("publish_execution_graph", { id }),
+  promoteEmbeddedAgentNode: (graphId: string, nodeKey: string) => call<AiAgentDefinition>("promote_embedded_agent_node", { graphId, nodeKey }),
   setExecutionGraphDisabled: (id: string, disabled: boolean) => call<ExecutionGraph>("set_execution_graph_disabled", { id, disabled }),
   getGraphRun: (id: string) => call<GraphRun>("get_graph_run", { id }),
   listGraphRuns: (graphId: string) => call<GraphRun[]>("list_graph_runs", { graphId }),

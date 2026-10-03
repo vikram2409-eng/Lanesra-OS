@@ -31,10 +31,12 @@ use rusqlite::Connection;
 use serde_json::json;
 
 use crate::domain::{AppError, AppResult};
+use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput};
 use crate::models::ai_agent_pipeline::AiAgentPipeline;
 use crate::models::execution_graph::{is_single_unconditional_outgoing, ExecutionGraph, ExecutionGraphInput, GraphEdgeInput, GraphNodeInput, NODE_TYPES};
 use crate::models::workflow::WorkflowDefinition;
 use crate::repositories::execution_graph_repo;
+use crate::services::ai_agent_service;
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -108,6 +110,88 @@ pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &Execution
     }
     validate_input(input)?;
     Ok(execution_graph_repo::update(conn, id, input, actor_user_id)?)
+}
+
+/// Agent Studio 2.0 (issue #196): turns one `agent` node's embedded
+/// persona into a real, reusable `AiAgentDefinition` - calling the exact
+/// same `ai_agent_service::create` a manual "+ New agent" already uses
+/// (the "same entity service" principle this whole codebase holds to), so
+/// a promoted agent is indistinguishable from one an admin built by hand.
+/// Only a `draft` graph's node can be promoted, same immutable-once-
+/// published rule `update` enforces - there is no node-level partial
+/// update, so this rewrites the one node's `config_json` and replays the
+/// rest of the graph through the existing `update()` call unchanged.
+pub fn promote_embedded_agent_node(
+    conn: &Connection,
+    graph_id: &str,
+    workspace_id: &str,
+    node_key: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
+    require_admin(conn, actor_user_id)?;
+    let graph = get_owned(conn, graph_id, workspace_id)?;
+    if graph.status != "draft" {
+        return Err(AppError::Validation("only a draft graph's node can be promoted - disable it and create a new version instead".into()));
+    }
+    let node = graph.nodes.iter().find(|n| n.node_key == node_key).ok_or_else(|| AppError::NotFound("Node".into()))?;
+    if node.node_type != "agent" {
+        return Err(AppError::Validation("only an agent node can be promoted".into()));
+    }
+    let config: serde_json::Value = serde_json::from_str(&node.config_json).unwrap_or_default();
+    let persona = config.get("embedded_persona").and_then(|v| v.as_str()).unwrap_or_default();
+    if persona.is_empty() {
+        return Err(AppError::Validation("node has no embedded_persona to promote - it may already reference a reusable agent".into()));
+    }
+    let action_names: Vec<String> = config
+        .get("embedded_action_names")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default();
+    let agent_input = AiAgentInput {
+        name: node_key.to_string(),
+        description: None,
+        icon: "🧩".to_string(),
+        system_prompt: persona.to_string(),
+        action_names,
+        delegate_agent_ids: Vec::new(),
+        skill_ids: Vec::new(),
+    };
+    let agent = ai_agent_service::create(conn, workspace_id, &agent_input, actor_user_id)?;
+
+    let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let node_id_to_key: HashMap<&str, &str> = graph.nodes.iter().map(|n| (n.id.as_str(), n.node_key.as_str())).collect();
+    let nodes: Vec<GraphNodeInput> = graph
+        .nodes
+        .iter()
+        .map(|n| {
+            let config_json = if n.node_key == node_key {
+                json!({"agent_id": agent.id, "input_template": input_template}).to_string()
+            } else {
+                n.config_json.clone()
+            };
+            GraphNodeInput {
+                node_key: n.node_key.clone(),
+                node_type: n.node_type.clone(),
+                config_json,
+                position_x: n.position_x,
+                position_y: n.position_y,
+                sort_order: n.sort_order,
+            }
+        })
+        .collect();
+    let edges: Vec<GraphEdgeInput> = graph
+        .edges
+        .iter()
+        .map(|e| GraphEdgeInput {
+            from_node_key: node_id_to_key.get(e.from_node_id.as_str()).copied().unwrap_or_default().to_string(),
+            to_node_key: node_id_to_key.get(e.to_node_id.as_str()).copied().unwrap_or_default().to_string(),
+            branch_label: e.branch_label.clone(),
+            sort_order: e.sort_order,
+        })
+        .collect();
+    let rebuilt = ExecutionGraphInput { name: graph.name.clone(), description: graph.description.clone(), nodes, edges };
+    update(conn, graph_id, workspace_id, &rebuilt, actor_user_id)?;
+    Ok(agent)
 }
 
 pub fn set_disabled(conn: &Connection, id: &str, workspace_id: &str, disabled: bool, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {

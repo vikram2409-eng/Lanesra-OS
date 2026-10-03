@@ -340,10 +340,55 @@ async fn execute_node(
             let agent_id = config.get("agent_id").and_then(|v| v.as_str()).unwrap_or_default();
             let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default();
             let input_text = resolve_run_template(input_template, &run.trigger_input, context);
-            let Some(agent) = ai_agent_repo::get(conn, agent_id)? else {
-                let msg = format!("agent '{agent_id}' not found");
-                record!("failed", Some(&input_text), None, Some(&msg));
-                return Err(AppError::Validation(msg));
+            // AI Agent Platform v2, Agent Studio 2.0 (issue #196): an
+            // `agent` node may be "embedded" instead of referencing a saved
+            // `AiAgentDefinition` - `agent_id` is blank and the node's own
+            // config carries a persona/action list directly. Build an
+            // ephemeral, never-persisted definition so this node still runs
+            // through the exact same `chat_service::run_agent_once_with_text`
+            // Tool-Call Firewall path as a Reusable agent; its memory tools
+            // are wired but silently no-op against this synthetic id (see
+            // `ai_agent_repo::update_memory`'s select-then-maybe-update),
+            // an honest limitation, not a crash risk.
+            let agent = if !agent_id.is_empty() {
+                let Some(agent) = ai_agent_repo::get(conn, agent_id)? else {
+                    let msg = format!("agent '{agent_id}' not found");
+                    record!("failed", Some(&input_text), None, Some(&msg));
+                    return Err(AppError::Validation(msg));
+                };
+                agent
+            } else {
+                let persona = config.get("embedded_persona").and_then(|v| v.as_str()).unwrap_or_default();
+                if persona.is_empty() {
+                    let msg = "agent node has neither agent_id nor embedded_persona set".to_string();
+                    record!("failed", Some(&input_text), None, Some(&msg));
+                    return Err(AppError::Validation(msg));
+                }
+                let action_names: Vec<String> = config
+                    .get("embedded_action_names")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+                crate::models::ai_agent::AiAgentDefinition {
+                    id: format!("embedded:{}", node.node_key),
+                    workspace_id: workspace_id.to_string(),
+                    name: node.node_key.clone(),
+                    description: None,
+                    icon: "🧩".to_string(),
+                    system_prompt: persona.to_string(),
+                    memory_md: String::new(),
+                    guardrails_md: String::new(),
+                    action_names,
+                    delegate_agent_ids: Vec::new(),
+                    skill_ids: Vec::new(),
+                    model_routing: None,
+                    is_active: true,
+                    current_version_id: None,
+                    created_at: now_iso(),
+                    created_by: None,
+                    updated_at: now_iso(),
+                    updated_by: None,
+                }
             };
             // AI Agent Platform v2, Phase 4: this graph run's own id scopes
             // Working Memory the same way an Orchestration Pipeline's run
@@ -427,6 +472,72 @@ async fn execute_node(
             Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
         }
         "run_agent_team" => {
+            let target_graph_id = config.get("target_graph_id").and_then(|v| v.as_str()).unwrap_or_default();
+            // Agent Studio 2.0 (issue #196): a "Run Agent Team" node may
+            // target either an old-style Pipeline (`pipeline_id`, the
+            // original Workflow Studio 2.0 behavior below) or another
+            // Execution Graph directly (`target_graph_id`) - the nested-
+            // team case this phase adds. A graph target's `variable_
+            // mapping` resolves each entry against this run's own context,
+            // same templates an Agent node's `input_template` already
+            // uses, and the resulting object becomes the nested run's own
+            // `trigger_input` - the same "JSON object becomes context"
+            // convention the `trigger` node's own match arm already
+            // documents for a workflow-sourced graph, generalized here so
+            // the child graph's nodes can reference `{{mapped_field}}`
+            // directly instead of a single opaque input string.
+            if !target_graph_id.is_empty() {
+                if target_graph_id == graph.id {
+                    let msg = "a graph cannot run itself as a nested Agent Team - this would recurse forever".to_string();
+                    record!("failed", None, None, Some(&msg));
+                    return Err(AppError::Validation(msg));
+                }
+                let mapping = config.get("variable_mapping").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+                let input_text = if mapping.is_empty() {
+                    let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default();
+                    resolve_run_template(input_template, &run.trigger_input, context)
+                } else {
+                    let mut resolved = serde_json::Map::new();
+                    for (key, template) in &mapping {
+                        let template_str = template.as_str().unwrap_or_default();
+                        resolved.insert(key.clone(), Value::String(resolve_run_template(template_str, &run.trigger_input, context)));
+                    }
+                    Value::Object(resolved).to_string()
+                };
+                let nested = Box::pin(start_run(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    target_graph_id,
+                    &input_text,
+                    actor,
+                    Some("execution_graph"),
+                    run.source_entity_type.as_deref(),
+                    run.source_entity_id.as_deref(),
+                ))
+                .await;
+                return match nested {
+                    Ok(nested_run) if nested_run.status == "completed" => {
+                        let output: Value = serde_json::from_str(&nested_run.context_json).unwrap_or(json!({}));
+                        context.insert(node.node_key.clone(), json!({"output": output}));
+                        record!("completed", Some(&input_text), Some(&json!({"output": output}).to_string()), None);
+                        Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+                    }
+                    Ok(nested_run) => {
+                        let msg = format!(
+                            "nested Agent Team run did not complete (status: {}) - a nested pause (e.g. an approval inside the child team) is not supported inside a Run Agent Team node in this phase",
+                            nested_run.status
+                        );
+                        record!("failed", Some(&input_text), None, Some(&msg));
+                        Err(AppError::Validation(msg))
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        record!("failed", Some(&input_text), None, Some(&msg));
+                        Err(e)
+                    }
+                };
+            }
             let pipeline_id = config.get("pipeline_id").and_then(|v| v.as_str()).unwrap_or_default();
             let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default();
             let input_text = resolve_run_template(input_template, &run.trigger_input, context);

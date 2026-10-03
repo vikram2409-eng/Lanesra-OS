@@ -5,6 +5,7 @@ import { api, ApiError } from "../../lib/api";
 import { ChatPanel } from "../../components/ChatPanel";
 import { AiTriggersPanel } from "./AiTriggersPanel";
 import { agentRequiresAdmin } from "../../lib/aiAgents";
+import { AGENT_TEMPLATES, type AgentTemplateDef } from "../../lib/agentTemplates";
 import { RISK_LEVELS, RISK_LEVEL_LABELS } from "../../lib/types";
 import type {
   AgentConnectorToolOption,
@@ -17,6 +18,8 @@ import type {
   AiAgentVersion,
   AiAgentVersionInput,
   AiApproval,
+  AiEvalRun,
+  AiEvalSuite,
   AiProvider,
   AiSkill,
   AiToolRegistryOverride,
@@ -103,10 +106,69 @@ const ADMIN_ACTIONS: [string, string][] = [
   ["list_ai_skills", "List AI skills"],
   ["create_ai_skill", "Create AI skill"],
 ];
-const ICON_CHOICES = ["🤖", "🧠", "🛠️", "📊", "📥", "🔎", "✉️", "📅", "🗂️", "⚡"];
+const ICON_CHOICES = ["🤖", "🧠", "🛠️", "📊", "📥", "🔎", "✉️", "📅", "🗂️", "⚡", "📄"];
 
 function emptyInput(): AiAgentInput {
   return { name: "", description: "", icon: "🤖", system_prompt: "", action_names: [], delegate_agent_ids: [], skill_ids: [] };
+}
+
+// Agent Studio 2.0 (issue #196): "Tone" is a guided Core-tab field with no
+// backing column of its own - "mostly UX/wiring polish, not new backend"
+// per the issue's own framing, so it round-trips through a leading
+// "Tone: <value>\n\n" line inside the existing system_prompt text instead
+// of a migration. Composing/decomposing happens only at the form's edges
+// (load and save); `system_prompt` itself is still the one thing that's
+// ever actually sent to the model.
+const TONE_LINE_RE = /^Tone:\s*(.+?)\n\n/;
+function splitTone(systemPrompt: string): { tone: string; persona: string } {
+  const m = systemPrompt.match(TONE_LINE_RE);
+  return m ? { tone: m[1], persona: systemPrompt.slice(m[0].length) } : { tone: "", persona: systemPrompt };
+}
+function joinTone(tone: string, persona: string): string {
+  return tone.trim() ? `Tone: ${tone.trim()}\n\n${persona}` : persona;
+}
+const TONE_CHOICES = ["", "Professional", "Friendly", "Concise", "Technical", "Reassuring"];
+
+/** Agent Studio 2.0 (issue #196): "a live capability summary... computed
+ * from the agent's real tool grants/policy, not hand-written copy" - the
+ * same idea `app.js`'s `roleAiSummary` already uses for Roles, applied
+ * here to an agent's `action_names` + its `AiAgentPolicy` (if any). Pure
+ * function of data already on screen, so it's always in sync with the
+ * checkboxes below it, never a second source of truth to drift. */
+function capabilitySummary(
+  actionNames: string[],
+  connectorTools: AgentConnectorToolOption[],
+  mcpTools: AgentMcpToolOption[],
+  policy: AiAgentPolicy | null,
+): string {
+  if (actionNames.length === 0) return "This agent has no tools granted yet - it can only converse, using its persona and memory.";
+  const readNames = new Set(["list_objects", "get_object_metadata", "list_records", "get_record", "search_records"]);
+  const writeNames = new Set(["create_record", "update_record"]);
+  const reads: string[] = [];
+  const writes: string[] = [];
+  const deletes: string[] = [];
+  let adminCount = 0;
+  let connectorCount = 0;
+  let mcpCount = 0;
+  for (const name of actionNames) {
+    if (readNames.has(name)) reads.push(name);
+    else if (writeNames.has(name)) writes.push(name);
+    else if (name === "archive_record") deletes.push(name);
+    else if (ADMIN_ACTIONS.some(([n]) => n === name)) adminCount++;
+    else if (connectorTools.some((t) => t.tool_name === name)) connectorCount++;
+    else if (mcpTools.some((t) => t.tool_name === name)) mcpCount++;
+  }
+  const parts: string[] = [];
+  if (reads.length) parts.push("read records");
+  if (writes.length) parts.push("create and update records");
+  if (adminCount) parts.push(`manage ${adminCount} admin setting${adminCount === 1 ? "" : "s"}`);
+  if (connectorCount) parts.push(`call ${connectorCount} connector action${connectorCount === 1 ? "" : "s"}`);
+  if (mcpCount) parts.push(`use ${mcpCount} MCP tool${mcpCount === 1 ? "" : "s"}`);
+  let sentence = parts.length ? `This agent can ${parts.join(", ")}.` : "This agent has tools granted, but none in a recognized category.";
+  if (deletes.length === 0) sentence += " It cannot delete or archive records.";
+  if (policy?.blocked_tool_names?.length) sentence += ` ${policy.blocked_tool_names.length} tool${policy.blocked_tool_names.length === 1 ? " is" : "s are"} explicitly blocked by policy regardless of the above.`;
+  if (policy?.require_approval_at_or_above) sentence += ` Anything ${RISK_LEVEL_LABELS[policy.require_approval_at_or_above].toLowerCase()} or riskier queues for Administrator approval instead of running immediately.`;
+  return sentence;
 }
 
 export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
@@ -131,7 +193,9 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
 
   const [editing, setEditing] = useState<AiAgentDefinition | null>(null);
   const [creating, setCreating] = useState(false);
-  const [chatWith, setChatWith] = useState<AiAgentDefinition | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [applyingTemplate, setApplyingTemplate] = useState<string | null>(null);
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
   const [guardrailsFor, setGuardrailsFor] = useState<AiAgentDefinition | null>(null);
   const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
@@ -188,6 +252,32 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this agent's routing"),
   });
 
+  // Agent Studio 2.0 (issue #196): "preconfigured starting tool/policy/
+  // output-schema combination" - `build()` covers the base agent fields
+  // in one `createAiAgent` call; policy and output schema are both
+  // per-existing-agent concepts, so they're a sequential follow-up once
+  // the agent has a real id, not a single bigger create call.
+  async function applyAgentTemplate(template: AgentTemplateDef) {
+    setApplyingTemplate(template.key);
+    setTemplateError(null);
+    try {
+      const agent = await api.createAiAgent(template.build());
+      if (template.policy) {
+        await api.upsertAiAgentPolicy(agent.id, template.policy);
+      }
+      if (template.outputSchema !== undefined) {
+        await api.createAiAgentVersionDraft(agent.id, { ...template.build(), model_routing: null, output_schema: template.outputSchema });
+      }
+      invalidate();
+      setShowTemplates(false);
+      setEditing(agent);
+    } catch (err) {
+      setTemplateError(err instanceof ApiError ? err.message : "Could not create this agent from the template");
+    } finally {
+      setApplyingTemplate(null);
+    }
+  }
+
   return (
     <div>
       <div className="card">
@@ -203,12 +293,23 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
             <button className="btn btn-secondary" onClick={() => onOpenHelp("build-your-first-agent")}>
               📖 Help
             </button>
+            <button className="btn btn-secondary" onClick={() => setShowTemplates((v) => !v)}>
+              Start from a template
+            </button>
             <button className="btn btn-primary" onClick={() => setCreating(true)}>
               + New agent
             </button>
           </div>
         </div>
         {error && <div className="error-banner">{error}</div>}
+        {showTemplates && (
+          <AgentTemplateGallery
+            templateError={templateError}
+            applyingTemplate={applyingTemplate}
+            onApply={applyAgentTemplate}
+            onClose={() => setShowTemplates(false)}
+          />
+        )}
         <div className="table-wrap">
           <table>
             <thead>
@@ -238,9 +339,6 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button className="btn btn-secondary" onClick={() => setChatWith(a)} disabled={!a.is_active}>
-                        Chat
-                      </button>
                       <button className="btn btn-secondary" onClick={() => setEditing(a)}>
                         Edit
                       </button>
@@ -279,6 +377,11 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
           skills={skills}
           connectorTools={connectorTools}
           mcpTools={mcpTools}
+          onOpenRouting={() => editing && setRoutingFor(editing)}
+          onOpenMemory={() => editing && setMemoryFor(editing)}
+          onOpenGuardrails={() => editing && setGuardrailsFor(editing)}
+          onOpenVersions={() => editing && setVersionsFor(editing)}
+          onOpenTriggers={() => editing && setTriggersFor(editing)}
           onCancel={() => {
             setCreating(false);
             setEditing(null);
@@ -286,20 +389,6 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
           onSubmit={(input) => (editing ? update.mutate({ id: editing.id, input }) : create.mutate(input))}
           pending={create.isPending || update.isPending}
         />
-      )}
-
-      {chatWith && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <h3 style={{ margin: 0 }}>
-              {chatWith.icon} Chat with {chatWith.name}
-            </h3>
-            <button className="btn btn-secondary" onClick={() => setChatWith(null)}>
-              Close
-            </button>
-          </div>
-          <ChatPanel agentId={chatWith.id} />
-        </div>
       )}
 
       {memoryFor && (
@@ -628,12 +717,168 @@ function ModelRoutingEditor({
   );
 }
 
+function AgentTemplateGallery({
+  templateError,
+  applyingTemplate,
+  onApply,
+  onClose,
+}: {
+  templateError: string | null;
+  applyingTemplate: string | null;
+  onApply: (template: AgentTemplateDef) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="card" style={{ background: "var(--bg-elevated)", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <strong>Start from a template</strong>
+        <button className="btn btn-secondary" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {templateError && <div className="error-banner">{templateError}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+        {AGENT_TEMPLATES.map((t) => (
+          <div key={t.key} className="card" style={{ padding: 10 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{t.label}</div>
+            <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{t.description}</p>
+            <button
+              className="btn btn-primary"
+              style={{ width: "100%" }}
+              disabled={applyingTemplate !== null}
+              onClick={() => onApply(t)}
+            >
+              {applyingTemplate === t.key ? "Creating..." : "Use this template"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Agent Studio 2.0 (issue #196): "Playground/Trace/Evaluation integrated
+ * inside the Agent Builder itself... rather than requiring a navigation
+ * away to the separate Evaluations admin panel." Reuses the existing
+ * `ChatPanel` (already a real, working chat against this exact agent - no
+ * new backend) and the existing Evaluation Harness API as-is (suites
+ * already belonging to this agent, same `run_suite` judge call the
+ * separate Evaluations tab uses) - this is wiring/placement, not a new
+ * execution path.
+ *
+ * "Streaming result" from the issue's own wording is honestly not
+ * implemented: no streaming transport (SSE/WebSocket) exists anywhere in
+ * this codebase today, frontend or backend, so adding one would be new
+ * infrastructure, not polish - `ChatPanel`'s existing "Thinking..."
+ * indicator while the full response is awaited is the honest version of
+ * this for now.
+ *
+ * "Version/model compare" is scoped to what the data actually supports:
+ * `AiEvalRun` has no version reference (an eval run is keyed by suite,
+ * not by which agent version was active when it ran), so this cannot
+ * honestly show a per-version eval score - it compares what versions
+ * *are* (status/model routing/output schema), not a fabricated
+ * per-version pass rate. A real per-version score needs the eval run
+ * model extended to record which version it ran against, which is out
+ * of scope for a polish pass.
+ */
+function AgentPlaygroundAndEval({ agent }: { agent: AiAgentDefinition }) {
+  const suitesQuery = useQuery({ queryKey: ["aiEvalSuites"], queryFn: () => api.listAiEvalSuites() });
+  const versionsQuery = useQuery({ queryKey: ["aiAgentVersions", agent.id], queryFn: () => api.listAiAgentVersions(agent.id) });
+  const suites = (suitesQuery.data ?? []).filter((s) => s.target_type === "agent" && s.target_id === agent.id);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <b style={{ fontSize: 13 }}>Playground</b>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+          Chats against this agent's last-saved configuration - save your changes above first to test them here.
+        </p>
+        <ChatPanel agentId={agent.id} />
+      </div>
+      <div>
+        <b style={{ fontSize: 13 }}>Evaluation</b>
+        {suites.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No Evaluation Suites target this agent yet - create one in Admin → Evaluations.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+            {suites.map((s) => (
+              <EvalSuiteRow key={s.id} suite={s} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <b style={{ fontSize: 13 }}>Versions</b>
+        {versionsQuery.isLoading && <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading...</p>}
+        {versionsQuery.data && versionsQuery.data.length > 0 && (
+          <div className="table-wrap" style={{ marginTop: 6 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Model routing</th>
+                  <th>Output schema</th>
+                </tr>
+              </thead>
+              <tbody>
+                {versionsQuery.data.map((v) => (
+                  <tr key={v.id}>
+                    <td>
+                      <span className="badge">{v.status}</span>
+                    </td>
+                    <td style={{ fontSize: 12 }}>{new Date(v.created_at).toLocaleDateString()}</td>
+                    <td style={{ fontSize: 12 }}>{v.model_routing ? "Custom" : "Workspace default"}</td>
+                    <td style={{ fontSize: 12 }}>{v.output_schema ? "Structured" : "Free-form text"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EvalSuiteRow({ suite }: { suite: AiEvalSuite }) {
+  const queryClient = useQueryClient();
+  const runsQuery = useQuery({ queryKey: ["aiEvalRuns", suite.id], queryFn: () => api.listAiEvalRuns(suite.id, 1) });
+  const latest: AiEvalRun | undefined = runsQuery.data?.[0];
+  const run = useMutation({
+    mutationFn: () => api.runAiEvalSuite(suite.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["aiEvalRuns", suite.id] }),
+  });
+
+  return (
+    <div className="card" style={{ padding: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{suite.name}</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          {suite.cases.length} case{suite.cases.length === 1 ? "" : "s"} ·{" "}
+          {latest ? `Last run: ${latest.passed_count} passed, ${latest.failed_count} failed` : "Never run"}
+        </div>
+      </div>
+      <button className="btn btn-secondary" onClick={() => run.mutate()} disabled={run.isPending}>
+        {run.isPending ? "Running..." : "Run"}
+      </button>
+    </div>
+  );
+}
+
 function AiAgentForm({
   initial,
   agents,
   skills,
   connectorTools,
   mcpTools,
+  onOpenRouting,
+  onOpenMemory,
+  onOpenGuardrails,
+  onOpenVersions,
+  onOpenTriggers,
   onCancel,
   onSubmit,
   pending,
@@ -643,6 +888,11 @@ function AiAgentForm({
   skills: AiSkill[];
   connectorTools: AgentConnectorToolOption[];
   mcpTools: AgentMcpToolOption[];
+  onOpenRouting: () => void;
+  onOpenMemory: () => void;
+  onOpenGuardrails: () => void;
+  onOpenVersions: () => void;
+  onOpenTriggers: () => void;
   onCancel: () => void;
   onSubmit: (input: AiAgentInput) => void;
   pending: boolean;
@@ -660,6 +910,20 @@ function AiAgentForm({
         }
       : emptyInput(),
   );
+  const [tab, setTab] = useState<"core" | "advanced">("core");
+  const { tone: initialTone, persona: initialPersona } = splitTone(input.system_prompt);
+  const [tone, setTone] = useState(initialTone);
+  const [persona, setPersona] = useState(initialPersona);
+  // Agent Studio 2.0 (issue #196): "a live capability summary... computed
+  // from the agent's real tool grants/policy" - only meaningful once an
+  // agent exists to have a policy at all; a brand-new agent being
+  // created has no AiAgentPolicy row yet, so the summary below just
+  // reflects the checked tools with no policy caveats.
+  const policyQuery = useQuery({
+    queryKey: ["aiAgentPolicy", initial?.id ?? null],
+    queryFn: () => api.getAiAgentPolicy(initial?.id ?? null),
+    enabled: !!initial,
+  });
 
   function toggleAction(name: string) {
     setInput((prev) => ({
@@ -679,139 +943,231 @@ function AiAgentForm({
 
   const delegateChoices = agents.filter((a) => a.is_active && a.id !== initial?.id);
   const requiresAdmin = agentRequiresAdmin(input.action_names);
+  const summary = capabilitySummary(input.action_names, connectorTools, mcpTools, policyQuery.data ?? null);
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <h3 style={{ marginTop: 0 }}>{initial ? `Edit ${initial.name}` : "New agent"}</h3>
+      <div className="tab-row">
+        <button type="button" className={`tab${tab === "core" ? " active" : ""}`} onClick={() => setTab("core")}>
+          Core
+        </button>
+        <button type="button" className={`tab${tab === "advanced" ? " active" : ""}`} onClick={() => setTab("advanced")}>
+          Advanced
+        </button>
+      </div>
       <form
         className="form-grid"
+        style={{ marginTop: 12 }}
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit(input);
+          onSubmit({ ...input, system_prompt: joinTone(tone, persona) });
         }}
       >
-        <div className="field">
-          <label>Name</label>
-          <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} required />
-        </div>
-        <div className="field">
-          <label>Icon</label>
-          <select value={input.icon} onChange={(e) => setInput({ ...input, icon: e.target.value })}>
-            {ICON_CHOICES.map((i) => (
-              <option key={i} value={i}>
-                {i}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field full">
-          <label>Description (optional)</label>
-          <input value={input.description ?? ""} onChange={(e) => setInput({ ...input, description: e.target.value || null })} />
-        </div>
-        <div className="field full">
-          <label>Persona / instructions</label>
-          <textarea
-            style={{ width: "100%", minHeight: 100 }}
-            value={input.system_prompt}
-            onChange={(e) => setInput({ ...input, system_prompt: e.target.value })}
-            required
-          />
-        </div>
-        <div className="field full">
-          <label>
-            Actions{" "}
-            {requiresAdmin && (
-              <span className="badge badge-danger" style={{ marginLeft: 6 }}>
-                Administrator-only
-              </span>
+        {tab === "core" && (
+          <>
+            <div className="field">
+              <label>Name</label>
+              <input value={input.name} onChange={(e) => setInput({ ...input, name: e.target.value })} required />
+            </div>
+            <div className="field">
+              <label>Icon</label>
+              <select value={input.icon} onChange={(e) => setInput({ ...input, icon: e.target.value })}>
+                {ICON_CHOICES.map((i) => (
+                  <option key={i} value={i}>
+                    {i}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field full">
+              <label>Description (optional)</label>
+              <input value={input.description ?? ""} onChange={(e) => setInput({ ...input, description: e.target.value || null })} />
+            </div>
+            <div className="field">
+              <label>Tone (optional)</label>
+              <select value={tone} onChange={(e) => setTone(e.target.value)}>
+                {TONE_CHOICES.map((t) => (
+                  <option key={t} value={t}>
+                    {t || "Unspecified"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field full">
+              <label>Purpose / instructions</label>
+              <textarea
+                style={{ width: "100%", minHeight: 100 }}
+                value={persona}
+                onChange={(e) => setPersona(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field full">
+              <div className="card" style={{ background: "var(--bg-elevated)", padding: 10 }}>
+                <b style={{ fontSize: 12 }}>What this agent can do</b>
+                <p style={{ fontSize: 13, margin: "4px 0 0" }}>{summary}</p>
+              </div>
+            </div>
+            <div className="field full">
+              <label>
+                Tools{" "}
+                {requiresAdmin && (
+                  <span className="badge badge-danger" style={{ marginLeft: 6 }}>
+                    Administrator-only
+                  </span>
+                )}
+              </label>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+                Granting any admin action makes this agent usable by administrators only - checked every time it runs, not just here.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <b style={{ fontSize: 12 }}>Records</b>
+                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                    {RECORD_ACTIONS.map(([name, label]) => (
+                      <label key={name} style={{ display: "block", fontSize: 13 }}>
+                        <input type="checkbox" checked={input.action_names.includes(name)} onChange={() => toggleAction(name)} /> {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <b style={{ fontSize: 12 }}>Admin</b>
+                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                    {ADMIN_ACTIONS.map(([name, label]) => (
+                      <label key={name} style={{ display: "block", fontSize: 13 }}>
+                        <input type="checkbox" checked={input.action_names.includes(name)} onChange={() => toggleAction(name)} /> {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {connectorTools.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <b style={{ fontSize: 12 }}>Connector Actions</b>
+                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                    {connectorTools.map((t) => (
+                      <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                        <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
+                        {t.connector_name}: {t.action_display_name} ({t.http_method.toUpperCase()})
+                        {t.requires_admin && (
+                          <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
+                            Administrator
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {mcpTools.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <b style={{ fontSize: 12 }}>MCP Tools</b>
+                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+                    {mcpTools.map((t) => (
+                      <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                        <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
+                        {t.mcp_server_name}: {t.tool_description || t.tool_name.split(":").pop()}
+                        {t.requires_admin && (
+                          <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
+                            Administrator
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {skills.length > 0 && (
+              <div className="field full">
+                <label>Knowledge: Skills</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {skills.map((s) => (
+                    <label key={s.id} style={{ fontSize: 13 }}>
+                      <input type="checkbox" checked={input.skill_ids.includes(s.id)} onChange={() => toggleSkill(s.id)} /> {s.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
             )}
-          </label>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
-            Granting any admin action makes this agent usable by administrators only - checked every time it runs, not just here.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <b style={{ fontSize: 12 }}>Records</b>
-              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                {RECORD_ACTIONS.map(([name, label]) => (
-                  <label key={name} style={{ display: "block", fontSize: 13 }}>
-                    <input type="checkbox" checked={input.action_names.includes(name)} onChange={() => toggleAction(name)} /> {label}
-                  </label>
-                ))}
+            {delegateChoices.length > 0 && (
+              <div className="field full">
+                <label>Can delegate to</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {delegateChoices.map((a) => (
+                    <label key={a.id} style={{ fontSize: 13 }}>
+                      <input type="checkbox" checked={input.delegate_agent_ids.includes(a.id)} onChange={() => toggleDelegate(a.id)} /> {a.icon}{" "}
+                      {a.name}
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <b style={{ fontSize: 12 }}>Admin</b>
-              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                {ADMIN_ACTIONS.map(([name, label]) => (
-                  <label key={name} style={{ display: "block", fontSize: 13 }}>
-                    <input type="checkbox" checked={input.action_names.includes(name)} onChange={() => toggleAction(name)} /> {label}
-                  </label>
-                ))}
+            )}
+            {initial && (
+              <div className="field full">
+                <AgentPlaygroundAndEval agent={initial} />
               </div>
-            </div>
-          </div>
-          {connectorTools.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <b style={{ fontSize: 12 }}>Connector Actions</b>
-              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                {connectorTools.map((t) => (
-                  <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
-                    <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
-                    {t.connector_name}: {t.action_display_name} ({t.http_method.toUpperCase()})
-                    {t.requires_admin && (
-                      <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
-                        Administrator
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-          {mcpTools.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <b style={{ fontSize: 12 }}>MCP Tools</b>
-              <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                {mcpTools.map((t) => (
-                  <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
-                    <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
-                    {t.mcp_server_name}: {t.tool_description || t.tool_name.split(":").pop()}
-                    {t.requires_admin && (
-                      <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
-                        Administrator
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        {skills.length > 0 && (
-          <div className="field full">
-            <label>Skills</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {skills.map((s) => (
-                <label key={s.id} style={{ fontSize: 13 }}>
-                  <input type="checkbox" checked={input.skill_ids.includes(s.id)} onChange={() => toggleSkill(s.id)} /> {s.name}
-                </label>
-              ))}
-            </div>
-          </div>
+            )}
+          </>
         )}
-        {delegateChoices.length > 0 && (
-          <div className="field full">
-            <label>Can delegate to</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {delegateChoices.map((a) => (
-                <label key={a.id} style={{ fontSize: 13 }}>
-                  <input type="checkbox" checked={input.delegate_agent_ids.includes(a.id)} onChange={() => toggleDelegate(a.id)} /> {a.icon}{" "}
-                  {a.name}
-                </label>
-              ))}
-            </div>
-          </div>
+        {tab === "advanced" && (
+          <>
+            {!initial && (
+              <div className="field full">
+                <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  Model routing, autonomy/policy, memory, guardrails, versions and triggers all apply to an existing agent - save this one
+                  first, then reopen Edit to configure them here.
+                </p>
+              </div>
+            )}
+            {initial && (
+              <>
+                <div className="field full">
+                  <div className="card" style={{ padding: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <b style={{ fontSize: 13 }}>Model Reference</b>
+                      <button type="button" className="btn btn-secondary" onClick={onOpenRouting}>
+                        Configure
+                      </button>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>
+                      {initial.model_routing ? "Custom routing configured for this agent." : "Using the workspace's default model routing."}
+                    </p>
+                  </div>
+                </div>
+                <div className="field full">
+                  <div className="card" style={{ padding: 10 }}>
+                    <b style={{ fontSize: 13 }}>Autonomy &amp; policy bindings</b>
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>
+                      {policyQuery.data?.require_approval_at_or_above
+                        ? `Requires approval at or above "${RISK_LEVEL_LABELS[policyQuery.data.require_approval_at_or_above]}" risk.`
+                        : "No approval threshold set - runs immediately regardless of risk level."}{" "}
+                      {policyQuery.data?.blocked_tool_names?.length
+                        ? `${policyQuery.data.blocked_tool_names.length} tool(s) explicitly blocked.`
+                        : "No tools explicitly blocked."}{" "}
+                      Edit the exact threshold/blocklist in the Policy Engine section below.
+                    </p>
+                  </div>
+                </div>
+                <div className="field full" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="btn btn-secondary" onClick={onOpenVersions}>
+                    Versions &amp; Output Schema
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={onOpenMemory}>
+                    Memory
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={onOpenGuardrails}>
+                    Guardrails
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={onOpenTriggers}>
+                    Triggers
+                  </button>
+                </div>
+              </>
+            )}
+          </>
         )}
         <div className="field full" style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-primary" type="submit" disabled={pending}>

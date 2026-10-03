@@ -123,8 +123,11 @@ export function summarizeNode(n: EditNode): string {
     case "action":
       return String(n.config.action_type ?? "");
     case "agent":
-      return n.config.agent_id ? "agent selected" : "no agent selected";
+      if (n.config.agent_id) return "agent selected";
+      if (n.config.embedded_persona) return "embedded sub-agent";
+      return "no agent selected";
     case "run_agent_team":
+      if (n.config.target_graph_id) return "nested team selected";
       return n.config.pipeline_id ? "team selected" : "no team selected";
     case "evaluate_result":
       return n.config.source_node_key ? `evaluates ${String(n.config.source_node_key)}` : "no node selected";

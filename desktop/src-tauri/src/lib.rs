@@ -352,6 +352,7 @@ pub fn run() {
             commands::execution_graph_commands::create_execution_graph,
             commands::execution_graph_commands::update_execution_graph,
             commands::execution_graph_commands::publish_execution_graph,
+            commands::execution_graph_commands::promote_embedded_agent_node,
             commands::execution_graph_commands::set_execution_graph_disabled,
             commands::execution_graph_commands::get_graph_run,
             commands::execution_graph_commands::list_graph_runs,
