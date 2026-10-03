@@ -21,7 +21,19 @@ const ICON_CHOICES = ["◆", "🏭", "📦", "🚗", "🏢", "🔧", "📋", "�
  * sidebar section and as an extra tab in the Custom fields / Business
  * rules admin screens, exactly like any of the nine built-in entities.
  */
-export function CustomObjectsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => void }) {
+export function CustomObjectsAdmin({
+  onOpenHelp,
+  onOpenTab,
+}: {
+  onOpenHelp: (slug: string) => void;
+  /** Admin Control Center Modernization (issue #197): object detail cross-
+   * links to Fields/Relationships/Screens/Rules/Workflows/Access/Solution
+   * ownership. Typed as a plain string (not Settings.tsx's own AdminTab
+   * union) to avoid this module depending on that file - the caller wraps
+   * its real `openTab` to satisfy the stricter type, same pattern
+   * AppShell.tsx's `onOpenAdminTab` already uses for the Command Palette. */
+  onOpenTab?: (adminTab: string) => void;
+}) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -72,6 +84,7 @@ export function CustomObjectsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) 
       {editing && (
         <ObjectEditForm
           object={editing}
+          onOpenTab={onOpenTab}
           onDone={() => {
             invalidate();
             setEditingId(null);
@@ -207,10 +220,12 @@ function ObjectForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
 
 function ObjectEditForm({
   object,
+  onOpenTab,
   onDone,
   onCancel,
 }: {
   object: CustomObjectDefinition;
+  onOpenTab?: (adminTab: string) => void;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -220,6 +235,7 @@ function ObjectEditForm({
   const [prefix, setPrefix] = useState(object.prefix);
   const [digits, setDigits] = useState(object.digits);
   const [error, setError] = useState<string | null>(null);
+  const references = useQuery({ queryKey: ["customObjectReferences", object.id], queryFn: () => api.countCustomObjectReferences(object.id) });
 
   const save = useMutation({
     mutationFn: () =>
@@ -252,9 +268,46 @@ function ObjectEditForm({
 
   return (
     <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
-      <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
-        Key: <code>{object.key}</code> (fixed)
-      </p>
+      <div className="builder-header">
+        <div>
+          <div className="builder-breadcrumb">Custom Objects / {object.plural_label}</div>
+          <div className="builder-title-row">
+            <h2>{object.icon} {object.plural_label}</h2>
+            <span className={`badge${object.is_active ? " badge-success" : ""}`}>{object.is_active ? "Active" : "Inactive"}</span>
+          </div>
+          <p className="builder-subtitle">
+            Key: <code>{object.key}</code> (fixed)
+          </p>
+        </div>
+      </div>
+      {onOpenTab && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("fields")}>
+            Fields
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("relationships")}>
+            Relationships{references.data && references.data.relationships > 0 ? ` (${references.data.relationships})` : ""}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("layouts")}>
+            Screens{references.data && references.data.screen_layouts > 0 ? ` (${references.data.screen_layouts})` : ""}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("pageBuilder")}>
+            Pages{references.data && references.data.page_layouts > 0 ? ` (${references.data.page_layouts})` : ""}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("rules")}>
+            Business Rules{references.data && references.data.business_rules > 0 ? ` (${references.data.business_rules})` : ""}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("workflow")}>
+            Workflows{references.data && references.data.workflows > 0 ? ` (${references.data.workflows})` : ""}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("accessRoles")}>
+            Access
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("solutions")}>
+            Solution ownership
+          </button>
+        </div>
+      )}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"
@@ -306,7 +359,18 @@ function ObjectEditForm({
             className="btn"
             type="button"
             onClick={() => {
-              if (confirm(`Delete '${object.plural_label}'? This only works if it has no records.`)) remove.mutate();
+              const refs = references.data;
+              const refParts = refs
+                ? [
+                    refs.business_rules > 0 ? `${refs.business_rules} business rule(s)` : null,
+                    refs.workflows > 0 ? `${refs.workflows} workflow(s)` : null,
+                    refs.screen_layouts > 0 ? `${refs.screen_layouts} screen layout(s)` : null,
+                    refs.page_layouts > 0 ? `${refs.page_layouts} page(s)` : null,
+                    refs.relationships > 0 ? `${refs.relationships} relationship(s)` : null,
+                  ].filter((p): p is string => p !== null)
+                : [];
+              const warning = refParts.length > 0 ? ` It's still referenced by ${refParts.join(", ")} - deleting will fail until those are removed.` : "";
+              if (confirm(`Delete '${object.plural_label}'? This only works if it has no records.${warning}`)) remove.mutate();
             }}
             disabled={remove.isPending}
           >

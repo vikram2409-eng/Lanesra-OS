@@ -1,6 +1,9 @@
 pub mod access_role_service;
 pub mod access_service;
 pub mod activity_service;
+pub mod admin_home_service;
+pub mod admin_nav_service;
+pub mod admin_search_service;
 pub mod agent_service;
 pub mod agent_version_service;
 pub mod ai_agent_hierarchy_service;

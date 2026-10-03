@@ -16,7 +16,7 @@ use crate::models::workspace_theme::{
     ThemeColorTokens, ThemeContrastIssue, ThemeShapeTokens, ThemeTokens, ThemeTypographyTokens, WorkspaceTheme, WorkspaceThemeInput,
     DENSITY_SCALES, RADIUS_SCALES, THEME_PRESET_KEYS,
 };
-use crate::repositories::workspace_theme_repo;
+use crate::repositories::{audit_repo, workspace_theme_repo};
 
 const MIN_CONTRAST_RATIO: f64 = 4.5;
 
@@ -232,9 +232,12 @@ pub fn save_draft(
             return Err(AppError::Validation("Only a Draft theme can be edited - publish a new draft instead of editing a Published or Archived one".into()));
         }
         workspace_theme_repo::update_draft(conn, id, input)?;
+        audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("theme"), Some(id), &format!("Updated theme draft '{}'", input.name), None)?;
         get(conn, id, workspace_id)
     } else {
-        Ok(workspace_theme_repo::create_draft(conn, workspace_id, input, actor_user_id)?)
+        let created = workspace_theme_repo::create_draft(conn, workspace_id, input, actor_user_id)?;
+        audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("theme"), Some(&created.id), &format!("Created theme draft '{}'", input.name), None)?;
+        Ok(created)
     }
 }
 
@@ -257,7 +260,9 @@ pub fn publish(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: O
             .join("; ");
         return Err(AppError::Validation(format!("Can't publish: critical contrast failure - {detail}")));
     }
-    Ok(workspace_theme_repo::publish(conn, id, actor_user_id)?)
+    let published = workspace_theme_repo::publish(conn, id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "publish", Some("theme"), Some(id), &format!("Published theme '{}'", theme.name), None)?;
+    Ok(published)
 }
 
 /// "Roll back" never mutates history - it creates a brand-new Draft
@@ -277,7 +282,9 @@ pub fn rollback_to_version(conn: &Connection, workspace_id: &str, from_version: 
         tokens: source.tokens.clone(),
     };
     let draft = workspace_theme_repo::create_draft(conn, workspace_id, &input, actor_user_id)?;
-    publish(conn, &draft.id, workspace_id, actor_user_id)
+    let published = publish(conn, &draft.id, workspace_id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("theme"), Some(&draft.id), &format!("Rolled back theme to version {from_version} (now '{}')", input.name), None)?;
+    Ok(published)
 }
 
 pub fn delete_draft(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -287,5 +294,6 @@ pub fn delete_draft(conn: &Connection, id: &str, workspace_id: &str, actor_user_
         return Err(AppError::Validation("Only a Draft theme can be deleted".into()));
     }
     workspace_theme_repo::delete_draft(conn, id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "delete", Some("theme"), Some(id), &format!("Deleted theme draft '{}'", theme.name), None)?;
     Ok(())
 }

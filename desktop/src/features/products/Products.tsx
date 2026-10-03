@@ -52,10 +52,12 @@ const emptyInput: ProductInput = {
 export function Products({
   prefill,
   onPrefillConsumed,
+  onOpenAdminTab,
 }: {
   prefill?: Prefill | null;
   onPrefillConsumed?: () => void;
   onNavigateTo?: (section: Section, prefill: Prefill) => void;
+  onOpenAdminTab?: (adminTab: string) => void;
 } = {}) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
   const queryClient = useQueryClient();
@@ -91,6 +93,7 @@ export function Products({
         id={view.id}
         onEdit={() => setView({ mode: "edit", id: view.id })}
         onBack={() => setView({ mode: "list" })}
+        onOpenAdminTab={onOpenAdminTab}
       />
     );
   }
@@ -368,7 +371,17 @@ function productDetailFields(p: Product): Record<string, ReactNode> {
  * `CustomFieldsCard` below, unchanged - that's a separate, pre-existing
  * mechanism this phase doesn't touch.
  */
-function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void; onBack: () => void }) {
+function ProductDetail({
+  id,
+  onEdit,
+  onBack,
+  onOpenAdminTab,
+}: {
+  id: string;
+  onEdit: () => void;
+  onBack: () => void;
+  onOpenAdminTab?: (adminTab: string) => void;
+}) {
   const canWrite = useCanWriteObject("Product");
   useReportVoiceContext("Product", id);
   const product = useQuery({ queryKey: ["product", id], queryFn: () => api.getProduct(id) });
@@ -403,7 +416,7 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
         // pre-existing mechanism this phase doesn't touch, same as the
         // doc comment above already says for LayoutDetailFields.
         <div className="card">
-          <PageRenderer entityType="Product" entityId={p.id} fields={productDetailFields(p)} onEdit={onEdit} />
+          <PageRenderer entityType="Product" entityId={p.id} fields={productDetailFields(p)} onEdit={onEdit} onOpenAdminTab={onOpenAdminTab} />
         </div>
       ) : (
         <div className="card">

@@ -18,7 +18,7 @@ use serde::Serialize;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::dashboard_layout::{DashboardLayout, DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets};
-use crate::repositories::{dashboard_layout_repo, user_repo};
+use crate::repositories::{audit_repo, dashboard_layout_repo, user_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -91,6 +91,7 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &DashboardLay
     let draft_json = serde_json::to_string(&seeded_widgets(&input.initial_kpi_keys)).expect("DashboardWidgets always serializes");
     dashboard_layout_repo::create(conn, &id, workspace_id, input.name.trim(), is_default, "[]", &draft_json, input.app_id.as_deref(), actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "dashboard_layout", &id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("dashboard_layout"), Some(&id), &format!("Created dashboard layout '{}'", input.name.trim()), None)?;
     get_layout(conn, &id)
 }
 
@@ -104,12 +105,15 @@ pub fn update_layout(conn: &Connection, id: &str, update: &DashboardLayoutUpdate
     let roles_json = serde_json::to_string(&update.roles).expect("Vec<String> always serializes");
     let draft_json = serde_json::to_string(&update.draft).expect("DashboardWidgets always serializes");
     dashboard_layout_repo::update_meta_and_draft(conn, id, update.name.trim(), &roles_json, &draft_json, update.app_id.as_deref(), actor_user_id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("dashboard_layout"), Some(id), &format!("Updated dashboard layout '{}'", update.name.trim()), None)?;
     get_layout(conn, id)
 }
 
 pub fn publish_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<DashboardLayout> {
     require_admin(conn, actor_user_id)?;
+    let before = get_layout(conn, id)?;
     dashboard_layout_repo::publish(conn, id, actor_user_id)?;
+    audit_repo::record(conn, &before.workspace_id, actor_user_id, "publish", Some("dashboard_layout"), Some(id), &format!("Published dashboard layout '{}'", before.name), None)?;
     get_layout(conn, id)
 }
 
@@ -155,6 +159,7 @@ pub fn delete_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -
         return Err(AppError::Validation("The last dashboard layout can't be deleted".into()));
     }
     dashboard_layout_repo::delete(conn, id)?;
+    audit_repo::record(conn, &layout.workspace_id, actor_user_id, "delete", Some("dashboard_layout"), Some(id), &format!("Deleted dashboard layout '{}'", layout.name), None)?;
     Ok(())
 }
 

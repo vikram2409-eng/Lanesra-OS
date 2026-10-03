@@ -112,10 +112,12 @@ export function Companies({
   prefill,
   onPrefillConsumed,
   onNavigateTo,
+  onOpenAdminTab,
 }: {
   prefill?: Prefill | null;
   onPrefillConsumed?: () => void;
   onNavigateTo?: (section: Section, prefill: Prefill) => void;
+  onOpenAdminTab?: (adminTab: string) => void;
 } = {}) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
   const [importing, setImporting] = useState(false);
@@ -198,6 +200,7 @@ export function Companies({
         onEdit={() => setView({ mode: "edit", id: view.id })}
         onBack={() => setView({ mode: "list" })}
         onNavigateTo={onNavigateTo}
+        onOpenAdminTab={onOpenAdminTab}
       />
     );
   }
@@ -620,11 +623,13 @@ function CompanyDetail({
   onEdit,
   onBack,
   onNavigateTo,
+  onOpenAdminTab,
 }: {
   id: string;
   onEdit: () => void;
   onBack: () => void;
   onNavigateTo?: (section: Section, prefill: Prefill) => void;
+  onOpenAdminTab?: (adminTab: string) => void;
 }) {
   const [tab, setTab] = useState<CompanyTab>("overview");
   const canWrite = useCanWriteObject("Company");
@@ -727,7 +732,7 @@ function CompanyDetail({
         // rather than a partial merge, and why `fields` is the identical
         // map the old LayoutDetailFields branch builds below it.
         <div style={{ marginTop: 16 }}>
-          <PageRenderer entityType="Company" entityId={id} fields={companyDetailFields(company.data)} onEdit={onEdit} />
+          <PageRenderer entityType="Company" entityId={id} fields={companyDetailFields(company.data)} onEdit={onEdit} onOpenAdminTab={onOpenAdminTab} />
         </div>
       )}
       {tab === "overview" && !effectivePage.data?.page && (

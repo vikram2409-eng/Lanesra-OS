@@ -14,7 +14,7 @@ use crate::models::relationship::{
     RelatedRecord, RelationshipDefinition, RelationshipDefinitionInput, RelationshipDefinitionUpdate, RelationshipInstance,
     DELETE_BEHAVIORS, RELATIONSHIP_TYPES,
 };
-use crate::repositories::relationship_repo;
+use crate::repositories::{audit_repo, relationship_repo};
 use crate::services::{access_service, custom_object_service, entity_registry};
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
@@ -87,6 +87,7 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &RelationshipDefinit
     let id = crate::domain::ids::new_uuid();
     let created = relationship_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "relationship_definition", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("relationship"), Some(&created.id), &format!("Created relationship '{}'", created.forward_label), None)?;
     Ok(created)
 }
 
@@ -112,7 +113,9 @@ pub fn update(conn: &Connection, id: &str, input: &RelationshipDefinitionUpdate,
     if input.forward_label.trim().is_empty() || input.reverse_label.trim().is_empty() {
         return Err(AppError::Validation("Both direction labels are required".into()));
     }
-    Ok(relationship_repo::update_definition(conn, id, input, actor_user_id)?)
+    let updated = relationship_repo::update_definition(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("relationship"), Some(id), &format!("Updated relationship '{}'", input.forward_label), None)?;
+    Ok(updated)
 }
 
 /// Hard-deletes a definition. Blocked while any link through it still
@@ -130,7 +133,9 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
             "Cannot delete this relationship - {count} record(s) are still linked through it. Unlink them first, or deactivate the relationship instead."
         )));
     }
-    Ok(relationship_repo::delete_definition(conn, id)?)
+    relationship_repo::delete_definition(conn, id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "delete", Some("relationship"), Some(id), &format!("Deleted relationship '{}'", existing.forward_label), None)?;
+    Ok(())
 }
 
 fn resolve_or_error(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<entity_registry::ResolvedRecord> {

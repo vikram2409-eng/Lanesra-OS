@@ -28,7 +28,7 @@ use serde::Deserialize;
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::integration::{Connection as ConnectionModel, ConnectionInput, ConnectionTestResult, ConnectionUpdate};
-use crate::repositories::{integration_connection_repo, integration_secret_repo};
+use crate::repositories::{audit_repo, integration_connection_repo, integration_secret_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -70,7 +70,7 @@ pub fn create(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], inpu
     validate_types(&input.connection_type, &input.auth_mode)?;
     let id = new_uuid();
     let secret_id = store_secret(conn, workspace_id, master_key, &format!("{} auth secret", input.name), input.secret_value.as_deref(), actor_user_id)?;
-    Ok(integration_connection_repo::insert(
+    let created = integration_connection_repo::insert(
         conn,
         &id,
         workspace_id,
@@ -82,7 +82,9 @@ pub fn create(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], inpu
         &input.config_json,
         input.owner_user_id.as_deref(),
         actor_user_id,
-    )?)
+    )?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("integration_connection"), Some(&created.id), &format!("Created integration connection '{}'", created.name), None)?;
+    Ok(created)
 }
 
 fn get_owned(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<ConnectionModel> {
@@ -123,7 +125,7 @@ pub fn update(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], id: 
         (Some(value), false) if !value.is_empty() => store_secret(conn, workspace_id, master_key, &format!("{} auth secret", input.name), Some(value), actor_user_id)?,
         _ => integration_connection_repo::secret_id_for(conn, id)?,
     };
-    Ok(integration_connection_repo::update(
+    let updated = integration_connection_repo::update(
         conn,
         id,
         input.name.trim(),
@@ -134,19 +136,23 @@ pub fn update(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], id: 
         input.owner_user_id.as_deref(),
         &input.status,
         actor_user_id,
-    )?)
+    )?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("integration_connection"), Some(id), &format!("Updated integration connection '{}'", updated.name), None)?;
+    Ok(updated)
 }
 
 pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
-    get_owned(conn, workspace_id, id)?;
+    let existing = get_owned(conn, workspace_id, id)?;
     let deps = integration_connection_repo::dependency_count(conn, id)?;
     if deps > 0 {
         return Err(AppError::Conflict(format!(
             "This connection is still used by {deps} other reference/webhook/job/external object - remove those first"
         )));
     }
-    Ok(integration_connection_repo::delete(conn, id)?)
+    integration_connection_repo::delete(conn, id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "delete", Some("integration_connection"), Some(id), &format!("Deleted integration connection '{}'", existing.name), None)?;
+    Ok(())
 }
 
 /// The real, decrypted secret value for a connection's own auth, if any -

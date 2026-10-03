@@ -16,7 +16,7 @@ use serde::Serialize;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::page_layout::{NodeLayout, PageDefinition, PageLayout, PageLayoutInput, PageLayoutUpdate, PageNode};
-use crate::repositories::{page_layout_repo, user_repo};
+use crate::repositories::{audit_repo, page_layout_repo, user_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -143,6 +143,7 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &PageLayoutIn
     let draft_json = serde_json::to_string(&empty_page()).expect("PageDefinition always serializes");
     page_layout_repo::create(conn, &id, workspace_id, &input.entity_type, input.name.trim(), is_default, "[]", &draft_json, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "page_layout", &id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("page_layout"), Some(&id), &format!("Created page layout '{}'", input.name.trim()), None)?;
     get_layout(conn, &id)
 }
 
@@ -152,15 +153,19 @@ pub fn update_layout(conn: &Connection, id: &str, update: &PageLayoutUpdate, act
         return Err(AppError::Validation("Page name is required".into()));
     }
     validate_page(&update.draft)?;
+    let workspace_id = get_layout(conn, id)?.workspace_id;
     let roles_json = serde_json::to_string(&update.roles).expect("Vec<String> always serializes");
     let draft_json = serde_json::to_string(&update.draft).expect("PageDefinition always serializes");
     page_layout_repo::update_meta_and_draft(conn, id, update.name.trim(), &roles_json, &draft_json, actor_user_id)?;
+    audit_repo::record(conn, &workspace_id, actor_user_id, "update", Some("page_layout"), Some(id), &format!("Updated page layout '{}'", update.name.trim()), None)?;
     get_layout(conn, id)
 }
 
 pub fn publish_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<PageLayout> {
     require_admin(conn, actor_user_id)?;
+    let before = get_layout(conn, id)?;
     page_layout_repo::publish(conn, id, actor_user_id)?;
+    audit_repo::record(conn, &before.workspace_id, actor_user_id, "publish", Some("page_layout"), Some(id), &format!("Published page layout '{}'", before.name), None)?;
     get_layout(conn, id)
 }
 
@@ -202,6 +207,7 @@ pub fn delete_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -
         return Err(AppError::Validation("The last page for an object can't be deleted".into()));
     }
     page_layout_repo::delete(conn, id)?;
+    audit_repo::record(conn, &layout.workspace_id, actor_user_id, "delete", Some("page_layout"), Some(id), &format!("Deleted page layout '{}'", layout.name), None)?;
     Ok(())
 }
 

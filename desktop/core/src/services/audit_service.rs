@@ -21,3 +21,13 @@ use crate::repositories::audit_repo;
 pub fn list_for_entity(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<Vec<AuditEvent>> {
     Ok(audit_repo::list_for_entity(conn, entity_type, entity_id)?)
 }
+
+/// Admin Control Center Modernization (issue #197): the "Recent Changes"
+/// panel's own feed - every admin-domain change across the whole
+/// workspace, not one entity's own history, so (unlike `list_for_entity`
+/// above) this one IS admin-only, matching `admin_home_service::
+/// get_summary`'s own gate on the same landing page.
+pub fn list_recent(conn: &Connection, workspace_id: &str, limit: i64, actor_user_id: Option<&str>) -> AppResult<Vec<AuditEvent>> {
+    super::user_service::require_admin(conn, actor_user_id)?;
+    Ok(audit_repo::list_recent(conn, workspace_id, limit.clamp(1, 200))?)
+}

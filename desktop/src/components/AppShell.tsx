@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { GlobalSearch } from "./GlobalSearch";
+import { AdminCommandPalette } from "./AdminCommandPalette";
 import { NotificationBell } from "./NotificationBell";
 import { VoiceModeButton } from "../features/voice/VoiceModeButton";
 import { api } from "../lib/api";
@@ -111,6 +112,7 @@ export function AppShell({
   active,
   onNavigate,
   onOpenSearchResult,
+  onOpenAdminTab,
   user,
   onLogout,
   customObjects,
@@ -123,6 +125,11 @@ export function AppShell({
   /** Global search "jump to a record" - reuses the same one-shot openId
    * prefill mechanism every list screen's ID-hyperlinks already use. */
   onOpenSearchResult: (section: Section, id: string) => void;
+  /** Admin Control Center Modernization (issue #197): the Command
+   * Palette's own "Admin" result picks a specific AdminTab (a string here
+   * to avoid this module depending on Settings.tsx's own AdminTab type) -
+   * App.tsx resolves it into AdminPanel's `openAdminTab` prop. */
+  onOpenAdminTab: (adminTab: string) => void;
   user: User;
   onLogout: () => void;
   customObjects: CustomObjectDefinition[];
@@ -157,6 +164,7 @@ export function AppShell({
 
   return (
     <div className="app-shell">
+      <AdminCommandPalette onNavigate={onNavigate} onOpenRecord={onOpenSearchResult} onOpenAdminTab={onOpenAdminTab} isAdmin={isAdmin} />
       <nav className="sidebar">
         <div className="sidebar-brand">Lanesra OS</div>
         {accessibleApps.length > 0 && (

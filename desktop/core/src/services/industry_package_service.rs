@@ -38,7 +38,7 @@ use crate::models::industry_package::{
 };
 use crate::models::relationship::RelationshipDefinition;
 use crate::models::screen_layout::{LayoutTabs, ScreenLayoutInput, ScreenLayoutUpdate};
-use crate::repositories::industry_package_repo;
+use crate::repositories::{audit_repo, industry_package_repo};
 use crate::services::{
     app_service, business_rule_service, custom_field_service, custom_object_service, custom_record_service,
     custom_report_service, dashboard_layout_service, numbering_service, relationship_service, screen_layout_service,
@@ -1121,6 +1121,16 @@ pub fn install(conn: &Connection, workspace_id: &str, app_package_id: &str, acto
     match outcome {
         Ok((installed, backup_path)) => {
             industry_package_repo::complete_run(conn, &run_id, "succeeded", None, Some(&backup_path))?;
+            audit_repo::record(
+                conn,
+                workspace_id,
+                actor_user_id,
+                "install",
+                Some("app_install"),
+                Some(&installed.id),
+                &format!("Installed app '{}' from package '{}'", installed.name, manifest.name),
+                None,
+            )?;
             Ok(installed)
         }
         Err(e) => {

@@ -1,5 +1,7 @@
 pub mod access_role;
 pub mod activity;
+pub mod admin_home;
+pub mod admin_nav;
 pub mod agent;
 pub mod ai;
 pub mod ai_agent;

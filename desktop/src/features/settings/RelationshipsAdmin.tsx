@@ -332,11 +332,21 @@ function RelationshipEditForm({
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not delete this relationship"),
   });
 
+  const connects = `${labelFor(definition.source_entity_type)} → ${definition.target_is_polymorphic ? "Any record type" : labelFor(definition.target_entity_type)}`;
+
   return (
     <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
-      <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
-        {labelFor(definition.source_entity_type)} → {definition.target_is_polymorphic ? "Any record type" : labelFor(definition.target_entity_type)} ({RELATIONSHIP_TYPE_LABELS[definition.relationship_type]}, fixed)
-      </p>
+      <div className="builder-header">
+        <div>
+          <div className="builder-breadcrumb">Relationships / {connects}</div>
+          <div className="builder-title-row">
+            <h2>{connects}</h2>
+            <span className={`badge${definition.is_active ? " badge-success" : ""}`}>{definition.is_active ? "Active" : "Inactive"}</span>
+            {definition.is_protected && <span className="badge">System</span>}
+          </div>
+          <p className="builder-subtitle">{RELATIONSHIP_TYPE_LABELS[definition.relationship_type]} (fixed)</p>
+        </div>
+      </div>
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

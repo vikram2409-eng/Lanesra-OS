@@ -17,7 +17,7 @@ import { Invoices } from "./features/invoices/Invoices";
 import { Contracts } from "./features/contracts/Contracts";
 import { Tasks } from "./features/tasks/Tasks";
 import { Reports } from "./features/reports/Reports";
-import { AdminPanel } from "./features/settings/Settings";
+import { AdminPanel, type AdminTab } from "./features/settings/Settings";
 import { AssistantPage } from "./features/assistant/AssistantPage";
 import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
@@ -123,6 +123,15 @@ function Ready({
     setPrefill(pre);
     setSection(target);
   }
+  // Admin Control Center Modernization (issue #197): the Command
+  // Palette's "Admin" results navigate here from outside AdminPanel's own
+  // tree - `key` always changes so AdminPanel's effect fires even when
+  // re-picking the same tab.
+  const [pendingAdminTab, setPendingAdminTab] = useState<{ tab: AdminTab; key: number } | null>(null);
+  function openAdminTab(tab: AdminTab) {
+    setSection("admin");
+    setPendingAdminTab({ tab, key: Date.now() });
+  }
   function clearPrefill() {
     setPrefill(null);
   }
@@ -160,6 +169,7 @@ function Ready({
         active={section}
         onNavigate={setSection}
         onOpenSearchResult={(target, id) => navigateTo(target, { openId: id })}
+        onOpenAdminTab={(tab) => openAdminTab(tab as AdminTab)}
         user={user}
         onLogout={onLogout}
         customObjects={customObjects.data ?? []}
@@ -174,13 +184,23 @@ function Ready({
           />
         )}
         {section === "companies" && (
-          <Companies prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+          <Companies
+            prefill={prefill}
+            onPrefillConsumed={clearPrefill}
+            onNavigateTo={navigateTo}
+            onOpenAdminTab={(tab) => openAdminTab(tab as AdminTab)}
+          />
         )}
         {section === "contacts" && (
           <Contacts prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
         )}
         {section === "products" && (
-          <Products prefill={prefill} onPrefillConsumed={clearPrefill} onNavigateTo={navigateTo} />
+          <Products
+            prefill={prefill}
+            onPrefillConsumed={clearPrefill}
+            onNavigateTo={navigateTo}
+            onOpenAdminTab={(tab) => openAdminTab(tab as AdminTab)}
+          />
         )}
         {section === "opportunities" && <Opportunities prefill={prefill} onPrefillConsumed={clearPrefill} />}
         {section === "quotes" && (
@@ -204,8 +224,10 @@ function Ready({
           />
         )}
         {section === "reports" && <Reports isAdmin={user.roles.includes("Administrator")} />}
-        {section === "assistant" && <AssistantPage user={user} />}
-        {section === "admin" && <AdminPanel />}
+        {section === "assistant" && (
+          <AssistantPage user={user} onOpenAdminTab={(tab) => openAdminTab(tab as AdminTab)} />
+        )}
+        {section === "admin" && <AdminPanel openAdminTab={pendingAdminTab} />}
         {section === "account" && <Account user={user} />}
         {activeCustomObject && (
           <CustomObjectRecords definition={activeCustomObject} prefill={prefill} onPrefillConsumed={clearPrefill} />

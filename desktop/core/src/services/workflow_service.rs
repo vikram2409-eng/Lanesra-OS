@@ -49,7 +49,7 @@ use crate::models::workflow::{
     TRIGGER_TYPES,
 };
 use crate::repositories::{
-    ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, company_repo, contract_repo, custom_field_repo, custom_record_repo,
+    ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, audit_repo, company_repo, contract_repo, custom_field_repo, custom_record_repo,
     integration_connection_ref_repo, notification_repo, opportunity_repo, relationship_repo, task_repo, user_repo, workflow_repo,
 };
 use crate::services::{access_service, builtin_field_service, company_service, custom_object_service, custom_record_service, entity_registry, task_service};
@@ -276,6 +276,7 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &WorkflowDefini
     let id = new_uuid();
     let created = workflow_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "workflow_definition", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("workflow"), Some(&created.id), &format!("Created workflow '{}'", created.name), None)?;
     Ok(created)
 }
 
@@ -311,7 +312,9 @@ pub fn update_rule(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate
     // identical snapshot-before-overwrite step for the full rationale.
     let snapshot_json = serde_json::to_string(&existing).expect("WorkflowDefinition is always serializable");
     workflow_repo::insert_version(conn, id, &snapshot_json)?;
-    Ok(workflow_repo::update(conn, id, input, actor_user_id)?)
+    let updated = workflow_repo::update(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("workflow"), Some(id), &format!("Updated workflow '{}'", updated.name), None)?;
+    Ok(updated)
 }
 
 /// Admin UX polish (spec §10) - see business_rule_service::list_versions's
