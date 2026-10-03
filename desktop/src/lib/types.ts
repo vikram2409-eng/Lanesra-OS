@@ -1134,6 +1134,12 @@ export interface BusinessRule {
    * for the full rationale. Purely a "which app's Admin screen shows this
    * by default" tag; evaluation is unaffected either way. */
   app_id: string | null;
+  /** Business Rule Board 2.0: shared by every rule in the same visual
+   * IF/ELSE IF/ELSE chain - null for a standalone rule (every rule from
+   * before this feature, and any rule never linked into a chain). */
+  branch_group_id: string | null;
+  /** "if" (default) | "else_if" | "else" - see `BusinessRuleBranchRole`. */
+  branch_role: BusinessRuleBranchRole;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -1141,6 +1147,13 @@ export interface BusinessRule {
   conditions: BusinessRuleCondition[];
   actions: BusinessRuleAction[];
 }
+
+/** Business Rule Board 2.0: matches core::models::business_rule::
+ * BRANCH_ROLES. Purely a visual-authoring tag except for "else", whose
+ * conditions list is allowed to be empty and - uniquely - always matches
+ * (see business_rule_service::rule_matches's doc comment). */
+export const BUSINESS_RULE_BRANCH_ROLES = ["if", "else_if", "else"] as const;
+export type BusinessRuleBranchRole = (typeof BUSINESS_RULE_BRANCH_ROLES)[number];
 
 export interface BusinessRuleInput {
   entity_type: string;

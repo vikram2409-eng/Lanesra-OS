@@ -554,6 +554,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let version_id: String = arg(args, "versionId")?;
             to_value(business_rule_service::restore_version(conn, &rule_id, &version_id, actor)?)
         }
+        "create_business_rule_branch" => {
+            let rule_id: String = arg(args, "ruleId")?;
+            let role: String = arg(args, "role")?;
+            to_value(business_rule_service::create_rule_branch(conn, &rule_id, &role, actor)?)
+        }
 
         "list_status_transitions" => {
             let entity_type: String = arg(args, "entityType")?;

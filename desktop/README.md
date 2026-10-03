@@ -1098,8 +1098,51 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   demo's Workflow Automation engine has no Execution Graph runtime
   equivalent at all, so a true graph canvas there would mean porting that
   whole runtime to JS first, named honestly as a desktop-only gap rather
-  than faked. Business Rule Board 2.0 and Screen Builder 2.0 (next under
-  epic #190) remain this framework's next real consumers.
+  than faked. Business Rule Board 2.0 (below) is also now shipped; Screen
+  Builder 2.0 (next under epic #190) is this framework's next real
+  consumer.
+- **UX/UI Modernization, Business Rule Board 2.0** (issue #194): unlike
+  Workflow Studio, `BusinessRulesAdmin.tsx` had no canvas of any kind to
+  migrate - every interaction was a dropdown or button inside a plain
+  numbered Conditions/Actions form. This is genuinely new UI over the
+  existing, unchanged rule engine (`domain::conditions::conditions_match`),
+  not a Shared Visual Builder Framework (#192) node-graph consumer - rules
+  stay deterministic and synchronous, so the board is visually
+  distinguished from Workflow Studio's graph canvas rather than reusing it.
+  The numbered form becomes a drag-and-drop IF lane / THEN lane board:
+  dragging reorders whole units (a lone condition, or a whole OR group
+  moving together), matching the issue's own "drag conditions/groups into
+  the IF lane" wording - native HTML5 drag-and-drop, since no reusable
+  list-drag primitive existed anywhere in the desktop frontend (the Shared
+  Visual Builder Framework's own drag hook is for free-form x/y canvas
+  nodes, a different shape entirely). Nested AND/OR condition groups still
+  render as the same bordered visual container `conditionGroups.ts`'s
+  `groupConditionIndices` already computed - no evaluation logic changed.
+  New ELSE IF/ELSE branching links a sibling rule into a visual chain via
+  two purely additive columns (migration `0068_business_rule_board.sql`:
+  nullable `branch_group_id`, `branch_role` defaulting to `"if"`) rather
+  than inventing a second execution path - `business_rule_service::
+  create_rule_branch` creates the linked sibling. The one deliberate,
+  additive evaluation change this issue needed: an `"else"`-role rule is
+  allowed to have zero conditions, and zero conditions always match
+  (`rule_matches`) - scoped to that one business-rules-only wrapper
+  function, so the shared AND/OR matcher Workflow Automation also depends
+  on (`domain::conditions::conditions_match`) is provably untouched.
+  `create_rule_branch` assigns every new sibling a priority lower than
+  everything already in its chain, so the chain's original "if" rule
+  always runs last and wins a field two branches both target - proven by a
+  dedicated priority-ordering regression test
+  (`core/tests/business_rule_board.rs`), not just by construction. A new
+  conflict analyzer (`lib/businessRuleConflicts.ts`) warns when two active
+  rules disagree on the same field's required/visibility/editability state
+  (hide+require, lock+require) - net-new analysis; nothing like it existed
+  before. Also new: 5 starter templates (Conditional Required, Conditional
+  Visibility, Validation, Conditional Choices, Field Lock). The existing
+  Test rule dry-run panel and the live plain-language rule summary are
+  reused in place, re-skinned onto the new board rather than rebuilt.
+  Mirrored in the online demo, including its own drag-and-drop reordering
+  and conflict analyzer banner. Screen Builder 2.0 (next under epic #190)
+  is the single largest remaining build in this epic.
 
 ## What's deferred to a later phase
 

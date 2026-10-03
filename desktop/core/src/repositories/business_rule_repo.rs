@@ -59,6 +59,8 @@ fn map_rule_header(row: &rusqlite::Row) -> rusqlite::Result<BusinessRule> {
         effective_end_date: row.get("effective_end_date")?,
         is_protected: row.get("is_protected")?,
         app_id: row.get("app_id")?,
+        branch_group_id: row.get("branch_group_id")?,
+        branch_role: row.get("branch_role")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -155,6 +157,49 @@ pub fn update(conn: &Connection, id: &str, input: &BusinessRuleUpdate, actor_use
     write_conditions(conn, id, &input.conditions)?;
     write_actions(conn, id, &input.actions)?;
     get(conn, id).map(|r| r.expect("just updated"))
+}
+
+/// Business Rule Board 2.0: inserts a new rule directly linked into an
+/// existing (or brand-new) IF/ELSE IF/ELSE chain - bypasses the ordinary
+/// `create`/`BusinessRuleInput` path since `branch_group_id`/`branch_role`
+/// are never settable through the normal create/edit form, only through
+/// `business_rule_service::create_rule_branch`.
+#[allow(clippy::too_many_arguments)]
+pub fn create_branch(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    entity_type: &str,
+    name: &str,
+    match_type: &str,
+    priority: i64,
+    app_id: Option<&str>,
+    branch_group_id: &str,
+    branch_role: &str,
+    conditions: &[BusinessRuleConditionInput],
+    actions: &[BusinessRuleActionInput],
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<BusinessRule> {
+    let now = now_iso();
+    conn.execute(
+        "INSERT INTO business_rules
+            (id, workspace_id, entity_type, name, description, match_type, priority, is_active,
+             effective_start_date, effective_end_date, is_protected, app_id, branch_group_id, branch_role,
+             created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, 1, NULL, NULL, 0, ?7, ?8, ?9, ?10, ?11, ?10, ?11)",
+        rusqlite::params![id, workspace_id, entity_type, name, match_type, priority, app_id, branch_group_id, branch_role, now, actor_user_id],
+    )?;
+    write_conditions(conn, id, conditions)?;
+    write_actions(conn, id, actions)?;
+    get(conn, id).map(|r| r.expect("just inserted"))
+}
+
+/// Promotes a standalone rule into the head of a new chain - called once,
+/// the first time a sibling is added to a rule that had no
+/// `branch_group_id` yet (see `create_rule_branch`).
+pub fn set_branch_group_id(conn: &Connection, id: &str, branch_group_id: &str) -> rusqlite::Result<()> {
+    conn.execute("UPDATE business_rules SET branch_group_id = ?1 WHERE id = ?2", rusqlite::params![branch_group_id, id])?;
+    Ok(())
 }
 
 /// Admin UX polish (spec §10): bounded version history. Kept per-rule at

@@ -23,8 +23,8 @@ use serde::Serialize;
 use crate::domain::{builtin_fields, AppError, AppResult};
 use crate::models::business_rule::{
     BusinessRule, BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput, BusinessRuleUpdate,
-    BusinessRuleVersion, ACTION_TYPES, CONDITION_OPERATORS, FIELD_TARGETED_ACTIONS, MATCH_TYPES, MESSAGE_ACTIONS,
-    TRIGGER_SOURCES,
+    BusinessRuleVersion, ACTION_TYPES, BRANCH_ROLES, CONDITION_OPERATORS, FIELD_TARGETED_ACTIONS, MATCH_TYPES,
+    MESSAGE_ACTIONS, TRIGGER_SOURCES,
 };
 use crate::repositories::{business_rule_repo, custom_field_repo, relationship_repo};
 use crate::services::{access_service, builtin_field_service, custom_object_service, entity_registry};
@@ -81,8 +81,20 @@ fn related_field_owner_type(conn: &Connection, entity_type: &str, relationship_d
     }
 }
 
-fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str, conditions: &[crate::models::business_rule::BusinessRuleConditionInput]) -> AppResult<()> {
+/// `allow_empty` is true only for a rule whose `branch_role` is "else"
+/// (Business Rule Board 2.0) - every other rule still needs at least one
+/// condition, exactly as before.
+fn validate_conditions(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    conditions: &[crate::models::business_rule::BusinessRuleConditionInput],
+    allow_empty: bool,
+) -> AppResult<()> {
     if conditions.is_empty() {
+        if allow_empty {
+            return Ok(());
+        }
         return Err(AppError::Validation("A rule needs at least one condition".into()));
     }
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
@@ -176,7 +188,7 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
     if !MATCH_TYPES.contains(&input.match_type.as_str()) {
         return Err(AppError::Validation(format!("Invalid match type '{}'", input.match_type)));
     }
-    validate_conditions(conn, workspace_id, entity_type, &input.conditions)?;
+    validate_conditions(conn, workspace_id, entity_type, &input.conditions, false)?;
     validate_actions(conn, workspace_id, entity_type, &input.actions)?;
     require_valid_app_id(conn, workspace_id, input.app_id.as_deref())?;
     Ok(())
@@ -189,6 +201,124 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleIn
     let created = business_rule_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "business_rule", &created.id, actor_user_id)?;
     Ok(created)
+}
+
+/// Business Rule Board 2.0: links a new sibling rule into `parent_rule_id`'s
+/// visual chain (`role` is "else_if" or "else" - never "if", which is what
+/// every standalone rule already is by default). The first time a chain
+/// gains a sibling, the parent is promoted to be its own chain's
+/// `branch_group_id`; every later sibling just joins that same id. Seeds a
+/// sensible, always-valid starting shape so the new rule saves immediately
+/// and the admin edits it in place on the board, rather than returning a
+/// rule that fails its own validation the moment it's created:
+/// - "else_if" gets one condition (same default the board's "+ New rule"
+///   uses: the entity's built-in trigger field, `equals` an empty value)
+///   and the parent's own match_type.
+/// - "else" gets zero conditions - see `rule_matches`'s doc comment for why
+///   that's allowed and what it means.
+/// Both get one default action (`default_branch_action`), since
+/// `validate_actions` requires at least one regardless of branch role.
+pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+    require_admin(conn, actor_user_id)?;
+    if role == "if" || !BRANCH_ROLES.contains(&role) {
+        return Err(AppError::Validation("Branch role must be 'else_if' or 'else'".into()));
+    }
+    let parent = business_rule_repo::get(conn, parent_rule_id)?.ok_or_else(|| AppError::NotFound("Business rule".into()))?;
+    let branch_group_id = match &parent.branch_group_id {
+        Some(g) => g.clone(),
+        None => {
+            business_rule_repo::set_branch_group_id(conn, &parent.id, &parent.id)?;
+            parent.id.clone()
+        }
+    };
+    let (conditions, match_type): (Vec<BusinessRuleConditionInput>, String) = if role == "else" {
+        (Vec::new(), parent.match_type.clone())
+    } else {
+        (
+            vec![BusinessRuleConditionInput {
+                field_source: "builtin".to_string(),
+                field_key: crate::models::business_rule::builtin_trigger_field_for(&parent.entity_type).to_string(),
+                operator: "equals".to_string(),
+                value: String::new(),
+                compare_field_source: None,
+                compare_field_key: None,
+                group_id: None,
+                relationship_definition_id: None,
+            }],
+            parent.match_type.clone(),
+        )
+    };
+    let actions = vec![default_branch_action(conn, &parent.workspace_id, &parent.entity_type)?];
+    let suffix = if role == "else" { "Else" } else { "Else if" };
+    let name = format!("{} — {suffix}", parent.name);
+    // Every new sibling sorts to run *before* every rule already in the
+    // chain, so the chain's original "if" rule - whose own priority never
+    // changes - always ends up running last and winning any tie on a field
+    // more than one branch happens to target ("last matching rule wins",
+    // `evaluate`'s own doc comment). That's what makes the chain actually
+    // read top-to-bottom as if/else-if/else precedence - if's effects beat
+    // an else_if's, which beats a later else_if's, which beats the
+    // catch-all else's - instead of an arbitrary tie that depended on
+    // creation order.
+    let chain_rules = business_rule_repo::list(conn, &parent.workspace_id, &parent.entity_type)?;
+    let chain_min_priority = chain_rules
+        .iter()
+        .filter(|r| r.id == branch_group_id || r.branch_group_id.as_deref() == Some(branch_group_id.as_str()))
+        .map(|r| r.priority)
+        .min()
+        .unwrap_or(parent.priority);
+    let id = crate::domain::ids::new_uuid();
+    let created = business_rule_repo::create_branch(
+        conn,
+        &id,
+        &parent.workspace_id,
+        &parent.entity_type,
+        &name,
+        &match_type,
+        chain_min_priority - 1,
+        parent.app_id.as_deref(),
+        &branch_group_id,
+        role,
+        &conditions,
+        &actions,
+        actor_user_id,
+    )?;
+    super::solution_component_service::tag_local(conn, &parent.workspace_id, "business_rule", &created.id, actor_user_id)?;
+    Ok(created)
+}
+
+/// The same "first active custom field, else first actionable built-in
+/// field, else a non-blocking warning" fallback `BusinessRulesAdmin.tsx`'s
+/// own `emptyAction` already uses for "+ Add action" - kept in sync by hand
+/// since one is a Rust service default and the other a TS form default,
+/// not by sharing code across the language boundary.
+fn default_branch_action(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<BusinessRuleActionInput> {
+    let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
+    if let Some(d) = defs.iter().find(|d| d.is_active) {
+        return Ok(BusinessRuleActionInput {
+            action_type: "require".to_string(),
+            target_field_key: Some(d.key.clone()),
+            target_field_source: "custom".to_string(),
+            action_value: None,
+            message: None,
+        });
+    }
+    if let Some(f) = builtin_fields::builtin_fields_for(entity_type).iter().find(|f| f.actionable) {
+        return Ok(BusinessRuleActionInput {
+            action_type: "require".to_string(),
+            target_field_key: Some(f.key.to_string()),
+            target_field_source: "builtin".to_string(),
+            action_value: None,
+            message: None,
+        });
+    }
+    Ok(BusinessRuleActionInput {
+        action_type: "show_warning".to_string(),
+        target_field_key: None,
+        target_field_source: "custom".to_string(),
+        action_value: None,
+        message: Some("Reminder".to_string()),
+    })
 }
 
 /// Any authenticated user can list active rules (the form needs them to
@@ -216,7 +346,7 @@ pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, acto
     if !MATCH_TYPES.contains(&input.match_type.as_str()) {
         return Err(AppError::Validation(format!("Invalid match type '{}'", input.match_type)));
     }
-    validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions)?;
+    validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions, existing.branch_role == "else")?;
     validate_actions(conn, &existing.workspace_id, &existing.entity_type, &input.actions)?;
     require_valid_app_id(conn, &existing.workspace_id, input.app_id.as_deref())?;
     // Admin UX polish (spec §10): snapshot the pre-edit state before it's
@@ -475,6 +605,16 @@ fn resolve_related_field(
 /// field conditions (if any) may need a different resolved value under the
 /// same field key.
 fn rule_matches(conn: &Connection, entity_type: &str, entity_id: &str, rule: &BusinessRule, ctx: &HashMap<String, String>) -> AppResult<bool> {
+    // Business Rule Board 2.0: an empty conditions list always matches -
+    // the one way to express "else" (run when nothing earlier in this
+    // rule's chain did) without inventing a second, parallel evaluation
+    // path. Only reachable for a `branch_role: "else"` rule created via
+    // `create_rule_branch`; every other rule still requires at least one
+    // condition (`validate_conditions`), so this is a no-op for every rule
+    // that existed before migration 0068.
+    if rule.conditions.is_empty() {
+        return Ok(true);
+    }
     if !rule.conditions.iter().any(|c| c.relationship_definition_id.is_some()) {
         return Ok(crate::domain::conditions::conditions_match(
             &rule.match_type,

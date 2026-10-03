@@ -1,6 +1,17 @@
 use serde::{Deserialize, Serialize};
 
 pub const MATCH_TYPES: &[&str] = &["all", "any"];
+/// Business Rule Board 2.0 (migration 0068): purely a visual-authoring tag,
+/// never read by `conditions_match`/`evaluate` - "if" is the default and
+/// only role every pre-existing rule has. "else_if" is an ordinary rule
+/// with its own conditions, linked for display only. "else" is the one role
+/// `business_rule_service::rule_matches` treats specially: an "else" rule's
+/// conditions list is allowed to be empty, and empty conditions always
+/// match (see that function's doc comment) - the one deliberate, additive
+/// change to evaluation this issue makes, letting "ELSE" mean "run when
+/// nothing else in its chain did" instead of forcing the admin to hand-craft
+/// a literal negation of every sibling condition.
+pub const BRANCH_ROLES: &[&str] = &["if", "else_if", "else"];
 /// Re-exported from `domain::conditions` rather than kept as a second,
 /// hand-copied list - this and `domain::conditions::CONDITION_OPERATORS`
 /// used to be two separately maintained lists of the same 10 operators;
@@ -150,6 +161,15 @@ pub struct BusinessRule {
     /// app's Admin screen shows this by default" tag; evaluation is
     /// unaffected either way.
     pub app_id: Option<String>,
+    /// Business Rule Board 2.0: shared by every rule in the same visual
+    /// IF/ELSE IF/ELSE chain - `None` for a standalone rule (every rule
+    /// created before migration 0068, and any new rule never linked into a
+    /// chain). Set to the chain's first ("if") rule's own id the moment a
+    /// sibling is added via `business_rule_service::create_rule_branch`.
+    pub branch_group_id: Option<String>,
+    /// See `BRANCH_ROLES`'s doc comment. Always "if" unless set by
+    /// `create_rule_branch`.
+    pub branch_role: String,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,

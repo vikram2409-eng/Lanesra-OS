@@ -792,6 +792,180 @@ tr:hover td {
   margin-bottom: 4px;
 }
 
+/* Business Rule Board 2.0 (issue #194): the IF -> THEN lane board that
+   replaces the old numbered-steps form. One .rule-lane-set per rule in a
+   chain (the "if" rule, plus any linked "else_if"/"else" siblings), laid
+   out left to right so branching reads the same way a flowchart would.
+   Drag-and-drop reorders/groups cards within a lane - there's no existing
+   list-drag primitive in this codebase (the Shared Visual Builder
+   Framework's own drag hook is for free-form x/y canvas nodes, a different
+   shape entirely), so this is a small, self-contained native HTML5
+   drag-and-drop implementation scoped to this one screen. */
+.rule-board {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rule-chain {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.rule-lane-set {
+  flex: 0 0 auto;
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rule-lane-set-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rule-branch-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.rule-branch-badge.if {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.rule-branch-badge.else_if {
+  background: var(--warning, #b8860b);
+  color: #fff;
+}
+
+.rule-branch-badge.else {
+  background: var(--text-muted);
+  color: var(--bg);
+}
+
+.rule-lane {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  padding: 12px;
+  min-height: 80px;
+}
+
+.rule-lane-title {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rule-lane-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.rule-lane-card.dragging {
+  opacity: 0.4;
+}
+
+.rule-lane-card .rule-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  padding: 10px 2px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.rule-lane-card .builder-row-card,
+.rule-lane-card .builder-or-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.rule-lane-dropzone {
+  height: 10px;
+  margin: -4px 0;
+  border-radius: 4px;
+}
+
+.rule-lane-dropzone.drop-over {
+  background: var(--accent);
+  opacity: 0.35;
+}
+
+.rule-conflict-banner {
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  font-size: 13px;
+}
+
+.rule-conflict-banner ul {
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+}
+
+.rule-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.rule-template-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--bg-elevated);
+  cursor: pointer;
+  text-align: left;
+}
+
+.rule-template-card:hover {
+  border-color: var(--accent);
+}
+
+.rule-template-card h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+}
+
+.rule-template-card p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.rule-ifthen-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: start;
+}
+
+.rule-ifthen-row > .rule-lane {
+  flex: 1 1 280px;
+}
+
 .legend-item {
   display: flex;
   align-items: center;
@@ -1040,6 +1214,20 @@ tr:hover td {
   background: rgba(79, 124, 255, 0.12);
   border: 1px solid var(--accent);
   color: var(--accent);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+/* Shown until a freshly-created graph has its first edge - the only other
+   cue that nodes need to be manually connected is the small per-node "→"
+   button itself, easy to miss on first use (confirmed by a real user
+   confused that a canvas full of just-added nodes looked "all unrelated"). */
+.graph-hint-banner {
+  background: var(--bg-elevated);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
   border-radius: 8px;
   padding: 6px 10px;
   font-size: 12px;

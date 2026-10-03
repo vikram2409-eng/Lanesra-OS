@@ -109,6 +109,7 @@ pub fn run() {
             commands::business_rule_commands::duplicate_business_rule,
             commands::business_rule_commands::list_business_rule_versions,
             commands::business_rule_commands::restore_business_rule_version,
+            commands::business_rule_commands::create_business_rule_branch,
             commands::status_transition_commands::list_status_transitions,
             commands::status_transition_commands::create_status_transition,
             commands::status_transition_commands::set_status_transition_active,
