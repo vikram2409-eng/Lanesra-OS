@@ -388,9 +388,18 @@ function DefinitionEditForm({
 
   return (
     <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
-      <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
-        Type: <code>{definition.field_type}</code> · Key: <code>{definition.key}</code> (fixed)
-      </p>
+      <div className="builder-header">
+        <div>
+          <div className="builder-breadcrumb">Custom Fields / {definition.label}</div>
+          <div className="builder-title-row">
+            <h2>{definition.label}</h2>
+            <span className={`badge${definition.is_active ? " badge-success" : ""}`}>{definition.is_active ? "Active" : "Inactive"}</span>
+          </div>
+          <p className="builder-subtitle">
+            Type: <code>{definition.field_type}</code> · Key: <code>{definition.key}</code> (fixed)
+          </p>
+        </div>
+      </div>
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

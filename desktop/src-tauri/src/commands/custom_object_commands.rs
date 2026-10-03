@@ -3,7 +3,7 @@ use tauri::State;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::custom_object::{CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
+use lanesra_core::models::custom_object::{CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate, CustomObjectReferenceCounts};
 use lanesra_core::services::custom_object_service;
 
 #[tauri::command]
@@ -35,4 +35,10 @@ pub fn deactivate_custom_object(state: State<AppState>, id: String) -> AppResult
 pub fn delete_custom_object(state: State<AppState>, id: String) -> AppResult<()> {
     let conn = state.conn.lock().unwrap();
     custom_object_service::delete(&conn, &id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn count_custom_object_references(state: State<AppState>, id: String) -> AppResult<CustomObjectReferenceCounts> {
+    let conn = state.conn.lock().unwrap();
+    custom_object_service::count_references(&conn, &id, current_actor(&state).as_deref())
 }

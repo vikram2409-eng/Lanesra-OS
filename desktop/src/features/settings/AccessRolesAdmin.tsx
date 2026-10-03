@@ -232,6 +232,16 @@ function RoleEditForm({ role, onDone, onCancel }: { role: AccessRole; onDone: ()
 
   return (
     <div className="card" style={{ marginBottom: 16, background: "var(--surface-2, transparent)" }}>
+      <div className="builder-header">
+        <div>
+          <div className="builder-breadcrumb">Access Roles / {role.name}</div>
+          <div className="builder-title-row">
+            <h2>{role.name}</h2>
+            {role.is_system && <span className="badge">System</span>}
+          </div>
+          {role.description && <p className="builder-subtitle">{role.description}</p>}
+        </div>
+      </div>
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

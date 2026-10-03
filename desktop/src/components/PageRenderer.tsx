@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 import { useEffectivePage } from "../lib/useEffectivePage";
+import { useIsAdmin } from "../lib/useCurrentUser";
 import type { PageNode } from "../lib/types";
 import { componentDef, isContainerType } from "../features/settings/pageComponentLibrary";
 import { RelatedRecordsCard } from "./RelatedRecordsCard";
@@ -55,6 +56,7 @@ export function PageRenderer({
   recordNumber,
   onEdit,
   onQuickAction,
+  onOpenAdminTab,
 }: {
   entityType: string;
   entityId: string;
@@ -65,8 +67,10 @@ export function PageRenderer({
   recordNumber?: ReactNode;
   onEdit?: () => void;
   onQuickAction?: (targetStatus: string) => void;
+  onOpenAdminTab?: (adminTab: string) => void;
 }) {
   const effective = useEffectivePage(entityType);
+  const isAdmin = useIsAdmin();
   const related = useQuery({
     queryKey: ["relatedRecords", entityType, entityId],
     queryFn: () => api.listRelatedRecords(entityType, entityId),
@@ -82,7 +86,63 @@ export function PageRenderer({
 
   const slots = { recordHeader, statusBadge, owner, recordNumber, onEdit, onQuickAction, fields, relatedCounts, entityType, entityId };
 
-  return <PageGrid nodes={page.root} slots={slots} />;
+  return (
+    <div>
+      {isAdmin && onOpenAdminTab && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <AdminGearMenu onOpenAdminTab={onOpenAdminTab} />
+        </div>
+      )}
+      <PageGrid nodes={page.root} slots={slots} />
+    </div>
+  );
+}
+
+/**
+ * Admin Control Center Modernization (issue #197): a runtime surface's own
+ * cross-link into the admin screen that configures it, mirroring
+ * `CustomObjectsAdmin.tsx`'s cross-link buttons but pointed the other
+ * direction - from a *published* Page back to the tools that built it,
+ * for an admin viewing the live record the way an end user would.
+ */
+const ADMIN_GEAR_LINKS: { label: string; tab: string }[] = [
+  { label: "Edit Page", tab: "pageBuilder" },
+  { label: "Manage Fields", tab: "fields" },
+  { label: "Business Rules", tab: "rules" },
+  { label: "Workflows", tab: "workflow" },
+  { label: "Access", tab: "accessRoles" },
+];
+
+function AdminGearMenu({ onOpenAdminTab }: { onOpenAdminTab: (adminTab: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button className="btn" title="Admin: jump to this page's configuration" onClick={() => setOpen((v) => !v)}>
+        ⚙
+      </button>
+      {open && (
+        <div
+          className="card"
+          style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", width: 180, zIndex: 20, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
+          onMouseLeave={() => setOpen(false)}
+        >
+          {ADMIN_GEAR_LINKS.map((l) => (
+            <button
+              key={l.tab}
+              className="link-button"
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "4px 0" }}
+              onClick={() => {
+                setOpen(false);
+                onOpenAdminTab(l.tab);
+              }}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Slots = {

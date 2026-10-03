@@ -580,6 +580,58 @@ export interface AuditEvent {
   details_json: string | null;
 }
 
+// Admin Control Center Modernization (issue #197) -------------------------
+
+export interface SetupProgress {
+  has_additional_users: boolean;
+  has_custom_access_roles: boolean;
+  has_data_model: boolean;
+  has_published_app: boolean;
+  has_automation: boolean;
+  has_integration: boolean;
+  has_backup: boolean;
+}
+
+export interface NeedsAttentionItem {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface PlatformHealth {
+  integration_connections_failed: number;
+  integration_jobs_running: number;
+  integration_jobs_failed_today: number;
+  workflow_runs_failed_today: number;
+  agent_runs_failed_today: number;
+  unpublished_items: number;
+  last_backup_at: string | null;
+}
+
+export interface AdminHomeSummary {
+  setup_progress: SetupProgress;
+  needs_attention: NeedsAttentionItem[];
+  platform_health: PlatformHealth;
+}
+
+export interface AdminSearchResult {
+  category: string;
+  entity_id: string;
+  title: string;
+  subtitle: string | null;
+  admin_tab: string;
+}
+
+export interface AdminNavItem {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  admin_tab: string;
+  label: string;
+  is_pinned: boolean;
+  last_viewed_at: string;
+}
+
 export const CONTRACT_STATUSES = [
   "Draft",
   "Under Review",
@@ -1510,6 +1562,16 @@ export interface CustomObjectDefinition {
   ownership_mode: OwnershipMode;
   created_at: string;
   updated_at: string;
+}
+
+// Admin Control Center Modernization (issue #197): impact analysis before
+// deleting/deactivating an object - see custom_object_service::count_references.
+export interface CustomObjectReferenceCounts {
+  business_rules: number;
+  workflows: number;
+  screen_layouts: number;
+  page_layouts: number;
+  relationships: number;
 }
 
 export interface CustomObjectDefinitionInput {

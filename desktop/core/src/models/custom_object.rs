@@ -28,6 +28,26 @@ pub struct CustomObjectDefinition {
     pub updated_at: String,
 }
 
+/// Admin Control Center Modernization (issue #197): "impact analysis
+/// before deleting/deactivating a field/object referenced elsewhere" -
+/// what else, besides its own live records, points at this object by its
+/// `key` (== `entity_type` everywhere else in this codebase). See
+/// `custom_object_service::count_references`.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct CustomObjectReferenceCounts {
+    pub business_rules: i64,
+    pub workflows: i64,
+    pub screen_layouts: i64,
+    pub page_layouts: i64,
+    pub relationships: i64,
+}
+
+impl CustomObjectReferenceCounts {
+    pub fn total(&self) -> i64 {
+        self.business_rules + self.workflows + self.screen_layouts + self.page_layouts + self.relationships
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomObjectDefinitionInput {
     pub singular_label: String,

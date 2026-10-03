@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -67,7 +67,7 @@ function resizeImageToPngBase64(file: File): Promise<string> {
   });
 }
 
-type AdminTab =
+export type AdminTab =
   | "users"
   | "organization"
   | "orgUnits"
@@ -136,6 +136,167 @@ function tabLabel(key: AdminTab): string {
   return ADMIN_TABS.find((t) => t.key === key)?.label ?? key;
 }
 
+// Admin Control Center Modernization (issue #197): the Setup Progress
+// checklist's own items, each a plain label plus the SetupProgress flag
+// that marks it done - a thin presentation layer over
+// `admin_home_service::get_summary`'s real aggregates, not a second
+// source of truth.
+const SETUP_PROGRESS_ITEMS: { key: keyof import("../../lib/types").SetupProgress; label: string }[] = [
+  { key: "has_additional_users", label: "Invite your team" },
+  { key: "has_custom_access_roles", label: "Create an Access Role" },
+  { key: "has_data_model", label: "Define a Custom Object" },
+  { key: "has_published_app", label: "Publish an App" },
+  { key: "has_automation", label: "Add a Business Rule or Workflow" },
+  { key: "has_integration", label: "Connect an Integration" },
+  { key: "has_backup", label: "Take a backup" },
+];
+
+/**
+ * Admin Control Center Modernization (issue #197): everything the landing
+ * page shows above the existing category grid - a Setup Progress
+ * checklist (hides itself once every item is done, since it's only
+ * useful for a first-time workspace), a Needs Attention panel (hidden
+ * when empty - a clean workspace shows no panel, not an empty one),
+ * Platform Health chips (same KPI-chip pattern `IntegrationHubAdmin.tsx`'s
+ * own Overview tab already established), a Recent Changes feed reading
+ * the same `audit_events` table every entity's own history already uses
+ * (see `audit_service::list_recent`), and Recently Viewed/Pinned admin
+ * items. All client-computed/read from real aggregates - nothing here
+ * invents a parallel status model.
+ */
+function AdminHomeExtras({ onOpenTab }: { onOpenTab: (key: AdminTab) => void }) {
+  const summary = useQuery({ queryKey: ["adminHomeSummary"], queryFn: () => api.getAdminHomeSummary() });
+  const recentChanges = useQuery({ queryKey: ["recentAuditEvents"], queryFn: () => api.listRecentAuditEvents(8) });
+  const recentVisits = useQuery({ queryKey: ["recentAdminVisits"], queryFn: () => api.listRecentAdminVisits() });
+  const pinned = useQuery({ queryKey: ["pinnedAdminItems"], queryFn: () => api.listPinnedAdminItems() });
+  const queryClient = useQueryClient();
+
+  const togglePin = useMutation({
+    mutationFn: ({ adminTab, pinned }: { adminTab: string; pinned: boolean }) => api.setAdminPinned(adminTab, pinned),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recentAdminVisits"] });
+      queryClient.invalidateQueries({ queryKey: ["pinnedAdminItems"] });
+    },
+  });
+
+  const s = summary.data;
+  const setupDone = s ? SETUP_PROGRESS_ITEMS.every((item) => s.setup_progress[item.key]) : true;
+  const kpi = (label: string, value: number | undefined, danger?: boolean) => (
+    <div className="card" style={{ textAlign: "center", padding: "10px 6px" }}>
+      <div style={{ fontSize: 22, fontWeight: 600, color: danger && value ? "var(--danger, #c0392b)" : undefined }}>{value ?? "—"}</div>
+      <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{label}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "grid", gap: 14, marginBottom: 18 }}>
+      {s && !setupDone && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Setup Progress</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 6 }}>
+            {SETUP_PROGRESS_ITEMS.map((item) => (
+              <div key={item.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <span style={{ color: s.setup_progress[item.key] ? "var(--success, #16a34a)" : "var(--text-muted)" }}>
+                  {s.setup_progress[item.key] ? "✓" : "○"}
+                </span>
+                <span style={{ textDecoration: s.setup_progress[item.key] ? "line-through" : undefined, color: s.setup_progress[item.key] ? "var(--text-muted)" : undefined }}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {s && s.needs_attention.length > 0 && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Needs Attention</h3>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {s.needs_attention.map((item) => (
+              <li key={item.key} style={{ fontSize: 13, marginBottom: 4 }}>
+                {item.label}
+                {item.count > 1 ? ` (${item.count})` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {s && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Platform Health</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+            {kpi("Integration connections failing", s.platform_health.integration_connections_failed, true)}
+            {kpi("Integration jobs running", s.platform_health.integration_jobs_running)}
+            {kpi("Jobs failed today", s.platform_health.integration_jobs_failed_today, true)}
+            {kpi("Workflow runs failed today", s.platform_health.workflow_runs_failed_today, true)}
+            {kpi("Agent/team runs failed today", s.platform_health.agent_runs_failed_today, true)}
+            {kpi("Unpublished items", s.platform_health.unpublished_items)}
+          </div>
+          <p style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 0, marginTop: 8 }}>
+            {s.platform_health.last_backup_at ? `Last backup: ${new Date(s.platform_health.last_backup_at).toLocaleString()}` : "No backup has ever been taken"}
+          </p>
+        </div>
+      )}
+
+      {((pinned.data && pinned.data.length > 0) || (recentVisits.data && recentVisits.data.length > 0) || (recentChanges.data && recentChanges.data.length > 0)) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+          {((pinned.data && pinned.data.length > 0) || (recentVisits.data && recentVisits.data.length > 0)) && (
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Recently Viewed &amp; Pinned</h3>
+              {pinned.data && pinned.data.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  {pinned.data.map((item) => (
+                    <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button className="link-button" onClick={() => onOpenTab(item.admin_tab as AdminTab)}>
+                        {item.label}
+                      </button>
+                      <button
+                        className="icon-btn"
+                        title="Unpin"
+                        onClick={() => togglePin.mutate({ adminTab: item.admin_tab, pinned: false })}
+                      >
+                        ★
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {recentVisits.data?.map((item) => (
+                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button className="link-button" onClick={() => onOpenTab(item.admin_tab as AdminTab)}>
+                    {item.label}
+                  </button>
+                  <button
+                    className="icon-btn"
+                    title="Pin"
+                    onClick={() => togglePin.mutate({ adminTab: item.admin_tab, pinned: true })}
+                  >
+                    ☆
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {recentChanges.data && recentChanges.data.length > 0 && (
+            <div className="card">
+              <h3 style={{ marginTop: 0 }}>Recent Changes</h3>
+              {recentChanges.data.map((e) => (
+                <div key={e.id} style={{ fontSize: 12, marginBottom: 6, color: "var(--text-muted)" }}>
+                  <span>{e.summary}</span>
+                  <br />
+                  <span>{new Date(e.occurred_at).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Groups the same tabs above into named categories for the landing page
 // below - purely a presentation grouping, the tab keys and their screens
 // are unchanged (Deployment Management and Integration Hub are the two new
@@ -198,7 +359,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
  * always starts on the landing page, the same as Setup always reopening
  * Setup Home in Salesforce.
  */
-export function AdminPanel() {
+export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; key: number } | null } = {}) {
   const [view, setView] = useState<"landing" | "tool">("landing");
   const [tab, setTab] = useState<AdminTab>("users");
   // Set only by openHelpTopic below (a deep link into a specific Help
@@ -217,6 +378,9 @@ export function AdminPanel() {
     setHelpTopicSlug(null);
     setTab(key);
     setView("tool");
+    // Admin Control Center Modernization (issue #197): best-effort,
+    // fire-and-forget - a failed write here should never block navigation.
+    api.recordAdminVisit(key, tabLabel(key)).catch(() => {});
   }
 
   function openHelpTopic(slug: string) {
@@ -224,6 +388,16 @@ export function AdminPanel() {
     setTab("help");
     setView("tool");
   }
+
+  // Admin Control Center Modernization (issue #197): the Command
+  // Palette's "Admin" results open a specific tab from outside this
+  // component's own tree - `openAdminTab`'s `key` changes on every pick
+  // (even re-picking the same tab) so this effect always fires, unlike
+  // keying only on `tab` which wouldn't retrigger for an identical value.
+  useEffect(() => {
+    if (openAdminTab) openTab(openAdminTab.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openAdminTab?.key]);
 
   if (view === "landing") {
     return (
@@ -234,6 +408,7 @@ export function AdminPanel() {
           objects, relationships, custom fields, screen layouts, apps, business rules, workflow automation, status
           transitions, number formats and Dashboard KPIs.
         </p>
+        <AdminHomeExtras onOpenTab={openTab} />
         <div className="admin-landing-grid">
           {ADMIN_CATEGORIES.map((cat) => (
             <div key={cat.key} className="admin-cat-card">
@@ -284,7 +459,7 @@ export function AdminPanel() {
       )}
       {tab === "profile" && !workspace.data && <p>Loading...</p>}
 
-      {tab === "objects" && <CustomObjectsAdmin onOpenHelp={openHelpTopic} />}
+      {tab === "objects" && <CustomObjectsAdmin onOpenHelp={openHelpTopic} onOpenTab={(t) => openTab(t as AdminTab)} />}
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}

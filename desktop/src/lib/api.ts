@@ -69,6 +69,9 @@ import type {
   AppPermission,
   AppPermissionInput,
   AuditEvent,
+  AdminHomeSummary,
+  AdminSearchResult,
+  AdminNavItem,
   BackupManifest,
   BackupPackage,
   ChangeOwnPassword,
@@ -140,6 +143,7 @@ import type {
   CustomFieldDefinitionUpdate,
   CustomFieldValues,
   CustomObjectDefinition,
+  CustomObjectReferenceCounts,
   CustomObjectDefinitionInput,
   CustomObjectDefinitionUpdate,
   CustomRecord,
@@ -591,6 +595,14 @@ export const api = {
   globalSearch: (query: string) => call<SearchResult[]>("global_search", { query }),
   listAuditEvents: (entityType: string, entityId: string) =>
     call<AuditEvent[]>("list_audit_events", { entityType, entityId }),
+  listRecentAuditEvents: (limit: number) => call<AuditEvent[]>("list_recent_audit_events", { limit }),
+
+  getAdminHomeSummary: () => call<AdminHomeSummary>("get_admin_home_summary"),
+  adminSearch: (query: string) => call<AdminSearchResult[]>("admin_search", { query }),
+  recordAdminVisit: (adminTab: string, label: string) => call<void>("record_admin_visit", { adminTab, label }),
+  setAdminPinned: (adminTab: string, pinned: boolean) => call<void>("set_admin_pinned", { adminTab, pinned }),
+  listRecentAdminVisits: () => call<AdminNavItem[]>("list_recent_admin_visits"),
+  listPinnedAdminItems: () => call<AdminNavItem[]>("list_pinned_admin_items"),
 
   logActivity: (input: ActivityInput) => call<Activity>("log_activity", { input }),
   listActivities: (entityType: string, entityId: string) =>
@@ -707,6 +719,7 @@ export const api = {
     call<CustomObjectDefinition>("update_custom_object", { id, input }),
   deactivateCustomObject: (id: string) => call<CustomObjectDefinition>("deactivate_custom_object", { id }),
   deleteCustomObject: (id: string) => call<void>("delete_custom_object", { id }),
+  countCustomObjectReferences: (id: string) => call<CustomObjectReferenceCounts>("count_custom_object_references", { id }),
 
   // Enterprise Access Foundation, Phase 1: Organization, Organization
   // Units, Work Teams, Record Ownership (spec §1-2).

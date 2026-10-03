@@ -32,6 +32,20 @@ pub fn record(
     Ok(())
 }
 
+fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AuditEvent> {
+    Ok(AuditEvent {
+        id: row.get("id")?,
+        workspace_id: row.get("workspace_id")?,
+        occurred_at: row.get("occurred_at")?,
+        user_id: row.get("user_id")?,
+        event_type: row.get("event_type")?,
+        entity_type: row.get("entity_type")?,
+        entity_id: row.get("entity_id")?,
+        summary: row.get("summary")?,
+        details_json: row.get("details_json")?,
+    })
+}
+
 pub fn list_for_entity(
     conn: &Connection,
     entity_type: &str,
@@ -40,18 +54,16 @@ pub fn list_for_entity(
     let mut stmt = conn.prepare(
         "SELECT * FROM audit_events WHERE entity_type = ?1 AND entity_id = ?2 ORDER BY occurred_at DESC",
     )?;
-    let rows = stmt.query_map((entity_type, entity_id), |row| {
-        Ok(AuditEvent {
-            id: row.get("id")?,
-            workspace_id: row.get("workspace_id")?,
-            occurred_at: row.get("occurred_at")?,
-            user_id: row.get("user_id")?,
-            event_type: row.get("event_type")?,
-            entity_type: row.get("entity_type")?,
-            entity_id: row.get("entity_id")?,
-            summary: row.get("summary")?,
-            details_json: row.get("details_json")?,
-        })
-    })?;
+    let rows = stmt.query_map((entity_type, entity_id), map_row)?;
+    rows.collect()
+}
+
+/// Admin Control Center Modernization (issue #197): the "Recent Changes"
+/// panel's own feed - every admin-domain change across the whole
+/// workspace, newest first, not scoped to one entity like
+/// `list_for_entity` above.
+pub fn list_recent(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<AuditEvent>> {
+    let mut stmt = conn.prepare("SELECT * FROM audit_events WHERE workspace_id = ?1 ORDER BY occurred_at DESC LIMIT ?2")?;
+    let rows = stmt.query_map(rusqlite::params![workspace_id, limit], map_row)?;
     rows.collect()
 }

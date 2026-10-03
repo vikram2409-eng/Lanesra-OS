@@ -12,8 +12,8 @@ use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::CUSTOM_FIELD_ENTITY_TYPES;
-use crate::models::custom_object::{CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
-use crate::repositories::{custom_object_repo, custom_record_repo};
+use crate::models::custom_object::{CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate, CustomObjectReferenceCounts};
+use crate::repositories::{audit_repo, custom_object_repo, custom_record_repo};
 use crate::services::access_service;
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
@@ -108,6 +108,7 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &CustomObjectDefinit
     let id = crate::domain::ids::new_uuid();
     let created = custom_object_repo::create(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "custom_object", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_object"), Some(&created.id), &format!("Created custom object '{}'", created.plural_label), None)?;
     Ok(created)
 }
 
@@ -176,7 +177,9 @@ pub fn update(conn: &Connection, id: &str, input: &CustomObjectDefinitionUpdate,
     if !(1..=10).contains(&input.digits) {
         return Err(AppError::Validation("Digit width must be between 1 and 10".into()));
     }
-    Ok(custom_object_repo::update(conn, id, input, actor_user_id)?)
+    let updated = custom_object_repo::update(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, &updated.workspace_id, actor_user_id, "update", Some("custom_object"), Some(id), &format!("Updated custom object '{}'", updated.plural_label), None)?;
+    Ok(updated)
 }
 
 /// Enterprise Access Foundation, Phase 1: change a Custom Object's
@@ -196,6 +199,8 @@ pub fn set_ownership_mode(conn: &Connection, id: &str, ownership_mode: &str, act
 pub fn deactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomObjectDefinition> {
     require_admin(conn, actor_user_id)?;
     let existing = custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
+    let plural_label = existing.plural_label.clone();
+    let workspace_id = existing.workspace_id.clone();
     let update = CustomObjectDefinitionUpdate {
         singular_label: existing.singular_label,
         plural_label: existing.plural_label,
@@ -204,12 +209,42 @@ pub fn deactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> A
         digits: existing.digits,
         is_active: false,
     };
-    Ok(custom_object_repo::update(conn, id, &update, actor_user_id)?)
+    let updated = custom_object_repo::update(conn, id, &update, actor_user_id)?;
+    audit_repo::record(conn, &workspace_id, actor_user_id, "deactivate", Some("custom_object"), Some(id), &format!("Deactivated custom object '{plural_label}'"), None)?;
+    Ok(updated)
+}
+
+/// Admin Control Center Modernization (issue #197): "impact analysis
+/// before deleting/deactivating a field/object referenced elsewhere" -
+/// what, besides live records (already checked separately by `delete`),
+/// points at this object by its `key`/`entity_type`. A real count query
+/// per domain, same "a handful of `conn.query_row` aggregates" convention
+/// `admin_home_service::get_summary` already uses, extending the single
+/// narrower "N dependents" precedent `connection_service::delete` already
+/// established for Integration Hub Connections.
+pub fn count_references(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomObjectReferenceCounts> {
+    require_admin(conn, actor_user_id)?;
+    let existing = custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
+    let ws = &existing.workspace_id;
+    let key = &existing.key;
+    let business_rules: i64 = conn.query_row("SELECT COUNT(*) FROM business_rules WHERE workspace_id = ?1 AND entity_type = ?2 AND is_active = 1", rusqlite::params![ws, key], |r| r.get(0))?;
+    let workflows: i64 = conn.query_row("SELECT COUNT(*) FROM workflow_definitions WHERE workspace_id = ?1 AND entity_type = ?2 AND is_active = 1", rusqlite::params![ws, key], |r| r.get(0))?;
+    let screen_layouts: i64 = conn.query_row("SELECT COUNT(*) FROM screen_layouts WHERE workspace_id = ?1 AND entity_type = ?2", rusqlite::params![ws, key], |r| r.get(0))?;
+    let page_layouts: i64 = conn.query_row("SELECT COUNT(*) FROM page_layouts WHERE workspace_id = ?1 AND entity_type = ?2", rusqlite::params![ws, key], |r| r.get(0))?;
+    let relationships: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM relationship_definitions WHERE workspace_id = ?1 AND is_active = 1 AND (source_entity_type = ?2 OR target_entity_type = ?2)",
+        rusqlite::params![ws, key],
+        |r| r.get(0),
+    )?;
+    Ok(CustomObjectReferenceCounts { business_rules, workflows, screen_layouts, page_layouts, relationships })
 }
 
 /// Hard-deletes an object definition. Blocked while any record - active or
 /// archived - still exists (ADM-CO-10): the admin's own guarded path is
 /// archiving or deleting every record first, not an automatic cascade.
+/// Also blocked while any business rule/workflow/screen/page/relationship
+/// still references this object - see `count_references`'s own doc
+/// comment; deactivating instead keeps all of those working unchanged.
 pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     let existing = custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
@@ -221,5 +256,21 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
             remaining.len()
         )));
     }
-    Ok(custom_object_repo::delete(conn, id)?)
+    let refs = count_references(conn, id, actor_user_id)?;
+    if refs.total() > 0 {
+        let mut parts = Vec::new();
+        if refs.business_rules > 0 { parts.push(format!("{} business rule(s)", refs.business_rules)); }
+        if refs.workflows > 0 { parts.push(format!("{} workflow(s)", refs.workflows)); }
+        if refs.screen_layouts > 0 { parts.push(format!("{} screen layout(s)", refs.screen_layouts)); }
+        if refs.page_layouts > 0 { parts.push(format!("{} page(s)", refs.page_layouts)); }
+        if refs.relationships > 0 { parts.push(format!("{} relationship(s)", refs.relationships)); }
+        return Err(AppError::Validation(format!(
+            "Cannot delete '{}' - still referenced by {}. Remove those references first, or deactivate the object instead.",
+            existing.plural_label,
+            parts.join(", ")
+        )));
+    }
+    custom_object_repo::delete(conn, id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "delete", Some("custom_object"), Some(id), &format!("Deleted custom object '{}'", existing.plural_label), None)?;
+    Ok(())
 }

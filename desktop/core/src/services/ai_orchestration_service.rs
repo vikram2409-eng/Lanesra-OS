@@ -23,7 +23,7 @@ use rusqlite::Connection;
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent_pipeline::{AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentTrigger, AiAgentTriggerInput, PIPELINE_TOPOLOGIES, TRIGGER_TARGET_TYPES, TRIGGER_TYPES};
-use crate::repositories::{ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, ai_agent_run_repo};
+use crate::repositories::{ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, ai_agent_run_repo, audit_repo};
 use crate::services::chat_service;
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -85,14 +85,18 @@ pub fn create_pipeline(conn: &Connection, workspace_id: &str, input: &AiAgentPip
     require_admin(conn, actor_user_id)?;
     validate_pipeline_input(conn, workspace_id, input)?;
     let id = new_uuid();
-    Ok(ai_agent_pipeline_repo::create(conn, &id, workspace_id, input, actor_user_id)?)
+    let created = ai_agent_pipeline_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("ai_agent_pipeline"), Some(&created.id), &format!("Created AI agent pipeline '{}'", created.name), None)?;
+    Ok(created)
 }
 
 pub fn update_pipeline(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentPipelineInput, actor_user_id: Option<&str>) -> AppResult<AiAgentPipeline> {
     require_admin(conn, actor_user_id)?;
     ai_agent_pipeline_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
     validate_pipeline_input(conn, workspace_id, input)?;
-    Ok(ai_agent_pipeline_repo::update(conn, id, input, actor_user_id)?)
+    let updated = ai_agent_pipeline_repo::update(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("ai_agent_pipeline"), Some(id), &format!("Updated AI agent pipeline '{}'", updated.name), None)?;
+    Ok(updated)
 }
 
 pub fn get_pipeline(conn: &Connection, id: &str) -> AppResult<Option<AiAgentPipeline>> {

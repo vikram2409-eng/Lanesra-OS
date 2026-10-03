@@ -1,5 +1,6 @@
 pub mod access_role_repo;
 pub mod activity_repo;
+pub mod admin_nav_repo;
 pub mod ai_agent_pending_run_repo;
 pub mod ai_agent_pipeline_repo;
 pub mod ai_agent_policy_repo;

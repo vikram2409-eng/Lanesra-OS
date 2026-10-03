@@ -75,6 +75,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (68, include_str!("migrations/0068_business_rule_board.sql")),
     (69, include_str!("migrations/0069_screen_builder_v2.sql")),
     (70, include_str!("migrations/0070_page_templates.sql")),
+    (71, include_str!("migrations/0071_admin_nav_history.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -138,7 +139,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 70);
+        assert_eq!(version, 71);
 
         let table_count: i64 = conn
             .query_row(

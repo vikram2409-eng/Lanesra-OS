@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use crate::domain::{AppError, AppResult};
 use crate::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiSkill, AiSkillInput};
-use crate::repositories::{ai_agent_repo, ai_provider_repo, ai_token_usage_repo};
+use crate::repositories::{ai_agent_repo, ai_provider_repo, ai_token_usage_repo, audit_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -105,6 +105,7 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor
     // install's own retag pass corrects this afterward for an agent that
     // came from a package instead of an admin's own hand.
     super::solution_component_service::tag_local(conn, workspace_id, "ai_agent", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("ai_agent"), Some(&created.id), &format!("Created AI agent '{}'", created.name), None)?;
     Ok(ai_agent_repo::get(conn, &created.id)?.expect("just created"))
 }
 
@@ -112,7 +113,9 @@ pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentIn
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     validate_agent_input(conn, workspace_id, Some(id), input)?;
-    Ok(ai_agent_repo::update(conn, id, input, actor_user_id)?)
+    let updated = ai_agent_repo::update(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("ai_agent"), Some(id), &format!("Updated AI agent '{}'", updated.name), None)?;
+    Ok(updated)
 }
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<Option<AiAgentDefinition>> {
@@ -235,14 +238,17 @@ pub fn create_skill(conn: &Connection, workspace_id: &str, input: &AiSkillInput,
     let id = crate::domain::ids::new_uuid();
     let created = ai_agent_repo::create_skill(conn, &id, workspace_id, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "ai_skill", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("ai_skill"), Some(&created.id), &format!("Created AI skill '{}'", created.name), None)?;
     Ok(created)
 }
 
 pub fn update_skill(conn: &Connection, id: &str, input: &AiSkillInput, actor_user_id: Option<&str>) -> AppResult<AiSkill> {
     require_admin(conn, actor_user_id)?;
-    ai_agent_repo::get_skill(conn, id)?.ok_or_else(|| AppError::NotFound("Skill".into()))?;
+    let existing = ai_agent_repo::get_skill(conn, id)?.ok_or_else(|| AppError::NotFound("Skill".into()))?;
     validate_skill_input(input)?;
-    Ok(ai_agent_repo::update_skill(conn, id, input, actor_user_id)?)
+    let updated = ai_agent_repo::update_skill(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("ai_skill"), Some(id), &format!("Updated AI skill '{}'", updated.name), None)?;
+    Ok(updated)
 }
 
 pub fn list_skills(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResult<Vec<AiSkill>> {

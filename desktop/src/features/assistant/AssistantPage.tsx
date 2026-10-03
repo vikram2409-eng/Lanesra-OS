@@ -12,7 +12,7 @@ import type { User } from "../../lib/types";
 // assistant - unchanged otherwise. `agentUsableBy` mirrors
 // chat_service::agent_requires_admin client-side so an admin-only agent
 // never even shows for a non-admin (the server re-checks regardless).
-export function AssistantPage({ user }: { user: User }) {
+export function AssistantPage({ user, onOpenAdminTab }: { user: User; onOpenAdminTab?: (adminTab: string) => void }) {
   const isAdmin = user.roles.includes("Administrator");
   const agentsQuery = useQuery({ queryKey: ["aiAgents", "picker"], queryFn: () => api.listAiAgents(true) });
   const usableAgents = (agentsQuery.data ?? []).filter((a) => agentUsableBy(a, isAdmin));
@@ -37,7 +37,11 @@ export function AssistantPage({ user }: { user: User }) {
           </label>
         )}
       </div>
-      {selectedAgent ? <ChatPanel agentId={selectedAgent.id} /> : <ChatPanel mode="records" />}
+      {selectedAgent ? (
+        <ChatPanel agentId={selectedAgent.id} onOpenAdminTab={onOpenAdminTab} />
+      ) : (
+        <ChatPanel mode="records" />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
+import { useIsAdmin } from "../lib/useCurrentUser";
 import type { ChatMessage, ChatMode } from "../lib/types";
 
 // AI & Agentic Layer, Phase 5: the reusable chat UI for both the
@@ -77,11 +78,12 @@ function ToolCallLine({ name, result }: { name: string; result?: string }) {
 
 export type ChatTarget = { mode: ChatMode } | { agentId: string };
 
-export function ChatPanel(target: ChatTarget) {
+export function ChatPanel(target: ChatTarget & { onOpenAdminTab?: (adminTab: string) => void }) {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isAdmin = useIsAdmin();
 
   const isAgent = "agentId" in target;
   const mode: ChatMode | "agent" = isAgent ? "agent" : target.mode;
@@ -118,6 +120,13 @@ export function ChatPanel(target: ChatTarget) {
 
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", height: "70vh" }}>
+      {isAgent && isAdmin && target.onOpenAdminTab && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+          <button className="link-button" style={{ fontSize: 12 }} onClick={() => target.onOpenAdminTab?.("aiAgents")}>
+            ⚙ Open in Agent Studio (definition, policy, toolbox & trace)
+          </button>
+        </div>
+      )}
       <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 4 }}>
         {history.isLoading && <p style={{ color: "var(--text-muted)" }}>Loading...</p>}
         {!history.isLoading && messages.length === 0 && (

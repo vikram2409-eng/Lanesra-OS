@@ -15,7 +15,7 @@ use crate::models::custom_field::{
     CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues, CUSTOM_FIELD_TYPES,
 };
 use crate::repositories::{
-    company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
+    audit_repo, company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
     product_repo, quote_repo, task_repo,
 };
 use crate::services::{access_service, builtin_field_service, business_rule_service, workflow_service};
@@ -238,6 +238,7 @@ pub fn create_definition(
     let id = crate::domain::ids::new_uuid();
     let created = custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created custom field '{}'", created.label), None)?;
     Ok(created)
 }
 
@@ -273,6 +274,7 @@ pub fn create_definition_with_key(
     let id = crate::domain::ids::new_uuid();
     let created = custom_field_repo::create_definition(conn, &id, workspace_id, key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created custom field '{}'", created.label), None)?;
     Ok(created)
 }
 
@@ -305,12 +307,16 @@ pub fn update_definition(
         &existing.field_type, &input.options, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length,
         input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
     )?;
-    Ok(custom_field_repo::update_definition(conn, id, input, actor_user_id)?)
+    let updated = custom_field_repo::update_definition(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("custom_field"), Some(id), &format!("Updated custom field '{}'", input.label), None)?;
+    Ok(updated)
 }
 
 pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
     let existing = custom_field_repo::get_definition(conn, id)?.ok_or_else(|| AppError::NotFound("Custom field".into()))?;
+    let label = existing.label.clone();
+    let workspace_id = existing.workspace_id.clone();
     let update = CustomFieldDefinitionUpdate {
         label: existing.label,
         options: existing.options,
@@ -331,7 +337,9 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
         placeholder: existing.placeholder,
         is_hidden_by_default: existing.is_hidden_by_default,
     };
-    Ok(custom_field_repo::update_definition(conn, id, &update, actor_user_id)?)
+    let updated = custom_field_repo::update_definition(conn, id, &update, actor_user_id)?;
+    audit_repo::record(conn, &workspace_id, actor_user_id, "deactivate", Some("custom_field"), Some(id), &format!("Deactivated custom field '{label}'"), None)?;
+    Ok(updated)
 }
 
 /// Admin UX polish (spec §10): the query half of the dependency-warning

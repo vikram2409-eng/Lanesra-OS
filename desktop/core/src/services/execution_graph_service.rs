@@ -35,7 +35,7 @@ use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput};
 use crate::models::ai_agent_pipeline::AiAgentPipeline;
 use crate::models::execution_graph::{is_single_unconditional_outgoing, ExecutionGraph, ExecutionGraphInput, GraphEdgeInput, GraphNodeInput, NODE_TYPES};
 use crate::models::workflow::WorkflowDefinition;
-use crate::repositories::execution_graph_repo;
+use crate::repositories::{audit_repo, execution_graph_repo};
 use crate::services::ai_agent_service;
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -77,7 +77,9 @@ fn validate_input(input: &ExecutionGraphInput) -> AppResult<()> {
 pub fn create(conn: &Connection, workspace_id: &str, input: &ExecutionGraphInput, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
     require_admin(conn, actor_user_id)?;
     validate_input(input)?;
-    Ok(execution_graph_repo::create(conn, &crate::domain::ids::new_uuid(), workspace_id, input, actor_user_id)?)
+    let created = execution_graph_repo::create(conn, &crate::domain::ids::new_uuid(), workspace_id, input, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("execution_graph"), Some(&created.id), &format!("Created execution graph '{}'", created.name), None)?;
+    Ok(created)
 }
 
 fn get_owned(conn: &Connection, id: &str, workspace_id: &str) -> AppResult<ExecutionGraph> {
@@ -109,7 +111,9 @@ pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &Execution
         return Err(AppError::Validation("only a draft graph can be edited - disable it and create a new version instead".into()));
     }
     validate_input(input)?;
-    Ok(execution_graph_repo::update(conn, id, input, actor_user_id)?)
+    let updated = execution_graph_repo::update(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("execution_graph"), Some(id), &format!("Updated execution graph '{}'", updated.name), None)?;
+    Ok(updated)
 }
 
 /// Agent Studio 2.0 (issue #196): turns one `agent` node's embedded
@@ -209,6 +213,7 @@ pub fn publish(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: O
     let graph = get_owned(conn, id, workspace_id)?;
     validate_for_publish(&graph)?;
     execution_graph_repo::set_status(conn, id, "published", actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "publish", Some("execution_graph"), Some(id), &format!("Published execution graph '{}'", graph.name), None)?;
     get_owned(conn, id, workspace_id)
 }
 

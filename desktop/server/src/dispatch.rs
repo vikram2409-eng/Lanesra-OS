@@ -64,6 +64,7 @@ use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
 use lanesra_core::services::{
     access_role_service, access_service,
     activity_service,
+    admin_home_service, admin_nav_service, admin_search_service,
     agent_version_service, approval_service, policy_engine_service, tool_registry_service,
     ai_service,
     api_client_service, api_object_service,
@@ -435,6 +436,27 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let entity_id: String = arg(args, "entityId")?;
             to_value(audit_service::list_for_entity(conn, &entity_type, &entity_id)?)
         }
+        "list_recent_audit_events" => {
+            let limit: i64 = arg(args, "limit")?;
+            to_value(audit_service::list_recent(conn, &require_workspace_id(conn)?, limit, actor)?)
+        }
+        "get_admin_home_summary" => to_value(admin_home_service::get_summary(conn, &require_workspace_id(conn)?, actor)?),
+        "admin_search" => {
+            let query: String = arg(args, "query")?;
+            to_value(admin_search_service::admin_search(conn, &require_workspace_id(conn)?, &query, actor)?)
+        }
+        "record_admin_visit" => {
+            let admin_tab: String = arg(args, "adminTab")?;
+            let label: String = arg(args, "label")?;
+            to_value(admin_nav_service::record_visit(conn, &require_workspace_id(conn)?, &admin_tab, &label, actor)?)
+        }
+        "set_admin_pinned" => {
+            let admin_tab: String = arg(args, "adminTab")?;
+            let pinned: bool = arg(args, "pinned")?;
+            to_value(admin_nav_service::set_pinned(conn, &require_workspace_id(conn)?, &admin_tab, pinned, actor)?)
+        }
+        "list_recent_admin_visits" => to_value(admin_nav_service::list_recent(conn, &require_workspace_id(conn)?, 10, actor)?),
+        "list_pinned_admin_items" => to_value(admin_nav_service::list_pinned(conn, &require_workspace_id(conn)?, actor)?),
 
         // --- AI & Agentic Layer, Phase 3: Unified Activity Timeline -----
         // Both plain sync - logging a manually-recorded interaction makes
@@ -691,6 +713,7 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             custom_object_service::delete(conn, &arg::<String>(args, "id")?, actor)?;
             Ok(Value::Null)
         }
+        "count_custom_object_references" => to_value(custom_object_service::count_references(conn, &arg::<String>(args, "id")?, actor)?),
 
         "get_organization" => to_value(organization_service::get(conn, &require_workspace_id(conn)?, actor)?),
         "update_organization" => {

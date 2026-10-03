@@ -355,3 +355,142 @@ fn a_custom_object_cannot_be_named_the_same_as_a_built_in_entity() {
     );
     assert!(clash.is_err());
 }
+
+// --- Admin Control Center Modernization (issue #197): impact analysis
+// before deleting a custom object - see custom_object_service::
+// count_references and its own use inside delete. -----------------------
+
+#[test]
+fn count_references_finds_a_business_rule_a_workflow_and_a_relationship() {
+    let (conn, ws, admin) = setup_workspace();
+    let vendor = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&admin)).unwrap();
+
+    let zero = custom_object_service::count_references(&conn, &vendor.id, Some(&admin)).unwrap();
+    assert_eq!(zero.total(), 0);
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &BusinessRuleInput {
+            app_id: None,
+            entity_type: vendor.key.clone(),
+            name: "Vendor rule".into(),
+            description: None,
+            match_type: "all".into(),
+            priority: 0,
+            effective_start_date: None,
+            effective_end_date: None,
+            conditions: vec![BusinessRuleConditionInput {
+                field_source: "builtin".into(),
+                field_key: "status".into(),
+                operator: "equals".into(),
+                value: "Active".into(),
+                compare_field_source: None,
+                compare_field_key: None,
+                group_id: None,
+                relationship_definition_id: None,
+            }],
+            actions: vec![BusinessRuleActionInput {
+                action_type: "show_message".into(),
+                target_field_key: None,
+                target_field_source: "builtin".into(),
+                action_value: None,
+                message: Some("hi".into()),
+            }],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowDefinitionInput};
+    use lanesra_core::services::workflow_service;
+    workflow_service::create_rule(
+        &conn, &ws,
+        &WorkflowDefinitionInput {
+            app_id: None,
+            entity_type: vendor.key.clone(),
+            name: "Vendor workflow".into(),
+            description: None,
+            trigger_type: "record_created".into(),
+            trigger_status: None,
+            trigger_field_key: None,
+            trigger_field_source: "builtin".into(),
+            trigger_offset_days: 0,
+            conditions: vec![],
+            match_type: "all".into(),
+            priority: 0,
+            actions: vec![WorkflowActionInput { action_type: "create_task".into(), params_json: serde_json::json!({"title": "Follow up", "description": null, "due_in_days": 1, "assignee_user_id": null}).to_string() }],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    use lanesra_core::models::relationship::RelationshipDefinitionInput;
+    use lanesra_core::services::relationship_service;
+    relationship_service::create(
+        &conn, &ws,
+        &RelationshipDefinitionInput {
+            source_entity_type: "Company".into(),
+            target_entity_type: vendor.key.clone(),
+            target_is_polymorphic: false,
+            relationship_type: "many_to_one".into(),
+            forward_label: "Vendor".into(),
+            reverse_label: "Companies".into(),
+            is_required: false,
+            show_related_list: true,
+            delete_behavior: "restrict".into(),
+            sort_order: 0,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    let refs = custom_object_service::count_references(&conn, &vendor.id, Some(&admin)).unwrap();
+    assert_eq!(refs.business_rules, 1, "{refs:?}");
+    assert_eq!(refs.workflows, 1, "{refs:?}");
+    assert_eq!(refs.relationships, 1, "{refs:?}");
+    assert_eq!(refs.total(), 3);
+}
+
+#[test]
+fn delete_is_blocked_while_a_business_rule_still_references_the_object_even_with_no_records() {
+    let (conn, ws, admin) = setup_workspace();
+    let vendor = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&admin)).unwrap();
+
+    business_rule_service::create_rule(
+        &conn, &ws,
+        &BusinessRuleInput {
+            app_id: None,
+            entity_type: vendor.key.clone(),
+            name: "Vendor rule".into(),
+            description: None,
+            match_type: "all".into(),
+            priority: 0,
+            effective_start_date: None,
+            effective_end_date: None,
+            conditions: vec![BusinessRuleConditionInput {
+                field_source: "builtin".into(),
+                field_key: "status".into(),
+                operator: "equals".into(),
+                value: "Active".into(),
+                compare_field_source: None,
+                compare_field_key: None,
+                group_id: None,
+                relationship_definition_id: None,
+            }],
+            actions: vec![BusinessRuleActionInput {
+                action_type: "show_message".into(),
+                target_field_key: None,
+                target_field_source: "builtin".into(),
+                action_value: None,
+                message: Some("hi".into()),
+            }],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    // No records exist, so the existing records-check alone would pass -
+    // the new reference check is what actually blocks this delete.
+    let err = custom_object_service::delete(&conn, &vendor.id, Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("business rule"), "{err}");
+}

@@ -26,7 +26,7 @@ use crate::models::business_rule::{
     BusinessRuleVersion, ACTION_TYPES, BRANCH_ROLES, CONDITION_OPERATORS, FIELD_TARGETED_ACTIONS, MATCH_TYPES,
     MESSAGE_ACTIONS, TRIGGER_SOURCES,
 };
-use crate::repositories::{business_rule_repo, custom_field_repo, relationship_repo};
+use crate::repositories::{audit_repo, business_rule_repo, custom_field_repo, relationship_repo};
 use crate::services::{access_service, builtin_field_service, custom_object_service, entity_registry};
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
@@ -200,6 +200,7 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleIn
     let id = crate::domain::ids::new_uuid();
     let created = business_rule_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "business_rule", &created.id, actor_user_id)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("business_rule"), Some(&created.id), &format!("Created business rule '{}'", created.name), None)?;
     Ok(created)
 }
 
@@ -355,7 +356,9 @@ pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, acto
     // can't fail the way parsing untrusted JSON can.
     let snapshot_json = serde_json::to_string(&existing).expect("BusinessRule is always serializable");
     business_rule_repo::insert_version(conn, id, &snapshot_json)?;
-    Ok(business_rule_repo::update(conn, id, input, actor_user_id)?)
+    let updated = business_rule_repo::update(conn, id, input, actor_user_id)?;
+    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("business_rule"), Some(id), &format!("Updated business rule '{}'", updated.name), None)?;
+    Ok(updated)
 }
 
 /// Admin UX polish (spec §10): every saved-version snapshot for a rule,
