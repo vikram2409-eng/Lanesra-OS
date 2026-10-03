@@ -45,6 +45,7 @@ use lanesra_core::models::workspace_theme::{ThemeTokens, WorkspaceThemeInput};
 use lanesra_core::models::ownership::OwnerRef;
 use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::work_team::{WorkTeamInput, WorkTeamUpdate};
+use lanesra_core::models::page_layout::{PageLayoutInput, PageLayoutUpdate};
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::saved_view::SavedViewInput;
@@ -78,7 +79,7 @@ use lanesra_core::services::{
     industry_package_service,
     integration_job_service, integration_log_service,
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
-    ownership_service,
+    ownership_service, page_layout_service,
     publisher_service, product_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
     user_service, vector_search_service,
@@ -933,6 +934,42 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let workspace_id = require_workspace_id(conn)?;
             let tabs = screen_layout_service::resolve_effective_layout(conn, &workspace_id, &entity_type, actor)?;
             to_value(lanesra_core::services::screen_layout_service::EffectiveLayout { tabs })
+        }
+
+        "list_page_layouts" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(page_layout_service::list_layouts(conn, &require_workspace_id(conn)?, &entity_type)?)
+        }
+        "create_page_layout" => {
+            let input: PageLayoutInput = arg(args, "input")?;
+            to_value(page_layout_service::create_layout(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_page_layout" => {
+            let id: String = arg(args, "id")?;
+            let update: PageLayoutUpdate = arg(args, "update")?;
+            to_value(page_layout_service::update_layout(conn, &id, &update, actor)?)
+        }
+        "publish_page_layout" => {
+            to_value(page_layout_service::publish_layout(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "unpublish_page_layout" => {
+            to_value(page_layout_service::unpublish_layout(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "revert_page_layout_draft" => {
+            to_value(page_layout_service::revert_layout_draft(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "make_page_layout_default" => {
+            to_value(page_layout_service::make_default(conn, &arg::<String>(args, "id")?, actor)?)
+        }
+        "delete_page_layout" => {
+            page_layout_service::delete_layout(conn, &arg::<String>(args, "id")?, actor)?;
+            Ok(Value::Null)
+        }
+        "effective_page_layout" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let workspace_id = require_workspace_id(conn)?;
+            let page = page_layout_service::resolve_effective_page(conn, &workspace_id, &entity_type, actor)?;
+            to_value(lanesra_core::services::page_layout_service::EffectivePage { page })
         }
 
         "list_dashboard_layouts" => to_value(dashboard_layout_service::list_layouts(conn, &require_workspace_id(conn)?)?),

@@ -1609,6 +1609,63 @@ export interface EffectiveLayout {
   tabs: LayoutTabs | null;
 }
 
+// Screen Builder 2.0 (issue #195, 5a): a page composer alongside the
+// ScreenLayout/LayoutTabs system above, not an evolution of it - see
+// page_layout.rs's own doc comment. A page is a tree of typed
+// PageNodes (component_type validated server-side against
+// page_layout_service::COMPONENT_TYPES, mirrored client-side in
+// pageComponentLibrary.ts) instead of a fixed tabs/sections/columns
+// shape, each independently placed on a 12-column responsive grid via
+// NodeLayout.
+export interface NodeLayout {
+  column_span: number; // 1-12, desktop
+  tablet_column_span: number | null; // null = inherits desktop's span
+  mobile_column_span: number | null; // null = inherits tablet's (or desktop's) span
+  order: number;
+}
+
+export interface PageNode {
+  id: string;
+  component_type: string;
+  config: Record<string, unknown>;
+  children: PageNode[];
+  layout: NodeLayout;
+}
+
+export interface PageDefinition {
+  root: PageNode[];
+}
+
+export interface PageLayout {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  name: string;
+  is_default: boolean;
+  roles: string[];
+  draft: PageDefinition;
+  published: PageDefinition | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface PageLayoutInput {
+  entity_type: string;
+  name: string;
+}
+
+export interface PageLayoutUpdate {
+  name: string;
+  roles: string[];
+  draft: PageDefinition;
+}
+
+export interface EffectivePage {
+  page: PageDefinition | null;
+}
+
 // Dashboard customization Phase 1: mirrors ScreenLayout/LayoutTabs above -
 // a workspace can have several named dashboard layouts (widgets instead
 // of field tabs, no entity_type since a dashboard isn't per-object),

@@ -966,6 +966,218 @@ tr:hover td {
   flex: 1 1 280px;
 }
 
+/* Screen Builder 2.0 (issue #195, 5a): palette | canvas | inspector/layers
+   three-pane layout, same drag/drop visual language as the business rule
+   lane board above (a drag handle, a dashed drop-zone that lights up on
+   hover) applied to a nested 12-column grid instead of a flat lane list. */
+.page-builder-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.page-builder-palette {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 640px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--bg-elevated);
+}
+
+.page-builder-palette-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.page-builder-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  cursor: grab;
+  font-size: 13px;
+  margin-bottom: 6px;
+  user-select: none;
+}
+
+.page-builder-palette-item.dragging {
+  opacity: 0.4;
+}
+
+.page-builder-palette-icon {
+  flex-shrink: 0;
+}
+
+.page-builder-canvas-wrap {
+  flex: 1 1 420px;
+  min-width: 320px;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.page-builder-canvas-frame {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 auto;
+  background: var(--bg);
+  transition: width 0.15s ease;
+}
+
+.page-builder-dropzone {
+  height: 10px;
+  margin: 4px 0;
+  border-radius: 4px;
+  border: 1px dashed transparent;
+}
+
+.page-builder-dropzone.drop-over {
+  background: var(--accent);
+  opacity: 0.35;
+  border-color: var(--accent);
+}
+
+.page-builder-node {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  margin-bottom: 4px;
+}
+
+.page-builder-node.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.page-builder-node.dragging {
+  opacity: 0.4;
+}
+
+.page-builder-node-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.page-builder-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.page-builder-node-icon {
+  flex-shrink: 0;
+}
+
+.page-builder-node-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-builder-node-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.page-builder-node-delete:hover {
+  color: var(--danger);
+}
+
+.page-builder-node-body {
+  padding: 8px 8px 2px;
+  border-top: 1px dashed var(--border);
+}
+
+.page-builder-empty-hint {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 32px 0;
+}
+
+.page-builder-side {
+  flex: 0 0 260px;
+  min-width: 220px;
+}
+
+.page-builder-inspector,
+.page-builder-layers {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  margin-bottom: 12px;
+}
+
+.page-builder-inspector-head {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.page-builder-inspector-divider {
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.page-builder-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.page-builder-layer-row:hover {
+  background: var(--bg);
+}
+
+.page-builder-layer-row.selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.page-builder-layer-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .page-builder-palette,
+  .page-builder-side {
+    flex: 1 1 100%;
+  }
+}
+
 .legend-item {
   display: flex;
   align-items: center;
