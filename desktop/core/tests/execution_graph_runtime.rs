@@ -487,3 +487,308 @@ async fn a_sequential_pipeline_mapped_to_a_graph_produces_the_same_output_as_the
     assert_eq!(agent1_node.input_json.as_deref(), Some("polish: A rough draft."));
     assert_eq!(agent1_node.output_json.as_deref().unwrap_or_default(), serde_json::json!({"output": "A polished draft."}).to_string());
 }
+
+// --- Agent Studio 2.0 (issue #196): embedded sub-agent nodes + promote,
+// nested Agent Team graphs via `run_agent_team`, and a parity gate proving
+// every client-side orchestration preset (`agentTeamPresets.ts`) is a
+// genuinely valid, publishable graph shape. ------------------------------
+
+#[tokio::test]
+async fn embedded_agent_node_runs_without_a_saved_agent_definition() {
+    let (conn, ws, admin) = setup_workspace("Graph Embedded Agent Co");
+    let graph = publish(
+        &conn, &ws, &admin,
+        ExecutionGraphInput {
+            name: "Embedded reviewer".into(), description: None,
+            nodes: vec![
+                node("trigger", "trigger", serde_json::json!({})),
+                node(
+                    "reviewer", "agent",
+                    serde_json::json!({"agent_id": "", "input_template": "{{trigger_input}}", "embedded_persona": "You are a terse reviewer.", "embedded_action_names": []}),
+                ),
+                node("end", "end", serde_json::json!({})),
+            ],
+            edges: vec![edge("trigger", "reviewer", None), edge("reviewer", "end", None)],
+        },
+    );
+    let port = spawn_sequence_stub(vec![anthropic_text_body("Looks fine.")]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+
+    let run = graph_runtime_service::start_run(&conn, &ws, &master_key(), &graph.id, "review this", Some(&admin), None, None, None).await.unwrap();
+    assert_eq!(run.status, "completed", "{run:?}");
+    let reviewer_node = run.nodes.iter().find(|n| n.node_key == "reviewer").expect("reviewer ran");
+    assert!(reviewer_node.output_json.as_deref().unwrap_or_default().contains("Looks fine."), "{reviewer_node:?}");
+}
+
+#[tokio::test]
+async fn agent_node_fails_clearly_when_neither_agent_id_nor_embedded_persona_is_set() {
+    let (conn, ws, admin) = setup_workspace("Graph Agent Misconfigured Co");
+    let graph = publish(
+        &conn, &ws, &admin,
+        ExecutionGraphInput {
+            name: "Misconfigured agent node".into(), description: None,
+            nodes: vec![
+                node("trigger", "trigger", serde_json::json!({})),
+                node("agent1", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("end", "end", serde_json::json!({})),
+            ],
+            edges: vec![edge("trigger", "agent1", None), edge("agent1", "end", None)],
+        },
+    );
+    let run = graph_runtime_service::start_run(&conn, &ws, &master_key(), &graph.id, "x", Some(&admin), None, None, None).await.unwrap();
+    assert_eq!(run.status, "failed", "{run:?}");
+    assert!(run.error_message.as_deref().unwrap_or_default().contains("embedded_persona"), "{run:?}");
+}
+
+#[test]
+fn promote_embedded_agent_node_creates_a_real_agent_and_the_published_graph_then_runs_through_it() {
+    let (conn, ws, admin) = setup_workspace("Graph Promote Co");
+    let input = ExecutionGraphInput {
+        name: "Team with embedded reviewer".into(), description: None,
+        nodes: vec![
+            node("trigger", "trigger", serde_json::json!({})),
+            node(
+                "reviewer", "agent",
+                serde_json::json!({"agent_id": "", "input_template": "{{trigger_input}}", "embedded_persona": "You are a terse reviewer.", "embedded_action_names": ["list_records"]}),
+            ),
+            node("end", "end", serde_json::json!({})),
+        ],
+        edges: vec![edge("trigger", "reviewer", None), edge("reviewer", "end", None)],
+    };
+    let created = execution_graph_service::create(&conn, &ws, &input, Some(&admin)).unwrap();
+
+    let agent = execution_graph_service::promote_embedded_agent_node(&conn, &created.id, &ws, "reviewer", Some(&admin)).unwrap();
+    assert_eq!(agent.system_prompt, "You are a terse reviewer.");
+    assert_eq!(agent.action_names, vec!["list_records".to_string()]);
+    // A real, independently fetchable agent now exists - the same "same
+    // entity service" guarantee a manual "+ New agent" gives (this calls
+    // `ai_agent_service::create` under the hood, not a one-off insert).
+    assert!(ai_agent_service::get(&conn, &agent.id).unwrap().is_some());
+
+    let reloaded = execution_graph_service::get(&conn, &created.id, &ws, Some(&admin)).unwrap();
+    let reviewer_node = reloaded.nodes.iter().find(|n| n.node_key == "reviewer").unwrap();
+    let config: serde_json::Value = serde_json::from_str(&reviewer_node.config_json).unwrap();
+    assert_eq!(config["agent_id"].as_str(), Some(agent.id.as_str()));
+    assert!(config.get("embedded_persona").is_none(), "{config}");
+}
+
+#[test]
+fn promote_embedded_agent_node_rejects_a_node_with_nothing_to_promote_and_a_published_graph() {
+    let (conn, ws, admin) = setup_workspace("Graph Promote Guard Co");
+    let real_agent = make_agent(&conn, &ws, &admin, "Real agent");
+    let input = ExecutionGraphInput {
+        name: "Reusable only".into(), description: None,
+        nodes: vec![
+            node("trigger", "trigger", serde_json::json!({})),
+            node("reviewer", "agent", serde_json::json!({"agent_id": real_agent.id, "input_template": ""})),
+            node("end", "end", serde_json::json!({})),
+        ],
+        edges: vec![edge("trigger", "reviewer", None), edge("reviewer", "end", None)],
+    };
+    let created = execution_graph_service::create(&conn, &ws, &input, Some(&admin)).unwrap();
+
+    // A node that already references a real agent has nothing to promote.
+    let err = execution_graph_service::promote_embedded_agent_node(&conn, &created.id, &ws, "reviewer", Some(&admin)).unwrap_err();
+    assert!(err.to_string().contains("no embedded_persona"), "{err}");
+
+    let published = execution_graph_service::publish(&conn, &created.id, &ws, Some(&admin)).unwrap();
+    let err2 = execution_graph_service::promote_embedded_agent_node(&conn, &published.id, &ws, "reviewer", Some(&admin)).unwrap_err();
+    assert!(err2.to_string().contains("draft"), "{err2}");
+}
+
+#[tokio::test]
+async fn run_agent_team_node_can_target_a_nested_execution_graph_with_variable_mapping() {
+    let (conn, ws, admin) = setup_workspace("Graph Nested Team Co");
+    let child_agent = make_agent(&conn, &ws, &admin, "Child handler");
+    let child = publish(
+        &conn, &ws, &admin,
+        ExecutionGraphInput {
+            name: "Child team".into(), description: None,
+            nodes: vec![
+                node("trigger", "trigger", serde_json::json!({})),
+                node("handle", "agent", serde_json::json!({"agent_id": child_agent.id, "input_template": "{{priority}}"})),
+                node("end", "end", serde_json::json!({})),
+            ],
+            edges: vec![edge("trigger", "handle", None), edge("handle", "end", None)],
+        },
+    );
+
+    let parent = publish(
+        &conn, &ws, &admin,
+        ExecutionGraphInput {
+            name: "Parent team".into(), description: None,
+            nodes: vec![
+                node("trigger", "trigger", serde_json::json!({})),
+                node("delegate", "run_agent_team", serde_json::json!({"target_graph_id": child.id, "variable_mapping": {"priority": "high"}})),
+                node("end", "end", serde_json::json!({})),
+            ],
+            edges: vec![edge("trigger", "delegate", None), edge("delegate", "end", None)],
+        },
+    );
+
+    let port = spawn_sequence_stub(vec![anthropic_text_body("handled it")]);
+    configure_anthropic_key(&conn, &ws, &admin, port);
+
+    let run = graph_runtime_service::start_run(&conn, &ws, &master_key(), &parent.id, "ticket #42", Some(&admin), None, None, None).await.unwrap();
+    assert_eq!(run.status, "completed", "{run:?}");
+    let delegate_node = run.nodes.iter().find(|n| n.node_key == "delegate").expect("delegate ran");
+    assert!(delegate_node.output_json.as_deref().unwrap_or_default().contains("handled it"), "{delegate_node:?}");
+
+    // The variable mapping became the nested run's own `trigger_input`
+    // (merged into context by the child's own `trigger` node, the same
+    // "JSON object becomes context" convention a workflow-sourced graph's
+    // trigger already uses) - proven by what the child's own agent node
+    // actually received, not just the final output.
+    let child_runs = graph_runtime_service::list_runs_for_graph(&conn, &child.id, &ws, Some(&admin)).unwrap();
+    assert_eq!(child_runs.len(), 1, "{child_runs:?}");
+    let handle_node = child_runs[0].nodes.iter().find(|n| n.node_key == "handle").expect("handle ran");
+    assert_eq!(handle_node.input_json.as_deref(), Some("high"));
+}
+
+#[tokio::test]
+async fn run_agent_team_node_rejects_targeting_its_own_graph() {
+    let (conn, ws, admin) = setup_workspace("Graph Self Reference Co");
+    let draft = execution_graph_service::create(
+        &conn, &ws,
+        &ExecutionGraphInput {
+            name: "Self team".into(), description: None,
+            nodes: vec![
+                node("trigger", "trigger", serde_json::json!({})),
+                node("delegate", "run_agent_team", serde_json::json!({"target_graph_id": ""})),
+                node("end", "end", serde_json::json!({})),
+            ],
+            edges: vec![edge("trigger", "delegate", None), edge("delegate", "end", None)],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    // The graph's own id isn't known before `create`, so the self-reference
+    // is wired in via a follow-up `update` (still draft at this point).
+    let self_id = draft.id.clone();
+    let updated = execution_graph_service::update(
+        &conn, &draft.id, &ws,
+        &ExecutionGraphInput {
+            name: "Self team".into(), description: None,
+            nodes: vec![
+                node("trigger", "trigger", serde_json::json!({})),
+                node("delegate", "run_agent_team", serde_json::json!({"target_graph_id": self_id})),
+                node("end", "end", serde_json::json!({})),
+            ],
+            edges: vec![edge("trigger", "delegate", None), edge("delegate", "end", None)],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    let published = execution_graph_service::publish(&conn, &updated.id, &ws, Some(&admin)).unwrap();
+
+    let run = graph_runtime_service::start_run(&conn, &ws, &master_key(), &published.id, "go", Some(&admin), None, None, None).await.unwrap();
+    assert_eq!(run.status, "failed", "{run:?}");
+    assert!(run.error_message.as_deref().unwrap_or_default().contains("cannot run itself"), "{run:?}");
+}
+
+// All 5 client-side orchestration presets (`desktop/src/lib/
+// agentTeamPresets.ts`) transcribed verbatim and run through the real
+// `validate_for_publish` - proving each is a genuinely valid, publishable
+// graph shape rather than merely a plausible-looking one. This is the
+// Rust-side half of that TS module's own doc comment promise; a change to
+// either side without the other now fails loudly here instead of only
+// being discovered by an admin clicking "Publish" on a preset-seeded team.
+#[test]
+fn every_agent_team_preset_passes_validate_for_publish() {
+    let (conn, ws, admin) = setup_workspace("Graph Presets Co");
+
+    let presets: Vec<(&str, Vec<GraphNodeInput>, Vec<GraphEdgeInput>)> = vec![
+        (
+            "sequential_team",
+            vec![
+                node("trigger_1", "trigger", serde_json::json!({})),
+                node("agent_1", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("agent_2", "agent", serde_json::json!({"agent_id": "", "input_template": "{{agent_1.output}}"})),
+                node("end_1", "end", serde_json::json!({})),
+            ],
+            vec![edge("trigger_1", "agent_1", None), edge("agent_1", "agent_2", None), edge("agent_2", "end_1", None)],
+        ),
+        (
+            "parallel_research",
+            vec![
+                node("trigger_1", "trigger", serde_json::json!({})),
+                node("parallel_split_1", "parallel_split", serde_json::json!({})),
+                node("agent_1", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("agent_2", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("agent_3", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("join_1", "join", serde_json::json!({"mode": "all", "required_count": 3})),
+                node("end_1", "end", serde_json::json!({})),
+            ],
+            vec![
+                edge("trigger_1", "parallel_split_1", None),
+                edge("parallel_split_1", "agent_1", None),
+                edge("parallel_split_1", "agent_2", None),
+                edge("parallel_split_1", "agent_3", None),
+                edge("agent_1", "join_1", None),
+                edge("agent_2", "join_1", None),
+                edge("agent_3", "join_1", None),
+                edge("join_1", "end_1", None),
+            ],
+        ),
+        (
+            "supervisor_team",
+            vec![
+                node("trigger_1", "trigger", serde_json::json!({})),
+                node("agent_supervisor", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("router_1", "router", serde_json::json!({"branches": ["specialist_a", "specialist_b"]})),
+                node("agent_specialist_1", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("agent_specialist_2", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("join_1", "join", serde_json::json!({"mode": "all", "required_count": 1})),
+                node("end_1", "end", serde_json::json!({})),
+            ],
+            vec![
+                edge("trigger_1", "agent_supervisor", None),
+                edge("agent_supervisor", "router_1", None),
+                edge("router_1", "agent_specialist_1", Some("specialist_a")),
+                edge("router_1", "agent_specialist_2", Some("specialist_b")),
+                edge("agent_specialist_1", "join_1", None),
+                edge("agent_specialist_2", "join_1", None),
+                edge("join_1", "end_1", None),
+            ],
+        ),
+        (
+            "review_loop",
+            vec![
+                node("trigger_1", "trigger", serde_json::json!({})),
+                node("loop_1", "loop", serde_json::json!({"max_iterations": 3})),
+                node("agent_1", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node(
+                    "evaluate_result_1", "evaluate_result",
+                    serde_json::json!({"source_node_key": "agent_1", "success_criteria": "The response fully and correctly answers the request"}),
+                ),
+                node("end_1", "end", serde_json::json!({})),
+            ],
+            vec![
+                edge("trigger_1", "loop_1", None),
+                edge("loop_1", "agent_1", Some("body")),
+                edge("agent_1", "evaluate_result_1", None),
+                edge("evaluate_result_1", "end_1", Some("pass")),
+                edge("evaluate_result_1", "loop_1", Some("fail")),
+                edge("loop_1", "end_1", Some("exit")),
+            ],
+        ),
+        (
+            "plan_and_execute",
+            vec![
+                node("trigger_1", "trigger", serde_json::json!({})),
+                node("agent_planner", "agent", serde_json::json!({"agent_id": "", "input_template": ""})),
+                node("transform_1", "transform", serde_json::json!({"set": {"plan": "{{agent_planner.output}}"}})),
+                node("agent_executor", "agent", serde_json::json!({"agent_id": "", "input_template": "{{transform_1.plan}}"})),
+                node("end_1", "end", serde_json::json!({})),
+            ],
+            vec![edge("trigger_1", "agent_planner", None), edge("agent_planner", "transform_1", None), edge("transform_1", "agent_executor", None), edge("agent_executor", "end_1", None)],
+        ),
+    ];
+
+    for (key, nodes, edges) in presets {
+        let input = ExecutionGraphInput { name: key.into(), description: None, nodes, edges };
+        let created = execution_graph_service::create(&conn, &ws, &input, Some(&admin)).unwrap_or_else(|e| panic!("preset '{key}' failed to create: {e}"));
+        let published = execution_graph_service::publish(&conn, &created.id, &ws, Some(&admin)).unwrap_or_else(|e| panic!("preset '{key}' failed validate_for_publish: {e}"));
+        assert_eq!(published.status, "published", "preset '{key}'");
+    }
+}

@@ -13,6 +13,7 @@ use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
+use lanesra_core::models::ai_agent::AiAgentDefinition;
 use lanesra_core::models::execution_graph::{ExecutionGraph, ExecutionGraphInput};
 use lanesra_core::models::graph_run::GraphRun;
 use lanesra_core::services::{execution_graph_service, graph_runtime_service};
@@ -50,6 +51,13 @@ pub fn publish_execution_graph(state: State<AppState>, id: String) -> AppResult<
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     execution_graph_service::publish(&conn, &id, &workspace_id, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
+pub fn promote_embedded_agent_node(state: State<AppState>, graph_id: String, node_key: String) -> AppResult<AiAgentDefinition> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    execution_graph_service::promote_embedded_agent_node(&conn, &graph_id, &workspace_id, &node_key, current_actor(&state).as_deref())
 }
 
 #[tauri::command]

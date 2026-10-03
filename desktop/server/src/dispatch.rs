@@ -1686,6 +1686,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let disabled: bool = arg(args, "disabled")?;
             to_value(execution_graph_service::set_disabled(conn, &id, &require_workspace_id(conn)?, disabled, actor)?)
         }
+        "promote_embedded_agent_node" => {
+            let graph_id: String = arg(args, "graphId")?;
+            let node_key: String = arg(args, "nodeKey")?;
+            to_value(execution_graph_service::promote_embedded_agent_node(conn, &graph_id, &require_workspace_id(conn)?, &node_key, actor)?)
+        }
         "get_graph_run" => {
             let id: String = arg(args, "id")?;
             to_value(graph_runtime_service::get_run(conn, &id, &require_workspace_id(conn)?, actor)?)
