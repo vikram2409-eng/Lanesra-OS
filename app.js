@@ -685,7 +685,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -700,7 +700,7 @@ const ADMIN_CATEGORIES=[
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields']},
- {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','themeStudio']},
+ {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
  {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards']},
@@ -2633,7 +2633,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -4984,6 +4984,439 @@ function layoutPreviewModal(entityKey){
  document.querySelectorAll('[data-preview-tab]').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('[data-preview-panel]').forEach(p=>p.style.display=p.dataset.previewPanel===b.dataset.previewTab?'':'none');
   document.querySelectorAll('[data-preview-tab]').forEach(x=>x.classList.toggle('active',x===b));
+ });
+}
+// ---- Page Builder (mirrors the desktop edition's page_layout_service -
+// Screen Builder 2.0, issue #195, 5a) --------------------------------------
+// A second, separate page-composer system alongside Screen layouts above
+// (which still only builds the create/edit form) - see page_layout.rs's own
+// doc comment for why this is deliberately not a rework of ensureLayouts'
+// tabs/sections model. Drag components from the palette onto a 12-column
+// grid, nest them inside a Section/Grid/Columns/Tabs/Sticky Panel/Field
+// Group container, resize with the Inspector's column-span steppers (an
+// exact 1-12 control, not pixel-drag), and preview at four breakpoints.
+// Composed pages aren't wired into the live record detail view yet - that's
+// 5b - so, like Workflow Studio's and Agent Teams' own node cards, the
+// canvas shows a schematic card for what's placed, never live record data.
+//
+// This is the client-side mirror of pageComponentLibrary.ts -
+// PAGE_COMPONENT_LIBRARY/PAGE_COMPONENT_CATEGORIES below must be kept in
+// sync with that file and with page_layout_service.rs's own
+// COMPONENT_TYPES/CONTAINER_COMPONENT_TYPES allowlists.
+const PAGE_COMPONENT_CATEGORIES=[
+ {key:'layout',label:'Layout'},
+ {key:'record',label:'Record'},
+ {key:'data',label:'Data'},
+ {key:'actions',label:'Actions'},
+ {key:'content',label:'Content'},
+ {key:'navigation',label:'Navigation'},
+ {key:'utility',label:'Utility'},
+];
+const PAGE_COMPONENT_LIBRARY=[
+ {type:'section',category:'layout',label:'Section',icon:'▭',isContainer:true,description:"A titled, full-width group that other components stack or arrange inside.",configSchema:[{key:'title',label:'Title',type:'text',placeholder:'Section title'}],defaultColumnSpan:12},
+ {type:'grid',category:'layout',label:'Grid',icon:'▦',isContainer:true,description:"An even grid of sub-columns for cards, tiles or small components.",configSchema:[{key:'columns',label:'Columns',type:'select',options:['2','3','4'],defaultValue:'2'}],defaultColumnSpan:12},
+ {type:'columns',category:'layout',label:'Columns',icon:'⫼',isContainer:true,description:"Two or three unevenly-weighted columns side by side.",configSchema:[{key:'ratio',label:'Split',type:'select',options:['50/50','33/33/33','25/75','75/25','33/67'],defaultValue:'50/50'}],defaultColumnSpan:12},
+ {type:'tabs',category:'layout',label:'Tabs',icon:'⬒',isContainer:true,description:"A tabbed container - each direct child becomes one tab's content.",configSchema:[{key:'tabLabels',label:'Tab labels (comma-separated)',type:'text',placeholder:'Overview, Activity, Related'}],defaultColumnSpan:12},
+ {type:'divider',category:'layout',label:'Divider',icon:'—',isContainer:false,description:"A plain horizontal rule.",configSchema:[],defaultColumnSpan:12},
+ {type:'spacer',category:'layout',label:'Spacer',icon:'␣',isContainer:false,description:"Blank vertical space.",configSchema:[{key:'height',label:'Height',type:'select',options:['small','medium','large'],defaultValue:'medium'}],defaultColumnSpan:12},
+ {type:'sticky_panel',category:'layout',label:'Sticky Panel',icon:'📌',isContainer:true,description:"Stays pinned to the top or bottom of the page while the rest scrolls.",configSchema:[{key:'position',label:'Position',type:'select',options:['top','bottom'],defaultValue:'top'}],defaultColumnSpan:12},
+ {type:'field',category:'record',label:'Field',icon:'🏷️',isContainer:false,description:"One field's label and value.",configSchema:[{key:'field_key',label:'Field',type:'field_picker'}],defaultColumnSpan:6},
+ {type:'field_group',category:'record',label:'Field Group',icon:'🏷️🏷️',isContainer:true,description:"A compact cluster of Field components under one shared heading.",configSchema:[{key:'title',label:'Heading',type:'text',placeholder:'Optional heading'}],defaultColumnSpan:6},
+ {type:'record_header',category:'record',label:'Record Header',icon:'🪪',isContainer:false,description:"The record's name/title plus its primary identifying detail, styled as a page header.",configSchema:[],defaultColumnSpan:12},
+ {type:'status_badge',category:'record',label:'Status Badge',icon:'🔖',isContainer:false,description:"A colored pill showing the record's status/stage field.",configSchema:[{key:'field_key',label:'Status field',type:'field_picker',help:"Defaults to the object's built-in status/stage field if left blank."}],defaultColumnSpan:3},
+ {type:'owner',category:'record',label:'Owner',icon:'👤',isContainer:false,description:"The record's assigned owner (user or team).",configSchema:[],defaultColumnSpan:3},
+ {type:'record_number',category:'record',label:'Record Number',icon:'#',isContainer:false,description:"The record's auto-numbered identifier (e.g. Q-2026-041).",configSchema:[],defaultColumnSpan:3},
+ {type:'related_list',category:'data',label:'Related List',icon:'🔗',isContainer:false,description:"A card-style list of records from one relationship - the same related-records card every detail page already shows.",configSchema:[{key:'relationship_key',label:'Relationship',type:'text',placeholder:'e.g. opportunities'}],defaultColumnSpan:12},
+ {type:'table',category:'data',label:'Table',icon:'▤',isContainer:false,description:"The same related records as a dense, sortable table instead of cards.",configSchema:[{key:'relationship_key',label:'Relationship',type:'text',placeholder:'e.g. quotes'}],defaultColumnSpan:12},
+ {type:'kpi',category:'data',label:'KPI',icon:'📊',isContainer:false,description:"A single computed number - a sum, a count, or a related-record count.",configSchema:[{key:'metric_label',label:'Label',type:'text',placeholder:'Open balance'},{key:'source',label:'Computed from',type:'select',options:['field_sum','field_count','related_count'],defaultValue:'field_sum'},{key:'field_key',label:'Field',type:'field_picker'}],defaultColumnSpan:3},
+ {type:'chart',category:'data',label:'Chart',icon:'📈',isContainer:false,description:"A small bar/line/pie chart over related data.",configSchema:[{key:'chart_type',label:'Chart type',type:'select',options:['bar','line','pie'],defaultValue:'bar'},{key:'metric_label',label:'Label',type:'text'}],defaultColumnSpan:6},
+ {type:'button',category:'actions',label:'Button',icon:'🔘',isContainer:false,description:"A single labeled action button.",configSchema:[{key:'label',label:'Label',type:'text',placeholder:'Edit'},{key:'style',label:'Style',type:'select',options:['primary','secondary'],defaultValue:'secondary'},{key:'action',label:'Action',type:'select',options:['none','edit','navigate'],defaultValue:'none'}],defaultColumnSpan:3},
+ {type:'command_bar',category:'actions',label:'Command Bar',icon:'⌘',isContainer:false,description:"A row of several buttons together, like a page's own toolbar.",configSchema:[{key:'buttonLabels',label:'Buttons (comma-separated)',type:'text',placeholder:'Edit, Clone, Delete'}],defaultColumnSpan:12},
+ {type:'quick_action',category:'actions',label:'Quick Action',icon:'⚡',isContainer:false,description:"A one-click action that changes a status or field without opening the full edit form.",configSchema:[{key:'label',label:'Label',type:'text',placeholder:'Mark Won'},{key:'target_status',label:'Sets status to',type:'text'}],defaultColumnSpan:3},
+ {type:'agent_action',category:'actions',label:'Agent Action',icon:'🤖',isContainer:false,description:"Runs a named AI Agent or Pipeline against this record.",configSchema:[{key:'label',label:'Label',type:'text',placeholder:'Summarize with AI'},{key:'agent_name',label:'Agent or Pipeline name',type:'text',help:"Matched by name at render time - a picker bound to the real Agent Foundry list is 5b scope."}],defaultColumnSpan:3},
+ {type:'rich_text',category:'content',label:'Rich Text',icon:'📝',isContainer:false,description:"A block of admin-authored formatted text.",configSchema:[{key:'text',label:'Text',type:'textarea',placeholder:'Write something...'}],defaultColumnSpan:12},
+ {type:'anchor_link',category:'navigation',label:'Anchor Link',icon:'⚓',isContainer:false,description:"A jump-to-section link, useful on a long detail page.",configSchema:[{key:'label',label:'Link text',type:'text'},{key:'target_section_id',label:'Jumps to (Section id)',type:'text'}],defaultColumnSpan:3},
+ {type:'note',category:'utility',label:'Note',icon:'💬',isContainer:false,description:"A static callout banner for admin-authored guidance.",configSchema:[{key:'text',label:'Text',type:'textarea'},{key:'tone',label:'Tone',type:'select',options:['info','warning'],defaultValue:'info'}],defaultColumnSpan:12},
+];
+function pageComponentDef(componentType){return PAGE_COMPONENT_LIBRARY.find(c=>c.type===componentType)}
+function pageIsContainer(componentType){return pageComponentDef(componentType)?.isContainer||false}
+const PAGE_PREVIEW_PRESETS=[
+ {key:'w1440',width:1440,tier:'desktop',label:'Desktop · 1440'},
+ {key:'w1024',width:1024,tier:'desktop',label:'Laptop · 1024'},
+ {key:'w768',width:768,tier:'tablet',label:'Tablet · 768'},
+ {key:'w390',width:390,tier:'mobile',label:'Mobile · 390'},
+];
+function pagePresetInfo(key){return PAGE_PREVIEW_PRESETS.find(p=>p.key===key)||PAGE_PREVIEW_PRESETS[0]}
+function pageEffectiveSpan(layout,tier){
+ if(tier==='desktop')return layout.columnSpan;
+ if(tier==='tablet')return layout.tabletColumnSpan??layout.columnSpan;
+ return layout.mobileColumnSpan??layout.tabletColumnSpan??layout.columnSpan;
+}
+function freshPageNode(componentType){
+ const def=pageComponentDef(componentType);
+ return {id:uid(),componentType,config:{},children:[],layout:{columnSpan:def?.defaultColumnSpan||12,tabletColumnSpan:null,mobileColumnSpan:null,order:0}};
+}
+function freshPageLayout(name,isDefault){return {id:uid(),name,isDefault,roles:[],draft:{root:[]},published:null,updatedAt:null}}
+function ensurePageLayouts(entityKey){
+ if(!data.pageLayouts)data.pageLayouts={};
+ let arr=data.pageLayouts[entityKey];
+ if(!arr||!arr.length)arr=[freshPageLayout('Default',true)];
+ if(!arr.some(l=>l.isDefault))arr[0].isDefault=true;
+ data.pageLayouts[entityKey]=arr;
+ return arr;
+}
+function defaultPageLayoutFor(entityKey){const arr=ensurePageLayouts(entityKey);return arr.find(l=>l.isDefault)||arr[0]}
+function pageLayoutById(entityKey,id){return ensurePageLayouts(entityKey).find(l=>l.id===id)}
+// ---- Pure tree helpers - unlike LayoutEditor's immutable-replace
+// convention, these mutate the draft tree in place (splice/assign) and the
+// caller follows up with save() - the same idiom wireLayoutDragDrop's own
+// moveField already uses for Screen layouts' flatter tabs/sections tree.
+function findPageNode(nodes,id){
+ for(const n of nodes){
+  if(n.id===id)return n;
+  const found=findPageNode(n.children,id);
+  if(found)return found;
+ }
+ return null;
+}
+function findPageNodeParentArray(nodes,id){
+ for(const n of nodes){
+  if(n.id===id)return nodes;
+  const found=findPageNodeParentArray(n.children,id);
+  if(found)return found;
+ }
+ return null;
+}
+function isDescendantOrSelfNode(node,id){
+ if(node.id===id)return true;
+ return node.children.some(c=>isDescendantOrSelfNode(c,id));
+}
+function removePageNode(root,id){
+ const arr=findPageNodeParentArray(root,id);
+ if(!arr)return null;
+ const idx=arr.findIndex(n=>n.id===id);
+ return arr.splice(idx,1)[0];
+}
+function insertPageNode(root,parentId,index,node){
+ const arr=parentId===null?root:findPageNode(root,parentId)?.children;
+ if(!arr)return;
+ arr.splice(Math.max(0,Math.min(index,arr.length)),0,node);
+}
+let pbEntityKey=null;
+let pbSelectedLayoutId=null;
+let pbSelectedNodeId=null;
+let pbPreviewPreset='w1440';
+let pbCustomWidth=null;
+let pbDrag=null; // {kind:'new',componentType} | {kind:'move',nodeId}
+function pageBuilderTab(body){
+ const keys=allEntityTypeKeys();
+ if(!pbEntityKey||!keys.includes(pbEntityKey))pbEntityKey=keys[0];
+ const entityKey=pbEntityKey;
+ const layouts=ensurePageLayouts(entityKey);
+ if(!pbSelectedLayoutId||!layouts.some(l=>l.id===pbSelectedLayoutId))pbSelectedLayoutId=defaultPageLayoutFor(entityKey).id;
+ const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
+ const hasPublished=!!layout.published;
+ const draftPublishedMatch=hasPublished&&JSON.stringify(layout.published)===JSON.stringify(layout.draft);
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>Page Builder</h3><select id="pbEntitySelect">${keys.map(k=>`<option value="${k}" ${k===entityKey?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
+ <p class="muted" style="font-size:13px">Compose a record detail page from a 12-column grid of Layout, Record, Data, Actions, Content, Navigation and Utility components — drag from the palette, nest inside a Section/Grid/Columns/Tabs/Sticky Panel/Field Group container, and resize with the column-span steppers. This is a separate system from Screen layouts above (which still only builds the create/edit form) — composed pages aren't wired into the live record detail view yet.</p>
+ <div class="panel-head" style="margin-top:4px">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${layouts.map(l=>`<button type="button" class="tab ${l.id===layout.id?'active':''}" data-pb-select-layout="${l.id}">${l.name}${l.isDefault?' · Default':''}</button>`).join('')}</div>
+  <button class="btn btn-secondary" id="pbAddLayout" type="button">+ New page</button>
+ </div>
+ <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
+  <div class="field" style="margin:0"><label>Page name</label><input id="pbName" value="${layout.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
+  <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${demoLayoutRoles().map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-pb-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
+  ${layout.isDefault?'<span class="badge">Default page — fallback for any unassigned role</span>':'<button class="btn btn-secondary" id="pbMakeDefault" type="button">Make default</button>'}
+  <button class="btn btn-secondary" id="pbDeleteLayout" type="button" ${layouts.length<=1||layout.isDefault?'disabled':''}>Delete page</button>
+ </div>
+ <div id="pbBreakpointBar"></div>
+ <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+  <div id="pbPalette" style="flex:0 0 190px;min-width:170px"></div>
+  <div style="flex:1 1 420px;min-width:260px;overflow:auto">
+   <div id="pbCanvasFrame" style="border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 auto;background:#fafafa"></div>
+  </div>
+  <div id="pbSide" style="flex:0 0 260px;min-width:220px"></div>
+ </div>
+ <div id="pbLayersBelow" style="margin-top:12px"></div>
+ <div class="actions" style="margin-top:16px;flex-wrap:wrap">
+  <button class="btn btn-primary" id="pbPublish" type="button" ${draftPublishedMatch?'disabled':''}>Publish</button>
+  ${hasPublished?'<button class="btn btn-secondary" id="pbUnpublish" type="button">Unpublish</button>':''}
+  ${hasPublished&&!draftPublishedMatch?'<button class="btn btn-secondary" id="pbRevert" type="button">Revert draft to published</button>':''}
+ </div>
+ </div>`;
+ $('#pbEntitySelect').onchange=e=>{pbEntityKey=e.target.value;pbSelectedLayoutId=null;pbSelectedNodeId=null;pageBuilderTab(body)};
+ body.querySelectorAll('[data-pb-select-layout]').forEach(b=>b.onclick=()=>{pbSelectedLayoutId=b.dataset.pbSelectLayout;pbSelectedNodeId=null;pageBuilderTab(body)});
+ $('#pbAddLayout').onclick=()=>{
+  const name=prompt('New page name?','New page');if(!name)return;
+  const l=freshPageLayout(name.trim(),false);
+  layouts.push(l);tagLocalComponent('pageLayout',l.id);save();
+  pbSelectedLayoutId=l.id;pbSelectedNodeId=null;pageBuilderTab(body);
+ };
+ // Same deferred-re-render reasoning as #layoutName in layoutsTab above -
+ // re-rendering while this change event is still being dispatched throws
+ // "node is no longer a child of this node".
+ $('#pbName').onchange=e=>{layout.name=e.target.value.trim()||layout.name;save();setTimeout(()=>pageBuilderTab(body),0)};
+ body.querySelectorAll('[data-pb-role]').forEach(cb=>cb.onchange=()=>{
+  const role=cb.dataset.pbRole;
+  layout.roles=cb.checked?[...layout.roles,role]:layout.roles.filter(r=>r!==role);
+  save();
+ });
+ const makeDefault=$('#pbMakeDefault'); if(makeDefault)makeDefault.onclick=()=>{layouts.forEach(l=>l.isDefault=(l.id===layout.id));save();toast(`${layout.name} is now the default page`);pageBuilderTab(body)};
+ $('#pbDeleteLayout').onclick=()=>{
+  if(layouts.length<=1||layout.isDefault)return;
+  if(!confirm(`Delete page "${layout.name}"? This can't be undone.`))return;
+  data.pageLayouts[entityKey]=layouts.filter(l=>l.id!==layout.id);
+  save();pbSelectedLayoutId=null;pbSelectedNodeId=null;toast('Page deleted');pageBuilderTab(body);
+ };
+ $('#pbPublish').onclick=()=>{layout.published=structuredClone(layout.draft);layout.updatedAt=new Date().toISOString();save();toast('Page published');pageBuilderTab(body)};
+ const unpub=$('#pbUnpublish'); if(unpub)unpub.onclick=()=>{if(!confirm("Unpublish this page? Any role assigned to it falls back to the Default page until you publish again."))return;layout.published=null;save();toast('Page unpublished');pageBuilderTab(body)};
+ const revert=$('#pbRevert'); if(revert)revert.onclick=()=>{if(!layout.published)return;layout.draft=structuredClone(layout.published);pbSelectedNodeId=null;save();toast('Draft reverted to the published page');pageBuilderTab(body)};
+ renderPageBreakpointBar(entityKey);
+ renderPagePalette();
+ renderPageCanvas(entityKey);
+ renderPageInspectorAndLayers(entityKey);
+}
+function renderPageBreakpointBar(entityKey){
+ const box=$('#pbBreakpointBar'); if(!box)return;
+ box.innerHTML=`<div style="display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap">
+  <span style="font-size:12px;color:#6b7280;font-weight:700">Preview:</span>
+  ${PAGE_PREVIEW_PRESETS.map(p=>`<button type="button" class="tab ${pbPreviewPreset===p.key&&pbCustomWidth===null?'active':''}" data-pb-preset="${p.key}">${p.label}</button>`).join('')}
+  <label style="display:flex;gap:6px;align-items:center;font-size:12px">Custom width <input type="number" min="320" max="1920" id="pbCustomWidth" value="${pbCustomWidth??''}" placeholder="px" style="width:80px;border:1px solid var(--line);border-radius:8px;padding:4px 6px"></label>
+ </div>`;
+ box.querySelectorAll('[data-pb-preset]').forEach(b=>b.onclick=()=>{pbPreviewPreset=b.dataset.pbPreset;pbCustomWidth=null;renderPageBreakpointBar(entityKey);renderPageCanvas(entityKey)});
+ $('#pbCustomWidth').onchange=e=>{pbCustomWidth=e.target.value?Number(e.target.value):null;renderPageCanvas(entityKey)};
+}
+function renderPagePalette(){
+ const box=$('#pbPalette'); if(!box)return;
+ box.innerHTML=`<div style="display:flex;flex-direction:column;gap:12px">${PAGE_COMPONENT_CATEGORIES.map(cat=>{
+  const items=PAGE_COMPONENT_LIBRARY.filter(c=>c.category===cat.key);
+  if(!items.length)return '';
+  return `<div><div class="muted" style="font-weight:700;font-size:11px;text-transform:uppercase;margin-bottom:6px">${cat.label}</div>${items.map(c=>`<div draggable="true" data-pb-new="${c.type}" title="${c.description}" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:#fff;cursor:grab;font-size:13px;display:flex;align-items:center;gap:6px;margin-bottom:6px"><span>${c.icon}</span>${c.label}</div>`).join('')}</div>`;
+ }).join('')}</div>`;
+ box.querySelectorAll('[data-pb-new]').forEach(el=>{
+  el.ondragstart=e=>{pbDrag={kind:'new',componentType:el.dataset.pbNew};e.dataTransfer.effectAllowed='copy'};
+  el.ondragend=()=>{pbDrag=null};
+ });
+}
+function pageGridHtml(nodes,tier,parentId,depth){
+ const pid=parentId===null?'':parentId;
+ const dz=idx=>`<div data-pb-dropzone data-parent="${pid}" data-index="${idx}" style="grid-column:span 12;min-height:10px;border:2px dashed transparent;border-radius:6px;transition:border-color .1s"></div>`;
+ if(!nodes.length){
+  return `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:8px">${dz(0)}${depth===0?'<div class="muted" style="grid-column:span 12;font-size:12px">Drag a component from the palette to start building.</div>':''}</div>`;
+ }
+ const items=nodes.map((n,i)=>{
+  const span=Math.min(12,Math.max(1,pageEffectiveSpan(n.layout,tier)));
+  return `<div style="grid-column:span ${span}">${pageNodeCardHtml(n,tier,depth)}</div>${dz(i+1)}`;
+ }).join('');
+ return `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:8px">${dz(0)}${items}</div>`;
+}
+function pageNodeCardHtml(node,tier,depth){
+ const def=pageComponentDef(node.componentType);
+ const isContainer=pageIsContainer(node.componentType);
+ const selected=pbSelectedNodeId===node.id;
+ return `<div data-pb-node="${node.id}" style="border:1px solid ${selected?'#4f46e5':'var(--line)'};border-radius:10px;padding:8px;cursor:pointer;background:${selected?'#eef2ff':'#fff'}">
+ <div data-pb-node-head="${node.id}" draggable="true" style="display:flex;align-items:center;gap:6px;font-size:13px">
+  <span style="cursor:grab">⠿</span><span>${def?.icon||'◻'}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pageNodeSummary(node,def)}</span>
+  <button type="button" class="icon-btn" data-pb-delete="${node.id}" title="Delete">✕</button>
+ </div>
+ ${isContainer?`<div style="margin-top:8px;padding-left:10px;border-left:2px solid var(--line)">${pageGridHtml(node.children,tier,node.id,depth+1)}</div>`:''}
+ </div>`;
+}
+function pageNodeSummary(node,def){
+ const label=def?.label||node.componentType;
+ const cfg=node.config||{};
+ const detail=cfg.title||cfg.label||cfg.field_key||cfg.metric_label||cfg.relationship_key;
+ return detail?`${label}: ${detail}`:label;
+}
+function renderPageCanvas(entityKey){
+ const frame=$('#pbCanvasFrame'); if(!frame)return;
+ const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
+ const preset=pagePresetInfo(pbPreviewPreset);
+ frame.style.width=(pbCustomWidth??preset.width)+'px';
+ frame.style.maxWidth='100%';
+ frame.innerHTML=pageGridHtml(layout.draft.root,preset.tier,null,0);
+ frame.querySelectorAll('[data-pb-node]').forEach(el=>{
+  el.onclick=e=>{e.stopPropagation();selectPageNode(entityKey,el.dataset.pbNode)};
+ });
+ frame.querySelectorAll('[data-pb-node-head]').forEach(el=>{
+  el.ondragstart=e=>{e.stopPropagation();pbDrag={kind:'move',nodeId:el.dataset.pbNodeHead};e.dataTransfer.effectAllowed='move'};
+  el.ondragend=()=>{pbDrag=null};
+ });
+ frame.querySelectorAll('[data-pb-delete]').forEach(el=>{
+  el.onclick=e=>{e.stopPropagation();deletePageNode(entityKey,el.dataset.pbDelete)};
+ });
+ frame.querySelectorAll('[data-pb-dropzone]').forEach(el=>{
+  el.ondragover=e=>{if(!pbDrag)return;e.preventDefault();e.stopPropagation();el.style.borderColor='#4f46e5'};
+  el.ondragleave=()=>{el.style.borderColor='transparent'};
+  el.ondrop=e=>{
+   e.preventDefault();e.stopPropagation();el.style.borderColor='transparent';
+   const parent=el.dataset.parent||null;
+   handlePageDrop(entityKey,parent,Number(el.dataset.index));
+  };
+ });
+}
+// Unifies canvas-node-click and layers-row-click selection into one place,
+// rather than toggling classList by hand in two different renderers.
+function selectPageNode(entityKey,id){
+ pbSelectedNodeId=id;
+ renderPageCanvas(entityKey);
+ renderPageInspectorAndLayers(entityKey);
+}
+function handlePageDrop(entityKey,parentId,index){
+ if(!pbDrag)return;
+ const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
+ if(pbDrag.kind==='new'){
+  insertPageNode(layout.draft.root,parentId,index,freshPageNode(pbDrag.componentType));
+ }else{
+  if(parentId!==null){
+   const dragged=findPageNode(layout.draft.root,pbDrag.nodeId);
+   if(dragged&&isDescendantOrSelfNode(dragged,parentId)){pbDrag=null;return}
+  }
+  const removed=removePageNode(layout.draft.root,pbDrag.nodeId);
+  if(!removed){pbDrag=null;return}
+  insertPageNode(layout.draft.root,parentId,index,removed);
+ }
+ pbDrag=null;
+ save();
+ renderPageCanvas(entityKey);
+ renderPageInspectorAndLayers(entityKey);
+}
+function deletePageNode(entityKey,id){
+ const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
+ removePageNode(layout.draft.root,id);
+ if(pbSelectedNodeId===id)pbSelectedNodeId=null;
+ save();
+ renderPageCanvas(entityKey);
+ renderPageInspectorAndLayers(entityKey);
+}
+function renderPageInspectorAndLayers(entityKey){
+ const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
+ const side=$('#pbSide'); const below=$('#pbLayersBelow');
+ if(!side||!below)return;
+ const node=pbSelectedNodeId?findPageNode(layout.draft.root,pbSelectedNodeId):null;
+ if(node){
+  side.innerHTML=pageInspectorHtml(entityKey,node);
+  wirePageInspectorEvents(entityKey,node);
+  below.innerHTML=pageLayersHtml(layout.draft.root,0);
+ }else{
+  side.innerHTML=pageLayersHtml(layout.draft.root,0);
+  below.innerHTML='';
+ }
+ wirePageLayersEvents(entityKey);
+}
+function pageInspectorHtml(entityKey,node){
+ const def=pageComponentDef(node.componentType);
+ const cfg=node.config||{};
+ const tier=pagePresetInfo(pbPreviewPreset).tier;
+ const span=pageEffectiveSpan(node.layout,tier);
+ const configHtml=(def?.configSchema||[]).map(f=>pageConfigFieldHtml(entityKey,f,cfg[f.key])).join('');
+ const relDefs=relationshipDefsFor(entityKey);
+ const relatedPicker=(node.componentType==='related_list'||node.componentType==='table')&&relDefs.length
+  ?`<div class="field"><label>Or pick a relationship</label><select data-pb-cfg="relationship_key"><option value="">Choose...</option>${relDefs.map(d=>{const label=d.sourceEntity===entityKey?d.forwardLabel:d.reverseLabel;return `<option value="${d.key}" ${cfg.relationship_key===d.key?'selected':''}>${label}</option>`}).join('')}</select></div>`
+  :'';
+ return `<div class="panel">
+ <div style="font-weight:700;display:flex;gap:6px;align-items:center"><span>${def?.icon||''}</span>${def?.label||node.componentType}</div>
+ ${def?.description?`<p class="muted" style="font-size:12px">${def.description}</p>`:''}
+ ${configHtml}
+ ${relatedPicker}
+ <div style="border-top:1px solid var(--line);margin:10px 0"></div>
+ <div style="font-weight:700;font-size:12px;margin-bottom:6px">Layout</div>
+ <div class="field"><label>Column span (${tier})</label>
+  <div style="display:flex;align-items:center;gap:8px">
+   <button type="button" class="btn btn-secondary" id="pbSpanMinus" ${span<=1?'disabled':''}>−</button>
+   <span style="min-width:24px;text-align:center">${span}</span>
+   <button type="button" class="btn btn-secondary" id="pbSpanPlus" ${span>=12?'disabled':''}>+</button>
+   <span class="muted" style="font-size:11px">of 12</span>
+  </div>
+ </div>
+ <p class="muted" style="font-size:11px">Set per breakpoint — switch the preview above to Tablet or Mobile to override this component's span there. Unset breakpoints inherit the next size up.</p>
+ </div>`;
+}
+function pageConfigFieldHtml(entityKey,schema,value){
+ const v=value===undefined?schema.defaultValue:value;
+ if(schema.type==='field_picker'){
+  const fields=allFieldsFor(entityKey);
+  return `<div class="field"><label>${schema.label}</label><select data-pb-cfg="${schema.key}"><option value="">Choose a field...</option>${fields.map(f=>`<option value="${f[0]}" ${v===f[0]?'selected':''}>${f[1]}</option>`).join('')}</select>${schema.help?`<p class="muted" style="font-size:11px">${schema.help}</p>`:''}</div>`;
+ }
+ if(schema.type==='select'){
+  return `<div class="field"><label>${schema.label}</label><select data-pb-cfg="${schema.key}">${(schema.options||[]).map(o=>`<option value="${o}" ${(v??schema.defaultValue)===o?'selected':''}>${o}</option>`).join('')}</select></div>`;
+ }
+ if(schema.type==='textarea'){
+  return `<div class="field"><label>${schema.label}</label><textarea rows="3" data-pb-cfg="${schema.key}" placeholder="${schema.placeholder||''}">${v||''}</textarea></div>`;
+ }
+ if(schema.type==='boolean'){
+  return `<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin:8px 0"><input type="checkbox" data-pb-cfg="${schema.key}" data-pb-cfg-bool="1" ${v?'checked':''}> ${schema.label}</label>`;
+ }
+ if(schema.type==='number'){
+  return `<div class="field"><label>${schema.label}</label><input type="number" data-pb-cfg="${schema.key}" data-pb-cfg-num="1" value="${v??''}"></div>`;
+ }
+ return `<div class="field"><label>${schema.label}</label><input type="text" data-pb-cfg="${schema.key}" placeholder="${schema.placeholder||''}" value="${v||''}">${schema.help?`<p class="muted" style="font-size:11px">${schema.help}</p>`:''}</div>`;
+}
+function wirePageInspectorEvents(entityKey,node){
+ const side=$('#pbSide'); if(!side)return;
+ side.querySelectorAll('[data-pb-cfg]').forEach(el=>{
+  const key=el.dataset.pbCfg;
+  el.onchange=()=>{
+   let val;
+   if(el.dataset.pbCfgBool)val=el.checked;
+   else if(el.dataset.pbCfgNum)val=el.value?Number(el.value):null;
+   else val=el.value;
+   updatePageNodeConfig(entityKey,node.id,key,val);
+  };
+ });
+ const tier=pagePresetInfo(pbPreviewPreset).tier;
+ const minus=$('#pbSpanMinus'); if(minus)minus.onclick=()=>updatePageNodeSpan(entityKey,node.id,tier,-1);
+ const plus=$('#pbSpanPlus'); if(plus)plus.onclick=()=>updatePageNodeSpan(entityKey,node.id,tier,1);
+}
+function updatePageNodeConfig(entityKey,id,key,value){
+ const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
+ const node=findPageNode(layout.draft.root,id);
+ if(!node)return;
+ node.config[key]=value;
+ save();
+ renderPageCanvas(entityKey);
+ // Deferred for the same reason as #layoutName/#tabTitle in layoutsTab
+ // above: this handler is still firing on an element that lives inside
+ // #pbSide, so tearing that element's parent down via innerHTML in the
+ // same tick throws "node is no longer a child of this node".
+ setTimeout(()=>renderPageInspectorAndLayers(entityKey),0);
+}
+function updatePageNodeSpan(entityKey,id,tier,delta){
+ const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
+ const node=findPageNode(layout.draft.root,id);
+ if(!node)return;
+ const next=Math.max(1,Math.min(12,pageEffectiveSpan(node.layout,tier)+delta));
+ if(tier==='desktop')node.layout.columnSpan=next;
+ else if(tier==='tablet')node.layout.tabletColumnSpan=next;
+ else node.layout.mobileColumnSpan=next;
+ save();
+ renderPageCanvas(entityKey);
+ renderPageInspectorAndLayers(entityKey);
+}
+function pageLayersHtml(nodes,depth){
+ if(depth===0){
+  if(!nodes.length)return `<div class="panel"><div style="font-weight:700;font-size:12px;margin-bottom:6px">Layers</div><p class="muted" style="font-size:12px">Nothing placed yet.</p></div>`;
+  return `<div class="panel"><div style="font-weight:700;font-size:12px;margin-bottom:6px">Layers</div>${pageLayersHtml(nodes,1)}</div>`;
+ }
+ return nodes.map(n=>{
+  const def=pageComponentDef(n.componentType);
+  const selected=pbSelectedNodeId===n.id;
+  return `<div style="padding-left:${(depth-1)*14}px">
+  <div data-pb-layer="${n.id}" style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 6px;border-radius:6px;cursor:pointer;background:${selected?'#eef2ff':'transparent'}">
+   <span>${def?.icon||'◻'}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pageNodeSummary(n,def)}</span>
+   <button type="button" class="icon-btn" data-pb-layer-delete="${n.id}" title="Delete">✕</button>
+  </div>
+  ${n.children.length?pageLayersHtml(n.children,depth+1):''}
+  </div>`;
+ }).join('');
+}
+function wirePageLayersEvents(entityKey){
+ document.querySelectorAll('[data-pb-layer]').forEach(el=>{
+  el.onclick=()=>selectPageNode(entityKey,el.dataset.pbLayer);
+ });
+ document.querySelectorAll('[data-pb-layer-delete]').forEach(el=>{
+  el.onclick=e=>{e.stopPropagation();deletePageNode(entityKey,el.dataset.pbLayerDelete)};
  });
 }
 // ---- Dashboards (mirrors the desktop edition's dashboard_layout_service/
@@ -10227,7 +10660,7 @@ function roadmapPage(){
    ]],
   ['⚙','No-Code Platform','Turn any business process into an admin-configurable object, field, rule, workflow, screen or dashboard — no code required.',[
    ['⚙','Fields, objects, rules & workflow',[['Admin panel & configurability','Branding & print customization; reports beyond the dashboard plus a simple custom report builder; custom fields, conditional business rules and workflow automation, generalized from Companies/Contacts to every major object; admin-configurable numbering per object; a dashboard KPI picker.'],['Custom Objects — extensibility platform, Phase A','An Administrator defines a whole new business object at runtime with its own icon and ID format, no code change — and it works through the exact same custom fields, business rules and report builder every built-in entity uses.'],['Custom Relationships — Phase B','Admins define relationships between any two record types (built-in or custom) — one-to-one / many-to-one / many-to-many cardinality, a restrict-or-archive delete policy, and a related-records list on record detail pages.'],['Richer Business Rules engine — Phase C, extended','Multi-condition AND/OR matching with one level of nested OR-groups, 10 comparison operators, and 12 action types (require, show, hide, lock, make editable, set default, set/clear value, restrict choices, block save, show error, show warning), plus rule priority, optional effective-date windows, and a "hide by default" flag on custom fields.'],['Richer Workflow Automation engine — Phase D, extended','7 trigger types (created/updated, status/field changed, date reached, due/overdue, scheduled), optional extra AND/OR conditions with OR-groups, and 8 action types (create task, update/default/clear a field, assign owner, create related record, add notification, create reminder), plus an in-app notification center.'],['Field validation, task reminders, session lock — Phase E','Custom field validation (min/max, max length, regex) at both definition and save time; Windows task reminder toasts through the standard Web Notification API; a 15-minute session inactivity auto-lock.'],['Condition engine v2','Four more comparison operators — starts with, ends with, is one of, is not one of — plus field-to-field comparison, so a condition can match against another field\'s live value instead of only a fixed one. Shared by business rules and workflow triggers, on desktop and in the online demo.'],['Status Transition Editor','Restrict which status/stage changes are allowed on any object, with a wildcard "from any status" starting point and a per-rule active toggle. No active rules leaves the field fully unrestricted; resaving the same status is never blocked.'],['Workflow action & test-mode expansion','Workflow actions reaching beyond the triggering record: create a new record (optionally linked) or update a field on already-linked records. A Test rule / Test workflow dry-run mode shows what active rules and workflows would do against hypothetical values, without touching real data.'],['Custom field extensibility','Four more settings on any custom field: a default value applied when a save leaves it empty, a "require a unique value" check (rejected at definition time for yes/no fields), placeholder text, and help text shown under the field on the record form.'],['Business Rules & Workflow Automation redesign','Both builders rebuilt as a numbered Condition/Effect (or Trigger/Action) layout with a live rule-summary panel; Workflow Automation gained a connected visual canvas (Trigger → Conditions → Actions → End) with zoom. Test and Activate/Deactivate moved into the builder header, alongside full editing, not just create.'],['Engine hardening: self-referential & polymorphic relationships, cross-record conditions, effective-dating','Five platform-primitive gaps closed together, since each pays off retroactively across every Industry Data Model package rather than one vertical: a relationship can now connect an object to another record of its own type (a parent/child hierarchy) or to a polymorphic "any record type" target chosen per link; a Business Rule or Workflow condition can read a field off the record linked through a many-to-one/one-to-one relationship, not just the triggering record\'s own; a date-reached/due-overdue workflow trigger now works on any Custom Object\'s own date field, not just a fixed built-in set; and the custom report builder gained an "as of" effective-dating filter — a predicate over a record\'s currently-stored Valid From/Valid To window, not true point-in-time reconstruction of a past value. Desktop edition only for now — not mirrored in the online demo.']]],
-   ['⊞','Screen/App Builder, Dashboards & App Builder',[['Screen/App Builder — full, 4 phases','What was the single largest item on this roadmap, now the biggest thing shipped on it: a real drag-and-drop layout builder for any object\'s create/edit form, on both the desktop app and the online demo. Phase 1 — named layouts, made of tabs of field sections, assigned to roles with a required Default fallback, and Draft → Publish (desktop had no layout designer at all before this; the demo\'s previous "Screen layouts" was field-order-only). Phase 2 — 1-3 column sections with a per-field full-width span. Phase 3 — placing a custom relationship\'s related-records list on a specific tab, with anything a tab doesn\'t claim still showing in an always-visible spot rather than disappearing. Phase 4 — the same published layout also drives the record\'s read-only detail/Overview view, not just the edit form, so a custom field an admin added is now visible there too. This is exactly the mechanism behind <a href="/platform">building your own app</a> on top of a custom object, not just reordering a form.'],['Dashboard customization — full, 3 phases + online demo','Admin → Dashboards lets an Administrator build multiple named dashboard layouts — each an ordered list of widgets — and assign them by role, with a required Default fallback, reusing the exact same draft/publish/role-resolution model Screen/App Builder shipped. Phase 1 — KPI tiles. Phase 2 — chart widgets, reusing the existing Custom Reports engine. Phase 3 — record-list widgets, a short list of an object\'s most recent (or, for Tasks and Invoices, soonest-due) records that jump straight to that record on click. No dashboard published yet falls back to exactly the fixed KPI picker that existed before this feature, unchanged. Shipped on both the desktop app and the online demo.'],['App Builder — Phase 1: publish a named app from your custom objects','Admin → Apps (desktop and online demo) groups a set of already-existing objects (built-in or custom), their screens and a dashboard into one named, publishable application — Property Management, Recruitment, Asset Tracking, whatever your organization actually runs — with its own icon, a sidebar App Switcher that filters navigation down to that app\'s objects, and an app-scoped dashboard, the same way Salesforce\'s AppDefinition scopes a Lightning app. Access is a genuinely new permission model — a grant to a role or to one specific person, at Viewer or Editor — not the existing role-checkbox pattern; on the desktop app, Administrators always see every published app and everyone else needs an explicit grant, while the browser demo (no signed-in user) simply shows every published app to everyone.'],['App Builder — Phase 2: server-side access enforcement','The Viewer/Editor level Phase 1 resolves is now a real security boundary, not just a UI hint. Once an object type is placed in at least one published app, every create, update, archive and status-lifecycle command on the desktop edition — issuing/voiding an invoice, recording a payment, converting a quote to an order or an order to an invoice, setting a quote/order status — requires at least Editor access to some app containing it, checked server-side on every command, not only by the button that\'s visible. Administrators always bypass; a grant to a specific person beats a grant to their role; the strongest grant across every matching app wins. Objects never placed in an app are completely unaffected — no existing workspace changes behavior by not adopting App Builder. The desktop UI also reflects this before a click reaches the server: a Viewer sees every "New", "Edit", "Issue", "Void", "Record payment" and status/conversion button on a scoped object disabled with an explanatory tooltip.'],['Theme Studio — Design Tokens, 4 curated presets &amp; a WCAG contrast gate','The first shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/191">#191</a>): until now, branding was a logo upload and nothing else. Admin → Theme Studio (desktop and online demo) lets an Administrator pick one of 4 curated presets — Orbit, Slate, Ember, Aurora — or build colors, typography, shape and density from scratch, with a live preview as you edit. Publishing runs every theme through the same Draft → Published → Archived versioning this platform already uses for Agent versions, including real rollback (creates a brand-new Draft from an older version\'s tokens and publishes that — history is never mutated). Publish itself is gated on a real WCAG 2.x contrast check across the theme\'s key text/surface pairs, with no override - a theme that fails stays a Draft. A workspace that never publishes a theme keeps exactly its current look.'],['Shared Visual Builder Framework — extracted from the Agent Team Builder canvas','The second shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/192">#192</a>): the pan/zoom/drag-to-reposition canvas, SVG edge rendering and click-to-connect state machine <code>AgentTeamsAdmin.tsx</code>\'s Agent Team Builder (Phase 5b) already proved in production are now a standalone <code>components/visualBuilder/</code> module (<code>useCanvasZoom</code>, <code>useNodeDrag</code>, <code>useConnectMode</code>, <code>VisualBuilderCanvas</code>) instead of code private to one screen. Every Execution Graph node type\'s connection rule - exactly-one-edge, any-number, two-fixed-labels (condition/approval/loop), or an admin-typed free label (router) - now collapses into one generic <code>ConnectionRule</code> shape a future canvas describes on its own terms, rather than re-deriving this interaction from scratch. Agent Team Builder itself is the only consumer today and keeps behaving identically on top of it (same CSS classes, same drag/zoom/connect feel) - proven by a clean typecheck and build with zero behavior change, not a new screen. Workflow Studio 2.0 and Business Rule Board 2.0 (next under epic #190) are this framework\'s first two real additional consumers.'],['Workflow Studio 2.0 — the Shared Visual Builder Framework\'s first real consumer','The third shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/193">#193</a>): Admin → Workflow Automation\'s canvas moves onto the Shared Visual Builder Framework (<a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/192">#192</a>) without migrating a single existing saved Workflow\'s execution path - an admin opts a specific workflow in (irreversibly) via a new "Upgrade to graph" action, which seeds a Draft Execution Graph from its current shape; every workflow that isn\'t upgraded keeps firing through the exact same flat engine it always has, proven by a dedicated parity test rather than only by construction. Upgrading unlocks the runtime\'s full 14-node palette - Switch, Loop, Parallel, Join and Run Agent were already real underneath but never surfaced by this builder before now, plus two genuinely new node types this issue added: Run Agent Team (calls an existing Agent Team through the same entry point a schedule trigger already uses) and Evaluate Result (grades an upstream node\'s output with the same LLM-as-judge call the Evaluation Harness uses, branching pass/fail). Also new: a typed variable reference panel, a client-side Test Run that highlights the path a real run would take as far as it\'s knowable without executing anything, and 5 starter templates. Shipped on the desktop edition; the online demo mirrors the 5 starter templates only - its workflow engine has no Execution Graph runtime equivalent to build a real graph canvas on top of, named honestly rather than faked.'],['Business Rule Board 2.0 — a visual IF/THEN lane board over the unchanged rule engine','The fourth shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/194">#194</a>): unlike Workflow Studio, Business Rules had no canvas of any kind to migrate - this is genuinely new UI over the existing, unchanged <code>domain::conditions::conditions_match</code> engine, visually distinguished from Workflow Studio since rules stay deterministic and synchronous. The old numbered Conditions/Actions form becomes a drag-and-drop IF lane / THEN lane board; dragging reorders whole units (a lone condition or a whole OR group moving together), matching the issue\'s own "drag conditions/groups into the IF lane" wording.</br>Nested AND/OR condition groups render as the same bordered visual container as before - no evaluation change. New ELSE IF/ELSE branching links a sibling rule into a visual chain (<code>branch_group_id</code>/<code>branch_role</code>, migration <code>0068_business_rule_board.sql</code>) rather than inventing a second execution path: an "else" rule is simply allowed to have zero conditions, and zero conditions always match - the one deliberate, additive evaluation change this issue needed, scoped to <code>business_rule_service::rule_matches</code> alone so the shared AND/OR matcher Workflow Automation also depends on stays provably untouched. A new conflict analyzer flags two active rules that disagree on the same field\'s required/visibility/editability state (hide+require, lock+require) - net-new analysis, not present before. Also new: 5 starter templates (Conditional Required, Conditional Visibility, Validation, Conditional Choices, Field Lock); the existing Test rule dry-run panel is reused in place, unchanged. Shipped on the desktop edition (6 new Rust tests in <code>business_rule_board.rs</code>, including a priority-ordering regression test proving an "if" branch\'s effect always wins over its "else" sibling\'s when both match the same record) and mirrored in the online demo, including its own drag-and-drop and conflict analyzer. Screen Builder 2.0 (next under epic #190) is the single largest remaining build in this epic.']]],
+   ['⊞','Screen/App Builder, Dashboards & App Builder',[['Screen/App Builder — full, 4 phases','What was the single largest item on this roadmap, now the biggest thing shipped on it: a real drag-and-drop layout builder for any object\'s create/edit form, on both the desktop app and the online demo. Phase 1 — named layouts, made of tabs of field sections, assigned to roles with a required Default fallback, and Draft → Publish (desktop had no layout designer at all before this; the demo\'s previous "Screen layouts" was field-order-only). Phase 2 — 1-3 column sections with a per-field full-width span. Phase 3 — placing a custom relationship\'s related-records list on a specific tab, with anything a tab doesn\'t claim still showing in an always-visible spot rather than disappearing. Phase 4 — the same published layout also drives the record\'s read-only detail/Overview view, not just the edit form, so a custom field an admin added is now visible there too. This is exactly the mechanism behind <a href="/platform">building your own app</a> on top of a custom object, not just reordering a form.'],['Dashboard customization — full, 3 phases + online demo','Admin → Dashboards lets an Administrator build multiple named dashboard layouts — each an ordered list of widgets — and assign them by role, with a required Default fallback, reusing the exact same draft/publish/role-resolution model Screen/App Builder shipped. Phase 1 — KPI tiles. Phase 2 — chart widgets, reusing the existing Custom Reports engine. Phase 3 — record-list widgets, a short list of an object\'s most recent (or, for Tasks and Invoices, soonest-due) records that jump straight to that record on click. No dashboard published yet falls back to exactly the fixed KPI picker that existed before this feature, unchanged. Shipped on both the desktop app and the online demo.'],['App Builder — Phase 1: publish a named app from your custom objects','Admin → Apps (desktop and online demo) groups a set of already-existing objects (built-in or custom), their screens and a dashboard into one named, publishable application — Property Management, Recruitment, Asset Tracking, whatever your organization actually runs — with its own icon, a sidebar App Switcher that filters navigation down to that app\'s objects, and an app-scoped dashboard, the same way Salesforce\'s AppDefinition scopes a Lightning app. Access is a genuinely new permission model — a grant to a role or to one specific person, at Viewer or Editor — not the existing role-checkbox pattern; on the desktop app, Administrators always see every published app and everyone else needs an explicit grant, while the browser demo (no signed-in user) simply shows every published app to everyone.'],['App Builder — Phase 2: server-side access enforcement','The Viewer/Editor level Phase 1 resolves is now a real security boundary, not just a UI hint. Once an object type is placed in at least one published app, every create, update, archive and status-lifecycle command on the desktop edition — issuing/voiding an invoice, recording a payment, converting a quote to an order or an order to an invoice, setting a quote/order status — requires at least Editor access to some app containing it, checked server-side on every command, not only by the button that\'s visible. Administrators always bypass; a grant to a specific person beats a grant to their role; the strongest grant across every matching app wins. Objects never placed in an app are completely unaffected — no existing workspace changes behavior by not adopting App Builder. The desktop UI also reflects this before a click reaches the server: a Viewer sees every "New", "Edit", "Issue", "Void", "Record payment" and status/conversion button on a scoped object disabled with an explanatory tooltip.'],['Theme Studio — Design Tokens, 4 curated presets &amp; a WCAG contrast gate','The first shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/191">#191</a>): until now, branding was a logo upload and nothing else. Admin → Theme Studio (desktop and online demo) lets an Administrator pick one of 4 curated presets — Orbit, Slate, Ember, Aurora — or build colors, typography, shape and density from scratch, with a live preview as you edit. Publishing runs every theme through the same Draft → Published → Archived versioning this platform already uses for Agent versions, including real rollback (creates a brand-new Draft from an older version\'s tokens and publishes that — history is never mutated). Publish itself is gated on a real WCAG 2.x contrast check across the theme\'s key text/surface pairs, with no override - a theme that fails stays a Draft. A workspace that never publishes a theme keeps exactly its current look.'],['Shared Visual Builder Framework — extracted from the Agent Team Builder canvas','The second shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/192">#192</a>): the pan/zoom/drag-to-reposition canvas, SVG edge rendering and click-to-connect state machine <code>AgentTeamsAdmin.tsx</code>\'s Agent Team Builder (Phase 5b) already proved in production are now a standalone <code>components/visualBuilder/</code> module (<code>useCanvasZoom</code>, <code>useNodeDrag</code>, <code>useConnectMode</code>, <code>VisualBuilderCanvas</code>) instead of code private to one screen. Every Execution Graph node type\'s connection rule - exactly-one-edge, any-number, two-fixed-labels (condition/approval/loop), or an admin-typed free label (router) - now collapses into one generic <code>ConnectionRule</code> shape a future canvas describes on its own terms, rather than re-deriving this interaction from scratch. Agent Team Builder itself is the only consumer today and keeps behaving identically on top of it (same CSS classes, same drag/zoom/connect feel) - proven by a clean typecheck and build with zero behavior change, not a new screen. Workflow Studio 2.0 and Business Rule Board 2.0 (next under epic #190) are this framework\'s first two real additional consumers.'],['Workflow Studio 2.0 — the Shared Visual Builder Framework\'s first real consumer','The third shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/193">#193</a>): Admin → Workflow Automation\'s canvas moves onto the Shared Visual Builder Framework (<a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/192">#192</a>) without migrating a single existing saved Workflow\'s execution path - an admin opts a specific workflow in (irreversibly) via a new "Upgrade to graph" action, which seeds a Draft Execution Graph from its current shape; every workflow that isn\'t upgraded keeps firing through the exact same flat engine it always has, proven by a dedicated parity test rather than only by construction. Upgrading unlocks the runtime\'s full 14-node palette - Switch, Loop, Parallel, Join and Run Agent were already real underneath but never surfaced by this builder before now, plus two genuinely new node types this issue added: Run Agent Team (calls an existing Agent Team through the same entry point a schedule trigger already uses) and Evaluate Result (grades an upstream node\'s output with the same LLM-as-judge call the Evaluation Harness uses, branching pass/fail). Also new: a typed variable reference panel, a client-side Test Run that highlights the path a real run would take as far as it\'s knowable without executing anything, and 5 starter templates. Shipped on the desktop edition; the online demo mirrors the 5 starter templates only - its workflow engine has no Execution Graph runtime equivalent to build a real graph canvas on top of, named honestly rather than faked.'],['Business Rule Board 2.0 — a visual IF/THEN lane board over the unchanged rule engine','The fourth shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/194">#194</a>): unlike Workflow Studio, Business Rules had no canvas of any kind to migrate - this is genuinely new UI over the existing, unchanged <code>domain::conditions::conditions_match</code> engine, visually distinguished from Workflow Studio since rules stay deterministic and synchronous. The old numbered Conditions/Actions form becomes a drag-and-drop IF lane / THEN lane board; dragging reorders whole units (a lone condition or a whole OR group moving together), matching the issue\'s own "drag conditions/groups into the IF lane" wording.</br>Nested AND/OR condition groups render as the same bordered visual container as before - no evaluation change. New ELSE IF/ELSE branching links a sibling rule into a visual chain (<code>branch_group_id</code>/<code>branch_role</code>, migration <code>0068_business_rule_board.sql</code>) rather than inventing a second execution path: an "else" rule is simply allowed to have zero conditions, and zero conditions always match - the one deliberate, additive evaluation change this issue needed, scoped to <code>business_rule_service::rule_matches</code> alone so the shared AND/OR matcher Workflow Automation also depends on stays provably untouched. A new conflict analyzer flags two active rules that disagree on the same field\'s required/visibility/editability state (hide+require, lock+require) - net-new analysis, not present before. Also new: 5 starter templates (Conditional Required, Conditional Visibility, Validation, Conditional Choices, Field Lock); the existing Test rule dry-run panel is reused in place, unchanged. Shipped on the desktop edition (6 new Rust tests in <code>business_rule_board.rs</code>, including a priority-ordering regression test proving an "if" branch\'s effect always wins over its "else" sibling\'s when both match the same record) and mirrored in the online demo, including its own drag-and-drop and conflict analyzer. Screen Builder 2.0 (next under epic #190) is the single largest remaining build in this epic.'],['Screen Builder 2.0 (5a) — a responsive page-composer engine &amp; 24-component library','The fifth shipped piece of the <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">UX/UI Modernization epic</a> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/195">#195</a>, split by its own author into two stacked PRs - this is 5a): a second, separate page-building system alongside Screen/App Builder above, which only ever builds the create/edit form. Admin &rarr; Page Builder (desktop and online demo) composes a record detail page from a 12-column responsive grid - drag a component from a 24-entry library across Layout (Section, Grid, Columns, Tabs, Divider, Spacer, Sticky Panel), Record (Field, Field Group, Record Header, Status Badge, Owner, Record Number), Data (Related List, Table, KPI, Chart), Actions (Button, Command Bar, Quick Action, Agent Action) plus one representative Content/Navigation/Utility component each, nest it inside a container, and resize with an exact 1-12 column-span stepper per breakpoint, not pixel-drag. A Layers panel and a live preview at four widths (1440/1024/768/390, plus a custom width) round it out. Same Draft/Published/role-assignment/Default-fallback governance every 2.0-era builder in this app uses, stored in a brand-new <code>page_layouts</code> table - <code>screen_layouts</code> and <code>ScreenLayoutsAdmin.tsx</code> are completely untouched, proven by a parity test plus an unchanged, fully-passing re-run of Screen/App Builder\'s own existing test suite. Composed pages aren\'t wired into the live record detail view yet - like every other 2.0-era builder\'s node cards, the canvas shows a schematic representation of what\'s placed, not live record data - page templates and that runtime wiring are 5b, the next piece of this issue.']]],
    ]],
   ['⬢','Apps, Packaging & Connections','Install a ready-made vertical app, package your own customizations like a real software vendor, and connect the workspace to everything else it needs to talk to.',[
    ['⬢','Industry Data Model & App Catalog',[['Industry Data Model: package manifest, install pipeline & App Catalog','A versioned metadata package format — objects, fields, relationships, business rules, workflows, screens, reports and a dashboard, with optional sample data — installed into an existing workspace from Admin → App Catalog. Install is not a separate product or a parallel data model: a package reuses the workspace\'s existing Company/Contact/Task core rather than creating duplicates, so Sales and an installed industry app coexist against the same customer master. Every install runs through pre-install validation (naming/numbering collisions, missing dependencies), an automatic safety backup, and a transactional install with rollback on failure; deactivating a package removes it from navigation without touching the business records it created.'],['Eleven industry reference packages, desktop edition','Field Service, Property Management, Construction & Contractors, Professional Services, Dental/Clinic Practice Administration, Recruitment & Staffing, Real Estate Brokerage, Legal Practice, Nonprofit & Association Management, Auto Repair & Service Garage, and Policy Administration & Claims Management — each a complete, install-ready object/field/relationship/business-rule/workflow set for that industry, reviewed and shipped one at a time with its own Rust core tests, then each deepened with an additional object, relationships, rules and (where supported) a workflow beyond its initial scope. The eleventh (insurance policy admin and claims) is checked against real PAS/claims practice — Guidewire, Duck Creek, ACORD — and is mirrored in the online demo below too, trimmed to that simpler engine the same way the other ten already are.'],['Per-app scoped automation','Business rules, workflow automation and dashboards created by an installed app are now tagged with the App that owns them, both admin builders gained an App filter, so an installed package\'s automation stays visibly contained instead of mixing into one flat unscoped list as more apps get installed.'],['App Catalog admin category, and App Builder confirms object changes','Admin → Apps split into two categories - App Builder (build your own) and App Catalog (install a reference package) - instead of one crowded tab. Separately, toggling an object on or off inside App Builder now shows a confirmation toast ("Added Contact to Field Service") instead of saving silently with no visible feedback, the actual defect behind a reported "can\'t add an existing entity to an installed app" bug (the underlying save always worked; there was just no confirmation, made worse by the mobile sidebar\'s icon-only collapsed state hiding the new nav entry).'],['Online demo: full 10-package App Catalog parity','The browser demo\'s Admin → App Catalog mirrors all ten reference packages, not just the original two (Field Service, Property Management) it shipped with - install creates the same custom objects/fields/relationships/rules/workflows client-side and tags them to the installing app, within the demo engine\'s existing structural limits (rules and workflows only fire on a watched-field edit, not record creation; a workflow\'s "create a new record" action only targets the 9 built-in types, not a custom object).'],['App Catalog: package Details before Install','A package can be previewed before any commitment — reachable both on the browse card, next to Import, and after importing, before Install. Parses the manifest already available pre-install to show what it builds (objects, field counts, ID formats, internal relationships), how it connects to existing data, its business rules and workflows described in plain language, and guidance on fitting it to a real organization. Shipped on both platforms.'],['Lanesra Industry Foundation — a twelfth, shared cross-industry package','Different in kind from the eleven business-vertical packages above: Party, Party Role, Party Relationship, Location, Asset, Agreement and more — shared plumbing other packages can optionally declare a real, enforced dependency on and relate to, instead of each reinventing its own version. First real use of the manifest format\'s dependencies mechanism — install/update now hard-fails until the required package is installed, active and version-satisfying. Desktop edition only — not mirrored in the online demo, which has no dependency-checking for any package.'],['Property Management retrofitted onto Foundation (v1.1.0)','The first business vertical actually rebuilt on a real dependency rather than the synthetic manifest that first proved the mechanism works: its Owner relationship now targets Foundation\'s Party instead of the built-in Company, and it gains four objects — Owner Interest (fractional co-ownership), Lease Amendment, Security Deposit and Violation / Notice. Lease Amendment, Security Deposit and Violation are also mirrored in the online demo (Owner Interest needs Foundation, so it\'s desktop only).'],['Field Service, deepened past its original scope','Checked against how ServiceTitan and Salesforce Field Service Lightning actually shape the rest of a real field service business: a pre-authorization Estimate (with its own approve/decline lifecycle) a Work Order can point back to, a recurring Maintenance Plan an Asset can be covered by, per-technician Time Entries for job costing, and an is_callback flag marking a return visit for unresolved prior work. Estimate and Maintenance Plan are also mirrored in the online demo, trimmed the same way every other reduced-mirror object already is.']]],
@@ -10271,7 +10704,7 @@ function roadmapPage(){
  const shortCatLabel=c=>c.title.split(/[—:]/)[0].trim();
 
  const planned=[
-  ['Enterprise UX/UI Modernization: Screen Builder 2.0','Reviewed against a supplied UX/UI spec (35 sections) against the real codebase before scoping: a genuine visual canvas already exists and runs in production (<code>AgentTeamsAdmin.tsx</code>, Phase 5b) with all 12 (now 14) Execution Graph node types proven, and Admin already has a real control-center-style landing grid (<code>Settings.tsx</code>\'s <code>ADMIN_CATEGORIES</code>) - so this isn\'t a from-scratch build. Four sub-issues under epic <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">#190</a> have already shipped - see Shipped, below: <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/191">#191</a> (Design Tokens &amp; Theme Studio), <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/192">#192</a> (the Shared Visual Builder Framework), <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/193">#193</a> (Workflow Studio 2.0, including two new node types - Run Agent Team and Evaluate Result - the framework\'s first real additional consumer) and <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/194">#194</a> (Business Rule Board 2.0 - a drag-and-drop IF/THEN lane board, not a node-graph consumer of the framework, since the rule engine stays deterministic/synchronous unlike Workflow Studio). Still open: Screen Builder (<code>ScreenLayoutsAdmin.tsx</code>) only assigns fields into a form\'s sections/columns - not the responsive page composer with templates and a component library the spec asks for, the single largest remaining build in this epic. Screen Builder 2.0 proceeds next (independently mergeable, gated on a before/after parity check so every existing saved Layout keeps rendering unchanged), then Agent Studio 2.0 polish, then Admin Control Center &amp; Runtime UX modernization.','UX/UI','L'],
+  ['Enterprise UX/UI Modernization: Screen Builder 2.0','Reviewed against a supplied UX/UI spec (35 sections) against the real codebase before scoping: a genuine visual canvas already exists and runs in production (<code>AgentTeamsAdmin.tsx</code>, Phase 5b) with all 12 (now 14) Execution Graph node types proven, and Admin already has a real control-center-style landing grid (<code>Settings.tsx</code>\'s <code>ADMIN_CATEGORIES</code>) - so this isn\'t a from-scratch build. Four sub-issues under epic <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">#190</a> have already shipped - see Shipped, below: <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/191">#191</a> (Design Tokens &amp; Theme Studio), <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/192">#192</a> (the Shared Visual Builder Framework), <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/193">#193</a> (Workflow Studio 2.0, including two new node types - Run Agent Team and Evaluate Result - the framework\'s first real additional consumer) and <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/194">#194</a> (Business Rule Board 2.0 - a drag-and-drop IF/THEN lane board, not a node-graph consumer of the framework, since the rule engine stays deterministic/synchronous unlike Workflow Studio). Screen Builder 2.0 (5a) has since shipped - see Shipped, below: a separate, 12-column responsive page-composer engine and 24-component library, independently mergeable and gated on the same before/after parity check so every existing saved Layout keeps rendering unchanged. Still open: 5b, the issue\'s other stacked half - page templates (Executive 360, Operations Workspace, Clean Detail, Data &amp; Insights) an admin can apply then freely customize, and wiring a composed page into the actual record detail rendering path, which 5a\'s canvas deliberately stops short of (it shows a schematic card for what\'s placed, not live record data, the same scoping every other 2.0-era builder in this app uses). 5b proceeds next, then Agent Studio 2.0 polish, then Admin Control Center &amp; Runtime UX modernization.','UX/UI','L'],
   ['Admin panel: UX/UI consistency pass','A full diagnostic across the whole Admin section, both platforms, for spacing/alignment/visual inconsistencies — flagged in particular: the mobile sidebar is icon-only with no label, so a newly-added nav icon (e.g. after installing an app) is easy to miss entirely. The Solution Packages spec\'s own Mobile UX Requirements call this out directly: icons alone aren\'t sufficient for discoverability, and the collapsed rail needs accessible labels/tooltips or a labeled collapsible state.',null,'M'],
   ['Website Refresh: information architecture overhaul','A detour ahead of the Screen Builder 2.0 work above, scoped against a supplied Website Refresh Strategy document and checked against the real product rather than copied verbatim: today\'s site has grown five nav dropdowns deep with real duplication between the homepage and <code>/platform</code>. Replacing it with one flat primary nav — <b>Product, App Catalog, Developers, Docs, Open Source, Try Live</b> — and giving the six core capabilities (AI Agent Foundry, Low-Code Platform, App Catalog, Integration Hub, Voice AI, Open &amp; Sovereign) their own destination page each instead of one long scroll repeating the same points. Sequenced in the same 5 phases the strategy document itself recommends: (1) navigation, homepage and a shortened Product Overview page; (2) the Agent Foundry, Low-Code and App Catalog destination pages; (3) Integration Hub, Voice AI and a new Developers hub; (4) per-app catalog detail pages and a docs terminology pass (CRM becomes an app inside the catalog, not the platform identity); (5) video-embed standards and visual polish. Every feature name, screenshot and supported-provider claim gets checked against the current build before publishing, not lifted from the strategy doc as-is. Built and finished before resuming Enterprise UX/UI Modernization, above.',null,'L'],
   ['Local MCP access without a Team Workspace server','The native MCP server (<code>POST /mcp</code>) only exists on the Team Workspace HTTP server today - a solo desktop install, with no listening socket at all, has zero MCP access, so pointing Claude Desktop or an IDE agent at a personal workspace\'s real records is impossible unless that person stands up a whole Team Workspace server for one feature. Scoped as a local <b>stdio bridge</b> - the desktop app\'s own process speaking MCP over stdio (the transport real desktop MCP clients expect), reusing the identical tool dispatcher and scoped API-client auth the Team Workspace HTTP endpoint already uses. Deliberately stdio-only, not an additional local HTTP listener - keeps this local-first product\'s "no open ports by default" posture intact.','MCP','M'],

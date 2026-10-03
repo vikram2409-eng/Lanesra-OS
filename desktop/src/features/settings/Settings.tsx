@@ -11,6 +11,7 @@ import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
 import { RelationshipsAdmin } from "./RelationshipsAdmin";
 import { CustomFieldsAdmin } from "./CustomFieldsAdmin";
 import { ScreenLayoutsAdmin } from "./ScreenLayoutsAdmin";
+import { PageBuilderAdmin } from "./PageBuilderAdmin";
 import { BusinessRulesAdmin } from "./BusinessRulesAdmin";
 import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
 import { StatusTransitionsAdmin } from "./StatusTransitionsAdmin";
@@ -77,6 +78,7 @@ type AdminTab =
   | "relationships"
   | "fields"
   | "layouts"
+  | "pageBuilder"
   | "themeStudio"
   | "rules"
   | "workflow"
@@ -108,6 +110,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "relationships", label: "Relationships" },
   { key: "fields", label: "Custom fields" },
   { key: "layouts", label: "Screen layouts" },
+  { key: "pageBuilder", label: "Page Builder" },
   { key: "themeStudio", label: "Theme Studio" },
   { key: "rules", label: "Business rules" },
   { key: "workflow", label: "Workflow automation" },
@@ -156,7 +159,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles"] },
   { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields"] },
-  { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts", "themeStudio"] },
+  { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts", "pageBuilder", "themeStudio"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
   { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards"] },
@@ -285,6 +288,7 @@ export function AdminPanel() {
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}
+      {tab === "pageBuilder" && <PageBuilderAdmin />}
       {tab === "themeStudio" && <ThemeStudioAdmin />}
       {tab === "rules" && <BusinessRulesAdmin />}
       {tab === "workflow" && <WorkflowAutomationAdmin />}
