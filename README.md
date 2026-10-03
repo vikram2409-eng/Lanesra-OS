@@ -5,7 +5,9 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Try the demo](https://img.shields.io/badge/try%20it-online%20demo-4f7cff)](https://lanesraos.com/demo)
 
-Modern, open-source, AI-native business application platform — an AI Agent Foundry and Unified AI Gateway where named agents run directly against your real data, not a bolted-on chatbot; a native MCP server & CLI that expose that same data to Claude Desktop, an IDE agent or any MCP-capable client; the same no-code admin panel that lets you reshape the workspace itself (your own record types, relationships, screens, business rules and automations, not just the fixed CRM fields); a complete CRM out of the box; and an Industry Data Model of 11 ready-made industry apps you can install instead of building from scratch. Deployment Management packages and promotes your customizations between workspaces, and an Integration Hub connects it to everything else you run. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
+**Build apps. Create agents. Orchestrate everything.**
+
+Lanesra OS is a free, open-source, self-hosted platform for building business applications — and for creating, governing, and orchestrating the AI agents that run on them. Shape the workspace itself with no-code tools: your own record types, relationships, screens, business rules, and automations. Define named AI agents with real tool access to your data, guardrailed by a policy engine and tool-call firewall, and chain agents and workflows into orchestrated pipelines with human-in-the-loop approvals. Connect it to everything else you run through an Integration Hub, or expose your data to external agents through a native MCP server. A complete CRM ships out of the box — alongside 11 ready-made industry apps you can install instead of building from scratch. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
 
 **[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
@@ -48,18 +50,6 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 - **Voice-First Mode** — a PIN-gated, risk-confirmed voice channel into your records: a 4-digit Voice PIN unlocks a time-boxed session, 8 per-role capability toggles plus a Max Voice Action Level and a Processing Boundary compose with (only ever narrow, never widen) the Access Roles above, and every voice-triggered write calls the exact same service a manual edit does, so Business Rules and Workflow Automation still apply — reads and navigation execute immediately, a status/field change always shows an explicit Before → After Confirm/Reject step, and delete-class actions are hard-blocked outright. Voice-triggered AI Agents & Pipelines, multi-turn conversational context, guided step-by-step record creation, industry-specific status vocabulary, and an optional admin-opt-in LLM-backed conversational layer (an unrecognized phrasing is rewritten by your own configured provider, then fed back through the identical permission/rule/confirmation pipeline) round out the full rollout — see the [roadmap](https://lanesraos.com/roadmap) for what's proposed next
 - **Access Control v1** — capability-scoped Access Roles (per-object create/read/update/delete/assign) and a Record Scope (Owner-only, Owner's Team, Owner's Org Unit and below, or Organization-wide) enforced on every create/update/delete/single-record-read across all owned objects and Custom Objects, plus list views, global search, dashboard widgets and report totals; an Access Inspector explains why a user can or can't see a given record from the identical evaluation trace enforcement itself uses
 
-**The core CRM — your Business OS:**
-
-- **Companies, Contacts & Sales Pipeline** — connected customer records with a Kanban/list opportunity pipeline
-- **Products & Services**, **Quotes**, **Orders**, **Invoices**, **Contracts**, **Tasks** — the full flexible sales lifecycle (Company → Opportunity → Quote → Order → Invoice), plus direct-quote/direct-order shortcuts
-- **Dashboard & global search** with clickable, filterable KPIs
-- **Reports** beyond the dashboard (revenue by month, win rate, AR aging, sales by owner), plus a simple report builder — including on custom fields and Custom Objects
-- **Branding & print customization** — logo, business profile, and PDF/print output for quotes, orders and invoices
-- **Admin panel**: user accounts and roles, admin-configurable ID/numbering formats per object (e.g. `CUS-000001` → `ACC-000001`), dashboard KPI picker
-- Windows task reminder notifications, session inactivity auto-lock
-- CSV import/export, whole-workspace backup & restore, self-service password change
-- Runs fully offline — no cloud account, licence key, or mandatory internet connection
-
 **Industry Data Model — install instead of building from scratch:**
 
 - **Industry Data Model** — a versioned package manifest format (objects, fields, relationships, business rules, workflows, screens, reports and a dashboard, with optional sample data) installed into an existing workspace, reusing your existing Company/Contact/Task core rather than creating a parallel data model
@@ -70,6 +60,20 @@ Modern, open-source, AI-native business application platform — an AI Agent Fou
 
 - **Deployment Management** — a Publisher registry, named/versioned Solutions curated from any component you've built, real export/import between workspaces, and update-with-diff — package and promote your customizations the way a real software vendor would
 - **Integration Hub** — AES-256-GCM-encrypted Connections (REST/SFTP/PostgreSQL/OData/SMTP), OpenAPI-imported Connectors (a curated template gallery — OpenAI, Cohere, Slack, GitHub, SendGrid — to start from) usable as Workflow Automation actions or, once opted in, as AI Agent Foundry tools (read-only by default, write access behind a further explicit per-connector opt-in), a generic REST API with hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a generalized CSV data-exchange wizard, and scheduled Integration Jobs
+
+**A complete CRM — proof, not the product:**
+
+The platform ships with a finished CRM, so there is value on day one — and a working example of what the platform itself builds.
+
+- **Companies, Contacts & Sales Pipeline** — connected customer records with a Kanban/list opportunity pipeline
+- **Products & Services**, **Quotes**, **Orders**, **Invoices**, **Contracts**, **Tasks** — the full flexible sales lifecycle (Company → Opportunity → Quote → Order → Invoice), plus direct-quote/direct-order shortcuts
+- **Dashboard & global search** with clickable, filterable KPIs
+- **Reports** beyond the dashboard (revenue by month, win rate, AR aging, sales by owner), plus a simple report builder — including on custom fields and Custom Objects
+- **Branding & print customization** — logo, business profile, and PDF/print output for quotes, orders and invoices
+- **Admin panel**: user accounts and roles, admin-configurable ID/numbering formats per object (e.g. `CUS-000001` → `ACC-000001`), dashboard KPI picker
+- Windows task reminder notifications, session inactivity auto-lock
+- CSV import/export, whole-workspace backup & restore, self-service password change
+- Runs fully offline — no cloud account, licence key, or mandatory internet connection
 
 ## Try it online
 
