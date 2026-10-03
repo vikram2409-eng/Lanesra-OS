@@ -64,6 +64,7 @@ pub mod organization_service;
 pub mod org_unit_service;
 pub mod ownership_service;
 pub mod page_layout_service;
+pub mod page_template_service;
 pub mod product_service;
 pub mod publisher_service;
 pub mod quote_service;

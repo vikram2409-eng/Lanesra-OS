@@ -37,6 +37,7 @@ pub mod organization;
 pub mod org_unit;
 pub mod ownership;
 pub mod page_layout;
+pub mod page_template;
 pub mod product;
 pub mod publisher;
 pub mod relationship;

@@ -46,6 +46,7 @@ use lanesra_core::models::ownership::OwnerRef;
 use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::work_team::{WorkTeamInput, WorkTeamUpdate};
 use lanesra_core::models::page_layout::{PageLayoutInput, PageLayoutUpdate};
+use lanesra_core::models::page_template::PageTemplateInput;
 use lanesra_core::models::relationship::{RelationshipDefinitionInput, RelationshipDefinitionUpdate};
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::saved_view::SavedViewInput;
@@ -79,7 +80,7 @@ use lanesra_core::services::{
     industry_package_service,
     integration_job_service, integration_log_service,
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
-    ownership_service, page_layout_service,
+    ownership_service, page_layout_service, page_template_service,
     publisher_service, product_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
     user_service, vector_search_service,
@@ -970,6 +971,21 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let workspace_id = require_workspace_id(conn)?;
             let page = page_layout_service::resolve_effective_page(conn, &workspace_id, &entity_type, actor)?;
             to_value(lanesra_core::services::page_layout_service::EffectivePage { page })
+        }
+
+        "list_page_templates" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(page_template_service::list_templates(conn, &require_workspace_id(conn)?, &entity_type)?)
+        }
+        "create_page_template" => {
+            let page_id: String = arg(args, "pageId")?;
+            let input: PageTemplateInput = arg(args, "input")?;
+            to_value(page_template_service::create_template_from_page(conn, &require_workspace_id(conn)?, &page_id, &input, actor)?)
+        }
+        "delete_page_template" => {
+            let id: String = arg(args, "id")?;
+            page_template_service::delete_template(conn, &id, &require_workspace_id(conn)?, actor)?;
+            Ok(Value::Null)
         }
 
         "list_dashboard_layouts" => to_value(dashboard_layout_service::list_layouts(conn, &require_workspace_id(conn)?)?),

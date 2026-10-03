@@ -116,6 +116,8 @@ import type {
   PageLayoutInput,
   PageLayoutUpdate,
   EffectivePage,
+  PageTemplate,
+  PageTemplateInput,
   Product,
   ProductInput,
   Quote,
@@ -833,6 +835,9 @@ export const api = {
   makePageLayoutDefault: (id: string) => call<PageLayout>("make_page_layout_default", { id }),
   deletePageLayout: (id: string) => call<void>("delete_page_layout", { id }),
   effectivePageLayout: (entityType: string) => call<EffectivePage>("effective_page_layout", { entityType }),
+  listPageTemplates: (entityType: string) => call<PageTemplate[]>("list_page_templates", { entityType }),
+  createPageTemplate: (pageId: string, input: PageTemplateInput) => call<PageTemplate>("create_page_template", { pageId, input }),
+  deletePageTemplate: (id: string) => call<void>("delete_page_template", { id }),
 
   listDashboardLayouts: () => call<DashboardLayout[]>("list_dashboard_layouts"),
   createDashboardLayout: (input: DashboardLayoutInput) => call<DashboardLayout>("create_dashboard_layout", { input }),

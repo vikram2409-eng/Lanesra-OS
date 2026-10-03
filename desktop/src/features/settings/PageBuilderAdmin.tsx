@@ -11,6 +11,7 @@ import {
   type PageDefinition,
   type PageLayout,
   type PageNode,
+  type PageTemplate,
 } from "../../lib/types";
 import {
   PAGE_COMPONENT_CATEGORIES,
@@ -20,6 +21,7 @@ import {
   type ConfigFieldSchema,
   type PageComponentDef,
 } from "./pageComponentLibrary";
+import { PAGE_TEMPLATES, type ThumbnailBlock } from "./pageTemplates";
 
 function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -295,6 +297,128 @@ function NewPageForm({
   );
 }
 
+function ThumbnailPreview({ blocks }: { blocks: ThumbnailBlock[] }) {
+  const colors: Record<ThumbnailBlock["kind"], string> = {
+    header: "var(--brand, #4f46e5)",
+    kpi: "#a5b4fc",
+    field: "#cbd5e1",
+    list: "#e2e8f0",
+    action: "#94a3b8",
+  };
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 3, marginBottom: 8 }}>
+      {blocks.map((b, i) => (
+        <div key={i} style={{ gridColumn: `span ${b.span}`, height: 14, borderRadius: 3, background: colors[b.kind] }} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Lists the 4 built-in templates (`pageTemplates.ts`) alongside any
+ * Organization Templates saved for this entity type - both apply the same
+ * way (`onApply` replaces the whole page draft), since from the picker's
+ * point of view a built-in and an org-authored template are the same
+ * kind of thing: a named starting shape to copy from, nothing more.
+ */
+function TemplatePicker({
+  fields,
+  relatedLists,
+  orgTemplates,
+  onApply,
+  onDeleteOrgTemplate,
+  onClose,
+}: {
+  fields: { key: string; label: string }[];
+  relatedLists: { key: string; label: string }[];
+  orgTemplates: PageTemplate[];
+  onApply: (definition: PageDefinition) => void;
+  onDeleteOrgTemplate: (id: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="card" style={{ background: "var(--bg-elevated)", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <strong>Start from a template</strong>
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+        {PAGE_TEMPLATES.map((t) => (
+          <div key={t.key} className="card" style={{ padding: 10 }}>
+            <ThumbnailPreview blocks={t.thumbnail} />
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{t.label}</div>
+            <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{t.description}</p>
+            <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => onApply(t.build(fields, relatedLists))}>
+              Apply
+            </button>
+          </div>
+        ))}
+        {orgTemplates.map((t) => (
+          <div key={t.id} className="card" style={{ padding: 10 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{t.name}</div>
+            <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{t.description || "Organization Template"}</p>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onApply(t.definition)}>
+                Apply
+              </button>
+              <button
+                className="btn"
+                onClick={() => {
+                  if (confirm(`Delete the "${t.name}" template?`)) onDeleteOrgTemplate(t.id);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SaveAsTemplateForm({
+  onSave,
+  onCancel,
+  pending,
+  error,
+}: {
+  onSave: (input: { name: string; description: string | null }) => void;
+  onCancel: () => void;
+  pending: boolean;
+  error: string | null;
+}) {
+  const [name, setName] = useState("New template");
+  const [description, setDescription] = useState("");
+  return (
+    <div className="card" style={{ background: "var(--bg-elevated)", marginBottom: 12 }}>
+      <div className="form-field">
+        <label>Template name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label>Description (optional)</label>
+        <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          className="btn btn-primary"
+          disabled={pending || !name.trim()}
+          onClick={() => onSave({ name: name.trim(), description: description.trim() || null })}
+        >
+          Save template
+        </button>
+        <button className="btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      {error && <p style={{ color: "var(--danger)", fontSize: 12 }}>{error}</p>}
+    </div>
+  );
+}
+
 function PageBuilderEditor({
   layout,
   fields,
@@ -318,6 +442,8 @@ function PageBuilderEditor({
   const [customWidth, setCustomWidth] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragPayload | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
 
   // Same "every structural edit auto-saves the draft immediately" rule as
   // Screen/App Builder - see ScreenLayoutsAdmin's own comment on why.
@@ -361,6 +487,41 @@ function PageBuilderEditor({
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not revert this draft"),
   });
+
+  const queryClient = useQueryClient();
+  const orgTemplates = useQuery({
+    queryKey: ["pageTemplates", layout.entity_type],
+    queryFn: () => api.listPageTemplates(layout.entity_type),
+  });
+  const saveAsTemplate = useMutation({
+    mutationFn: (input: { name: string; description: string | null }) => api.createPageTemplate(layout.id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pageTemplates", layout.entity_type] });
+      setShowSaveTemplate(false);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this template"),
+  });
+  const deleteTemplate = useMutation({
+    mutationFn: (id: string) => api.deletePageTemplate(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pageTemplates", layout.entity_type] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not delete this template"),
+  });
+
+  // Applying any template (built-in or Organization) always *replaces*
+  // the whole page - same destructive-with-a-confirm pattern delete page/
+  // layout already uses here, since partially merging a template into
+  // whatever's already there has no sensible single meaning. The result
+  // is an ordinary draft from this point on (an immediate save() call,
+  // same as every other structural edit) - nothing links back to the
+  // template afterward, so it's never "permanently template-bound."
+  function applyTemplate(definition: PageDefinition) {
+    if (page.root.length > 0 && !confirm("This replaces everything currently on this page with the template. Continue?")) {
+      return;
+    }
+    save(structuredClone(definition));
+    setSelectedNodeId(null);
+    setShowTemplates(false);
+  }
 
   const hasPublished = layout.published !== null;
   const draftPublishedMatch = hasPublished && JSON.stringify(layout.published) === JSON.stringify(page);
@@ -416,6 +577,12 @@ function PageBuilderEditor({
             Make default
           </button>
         )}
+        <button className="btn" onClick={() => setShowTemplates((v) => !v)}>
+          Start from a template
+        </button>
+        <button className="btn" onClick={() => setShowSaveTemplate((v) => !v)} disabled={page.root.length === 0}>
+          Save as Organization Template
+        </button>
         <button
           className="btn"
           onClick={() => {
@@ -427,6 +594,26 @@ function PageBuilderEditor({
           Delete
         </button>
       </div>
+
+      {showTemplates && (
+        <TemplatePicker
+          fields={fields}
+          relatedLists={relatedLists}
+          orgTemplates={orgTemplates.data ?? []}
+          onApply={applyTemplate}
+          onDeleteOrgTemplate={(id) => deleteTemplate.mutate(id)}
+          onClose={() => setShowTemplates(false)}
+        />
+      )}
+
+      {showSaveTemplate && (
+        <SaveAsTemplateForm
+          onSave={(input) => saveAsTemplate.mutate(input)}
+          onCancel={() => setShowSaveTemplate(false)}
+          pending={saveAsTemplate.isPending}
+          error={saveAsTemplate.error instanceof ApiError ? saveAsTemplate.error.message : null}
+        />
+      )}
 
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 600, fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Visible to roles (none = everyone)</div>
