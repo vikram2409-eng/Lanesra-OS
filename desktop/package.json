@@ -24,6 +24,6 @@
     "@vitejs/plugin-react": "^4",
     "typescript": "^5",
     "vite": "^5",
-    "vitest": "^2"
+    "vitest": "^5"
   }
 }
