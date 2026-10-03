@@ -2553,7 +2553,7 @@ dependencies = [
  "chrono",
  "csv",
  "hex",
- "hmac 0.12.1",
+ "hmac 0.13.0",
  "lettre",
  "rand_core 0.6.4",
  "regex",
