@@ -5,6 +5,9 @@
   <url><loc>https://lanesraos.com/agent-foundry</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
   <url><loc>https://lanesraos.com/low-code</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
   <url><loc>https://lanesraos.com/apps</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://lanesraos.com/integrations</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://lanesraos.com/voice</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://lanesraos.com/developers</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://lanesraos.com/demo</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://lanesraos.com/compare</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://lanesraos.com/download</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
