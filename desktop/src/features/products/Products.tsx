@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -8,6 +9,8 @@ import { ExportCsvButton } from "../../components/ExportCsvButton";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { LayoutDetailFields } from "../../components/LayoutDetailFields";
+import { PageRenderer } from "../../components/PageRenderer";
+import { useEffectivePage } from "../../lib/useEffectivePage";
 import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { OwnershipByline } from "../../components/OwnershipByline";
@@ -306,6 +309,50 @@ function ProductForm({
   );
 }
 
+/** Shared by `LayoutDetailFields` and `PageRenderer` (Screen Builder 2.0,
+ * issue #195, 5b) below - see `companyDetailFields` in Companies.tsx for
+ * why this is pulled out into its own function. */
+function productDetailFields(p: Product): Record<string, ReactNode> {
+  return {
+    sku: (
+      <div className="form-field" key="sku">
+        <label>SKU</label>
+        <div>{p.sku ?? "—"}</div>
+      </div>
+    ),
+    category: (
+      <div className="form-field" key="category">
+        <label>Category</label>
+        <div>{p.category ?? "—"}</div>
+      </div>
+    ),
+    unit_price_cents: (
+      <div className="form-field" key="unit_price_cents">
+        <label>Unit price</label>
+        <div>{formatCents(p.unit_price_cents)}</div>
+      </div>
+    ),
+    cost_cents: (
+      <div className="form-field" key="cost_cents">
+        <label>Cost</label>
+        <div>{formatCents(p.cost_cents)}</div>
+      </div>
+    ),
+    tax_rate_bp: (
+      <div className="form-field" key="tax_rate_bp">
+        <label>Tax rate</label>
+        <div>{(p.tax_rate_bp / 100).toFixed(2)}%</div>
+      </div>
+    ),
+    description: (
+      <div className="form-field full" key="description">
+        <label>Description</label>
+        <div>{p.description ?? "—"}</div>
+      </div>
+    ),
+  };
+}
+
 /**
  * Record-detail-page round: Products previously had no detail view at all -
  * list row click and menu went straight to Edit. No related-records list
@@ -325,6 +372,7 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
   const canWrite = useCanWriteObject("Product");
   useReportVoiceContext("Product", id);
   const product = useQuery({ queryKey: ["product", id], queryFn: () => api.getProduct(id) });
+  const effectivePage = useEffectivePage("Product");
 
   if (!product.data) return <p>Loading...</p>;
   const p = product.data;
@@ -348,53 +396,27 @@ function ProductDetail({ id, onEdit, onBack }: { id: string; onEdit: () => void;
       <AuditByline createdAt={p.created_at} createdBy={p.created_by} updatedAt={p.updated_at} updatedBy={p.updated_by} />
       <OwnershipByline objectKey="Product" recordId={p.id} />
 
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Details</h3>
-        <div className="form-grid">
-        <LayoutDetailFields
-          entityType="Product"
-          order={["sku", "category", "unit_price_cents", "cost_cents", "tax_rate_bp", "description"]}
-          fields={{
-            sku: (
-              <div className="form-field" key="sku">
-                <label>SKU</label>
-                <div>{p.sku ?? "—"}</div>
-              </div>
-            ),
-            category: (
-              <div className="form-field" key="category">
-                <label>Category</label>
-                <div>{p.category ?? "—"}</div>
-              </div>
-            ),
-            unit_price_cents: (
-              <div className="form-field" key="unit_price_cents">
-                <label>Unit price</label>
-                <div>{formatCents(p.unit_price_cents)}</div>
-              </div>
-            ),
-            cost_cents: (
-              <div className="form-field" key="cost_cents">
-                <label>Cost</label>
-                <div>{formatCents(p.cost_cents)}</div>
-              </div>
-            ),
-            tax_rate_bp: (
-              <div className="form-field" key="tax_rate_bp">
-                <label>Tax rate</label>
-                <div>{(p.tax_rate_bp / 100).toFixed(2)}%</div>
-              </div>
-            ),
-            description: (
-              <div className="form-field full" key="description">
-                <label>Description</label>
-                <div>{p.description ?? "—"}</div>
-              </div>
-            ),
-          }}
-        />
+      {effectivePage.data?.page ? (
+        // Screen Builder 2.0 (issue #195, 5b): an admin-composed Page
+        // takes over just the Details card's content once published for
+        // Product - CustomFieldsCard/AuditTrail below are a separate,
+        // pre-existing mechanism this phase doesn't touch, same as the
+        // doc comment above already says for LayoutDetailFields.
+        <div className="card">
+          <PageRenderer entityType="Product" entityId={p.id} fields={productDetailFields(p)} onEdit={onEdit} />
         </div>
-      </div>
+      ) : (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Details</h3>
+          <div className="form-grid">
+            <LayoutDetailFields
+              entityType="Product"
+              order={["sku", "category", "unit_price_cents", "cost_cents", "tax_rate_bp", "description"]}
+              fields={productDetailFields(p)}
+            />
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 16 }}>
         <CustomFieldsCard entityType="Product" entityId={p.id} status={p.is_active ? "true" : "false"} />

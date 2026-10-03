@@ -1666,6 +1666,26 @@ export interface EffectivePage {
   page: PageDefinition | null;
 }
 
+// Screen Builder 2.0 (issue #195, 5b): an immutable, workspace-scoped
+// snapshot of a page's draft, saved via "Save as Organization Template" -
+// see page_template.rs's own doc comment for why it has no
+// draft/published/roles lifecycle like PageLayout does.
+export interface PageTemplate {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  name: string;
+  description: string | null;
+  definition: PageDefinition;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface PageTemplateInput {
+  name: string;
+  description: string | null;
+}
+
 // Dashboard customization Phase 1: mirrors ScreenLayout/LayoutTabs above -
 // a workspace can have several named dashboard layouts (widgets instead
 // of field tabs, no entity_type since a dashboard isn't per-object),

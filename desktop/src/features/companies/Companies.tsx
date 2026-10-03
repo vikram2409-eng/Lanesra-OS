@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -10,6 +11,8 @@ import { CsvImportDialog, type ParsedCsvRow } from "../../components/CsvImportDi
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { LayoutDetailFields } from "../../components/LayoutDetailFields";
+import { PageRenderer } from "../../components/PageRenderer";
+import { useEffectivePage } from "../../lib/useEffectivePage";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { RelatedRecordsCard } from "../../components/RelatedRecordsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
@@ -527,6 +530,82 @@ const COMPANY_TABS: { tab: CompanyTab; label: string }[] = [
   { tab: "activity", label: "Activity" },
 ];
 
+/** The Overview tab's field elements, keyed by layout key - shared by
+ * both the `LayoutDetailFields` fallback and `PageRenderer` (Screen
+ * Builder 2.0, issue #195, 5b) below, so a `field` component placed on a
+ * published Page renders through the exact same pre-built element either
+ * renderer would otherwise arrange. */
+function companyDetailFields(data: Company): Record<string, ReactNode> {
+  return {
+    phone: (
+      <div className="form-field" key="phone">
+        <label>Phone</label>
+        <div>{data.phone ?? "—"}</div>
+      </div>
+    ),
+    email: (
+      <div className="form-field" key="email">
+        <label>Email</label>
+        <div>{data.email ?? "—"}</div>
+      </div>
+    ),
+    website: (
+      <div className="form-field" key="website">
+        <label>Website</label>
+        <div>{data.website ?? "—"}</div>
+      </div>
+    ),
+    annual_revenue_cents: (
+      <div className="form-field" key="annual_revenue_cents">
+        <label>Annual revenue</label>
+        <div>{data.annual_revenue_cents === null ? "—" : formatCents(data.annual_revenue_cents)}</div>
+      </div>
+    ),
+    employee_count: (
+      <div className="form-field" key="employee_count">
+        <label>Employees</label>
+        <div>{data.employee_count ?? "—"}</div>
+      </div>
+    ),
+    preferred_contact_method: (
+      <div className="form-field" key="preferred_contact_method">
+        <label>Preferred contact method</label>
+        <div>{data.preferred_contact_method ?? "—"}</div>
+      </div>
+    ),
+    tax_number: (
+      <div className="form-field" key="tax_number">
+        <label>Tax number</label>
+        <div>{data.tax_number ?? "—"}</div>
+      </div>
+    ),
+    billing_address: (
+      <div className="form-field full" key="billing_address">
+        <label>Billing address</label>
+        <div>{data.billing_address ?? "—"}</div>
+      </div>
+    ),
+    shipping_address: (
+      <div className="form-field full" key="shipping_address">
+        <label>Shipping address</label>
+        <div>{data.shipping_address ?? "—"}</div>
+      </div>
+    ),
+    tags: (
+      <div className="form-field full" key="tags">
+        <label>Tags</label>
+        <div>{data.tags ?? "—"}</div>
+      </div>
+    ),
+    notes: (
+      <div className="form-field full" key="notes">
+        <label>Notes</label>
+        <div>{data.notes ?? "—"}</div>
+      </div>
+    ),
+  };
+}
+
 /**
  * Addendum Phase 5 (Customer 360, spec §5): a tabbed record view
  * replacing the old plain-grid CompanyDetail - Contracts and Tasks tabs
@@ -561,6 +640,7 @@ function CompanyDetail({
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const contracts = useQuery({ queryKey: ["contractsByCompany", id], queryFn: () => api.listContractsByCompany(id) });
   const tasks = useQuery({ queryKey: ["tasksByRelated", "Company", id], queryFn: () => api.listTasksByRelated("Company", id) });
+  const effectivePage = useEffectivePage("Company");
 
   if (!company.data) return <p>Loading...</p>;
 
@@ -639,7 +719,18 @@ function CompanyDetail({
         ))}
       </div>
 
-      {tab === "overview" && (
+      {tab === "overview" && effectivePage.data?.page && (
+        // Screen Builder 2.0 (issue #195, 5b): an admin-composed Page
+        // takes over the whole Overview panel once published for
+        // Company - see PageRenderer's own doc comment for why this is a
+        // full opt-in replacement (Details/Related/Audit/Activity below)
+        // rather than a partial merge, and why `fields` is the identical
+        // map the old LayoutDetailFields branch builds below it.
+        <div style={{ marginTop: 16 }}>
+          <PageRenderer entityType="Company" entityId={id} fields={companyDetailFields(company.data)} onEdit={onEdit} />
+        </div>
+      )}
+      {tab === "overview" && !effectivePage.data?.page && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Details</h3>
@@ -650,74 +741,7 @@ function CompanyDetail({
                   "phone", "email", "website", "annual_revenue_cents", "employee_count",
                   "preferred_contact_method", "tax_number", "billing_address", "shipping_address", "tags", "notes",
                 ]}
-                fields={{
-                  phone: (
-                    <div className="form-field" key="phone">
-                      <label>Phone</label>
-                      <div>{company.data.phone ?? "—"}</div>
-                    </div>
-                  ),
-                  email: (
-                    <div className="form-field" key="email">
-                      <label>Email</label>
-                      <div>{company.data.email ?? "—"}</div>
-                    </div>
-                  ),
-                  website: (
-                    <div className="form-field" key="website">
-                      <label>Website</label>
-                      <div>{company.data.website ?? "—"}</div>
-                    </div>
-                  ),
-                  annual_revenue_cents: (
-                    <div className="form-field" key="annual_revenue_cents">
-                      <label>Annual revenue</label>
-                      <div>{company.data.annual_revenue_cents === null ? "—" : formatCents(company.data.annual_revenue_cents)}</div>
-                    </div>
-                  ),
-                  employee_count: (
-                    <div className="form-field" key="employee_count">
-                      <label>Employees</label>
-                      <div>{company.data.employee_count ?? "—"}</div>
-                    </div>
-                  ),
-                  preferred_contact_method: (
-                    <div className="form-field" key="preferred_contact_method">
-                      <label>Preferred contact method</label>
-                      <div>{company.data.preferred_contact_method ?? "—"}</div>
-                    </div>
-                  ),
-                  tax_number: (
-                    <div className="form-field" key="tax_number">
-                      <label>Tax number</label>
-                      <div>{company.data.tax_number ?? "—"}</div>
-                    </div>
-                  ),
-                  billing_address: (
-                    <div className="form-field full" key="billing_address">
-                      <label>Billing address</label>
-                      <div>{company.data.billing_address ?? "—"}</div>
-                    </div>
-                  ),
-                  shipping_address: (
-                    <div className="form-field full" key="shipping_address">
-                      <label>Shipping address</label>
-                      <div>{company.data.shipping_address ?? "—"}</div>
-                    </div>
-                  ),
-                  tags: (
-                    <div className="form-field full" key="tags">
-                      <label>Tags</label>
-                      <div>{company.data.tags ?? "—"}</div>
-                    </div>
-                  ),
-                  notes: (
-                    <div className="form-field full" key="notes">
-                      <label>Notes</label>
-                      <div>{company.data.notes ?? "—"}</div>
-                    </div>
-                  ),
-                }}
+                fields={companyDetailFields(company.data)}
               />
             </div>
           </div>
@@ -726,6 +750,7 @@ function CompanyDetail({
           <ActivityTimeline entityType="Company" entityId={id} />
         </div>
       )}
+
 
       {tab === "contacts" && (
         <TabListCard
