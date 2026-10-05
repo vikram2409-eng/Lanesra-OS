@@ -7,7 +7,7 @@
 
 **Build apps. Create agents. Orchestrate everything.**
 
-Lanesra OS is a free, open-source, self-hosted platform for building business applications — and for creating, governing, and orchestrating the AI agents that run on them. Shape the workspace itself with no-code tools: your own record types, relationships, screens, business rules, and automations. Define named AI agents with real tool access to your data, guardrailed by a policy engine and tool-call firewall, and chain agents and workflows into orchestrated pipelines with human-in-the-loop approvals. Connect it to everything else you run through an Integration Hub, or expose your data to external agents through a native MCP server. A complete CRM ships out of the box — alongside 11 ready-made industry apps you can install instead of building from scratch. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
+Lanesra OS is a free, open-source, self-hosted platform for building business applications — and for creating, governing, and orchestrating the AI agents that run on them. Shape the workspace itself with no-code tools: your own record types, relationships, screens, business rules, and automations. Define named AI agents with real tool access to your data, guardrailed by a policy engine and tool-call firewall, and chain agents and workflows into orchestrated pipelines with human-in-the-loop approvals. Connect it to everything else you run through an Integration Hub, or expose your data to external agents through a native MCP server. A complete sales app ships out of the box — alongside 11 ready-made industry apps you can install instead of building from scratch. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
 
 **[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
@@ -61,9 +61,9 @@ Lanesra OS is a free, open-source, self-hosted platform for building business ap
 - **Deployment Management** — a Publisher registry, named/versioned Solutions curated from any component you've built, real export/import between workspaces, and update-with-diff — package and promote your customizations the way a real software vendor would
 - **Integration Hub** — AES-256-GCM-encrypted Connections (REST/SFTP/PostgreSQL/OData/SMTP), OpenAPI-imported Connectors (a curated template gallery — OpenAI, Cohere, Slack, GitHub, SendGrid — to start from) usable as Workflow Automation actions or, once opted in, as AI Agent Foundry tools (read-only by default, write access behind a further explicit per-connector opt-in), a generic REST API with hashed/scoped API keys, HMAC-SHA256-signed Webhooks with retry, a generalized CSV data-exchange wizard, and scheduled Integration Jobs
 
-**A complete CRM — proof, not the product:**
+**A complete sales app — proof, not the product:**
 
-The platform ships with a finished CRM, so there is value on day one — and a working example of what the platform itself builds.
+The platform ships with a finished sales app, so there is value on day one — and a working example of what the platform itself builds.
 
 - **Companies, Contacts & Sales Pipeline** — connected customer records with a Kanban/list opportunity pipeline
 - **Products & Services**, **Quotes**, **Orders**, **Invoices**, **Contracts**, **Tasks** — the full flexible sales lifecycle (Company → Opportunity → Quote → Order → Invoice), plus direct-quote/direct-order shortcuts
@@ -106,7 +106,7 @@ The root of this repo is the public product website (`lanesraos.com`), a static 
 
 ## Public product pages
 
-- `/platform` — What you can build on top of the CRM, illustrated with real examples
+- `/platform` — What you can build with the platform, illustrated with real examples
 - `/compare` — A factual market-positioning comparison
 - `/download` — Desktop platform status, what's available today, and what's still planned
 - `/roadmap` — Shipped, in-progress and proposed work, plus the recommended build sequence (formerly split across separate Roadmap and Backlog pages)
