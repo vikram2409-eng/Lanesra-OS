@@ -6,7 +6,7 @@
 //! comment for what each test category is checking and why.
 
 use lanesra_core::db::open_in_memory_db;
-use lanesra_core::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets};
+use lanesra_core::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets, WidgetLayout};
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{dashboard_layout_service, user_service, workspace_service};
@@ -227,4 +227,63 @@ fn widgets_round_trip_through_save_and_a_fresh_reload() {
 
     let reloaded = dashboard_layout_service::get_layout(&conn, &layout.id).unwrap();
     assert_eq!(reloaded.draft, saved.draft);
+}
+
+/// Runtime UX Modernization (issue #198): a widget's explicit grid
+/// position/size round-trips exactly through save-and-reload, same as any
+/// other field - this is the regression the dashboard drag/resize grid
+/// depends on (a dragged widget that reset to its auto-placed position on
+/// reload would be a silent correctness bug the UI alone can't catch,
+/// since the optimistic client-side state update looks identical either
+/// way until a fresh reload).
+#[test]
+fn widget_layout_round_trips_through_save_and_a_fresh_reload() {
+    let (conn, ws, admin) = setup_workspace();
+    let layout = dashboard_layout_service::list_layouts(&conn, &ws).unwrap().remove(0);
+
+    let placed_layout = WidgetLayout { x: 3, y: 2, w: 6, h: 5 };
+    let draft = DashboardWidgets {
+        widgets: vec![
+            DashboardWidget { id: "w1".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": "open_pipeline" }), layout: Some(placed_layout) },
+            DashboardWidget { id: "w2".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": "overdue_invoices" }), layout: None },
+        ],
+    };
+    let update = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft, app_id: None };
+    let saved = dashboard_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
+    assert_eq!(saved.draft.widgets[0].layout, Some(placed_layout));
+    assert_eq!(saved.draft.widgets[1].layout, None, "a widget saved without a layout stays unplaced, not auto-filled server-side");
+
+    let reloaded = dashboard_layout_service::get_layout(&conn, &layout.id).unwrap();
+    assert_eq!(reloaded.draft.widgets[0].layout, Some(placed_layout));
+    assert_eq!(reloaded.draft.widgets[1].layout, None);
+}
+
+/// The 4 new widget kinds (issue #198) need no backend awareness of their
+/// own shape - `kind` is an opaque string and `config` an opaque JSON blob
+/// to this layer, the same convention the pre-existing "record_list" kind
+/// already relies on. This just confirms that convention actually holds
+/// for the new kinds too: nothing here validates or rejects them.
+#[test]
+fn new_widget_kinds_round_trip_opaquely() {
+    let (conn, ws, admin) = setup_workspace();
+    let layout = dashboard_layout_service::list_layouts(&conn, &ws).unwrap().remove(0);
+
+    let draft = DashboardWidgets {
+        widgets: vec![
+            DashboardWidget { id: "w1".into(), kind: "table".into(), config: serde_json::json!({ "entity_type": "Task", "mode": "due_soon", "limit": 8 }), layout: None },
+            DashboardWidget { id: "w2".into(), kind: "saved_view".into(), config: serde_json::json!({ "entity_type": "Task", "saved_view_id": "sv1", "limit": 5 }), layout: None },
+            DashboardWidget { id: "w3".into(), kind: "task_queue".into(), config: serde_json::json!({ "mode": "overdue", "limit": 5 }), layout: None },
+            DashboardWidget { id: "w4".into(), kind: "agent_insight".into(), config: serde_json::json!({ "agent_id": "agent1" }), layout: None },
+        ],
+    };
+    let update = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft, app_id: None };
+    let saved = dashboard_layout_service::update_layout(&conn, &layout.id, &update, Some(&admin)).unwrap();
+
+    let reloaded = dashboard_layout_service::get_layout(&conn, &layout.id).unwrap();
+    assert_eq!(reloaded.draft, saved.draft);
+    assert_eq!(reloaded.draft.widgets.len(), 4);
+    assert_eq!(reloaded.draft.widgets[0].kind, "table");
+    assert_eq!(reloaded.draft.widgets[0].config["mode"], "due_soon");
+    assert_eq!(reloaded.draft.widgets[2].kind, "task_queue");
+    assert_eq!(reloaded.draft.widgets[2].config["mode"], "overdue");
 }

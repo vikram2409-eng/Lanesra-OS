@@ -1473,7 +1473,7 @@ function dashboardChartWidgetHtml(w){
  const report=(data.customReports||[]).find(r=>r.id===w.config.reportId);
  const rows=runCustomReport(report);
  const max=Math.max(0,...rows.map(r=>r.value));
- return `<section class="panel"><div class="panel-head"><h3>${report.name}</h3></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</section>`;
+ return `<section class="panel"><div class="panel-head"><h3>${report.name}</h3></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max,i)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</section>`;
 }
 function dashboardRecordListWidgetHtml(w){
  const {entityKey,mode,limit}=w.config;
@@ -1551,7 +1551,7 @@ let reportsTo='';
 let reportsAsOf='';
 let selectedCustomReportId=null;
 function inRange(dateStr){if(!dateStr)return false;if(reportsFrom&&dateStr<reportsFrom)return false;if(reportsTo&&dateStr>reportsTo)return false;return true}
-function reportBarHtml(value,max){const pct=max>0?Math.max(2,Math.round(value/max*100)):0;return `<div style="background:#eef2ff;border-radius:5px;width:130px;height:9px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--brand)"></div></div>`}
+function reportBarHtml(value,max,index){const pct=max>0?Math.max(2,Math.round(value/max*100)):0;const color=index===undefined?'var(--brand)':`var(--chart-${(index%6)+1})`;return `<div style="background:#eef2ff;border-radius:5px;width:130px;height:9px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color}"></div></div>`}
 function downloadCsv(filename,headers,rows){
  const esc=v=>{const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
  const csv=[headers.map(esc).join(','),...rows.map(r=>r.map(esc).join(','))].join('\n');
@@ -1657,21 +1657,21 @@ function winRateReportTab(body){
 function lostReasonsReportTab(body){
  const rows=reportLostReasons();
  const max=Math.max(0,...rows.map(r=>r.count));
- body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Lost reasons</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Uses each opportunity's expected close date — this demo doesn't track a separate closed-date timestamp.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Reason</th><th>Count</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.reason}</td><td>${r.count}</td><td>${reportBarHtml(r.count,max)}</td><td>${money(r.value)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No lost opportunities in this range.</div>'}</div>`;
+ body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Lost reasons</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Uses each opportunity's expected close date — this demo doesn't track a separate closed-date timestamp.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Reason</th><th>Count</th><th></th><th>Value</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.reason}</td><td>${r.count}</td><td>${reportBarHtml(r.count,max,i)}</td><td>${money(r.value)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No lost opportunities in this range.</div>'}</div>`;
  wireRangeControls(()=>lostReasonsReportTab(body));
  $('#exportReport').onclick=()=>downloadCsv('lost-reasons.csv',['Reason','Count','Value'],rows.map(r=>[r.reason,r.count,r.value.toFixed(2)]));
 }
 function arAgingReportTab(body){
  const rows=reportArAging(reportsAsOf);
  const max=Math.max(0,...rows.map(r=>r.balance));
- body.innerHTML=`<div class="form-grid" style="grid-template-columns:max-content;align-items:end;margin-bottom:16px"><div class="field"><label>As of</label><input type="date" id="reportsAsOfInput" value="${reportsAsOf}"></div></div><div class="panel"><div class="panel-head"><h3>AR aging</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Uses each invoice's full amount as its balance — this demo doesn't track partial payments separately.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Bucket</th><th>Invoices</th><th></th><th>Balance</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.bucket}</td><td>${r.count}</td><td>${reportBarHtml(r.balance,max)}</td><td>${money(r.balance)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No outstanding balances.</div>'}</div>`;
+ body.innerHTML=`<div class="form-grid" style="grid-template-columns:max-content;align-items:end;margin-bottom:16px"><div class="field"><label>As of</label><input type="date" id="reportsAsOfInput" value="${reportsAsOf}"></div></div><div class="panel"><div class="panel-head"><h3>AR aging</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Uses each invoice's full amount as its balance — this demo doesn't track partial payments separately.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Bucket</th><th>Invoices</th><th></th><th>Balance</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.bucket}</td><td>${r.count}</td><td>${reportBarHtml(r.balance,max,i)}</td><td>${money(r.balance)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No outstanding balances.</div>'}</div>`;
  $('#reportsAsOfInput').onchange=e=>{reportsAsOf=e.target.value;arAgingReportTab(body)};
  $('#exportReport').onclick=()=>downloadCsv('ar-aging.csv',['Bucket','Invoices','Balance'],rows.map(r=>[r.bucket,r.count,r.balance.toFixed(2)]));
 }
 function salesByOwnerReportTab(body){
  const rows=reportSalesByOwner();
  const max=Math.max(0,...rows.map(r=>r.total));
- body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Sales by owner</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Attributed via each invoice's Company owner — invoices have no owner of their own. Grouped by due date, since this demo doesn't track a separate issue date.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Owner</th><th>Invoices</th><th></th><th>Revenue</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.owner}</td><td>${r.count}</td><td>${reportBarHtml(r.total,max)}</td><td>${money(r.total)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No invoices in this range.</div>'}</div>`;
+ body.innerHTML=`${rangeControlsHtml()}<div class="panel"><div class="panel-head"><h3>Sales by owner</h3><button class="btn btn-secondary" id="exportReport">Export CSV</button></div><p class="muted" style="margin-top:-8px;font-size:13px">Attributed via each invoice's Company owner — invoices have no owner of their own. Grouped by due date, since this demo doesn't track a separate issue date.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Owner</th><th>Invoices</th><th></th><th>Revenue</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.owner}</td><td>${r.count}</td><td>${reportBarHtml(r.total,max,i)}</td><td>${money(r.total)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No invoices in this range.</div>'}</div>`;
  wireRangeControls(()=>salesByOwnerReportTab(body));
  $('#exportReport').onclick=()=>downloadCsv('sales-by-owner.csv',['Owner','Invoices','Revenue'],rows.map(r=>[r.owner,r.count,r.total.toFixed(2)]));
 }
@@ -1689,7 +1689,7 @@ function renderCustomReportResults(){
  if(!report){box.innerHTML='';return}
  const rows=runCustomReport(report);
  const max=Math.max(0,...rows.map(r=>r.value));
- box.innerHTML=`<div class="panel" style="margin-top:16px"><div class="panel-head"><h3>${report.name}</h3><button class="btn btn-secondary" id="exportCustomReport">Export CSV</button></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</div>`;
+ box.innerHTML=`<div class="panel" style="margin-top:16px"><div class="panel-head"><h3>${report.name}</h3><button class="btn btn-secondary" id="exportCustomReport">Export CSV</button></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max,i)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</div>`;
  $('#exportCustomReport').onclick=()=>downloadCsv(`${report.name.toLowerCase().replace(/\s+/g,'-')}.csv`,['Group','Value'],rows.map(r=>[r.group,r.value]));
 }
 function customReportModal(){
@@ -1767,7 +1767,7 @@ function renderAskReportResult(question){
  const rows=runCustomReport({entityKey:matchKey,groupBySource:'builtin',groupByField:statusField,aggregate:'count',sumFieldKey:''});
  const max=Math.max(0,...rows.map(r=>r.value));
  const statusLabel=statusField==='stage'?'Stage':'Status';
- box.innerHTML=`<p class="muted" style="font-size:13px">Simulated: matched "${entityLabel(matchKey)}" in your question and counted real demo records by ${statusLabel} - a simple keyword match, not a real LLM call.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max)}</td><td>${r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}`;
+ box.innerHTML=`<p class="muted" style="font-size:13px">Simulated: matched "${entityLabel(matchKey)}" in your question and counted real demo records by ${statusLabel} - a simple keyword match, not a real LLM call.</p>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max,i)}</td><td>${r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}`;
 }
 // Phase 5 Customer/Contact 360, generalized in the v0.25 round: a
 // company/contact reference anywhere in a list becomes a clickable link
@@ -4823,12 +4823,21 @@ function groupsHtml(groups,record){
 // database rows until a workspace actually applies/customizes one, same
 // as the real desktop edition.
 const THEME_PRESETS=[
- ['orbit','Orbit','Signature Lanesra: modern indigo, premium SaaS/enterprise.',{color:{brand_primary:'#635BFF',brand_secondary:'#8B5CF6',surface_app:'#F7F8FC',surface_card:'#FFFFFF',surface_sidebar:'#111827',border_default:'#E2E5EE',text_primary:'#111827',text_secondary:'#5B6572',status_success:'#0F9D76',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'rounded'},density:'comfortable'}],
- ['slate','Slate','Consulting/enterprise: restrained blue + teal.',{color:{brand_primary:'#2563EB',brand_secondary:'#14B8A6',surface_app:'#F8FAFC',surface_card:'#FFFFFF',surface_sidebar:'#0F172A',border_default:'#E1E7F0',text_primary:'#0F172A',text_secondary:'#5B6572',status_success:'#16A34A',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'soft'},density:'comfortable'}],
- ['ember','Ember','Warm executive: amber/orange with neutral graphite.',{color:{brand_primary:'#C2410C',brand_secondary:'#EAB308',surface_app:'#FAFAF9',surface_card:'#FFFFFF',surface_sidebar:'#1C1917',border_default:'#E7E3DF',text_primary:'#1C1917',text_secondary:'#5B6572',status_success:'#15803D',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'soft'},density:'comfortable'}],
- ['aurora','Aurora','Contemporary teal with violet accents, modern technical feel.',{color:{brand_primary:'#0F766E',brand_secondary:'#7C3AED',surface_app:'#F4FAF9',surface_card:'#FFFFFF',surface_sidebar:'#102A2E',border_default:'#DCEAE8',text_primary:'#102A2E',text_secondary:'#5B6572',status_success:'#15803D',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'rounded'},density:'comfortable'}],
+ ['orbit','Orbit','Signature Lanesra: modern indigo, premium SaaS/enterprise.',{color:{brand_primary:'#635BFF',brand_secondary:'#8B5CF6',surface_app:'#F7F8FC',surface_card:'#FFFFFF',surface_sidebar:'#111827',border_default:'#E2E5EE',text_primary:'#111827',text_secondary:'#5B6572',status_success:'#0F9D76',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'rounded'},density:'comfortable',chart:{palette:['#635BFF','#0F9D76','#F59E0B','#EF4444','#3B82F6','#8B5CF6']}}],
+ ['slate','Slate','Consulting/enterprise: restrained blue + teal.',{color:{brand_primary:'#2563EB',brand_secondary:'#14B8A6',surface_app:'#F8FAFC',surface_card:'#FFFFFF',surface_sidebar:'#0F172A',border_default:'#E1E7F0',text_primary:'#0F172A',text_secondary:'#5B6572',status_success:'#16A34A',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'soft'},density:'comfortable',chart:{palette:['#2563EB','#14B8A6','#F59E0B','#EF4444','#8B5CF6','#16A34A']}}],
+ ['ember','Ember','Warm executive: amber/orange with neutral graphite.',{color:{brand_primary:'#C2410C',brand_secondary:'#EAB308',surface_app:'#FAFAF9',surface_card:'#FFFFFF',surface_sidebar:'#1C1917',border_default:'#E7E3DF',text_primary:'#1C1917',text_secondary:'#5B6572',status_success:'#15803D',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'soft'},density:'comfortable',chart:{palette:['#C2410C','#EAB308','#0F766E','#3B82F6','#8B5CF6','#EF4444']}}],
+ ['aurora','Aurora','Contemporary teal with violet accents, modern technical feel.',{color:{brand_primary:'#0F766E',brand_secondary:'#7C3AED',surface_app:'#F4FAF9',surface_card:'#FFFFFF',surface_sidebar:'#102A2E',border_default:'#DCEAE8',text_primary:'#102A2E',text_secondary:'#5B6572',status_success:'#15803D',status_warning:'#F59E0B',status_danger:'#EF4444',status_info:'#3B82F6'},typography:{font_family:'-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',base_size_px:16},shape:{radius_scale:'rounded'},density:'comfortable',chart:{palette:['#0F766E','#7C3AED','#F59E0B','#EF4444','#3B82F6','#16A34A']}}],
 ];
 const THEME_COLOR_FIELDS=[['brand_primary','Brand primary'],['brand_secondary','Brand secondary'],['surface_app','App background'],['surface_card','Card surface'],['surface_sidebar','Sidebar surface'],['border_default','Border'],['text_primary','Primary text'],['text_secondary','Secondary text'],['status_success','Success'],['status_warning','Warning'],['status_danger','Danger'],['status_info','Info']];
+// Runtime UX Modernization (issue #198): same default every curated preset
+// starts from (see workspace_theme.rs's DEFAULT_CHART_PALETTE). A theme
+// saved in localStorage before this field existed just falls back here,
+// the same "absent means not yet set" convention the real app's
+// `#[serde(default)]` applies server-side.
+const DEFAULT_CHART_PALETTE=['#635BFF','#0F9D76','#F59E0B','#EF4444','#3B82F6','#8B5CF6'];
+function themeChartPalette(tokens){
+ return (tokens.chart&&tokens.chart.palette&&tokens.chart.palette.length)?tokens.chart.palette:DEFAULT_CHART_PALETTE;
+}
 // Same WCAG 2.x relative-luminance/contrast-ratio math as
 // theme_service.rs's own hex_to_linear_rgb/relative_luminance/
 // contrast_ratio - transcribed, not approximated, so this demo's "Check
@@ -4884,11 +4893,13 @@ function themeStudioTab(body){
  body.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{
   const [key,name,,tokens]=THEME_PRESETS.find(p=>p[0]===b.dataset.preset);
   themeDraft={id:null,name:`${name} (custom)`,preset_key:key,tokens:structuredClone(tokens)};
+  themeDraft.tokens.chart=themeDraft.tokens.chart||{palette:themeChartPalette(themeDraft.tokens).slice()};
   themeIssues=null;renderAdminTab();
  });
  body.querySelectorAll('[data-edit-theme]').forEach(b=>b.onclick=()=>{
   const v=data.themeVersions.find(t=>t.id===b.dataset.editTheme);
   themeDraft={id:v.id,name:v.name,preset_key:v.preset_key,tokens:structuredClone(v.tokens)};
+  themeDraft.tokens.chart=themeDraft.tokens.chart||{palette:themeChartPalette(themeDraft.tokens).slice()};
   themeIssues=null;renderAdminTab();
  });
  body.querySelectorAll('[data-delete-theme]').forEach(b=>b.onclick=()=>{
@@ -4928,6 +4939,8 @@ function themeDraftPanel(){
  <div class="field"><label>Name</label><input id="themeDraftName" value="${d.name}"></div>
  <h4>Colors</h4>
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${THEME_COLOR_FIELDS.map(([key,label])=>`<div class="field"><label>${label}</label><div style="display:flex;gap:6px;align-items:center"><input type="color" data-theme-color="${key}" value="${d.tokens.color[key]}" style="width:36px;height:30px;padding:0"><input data-theme-color-text="${key}" value="${d.tokens.color[key]}" style="flex:1"></div></div>`).join('')}</div>
+ <h4 title="The color series a multi-row chart (Reports, dashboard chart widgets) cycles through by group index.">Chart palette</h4>
+ <div style="display:flex;flex-wrap:wrap;gap:8px">${d.tokens.chart.palette.map((c,i)=>`<div class="field" style="width:90px"><label>Series ${i+1}</label><div style="display:flex;gap:6px;align-items:center"><input type="color" data-theme-chart="${i}" value="${c}" style="width:36px;height:30px;padding:0"><input data-theme-chart-text="${i}" value="${c}" style="width:70px"></div></div>`).join('')}</div>
  <h4>Typography</h4>
  <div class="field"><label>Font family</label><input id="themeDraftFont" value="${d.tokens.typography.font_family}"></div>
  <div class="field"><label>Base size (px)</label><input id="themeDraftSize" type="number" value="${d.tokens.typography.base_size_px}"></div>
@@ -4956,7 +4969,9 @@ function themePreviewHtml(tokens){
  <span style="background:${c.status_success};color:#fff;border-radius:999px;padding:2px 10px;font-size:12px;margin-right:6px">Success</span>
  <span style="background:${c.status_warning};color:#fff;border-radius:999px;padding:2px 10px;font-size:12px;margin-right:6px">Warning</span>
  <span style="background:${c.status_danger};color:#fff;border-radius:999px;padding:2px 10px;font-size:12px">Danger</span>
- </div></div>`;
+ </div>
+ <div style="display:flex;gap:4px;margin-top:12px">${themeChartPalette(tokens).map((pc,i)=>`<div style="flex:1;height:28px;background:${pc};border-radius:4px" title="Series ${i+1}"></div>`).join('')}</div>
+ </div>`;
 }
 function bindThemeDraftPanel(){
  $('#themePreview').innerHTML=themePreviewHtml(themeDraft.tokens);
@@ -4966,6 +4981,13 @@ function bindThemeDraftPanel(){
   const colorInput=document.querySelector(`[data-theme-color="${key}"]`);
   const textInput=document.querySelector(`[data-theme-color-text="${key}"]`);
   const sync=val=>{themeDraft.tokens.color[key]=val;colorInput.value=val;textInput.value=val;$('#themePreview').innerHTML=themePreviewHtml(themeDraft.tokens)};
+  colorInput.oninput=e=>sync(e.target.value);
+  textInput.oninput=e=>sync(e.target.value);
+ });
+ themeDraft.tokens.chart.palette.forEach((_,i)=>{
+  const colorInput=document.querySelector(`[data-theme-chart="${i}"]`);
+  const textInput=document.querySelector(`[data-theme-chart-text="${i}"]`);
+  const sync=val=>{themeDraft.tokens.chart.palette[i]=val;colorInput.value=val;textInput.value=val;$('#themePreview').innerHTML=themePreviewHtml(themeDraft.tokens)};
   colorInput.oninput=e=>sync(e.target.value);
   textInput.oninput=e=>sync(e.target.value);
  });
@@ -5011,6 +5033,11 @@ function applyWorkspaceTheme(){
  appEl.style.setProperty('--success',c.status_success);
  appEl.style.setProperty('--warn',c.status_warning);
  appEl.style.setProperty('--danger',c.status_danger);
+ // Runtime UX Modernization (issue #198): the categorical palette report
+ // bars cycle through (see reportBarHtml) - a shorter custom palette
+ // cycles to fill every slot, same as applyTheme.ts's real counterpart.
+ const palette=themeChartPalette(theme.tokens);
+ for(let i=0;i<6;i++){appEl.style.setProperty(`--chart-${i+1}`,palette[i%palette.length])}
  if(sidebar)sidebar.style.background=c.surface_sidebar;
 }
 function layoutsTab(body){
@@ -5824,6 +5851,15 @@ function dashboardsTab(body){
  </div>
  <div style="margin-bottom:14px"><span class="badge">${isPublished?(hasDraftChanges?'Published — unpublished draft changes':'Published'):'Not published — Dashboard shows the fixed KPI picker selection'}</span></div>
  <div style="font-weight:700;margin-bottom:8px">Widgets</div>
+ <!-- Runtime UX Modernization (issue #198): desktop's Dashboards admin
+      replaced this badge/arrow-reorder list with a real drag/resize grid
+      and a table/saved_view/task_queue/agent_insight widget-kind
+      renderer (see DashboardGrid.tsx/DashboardWidgetCard.tsx) - this demo
+      intentionally keeps the simpler reorder-arrows list and the original
+      3 widget kinds (kpi/chart/record_list) rather than half-mirroring an
+      interactive canvas, the same proportionate-scope call this file
+      already makes elsewhere (see the AR aging/Sales-by-owner notes
+      above). -->
  <div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0">${dash.draftWidgets.length?dash.draftWidgets.map((w,i)=>`<span class="badge" style="display:inline-flex;align-items:center;gap:6px">${dashboardWidgetLabel(w,reports)}<button class="icon-btn" data-move-widget="${w.id}" data-dir="-1" ${i===0?'disabled':''} type="button" title="Move earlier">↑</button><button class="icon-btn" data-move-widget="${w.id}" data-dir="1" ${i===dash.draftWidgets.length-1?'disabled':''} type="button" title="Move later">↓</button><button class="icon-btn" data-remove-widget="${w.id}" type="button" title="Remove">×</button></span>`).join(''):'<span class="muted">No widgets yet.</span>'}</div>
  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
   ${availableKpis.length?`<select id="addKpiWidget"><option value="">+ Add KPI tile…</option>${availableKpis.map(k=>`<option value="${k.key}">${k.label}</option>`).join('')}</select>`:''}
