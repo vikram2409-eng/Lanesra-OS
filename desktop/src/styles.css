@@ -1942,3 +1942,56 @@ tr:hover td {
   display: flex;
   justify-content: flex-end;
 }
+
+/* RecordHeader (Runtime UX Modernization, issue #198): the one
+   title/subtitle/status/owner/record-number/avatar + up to 4 key
+   attributes header every detail/edit view uses now. */
+.record-header {
+  margin-bottom: 16px;
+}
+.record-header-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.record-header-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.record-header-attributes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 10px;
+}
+.record-header-attribute {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.record-header-attribute-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Sticky command bar: the Back/Edit toolbar atop a long record detail
+   page - a variant of .toolbar that stays visible while scrolling,
+   without changing every other .toolbar in the app. */
+.record-command-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  padding: 8px 0;
+  margin-bottom: 8px;
+}

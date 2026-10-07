@@ -5,6 +5,7 @@ import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { StatusBadge } from "../../components/StatusBadge";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
@@ -15,6 +16,7 @@ import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
 import type { Prefill } from "../../components/AppShell";
 import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
@@ -346,7 +348,22 @@ function OpportunityForm({
 
   return (
     <div>
-      <h2>{opportunityId ? "Edit opportunity" : "New opportunity"}</h2>
+      {existing.data ? (
+        <RecordHeader
+          title={existing.data.name}
+          status={<StatusBadge status={existing.data.status} />}
+          recordNumber={existing.data.opportunity_number}
+          subtitle={existing.data.stage}
+          owner={<OwnershipByline objectKey="Opportunity" recordId={existing.data.id} />}
+          attributes={[
+            { label: "Value", value: formatCents(existing.data.value_cents, existing.data.currency_code) },
+            { label: "Probability", value: `${(existing.data.probability_bp / 100).toFixed(0)}%` },
+            { label: "Expected close", value: existing.data.expected_close_date ?? "—" },
+          ]}
+        />
+      ) : (
+        <h2>New opportunity</h2>
+      )}
       {existing.data && (
         <AuditByline
           createdAt={existing.data.created_at}
@@ -355,7 +372,6 @@ function OpportunityForm({
           updatedBy={existing.data.updated_by}
         />
       )}
-      {opportunityId && <OwnershipByline objectKey="Opportunity" recordId={opportunityId} />}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

@@ -18,6 +18,7 @@ import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { useReportVoiceContext } from "../voice/VoiceContext";
@@ -664,9 +665,11 @@ function ContactDetail({
     ...relatedTasks.map((t) => ({ at: t.created_at, text: `Task "${t.title}" created (${t.status})` })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
+  const subtitle = [companyName, c.job_title].filter(Boolean).join(" · ") || undefined;
+
   return (
     <div>
-      <div className="toolbar">
+      <div className="toolbar record-command-bar">
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
@@ -674,16 +677,19 @@ function ContactDetail({
           Edit
         </button>
       </div>
-      <h2>
-        {c.first_name} {c.last_name} <StatusBadge status={c.status} />
-      </h2>
-      <p style={{ color: "var(--text-muted)" }}>
-        {c.contact_number}
-        {companyName ? ` · ${companyName}` : ""}
-        {c.job_title ? ` · ${c.job_title}` : ""}
-      </p>
+      <RecordHeader
+        title={`${c.first_name} ${c.last_name}`}
+        status={<StatusBadge status={c.status} />}
+        recordNumber={c.contact_number}
+        subtitle={subtitle}
+        owner={<OwnershipByline objectKey="Contact" recordId={c.id} />}
+        attributes={[
+          { label: "Email", value: c.email ?? "—" },
+          { label: "Phone", value: c.phone ?? "—" },
+          { label: "Mobile", value: c.mobile ?? "—" },
+        ]}
+      />
       <AuditByline createdAt={c.created_at} createdBy={c.created_by} updatedAt={c.updated_at} updatedBy={c.updated_by} />
-      <OwnershipByline objectKey="Contact" recordId={c.id} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (

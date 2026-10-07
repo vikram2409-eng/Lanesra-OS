@@ -17,6 +17,7 @@ import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
 import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
@@ -423,9 +424,11 @@ function ProductDetail({
   if (!product.data) return <p>Loading...</p>;
   const p = product.data;
 
+  const statusBadge = <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>;
+
   return (
     <div>
-      <div className="toolbar">
+      <div className="toolbar record-command-bar">
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
@@ -433,14 +436,19 @@ function ProductDetail({
           Edit
         </button>
       </div>
-      <h2>
-        {p.name} <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>
-      </h2>
-      <p style={{ color: "var(--text-muted)" }}>
-        {p.product_number} · {p.type}
-      </p>
+      <RecordHeader
+        title={p.name}
+        status={statusBadge}
+        recordNumber={p.product_number}
+        subtitle={p.type}
+        owner={<OwnershipByline objectKey="Product" recordId={p.id} />}
+        attributes={[
+          { label: "SKU", value: p.sku ?? "—" },
+          { label: "Category", value: p.category ?? "—" },
+          { label: "Unit price", value: formatCents(p.unit_price_cents) },
+        ]}
+      />
       <AuditByline createdAt={p.created_at} createdBy={p.created_by} updatedAt={p.updated_at} updatedBy={p.updated_by} />
-      <OwnershipByline objectKey="Product" recordId={p.id} />
 
       {effectivePage.data?.page ? (
         // Screen Builder 2.0 (issue #195, 5b): an admin-composed Page
@@ -449,7 +457,17 @@ function ProductDetail({
         // pre-existing mechanism this phase doesn't touch, same as the
         // doc comment above already says for LayoutDetailFields.
         <div className="card">
-          <PageRenderer entityType="Product" entityId={p.id} fields={productDetailFields(p)} onEdit={onEdit} onOpenAdminTab={onOpenAdminTab} />
+          <PageRenderer
+            entityType="Product"
+            entityId={p.id}
+            fields={productDetailFields(p)}
+            onEdit={onEdit}
+            onOpenAdminTab={onOpenAdminTab}
+            recordHeader={<RecordHeader title={p.name} subtitle={p.type} attributes={[{ label: "SKU", value: p.sku ?? "—" }, { label: "Category", value: p.category ?? "—" }, { label: "Unit price", value: formatCents(p.unit_price_cents) }]} />}
+            statusBadge={statusBadge}
+            owner={<OwnershipByline objectKey="Product" recordId={p.id} />}
+            recordNumber={p.product_number}
+          />
         </div>
       ) : (
         <div className="card">

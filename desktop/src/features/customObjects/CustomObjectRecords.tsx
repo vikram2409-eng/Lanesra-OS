@@ -12,6 +12,8 @@ import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
+import { StatusBadge } from "../../components/StatusBadge";
 import type { Prefill } from "../../components/AppShell";
 import {
   CUSTOM_RECORD_STATUSES,
@@ -297,9 +299,16 @@ function RecordForm({
 
   return (
     <div>
-      <h2>
-        {recordId ? `Edit ${definition.singular_label.toLowerCase()}` : `New ${definition.singular_label.toLowerCase()}`}
-      </h2>
+      {existing.data ? (
+        <RecordHeader
+          title={existing.data.primary_name}
+          status={<StatusBadge status={existing.data.status} />}
+          recordNumber={existing.data.display_number}
+          owner={<OwnershipByline objectKey={definition.key} recordId={existing.data.id} />}
+        />
+      ) : (
+        <h2>New {definition.singular_label.toLowerCase()}</h2>
+      )}
       {existing.data && (
         <AuditByline
           createdAt={existing.data.created_at}
@@ -308,7 +317,6 @@ function RecordForm({
           updatedBy={existing.data.updated_by}
         />
       )}
-      {recordId && <OwnershipByline objectKey={definition.key} recordId={recordId} />}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

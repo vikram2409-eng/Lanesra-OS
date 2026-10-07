@@ -24,6 +24,7 @@ import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
 import { useSavedViews } from "../../lib/useSavedViews";
@@ -705,7 +706,7 @@ function CompanyDetail({
 
   return (
     <div>
-      <div className="toolbar">
+      <div className="toolbar record-command-bar">
         <div>
           <button className="btn" onClick={onBack}>
             ← Back
@@ -715,17 +716,24 @@ function CompanyDetail({
           Edit
         </button>
       </div>
-      <h2>
-        {company.data.name} <StatusBadge status={company.data.status} />
-      </h2>
-      <p style={{ color: "var(--text-muted)" }}>{company.data.customer_number}</p>
+      <RecordHeader
+        title={company.data.name}
+        status={<StatusBadge status={company.data.status} />}
+        recordNumber={company.data.customer_number}
+        owner={<OwnershipByline objectKey="Company" recordId={id} />}
+        attributes={[
+          { label: "Phone", value: company.data.phone ?? "—" },
+          { label: "Email", value: company.data.email ?? "—" },
+          { label: "Website", value: company.data.website ?? "—" },
+          { label: "Annual revenue", value: company.data.annual_revenue_cents != null ? formatCents(company.data.annual_revenue_cents) : "—" },
+        ]}
+      />
       <AuditByline
         createdAt={company.data.created_at}
         createdBy={company.data.created_by}
         updatedAt={company.data.updated_at}
         updatedBy={company.data.updated_by}
       />
-      <OwnershipByline objectKey="Company" recordId={id} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (
@@ -756,7 +764,27 @@ function CompanyDetail({
         // rather than a partial merge, and why `fields` is the identical
         // map the old LayoutDetailFields branch builds below it.
         <div style={{ marginTop: 16 }}>
-          <PageRenderer entityType="Company" entityId={id} fields={companyDetailFields(company.data)} onEdit={onEdit} onOpenAdminTab={onOpenAdminTab} />
+          <PageRenderer
+            entityType="Company"
+            entityId={id}
+            fields={companyDetailFields(company.data)}
+            onEdit={onEdit}
+            onOpenAdminTab={onOpenAdminTab}
+            recordHeader={
+              <RecordHeader
+                title={company.data.name}
+                attributes={[
+                  { label: "Phone", value: company.data.phone ?? "—" },
+                  { label: "Email", value: company.data.email ?? "—" },
+                  { label: "Website", value: company.data.website ?? "—" },
+                  { label: "Annual revenue", value: company.data.annual_revenue_cents != null ? formatCents(company.data.annual_revenue_cents) : "—" },
+                ]}
+              />
+            }
+            statusBadge={<StatusBadge status={company.data.status} />}
+            owner={<OwnershipByline objectKey="Company" recordId={id} />}
+            recordNumber={company.data.customer_number}
+          />
         </div>
       )}
       {tab === "overview" && !effectivePage.data?.page && (
