@@ -44,7 +44,7 @@ fn layout_input(name: &str, initial_kpi_keys: &[&str]) -> DashboardLayoutInput {
 }
 
 fn one_kpi_draft(key: &str) -> DashboardWidgets {
-    DashboardWidgets { widgets: vec![DashboardWidget { id: "w1".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": key }) }] }
+    DashboardWidgets { widgets: vec![DashboardWidget { id: "w1".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": key }), layout: None }] }
 }
 
 fn kpi_keys(widgets: &DashboardWidgets) -> Vec<String> {
@@ -217,8 +217,8 @@ fn widgets_round_trip_through_save_and_a_fresh_reload() {
 
     let draft = DashboardWidgets {
         widgets: vec![
-            DashboardWidget { id: "w1".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": "open_pipeline" }) },
-            DashboardWidget { id: "w2".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": "overdue_invoices" }) },
+            DashboardWidget { id: "w1".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": "open_pipeline" }), layout: None },
+            DashboardWidget { id: "w2".into(), kind: "kpi".into(), config: serde_json::json!({ "kpi_key": "overdue_invoices" }), layout: None },
         ],
     };
     let update = DashboardLayoutUpdate { name: layout.name.clone(), roles: vec![], draft, app_id: None };

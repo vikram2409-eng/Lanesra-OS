@@ -6,6 +6,7 @@ import { AppScopeFilter, AppScopeSelect, matchesAppFilter, useApps } from "../..
 import {
   CUSTOM_FIELD_ENTITY_TYPES,
   ROLES,
+  TASK_QUEUE_MODES,
   entityTypeLabel,
   type AppDefinition,
   type CustomFieldEntityType,
@@ -14,6 +15,7 @@ import {
   type DashboardWidget,
   type DashboardWidgets,
   type RecordListMode,
+  type TaskQueueMode,
 } from "../../lib/types";
 import { KPI_DEFS, kpiLabel } from "../dashboard/kpis";
 
@@ -283,17 +285,40 @@ function LayoutEditor({
   });
 
   function addKpi(key: string) {
-    save({ widgets: [...widgets.widgets, { id: newId(), kind: "kpi", config: { kpi_key: key } }] });
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "kpi", config: { kpi_key: key }, layout: null }] });
   }
 
   function addChart(reportId: string) {
-    save({ widgets: [...widgets.widgets, { id: newId(), kind: "chart", config: { report_id: reportId } }] });
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "chart", config: { report_id: reportId }, layout: null }] });
   }
 
   function addRecordList(entityType: string, mode: RecordListMode) {
     save({
-      widgets: [...widgets.widgets, { id: newId(), kind: "record_list", config: { entity_type: entityType, mode, limit: 5 } }],
+      widgets: [...widgets.widgets, { id: newId(), kind: "record_list", config: { entity_type: entityType, mode, limit: 5 }, layout: null }],
     });
+  }
+
+  function addTable(entityType: string, mode: RecordListMode) {
+    save({
+      widgets: [...widgets.widgets, { id: newId(), kind: "table", config: { entity_type: entityType, mode, limit: 8 }, layout: null }],
+    });
+  }
+
+  function addTaskQueue(mode: TaskQueueMode) {
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "task_queue", config: { mode, limit: 5 }, layout: null }] });
+  }
+
+  function addSavedView(entityType: string, savedViewId: string) {
+    save({
+      widgets: [
+        ...widgets.widgets,
+        { id: newId(), kind: "saved_view", config: { entity_type: entityType, saved_view_id: savedViewId, limit: 5 }, layout: null },
+      ],
+    });
+  }
+
+  function addAgentInsight(agentId: string) {
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "agent_insight", config: { agent_id: agentId }, layout: null }] });
   }
 
   function setRecordListSavedView(id: string, savedViewId: string) {
@@ -473,6 +498,10 @@ function LayoutEditor({
             )
           )}
           <AddRecordListWidget onAdd={addRecordList} />
+          <AddTableWidget onAdd={addTable} />
+          <AddTaskQueueWidget onAdd={addTaskQueue} />
+          <AddSavedViewWidget onAdd={addSavedView} />
+          <AddAgentInsightWidget onAdd={addAgentInsight} />
         </div>
       </div>
 
@@ -534,6 +563,144 @@ function AddRecordListWidget({ onAdd }: { onAdd: (entityType: string, mode: Reco
   );
 }
 
+/** Same entity-type/mode choice as `AddRecordListWidget`, but produces a
+ * `"table"` widget instead of a `"record_list"` one - the dashboard grid
+ * (issue #198) renders a table widget as a full interactive `ListTable`
+ * (sortable/resizable columns) rather than the compact bullet list a
+ * record-list widget gets, for a dashboard tile that needs to show more
+ * than a title/subtitle per row. */
+function AddTableWidget({ onAdd }: { onAdd: (entityType: string, mode: RecordListMode) => void }) {
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>("Task");
+  const dueSoonAvailable = DUE_SOON_ENTITY_TYPES.includes(entityType);
+  const [mode, setMode] = useState<RecordListMode>("due_soon");
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select
+        value={entityType}
+        onChange={(e) => {
+          const next = e.target.value as CustomFieldEntityType;
+          setEntityType(next);
+          if (!DUE_SOON_ENTITY_TYPES.includes(next)) setMode("recent");
+        }}
+      >
+        {CUSTOM_FIELD_ENTITY_TYPES.map((t) => (
+          <option key={t} value={t}>
+            {entityTypeLabel(t)}
+          </option>
+        ))}
+      </select>
+      {dueSoonAvailable && (
+        <select value={mode} onChange={(e) => setMode(e.target.value as RecordListMode)}>
+          <option value="due_soon">Due soon</option>
+          <option value="recent">Recently created</option>
+        </select>
+      )}
+      <button className="btn" onClick={() => onAdd(entityType, dueSoonAvailable ? mode : "recent")}>
+        + Add table
+      </button>
+    </span>
+  );
+}
+
+const TASK_QUEUE_MODE_LABELS: Record<TaskQueueMode, string> = {
+  today: "Due today",
+  overdue: "Overdue",
+  upcoming: "Upcoming",
+  mine: "Assigned to me",
+};
+
+/** A queue of open Tasks filtered the same way Tasks.tsx's own tabs filter
+ * them (see that file's `Tab` type), plus "mine" for a dashboard tile
+ * personalized to the signed-in user. No new backend - resolved client-side
+ * from the same `api.listTasks()` rows the Tasks screen already fetches. */
+function AddTaskQueueWidget({ onAdd }: { onAdd: (mode: TaskQueueMode) => void }) {
+  const [mode, setMode] = useState<TaskQueueMode>("today");
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select value={mode} onChange={(e) => setMode(e.target.value as TaskQueueMode)}>
+        {TASK_QUEUE_MODES.map((m) => (
+          <option key={m} value={m}>
+            {TASK_QUEUE_MODE_LABELS[m]}
+          </option>
+        ))}
+      </select>
+      <button className="btn" onClick={() => onAdd(mode)}>
+        + Add task queue
+      </button>
+    </span>
+  );
+}
+
+/** Embeds one specific Saved View (its exact filters/sort/columns, see
+ * `useSavedViews`) as a dashboard tile - unlike a table/record-list widget's
+ * ad hoc entity-type+mode choice, this mirrors a view a user already
+ * curated on a list screen. */
+function AddSavedViewWidget({ onAdd }: { onAdd: (entityType: string, savedViewId: string) => void }) {
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>("Task");
+  const [savedViewId, setSavedViewId] = useState("");
+  const views = useQuery({
+    queryKey: ["savedViewsForWidget", entityType],
+    queryFn: () => api.listSavedViews(entityType),
+  });
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select
+        value={entityType}
+        onChange={(e) => {
+          setEntityType(e.target.value as CustomFieldEntityType);
+          setSavedViewId("");
+        }}
+      >
+        {CUSTOM_FIELD_ENTITY_TYPES.map((t) => (
+          <option key={t} value={t}>
+            {entityTypeLabel(t)}
+          </option>
+        ))}
+      </select>
+      <select value={savedViewId} onChange={(e) => setSavedViewId(e.target.value)} disabled={!views.data || views.data.length === 0}>
+        <option value="">
+          {views.data && views.data.length > 0 ? "Choose a saved view..." : "No saved views for this object"}
+        </option>
+        {(views.data ?? []).map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.name}
+          </option>
+        ))}
+      </select>
+      <button className="btn" disabled={!savedViewId} onClick={() => onAdd(entityType, savedViewId)}>
+        + Add saved view
+      </button>
+    </span>
+  );
+}
+
+/** A small card about one active AI agent (usage, recent run outcomes) -
+ * resolved client-side from `api.getAiAgentTokenUsage`/`api.listAiAgentRuns`,
+ * both already exposed to the frontend, so this adds no new Rust surface. */
+function AddAgentInsightWidget({ onAdd }: { onAdd: (agentId: string) => void }) {
+  const [agentId, setAgentId] = useState("");
+  const agents = useQuery({ queryKey: ["aiAgentsForWidget"], queryFn: () => api.listAiAgents(true) });
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select value={agentId} onChange={(e) => setAgentId(e.target.value)} disabled={!agents.data || agents.data.length === 0}>
+        <option value="">{agents.data && agents.data.length > 0 ? "Choose an agent..." : "No active agents yet"}</option>
+        {(agents.data ?? []).map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+      </select>
+      <button className="btn" disabled={!agentId} onClick={() => onAdd(agentId)}>
+        + Add agent insight
+      </button>
+    </span>
+  );
+}
+
 /** Narrows a record-list widget's rows to one Saved View's filters, reusing
  * the same views a Companies/Contacts/etc. list screen would offer (see
  * `useSavedViews`) - a dashboard tile is just another consumer of the same
@@ -566,10 +733,20 @@ function widgetLabel(w: DashboardWidget, reports: CustomReport[]): string {
     const report = reports.find((r) => r.id === w.config.report_id);
     return report ? `📊 ${report.name}` : "📊 (report deleted)";
   }
-  if (w.kind === "record_list") {
+  if (w.kind === "record_list" || w.kind === "table") {
     const entityType = w.config.entity_type as string;
     const mode = w.config.mode as string;
-    return `📋 ${entityTypeLabel(entityType)} - ${mode === "due_soon" ? "due soon" : "recent"}`;
+    const icon = w.kind === "table" ? "🗂️" : "📋";
+    return `${icon} ${entityTypeLabel(entityType)} - ${mode === "due_soon" ? "due soon" : "recent"}`;
+  }
+  if (w.kind === "saved_view") {
+    return `🔖 ${entityTypeLabel(w.config.entity_type as string)} saved view`;
+  }
+  if (w.kind === "task_queue") {
+    return `✅ Tasks - ${TASK_QUEUE_MODE_LABELS[w.config.mode as TaskQueueMode] ?? (w.config.mode as string)}`;
+  }
+  if (w.kind === "agent_insight") {
+    return `🤖 Agent insight`;
   }
   return w.kind;
 }

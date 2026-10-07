@@ -1768,10 +1768,22 @@ export interface PageTemplateInput {
  * rows - the same reuse a list screen's own `useSavedViews` gets, applied
  * here to a dashboard tile's data source. This layer (like the backend)
  * never inspects `config` beyond that per-kind shape. */
+/** Runtime UX Modernization (issue #198): a widget's position/size on
+ * the responsive drag/resize grid, in grid-cell units. `null` for any
+ * widget saved before this field existed, or newly added and not yet
+ * placed - the grid auto-places those. */
+export interface WidgetLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface DashboardWidget {
   id: string;
   kind: string;
   config: Record<string, unknown>;
+  layout: WidgetLayout | null;
 }
 
 export interface DashboardWidgets {
@@ -1817,6 +1829,16 @@ export interface EffectiveDashboard {
 // actually does per entity type.
 export const RECORD_LIST_MODES = ["recent", "due_soon"] as const;
 export type RecordListMode = (typeof RECORD_LIST_MODES)[number];
+
+// Runtime UX Modernization (issue #198): the "task_queue" widget kind's
+// config is `{mode, limit}` - no new Rust/service surface, it filters the
+// same `api.listTasks()` rows the Tasks screen already fetches, using the
+// identical due-date comparisons Tasks.tsx's own tabs use (see that file's
+// `Tab` filtering), plus "mine" (owner_user_id === the viewing user, via
+// `useCurrentUser`) since a dashboard tile is personal in a way a shared
+// list screen tab isn't.
+export const TASK_QUEUE_MODES = ["today", "overdue", "upcoming", "mine"] as const;
+export type TaskQueueMode = (typeof TASK_QUEUE_MODES)[number];
 
 export interface RecordListRow {
   entity_type: string;

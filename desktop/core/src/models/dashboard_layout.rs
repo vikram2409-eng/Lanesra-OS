@@ -57,6 +57,25 @@ pub struct DashboardWidget {
     pub id: String,
     pub kind: String,
     pub config: serde_json::Value,
+    /// Runtime UX Modernization (issue #198): the widget's position/size
+    /// on the responsive drag/resize grid. `None` for any widget saved
+    /// before this field existed - the frontend auto-places those rather
+    /// than erroring, the same "absent means not yet set" convention
+    /// other optional geometry in this codebase already uses. Still never
+    /// inspected by this layer - `layout` is cross-kind, not per-kind,
+    /// but no less opaque to the backend than `config` itself.
+    #[serde(default)]
+    pub layout: Option<WidgetLayout>,
+}
+
+/// A widget's position (`x`/`y`, grid cells from the top-left) and size
+/// (`w`/`h`, in the same cell units) on the dashboard's responsive grid.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WidgetLayout {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
