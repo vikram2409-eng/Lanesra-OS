@@ -23,6 +23,7 @@ import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
 import { useSavedViews } from "../../lib/useSavedViews";
@@ -49,12 +50,17 @@ const COMPANY_EXPORT_COLUMNS = [
   { label: "Preferred contact method", get: (c: Company) => c.preferred_contact_method ?? "" },
 ];
 
-const companyColumns: ListTableColumn<Company>[] = [
+function makeCompanyColumns(onOpen: (id: string) => void): ListTableColumn<Company>[] {
+  return [
   {
     key: "customer_number",
     label: "Number",
     getValue: (c) => c.customer_number,
-    render: (c) => <span className="id-link">{c.customer_number}</span>,
+    render: (c) => (
+      <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(c.id); }}>
+        {c.customer_number}
+      </span>
+    ),
     defaultWidth: 110,
   },
   { key: "name", label: "Name", getValue: (c) => c.name, defaultWidth: 220 },
@@ -65,7 +71,8 @@ const companyColumns: ListTableColumn<Company>[] = [
   { key: "employee_count", label: "Employees", format: "number", getValue: (c) => c.employee_count, align: "right", defaultWidth: 100 },
   { key: "phone", label: "Phone", getValue: (c) => c.phone, defaultWidth: 140 },
   { key: "email", label: "Email", getValue: (c) => c.email, defaultWidth: 200 },
-];
+  ];
+}
 const DEFAULT_COMPANY_COLUMNS = ["customer_number", "name", "status", "tax_number"];
 
 const COMPANY_IMPORT_COLUMNS = [
@@ -140,6 +147,7 @@ export function Companies({
 } = {}) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
   const [importing, setImporting] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const views = useSavedViews("Company");
@@ -149,6 +157,8 @@ export function Companies({
 
   const filteredRows = (companies.data ?? []).filter((c) => fieldFilters.matches(c.id));
   const selection = useBulkSelection(filteredRows, (c) => c.id);
+  const companyColumns = makeCompanyColumns((id) => setView({ mode: "detail", id }));
+  const previewRow = previewId ? filteredRows.find((c) => c.id === previewId) ?? null : null;
 
   function companyFieldValue(row: Company, key: string): string {
     switch (key) {
@@ -279,12 +289,31 @@ export function Companies({
             onVisibleKeysChange={views.setColumnKeys}
             groups={groups}
             getRowId={(c) => c.id}
-            onRowClick={(c) => setView({ mode: "detail", id: c.id })}
+            onRowClick={(c) => setPreviewId(c.id)}
             selection={selection}
             resolveUser={(id) => users.data?.find((u) => u.id === id)?.display_name}
           />
         );
       })()}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={previewRow.name}
+          subtitle={previewRow.customer_number}
+          fields={[
+            { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+            { label: "Owner", value: users.data?.find((u) => u.id === previewRow.owner_user_id)?.display_name ?? "—" },
+            { label: "Tax number", value: previewRow.tax_number ?? "—" },
+            { label: "Phone", value: previewRow.phone ?? "—" },
+            { label: "Email", value: previewRow.email ?? "—" },
+            { label: "Website", value: previewRow.website ?? "—" },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "detail", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
+      )}
     </div>
   );
 }

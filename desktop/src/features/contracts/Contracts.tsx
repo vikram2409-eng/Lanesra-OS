@@ -12,6 +12,8 @@ import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import { TabListCard } from "../../components/TabListCard";
 import type { Prefill, Section } from "../../components/AppShell";
@@ -62,6 +64,39 @@ function isRenewingSoon(renewalDate: string | null): boolean {
   return days >= 0 && days <= 90;
 }
 
+function makeContractColumns(companyNameById: Map<string, string>, onOpen: (id: string) => void): ListTableColumn<Contract>[] {
+  return [
+    {
+      key: "contract_number",
+      label: "Number",
+      getValue: (c) => c.contract_number,
+      render: (c) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(c.id); }}>
+          {c.contract_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "title", label: "Title", getValue: (c) => c.title, defaultWidth: 200 },
+    { key: "company_id", label: "Company", getValue: (c) => companyNameById.get(c.company_id) ?? null, defaultWidth: 180 },
+    { key: "status", label: "Status", format: "status", getValue: (c) => c.status, defaultWidth: 120 },
+    { key: "value_cents", label: "Value", getValue: (c) => c.value_cents, render: (c) => formatCents(c.value_cents, c.currency_code), align: "right", defaultWidth: 120 },
+    {
+      key: "renewal_date",
+      label: "Renewal date",
+      getValue: (c) => c.renewal_date,
+      render: (c) => (
+        <>
+          {c.renewal_date ?? "—"}
+          {isRenewingSoon(c.renewal_date) && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Renewing soon</span>}
+        </>
+      ),
+      defaultWidth: 160,
+    },
+  ];
+}
+const DEFAULT_CONTRACT_COLUMNS = ["contract_number", "title", "company_id", "status", "renewal_date"];
+
 export function Contracts({
   prefill,
   onPrefillConsumed,
@@ -74,6 +109,8 @@ export function Contracts({
   const [view, setView] = useState<View>(() =>
     prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
   );
+  const [columnKeys, setColumnKeys] = useState<string[] | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
   const fieldFilters = useCustomFieldFilters("Contract");
@@ -117,6 +154,7 @@ export function Contracts({
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+  const contractColumns = makeContractColumns(companyNameById, (id) => setView({ mode: "detail", id }));
 
   return (
     <div>
@@ -146,49 +184,46 @@ export function Contracts({
         return rows.length === 0 ? (
           <p className="empty-state">No contracts match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Title</th>
-              <th>Company</th>
-              <th>Status</th>
-              <th>Value</th>
-              <th>Renewal date</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <tr key={c.id} onClick={() => setView({ mode: "detail", id: c.id })} style={{ cursor: "pointer" }}>
-                <td><span className="id-link">{c.contract_number}</span></td>
-                <td>{c.title}</td>
-                <td>{companyNameById.get(c.company_id) ?? "—"}</td>
-                <td>
-                  <StatusBadge status={c.status} />
-                </td>
-                <td>{formatCents(c.value_cents, c.currency_code)}</td>
-                <td>
-                  {c.renewal_date ?? "—"}
-                  {isRenewingSoon(c.renewal_date) && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Renewing soon</span>}
-                </td>
-                <td>
-                  <button
-                    className="btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setView({ mode: "edit", id: c.id });
-                    }}
-                    disabled={!canWrite}
-                    title={canWrite ? undefined : "You have view-only access to Contracts through an app"}
-                  >
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Contract>
+            storageKey="Contract"
+            columns={contractColumns}
+            visibleKeys={columnKeys ?? DEFAULT_CONTRACT_COLUMNS}
+            onVisibleKeysChange={setColumnKeys}
+            groups={[{ label: "", rows }]}
+            getRowId={(c) => c.id}
+            onRowClick={(c) => setPreviewId(c.id)}
+            actionsColumn={(c) => (
+              <button
+                className="btn"
+                onClick={() => setView({ mode: "edit", id: c.id })}
+                disabled={!canWrite}
+                title={canWrite ? undefined : "You have view-only access to Contracts through an app"}
+              >
+                Edit
+              </button>
+            )}
+          />
+        );
+      })()}
+      {previewId && (() => {
+        const previewRow = contracts.data?.find((c) => c.id === previewId);
+        if (!previewRow) return null;
+        return (
+          <QuickPreviewDrawer
+            title={previewRow.title}
+            subtitle={previewRow.contract_number}
+            fields={[
+              { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+              { label: "Company", value: companyNameById.get(previewRow.company_id) ?? "—" },
+              { label: "Value", value: formatCents(previewRow.value_cents, previewRow.currency_code) },
+              { label: "Renewal date", value: previewRow.renewal_date ?? "—" },
+            ]}
+            onClose={() => setPreviewId(null)}
+            onOpenFull={() => {
+              setView({ mode: "detail", id: previewRow.id });
+              setPreviewId(null);
+            }}
+          />
         );
       })()}
     </div>

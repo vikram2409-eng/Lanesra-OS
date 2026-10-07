@@ -1878,3 +1878,67 @@ tr:hover td {
 .list-table-card-value {
   text-align: right;
 }
+
+/* QuickPreviewDrawer: a right-side slide-in, not a centered .modal - it
+   sits alongside the list rather than blocking it. */
+.quick-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+.quick-preview-drawer {
+  width: 380px;
+  max-width: 90vw;
+  height: 100%;
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: quick-preview-slide-in 0.15s ease-out;
+}
+@keyframes quick-preview-slide-in {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.quick-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.quick-preview-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+.quick-preview-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.quick-preview-label {
+  color: var(--text-muted);
+}
+.quick-preview-value {
+  text-align: right;
+}
+.quick-preview-footer {
+  display: flex;
+  justify-content: flex-end;
+}

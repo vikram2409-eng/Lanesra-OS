@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -16,7 +16,8 @@ import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
-import { GroupHeaderRow } from "../../components/GroupHeaderRow";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { useReportVoiceContext } from "../voice/VoiceContext";
@@ -54,6 +55,41 @@ function contactExportColumns(companyNameById: Map<string, string>) {
     { label: "LinkedIn", get: (c: Contact) => c.linkedin_url ?? "" },
   ];
 }
+
+function makeContactColumns(companyNameById: Map<string, string>, onOpen: (id: string) => void): ListTableColumn<Contact>[] {
+  return [
+    {
+      key: "contact_number",
+      label: "Number",
+      getValue: (c) => c.contact_number,
+      render: (c) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(c.id); }}>
+          {c.contact_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    {
+      key: "name",
+      label: "Name",
+      getValue: (c) => `${c.first_name} ${c.last_name}`,
+      render: (c) => (
+        <>
+          {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
+        </>
+      ),
+      defaultWidth: 200,
+    },
+    { key: "company_id", label: "Company", getValue: (c) => companyNameById.get(c.company_id) ?? null, defaultWidth: 180 },
+    { key: "email", label: "Email", getValue: (c) => c.email, defaultWidth: 200 },
+    { key: "status", label: "Status", format: "status", getValue: (c) => c.status, defaultWidth: 120 },
+    { key: "job_title", label: "Job title", getValue: (c) => c.job_title, defaultWidth: 160 },
+    { key: "phone", label: "Phone", getValue: (c) => c.phone, defaultWidth: 140 },
+    { key: "mobile", label: "Mobile", getValue: (c) => c.mobile, defaultWidth: 140 },
+    { key: "department", label: "Department", getValue: (c) => c.department, defaultWidth: 140 },
+  ];
+}
+const DEFAULT_CONTACT_COLUMNS = ["contact_number", "name", "company_id", "email", "status"];
 
 const CONTACT_IMPORT_COLUMNS = [
   { label: "First name", required: true },
@@ -142,6 +178,7 @@ export function Contacts({
     prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
   );
   const [importing, setImporting] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const views = useSavedViews("Contact");
@@ -151,6 +188,7 @@ export function Contacts({
 
   const filteredRows = (contacts.data ?? []).filter((c) => fieldFilters.matches(c.id));
   const selection = useBulkSelection(filteredRows, (c) => c.id);
+  const previewRow = previewId ? filteredRows.find((c) => c.id === previewId) ?? null : null;
 
   function contactFieldValue(row: Contact, key: string): string {
     switch (key) {
@@ -222,6 +260,7 @@ export function Contacts({
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+  const contactColumns = makeContactColumns(companyNameById, (id) => setView({ mode: "detail", id }));
 
   return (
     <div>
@@ -275,61 +314,47 @@ export function Contacts({
         return filteredRows.length === 0 ? (
           <p className="empty-state">No contacts match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: 28 }}>
-                <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
-              </th>
-              <th>Number</th>
-              <th>Name</th>
-              <th>Company</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((group) => (
-              <Fragment key={group.label || "_"}>
-                {views.groupByField && <GroupHeaderRow label={group.label} colSpan={7} />}
-                {group.rows.map((c) => (
-                  <tr key={c.id} style={{ cursor: "pointer" }}>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={selection.isSelected(c.id)} onChange={() => selection.toggle(c.id)} />
-                    </td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                      <span className="id-link">{c.contact_number}</span>
-                    </td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                      {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
-                    </td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>{companyNameById.get(c.company_id) ?? "—"}</td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.email ?? "—"}</td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                      <StatusBadge status={c.status} />
-                    </td>
-                    <td>
-                      <button
-                        className="btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setView({ mode: "edit", id: c.id });
-                        }}
-                        disabled={!canWrite}
-                        title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Contact>
+            storageKey="Contact"
+            columns={contactColumns}
+            visibleKeys={views.columnKeys ?? DEFAULT_CONTACT_COLUMNS}
+            onVisibleKeysChange={views.setColumnKeys}
+            groups={groups}
+            getRowId={(c) => c.id}
+            onRowClick={(c) => setPreviewId(c.id)}
+            selection={selection}
+            actionsColumn={(c) => (
+              <button
+                className="btn"
+                onClick={() => setView({ mode: "edit", id: c.id })}
+                disabled={!canWrite}
+                title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
+              >
+                Edit
+              </button>
+            )}
+          />
         );
       })()}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={`${previewRow.first_name} ${previewRow.last_name}`}
+          subtitle={previewRow.contact_number}
+          fields={[
+            { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+            { label: "Company", value: companyNameById.get(previewRow.company_id) ?? "—" },
+            { label: "Job title", value: previewRow.job_title ?? "—" },
+            { label: "Email", value: previewRow.email ?? "—" },
+            { label: "Phone", value: previewRow.phone ?? "—" },
+            { label: "Mobile", value: previewRow.mobile ?? "—" },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "detail", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
+      )}
     </div>
   );
 }

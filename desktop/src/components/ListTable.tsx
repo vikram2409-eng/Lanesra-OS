@@ -138,6 +138,8 @@ export function ListTable<T>({
   mobileCollapse = true,
   emptyMessage = "No records match the current filters.",
   stickyHeaderOffset = 0,
+  actionsColumn,
+  showGroupHeaders: showGroupHeadersProp,
 }: {
   storageKey: string;
   columns: ListTableColumn<T>[];
@@ -154,6 +156,15 @@ export function ListTable<T>({
   mobileCollapse?: boolean;
   emptyMessage?: string;
   stickyHeaderOffset?: number;
+  /** An always-visible trailing column (e.g. a row-level "Edit" button) -
+   * not part of the toggleable/reorderable column set, so it doesn't
+   * appear in the Columns picker and always renders last. */
+  actionsColumn?: (row: T) => ReactNode;
+  /** Overrides the default "show a group header row when there's more
+   * than one group, or a single labelled one" heuristic - e.g. Tasks
+   * suppresses it for its single-group tabs (the active tab button
+   * already says "Today"/"Upcoming") but wants it for its "By owner" tab. */
+  showGroupHeaders?: boolean;
 }) {
   const [widths, setWidths] = useState<Record<string, number>>(() => loadJson(`listTableWidths:${storageKey}`, {}));
   const [internalDensity, setInternalDensity] = useState<TableDensity>(() => loadJson("listTableDensity", "comfortable" as TableDensity));
@@ -224,8 +235,8 @@ export function ListTable<T>({
   }
 
   const hasRows = groups.some((g) => g.rows.length > 0);
-  const showGroupHeaders = groups.length > 1 || (groups.length === 1 && groups[0].label !== "");
-  const colSpan = orderedVisible.length + (selection ? 1 : 0);
+  const showGroupHeaders = showGroupHeadersProp ?? (groups.length > 1 || (groups.length === 1 && groups[0].label !== ""));
+  const colSpan = orderedVisible.length + (selection ? 1 : 0) + (actionsColumn ? 1 : 0);
   const cardPriorityKeys = priorityKeys ?? orderedVisible.slice(0, 3).map((c) => c.key);
 
   return (
@@ -309,6 +320,9 @@ export function ListTable<T>({
                     />
                   </th>
                 ))}
+                {actionsColumn && (
+                  <th style={{ position: "sticky", top: stickyHeaderOffset, background: "var(--bg)", zIndex: 2 }} />
+                )}
               </tr>
             </thead>
             <tbody>
@@ -323,6 +337,7 @@ export function ListTable<T>({
                   getRowId={getRowId}
                   onRowClick={onRowClick}
                   resolveUser={resolveUser}
+                  actionsColumn={actionsColumn}
                 />
               ))}
             </tbody>
@@ -355,6 +370,11 @@ export function ListTable<T>({
                       </div>
                     );
                   })}
+                  {actionsColumn && (
+                    <div className="list-table-card-field" onClick={(e) => e.stopPropagation()}>
+                      {actionsColumn(row)}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -374,6 +394,7 @@ function RowsForGroup<T>({
   getRowId,
   onRowClick,
   resolveUser,
+  actionsColumn,
 }: {
   group: ListTableGroup<T>;
   showGroupHeaders: boolean;
@@ -383,6 +404,7 @@ function RowsForGroup<T>({
   getRowId: (row: T) => string;
   onRowClick?: (row: T) => void;
   resolveUser?: (id: string) => string | undefined;
+  actionsColumn?: (row: T) => ReactNode;
 }) {
   return (
     <>
@@ -404,6 +426,7 @@ function RowsForGroup<T>({
                 </td>
               );
             })}
+            {actionsColumn && <td onClick={(e) => e.stopPropagation()}>{actionsColumn(row)}</td>}
           </tr>
         );
       })}
