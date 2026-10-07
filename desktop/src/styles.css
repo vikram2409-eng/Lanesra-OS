@@ -2019,3 +2019,62 @@ tr:hover td {
   font-size: 12px;
   margin-bottom: 4px;
 }
+
+/* DashboardGrid (Runtime UX Modernization, issue #198): the shared
+   widget grid - one widget-positioning implementation for both the live
+   Dashboard (view mode) and the dashboard-layout editor's canvas (edit
+   mode, with drag/resize handles). See components/DashboardGrid.tsx. */
+.dashboard-grid-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.dashboard-grid-item.editable {
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.dashboard-grid-item.editable:hover {
+  border-color: var(--border);
+}
+.dashboard-grid-item.editable.selected {
+  border-color: var(--accent);
+}
+.dashboard-grid-item-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-radius: 8px 8px 0 0;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+.dashboard-grid-item-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.dashboard-grid-item-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.dashboard-grid-item-resize::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--border);
+  border-bottom: 2px solid var(--border);
+}

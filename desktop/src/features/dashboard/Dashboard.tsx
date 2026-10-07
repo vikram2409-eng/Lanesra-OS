@@ -3,12 +3,12 @@ import { useEffect } from "react";
 
 import { api } from "../../lib/api";
 import { formatCents } from "../../lib/money";
-import { Bar } from "../../components/Bar";
+import { DashboardGrid } from "../../components/DashboardGrid";
 import type { Section } from "../../components/AppShell";
-import { sectionFor } from "../../components/GlobalSearch";
-import { entityTypeLabel, type CustomReport, type DashboardWidget, type RecordListMode } from "../../lib/types";
+import type { DashboardWidget } from "../../lib/types";
 import { useEffectiveDashboard } from "../../lib/useEffectiveDashboard";
-import { KPI_DEFS, resolveVisibleKpis, type KpiDef } from "./kpis";
+import { DashboardWidgetCard } from "./DashboardWidgetCard";
+import { KPI_DEFS, resolveVisibleKpis } from "./kpis";
 
 export function Dashboard({
   onNavigate,
@@ -71,56 +71,45 @@ export function Dashboard({
   const layoutWidgets = appDashboardId
     ? appLayout?.published?.widgets ?? null
     : effectiveDashboard.data?.widgets?.widgets ?? null;
+
+  // Every widget kind renders through one shared `DashboardGrid` +
+  // `DashboardWidgetCard` (issue #198) - a kpi/chart widget whose kpi_key/
+  // report_id has since gone stale is simply skipped here rather than
+  // shown broken, the same "opaque key can go stale, skip not error"
+  // choice `DashboardWidget`'s own doc comment already makes; every other
+  // kind degrades gracefully inside its own card instead (e.g. "(agent
+  // deleted)"), since a reference there isn't necessarily stale (a
+  // deactivated agent is still a real agent). The no-layout-published-yet
+  // fallback keeps the older workspace-wide `dashboard_kpi_prefs` KPI
+  // selection, routed through the same renderer via synthetic widgets so
+  // there's still only one rendering path.
   const kpiByKey = new Map(KPI_DEFS.map((k) => [k.key, k]));
-  const visibleKpis: KpiDef[] = layoutWidgets
-    ? layoutWidgets
-        .filter((w) => w.kind === "kpi")
-        .map((w) => kpiByKey.get(w.config.kpi_key as string))
-        .filter((k): k is KpiDef => !!k)
-    : resolveVisibleKpis(workspace.data?.dashboard_kpi_prefs ?? null);
-
-  // A chart widget's report_id may point at a report that's since been
-  // deleted - that widget is simply skipped, not an error (see
-  // DashboardWidget's own doc comment on this "opaque key can go stale"
-  // choice, same as an unresolved KPI key above).
   const reportById = new Map((reports.data ?? []).map((r) => [r.id, r]));
-  const chartReports: CustomReport[] = layoutWidgets
-    ? layoutWidgets
-        .filter((w) => w.kind === "chart")
-        .map((w) => reportById.get(w.config.report_id as string))
-        .filter((r): r is CustomReport => !!r)
-    : [];
-
-  // A record-list widget's config is fully self-contained (entity_type,
-  // mode, limit) - unlike a chart widget's report_id, there's no
-  // "resolves to something that might have been deleted" step here.
-  const recordListWidgets: DashboardWidget[] = layoutWidgets ? layoutWidgets.filter((w) => w.kind === "record_list") : [];
+  const gridWidgets: DashboardWidget[] = layoutWidgets
+    ? layoutWidgets.filter((w) => {
+        if (w.kind === "kpi") return kpiByKey.has(w.config.kpi_key as string);
+        if (w.kind === "chart") return reportById.has(w.config.report_id as string);
+        return true;
+      })
+    : resolveVisibleKpis(workspace.data?.dashboard_kpi_prefs ?? null).map((k) => ({
+        id: k.key,
+        kind: "kpi",
+        config: { kpi_key: k.key },
+        layout: null,
+      }));
 
   return (
     <div>
       <h2>Dashboard</h2>
-      <div className="kpi-row">
-        {visibleKpis.map((kpi) => (
-          <div className="kpi-tile" key={kpi.key} onClick={() => onNavigate(kpi.section)}>
-            <div className="value">{kpi.value(data)}</div>
-            <div className="label">{kpi.label(data)}</div>
-          </div>
-        ))}
-      </div>
 
-      {chartReports.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-          {chartReports.map((report) => (
-            <DashboardChartCard key={report.id} report={report} />
-          ))}
-        </div>
-      )}
-
-      {recordListWidgets.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-          {recordListWidgets.map((w) => (
-            <DashboardRecordListCard key={w.id} widget={w} onOpenRecord={onOpenRecord} />
-          ))}
+      {gridWidgets.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <DashboardGrid
+            widgets={gridWidgets}
+            renderWidget={(w) => (
+              <DashboardWidgetCard widget={w} summary={data} reports={reports.data ?? []} onNavigate={onNavigate} onOpenRecord={onOpenRecord} />
+            )}
+          />
         </div>
       )}
 
@@ -172,96 +161,3 @@ export function Dashboard({
   );
 }
 
-/** One chart widget on the live Dashboard - runs its report fresh (same
- * `run_custom_report` command the Reports screen's own runner uses) and
- * draws it with the same dependency-free `Bar` the Reports screen uses,
- * so a chart looks identical whether it's viewed there or here. */
-function DashboardChartCard({ report }: { report: CustomReport }) {
-  const q = useQuery({ queryKey: ["runCustomReport", report.id], queryFn: () => api.runCustomReport(report.id) });
-  const rows = q.data ?? [];
-  const max = Math.max(0, ...rows.map((r) => r.value));
-
-  return (
-    <div className="card">
-      <h3 style={{ marginTop: 0 }}>{report.name}</h3>
-      {q.isLoading && <p>Loading...</p>}
-      {rows.length === 0 && !q.isLoading && <p className="empty-state">No data yet.</p>}
-      {rows.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Group</th>
-              <th></th>
-              <th>Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.group}>
-                <td>{r.group}</td>
-                <td>
-                  <Bar value={r.value} max={max} />
-                </td>
-                <td>{report.aggregate === "sum" ? r.value.toLocaleString() : r.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
-
-/** One record-list widget on the live Dashboard - a short list of records
- * for `widget.config.entity_type`, run fresh via `run_dashboard_record_list`
- * (see `dashboard_widget_service` in core for what "recent" vs "due_soon"
- * mean). Clicking a row jumps straight to that record, the same one-shot
- * navigation an ID hyperlink or a Global search result already uses. */
-function DashboardRecordListCard({
-  widget,
-  onOpenRecord,
-}: {
-  widget: DashboardWidget;
-  onOpenRecord: (section: Section, id: string) => void;
-}) {
-  const entityType = widget.config.entity_type as string;
-  const mode = widget.config.mode as RecordListMode;
-  const limit = (widget.config.limit as number) ?? 5;
-  const savedViewId = (widget.config.saved_view_id as string | undefined) ?? null;
-  const q = useQuery({
-    queryKey: ["dashboardRecordList", entityType, mode, limit, savedViewId],
-    queryFn: () => api.runDashboardRecordList(entityType, mode, limit, savedViewId),
-  });
-  const rows = q.data ?? [];
-
-  return (
-    <div className="card">
-      <h3 style={{ marginTop: 0 }}>
-        {entityTypeLabel(entityType)} - {mode === "due_soon" ? "due soon" : "recent"}
-      </h3>
-      {q.isLoading && <p>Loading...</p>}
-      {rows.length === 0 && !q.isLoading && <p className="empty-state">Nothing here yet.</p>}
-      {rows.length > 0 && (
-        <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", fontSize: 14 }}>
-          {rows.map((r) => (
-            <li
-              key={r.entity_id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                padding: "6px 0",
-                borderBottom: "1px solid var(--border, #e5e7eb)",
-                cursor: "pointer",
-              }}
-              onClick={() => onOpenRecord(sectionFor(r.entity_type), r.entity_id)}
-            >
-              <span>{r.title}</span>
-              {r.subtitle && <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{r.subtitle}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
