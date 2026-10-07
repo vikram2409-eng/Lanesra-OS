@@ -19,6 +19,7 @@ import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import { RecordHeader } from "../../components/RecordHeader";
+import { InlineEditField } from "../../components/InlineEditField";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { useReportVoiceContext } from "../voice/VoiceContext";
@@ -36,6 +37,25 @@ import {
 } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
+
+function toContactInput(data: Contact): ContactInput {
+  return {
+    company_id: data.company_id,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    job_title: data.job_title,
+    email: data.email,
+    phone: data.phone,
+    mobile: data.mobile,
+    is_primary: data.is_primary,
+    status: data.status,
+    tags: data.tags,
+    notes: data.notes,
+    department: data.department,
+    preferred_contact_method: data.preferred_contact_method,
+    linkedin_url: data.linkedin_url,
+  };
+}
 
 function contactExportColumns(companyNameById: Map<string, string>) {
   return [
@@ -390,38 +410,7 @@ function ContactForm({
   const [duplicateWarning, setDuplicateWarning] = useState<Contact[] | null>(null);
 
   if (existing.data && existingCustomFields.data !== undefined && loadedFor !== contactId) {
-    const {
-      first_name,
-      last_name,
-      job_title,
-      email,
-      phone,
-      mobile,
-      is_primary,
-      status,
-      tags,
-      notes,
-      company_id,
-      department,
-      preferred_contact_method,
-      linkedin_url,
-    } = existing.data;
-    setInput({
-      company_id,
-      first_name,
-      last_name,
-      job_title,
-      email,
-      phone,
-      mobile,
-      is_primary,
-      status,
-      tags,
-      notes,
-      department,
-      preferred_contact_method,
-      linkedin_url,
-    });
+    setInput(toContactInput(existing.data));
     setCustomValues(existingCustomFields.data);
     setLoadedFor(contactId);
   }
@@ -630,6 +619,12 @@ function ContactDetail({
   const canWrite = useCanWriteObject("Contact");
   useReportVoiceContext("Contact", id);
   const contact = useQuery({ queryKey: ["contact", id], queryFn: () => api.getContact(id) });
+  const queryClientForField = useQueryClient();
+  const updateField = async (patch: Partial<ContactInput>) => {
+    if (!contact.data) return;
+    await api.updateContact(id, { ...toContactInput(contact.data), ...patch });
+    await queryClientForField.invalidateQueries({ queryKey: ["contact", id] });
+  };
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
@@ -716,14 +711,45 @@ function ContactDetail({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Details</h3>
-            <p><strong>Email:</strong> {c.email ?? "—"}</p>
-            <p><strong>Phone:</strong> {c.phone ?? "—"}</p>
-            <p><strong>Mobile:</strong> {c.mobile ?? "—"}</p>
-            <p><strong>Department:</strong> {c.department ?? "—"}</p>
-            <p><strong>Preferred contact method:</strong> {c.preferred_contact_method ?? "—"}</p>
-            <p><strong>LinkedIn:</strong> {c.linkedin_url ?? "—"}</p>
-            <p><strong>Tags:</strong> {c.tags ?? "—"}</p>
-            <p><strong>Notes:</strong> {c.notes ?? "—"}</p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Email:</strong>
+              <InlineEditField canEdit={canWrite} value={c.email ?? ""} displayValue={c.email ?? "—"} onSave={(v) => updateField({ email: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Phone:</strong>
+              <InlineEditField canEdit={canWrite} value={c.phone ?? ""} displayValue={c.phone ?? "—"} onSave={(v) => updateField({ phone: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Mobile:</strong>
+              <InlineEditField canEdit={canWrite} value={c.mobile ?? ""} displayValue={c.mobile ?? "—"} onSave={(v) => updateField({ mobile: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Department:</strong>
+              <InlineEditField canEdit={canWrite} value={c.department ?? ""} displayValue={c.department ?? "—"} onSave={(v) => updateField({ department: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Preferred contact method:</strong>
+              <InlineEditField
+                canEdit={canWrite}
+                type="select"
+                options={PREFERRED_CONTACT_METHODS}
+                value={c.preferred_contact_method ?? PREFERRED_CONTACT_METHODS[0]}
+                displayValue={c.preferred_contact_method ?? "—"}
+                onSave={(v) => updateField({ preferred_contact_method: v || null })}
+              />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>LinkedIn:</strong>
+              <InlineEditField canEdit={canWrite} value={c.linkedin_url ?? ""} displayValue={c.linkedin_url ?? "—"} onSave={(v) => updateField({ linkedin_url: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Tags:</strong>
+              <InlineEditField canEdit={canWrite} value={c.tags ?? ""} displayValue={c.tags ?? "—"} onSave={(v) => updateField({ tags: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Notes:</strong>
+              <InlineEditField canEdit={canWrite} type="textarea" value={c.notes ?? ""} displayValue={c.notes ?? "—"} onSave={(v) => updateField({ notes: v || null })} />
+            </p>
           </div>
           <RelatedRecordsCard entityType="Contact" entityId={id} />
           <AuditTrail entityType="Contact" entityId={id} />

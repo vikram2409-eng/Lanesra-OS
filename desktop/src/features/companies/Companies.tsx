@@ -25,6 +25,7 @@ import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
 import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import { RecordHeader } from "../../components/RecordHeader";
+import { InlineEditField } from "../../components/InlineEditField";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
 import { useSavedViews } from "../../lib/useSavedViews";
@@ -345,22 +346,7 @@ function CompanyForm({
   const [duplicateWarning, setDuplicateWarning] = useState<Company[] | null>(null);
 
   if (existing.data && existingCustomFields.data !== undefined && loadedFor !== companyId) {
-    setInput({
-      name: existing.data.name,
-      status: existing.data.status,
-      owner_user_id: existing.data.owner_user_id,
-      tax_number: existing.data.tax_number,
-      billing_address: existing.data.billing_address,
-      shipping_address: existing.data.shipping_address,
-      tags: existing.data.tags,
-      notes: existing.data.notes,
-      phone: existing.data.phone,
-      email: existing.data.email,
-      website: existing.data.website,
-      annual_revenue_cents: existing.data.annual_revenue_cents,
-      employee_count: existing.data.employee_count,
-      preferred_contact_method: existing.data.preferred_contact_method,
-    });
+    setInput(toCompanyInput(existing.data));
     setCustomValues(existingCustomFields.data);
     setLoadedFor(companyId);
   }
@@ -563,72 +549,135 @@ const COMPANY_TABS: { tab: CompanyTab; label: string }[] = [
  * Builder 2.0, issue #195, 5b) below, so a `field` component placed on a
  * published Page renders through the exact same pre-built element either
  * renderer would otherwise arrange. */
-function companyDetailFields(data: Company): Record<string, ReactNode> {
+function toCompanyInput(data: Company): CompanyInput {
+  return {
+    name: data.name,
+    status: data.status,
+    owner_user_id: data.owner_user_id,
+    tax_number: data.tax_number,
+    billing_address: data.billing_address,
+    shipping_address: data.shipping_address,
+    tags: data.tags,
+    notes: data.notes,
+    phone: data.phone,
+    email: data.email,
+    website: data.website,
+    annual_revenue_cents: data.annual_revenue_cents,
+    employee_count: data.employee_count,
+    preferred_contact_method: data.preferred_contact_method,
+  };
+}
+
+/**
+ * Runtime UX Modernization (issue #198): `onFieldSave`, when given, wraps
+ * each value in `InlineEditField` - click-to-edit in place, saved through
+ * the exact same `api.updateCompany` call a full form edit uses (see
+ * `CompanyDetail`'s `updateField` mutation). Omit it (as the edit form's
+ * own read-only preview never needs) and every field renders plain, same
+ * as before.
+ */
+function companyDetailFields(
+  data: Company,
+  canEdit = false,
+  onFieldSave?: (patch: Partial<CompanyInput>) => Promise<void>,
+): Record<string, ReactNode> {
+  const save = onFieldSave ?? (async () => {});
   return {
     phone: (
       <div className="form-field" key="phone">
         <label>Phone</label>
-        <div>{data.phone ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.phone ?? ""} displayValue={data.phone ?? "—"} onSave={(v) => save({ phone: v || null })} />
       </div>
     ),
     email: (
       <div className="form-field" key="email">
         <label>Email</label>
-        <div>{data.email ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.email ?? ""} displayValue={data.email ?? "—"} onSave={(v) => save({ email: v || null })} />
       </div>
     ),
     website: (
       <div className="form-field" key="website">
         <label>Website</label>
-        <div>{data.website ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.website ?? ""} displayValue={data.website ?? "—"} onSave={(v) => save({ website: v || null })} />
       </div>
     ),
     annual_revenue_cents: (
       <div className="form-field" key="annual_revenue_cents">
         <label>Annual revenue</label>
-        <div>{data.annual_revenue_cents === null ? "—" : formatCents(data.annual_revenue_cents)}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="number"
+          value={data.annual_revenue_cents === null ? "" : centsToInputValue(data.annual_revenue_cents)}
+          displayValue={data.annual_revenue_cents === null ? "—" : formatCents(data.annual_revenue_cents)}
+          onSave={(v) => save({ annual_revenue_cents: v === "" ? null : parseDecimalToCents(v) })}
+        />
       </div>
     ),
     employee_count: (
       <div className="form-field" key="employee_count">
         <label>Employees</label>
-        <div>{data.employee_count ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="number"
+          value={data.employee_count === null ? "" : String(data.employee_count)}
+          displayValue={data.employee_count ?? "—"}
+          onSave={(v) => save({ employee_count: v === "" ? null : Math.round(Number(v)) })}
+        />
       </div>
     ),
     preferred_contact_method: (
       <div className="form-field" key="preferred_contact_method">
         <label>Preferred contact method</label>
-        <div>{data.preferred_contact_method ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="select"
+          options={PREFERRED_CONTACT_METHODS}
+          value={data.preferred_contact_method ?? PREFERRED_CONTACT_METHODS[0]}
+          displayValue={data.preferred_contact_method ?? "—"}
+          onSave={(v) => save({ preferred_contact_method: v || null })}
+        />
       </div>
     ),
     tax_number: (
       <div className="form-field" key="tax_number">
         <label>Tax number</label>
-        <div>{data.tax_number ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.tax_number ?? ""} displayValue={data.tax_number ?? "—"} onSave={(v) => save({ tax_number: v || null })} />
       </div>
     ),
     billing_address: (
       <div className="form-field full" key="billing_address">
         <label>Billing address</label>
-        <div>{data.billing_address ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="textarea"
+          value={data.billing_address ?? ""}
+          displayValue={data.billing_address ?? "—"}
+          onSave={(v) => save({ billing_address: v || null })}
+        />
       </div>
     ),
     shipping_address: (
       <div className="form-field full" key="shipping_address">
         <label>Shipping address</label>
-        <div>{data.shipping_address ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="textarea"
+          value={data.shipping_address ?? ""}
+          displayValue={data.shipping_address ?? "—"}
+          onSave={(v) => save({ shipping_address: v || null })}
+        />
       </div>
     ),
     tags: (
       <div className="form-field full" key="tags">
         <label>Tags</label>
-        <div>{data.tags ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.tags ?? ""} displayValue={data.tags ?? "—"} onSave={(v) => save({ tags: v || null })} />
       </div>
     ),
     notes: (
       <div className="form-field full" key="notes">
         <label>Notes</label>
-        <div>{data.notes ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} type="textarea" value={data.notes ?? ""} displayValue={data.notes ?? "—"} onSave={(v) => save({ notes: v || null })} />
       </div>
     ),
   };
@@ -660,6 +709,12 @@ function CompanyDetail({
   const canWrite = useCanWriteObject("Company");
   useReportVoiceContext("Company", id);
   const company = useQuery({ queryKey: ["company", id], queryFn: () => api.getCompany(id) });
+  const queryClientForField = useQueryClient();
+  const updateField = async (patch: Partial<CompanyInput>) => {
+    if (!company.data) return;
+    await api.updateCompany(id, { ...toCompanyInput(company.data), ...patch });
+    await queryClientForField.invalidateQueries({ queryKey: ["company", id] });
+  };
   const contacts = useQuery({ queryKey: ["contactsByCompany", id], queryFn: () => api.listContactsByCompany(id) });
   const opportunities = useQuery({
     queryKey: ["opportunitiesByCompany", id],
@@ -767,7 +822,7 @@ function CompanyDetail({
           <PageRenderer
             entityType="Company"
             entityId={id}
-            fields={companyDetailFields(company.data)}
+            fields={companyDetailFields(company.data, canWrite, updateField)}
             onEdit={onEdit}
             onOpenAdminTab={onOpenAdminTab}
             recordHeader={
@@ -798,7 +853,7 @@ function CompanyDetail({
                   "phone", "email", "website", "annual_revenue_cents", "employee_count",
                   "preferred_contact_method", "tax_number", "billing_address", "shipping_address", "tags", "notes",
                 ]}
-                fields={companyDetailFields(company.data)}
+                fields={companyDetailFields(company.data, canWrite, updateField)}
               />
             </div>
           </div>

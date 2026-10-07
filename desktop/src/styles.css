@@ -1995,3 +1995,27 @@ tr:hover td {
   padding: 8px 0;
   margin-bottom: 8px;
 }
+
+/* InlineEditField (Runtime UX Modernization, issue #198): a read-only
+   detail field that's click-to-edit when the viewer has write access. */
+.inline-edit-value {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
+.inline-edit-value:hover,
+.inline-edit-value:focus-visible {
+  background: rgba(127, 127, 127, 0.1);
+  outline: 1px dashed var(--border);
+}
+.inline-edit-active select,
+.inline-edit-active input,
+.inline-edit-active textarea {
+  max-width: 220px;
+}
+.inline-edit-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
