@@ -237,12 +237,12 @@ function LostReasonsReport({ range }: { range: { from: string | null; to: string
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr key={r.reason}>
                 <td>{r.reason}</td>
                 <td>{r.count}</td>
                 <td>
-                  <Bar value={r.count} max={max} />
+                  <Bar value={r.count} max={max} index={i} />
                 </td>
                 <td>{formatCents(r.value_cents, "USD")}</td>
               </tr>
@@ -286,12 +286,12 @@ function ArAgingReport({ asOfDate }: { asOfDate: string }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr key={r.bucket}>
                 <td>{r.bucket}</td>
                 <td>{r.invoice_count}</td>
                 <td>
-                  <Bar value={r.balance_cents} max={max} />
+                  <Bar value={r.balance_cents} max={max} index={i} />
                 </td>
                 <td>{formatCents(r.balance_cents, "USD")}</td>
               </tr>
@@ -338,12 +338,12 @@ function SalesByOwnerReport({ range }: { range: { from: string | null; to: strin
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr key={r.owner_user_id ?? "unassigned"}>
                 <td>{r.owner_name}</td>
                 <td>{r.invoice_count}</td>
                 <td>
-                  <Bar value={r.total_cents} max={max} />
+                  <Bar value={r.total_cents} max={max} index={i} />
                 </td>
                 <td>{formatCents(r.total_cents, "USD")}</td>
               </tr>
@@ -646,11 +646,11 @@ function CustomReportRunner({ report }: { report: CustomReport }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr key={r.group}>
                 <td>{r.group}</td>
                 <td>
-                  <Bar value={r.value} max={max} />
+                  <Bar value={r.value} max={max} index={i} />
                 </td>
                 <td>{report.aggregate === "sum" ? r.value.toLocaleString() : r.value}</td>
               </tr>
@@ -749,11 +749,11 @@ function AskReportPanel() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {rows.map((r, i) => (
                   <tr key={r.group}>
                     <td>{r.group}</td>
                     <td>
-                      <Bar value={r.value} max={max} />
+                      <Bar value={r.value} max={max} index={i} />
                     </td>
                     <td>{result.report.aggregate === "sum" ? r.value.toLocaleString() : r.value}</td>
                   </tr>

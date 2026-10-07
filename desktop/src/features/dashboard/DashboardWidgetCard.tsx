@@ -129,11 +129,11 @@ function ChartWidgetCard({ widget, reports }: { widget: DashboardWidget; reports
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr key={r.group}>
                 <td>{r.group}</td>
                 <td>
-                  <Bar value={r.value} max={max} />
+                  <Bar value={r.value} max={max} index={i} />
                 </td>
                 <td>{report.aggregate === "sum" ? r.value.toLocaleString() : r.value}</td>
               </tr>

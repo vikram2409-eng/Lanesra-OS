@@ -13,8 +13,8 @@ use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::workspace_theme::{
-    ThemeColorTokens, ThemeContrastIssue, ThemeShapeTokens, ThemeTokens, ThemeTypographyTokens, WorkspaceTheme, WorkspaceThemeInput,
-    DENSITY_SCALES, RADIUS_SCALES, THEME_PRESET_KEYS,
+    ThemeChartTokens, ThemeColorTokens, ThemeContrastIssue, ThemeShapeTokens, ThemeTokens, ThemeTypographyTokens, WorkspaceTheme,
+    WorkspaceThemeInput, DENSITY_SCALES, RADIUS_SCALES, THEME_PRESET_KEYS,
 };
 use crate::repositories::{audit_repo, workspace_theme_repo};
 
@@ -50,6 +50,9 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                 typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
                 shape: ThemeShapeTokens { radius_scale: "rounded".into() },
                 density: "comfortable".into(),
+                chart: ThemeChartTokens {
+                    palette: ["#635BFF", "#0F9D76", "#F59E0B", "#EF4444", "#3B82F6", "#8B5CF6"].iter().map(|s| s.to_string()).collect(),
+                },
             },
         ),
         (
@@ -74,6 +77,9 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                 typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
                 shape: ThemeShapeTokens { radius_scale: "soft".into() },
                 density: "comfortable".into(),
+                chart: ThemeChartTokens {
+                    palette: ["#2563EB", "#14B8A6", "#F59E0B", "#EF4444", "#8B5CF6", "#16A34A"].iter().map(|s| s.to_string()).collect(),
+                },
             },
         ),
         (
@@ -98,6 +104,9 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                 typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
                 shape: ThemeShapeTokens { radius_scale: "soft".into() },
                 density: "comfortable".into(),
+                chart: ThemeChartTokens {
+                    palette: ["#C2410C", "#EAB308", "#0F766E", "#3B82F6", "#8B5CF6", "#EF4444"].iter().map(|s| s.to_string()).collect(),
+                },
             },
         ),
         (
@@ -122,6 +131,9 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                 typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
                 shape: ThemeShapeTokens { radius_scale: "rounded".into() },
                 density: "comfortable".into(),
+                chart: ThemeChartTokens {
+                    palette: ["#0F766E", "#7C3AED", "#F59E0B", "#EF4444", "#3B82F6", "#16A34A"].iter().map(|s| s.to_string()).collect(),
+                },
             },
         ),
     ]
@@ -197,6 +209,9 @@ fn validate_shape(input: &WorkspaceThemeInput) -> AppResult<()> {
     }
     if !DENSITY_SCALES.contains(&input.tokens.density.as_str()) {
         return Err(AppError::Validation(format!("Unknown density '{}'", input.tokens.density)));
+    }
+    if input.tokens.chart.palette.len() < 3 {
+        return Err(AppError::Validation("Chart palette needs at least 3 colors to stay usefully categorical".into()));
     }
     Ok(())
 }

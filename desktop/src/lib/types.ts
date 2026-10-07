@@ -4154,11 +4154,18 @@ export interface ThemeShapeTokens {
   radius_scale: string;
 }
 
+// Runtime UX Modernization (issue #198): the categorical palette charts
+// cycle through by series/group index - see Bar.tsx and applyTheme.ts.
+export interface ThemeChartTokens {
+  palette: string[];
+}
+
 export interface ThemeTokens {
   color: ThemeColorTokens;
   typography: ThemeTypographyTokens;
   shape: ThemeShapeTokens;
   density: string;
+  chart: ThemeChartTokens;
 }
 
 export interface WorkspaceTheme {
