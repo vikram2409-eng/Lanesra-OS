@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -22,7 +22,7 @@ import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
-import { GroupHeaderRow } from "../../components/GroupHeaderRow";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
 import { useSavedViews } from "../../lib/useSavedViews";
@@ -48,6 +48,25 @@ const COMPANY_EXPORT_COLUMNS = [
   { label: "Employees", get: (c: Company) => (c.employee_count === null ? "" : String(c.employee_count)) },
   { label: "Preferred contact method", get: (c: Company) => c.preferred_contact_method ?? "" },
 ];
+
+const companyColumns: ListTableColumn<Company>[] = [
+  {
+    key: "customer_number",
+    label: "Number",
+    getValue: (c) => c.customer_number,
+    render: (c) => <span className="id-link">{c.customer_number}</span>,
+    defaultWidth: 110,
+  },
+  { key: "name", label: "Name", getValue: (c) => c.name, defaultWidth: 220 },
+  { key: "status", label: "Status", format: "status", getValue: (c) => c.status, defaultWidth: 120 },
+  { key: "tax_number", label: "Tax number", getValue: (c) => c.tax_number, defaultWidth: 140 },
+  { key: "owner_user_id", label: "Owner", format: "owner", getValue: (c) => c.owner_user_id, defaultWidth: 160 },
+  { key: "annual_revenue_cents", label: "Annual revenue", format: "currency", getValue: (c) => c.annual_revenue_cents, align: "right", defaultWidth: 140 },
+  { key: "employee_count", label: "Employees", format: "number", getValue: (c) => c.employee_count, align: "right", defaultWidth: 100 },
+  { key: "phone", label: "Phone", getValue: (c) => c.phone, defaultWidth: 140 },
+  { key: "email", label: "Email", getValue: (c) => c.email, defaultWidth: 200 },
+];
+const DEFAULT_COMPANY_COLUMNS = ["customer_number", "name", "status", "tax_number"];
 
 const COMPANY_IMPORT_COLUMNS = [
   { label: "Name", required: true },
@@ -253,41 +272,17 @@ export function Companies({
         return filteredRows.length === 0 ? (
           <p className="empty-state">No companies match the current filters.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 28 }}>
-                  <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
-                </th>
-                <th>Number</th>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Tax number</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((group) => (
-                <Fragment key={group.label || "_"}>
-                  {views.groupByField && <GroupHeaderRow label={group.label} colSpan={5} />}
-                  {group.rows.map((c) => (
-                    <tr key={c.id} style={{ cursor: "pointer" }}>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={selection.isSelected(c.id)} onChange={() => selection.toggle(c.id)} />
-                      </td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                        <span className="id-link">{c.customer_number}</span>
-                      </td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.name}</td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                        <StatusBadge status={c.status} />
-                      </td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.tax_number ?? "—"}</td>
-                    </tr>
-                  ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+          <ListTable<Company>
+            storageKey="Company"
+            columns={companyColumns}
+            visibleKeys={views.columnKeys ?? DEFAULT_COMPANY_COLUMNS}
+            onVisibleKeysChange={views.setColumnKeys}
+            groups={groups}
+            getRowId={(c) => c.id}
+            onRowClick={(c) => setView({ mode: "detail", id: c.id })}
+            selection={selection}
+            resolveUser={(id) => users.data?.find((u) => u.id === id)?.display_name}
+          />
         );
       })()}
     </div>

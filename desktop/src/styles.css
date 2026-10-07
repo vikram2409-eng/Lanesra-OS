@@ -1742,3 +1742,139 @@ tr:hover td {
     grid-template-columns: 1fr;
   }
 }
+
+/* ListTable (Runtime UX Modernization, issue #198): the shared
+   dynamic-column table - density, column resize/reorder/picker chrome,
+   and the table<->card mobile collapse. See components/ListTable.tsx. */
+.list-table-wrap {
+  width: 100%;
+}
+
+.list-table-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.segmented-btn + .segmented-btn {
+  border-left: 1px solid var(--border);
+}
+.segmented-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.list-table-column-picker {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.list-table-column-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.list-table-column-picker-row:hover {
+  background: rgba(127, 127, 127, 0.08);
+  border-radius: 4px;
+}
+
+.list-table-table th {
+  position: relative;
+  user-select: none;
+}
+.list-table-resize-handle {
+  position: absolute;
+  /* Stays fully inside its own <th> box (not straddling the boundary)
+     so it never sits under the next column's header, which would
+     otherwise win hit-testing since later DOM siblings paint on top. */
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.list-table-resize-handle:hover {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+/* Density: default row padding already matches "comfortable" (see the
+   base th/td rule); compact/dense tighten it. */
+.list-table-compact .list-table-table th,
+.list-table-compact .list-table-table td {
+  padding: 5px 10px;
+}
+.list-table-dense .list-table-table th,
+.list-table-dense .list-table-table td {
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+/* Mobile card collapse: both markups stay in the DOM; only one shows at
+   a time, so no resize listener is needed. */
+.list-table-cards {
+  display: none;
+}
+@media (max-width: 720px) {
+  .list-table-table {
+    display: none;
+  }
+  .list-table-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+.list-table-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  background: var(--bg-elevated);
+}
+.list-table-card-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.list-table-card-label {
+  color: var(--text-muted);
+}
+.list-table-card-value {
+  text-align: right;
+}
