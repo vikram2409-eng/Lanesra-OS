@@ -2532,6 +2532,8 @@ export interface AiAgentDefinition {
   is_active: boolean;
   /** AI Agent Platform v2, Phase 1: this agent's current Published version. */
   current_version_id: string | null;
+  /** Agent Access Governance (issue #245): this agent's own bound identity for record-write access-control purposes - `null` changes nothing. */
+  acts_as_user_id: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -2701,6 +2703,10 @@ export interface AiAgentPolicy {
   // ai_memory_service::remember write under this policy's scope is
   // excluded from durable persistence. Defaults true (excluded).
   exclude_restricted_memory: boolean;
+  // Agent Access Governance (issue #245): whether a record write this
+  // policy's scope makes is checked for real against Access Control v1.
+  // Defaults false - zero behavior change until an admin opts in.
+  enforce_record_access: boolean;
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -2711,6 +2717,29 @@ export interface AiAgentPolicyInput {
   require_approval_at_or_above: RiskLevel | null;
   blocked_tool_names: string[];
   exclude_restricted_memory: boolean;
+  enforce_record_access: boolean;
+}
+
+// What policy_engine_service::evaluate decided for one tool call -
+// core::models::ai_agent_policy::PolicyDecision 1:1 (serde tag "outcome").
+export type PolicyDecision =
+  | { outcome: "allow" }
+  | { outcome: "require_approval"; risk_level: RiskLevel }
+  | { outcome: "deny"; risk_level: RiskLevel };
+
+// Agent Access Governance (issue #245) - core::models::agent_access_inspection
+// 1:1. See AgentAccessInspector.tsx and agent_access_inspector_service's
+// own doc comment for what each field means.
+export interface AgentAccessInspection {
+  agent_id: string;
+  agent_name: string;
+  tool_name: string;
+  tool_in_action_list: boolean;
+  policy_decision: PolicyDecision;
+  policy_source: string;
+  record_access_enforced: boolean;
+  acting_as_user_id: string | null;
+  record_access: AccessInspectorResult | null;
 }
 
 // --- AI & Agentic Layer, Phase 6b - orchestration on top of Phase 6a's

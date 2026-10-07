@@ -189,7 +189,7 @@ fn restricted_classification_is_allowed_once_a_policy_relaxes_the_exclusion() {
     let agent = make_agent(&conn, &ws, &admin, "Guarded");
     policy_engine_service::upsert_policy(
         &conn, &ws, Some(&agent.id),
-        &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec![], exclude_restricted_memory: false },
+        &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec![], exclude_restricted_memory: false, enforce_record_access: false },
         Some(&admin),
     )
     .unwrap();

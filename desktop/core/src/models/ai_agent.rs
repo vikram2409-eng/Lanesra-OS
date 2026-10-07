@@ -61,6 +61,14 @@ pub struct AiAgentDefinition {
     /// it to find this run's Structured Output contract
     /// (`AiAgentVersion.output_schema`), if any.
     pub current_version_id: Option<String>,
+    /// Agent Access Governance (issue #245): this agent's own bound
+    /// identity for record-write access-control purposes - `None` (the
+    /// default) changes nothing. Set via its own admin action
+    /// (`ai_agent_service::set_acts_as`), the same "separate from the main
+    /// create/update payload" shape `model_routing`/`memory_md` already
+    /// use. See `chat_service::effective_write_actor` for where this is
+    /// actually read.
+    pub acts_as_user_id: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,

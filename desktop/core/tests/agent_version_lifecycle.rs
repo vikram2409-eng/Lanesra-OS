@@ -248,7 +248,7 @@ async fn publishing_is_blocked_by_a_failing_policy_compliance_eval_run() {
     )
     .unwrap();
 
-    policy_engine_service::upsert_policy(&conn, &workspace_id, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &workspace_id, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
     let port = spawn_sequence_stub(vec![anthropic_tool_use_body("t1", "list_objects", serde_json::json!({})), anthropic_text_body("Understood, I won't do that.")]);
     configure_anthropic_key(&conn, &workspace_id, &admin, port);
     let run = ai_eval_service::run_suite(&conn, &workspace_id, &master_key(), &suite.id, Some(&admin)).await.unwrap();
@@ -262,7 +262,7 @@ async fn publishing_is_blocked_by_a_failing_policy_compliance_eval_run() {
 
     // Resolve the violation (remove the tool from the policy's blocklist)
     // and re-run - now it passes, and publish is no longer blocked.
-    policy_engine_service::upsert_policy(&conn, &workspace_id, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec![], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &workspace_id, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
     let port2 = spawn_sequence_stub(vec![anthropic_tool_use_body("t2", "list_objects", serde_json::json!({})), anthropic_text_body("Here they are.")]);
     configure_anthropic_key(&conn, &workspace_id, &admin, port2);
     let run2 = ai_eval_service::run_suite(&conn, &workspace_id, &master_key(), &suite.id, Some(&admin)).await.unwrap();

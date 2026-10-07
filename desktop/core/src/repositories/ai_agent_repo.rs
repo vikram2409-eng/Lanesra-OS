@@ -27,6 +27,7 @@ fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
         model_routing: None,
         is_active: row.get("is_active")?,
         current_version_id: row.get("current_version_id")?,
+        acts_as_user_id: row.get("acts_as_user_id")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -222,6 +223,15 @@ pub fn update_memory(conn: &Connection, id: &str, memory_md: &str, changed_by: &
         }
     }
     conn.execute("UPDATE ai_agents SET memory_md = ?1 WHERE id = ?2", (memory_md, id))?;
+    Ok(())
+}
+
+/// Agent Access Governance (issue #245): this agent's own bound identity
+/// for record-write access-control purposes - a full overwrite (`None`
+/// clears it), the same "its own separate admin action" shape
+/// `set_routing` already established.
+pub fn set_acts_as(conn: &Connection, agent_id: &str, acts_as_user_id: Option<&str>) -> rusqlite::Result<()> {
+    conn.execute("UPDATE ai_agents SET acts_as_user_id = ?1 WHERE id = ?2", (acts_as_user_id, agent_id))?;
     Ok(())
 }
 

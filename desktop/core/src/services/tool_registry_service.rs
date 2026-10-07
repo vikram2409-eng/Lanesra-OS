@@ -40,10 +40,12 @@ fn hardcoded_override(tool_name: &str) -> Option<RiskLevel> {
 
 /// `source` is `tool_source`'s own classification (`chat_service.rs`) -
 /// `Some("connector_read")`/`Some("connector_write")` for a
-/// connector-derived tool name, `Some("record")`/`Some("admin")` (or
-/// `None`, for a Foundry-only name like `update_memory` this function is
-/// never actually asked to classify - see `policy_engine_service`'s own
-/// doc comment) for a native one.
+/// connector-derived tool name, `Some("record")`/`Some("admin")` for a
+/// native one, `Some("agent_internal")` for a Foundry-only name like
+/// `update_memory` (issue #245 - these now go through the same firewall,
+/// just falling into the name-prefix heuristic below rather than a
+/// dedicated branch), or `None` for anything this convention has never
+/// seen before.
 pub fn default_risk_for(tool_name: &str, source: Option<&str>) -> RiskLevel {
     if let Some(risk) = hardcoded_override(tool_name) {
         return risk;

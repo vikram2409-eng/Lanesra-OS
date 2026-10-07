@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../../lib/api";
 import { ChatPanel } from "../../components/ChatPanel";
 import { AiTriggersPanel } from "./AiTriggersPanel";
+import { AgentAccessInspector } from "./AgentAccessInspector";
 import { agentRequiresAdmin } from "../../lib/aiAgents";
 import { AGENT_TEMPLATES, type AgentTemplateDef } from "../../lib/agentTemplates";
 import { RISK_LEVELS, RISK_LEVEL_LABELS } from "../../lib/types";
@@ -199,6 +200,8 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
   const [guardrailsFor, setGuardrailsFor] = useState<AiAgentDefinition | null>(null);
   const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
+  const [actsAsFor, setActsAsFor] = useState<AiAgentDefinition | null>(null);
+  const [inspectingAccess, setInspectingAccess] = useState(false);
   const [versionsFor, setVersionsFor] = useState<AiAgentDefinition | null>(null);
   const [triggersFor, setTriggersFor] = useState<AiAgentDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +253,14 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
       invalidate();
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this agent's routing"),
+  });
+  const saveActsAs = useMutation({
+    mutationFn: ({ id, actsAsUserId }: { id: string; actsAsUserId: string | null }) => api.setAiAgentActsAs(id, actsAsUserId),
+    onSuccess: () => {
+      setActsAsFor(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this agent's Acts As identity"),
   });
 
   // Agent Studio 2.0 (issue #196): "preconfigured starting tool/policy/
@@ -351,6 +362,9 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                       <button className="btn btn-secondary" onClick={() => setRoutingFor(a)}>
                         Routing{a.model_routing && <span className="badge badge-success" style={{ marginLeft: 4 }}>on</span>}
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setActsAsFor(a)}>
+                        Acts as{a.acts_as_user_id && <span className="badge badge-success" style={{ marginLeft: 4 }}>set</span>}
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setVersionsFor(a)}>
                         Versions
                       </button>
@@ -419,11 +433,35 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
         />
       )}
 
+      {actsAsFor && (
+        <ActsAsEditor
+          agent={actsAsFor}
+          onCancel={() => setActsAsFor(null)}
+          onSave={(actsAsUserId) => saveActsAs.mutate({ id: actsAsFor.id, actsAsUserId })}
+          pending={saveActsAs.isPending}
+        />
+      )}
+
       {versionsFor && <VersionsPanel agent={versionsFor} agents={agents} skills={skills} connectorTools={connectorTools} mcpTools={mcpTools} />}
 
       <ApprovalsPanel />
 
       <PolicyEnginePanel agents={agents} />
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="toolbar">
+          <h3 style={{ margin: 0 }}>Agent Access Inspector</h3>
+          <button className="btn btn-secondary" onClick={() => setInspectingAccess((v) => !v)}>
+            {inspectingAccess ? "Hide" : "Show"}
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          A real, traceable answer to "what can this agent actually touch" - the Tool-Call Firewall decision for any
+          tool it can call, plus the real Access Control v1 trace for a record-write tool once a policy enforces it.
+        </p>
+        {inspectingAccess && agents.length > 0 && <AgentAccessInspector agents={agents} onClose={() => setInspectingAccess(false)} />}
+        {inspectingAccess && agents.length === 0 && <div className="empty-state">Create an agent first.</div>}
+      </div>
 
       <KnowledgeAndMemoryPanel />
 
@@ -708,6 +746,61 @@ function ModelRoutingEditor({
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <button className="btn btn-primary" onClick={() => onSave(enabled ? routing : null)} disabled={pending}>
           {pending ? "Saving..." : "Save routing"}
+        </button>
+        <button className="btn btn-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/// Agent Access Governance (issue #245): this agent's own bound identity
+/// for record-write access-control purposes - see `ai_agent.rs`'s own
+/// doc comment on `acts_as_user_id`. `null` (the default) changes
+/// nothing; see the Agent Access Inspector below for what this actually
+/// does once a workspace also turns on "Enforce Access Control" in its
+/// policy.
+function ActsAsEditor({
+  agent,
+  onCancel,
+  onSave,
+  pending,
+}: {
+  agent: AiAgentDefinition;
+  onCancel: () => void;
+  onSave: (actsAsUserId: string | null) => void;
+  pending: boolean;
+}) {
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+  const [userId, setUserId] = useState(agent.acts_as_user_id ?? "");
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ marginTop: 0 }}>
+        {agent.icon} {agent.name}'s Acts As identity
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        With no identity set, this agent's record writes stay unattributed/system-level, unaffected by Access Control
+        v1, exactly as before this feature existed. Setting one - and turning on "Enforce Access Control on record
+        writes" in this agent's (or the workspace default) policy below - makes every create/update/archive this
+        agent performs check for real against that user's own Access Roles, the same evaluation a manual edit by
+        that user would go through.
+      </p>
+      <div className="field">
+        <label>Acts as</label>
+        <select value={userId} onChange={(e) => setUserId(e.target.value)}>
+          <option value="">— Unattributed (today's behavior) —</option>
+          {(users.data ?? []).map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.display_name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button className="btn btn-primary" onClick={() => onSave(userId || null)} disabled={pending}>
+          {pending ? "Saving..." : "Save"}
         </button>
         <button className="btn btn-secondary" onClick={onCancel}>
           Cancel
@@ -1662,6 +1755,7 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
   const [threshold, setThreshold] = useState<RiskLevel | "">(policy?.require_approval_at_or_above ?? "");
   const [blockedText, setBlockedText] = useState((policy?.blocked_tool_names ?? []).join(", "));
   const [excludeRestrictedMemory, setExcludeRestrictedMemory] = useState(policy?.exclude_restricted_memory ?? true);
+  const [enforceRecordAccess, setEnforceRecordAccess] = useState(policy?.enforce_record_access ?? false);
 
   const save = useMutation({
     mutationFn: () => {
@@ -1672,6 +1766,7 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
           .map((s) => s.trim())
           .filter(Boolean),
         exclude_restricted_memory: excludeRestrictedMemory,
+        enforce_record_access: enforceRecordAccess,
       };
       return api.upsertAiAgentPolicy(agentId, input);
     },
@@ -1703,6 +1798,11 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
       <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}>
         <input type="checkbox" checked={excludeRestrictedMemory} onChange={(e) => setExcludeRestrictedMemory(e.target.checked)} style={{ marginRight: 6 }} />
         Exclude 'restricted'-classified content from durable memory (Session/Working/Entity - remember tool)
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}>
+        <input type="checkbox" checked={enforceRecordAccess} onChange={(e) => setEnforceRecordAccess(e.target.checked)} style={{ marginRight: 6 }} />
+        Enforce Access Control v1 on record writes (create/update/archive) under this policy's scope - off by default, so every AI-driven
+        write stays unattributed/unscoped exactly as before until this is turned on. See the Agent Access Inspector below.
       </label>
       <button className="btn btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
         {save.isPending ? "Saving..." : "Save policy"}
