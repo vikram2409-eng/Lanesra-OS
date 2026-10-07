@@ -10,10 +10,11 @@ use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemoryUpdate, AiAgentMemorySnapshot, AiAgentVersion, AiAgentVersionInput, AiSkill, AiSkillInput};
+use lanesra_core::models::agent_access_inspection::AgentAccessInspection;
 use lanesra_core::models::ai_agent_policy::{AiAgentPolicy, AiAgentPolicyInput};
 use lanesra_core::models::ai_approval::{AiApproval, AiApprovalInput, AiApprovalResolution};
 use lanesra_core::models::ai_tool_registry::{AiToolRegistryOverride, AiToolRegistryOverrideInput};
-use lanesra_core::services::{agent_version_service, ai_agent_service, approval_service, policy_engine_service, tool_registry_service};
+use lanesra_core::services::{agent_access_inspector_service, agent_version_service, ai_agent_service, approval_service, policy_engine_service, tool_registry_service};
 
 #[tauri::command]
 pub fn list_ai_agents(state: State<AppState>, active_only: bool) -> AppResult<Vec<AiAgentDefinition>> {
@@ -71,6 +72,16 @@ pub fn set_ai_agent_model_routing(state: State<AppState>, id: String, routing: O
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     ai_agent_service::set_model_routing(&conn, &id, &workspace_id, routing, current_actor(&state).as_deref())
+}
+
+/// Agent Access Governance (issue #245): an agent's own bound identity -
+/// `acts_as_user_id: None` clears it, returning this agent to today's
+/// unscoped record-write behavior.
+#[tauri::command]
+pub fn set_ai_agent_acts_as(state: State<AppState>, id: String, acts_as_user_id: Option<String>) -> AppResult<AiAgentDefinition> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    ai_agent_service::set_acts_as(&conn, &id, &workspace_id, acts_as_user_id, current_actor(&state).as_deref())
 }
 
 #[tauri::command]
@@ -153,6 +164,35 @@ pub fn upsert_ai_agent_policy(state: State<AppState>, agent_id: Option<String>, 
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     policy_engine_service::upsert_policy(&conn, &workspace_id, agent_id.as_deref(), &input, current_actor(&state).as_deref())
+}
+
+/// Agent Access Governance (issue #245): the Agent Access Inspector -
+/// `object_key`/`record_id` only matter for a record-write tool name,
+/// `simulate_as_user_id` only matters when this agent has no `acts_as`
+/// of its own and this workspace's policy enforces record access at all
+/// - see `agent_access_inspector_service::inspect`'s own doc comment.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn inspect_agent_access(
+    state: State<AppState>,
+    agent_id: String,
+    tool_name: String,
+    object_key: Option<String>,
+    record_id: Option<String>,
+    simulate_as_user_id: Option<String>,
+) -> AppResult<AgentAccessInspection> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    agent_access_inspector_service::inspect(
+        &conn,
+        &workspace_id,
+        &agent_id,
+        &tool_name,
+        object_key.as_deref(),
+        record_id.as_deref(),
+        simulate_as_user_id.as_deref(),
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]

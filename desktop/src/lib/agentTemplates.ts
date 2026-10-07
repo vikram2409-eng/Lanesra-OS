@@ -85,7 +85,7 @@ export const AGENT_TEMPLATES: AgentTemplateDef[] = [
       "You take well-defined actions on records - creating and updating them as asked. Confirm what you changed and why in your reply.",
       ["list_records", "get_record", "search_records", "create_record", "update_record"],
     ),
-    policy: { require_approval_at_or_above: "destructive" as RiskLevel, blocked_tool_names: [], exclude_restricted_memory: true },
+    policy: { require_approval_at_or_above: "destructive" as RiskLevel, blocked_tool_names: [], exclude_restricted_memory: true, enforce_record_access: false },
   },
   {
     key: "research_agent",

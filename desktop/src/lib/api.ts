@@ -31,6 +31,7 @@ import type {
   AiApprovalResolution,
   AiAgentPolicy,
   AiAgentPolicyInput,
+  AgentAccessInspection,
   AiToolRegistryOverride,
   AiToolRegistryOverrideInput,
   ExecutionGraph,
@@ -369,6 +370,9 @@ export const api = {
   testAiProviderKey: (id: string) =>
     callAdminAction<AiTestResult>("test_ai_provider_key", { id }, "POST", `/api/admin/ai-providers/${encodeURIComponent(id)}/test`),
   setAiAgentModelRouting: (id: string, routing: AiAgentModelRouting | null) => call<AiAgentDefinition>("set_ai_agent_model_routing", { id, routing }),
+  setAiAgentActsAs: (id: string, actsAsUserId: string | null) => call<AiAgentDefinition>("set_ai_agent_acts_as", { id, actsAsUserId }),
+  inspectAgentAccess: (agentId: string, toolName: string, objectKey: string | null, recordId: string | null, simulateAsUserId: string | null) =>
+    call<AgentAccessInspection>("inspect_agent_access", { agentId, toolName, objectKey, recordId, simulateAsUserId }),
   getAiAgentTokenUsage: (id: string) => call<AiTokenUsageSummary>("get_ai_agent_token_usage", { id }),
   setAiDailyTokenBudget: (input: AiDailyTokenBudgetInput) => call<AiSettings>("set_ai_daily_token_budget", { input }),
   getAiTokenUsageSummary: () => call<AiTokenUsageSummary>("get_ai_token_usage_summary"),

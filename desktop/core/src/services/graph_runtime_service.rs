@@ -384,6 +384,7 @@ async fn execute_node(
                     model_routing: None,
                     is_active: true,
                     current_version_id: None,
+                    acts_as_user_id: None,
                     created_at: now_iso(),
                     created_by: None,
                     updated_at: now_iso(),

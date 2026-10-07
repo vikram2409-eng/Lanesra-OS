@@ -314,7 +314,7 @@ async fn policy_compliance_evaluator_checks_for_a_blocked_tool_call_with_no_judg
     // Block the tool outright under this agent's policy - the same call
     // now trips the Tool-Call Firewall, and the eval records it as a
     // failure with no judge call either.
-    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
     let (port2, captured2) = spawn_sequence_stub(vec![anthropic_tool_use_body("t2", "list_objects", serde_json::json!({})), anthropic_text_body("Understood, I won't do that.")]);
     configure_anthropic_key(&conn, &ws, &admin, port2);
     let run2 = ai_eval_service::run_suite(&conn, &ws, &master_key(), &suite.id, Some(&admin)).await.unwrap();
@@ -326,7 +326,7 @@ async fn policy_compliance_evaluator_checks_for_a_blocked_tool_call_with_no_judg
     // A require-approval threshold at or below the tool's own risk level
     // (read, for list_objects) also counts as a violation - not just an
     // outright blocklist entry.
-    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Read), blocked_tool_names: vec![], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Read), blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
     let (port3, _c3) = spawn_sequence_stub(vec![anthropic_tool_use_body("t3", "list_objects", serde_json::json!({})), anthropic_text_body("Noted - awaiting approval.")]);
     configure_anthropic_key(&conn, &ws, &admin, port3);
     let run3 = ai_eval_service::run_suite(&conn, &ws, &master_key(), &suite.id, Some(&admin)).await.unwrap();

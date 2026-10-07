@@ -126,7 +126,13 @@ fn required_object<'a>(args: &'a Value, key: &str) -> AppResult<&'a Value> {
     if v.is_object() { Ok(v) } else { Err(AppError::Validation(format!("'{key}' must be an object"))) }
 }
 
-async fn dispatch_record_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], name: &str, arguments: &Value) -> AppResult<Value> {
+/// `access_actor` is Agent Access Governance's (issue #245) effective
+/// write-actor - see `effective_write_actor`'s own doc comment. `None`
+/// unless a policy has opted this call into real Access Control v1
+/// enforcement; passed straight through to `api_object_service`'s own
+/// already-existing `actor_user_id` parameter on the three record-write
+/// branches below, unchanged everywhere else.
+async fn dispatch_record_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], name: &str, arguments: &Value, access_actor: Option<&str>) -> AppResult<Value> {
     match name {
         "list_objects" => api_object_service::list_object_keys(conn, workspace_id).and_then(|v| serde_json::to_value(v).map_err(ser_err)),
         "get_object_metadata" => {
@@ -146,18 +152,18 @@ async fn dispatch_record_tool(conn: &Connection, workspace_id: &str, master_key:
         "create_record" => {
             let key = required_str(arguments, "object_key")?;
             let data = required_object(arguments, "data")?;
-            api_object_service::create_record(conn, workspace_id, key, data, None)
+            api_object_service::create_record(conn, workspace_id, key, data, access_actor)
         }
         "update_record" => {
             let key = required_str(arguments, "object_key")?;
             let id = required_str(arguments, "id")?;
             let data = required_object(arguments, "data")?;
-            api_object_service::update_record(conn, workspace_id, key, id, data, None)
+            api_object_service::update_record(conn, workspace_id, key, id, data, access_actor)
         }
         "archive_record" => {
             let key = required_str(arguments, "object_key")?;
             let id = required_str(arguments, "id")?;
-            api_object_service::archive_record(conn, workspace_id, key, id, None).map(|_| json!({"archived": true}))
+            api_object_service::archive_record(conn, workspace_id, key, id, access_actor).map(|_| json!({"archived": true}))
         }
         "search_records" => {
             let query = required_str(arguments, "query")?;
@@ -342,6 +348,16 @@ fn admin_tools() -> Vec<ToolSpec> {
 /// resolves to a real, currently-enabled connector action is checked
 /// where it matters (`ai_agent_service::validate_action_names` at save
 /// time, `connector_tool_service::dispatch` at call time), not here.
+/// Agent Access Governance (issue #245): the Foundry-only tool names
+/// `execute_agent_tool` dispatches directly, never through
+/// `dispatch_record_tool`/`dispatch_admin_tool` - `tool_source` used to
+/// return `None` for every one of these (see `tool_registry_service::
+/// default_risk_for`'s old doc comment), the exact reason the Tool-Call
+/// Firewall never saw them. Classified as their own source so a workspace
+/// can still block/risk-gate `delegate_to_agent`, say, without this
+/// function pretending they're record/admin tools.
+const AGENT_INTERNAL_TOOLS: &[&str] = &["update_memory", "remember", "get_memory", "search_knowledge", "use_skill", "delegate_to_agent"];
+
 pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
     if record_tools().iter().any(|t| t.name == name) {
         Some("record")
@@ -355,6 +371,8 @@ pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
         Some("mcp_read")
     } else if name.starts_with("mcp_write_tool:") {
         Some("mcp_write")
+    } else if AGENT_INTERNAL_TOOLS.contains(&name) {
+        Some("agent_internal")
     } else {
         None
     }
@@ -740,8 +758,13 @@ async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 3
     if mode == "records" || mode == "admin" {
         apply_tool_firewall(conn, workspace_id, None, actor, &call.name, &call.arguments)?;
     }
+    // Agent Access Governance (issue #245): the fixed "records"/"admin"
+    // assistants have no agent identity, so only the workspace-default
+    // policy can opt them into real Access Control v1 enforcement - see
+    // `effective_write_actor`'s own doc comment.
+    let access_actor = effective_write_actor(conn, workspace_id, None, actor, None)?;
     match mode {
-        "records" => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments).await,
+        "records" => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments, access_actor.as_deref()).await,
         // Admin mode's own tool list is the records catalog plus the
         // admin one (see `tools_for_mode`) - an admin who can create a
         // Business Rule can obviously also read what get_object_metadata/
@@ -750,11 +773,30 @@ async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 3
         // belongs to rather than assuming the whole mode maps to one
         // dispatcher.
         "admin" => match tool_source(&call.name) {
-            Some("record") => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments).await,
+            Some("record") => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments, access_actor.as_deref()).await,
             _ => dispatch_admin_tool(conn, workspace_id, actor, master_key, &call.name, &call.arguments).await,
         },
         other => Err(AppError::Validation(format!("Unknown chat mode '{other}'"))),
     }
+}
+
+/// Agent Access Governance (issue #245): the actor
+/// `dispatch_record_tool`'s record-write branches check Access Control
+/// v1 against. `None` (today's "unattributed/system" convention,
+/// unchanged) unless the policy that actually governs this call (agent-
+/// specific, else the workspace default, else none configured at all)
+/// has `enforce_record_access` on - a workspace that's never opened this
+/// screen sees exactly today's behavior either way. Once on: `acts_as`
+/// (an agent's own bound identity) wins if set, else whichever real
+/// human is chatting right now (`actor`); a scheduled/background run
+/// with neither stays unattributed even with the toggle on, since
+/// there's no identity to check against.
+fn effective_write_actor(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, actor: Option<&str>, acts_as: Option<&str>) -> AppResult<Option<String>> {
+    let enforce = policy_engine_service::resolve_policy(conn, workspace_id, agent_id)?.map(|p| p.enforce_record_access).unwrap_or(false);
+    if !enforce {
+        return Ok(None);
+    }
+    Ok(acts_as.map(String::from).or_else(|| actor.map(String::from)))
 }
 
 pub fn get_history(conn: &Connection, workspace_id: &str, user_id: &str, mode: &str) -> AppResult<Vec<ChatMessage>> {
@@ -972,6 +1014,12 @@ fn execute_agent_tool<'a>(
     memory_context: &'a AgentMemoryContext,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AppResult<Value>> + 'a>> {
     Box::pin(async move {
+        // Agent Access Governance (issue #245): checked once, here, for
+        // every tool name this agent can call - including the Foundry-
+        // internal ones matched directly below, which used to dispatch
+        // before the firewall ever saw them. The inner `other` branch no
+        // longer repeats this call.
+        apply_tool_firewall(conn, workspace_id, Some(&agent.id), actor, &call.name, &call.arguments)?;
         match call.name.as_str() {
             "update_memory" => {
                 let content = required_str(&call.arguments, "content")?;
@@ -1029,9 +1077,11 @@ fn execute_agent_tool<'a>(
             }
             other => match tool_source(other) {
                 Some(src @ ("record" | "admin" | "connector_read" | "connector_write" | "mcp_read" | "mcp_write")) => {
-                    apply_tool_firewall(conn, workspace_id, Some(&agent.id), actor, other, &call.arguments)?;
                     match src {
-                        "record" => dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments).await,
+                        "record" => {
+                            let access_actor = effective_write_actor(conn, workspace_id, Some(&agent.id), actor, agent.acts_as_user_id.as_deref())?;
+                            dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments, access_actor.as_deref()).await
+                        }
                         "admin" => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
                         "connector_read" | "connector_write" => super::connector_tool_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
                         _ => super::mcp_client_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,

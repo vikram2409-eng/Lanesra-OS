@@ -28,6 +28,14 @@ pub struct AiAgentPolicy {
     /// than stored. Defaults `true` (excluded) - see
     /// `services::policy_engine_service::evaluate_memory_write`.
     pub exclude_restricted_memory: bool,
+    /// Agent Access Governance (issue #245): whether a record write this
+    /// policy's scope makes (`create_record`/`update_record`/
+    /// `archive_record`) is checked for real against Access Control v1,
+    /// instead of the `actor_user_id: None` "unattributed/system"
+    /// convention every AI-driven write has always used. Defaults
+    /// `false` - zero behavior change for a workspace that never opens
+    /// this screen. See `chat_service::effective_write_actor`.
+    pub enforce_record_access: bool,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -40,6 +48,8 @@ pub struct AiAgentPolicyInput {
     pub blocked_tool_names: Vec<String>,
     #[serde(default = "default_exclude_restricted_memory")]
     pub exclude_restricted_memory: bool,
+    #[serde(default)]
+    pub enforce_record_access: bool,
 }
 
 fn default_exclude_restricted_memory() -> bool {

@@ -206,6 +206,26 @@ pub fn set_model_routing(conn: &Connection, id: &str, workspace_id: &str, routin
     Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
 }
 
+/// Agent Access Governance (issue #245): an agent's own bound identity
+/// for record-write access-control purposes - its own separate admin
+/// action, the same shape `set_model_routing` above already established.
+/// `None` clears it (today's unscoped behavior for this agent). A `Some`
+/// value must be an active user of this workspace - the same bar a
+/// manual owner reassignment holds itself to.
+pub fn set_acts_as(conn: &Connection, id: &str, workspace_id: &str, acts_as_user_id: Option<String>, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+    require_admin(conn, actor_user_id)?;
+    ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    if let Some(user_id) = &acts_as_user_id {
+        let users = super::user_service::list(conn, workspace_id)?;
+        let user = users.iter().find(|u| &u.id == user_id).ok_or_else(|| AppError::Validation("Selected user does not exist".into()))?;
+        if !user.is_active {
+            return Err(AppError::Validation("Selected user is not active".into()));
+        }
+    }
+    ai_agent_repo::set_acts_as(conn, id, acts_as_user_id.as_deref())?;
+    Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
+}
+
 /// The Agent tier's real usage-vs-budget snapshot - shown alongside this
 /// agent's Model Routing settings, same "any authenticated user can see
 /// the numbers" reasoning `ai_service::token_usage_today` already

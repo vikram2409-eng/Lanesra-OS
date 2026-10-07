@@ -180,7 +180,7 @@ fn a_blocklisted_tool_is_denied_regardless_of_its_own_risk_level() {
     let (conn, ws, admin) = setup_workspace("Blocklist Test Co");
     policy_engine_service::upsert_policy(
         &conn, &ws, None,
-        &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true },
+        &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true, enforce_record_access: false },
         Some(&admin),
     )
     .unwrap();
@@ -200,7 +200,7 @@ fn a_risk_threshold_queues_a_durable_approval_instead_of_denying() {
     let (conn, ws, admin) = setup_workspace("Risk Threshold Test Co");
     policy_engine_service::upsert_policy(
         &conn, &ws, None,
-        &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Write), blocked_tool_names: vec![], exclude_restricted_memory: true },
+        &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Write), blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false },
         Some(&admin),
     )
     .unwrap();
@@ -239,7 +239,7 @@ fn an_agent_specific_policy_takes_precedence_over_the_workspace_default() {
 
     // A strict workspace-wide default: even a Read-level lookup needs
     // approval.
-    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Read), blocked_tool_names: vec![], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Read), blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
 
     // A different, unconfigured agent falls through to that strict
     // default.
@@ -249,7 +249,7 @@ fn an_agent_specific_policy_takes_precedence_over_the_workspace_default() {
     // This agent gets its own, deliberately looser policy - no threshold
     // at all - which wins over the workspace default entirely, not just
     // for the fields it happens to set.
-    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec![], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
     let this_agent_decision = policy_engine_service::evaluate(&conn, &ws, Some(&agent.id), "list_objects", Some("record")).unwrap();
     assert_eq!(this_agent_decision, PolicyDecision::Allow);
 
@@ -262,7 +262,7 @@ fn an_agent_specific_policy_takes_precedence_over_the_workspace_default() {
 #[test]
 fn getting_or_listing_policies_requires_an_administrator() {
     let (conn, ws, admin) = setup_workspace("Policy Auth Test Co");
-    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Write), blocked_tool_names: vec![], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Write), blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
 
     assert!(policy_engine_service::get_policy(&conn, &ws, None, None).is_err());
     assert!(policy_engine_service::list_policies(&conn, &ws, None).is_err());
@@ -274,7 +274,7 @@ fn getting_or_listing_policies_requires_an_administrator() {
 #[tokio::test]
 async fn a_blocked_tool_call_never_reaches_its_real_dispatcher() {
     let (conn, ws, admin) = setup_workspace("Firewall Deny Test Co");
-    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec!["list_objects".into()], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
 
     let port = spawn_sequence_stub(vec![anthropic_tool_use_body("t1", "list_objects", serde_json::json!({})), anthropic_text_body("Understood, I won't do that.")]);
     configure_anthropic_key(&conn, &ws, &admin, port);
@@ -289,7 +289,7 @@ async fn a_blocked_tool_call_never_reaches_its_real_dispatcher() {
 #[tokio::test]
 async fn a_risk_gated_tool_call_is_queued_for_approval_and_never_dispatched() {
     let (conn, ws, admin) = setup_workspace("Firewall Approval Test Co");
-    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Read), blocked_tool_names: vec![], exclude_restricted_memory: true }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(&conn, &ws, None, &AiAgentPolicyInput { require_approval_at_or_above: Some(RiskLevel::Read), blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false }, Some(&admin)).unwrap();
 
     let port = spawn_sequence_stub(vec![anthropic_tool_use_body("t1", "list_objects", serde_json::json!({})), anthropic_text_body("Noted - awaiting approval.")]);
     configure_anthropic_key(&conn, &ws, &admin, port);

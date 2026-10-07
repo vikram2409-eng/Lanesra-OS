@@ -65,7 +65,7 @@ use lanesra_core::services::{
     access_role_service, access_service,
     activity_service,
     admin_home_service, admin_nav_service, admin_search_service,
-    agent_version_service, approval_service, policy_engine_service, tool_registry_service,
+    agent_access_inspector_service, agent_version_service, approval_service, policy_engine_service, tool_registry_service,
     ai_service,
     api_client_service, api_object_service,
     app_service, audit_service,
@@ -1595,6 +1595,26 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let input: AiAgentPolicyInput = arg(args, "input")?;
             to_value(policy_engine_service::upsert_policy(conn, &require_workspace_id(conn)?, agent_id.as_deref(), &input, actor)?)
         }
+        // Agent Access Governance (issue #245): the Agent Access
+        // Inspector - see `agent_access_inspector_service::inspect`'s own
+        // doc comment.
+        "inspect_agent_access" => {
+            let agent_id: String = arg(args, "agentId")?;
+            let tool_name: String = arg(args, "toolName")?;
+            let object_key: Option<String> = arg(args, "objectKey")?;
+            let record_id: Option<String> = arg(args, "recordId")?;
+            let simulate_as_user_id: Option<String> = arg(args, "simulateAsUserId")?;
+            to_value(agent_access_inspector_service::inspect(
+                conn,
+                &require_workspace_id(conn)?,
+                &agent_id,
+                &tool_name,
+                object_key.as_deref(),
+                record_id.as_deref(),
+                simulate_as_user_id.as_deref(),
+                actor,
+            )?)
+        }
         "list_ai_tool_registry_overrides" => to_value(tool_registry_service::list_overrides(conn, &require_workspace_id(conn)?, actor)?),
         "set_ai_tool_registry_override" => {
             let input: AiToolRegistryOverrideInput = arg(args, "input")?;
@@ -1869,6 +1889,11 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let id: String = arg(args, "id")?;
             let routing: Option<AiAgentModelRouting> = arg(args, "routing")?;
             to_value(ai_agent_service::set_model_routing(conn, &id, &require_workspace_id(conn)?, routing, actor)?)
+        }
+        "set_ai_agent_acts_as" => {
+            let id: String = arg(args, "id")?;
+            let acts_as_user_id: Option<String> = arg(args, "actsAsUserId")?;
+            to_value(ai_agent_service::set_acts_as(conn, &id, &require_workspace_id(conn)?, acts_as_user_id, actor)?)
         }
         "get_ai_agent_token_usage" => {
             let id: String = arg(args, "id")?;
