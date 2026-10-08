@@ -15,6 +15,8 @@ import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
 import { useReportVoiceContext } from "../voice/VoiceContext";
@@ -24,6 +26,28 @@ import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
+
+function makeQuoteColumns(companyNameById: Map<string, string>, onOpen: (id: string) => void): ListTableColumn<Quote>[] {
+  return [
+    {
+      key: "quote_number",
+      label: "Number",
+      getValue: (q) => q.quote_number,
+      render: (q) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(q.id); }}>
+          {q.quote_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "company_id", label: "Company", getValue: (q) => companyNameById.get(q.company_id) ?? null, defaultWidth: 180 },
+    { key: "status", label: "Status", format: "status", getValue: (q) => q.status, defaultWidth: 120 },
+    { key: "issue_date", label: "Issue date", format: "date", getValue: (q) => q.issue_date, defaultWidth: 130 },
+    { key: "expiry_date", label: "Expiry date", format: "date", getValue: (q) => q.expiry_date, defaultWidth: 130 },
+    { key: "total_cents", label: "Total", getValue: (q) => q.total_cents, render: (q) => formatCents(q.total_cents, q.currency_code), align: "right", defaultWidth: 130 },
+  ];
+}
+const DEFAULT_QUOTE_COLUMNS = ["quote_number", "company_id", "status", "total_cents"];
 
 function quoteExportColumns(companyNameById: Map<string, string>) {
   return [
@@ -52,6 +76,8 @@ export function Quotes({
   const [view, setView] = useState<View>(() =>
     prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
   );
+  const [columnKeys, setColumnKeys] = useState<string[] | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const fieldFilters = useCustomFieldFilters("Quote");
@@ -94,6 +120,7 @@ export function Quotes({
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+  const quoteColumns = makeQuoteColumns(companyNameById, (id) => setView({ mode: "detail", id }));
 
   return (
     <div>
@@ -123,28 +150,36 @@ export function Quotes({
         return rows.length === 0 ? (
           <p className="empty-state">No quotes match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Company</th>
-              <th>Status</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((q) => (
-              <tr key={q.id} onClick={() => setView({ mode: "detail", id: q.id })} style={{ cursor: "pointer" }}>
-                <td><span className="id-link">{q.quote_number}</span></td>
-                <td>{companyNameById.get(q.company_id) ?? "—"}</td>
-                <td>
-                  <StatusBadge status={q.status} />
-                </td>
-                <td>{formatCents(q.total_cents, q.currency_code)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Quote>
+            storageKey="Quote"
+            columns={quoteColumns}
+            visibleKeys={columnKeys ?? DEFAULT_QUOTE_COLUMNS}
+            onVisibleKeysChange={setColumnKeys}
+            groups={[{ label: "", rows }]}
+            getRowId={(q) => q.id}
+            onRowClick={(q) => setPreviewId(q.id)}
+          />
+        );
+      })()}
+      {previewId && (() => {
+        const previewRow = quotes.data?.find((q) => q.id === previewId);
+        if (!previewRow) return null;
+        return (
+          <QuickPreviewDrawer
+            title={previewRow.quote_number}
+            subtitle={companyNameById.get(previewRow.company_id) ?? undefined}
+            fields={[
+              { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+              { label: "Issue date", value: previewRow.issue_date ?? "—" },
+              { label: "Expiry date", value: previewRow.expiry_date ?? "—" },
+              { label: "Total", value: formatCents(previewRow.total_cents, previewRow.currency_code) },
+            ]}
+            onClose={() => setPreviewId(null)}
+            onOpenFull={() => {
+              setView({ mode: "detail", id: previewRow.id });
+              setPreviewId(null);
+            }}
+          />
         );
       })()}
     </div>

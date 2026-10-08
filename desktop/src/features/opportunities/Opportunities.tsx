@@ -1,10 +1,11 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { showRuleMessages } from "../../lib/ruleMessages";
 import { formatCents, centsToInputValue, parseDecimalToCents } from "../../lib/money";
 import { ExportCsvButton } from "../../components/ExportCsvButton";
+import { StatusBadge } from "../../components/StatusBadge";
 import { useCustomFieldElements } from "../../components/CustomFieldsSection";
 import { LayoutFormFields } from "../../components/LayoutFormFields";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
@@ -13,7 +14,9 @@ import { OwnershipByline } from "../../components/OwnershipByline";
 import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
-import { GroupHeaderRow } from "../../components/GroupHeaderRow";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
 import type { Prefill } from "../../components/AppShell";
 import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
@@ -42,6 +45,30 @@ function opportunityExportColumns(companyNameById: Map<string, string>) {
     { label: "Expected close date", get: (o: Opportunity) => o.expected_close_date ?? "" },
   ];
 }
+
+function makeOpportunityColumns(companyNameById: Map<string, string>, onOpen: (id: string) => void): ListTableColumn<Opportunity>[] {
+  return [
+    {
+      key: "opportunity_number",
+      label: "Number",
+      getValue: (o) => o.opportunity_number,
+      render: (o) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(o.id); }}>
+          {o.opportunity_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "name", label: "Name", getValue: (o) => o.name, defaultWidth: 220 },
+    { key: "company_id", label: "Company", getValue: (o) => companyNameById.get(o.company_id) ?? null, defaultWidth: 180 },
+    { key: "stage", label: "Stage", getValue: (o) => o.stage, defaultWidth: 130 },
+    { key: "status", label: "Status", format: "status", getValue: (o) => o.status, defaultWidth: 110 },
+    { key: "value_cents", label: "Value", getValue: (o) => o.value_cents, render: (o) => formatCents(o.value_cents, o.currency_code), align: "right", defaultWidth: 130 },
+    { key: "probability_bp", label: "Probability", format: "progress", getValue: (o) => o.probability_bp / 100, defaultWidth: 140 },
+    { key: "expected_close_date", label: "Expected close", format: "date", getValue: (o) => o.expected_close_date, defaultWidth: 140 },
+  ];
+}
+const DEFAULT_OPPORTUNITY_COLUMNS = ["opportunity_number", "name", "company_id", "stage", "value_cents", "probability_bp"];
 
 function emptyInput(companyId: string, currency: string): OpportunityInput {
   return {
@@ -78,6 +105,8 @@ export function Opportunities({
 
   const filteredRows = (opportunities.data ?? []).filter((o) => fieldFilters.matches(o.id));
   const selection = useBulkSelection(filteredRows, (o) => o.id);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const previewRow = previewId ? filteredRows.find((o) => o.id === previewId) ?? null : null;
 
   function opportunityFieldValue(row: Opportunity, key: string): string {
     switch (key) {
@@ -140,6 +169,7 @@ export function Opportunities({
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+  const opportunityColumns = makeOpportunityColumns(companyNameById, (id) => setView({ mode: "edit", id }));
 
   return (
     <div>
@@ -179,54 +209,47 @@ export function Opportunities({
         return filteredRows.length === 0 ? (
           <p className="empty-state">No opportunities match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: 28 }}>
-                <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
-              </th>
-              <th>Number</th>
-              <th>Name</th>
-              <th>Company</th>
-              <th>Stage</th>
-              <th>Value</th>
-              <th>Probability</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((group) => (
-              <Fragment key={group.label || "_"}>
-                {views.groupByField && <GroupHeaderRow label={group.label} colSpan={8} />}
-                {group.rows.map((o) => (
-                  <tr key={o.id}>
-                    <td>
-                      <input type="checkbox" checked={selection.isSelected(o.id)} onChange={() => selection.toggle(o.id)} />
-                    </td>
-                    <td>{o.opportunity_number}</td>
-                    <td>{o.name}</td>
-                    <td>{companyNameById.get(o.company_id) ?? "—"}</td>
-                    <td>{o.stage}</td>
-                    <td>{formatCents(o.value_cents, o.currency_code)}</td>
-                    <td>{(o.probability_bp / 100).toFixed(0)}%</td>
-                    <td>
-                      <button
-                        className="btn"
-                        onClick={() => setView({ mode: "edit", id: o.id })}
-                        disabled={!canWrite}
-                        title={canWrite ? undefined : "You have view-only access to Opportunities through an app"}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Opportunity>
+            storageKey="Opportunity"
+            columns={opportunityColumns}
+            visibleKeys={views.columnKeys ?? DEFAULT_OPPORTUNITY_COLUMNS}
+            onVisibleKeysChange={views.setColumnKeys}
+            groups={groups}
+            getRowId={(o) => o.id}
+            onRowClick={(o) => setPreviewId(o.id)}
+            selection={selection}
+            actionsColumn={(o) => (
+              <button
+                className="btn"
+                onClick={() => setView({ mode: "edit", id: o.id })}
+                disabled={!canWrite}
+                title={canWrite ? undefined : "You have view-only access to Opportunities through an app"}
+              >
+                Edit
+              </button>
+            )}
+          />
         );
       })()}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={previewRow.name}
+          subtitle={previewRow.opportunity_number}
+          fields={[
+            { label: "Stage", value: previewRow.stage },
+            { label: "Status", value: previewRow.status },
+            { label: "Company", value: companyNameById.get(previewRow.company_id) ?? "—" },
+            { label: "Value", value: formatCents(previewRow.value_cents, previewRow.currency_code) },
+            { label: "Probability", value: `${(previewRow.probability_bp / 100).toFixed(0)}%` },
+            { label: "Expected close", value: previewRow.expected_close_date ?? "—" },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "edit", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -325,7 +348,22 @@ function OpportunityForm({
 
   return (
     <div>
-      <h2>{opportunityId ? "Edit opportunity" : "New opportunity"}</h2>
+      {existing.data ? (
+        <RecordHeader
+          title={existing.data.name}
+          status={<StatusBadge status={existing.data.status} />}
+          recordNumber={existing.data.opportunity_number}
+          subtitle={existing.data.stage}
+          owner={<OwnershipByline objectKey="Opportunity" recordId={existing.data.id} />}
+          attributes={[
+            { label: "Value", value: formatCents(existing.data.value_cents, existing.data.currency_code) },
+            { label: "Probability", value: `${(existing.data.probability_bp / 100).toFixed(0)}%` },
+            { label: "Expected close", value: existing.data.expected_close_date ?? "—" },
+          ]}
+        />
+      ) : (
+        <h2>New opportunity</h2>
+      )}
       {existing.data && (
         <AuditByline
           createdAt={existing.data.created_at}
@@ -334,7 +372,6 @@ function OpportunityForm({
           updatedBy={existing.data.updated_by}
         />
       )}
-      {opportunityId && <OwnershipByline objectKey="Opportunity" recordId={opportunityId} />}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

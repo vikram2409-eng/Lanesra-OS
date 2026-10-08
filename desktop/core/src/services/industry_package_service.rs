@@ -756,7 +756,7 @@ fn resolve_dashboard_widgets(widgets: &[ManifestDashboardWidget], reports: &[Cus
                     obj.insert("report_id".to_string(), serde_json::Value::String(report.id.clone()));
                 }
             }
-            Ok(DashboardWidget { id: new_uuid(), kind: w.kind.clone(), config })
+            Ok(DashboardWidget { id: new_uuid(), kind: w.kind.clone(), config, layout: None })
         })
         .collect()
 }

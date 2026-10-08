@@ -76,6 +76,15 @@ export function ThemeStudioAdmin() {
     setDraft((d) => (d ? { ...d, tokens: { ...d.tokens, color: { ...d.tokens.color, [key]: value } } } : d));
   }
 
+  function updateChartColor(index: number, value: string) {
+    setDraft((d) => {
+      if (!d) return d;
+      const palette = [...d.tokens.chart.palette];
+      palette[index] = value;
+      return { ...d, tokens: { ...d.tokens, chart: { palette } } };
+    });
+  }
+
   const save = useMutation({
     mutationFn: () => {
       if (!draft) throw new Error("no draft");
@@ -258,6 +267,26 @@ export function ThemeStudioAdmin() {
                 ))}
               </div>
 
+              <h4 title="The color series a multi-row chart (Reports, dashboard chart widgets) cycles through by group index - distinct from the semantic brand/status colors above.">
+                Chart palette
+              </h4>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {draft.tokens.chart.palette.map((c, i) => (
+                  <div className="form-field" key={i} style={{ width: 90 }}>
+                    <label>Series {i + 1}</label>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input
+                        type="color"
+                        value={c}
+                        onChange={(e) => updateChartColor(i, e.target.value)}
+                        style={{ width: 36, height: 30, padding: 0 }}
+                      />
+                      <input value={c} onChange={(e) => updateChartColor(i, e.target.value)} style={{ width: 70 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <h4>Typography</h4>
               <div className="form-field">
                 <label>Font family</label>
@@ -400,6 +429,11 @@ export function ThemeStudioAdmin() {
                   <span style={{ background: draft.tokens.color.status_danger, color: "#fff", borderRadius: 999, padding: "2px 10px", fontSize: 12 }}>
                     Danger
                   </span>
+                </div>
+                <div style={{ display: "flex", gap: 4, marginTop: 12 }}>
+                  {draft.tokens.chart.palette.map((c, i) => (
+                    <div key={i} style={{ flex: 1, height: 28, background: c, borderRadius: 4 }} title={`Series ${i + 1}`} />
+                  ))}
                 </div>
               </div>
             </div>

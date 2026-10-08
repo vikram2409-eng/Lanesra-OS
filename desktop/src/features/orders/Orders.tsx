@@ -15,6 +15,8 @@ import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
 import { useReportVoiceContext } from "../voice/VoiceContext";
@@ -24,6 +26,27 @@ import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
+
+function makeOrderColumns(companyNameById: Map<string, string>, onOpen: (id: string) => void): ListTableColumn<Order>[] {
+  return [
+    {
+      key: "order_number",
+      label: "Number",
+      getValue: (o) => o.order_number,
+      render: (o) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(o.id); }}>
+          {o.order_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "company_id", label: "Company", getValue: (o) => companyNameById.get(o.company_id) ?? null, defaultWidth: 180 },
+    { key: "status", label: "Status", format: "status", getValue: (o) => o.status, defaultWidth: 120 },
+    { key: "source_quote_id", label: "From quote", getValue: (o) => o.source_quote_id, render: (o) => (o.source_quote_id ? "Yes" : "Direct"), defaultWidth: 110 },
+    { key: "total_cents", label: "Total", getValue: (o) => o.total_cents, render: (o) => formatCents(o.total_cents, o.currency_code), align: "right", defaultWidth: 130 },
+  ];
+}
+const DEFAULT_ORDER_COLUMNS = ["order_number", "company_id", "status", "total_cents"];
 
 function orderExportColumns(companyNameById: Map<string, string>) {
   return [
@@ -52,6 +75,8 @@ export function Orders({
   const [view, setView] = useState<View>(() =>
     prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
   );
+  const [columnKeys, setColumnKeys] = useState<string[] | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const fieldFilters = useCustomFieldFilters("Order");
@@ -94,6 +119,7 @@ export function Orders({
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+  const orderColumns = makeOrderColumns(companyNameById, (id) => setView({ mode: "detail", id }));
 
   return (
     <div>
@@ -123,30 +149,35 @@ export function Orders({
         return rows.length === 0 ? (
           <p className="empty-state">No orders match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Company</th>
-              <th>Status</th>
-              <th>From quote</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((o) => (
-              <tr key={o.id} onClick={() => setView({ mode: "detail", id: o.id })} style={{ cursor: "pointer" }}>
-                <td><span className="id-link">{o.order_number}</span></td>
-                <td>{companyNameById.get(o.company_id) ?? "—"}</td>
-                <td>
-                  <StatusBadge status={o.status} />
-                </td>
-                <td>{o.source_quote_id ? "Yes" : "Direct"}</td>
-                <td>{formatCents(o.total_cents, o.currency_code)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Order>
+            storageKey="Order"
+            columns={orderColumns}
+            visibleKeys={columnKeys ?? DEFAULT_ORDER_COLUMNS}
+            onVisibleKeysChange={setColumnKeys}
+            groups={[{ label: "", rows }]}
+            getRowId={(o) => o.id}
+            onRowClick={(o) => setPreviewId(o.id)}
+          />
+        );
+      })()}
+      {previewId && (() => {
+        const previewRow = orders.data?.find((o) => o.id === previewId);
+        if (!previewRow) return null;
+        return (
+          <QuickPreviewDrawer
+            title={previewRow.order_number}
+            subtitle={companyNameById.get(previewRow.company_id) ?? undefined}
+            fields={[
+              { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+              { label: "From quote", value: previewRow.source_quote_id ? "Yes" : "Direct" },
+              { label: "Total", value: formatCents(previewRow.total_cents, previewRow.currency_code) },
+            ]}
+            onClose={() => setPreviewId(null)}
+            onOpenFull={() => {
+              setView({ mode: "detail", id: previewRow.id });
+              setPreviewId(null);
+            }}
+          />
         );
       })()}
     </div>

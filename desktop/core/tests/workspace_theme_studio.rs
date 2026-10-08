@@ -153,6 +153,70 @@ fn delete_draft_rejects_a_published_or_archived_version() {
     assert!(theme_service::get(&conn, &v2.id, &workspace_id).is_err());
 }
 
+/// Runtime UX Modernization (issue #198): every curated preset ships its
+/// own chart palette (not just a shared default), and each has at least 3
+/// colors - the same minimum `validate_shape` enforces for any custom
+/// palette, so a preset could never fail to publish its own default.
+#[test]
+fn every_preset_ships_its_own_chart_palette() {
+    let presets = theme_service::built_in_presets();
+    for (key, _, _, tokens) in &presets {
+        assert!(tokens.chart.palette.len() >= 3, "preset '{key}' chart palette is too short: {:?}", tokens.chart.palette);
+    }
+    // Distinct presets should not all share the exact same palette -
+    // otherwise "chart palette" wouldn't actually vary by preset.
+    let orbit = theme_service::get_preset("orbit").unwrap();
+    let slate = theme_service::get_preset("slate").unwrap();
+    assert_ne!(orbit.chart.palette, slate.chart.palette);
+}
+
+/// A theme row saved before this field existed (no `"chart"` key in its
+/// stored JSON) must still deserialize - `#[serde(default)]` falls back to
+/// `ThemeChartTokens::default()`'s own 6-color palette rather than erroring
+/// or leaving every chart on the workspace with no color at all.
+#[test]
+fn a_theme_without_a_stored_chart_field_deserializes_with_the_default_palette() {
+    use lanesra_core::models::workspace_theme::ThemeTokens;
+    let legacy_json = serde_json::json!({
+        "color": {
+            "brand_primary": "#635BFF", "brand_secondary": "#8B5CF6",
+            "surface_app": "#F7F8FC", "surface_card": "#FFFFFF", "surface_sidebar": "#111827",
+            "border_default": "#E2E5EE", "text_primary": "#111827", "text_secondary": "#5B6572",
+            "status_success": "#0F9D76", "status_warning": "#F59E0B", "status_danger": "#EF4444", "status_info": "#3B82F6"
+        },
+        "typography": { "font_family": "sans-serif", "base_size_px": 16 },
+        "shape": { "radius_scale": "rounded" },
+        "density": "comfortable"
+    });
+    let parsed: ThemeTokens = serde_json::from_value(legacy_json).unwrap();
+    assert_eq!(parsed.chart.palette.len(), 6);
+}
+
+#[test]
+fn validate_shape_rejects_a_too_short_chart_palette() {
+    let (conn, workspace_id, admin) = setup_workspace();
+    let mut tokens = theme_service::get_preset("orbit").unwrap();
+    tokens.chart.palette = vec!["#111111".into(), "#222222".into()];
+    let input = WorkspaceThemeInput { name: "Too few colors".into(), preset_key: None, tokens };
+    let err = theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap_err();
+    assert!(format!("{err:?}").to_lowercase().contains("palette"));
+}
+
+/// A custom chart palette an admin edits in Theme Studio survives the same
+/// save/edit/publish lifecycle every other token group already does.
+#[test]
+fn custom_chart_palette_round_trips_through_save_and_publish() {
+    let (conn, workspace_id, admin) = setup_workspace();
+    let mut tokens = theme_service::get_preset("orbit").unwrap();
+    tokens.chart.palette = vec!["#111111".into(), "#222222".into(), "#333333".into()];
+    let input = WorkspaceThemeInput { name: "Custom palette".into(), preset_key: None, tokens };
+    let draft = theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap();
+    assert_eq!(draft.tokens.chart.palette, vec!["#111111", "#222222", "#333333"]);
+
+    let published = theme_service::publish(&conn, &draft.id, &workspace_id, Some(&admin)).unwrap();
+    assert_eq!(published.tokens.chart.palette, vec!["#111111", "#222222", "#333333"]);
+}
+
 #[test]
 fn non_admin_cannot_save_or_publish_a_theme() {
     let (conn, workspace_id, admin) = setup_workspace();

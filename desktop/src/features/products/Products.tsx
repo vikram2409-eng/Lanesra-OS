@@ -15,6 +15,9 @@ import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
 import type { Prefill, Section } from "../../components/AppShell";
 import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
@@ -35,6 +38,29 @@ const PRODUCT_EXPORT_COLUMNS = [
   { label: "Tax rate (bp)", get: (p: Product) => String(p.tax_rate_bp) },
   { label: "Active", get: (p: Product) => (p.is_active ? "Yes" : "No") },
 ];
+
+function makeProductColumns(onOpen: (id: string) => void): ListTableColumn<Product>[] {
+  return [
+    {
+      key: "product_number",
+      label: "Number",
+      getValue: (p) => p.product_number,
+      render: (p) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(p.id); }}>
+          {p.product_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "name", label: "Name", getValue: (p) => p.name, defaultWidth: 220 },
+    { key: "type", label: "Type", getValue: (p) => p.type, defaultWidth: 110 },
+    { key: "sku", label: "SKU", getValue: (p) => p.sku, defaultWidth: 120 },
+    { key: "category", label: "Category", getValue: (p) => p.category, defaultWidth: 140 },
+    { key: "unit_price_cents", label: "Unit price", format: "currency", getValue: (p) => p.unit_price_cents, align: "right", defaultWidth: 120 },
+    { key: "is_active", label: "Active", format: "boolean", getValue: (p) => p.is_active, defaultWidth: 90 },
+  ];
+}
+const DEFAULT_PRODUCT_COLUMNS = ["product_number", "name", "type", "unit_price_cents", "is_active"];
 
 const emptyInput: ProductInput = {
   sku: null,
@@ -60,10 +86,13 @@ export function Products({
   onOpenAdminTab?: (adminTab: string) => void;
 } = {}) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
+  const [columnKeys, setColumnKeys] = useState<string[] | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
   const fieldFilters = useCustomFieldFilters("Product");
   const canWrite = useCanWriteObject("Product");
+  const productColumns = makeProductColumns((id) => setView({ mode: "detail", id }));
 
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
@@ -122,42 +151,47 @@ export function Products({
         return rows.length === 0 ? (
           <p className="empty-state">No products match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Unit price</th>
-              <th>Active</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id} onClick={() => setView({ mode: "detail", id: p.id })} style={{ cursor: "pointer" }}>
-                <td><span className="id-link">{p.product_number}</span></td>
-                <td>{p.name}</td>
-                <td>{p.type}</td>
-                <td>{formatCents(p.unit_price_cents)}</td>
-                <td>{p.is_active ? "Yes" : "No"}</td>
-                <td>
-                  <button
-                    className="btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setView({ mode: "edit", id: p.id });
-                    }}
-                    disabled={!canWrite}
-                    title={canWrite ? undefined : "You have view-only access to Products through an app"}
-                  >
-                    Edit
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Product>
+            storageKey="Product"
+            columns={productColumns}
+            visibleKeys={columnKeys ?? DEFAULT_PRODUCT_COLUMNS}
+            onVisibleKeysChange={setColumnKeys}
+            groups={[{ label: "", rows }]}
+            getRowId={(p) => p.id}
+            onRowClick={(p) => setPreviewId(p.id)}
+            actionsColumn={(p) => (
+              <button
+                className="btn"
+                onClick={() => setView({ mode: "edit", id: p.id })}
+                disabled={!canWrite}
+                title={canWrite ? undefined : "You have view-only access to Products through an app"}
+              >
+                Edit
+              </button>
+            )}
+          />
+        );
+      })()}
+      {previewId && (() => {
+        const previewRow = products.data?.find((p) => p.id === previewId);
+        if (!previewRow) return null;
+        return (
+          <QuickPreviewDrawer
+            title={previewRow.name}
+            subtitle={previewRow.product_number}
+            fields={[
+              { label: "Type", value: previewRow.type },
+              { label: "SKU", value: previewRow.sku ?? "—" },
+              { label: "Category", value: previewRow.category ?? "—" },
+              { label: "Unit price", value: formatCents(previewRow.unit_price_cents) },
+              { label: "Active", value: previewRow.is_active ? "Yes" : "No" },
+            ]}
+            onClose={() => setPreviewId(null)}
+            onOpenFull={() => {
+              setView({ mode: "detail", id: previewRow.id });
+              setPreviewId(null);
+            }}
+          />
         );
       })()}
     </div>
@@ -390,9 +424,11 @@ function ProductDetail({
   if (!product.data) return <p>Loading...</p>;
   const p = product.data;
 
+  const statusBadge = <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>;
+
   return (
     <div>
-      <div className="toolbar">
+      <div className="toolbar record-command-bar">
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
@@ -400,14 +436,19 @@ function ProductDetail({
           Edit
         </button>
       </div>
-      <h2>
-        {p.name} <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>
-      </h2>
-      <p style={{ color: "var(--text-muted)" }}>
-        {p.product_number} · {p.type}
-      </p>
+      <RecordHeader
+        title={p.name}
+        status={statusBadge}
+        recordNumber={p.product_number}
+        subtitle={p.type}
+        owner={<OwnershipByline objectKey="Product" recordId={p.id} />}
+        attributes={[
+          { label: "SKU", value: p.sku ?? "—" },
+          { label: "Category", value: p.category ?? "—" },
+          { label: "Unit price", value: formatCents(p.unit_price_cents) },
+        ]}
+      />
       <AuditByline createdAt={p.created_at} createdBy={p.created_by} updatedAt={p.updated_at} updatedBy={p.updated_by} />
-      <OwnershipByline objectKey="Product" recordId={p.id} />
 
       {effectivePage.data?.page ? (
         // Screen Builder 2.0 (issue #195, 5b): an admin-composed Page
@@ -416,7 +457,17 @@ function ProductDetail({
         // pre-existing mechanism this phase doesn't touch, same as the
         // doc comment above already says for LayoutDetailFields.
         <div className="card">
-          <PageRenderer entityType="Product" entityId={p.id} fields={productDetailFields(p)} onEdit={onEdit} onOpenAdminTab={onOpenAdminTab} />
+          <PageRenderer
+            entityType="Product"
+            entityId={p.id}
+            fields={productDetailFields(p)}
+            onEdit={onEdit}
+            onOpenAdminTab={onOpenAdminTab}
+            recordHeader={<RecordHeader title={p.name} subtitle={p.type} attributes={[{ label: "SKU", value: p.sku ?? "—" }, { label: "Category", value: p.category ?? "—" }, { label: "Unit price", value: formatCents(p.unit_price_cents) }]} />}
+            statusBadge={statusBadge}
+            owner={<OwnershipByline objectKey="Product" recordId={p.id} />}
+            recordNumber={p.product_number}
+          />
         </div>
       ) : (
         <div className="card">

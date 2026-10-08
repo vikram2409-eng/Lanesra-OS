@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -10,7 +10,10 @@ import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { OwnershipByline } from "../../components/OwnershipByline";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
-import { GroupHeaderRow } from "../../components/GroupHeaderRow";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
+import { StatusBadge } from "../../components/StatusBadge";
 import type { Prefill } from "../../components/AppShell";
 import {
   CUSTOM_RECORD_STATUSES,
@@ -25,6 +28,26 @@ import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { useReportVoiceContext } from "../voice/VoiceContext";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+function makeCustomRecordColumns(onOpen: (id: string) => void): ListTableColumn<CustomRecord>[] {
+  return [
+    {
+      key: "display_number",
+      label: "Number",
+      getValue: (r) => r.display_number,
+      render: (r) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(r.id); }}>
+          {r.display_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "primary_name", label: "Name", getValue: (r) => r.primary_name, defaultWidth: 220 },
+    { key: "status", label: "Status", format: "status", getValue: (r) => r.status, defaultWidth: 120 },
+    { key: "owner_user_id", label: "Owner", format: "owner", getValue: (r) => r.owner_user_id, defaultWidth: 160 },
+  ];
+}
+const DEFAULT_CUSTOM_RECORD_COLUMNS = ["display_number", "primary_name", "status", "owner_user_id"];
 
 /**
  * Generic list/create/edit screen for records of one admin-defined custom
@@ -50,6 +73,7 @@ export function CustomObjectRecords({
   onPrefillConsumed?: () => void;
 }) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "edit", id: prefill.openId } : { mode: "list" }));
+  const [previewId, setPreviewId] = useState<string | null>(null);
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,6 +98,8 @@ export function CustomObjectRecords({
 
   const filteredRows = (records.data ?? []).filter((r) => fieldFilters.matches(r.id));
   const selection = useBulkSelection(filteredRows, (r) => r.id);
+  const customRecordColumns = makeCustomRecordColumns((id) => setView({ mode: "edit", id }));
+  const previewRow = previewId ? filteredRows.find((r) => r.id === previewId) ?? null : null;
 
   function recordFieldValue(row: CustomRecord, key: string): string {
     switch (key) {
@@ -154,52 +180,44 @@ export function CustomObjectRecords({
         return filteredRows.length === 0 ? (
           <p className="empty-state">No {definition.plural_label.toLowerCase()} match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: 28 }}>
-                <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
-              </th>
-              <th>Number</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Owner</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((group) => (
-              <Fragment key={group.label || "_"}>
-                {views.groupByField && <GroupHeaderRow label={group.label} colSpan={6} />}
-                {group.rows.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <input type="checkbox" checked={selection.isSelected(r.id)} onChange={() => selection.toggle(r.id)} />
-                    </td>
-                    <td>{r.display_number}</td>
-                    <td>{r.primary_name}</td>
-                    <td>
-                      <span className={`badge${r.status === "Active" ? " badge-success" : ""}`}>{r.status}</span>
-                    </td>
-                    <td>{ownerName(r.owner_user_id)}</td>
-                    <td>
-                      <button
-                        className="btn"
-                        onClick={() => setView({ mode: "edit", id: r.id })}
-                        disabled={!canWrite}
-                        title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<CustomRecord>
+            storageKey={definition.key}
+            columns={customRecordColumns}
+            visibleKeys={views.columnKeys ?? DEFAULT_CUSTOM_RECORD_COLUMNS}
+            onVisibleKeysChange={views.setColumnKeys}
+            groups={groups}
+            getRowId={(r) => r.id}
+            onRowClick={(r) => setPreviewId(r.id)}
+            selection={selection}
+            resolveUser={(id) => users.data?.find((u) => u.id === id)?.display_name}
+            actionsColumn={(r) => (
+              <button
+                className="btn"
+                onClick={() => setView({ mode: "edit", id: r.id })}
+                disabled={!canWrite}
+                title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+              >
+                Edit
+              </button>
+            )}
+          />
         );
       })()}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={previewRow.primary_name}
+          subtitle={previewRow.display_number}
+          fields={[
+            { label: "Status", value: previewRow.status },
+            { label: "Owner", value: ownerName(previewRow.owner_user_id) },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "edit", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -281,9 +299,16 @@ function RecordForm({
 
   return (
     <div>
-      <h2>
-        {recordId ? `Edit ${definition.singular_label.toLowerCase()}` : `New ${definition.singular_label.toLowerCase()}`}
-      </h2>
+      {existing.data ? (
+        <RecordHeader
+          title={existing.data.primary_name}
+          status={<StatusBadge status={existing.data.status} />}
+          recordNumber={existing.data.display_number}
+          owner={<OwnershipByline objectKey={definition.key} recordId={existing.data.id} />}
+        />
+      ) : (
+        <h2>New {definition.singular_label.toLowerCase()}</h2>
+      )}
       {existing.data && (
         <AuditByline
           createdAt={existing.data.created_at}
@@ -292,7 +317,6 @@ function RecordForm({
           updatedBy={existing.data.updated_by}
         />
       )}
-      {recordId && <OwnershipByline objectKey={definition.key} recordId={recordId} />}
       {error && <div className="error-banner">{error}</div>}
       <form
         className="form-grid"

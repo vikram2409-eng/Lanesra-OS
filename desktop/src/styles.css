@@ -13,6 +13,15 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --info: #3b82f6;
+  /* Runtime UX Modernization (issue #198): the default categorical chart
+     palette, applied before any workspace publishes a theme - see
+     applyTheme.ts for how a Published theme's own palette overrides this. */
+  --chart-1: #635bff;
+  --chart-2: #0f9d76;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #3b82f6;
+  --chart-6: #8b5cf6;
   --font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --base-font-size: 14px;
   font-family: var(--font-family);
@@ -1741,4 +1750,340 @@ tr:hover td {
   .help-admin-layout {
     grid-template-columns: 1fr;
   }
+}
+
+/* ListTable (Runtime UX Modernization, issue #198): the shared
+   dynamic-column table - density, column resize/reorder/picker chrome,
+   and the table<->card mobile collapse. See components/ListTable.tsx. */
+.list-table-wrap {
+  width: 100%;
+}
+
+.list-table-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.segmented-btn + .segmented-btn {
+  border-left: 1px solid var(--border);
+}
+.segmented-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.list-table-column-picker {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.list-table-column-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.list-table-column-picker-row:hover {
+  background: rgba(127, 127, 127, 0.08);
+  border-radius: 4px;
+}
+
+.list-table-table th {
+  position: relative;
+  user-select: none;
+}
+.list-table-resize-handle {
+  position: absolute;
+  /* Stays fully inside its own <th> box (not straddling the boundary)
+     so it never sits under the next column's header, which would
+     otherwise win hit-testing since later DOM siblings paint on top. */
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.list-table-resize-handle:hover {
+  background: var(--accent);
+  opacity: 0.4;
+}
+
+/* Density: default row padding already matches "comfortable" (see the
+   base th/td rule); compact/dense tighten it. */
+.list-table-compact .list-table-table th,
+.list-table-compact .list-table-table td {
+  padding: 5px 10px;
+}
+.list-table-dense .list-table-table th,
+.list-table-dense .list-table-table td {
+  padding: 2px 8px;
+  font-size: 13px;
+}
+
+/* Mobile card collapse: both markups stay in the DOM; only one shows at
+   a time, so no resize listener is needed. */
+.list-table-cards {
+  display: none;
+}
+@media (max-width: 720px) {
+  .list-table-table {
+    display: none;
+  }
+  .list-table-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+.list-table-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  background: var(--bg-elevated);
+}
+.list-table-card-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.list-table-card-label {
+  color: var(--text-muted);
+}
+.list-table-card-value {
+  text-align: right;
+}
+
+/* QuickPreviewDrawer: a right-side slide-in, not a centered .modal - it
+   sits alongside the list rather than blocking it. */
+.quick-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+.quick-preview-drawer {
+  width: 380px;
+  max-width: 90vw;
+  height: 100%;
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: quick-preview-slide-in 0.15s ease-out;
+}
+@keyframes quick-preview-slide-in {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.quick-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.quick-preview-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+.quick-preview-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.quick-preview-label {
+  color: var(--text-muted);
+}
+.quick-preview-value {
+  text-align: right;
+}
+.quick-preview-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* RecordHeader (Runtime UX Modernization, issue #198): the one
+   title/subtitle/status/owner/record-number/avatar + up to 4 key
+   attributes header every detail/edit view uses now. */
+.record-header {
+  margin-bottom: 16px;
+}
+.record-header-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.record-header-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.record-header-attributes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 10px;
+}
+.record-header-attribute {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.record-header-attribute-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Sticky command bar: the Back/Edit toolbar atop a long record detail
+   page - a variant of .toolbar that stays visible while scrolling,
+   without changing every other .toolbar in the app. */
+.record-command-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+
+/* InlineEditField (Runtime UX Modernization, issue #198): a read-only
+   detail field that's click-to-edit when the viewer has write access. */
+.inline-edit-value {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
+.inline-edit-value:hover,
+.inline-edit-value:focus-visible {
+  background: rgba(127, 127, 127, 0.1);
+  outline: 1px dashed var(--border);
+}
+.inline-edit-active select,
+.inline-edit-active input,
+.inline-edit-active textarea {
+  max-width: 220px;
+}
+.inline-edit-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+/* DashboardGrid (Runtime UX Modernization, issue #198): the shared
+   widget grid - one widget-positioning implementation for both the live
+   Dashboard (view mode) and the dashboard-layout editor's canvas (edit
+   mode, with drag/resize handles). See components/DashboardGrid.tsx. */
+.dashboard-grid-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.dashboard-grid-item.editable {
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.dashboard-grid-item.editable:hover {
+  border-color: var(--border);
+}
+.dashboard-grid-item.editable.selected {
+  border-color: var(--accent);
+}
+.dashboard-grid-item-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-radius: 8px 8px 0 0;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+.dashboard-grid-item-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.dashboard-grid-item-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.dashboard-grid-item-resize::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--border);
+  border-bottom: 2px solid var(--border);
 }

@@ -3,24 +3,26 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import { AppScopeFilter, AppScopeSelect, matchesAppFilter, useApps } from "../../components/AppScope";
+import { DashboardGrid } from "../../components/DashboardGrid";
+import { WidgetInspector } from "../../components/WidgetInspector";
 import {
   CUSTOM_FIELD_ENTITY_TYPES,
   ROLES,
+  TASK_QUEUE_MODES,
   entityTypeLabel,
   type AppDefinition,
   type CustomFieldEntityType,
   type CustomReport,
   type DashboardLayout,
-  type DashboardWidget,
+  type DashboardSummary,
   type DashboardWidgets,
   type RecordListMode,
+  type TaskQueueMode,
+  type WidgetLayout,
 } from "../../lib/types";
+import { DashboardWidgetCard } from "../dashboard/DashboardWidgetCard";
 import { KPI_DEFS, kpiLabel } from "../dashboard/kpis";
-
-/** Entity types whose "due_soon" mode actually sorts by a real due date -
- * see `dashboard_widget_service::run` in core. Every other entity type
- * only offers "Recently created". */
-const DUE_SOON_ENTITY_TYPES: CustomFieldEntityType[] = ["Task", "Invoice"];
+import { DUE_SOON_ENTITY_TYPES, TASK_QUEUE_MODE_LABELS, widgetLabel } from "../dashboard/widgetMeta";
 
 function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -59,7 +61,6 @@ function newId(): string {
 export function DashboardLayoutsAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [previewId, setPreviewId] = useState<string | null>(null);
   const [appFilter, setAppFilter] = useState<"all" | "none" | string>("all");
   const queryClient = useQueryClient();
 
@@ -71,6 +72,10 @@ export function DashboardLayoutsAdmin() {
   // here and threaded down, rather than re-fetched per widget.
   const reports = useQuery({ queryKey: ["customReports"], queryFn: () => api.listCustomReports() });
   const reportList = reports.data ?? [];
+  // KPI widgets on the edit canvas render real values (the same live
+  // preview the grid gives every other widget kind), rather than a mock
+  // "—" placeholder - one more cheap query, not a second data path.
+  const summary = useQuery({ queryKey: ["dashboardSummaryForAdmin"], queryFn: () => api.dashboardSummary() });
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["dashboardLayouts"] });
@@ -80,7 +85,6 @@ export function DashboardLayoutsAdmin() {
   const list = layouts.data ?? [];
   const visibleList = list.filter((l) => matchesAppFilter(l.app_id, appFilter));
   const selected = visibleList.find((l) => l.id === selectedId) ?? visibleList.find((l) => l.is_default) ?? visibleList[0] ?? null;
-  const previewLayout = list.find((l) => l.id === previewId) ?? null;
   const newLayoutAppId = appFilter !== "all" && appFilter !== "none" ? appFilter : null;
 
   return (
@@ -146,17 +150,13 @@ export function DashboardLayoutsAdmin() {
           layoutCount={list.length}
           reports={reportList}
           apps={appList}
+          summary={summary.data ?? null}
           onChanged={invalidate}
           onDeleted={() => {
             invalidate();
             setSelectedId(null);
           }}
-          onPreview={() => setPreviewId(selected.id)}
         />
-      )}
-
-      {previewLayout && (
-        <LayoutPreviewModal layout={previewLayout} reports={reportList} onClose={() => setPreviewId(null)} />
       )}
     </div>
   );
@@ -218,23 +218,24 @@ function LayoutEditor({
   layoutCount,
   reports,
   apps,
+  summary,
   onChanged,
   onDeleted,
-  onPreview,
 }: {
   layout: DashboardLayout;
   layoutCount: number;
   reports: CustomReport[];
   apps: AppDefinition[];
+  summary: DashboardSummary | null;
   onChanged: () => void;
   onDeleted: () => void;
-  onPreview: () => void;
 }) {
   const [name, setName] = useState(layout.name);
   const [roles, setRoles] = useState<string[]>(layout.roles);
   const [widgets, setWidgets] = useState<DashboardWidgets>(layout.draft);
   const [appId, setAppId] = useState<string | null>(layout.app_id);
   const [error, setError] = useState<string | null>(null);
+  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
 
   // Every structural edit (add/remove/reorder a widget) saves immediately
   // - same reasoning as ScreenLayoutsAdmin's identical choice.
@@ -283,38 +284,52 @@ function LayoutEditor({
   });
 
   function addKpi(key: string) {
-    save({ widgets: [...widgets.widgets, { id: newId(), kind: "kpi", config: { kpi_key: key } }] });
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "kpi", config: { kpi_key: key }, layout: null }] });
   }
 
   function addChart(reportId: string) {
-    save({ widgets: [...widgets.widgets, { id: newId(), kind: "chart", config: { report_id: reportId } }] });
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "chart", config: { report_id: reportId }, layout: null }] });
   }
 
   function addRecordList(entityType: string, mode: RecordListMode) {
     save({
-      widgets: [...widgets.widgets, { id: newId(), kind: "record_list", config: { entity_type: entityType, mode, limit: 5 } }],
+      widgets: [...widgets.widgets, { id: newId(), kind: "record_list", config: { entity_type: entityType, mode, limit: 5 }, layout: null }],
     });
   }
 
-  function setRecordListSavedView(id: string, savedViewId: string) {
+  function addTable(entityType: string, mode: RecordListMode) {
     save({
-      widgets: widgets.widgets.map((w) =>
-        w.id === id ? { ...w, config: { ...w.config, saved_view_id: savedViewId || undefined } } : w,
-      ),
+      widgets: [...widgets.widgets, { id: newId(), kind: "table", config: { entity_type: entityType, mode, limit: 8 }, layout: null }],
     });
+  }
+
+  function addTaskQueue(mode: TaskQueueMode) {
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "task_queue", config: { mode, limit: 5 }, layout: null }] });
+  }
+
+  function addSavedView(entityType: string, savedViewId: string) {
+    save({
+      widgets: [
+        ...widgets.widgets,
+        { id: newId(), kind: "saved_view", config: { entity_type: entityType, saved_view_id: savedViewId, limit: 5 }, layout: null },
+      ],
+    });
+  }
+
+  function addAgentInsight(agentId: string) {
+    save({ widgets: [...widgets.widgets, { id: newId(), kind: "agent_insight", config: { agent_id: agentId }, layout: null }] });
   }
 
   function removeWidget(id: string) {
     save({ widgets: widgets.widgets.filter((w) => w.id !== id) });
   }
 
-  function moveWidget(id: string, direction: -1 | 1) {
-    const idx = widgets.widgets.findIndex((w) => w.id === id);
-    const swapWith = idx + direction;
-    if (idx < 0 || swapWith < 0 || swapWith >= widgets.widgets.length) return;
-    const next = [...widgets.widgets];
-    [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
-    save({ widgets: next });
+  function updateWidgetLayout(id: string, layout: WidgetLayout) {
+    save({ widgets: widgets.widgets.map((w) => (w.id === id ? { ...w, layout } : w)) });
+  }
+
+  function updateWidgetConfig(id: string, config: Record<string, unknown>) {
+    save({ widgets: widgets.widgets.map((w) => (w.id === id ? { ...w, config } : w)) });
   }
 
   const usedKpiKeys = new Set(widgets.widgets.filter((w) => w.kind === "kpi").map((w) => w.config.kpi_key as string));
@@ -325,6 +340,7 @@ function LayoutEditor({
 
   const hasPublished = layout.published !== null;
   const draftPublishedMatch = hasPublished && JSON.stringify(widgets) === JSON.stringify(layout.published);
+  const selectedWidget = widgets.widgets.find((w) => w.id === selectedWidgetId) ?? null;
 
   return (
     <div>
@@ -385,9 +401,6 @@ function LayoutEditor({
                 Make default
               </button>
             )}
-            <button className="btn" onClick={onPreview}>
-              Preview
-            </button>
             <button
               className="btn btn-danger"
               onClick={() => {
@@ -410,32 +423,10 @@ function LayoutEditor({
 
       <div className="card" style={{ background: "var(--surface-2, transparent)" }}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Widgets</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "8px 0" }}>
-          {widgets.widgets.length === 0 && <span className="empty-state">No widgets yet.</span>}
-          {widgets.widgets.map((w, i) => (
-            <span key={w.id} className="badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {widgetLabel(w, reports)}
-              {w.kind === "record_list" && (
-                <RecordListSavedViewPicker widget={w} onChange={(savedViewId) => setRecordListSavedView(w.id, savedViewId)} />
-              )}
-              <button className="link-button" onClick={() => moveWidget(w.id, -1)} disabled={i === 0} title="Move earlier">
-                ↑
-              </button>
-              <button
-                className="link-button"
-                onClick={() => moveWidget(w.id, 1)}
-                disabled={i === widgets.widgets.length - 1}
-                title="Move later"
-              >
-                ↓
-              </button>
-              <button className="link-button" onClick={() => removeWidget(w.id)} title="Remove from dashboard">
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 0 }}>
+          Drag a widget's header to move it, its bottom-right corner to resize it, or click it to edit its data source.
+        </p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           {availableKpis.length > 0 && (
             <select
               value=""
@@ -473,7 +464,50 @@ function LayoutEditor({
             )
           )}
           <AddRecordListWidget onAdd={addRecordList} />
+          <AddTableWidget onAdd={addTable} />
+          <AddTaskQueueWidget onAdd={addTaskQueue} />
+          <AddSavedViewWidget onAdd={addSavedView} />
+          <AddAgentInsightWidget onAdd={addAgentInsight} />
         </div>
+
+        {widgets.widgets.length === 0 ? (
+          <span className="empty-state">No widgets yet - add one above.</span>
+        ) : (
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <DashboardGrid
+                widgets={widgets.widgets}
+                editable
+                selectedId={selectedWidgetId}
+                onSelect={setSelectedWidgetId}
+                onLayoutChange={updateWidgetLayout}
+                renderHeader={(w) => <span style={{ fontSize: 12 }}>{widgetLabel(w, reports)}</span>}
+                renderWidget={(w) => (
+                  <DashboardWidgetCard
+                    widget={w}
+                    summary={summary}
+                    reports={reports}
+                    interactive={false}
+                    onNavigate={() => {}}
+                    onOpenRecord={() => {}}
+                  />
+                )}
+              />
+            </div>
+            {selectedWidget && (
+              <WidgetInspector
+                widget={selectedWidget}
+                reports={reports}
+                onConfigChange={(config) => updateWidgetConfig(selectedWidget.id, config)}
+                onRemove={() => {
+                  removeWidget(selectedWidget.id);
+                  setSelectedWidgetId(null);
+                }}
+                onClose={() => setSelectedWidgetId(null)}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       <div className="toolbar" style={{ marginTop: 16 }}>
@@ -534,88 +568,134 @@ function AddRecordListWidget({ onAdd }: { onAdd: (entityType: string, mode: Reco
   );
 }
 
-/** Narrows a record-list widget's rows to one Saved View's filters, reusing
- * the same views a Companies/Contacts/etc. list screen would offer (see
- * `useSavedViews`) - a dashboard tile is just another consumer of the same
- * saved filter, not a second filter-building UI. */
-function RecordListSavedViewPicker({ widget, onChange }: { widget: DashboardWidget; onChange: (savedViewId: string) => void }) {
-  const entityType = widget.config.entity_type as string;
-  const currentId = (widget.config.saved_view_id as string | undefined) ?? "";
+/** Same entity-type/mode choice as `AddRecordListWidget`, but produces a
+ * `"table"` widget instead of a `"record_list"` one - the dashboard grid
+ * (issue #198) renders a table widget as a full interactive `ListTable`
+ * (sortable/resizable columns) rather than the compact bullet list a
+ * record-list widget gets, for a dashboard tile that needs to show more
+ * than a title/subtitle per row. */
+function AddTableWidget({ onAdd }: { onAdd: (entityType: string, mode: RecordListMode) => void }) {
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>("Task");
+  const dueSoonAvailable = DUE_SOON_ENTITY_TYPES.includes(entityType);
+  const [mode, setMode] = useState<RecordListMode>("due_soon");
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select
+        value={entityType}
+        onChange={(e) => {
+          const next = e.target.value as CustomFieldEntityType;
+          setEntityType(next);
+          if (!DUE_SOON_ENTITY_TYPES.includes(next)) setMode("recent");
+        }}
+      >
+        {CUSTOM_FIELD_ENTITY_TYPES.map((t) => (
+          <option key={t} value={t}>
+            {entityTypeLabel(t)}
+          </option>
+        ))}
+      </select>
+      {dueSoonAvailable && (
+        <select value={mode} onChange={(e) => setMode(e.target.value as RecordListMode)}>
+          <option value="due_soon">Due soon</option>
+          <option value="recent">Recently created</option>
+        </select>
+      )}
+      <button className="btn" onClick={() => onAdd(entityType, dueSoonAvailable ? mode : "recent")}>
+        + Add table
+      </button>
+    </span>
+  );
+}
+
+/** A queue of open Tasks filtered the same way Tasks.tsx's own tabs filter
+ * them (see that file's `Tab` type), plus "mine" for a dashboard tile
+ * personalized to the signed-in user. No new backend - resolved client-side
+ * from the same `api.listTasks()` rows the Tasks screen already fetches. */
+function AddTaskQueueWidget({ onAdd }: { onAdd: (mode: TaskQueueMode) => void }) {
+  const [mode, setMode] = useState<TaskQueueMode>("today");
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select value={mode} onChange={(e) => setMode(e.target.value as TaskQueueMode)}>
+        {TASK_QUEUE_MODES.map((m) => (
+          <option key={m} value={m}>
+            {TASK_QUEUE_MODE_LABELS[m]}
+          </option>
+        ))}
+      </select>
+      <button className="btn" onClick={() => onAdd(mode)}>
+        + Add task queue
+      </button>
+    </span>
+  );
+}
+
+/** Embeds one specific Saved View (its exact filters/sort/columns, see
+ * `useSavedViews`) as a dashboard tile - unlike a table/record-list widget's
+ * ad hoc entity-type+mode choice, this mirrors a view a user already
+ * curated on a list screen. */
+function AddSavedViewWidget({ onAdd }: { onAdd: (entityType: string, savedViewId: string) => void }) {
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>("Task");
+  const [savedViewId, setSavedViewId] = useState("");
   const views = useQuery({
     queryKey: ["savedViewsForWidget", entityType],
     queryFn: () => api.listSavedViews(entityType),
   });
 
-  if (!views.data || views.data.length === 0) return null;
-
   return (
-    <select value={currentId} onChange={(e) => onChange(e.target.value)} style={{ fontSize: 12 }} title="Narrow this widget to a saved view">
-      <option value="">All records</option>
-      {views.data.map((v) => (
-        <option key={v.id} value={v.id}>
-          {v.name}
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select
+        value={entityType}
+        onChange={(e) => {
+          setEntityType(e.target.value as CustomFieldEntityType);
+          setSavedViewId("");
+        }}
+      >
+        {CUSTOM_FIELD_ENTITY_TYPES.map((t) => (
+          <option key={t} value={t}>
+            {entityTypeLabel(t)}
+          </option>
+        ))}
+      </select>
+      <select value={savedViewId} onChange={(e) => setSavedViewId(e.target.value)} disabled={!views.data || views.data.length === 0}>
+        <option value="">
+          {views.data && views.data.length > 0 ? "Choose a saved view..." : "No saved views for this object"}
         </option>
-      ))}
-    </select>
+        {(views.data ?? []).map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.name}
+          </option>
+        ))}
+      </select>
+      <button className="btn" disabled={!savedViewId} onClick={() => onAdd(entityType, savedViewId)}>
+        + Add saved view
+      </button>
+    </span>
   );
 }
 
-function widgetLabel(w: DashboardWidget, reports: CustomReport[]): string {
-  if (w.kind === "kpi") return kpiLabel(w.config.kpi_key as string);
-  if (w.kind === "chart") {
-    const report = reports.find((r) => r.id === w.config.report_id);
-    return report ? `📊 ${report.name}` : "📊 (report deleted)";
-  }
-  if (w.kind === "record_list") {
-    const entityType = w.config.entity_type as string;
-    const mode = w.config.mode as string;
-    return `📋 ${entityTypeLabel(entityType)} - ${mode === "due_soon" ? "due soon" : "recent"}`;
-  }
-  return w.kind;
-}
+/** A small card about one active AI agent (usage, recent run outcomes) -
+ * resolved client-side from `api.getAiAgentTokenUsage`/`api.listAiAgentRuns`,
+ * both already exposed to the frontend, so this adds no new Rust surface. */
+function AddAgentInsightWidget({ onAdd }: { onAdd: (agentId: string) => void }) {
+  const [agentId, setAgentId] = useState("");
+  const agents = useQuery({ queryKey: ["aiAgentsForWidget"], queryFn: () => api.listAiAgents(true) });
 
-function LayoutPreviewModal({
-  layout,
-  reports,
-  onClose,
-}: {
-  layout: DashboardLayout;
-  reports: CustomReport[];
-  onClose: () => void;
-}) {
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-    >
-      <div className="card" style={{ width: 480, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-        <div className="toolbar">
-          <h3 style={{ margin: 0 }}>Preview - {layout.name}</h3>
-          <button className="btn" onClick={onClose}>
-            Close
-          </button>
-        </div>
-        <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 0 }}>
-          Shows this dashboard's draft, as it will appear once published. Values are illustrative here.
-        </p>
-        {layout.draft.widgets.length === 0 && <span className="empty-state">No widgets on this dashboard yet.</span>}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          {layout.draft.widgets.map((w) => (
-            <div key={w.id} className="kpi-tile" style={{ minWidth: 140 }}>
-              <div className="value">—</div>
-              <div className="label">{widgetLabel(w, reports)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <select value={agentId} onChange={(e) => setAgentId(e.target.value)} disabled={!agents.data || agents.data.length === 0}>
+        <option value="">{agents.data && agents.data.length > 0 ? "Choose an agent..." : "No active agents yet"}</option>
+        {(agents.data ?? []).map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+      </select>
+      <button className="btn" disabled={!agentId} onClick={() => onAdd(agentId)}>
+        + Add agent insight
+      </button>
+    </span>
   );
 }
+

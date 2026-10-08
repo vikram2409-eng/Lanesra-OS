@@ -15,6 +15,8 @@ import { CustomFieldsCard } from "../../components/CustomFieldsCard";
 import { AuditByline, AuditTrail } from "../../components/AuditTrail";
 import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import { RelatedRecordSummary } from "../../components/RelatedRecordSummary";
 import type { Prefill, Section } from "../../components/AppShell";
 import { useReportVoiceContext } from "../voice/VoiceContext";
@@ -24,6 +26,28 @@ import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
+
+function makeInvoiceColumns(companyNameById: Map<string, string>, onOpen: (id: string) => void): ListTableColumn<Invoice>[] {
+  return [
+    {
+      key: "invoice_number",
+      label: "Number",
+      getValue: (inv) => inv.invoice_number,
+      render: (inv) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(inv.id); }}>
+          {inv.invoice_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "company_id", label: "Company", getValue: (inv) => companyNameById.get(inv.company_id) ?? null, defaultWidth: 180 },
+    { key: "status", label: "Status", format: "status", getValue: (inv) => inv.status, defaultWidth: 120 },
+    { key: "total_cents", label: "Total", getValue: (inv) => inv.total_cents, render: (inv) => formatCents(inv.total_cents, inv.currency_code), align: "right", defaultWidth: 120 },
+    { key: "balance_cents", label: "Balance", getValue: (inv) => inv.balance_cents, render: (inv) => formatCents(inv.balance_cents, inv.currency_code), align: "right", defaultWidth: 120 },
+    { key: "due_date", label: "Due", format: "date", getValue: (inv) => inv.due_date, defaultWidth: 120 },
+  ];
+}
+const DEFAULT_INVOICE_COLUMNS = ["invoice_number", "company_id", "status", "total_cents", "balance_cents", "due_date"];
 
 function invoiceExportColumns(companyNameById: Map<string, string>) {
   return [
@@ -51,6 +75,8 @@ export function Invoices({
   const [view, setView] = useState<View>(() =>
     prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
   );
+  const [columnKeys, setColumnKeys] = useState<string[] | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const fieldFilters = useCustomFieldFilters("Invoice");
@@ -93,6 +119,7 @@ export function Invoices({
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+  const invoiceColumns = makeInvoiceColumns(companyNameById, (id) => setView({ mode: "detail", id }));
 
   return (
     <div>
@@ -122,32 +149,36 @@ export function Invoices({
         return rows.length === 0 ? (
           <p className="empty-state">No invoices match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Company</th>
-              <th>Status</th>
-              <th>Total</th>
-              <th>Balance</th>
-              <th>Due</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((inv) => (
-              <tr key={inv.id} onClick={() => setView({ mode: "detail", id: inv.id })} style={{ cursor: "pointer" }}>
-                <td><span className="id-link">{inv.invoice_number}</span></td>
-                <td>{companyNameById.get(inv.company_id) ?? "—"}</td>
-                <td>
-                  <StatusBadge status={inv.status} />
-                </td>
-                <td>{formatCents(inv.total_cents, inv.currency_code)}</td>
-                <td>{formatCents(inv.balance_cents, inv.currency_code)}</td>
-                <td>{inv.due_date ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Invoice>
+            storageKey="Invoice"
+            columns={invoiceColumns}
+            visibleKeys={columnKeys ?? DEFAULT_INVOICE_COLUMNS}
+            onVisibleKeysChange={setColumnKeys}
+            groups={[{ label: "", rows }]}
+            getRowId={(inv) => inv.id}
+            onRowClick={(inv) => setPreviewId(inv.id)}
+          />
+        );
+      })()}
+      {previewId && (() => {
+        const previewRow = invoices.data?.find((inv) => inv.id === previewId);
+        if (!previewRow) return null;
+        return (
+          <QuickPreviewDrawer
+            title={previewRow.invoice_number}
+            subtitle={companyNameById.get(previewRow.company_id) ?? undefined}
+            fields={[
+              { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+              { label: "Total", value: formatCents(previewRow.total_cents, previewRow.currency_code) },
+              { label: "Balance", value: formatCents(previewRow.balance_cents, previewRow.currency_code) },
+              { label: "Due", value: previewRow.due_date ?? "—" },
+            ]}
+            onClose={() => setPreviewId(null)}
+            onOpenFull={() => {
+              setView({ mode: "detail", id: previewRow.id });
+              setPreviewId(null);
+            }}
+          />
         );
       })()}
     </div>

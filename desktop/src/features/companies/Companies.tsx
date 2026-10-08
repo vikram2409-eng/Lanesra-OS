@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -22,7 +22,10 @@ import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
-import { GroupHeaderRow } from "../../components/GroupHeaderRow";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
+import { InlineEditField } from "../../components/InlineEditField";
 import type { Prefill, Section } from "../../components/AppShell";
 import { field } from "../../lib/csv";
 import { useSavedViews } from "../../lib/useSavedViews";
@@ -48,6 +51,31 @@ const COMPANY_EXPORT_COLUMNS = [
   { label: "Employees", get: (c: Company) => (c.employee_count === null ? "" : String(c.employee_count)) },
   { label: "Preferred contact method", get: (c: Company) => c.preferred_contact_method ?? "" },
 ];
+
+function makeCompanyColumns(onOpen: (id: string) => void): ListTableColumn<Company>[] {
+  return [
+  {
+    key: "customer_number",
+    label: "Number",
+    getValue: (c) => c.customer_number,
+    render: (c) => (
+      <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(c.id); }}>
+        {c.customer_number}
+      </span>
+    ),
+    defaultWidth: 110,
+  },
+  { key: "name", label: "Name", getValue: (c) => c.name, defaultWidth: 220 },
+  { key: "status", label: "Status", format: "status", getValue: (c) => c.status, defaultWidth: 120 },
+  { key: "tax_number", label: "Tax number", getValue: (c) => c.tax_number, defaultWidth: 140 },
+  { key: "owner_user_id", label: "Owner", format: "owner", getValue: (c) => c.owner_user_id, defaultWidth: 160 },
+  { key: "annual_revenue_cents", label: "Annual revenue", format: "currency", getValue: (c) => c.annual_revenue_cents, align: "right", defaultWidth: 140 },
+  { key: "employee_count", label: "Employees", format: "number", getValue: (c) => c.employee_count, align: "right", defaultWidth: 100 },
+  { key: "phone", label: "Phone", getValue: (c) => c.phone, defaultWidth: 140 },
+  { key: "email", label: "Email", getValue: (c) => c.email, defaultWidth: 200 },
+  ];
+}
+const DEFAULT_COMPANY_COLUMNS = ["customer_number", "name", "status", "tax_number"];
 
 const COMPANY_IMPORT_COLUMNS = [
   { label: "Name", required: true },
@@ -121,6 +149,7 @@ export function Companies({
 } = {}) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "detail", id: prefill.openId } : { mode: "list" }));
   const [importing, setImporting] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const views = useSavedViews("Company");
@@ -130,6 +159,8 @@ export function Companies({
 
   const filteredRows = (companies.data ?? []).filter((c) => fieldFilters.matches(c.id));
   const selection = useBulkSelection(filteredRows, (c) => c.id);
+  const companyColumns = makeCompanyColumns((id) => setView({ mode: "detail", id }));
+  const previewRow = previewId ? filteredRows.find((c) => c.id === previewId) ?? null : null;
 
   function companyFieldValue(row: Company, key: string): string {
     switch (key) {
@@ -253,43 +284,38 @@ export function Companies({
         return filteredRows.length === 0 ? (
           <p className="empty-state">No companies match the current filters.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 28 }}>
-                  <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
-                </th>
-                <th>Number</th>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Tax number</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((group) => (
-                <Fragment key={group.label || "_"}>
-                  {views.groupByField && <GroupHeaderRow label={group.label} colSpan={5} />}
-                  {group.rows.map((c) => (
-                    <tr key={c.id} style={{ cursor: "pointer" }}>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={selection.isSelected(c.id)} onChange={() => selection.toggle(c.id)} />
-                      </td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                        <span className="id-link">{c.customer_number}</span>
-                      </td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.name}</td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                        <StatusBadge status={c.status} />
-                      </td>
-                      <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.tax_number ?? "—"}</td>
-                    </tr>
-                  ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+          <ListTable<Company>
+            storageKey="Company"
+            columns={companyColumns}
+            visibleKeys={views.columnKeys ?? DEFAULT_COMPANY_COLUMNS}
+            onVisibleKeysChange={views.setColumnKeys}
+            groups={groups}
+            getRowId={(c) => c.id}
+            onRowClick={(c) => setPreviewId(c.id)}
+            selection={selection}
+            resolveUser={(id) => users.data?.find((u) => u.id === id)?.display_name}
+          />
         );
       })()}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={previewRow.name}
+          subtitle={previewRow.customer_number}
+          fields={[
+            { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+            { label: "Owner", value: users.data?.find((u) => u.id === previewRow.owner_user_id)?.display_name ?? "—" },
+            { label: "Tax number", value: previewRow.tax_number ?? "—" },
+            { label: "Phone", value: previewRow.phone ?? "—" },
+            { label: "Email", value: previewRow.email ?? "—" },
+            { label: "Website", value: previewRow.website ?? "—" },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "detail", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -320,22 +346,7 @@ function CompanyForm({
   const [duplicateWarning, setDuplicateWarning] = useState<Company[] | null>(null);
 
   if (existing.data && existingCustomFields.data !== undefined && loadedFor !== companyId) {
-    setInput({
-      name: existing.data.name,
-      status: existing.data.status,
-      owner_user_id: existing.data.owner_user_id,
-      tax_number: existing.data.tax_number,
-      billing_address: existing.data.billing_address,
-      shipping_address: existing.data.shipping_address,
-      tags: existing.data.tags,
-      notes: existing.data.notes,
-      phone: existing.data.phone,
-      email: existing.data.email,
-      website: existing.data.website,
-      annual_revenue_cents: existing.data.annual_revenue_cents,
-      employee_count: existing.data.employee_count,
-      preferred_contact_method: existing.data.preferred_contact_method,
-    });
+    setInput(toCompanyInput(existing.data));
     setCustomValues(existingCustomFields.data);
     setLoadedFor(companyId);
   }
@@ -538,72 +549,135 @@ const COMPANY_TABS: { tab: CompanyTab; label: string }[] = [
  * Builder 2.0, issue #195, 5b) below, so a `field` component placed on a
  * published Page renders through the exact same pre-built element either
  * renderer would otherwise arrange. */
-function companyDetailFields(data: Company): Record<string, ReactNode> {
+function toCompanyInput(data: Company): CompanyInput {
+  return {
+    name: data.name,
+    status: data.status,
+    owner_user_id: data.owner_user_id,
+    tax_number: data.tax_number,
+    billing_address: data.billing_address,
+    shipping_address: data.shipping_address,
+    tags: data.tags,
+    notes: data.notes,
+    phone: data.phone,
+    email: data.email,
+    website: data.website,
+    annual_revenue_cents: data.annual_revenue_cents,
+    employee_count: data.employee_count,
+    preferred_contact_method: data.preferred_contact_method,
+  };
+}
+
+/**
+ * Runtime UX Modernization (issue #198): `onFieldSave`, when given, wraps
+ * each value in `InlineEditField` - click-to-edit in place, saved through
+ * the exact same `api.updateCompany` call a full form edit uses (see
+ * `CompanyDetail`'s `updateField` mutation). Omit it (as the edit form's
+ * own read-only preview never needs) and every field renders plain, same
+ * as before.
+ */
+function companyDetailFields(
+  data: Company,
+  canEdit = false,
+  onFieldSave?: (patch: Partial<CompanyInput>) => Promise<void>,
+): Record<string, ReactNode> {
+  const save = onFieldSave ?? (async () => {});
   return {
     phone: (
       <div className="form-field" key="phone">
         <label>Phone</label>
-        <div>{data.phone ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.phone ?? ""} displayValue={data.phone ?? "—"} onSave={(v) => save({ phone: v || null })} />
       </div>
     ),
     email: (
       <div className="form-field" key="email">
         <label>Email</label>
-        <div>{data.email ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.email ?? ""} displayValue={data.email ?? "—"} onSave={(v) => save({ email: v || null })} />
       </div>
     ),
     website: (
       <div className="form-field" key="website">
         <label>Website</label>
-        <div>{data.website ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.website ?? ""} displayValue={data.website ?? "—"} onSave={(v) => save({ website: v || null })} />
       </div>
     ),
     annual_revenue_cents: (
       <div className="form-field" key="annual_revenue_cents">
         <label>Annual revenue</label>
-        <div>{data.annual_revenue_cents === null ? "—" : formatCents(data.annual_revenue_cents)}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="number"
+          value={data.annual_revenue_cents === null ? "" : centsToInputValue(data.annual_revenue_cents)}
+          displayValue={data.annual_revenue_cents === null ? "—" : formatCents(data.annual_revenue_cents)}
+          onSave={(v) => save({ annual_revenue_cents: v === "" ? null : parseDecimalToCents(v) })}
+        />
       </div>
     ),
     employee_count: (
       <div className="form-field" key="employee_count">
         <label>Employees</label>
-        <div>{data.employee_count ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="number"
+          value={data.employee_count === null ? "" : String(data.employee_count)}
+          displayValue={data.employee_count ?? "—"}
+          onSave={(v) => save({ employee_count: v === "" ? null : Math.round(Number(v)) })}
+        />
       </div>
     ),
     preferred_contact_method: (
       <div className="form-field" key="preferred_contact_method">
         <label>Preferred contact method</label>
-        <div>{data.preferred_contact_method ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="select"
+          options={PREFERRED_CONTACT_METHODS}
+          value={data.preferred_contact_method ?? PREFERRED_CONTACT_METHODS[0]}
+          displayValue={data.preferred_contact_method ?? "—"}
+          onSave={(v) => save({ preferred_contact_method: v || null })}
+        />
       </div>
     ),
     tax_number: (
       <div className="form-field" key="tax_number">
         <label>Tax number</label>
-        <div>{data.tax_number ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.tax_number ?? ""} displayValue={data.tax_number ?? "—"} onSave={(v) => save({ tax_number: v || null })} />
       </div>
     ),
     billing_address: (
       <div className="form-field full" key="billing_address">
         <label>Billing address</label>
-        <div>{data.billing_address ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="textarea"
+          value={data.billing_address ?? ""}
+          displayValue={data.billing_address ?? "—"}
+          onSave={(v) => save({ billing_address: v || null })}
+        />
       </div>
     ),
     shipping_address: (
       <div className="form-field full" key="shipping_address">
         <label>Shipping address</label>
-        <div>{data.shipping_address ?? "—"}</div>
+        <InlineEditField
+          canEdit={canEdit}
+          type="textarea"
+          value={data.shipping_address ?? ""}
+          displayValue={data.shipping_address ?? "—"}
+          onSave={(v) => save({ shipping_address: v || null })}
+        />
       </div>
     ),
     tags: (
       <div className="form-field full" key="tags">
         <label>Tags</label>
-        <div>{data.tags ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} value={data.tags ?? ""} displayValue={data.tags ?? "—"} onSave={(v) => save({ tags: v || null })} />
       </div>
     ),
     notes: (
       <div className="form-field full" key="notes">
         <label>Notes</label>
-        <div>{data.notes ?? "—"}</div>
+        <InlineEditField canEdit={canEdit} type="textarea" value={data.notes ?? ""} displayValue={data.notes ?? "—"} onSave={(v) => save({ notes: v || null })} />
       </div>
     ),
   };
@@ -635,6 +709,12 @@ function CompanyDetail({
   const canWrite = useCanWriteObject("Company");
   useReportVoiceContext("Company", id);
   const company = useQuery({ queryKey: ["company", id], queryFn: () => api.getCompany(id) });
+  const queryClientForField = useQueryClient();
+  const updateField = async (patch: Partial<CompanyInput>) => {
+    if (!company.data) return;
+    await api.updateCompany(id, { ...toCompanyInput(company.data), ...patch });
+    await queryClientForField.invalidateQueries({ queryKey: ["company", id] });
+  };
   const contacts = useQuery({ queryKey: ["contactsByCompany", id], queryFn: () => api.listContactsByCompany(id) });
   const opportunities = useQuery({
     queryKey: ["opportunitiesByCompany", id],
@@ -681,7 +761,7 @@ function CompanyDetail({
 
   return (
     <div>
-      <div className="toolbar">
+      <div className="toolbar record-command-bar">
         <div>
           <button className="btn" onClick={onBack}>
             ← Back
@@ -691,17 +771,24 @@ function CompanyDetail({
           Edit
         </button>
       </div>
-      <h2>
-        {company.data.name} <StatusBadge status={company.data.status} />
-      </h2>
-      <p style={{ color: "var(--text-muted)" }}>{company.data.customer_number}</p>
+      <RecordHeader
+        title={company.data.name}
+        status={<StatusBadge status={company.data.status} />}
+        recordNumber={company.data.customer_number}
+        owner={<OwnershipByline objectKey="Company" recordId={id} />}
+        attributes={[
+          { label: "Phone", value: company.data.phone ?? "—" },
+          { label: "Email", value: company.data.email ?? "—" },
+          { label: "Website", value: company.data.website ?? "—" },
+          { label: "Annual revenue", value: company.data.annual_revenue_cents != null ? formatCents(company.data.annual_revenue_cents) : "—" },
+        ]}
+      />
       <AuditByline
         createdAt={company.data.created_at}
         createdBy={company.data.created_by}
         updatedAt={company.data.updated_at}
         updatedBy={company.data.updated_by}
       />
-      <OwnershipByline objectKey="Company" recordId={id} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (
@@ -732,7 +819,27 @@ function CompanyDetail({
         // rather than a partial merge, and why `fields` is the identical
         // map the old LayoutDetailFields branch builds below it.
         <div style={{ marginTop: 16 }}>
-          <PageRenderer entityType="Company" entityId={id} fields={companyDetailFields(company.data)} onEdit={onEdit} onOpenAdminTab={onOpenAdminTab} />
+          <PageRenderer
+            entityType="Company"
+            entityId={id}
+            fields={companyDetailFields(company.data, canWrite, updateField)}
+            onEdit={onEdit}
+            onOpenAdminTab={onOpenAdminTab}
+            recordHeader={
+              <RecordHeader
+                title={company.data.name}
+                attributes={[
+                  { label: "Phone", value: company.data.phone ?? "—" },
+                  { label: "Email", value: company.data.email ?? "—" },
+                  { label: "Website", value: company.data.website ?? "—" },
+                  { label: "Annual revenue", value: company.data.annual_revenue_cents != null ? formatCents(company.data.annual_revenue_cents) : "—" },
+                ]}
+              />
+            }
+            statusBadge={<StatusBadge status={company.data.status} />}
+            owner={<OwnershipByline objectKey="Company" recordId={id} />}
+            recordNumber={company.data.customer_number}
+          />
         </div>
       )}
       {tab === "overview" && !effectivePage.data?.page && (
@@ -746,7 +853,7 @@ function CompanyDetail({
                   "phone", "email", "website", "annual_revenue_cents", "employee_count",
                   "preferred_contact_method", "tax_number", "billing_address", "shipping_address", "tags", "notes",
                 ]}
-                fields={companyDetailFields(company.data)}
+                fields={companyDetailFields(company.data, canWrite, updateField)}
               />
             </div>
           </div>

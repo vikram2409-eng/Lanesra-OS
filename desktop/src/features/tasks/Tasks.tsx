@@ -12,6 +12,8 @@ import { OwnershipByline } from "../../components/OwnershipByline";
 import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
 import type { Prefill, Section } from "../../components/AppShell";
 import {
   TASK_PRIORITIES,
@@ -82,6 +84,36 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function makeTaskColumns(
+  ownerName: (id: string | null) => string,
+  relatedLabel: (task: Task) => string | null,
+  showOwnerColumn: boolean,
+  onOpen: (id: string) => void,
+): ListTableColumn<Task>[] {
+  const columns: ListTableColumn<Task>[] = [
+    {
+      key: "task_number",
+      label: "Number",
+      getValue: (t) => t.task_number,
+      render: (t) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(t.id); }}>
+          {t.task_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "title", label: "Title", getValue: (t) => t.title, defaultWidth: 220 },
+    { key: "priority", label: "Priority", getValue: (t) => t.priority, defaultWidth: 100 },
+    { key: "status", label: "Status", getValue: (t) => t.status, defaultWidth: 110 },
+    { key: "due_date", label: "Due date", format: "date", getValue: (t) => t.due_date, defaultWidth: 130 },
+  ];
+  if (showOwnerColumn) {
+    columns.push({ key: "owner_user_id", label: "Owner", getValue: (t) => t.owner_user_id, render: (t) => ownerName(t.owner_user_id), defaultWidth: 160 });
+  }
+  columns.push({ key: "related", label: "Related to", getValue: (t) => relatedLabel(t), render: (t) => relatedLabel(t) ?? "General", defaultWidth: 180 });
+  return columns;
+}
+
 export function Tasks({
   currentUserId,
   prefill,
@@ -101,6 +133,7 @@ export function Tasks({
         : { mode: "list" },
   );
   const [tab, setTab] = useState<Tab>("today");
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -233,6 +266,9 @@ export function Tasks({
   }
 
   const showGroupLabels = tab === "owner";
+  const taskColumns = makeTaskColumns(ownerName, relatedLabel, !showGroupLabels, (id) => setView({ mode: "detail", id }));
+  const defaultTaskColumns = taskColumns.map((c) => c.key);
+  const previewRow = previewId ? all.find((t) => t.id === previewId) ?? null : null;
 
   return (
     <div>
@@ -263,60 +299,48 @@ export function Tasks({
       <CustomFieldFilterBar filters={fieldFilters} />
       <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
       {tasks.isLoading && <p>Loading...</p>}
-      {groups.every((g) => g.rows.length === 0) && <p className="empty-state">No tasks here.</p>}
-      {groups.map(
-        (group) =>
-          group.rows.length > 0 && (
-            <div key={group.label} style={{ marginBottom: showGroupLabels ? 24 : 0 }}>
-              {showGroupLabels && <h3>{group.label}</h3>}
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 28 }}>
-                      <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
-                    </th>
-                    <th>Number</th>
-                    <th>Title</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Due date</th>
-                    {!showGroupLabels && <th>Owner</th>}
-                    <th>Related to</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.rows.map((t) => (
-                    <tr key={t.id} style={{ cursor: "pointer" }}>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={selection.isSelected(t.id)} onChange={() => selection.toggle(t.id)} />
-                      </td>
-                      <td onClick={() => setView({ mode: "detail", id: t.id })}><span className="id-link">{t.task_number}</span></td>
-                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.title}</td>
-                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.priority}</td>
-                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.status}</td>
-                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{t.due_date ?? "—"}</td>
-                      {!showGroupLabels && <td onClick={() => setView({ mode: "detail", id: t.id })}>{ownerName(t.owner_user_id)}</td>}
-                      <td onClick={() => setView({ mode: "detail", id: t.id })}>{relatedLabel(t) ?? "General"}</td>
-                      <td>
-                        <button
-                          className="btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setView({ mode: "edit", id: t.id });
-                          }}
-                          disabled={!canWrite}
-                          title={canWrite ? undefined : "You have view-only access to Tasks through an app"}
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ),
+      {groups.every((g) => g.rows.length === 0) ? (
+        <p className="empty-state">No tasks here.</p>
+      ) : (
+        <ListTable<Task>
+          storageKey="Task"
+          columns={taskColumns}
+          visibleKeys={views.columnKeys ?? defaultTaskColumns}
+          onVisibleKeysChange={views.setColumnKeys}
+          groups={groups}
+          showGroupHeaders={showGroupLabels}
+          getRowId={(t) => t.id}
+          onRowClick={(t) => setPreviewId(t.id)}
+          selection={selection}
+          actionsColumn={(t) => (
+            <button
+              className="btn"
+              onClick={() => setView({ mode: "edit", id: t.id })}
+              disabled={!canWrite}
+              title={canWrite ? undefined : "You have view-only access to Tasks through an app"}
+            >
+              Edit
+            </button>
+          )}
+        />
+      )}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={previewRow.title}
+          subtitle={previewRow.task_number}
+          fields={[
+            { label: "Status", value: previewRow.status },
+            { label: "Priority", value: previewRow.priority },
+            { label: "Due date", value: previewRow.due_date ?? "—" },
+            { label: "Owner", value: ownerName(previewRow.owner_user_id) },
+            { label: "Related to", value: relatedLabel(previewRow) ?? "General" },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "detail", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
       )}
     </div>
   );

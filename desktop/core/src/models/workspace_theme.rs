@@ -45,7 +45,39 @@ pub struct ThemeTokens {
     pub shape: ThemeShapeTokens,
     /// 'comfortable' | 'compact' | 'dense'.
     pub density: String,
+    /// Runtime UX Modernization (issue #198): the categorical palette
+    /// charts cycle through for per-series/per-group color (distinct from
+    /// `color`'s semantic brand/status tokens, which stay single-purpose).
+    /// `#[serde(default)]` so a theme row saved before this field existed
+    /// deserializes with the same built-in default every preset ships -
+    /// the same "absent means not yet set" convention `DashboardWidget.layout`
+    /// already uses.
+    #[serde(default)]
+    pub chart: ThemeChartTokens,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThemeChartTokens {
+    /// Ordered list of hex colors a multi-series/grouped chart cycles
+    /// through by index - never inspected for length by this layer beyond
+    /// `theme_service::validate_shape`'s own minimum-count check.
+    pub palette: Vec<String>,
+}
+
+impl Default for ThemeChartTokens {
+    fn default() -> Self {
+        ThemeChartTokens {
+            palette: DEFAULT_CHART_PALETTE.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+}
+
+/// The same neutral categorical palette every curated preset in
+/// `theme_service::built_in_presets` starts from before customizing it -
+/// distinct enough from each other under normal vision and under the most
+/// common color-vision deficiencies (deuteranopia/protanopia) to stay
+/// distinguishable without relying on hue alone.
+pub const DEFAULT_CHART_PALETTE: [&str; 6] = ["#635BFF", "#0F9D76", "#F59E0B", "#EF4444", "#3B82F6", "#8B5CF6"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeColorTokens {

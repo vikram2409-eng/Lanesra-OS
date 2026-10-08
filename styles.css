@@ -1,4 +1,7 @@
 :root{--bg:#f7f8fb;--panel:#fff;--text:#111827;--muted:#6b7280;--line:#e5e7eb;--brand:#4f46e5;--brand2:#7c3aed;--success:#059669;--warn:#d97706;--danger:#dc2626;--shadow:0 16px 50px rgba(17,24,39,.09);--radius:18px;
+/* Runtime UX Modernization (issue #198): default categorical report-bar
+   palette before any theme is published - see applyWorkspaceTheme/reportBarHtml. */
+--chart-1:#635bff;--chart-2:#0f9d76;--chart-3:#f59e0b;--chart-4:#ef4444;--chart-5:#3b82f6;--chart-6:#8b5cf6;
 /* Redesign tokens - formalizing the near-black "dark section" color already
    hand-repeated as literal #111827 in .cta/.choice-card.dark/.maker-card,
    and the accent-soft/surface-alt values already used as inline var(...,

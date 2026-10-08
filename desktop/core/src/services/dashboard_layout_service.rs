@@ -47,6 +47,7 @@ fn seeded_widgets(initial_kpi_keys: &[String]) -> DashboardWidgets {
                 id: crate::domain::ids::new_uuid(),
                 kind: "kpi".into(),
                 config: serde_json::json!({ "kpi_key": key }),
+                layout: None,
             })
             .collect(),
     }

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
@@ -16,7 +16,10 @@ import { ActivityTimeline } from "../../components/ActivityTimeline";
 import { TabListCard } from "../../components/TabListCard";
 import { SavedViewBar } from "../../components/SavedViewBar";
 import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
-import { GroupHeaderRow } from "../../components/GroupHeaderRow";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
+import { InlineEditField } from "../../components/InlineEditField";
 import { field } from "../../lib/csv";
 import type { Prefill, Section } from "../../components/AppShell";
 import { useReportVoiceContext } from "../voice/VoiceContext";
@@ -34,6 +37,25 @@ import {
 } from "../../lib/types";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
+
+function toContactInput(data: Contact): ContactInput {
+  return {
+    company_id: data.company_id,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    job_title: data.job_title,
+    email: data.email,
+    phone: data.phone,
+    mobile: data.mobile,
+    is_primary: data.is_primary,
+    status: data.status,
+    tags: data.tags,
+    notes: data.notes,
+    department: data.department,
+    preferred_contact_method: data.preferred_contact_method,
+    linkedin_url: data.linkedin_url,
+  };
+}
 
 function contactExportColumns(companyNameById: Map<string, string>) {
   return [
@@ -54,6 +76,41 @@ function contactExportColumns(companyNameById: Map<string, string>) {
     { label: "LinkedIn", get: (c: Contact) => c.linkedin_url ?? "" },
   ];
 }
+
+function makeContactColumns(companyNameById: Map<string, string>, onOpen: (id: string) => void): ListTableColumn<Contact>[] {
+  return [
+    {
+      key: "contact_number",
+      label: "Number",
+      getValue: (c) => c.contact_number,
+      render: (c) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(c.id); }}>
+          {c.contact_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    {
+      key: "name",
+      label: "Name",
+      getValue: (c) => `${c.first_name} ${c.last_name}`,
+      render: (c) => (
+        <>
+          {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
+        </>
+      ),
+      defaultWidth: 200,
+    },
+    { key: "company_id", label: "Company", getValue: (c) => companyNameById.get(c.company_id) ?? null, defaultWidth: 180 },
+    { key: "email", label: "Email", getValue: (c) => c.email, defaultWidth: 200 },
+    { key: "status", label: "Status", format: "status", getValue: (c) => c.status, defaultWidth: 120 },
+    { key: "job_title", label: "Job title", getValue: (c) => c.job_title, defaultWidth: 160 },
+    { key: "phone", label: "Phone", getValue: (c) => c.phone, defaultWidth: 140 },
+    { key: "mobile", label: "Mobile", getValue: (c) => c.mobile, defaultWidth: 140 },
+    { key: "department", label: "Department", getValue: (c) => c.department, defaultWidth: 140 },
+  ];
+}
+const DEFAULT_CONTACT_COLUMNS = ["contact_number", "name", "company_id", "email", "status"];
 
 const CONTACT_IMPORT_COLUMNS = [
   { label: "First name", required: true },
@@ -142,6 +199,7 @@ export function Contacts({
     prefill?.openId ? { mode: "detail", id: prefill.openId } : prefill?.companyId ? { mode: "create" } : { mode: "list" }
   );
   const [importing, setImporting] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => api.listContacts() });
   const views = useSavedViews("Contact");
@@ -151,6 +209,7 @@ export function Contacts({
 
   const filteredRows = (contacts.data ?? []).filter((c) => fieldFilters.matches(c.id));
   const selection = useBulkSelection(filteredRows, (c) => c.id);
+  const previewRow = previewId ? filteredRows.find((c) => c.id === previewId) ?? null : null;
 
   function contactFieldValue(row: Contact, key: string): string {
     switch (key) {
@@ -222,6 +281,7 @@ export function Contacts({
   }
 
   const companyNameById = new Map((companies.data ?? []).map((c) => [c.id, c.name]));
+  const contactColumns = makeContactColumns(companyNameById, (id) => setView({ mode: "detail", id }));
 
   return (
     <div>
@@ -275,61 +335,47 @@ export function Contacts({
         return filteredRows.length === 0 ? (
           <p className="empty-state">No contacts match the current filters.</p>
         ) : (
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: 28 }}>
-                <input type="checkbox" checked={selection.allSelected} ref={(el) => el && (el.indeterminate = selection.someSelected)} onChange={selection.toggleAll} />
-              </th>
-              <th>Number</th>
-              <th>Name</th>
-              <th>Company</th>
-              <th>Email</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((group) => (
-              <Fragment key={group.label || "_"}>
-                {views.groupByField && <GroupHeaderRow label={group.label} colSpan={7} />}
-                {group.rows.map((c) => (
-                  <tr key={c.id} style={{ cursor: "pointer" }}>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={selection.isSelected(c.id)} onChange={() => selection.toggle(c.id)} />
-                    </td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                      <span className="id-link">{c.contact_number}</span>
-                    </td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                      {c.first_name} {c.last_name} {c.is_primary && <span className="badge">Primary</span>}
-                    </td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>{companyNameById.get(c.company_id) ?? "—"}</td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>{c.email ?? "—"}</td>
-                    <td onClick={() => setView({ mode: "detail", id: c.id })}>
-                      <StatusBadge status={c.status} />
-                    </td>
-                    <td>
-                      <button
-                        className="btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setView({ mode: "edit", id: c.id });
-                        }}
-                        disabled={!canWrite}
-                        title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
-                      >
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+          <ListTable<Contact>
+            storageKey="Contact"
+            columns={contactColumns}
+            visibleKeys={views.columnKeys ?? DEFAULT_CONTACT_COLUMNS}
+            onVisibleKeysChange={views.setColumnKeys}
+            groups={groups}
+            getRowId={(c) => c.id}
+            onRowClick={(c) => setPreviewId(c.id)}
+            selection={selection}
+            actionsColumn={(c) => (
+              <button
+                className="btn"
+                onClick={() => setView({ mode: "edit", id: c.id })}
+                disabled={!canWrite}
+                title={canWrite ? undefined : "You have view-only access to Contacts through an app"}
+              >
+                Edit
+              </button>
+            )}
+          />
         );
       })()}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={`${previewRow.first_name} ${previewRow.last_name}`}
+          subtitle={previewRow.contact_number}
+          fields={[
+            { label: "Status", value: <StatusBadge status={previewRow.status} /> },
+            { label: "Company", value: companyNameById.get(previewRow.company_id) ?? "—" },
+            { label: "Job title", value: previewRow.job_title ?? "—" },
+            { label: "Email", value: previewRow.email ?? "—" },
+            { label: "Phone", value: previewRow.phone ?? "—" },
+            { label: "Mobile", value: previewRow.mobile ?? "—" },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "detail", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -364,38 +410,7 @@ function ContactForm({
   const [duplicateWarning, setDuplicateWarning] = useState<Contact[] | null>(null);
 
   if (existing.data && existingCustomFields.data !== undefined && loadedFor !== contactId) {
-    const {
-      first_name,
-      last_name,
-      job_title,
-      email,
-      phone,
-      mobile,
-      is_primary,
-      status,
-      tags,
-      notes,
-      company_id,
-      department,
-      preferred_contact_method,
-      linkedin_url,
-    } = existing.data;
-    setInput({
-      company_id,
-      first_name,
-      last_name,
-      job_title,
-      email,
-      phone,
-      mobile,
-      is_primary,
-      status,
-      tags,
-      notes,
-      department,
-      preferred_contact_method,
-      linkedin_url,
-    });
+    setInput(toContactInput(existing.data));
     setCustomValues(existingCustomFields.data);
     setLoadedFor(contactId);
   }
@@ -604,6 +619,12 @@ function ContactDetail({
   const canWrite = useCanWriteObject("Contact");
   useReportVoiceContext("Contact", id);
   const contact = useQuery({ queryKey: ["contact", id], queryFn: () => api.getContact(id) });
+  const queryClientForField = useQueryClient();
+  const updateField = async (patch: Partial<ContactInput>) => {
+    if (!contact.data) return;
+    await api.updateContact(id, { ...toContactInput(contact.data), ...patch });
+    await queryClientForField.invalidateQueries({ queryKey: ["contact", id] });
+  };
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.listCompanies() });
   const opportunities = useQuery({ queryKey: ["opportunities"], queryFn: () => api.listOpportunities() });
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
@@ -639,9 +660,11 @@ function ContactDetail({
     ...relatedTasks.map((t) => ({ at: t.created_at, text: `Task "${t.title}" created (${t.status})` })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
+  const subtitle = [companyName, c.job_title].filter(Boolean).join(" · ") || undefined;
+
   return (
     <div>
-      <div className="toolbar">
+      <div className="toolbar record-command-bar">
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
@@ -649,16 +672,19 @@ function ContactDetail({
           Edit
         </button>
       </div>
-      <h2>
-        {c.first_name} {c.last_name} <StatusBadge status={c.status} />
-      </h2>
-      <p style={{ color: "var(--text-muted)" }}>
-        {c.contact_number}
-        {companyName ? ` · ${companyName}` : ""}
-        {c.job_title ? ` · ${c.job_title}` : ""}
-      </p>
+      <RecordHeader
+        title={`${c.first_name} ${c.last_name}`}
+        status={<StatusBadge status={c.status} />}
+        recordNumber={c.contact_number}
+        subtitle={subtitle}
+        owner={<OwnershipByline objectKey="Contact" recordId={c.id} />}
+        attributes={[
+          { label: "Email", value: c.email ?? "—" },
+          { label: "Phone", value: c.phone ?? "—" },
+          { label: "Mobile", value: c.mobile ?? "—" },
+        ]}
+      />
       <AuditByline createdAt={c.created_at} createdBy={c.created_by} updatedAt={c.updated_at} updatedBy={c.updated_by} />
-      <OwnershipByline objectKey="Contact" recordId={c.id} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {kpis.map((k) => (
@@ -685,14 +711,45 @@ function ContactDetail({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
           <div className="card">
             <h3 style={{ marginTop: 0 }}>Details</h3>
-            <p><strong>Email:</strong> {c.email ?? "—"}</p>
-            <p><strong>Phone:</strong> {c.phone ?? "—"}</p>
-            <p><strong>Mobile:</strong> {c.mobile ?? "—"}</p>
-            <p><strong>Department:</strong> {c.department ?? "—"}</p>
-            <p><strong>Preferred contact method:</strong> {c.preferred_contact_method ?? "—"}</p>
-            <p><strong>LinkedIn:</strong> {c.linkedin_url ?? "—"}</p>
-            <p><strong>Tags:</strong> {c.tags ?? "—"}</p>
-            <p><strong>Notes:</strong> {c.notes ?? "—"}</p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Email:</strong>
+              <InlineEditField canEdit={canWrite} value={c.email ?? ""} displayValue={c.email ?? "—"} onSave={(v) => updateField({ email: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Phone:</strong>
+              <InlineEditField canEdit={canWrite} value={c.phone ?? ""} displayValue={c.phone ?? "—"} onSave={(v) => updateField({ phone: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Mobile:</strong>
+              <InlineEditField canEdit={canWrite} value={c.mobile ?? ""} displayValue={c.mobile ?? "—"} onSave={(v) => updateField({ mobile: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Department:</strong>
+              <InlineEditField canEdit={canWrite} value={c.department ?? ""} displayValue={c.department ?? "—"} onSave={(v) => updateField({ department: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Preferred contact method:</strong>
+              <InlineEditField
+                canEdit={canWrite}
+                type="select"
+                options={PREFERRED_CONTACT_METHODS}
+                value={c.preferred_contact_method ?? PREFERRED_CONTACT_METHODS[0]}
+                displayValue={c.preferred_contact_method ?? "—"}
+                onSave={(v) => updateField({ preferred_contact_method: v || null })}
+              />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>LinkedIn:</strong>
+              <InlineEditField canEdit={canWrite} value={c.linkedin_url ?? ""} displayValue={c.linkedin_url ?? "—"} onSave={(v) => updateField({ linkedin_url: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Tags:</strong>
+              <InlineEditField canEdit={canWrite} value={c.tags ?? ""} displayValue={c.tags ?? "—"} onSave={(v) => updateField({ tags: v || null })} />
+            </p>
+            <p style={{ display: "flex", gap: 6 }}>
+              <strong>Notes:</strong>
+              <InlineEditField canEdit={canWrite} type="textarea" value={c.notes ?? ""} displayValue={c.notes ?? "—"} onSave={(v) => updateField({ notes: v || null })} />
+            </p>
           </div>
           <RelatedRecordsCard entityType="Contact" entityId={id} />
           <AuditTrail entityType="Contact" entityId={id} />

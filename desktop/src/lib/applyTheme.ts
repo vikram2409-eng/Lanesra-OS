@@ -1,5 +1,11 @@
 import type { ThemeTokens } from "./types";
 
+// Runtime UX Modernization (issue #198): how many --chart-N slots the rest
+// of the app (Bar.tsx) cycles through - see that file and styles.css's
+// :root defaults. Fixed, not derived from a theme's own palette length, so
+// every chart-coloring call site can cycle through a stable range.
+export const CHART_PALETTE_SIZE = 6;
+
 // UX/UI Modernization, Phase A (issue #191): applies a Published theme's
 // tokens as inline CSS custom properties on :root, overriding styles.css's
 // static defaults - see that file's own comment on which vars this covers
@@ -22,4 +28,10 @@ export function applyThemeTokens(tokens: ThemeTokens): void {
   root.setProperty("--info", tokens.color.status_info);
   root.setProperty("--font-family", tokens.typography.font_family);
   root.setProperty("--base-font-size", `${tokens.typography.base_size_px}px`);
+  // A palette shorter than CHART_PALETTE_SIZE (the Rust-side minimum is 3)
+  // cycles to fill every slot, so no --chart-N var is ever left undefined.
+  const palette = tokens.chart.palette;
+  for (let i = 0; i < CHART_PALETTE_SIZE; i++) {
+    if (palette.length > 0) root.setProperty(`--chart-${i + 1}`, palette[i % palette.length]);
+  }
 }

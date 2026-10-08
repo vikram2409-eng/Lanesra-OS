@@ -16,13 +16,11 @@ export type SortDirection = "asc" | "desc";
  * `CustomFieldFilterBar`) it already had - a saved view is "remember what
  * I had set," not a new query capability.
  *
- * Column visibility is intentionally not wired up here yet: no list
- * screen in this codebase has a dynamic-column table today (every
- * `show_in_list` custom-field flag is defined but currently unread by any
- * renderer), so persisting a `columns` array on the saved view now - while
- * only actually applying `filters`/`sort`/`group` - is honest forward
- * scope, not a silently-dropped feature. Wiring real column toggling in is
- * a real, separate fast-follow.
+ * Column visibility/order (Runtime UX Modernization, issue #198): the
+ * `columns` array is the display order of visible column keys; `null`
+ * means "use the table's own default set." `ListTable` is the one real
+ * reader of it now - see that component for the resizable/reorderable
+ * dynamic-column table itself.
  */
 export function useSavedViews(objectKey: string) {
   const queryClient = useQueryClient();
@@ -31,6 +29,7 @@ export function useSavedViews(objectKey: string) {
   const [sortField, setSortFieldState] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [groupByField, setGroupByField] = useState<string | null>(null);
+  const [columnKeys, setColumnKeys] = useState<string[] | null>(null);
 
   const viewsQuery = useQuery({
     queryKey: ["savedViews", objectKey],
@@ -46,12 +45,14 @@ export function useSavedViews(objectKey: string) {
       setSortFieldState(null);
       setSortDirection("asc");
       setGroupByField(null);
+      setColumnKeys(null);
       return;
     }
     Object.entries(view.filters).forEach(([key, value]) => filters.setFilter(key, value));
     setSortFieldState(view.sort_field);
     setSortDirection(view.sort_direction);
     setGroupByField(view.group_by_field);
+    setColumnKeys(view.columns);
   }
 
   function setSort(field: string | null) {
@@ -71,7 +72,7 @@ export function useSavedViews(objectKey: string) {
       filters: filters.filters,
       sort_field: sortField,
       sort_direction: sortDirection,
-      columns: activeView?.columns ?? null,
+      columns: columnKeys,
       group_by_field: groupByField,
     };
   }
@@ -116,14 +117,15 @@ export function useSavedViews(objectKey: string) {
   }
 
   const isDirty = useMemo(() => {
-    if (!activeView) return sortField !== null || groupByField !== null || filters.isActive;
+    if (!activeView) return sortField !== null || groupByField !== null || columnKeys !== null || filters.isActive;
     return (
       JSON.stringify(activeView.filters) !== JSON.stringify(filters.filters) ||
       activeView.sort_field !== sortField ||
       activeView.sort_direction !== sortDirection ||
-      activeView.group_by_field !== groupByField
+      activeView.group_by_field !== groupByField ||
+      JSON.stringify(activeView.columns) !== JSON.stringify(columnKeys)
     );
-  }, [activeView, filters.filters, filters.isActive, sortField, sortDirection, groupByField]);
+  }, [activeView, filters.filters, filters.isActive, sortField, sortDirection, groupByField, columnKeys]);
 
   /**
    * Applies the current sort/group (not filters - the caller already
@@ -158,6 +160,8 @@ export function useSavedViews(objectKey: string) {
     setSort,
     groupByField,
     setGroupByField,
+    columnKeys,
+    setColumnKeys,
     saveAsNew,
     updateCurrent,
     deleteView,
