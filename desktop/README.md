@@ -1143,6 +1143,104 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   Mirrored in the online demo, including its own drag-and-drop reordering
   and conflict analyzer banner. Screen Builder 2.0 (next under epic #190)
   is the single largest remaining build in this epic.
+- **UX/UI Modernization, Screen Builder 2.0** (issue #195), 2 stacked PRs:
+  a second, separate page-building system alongside Screen/App Builder,
+  which only ever builds the create/edit form. **5a** - Admin → Page
+  Builder composes a record detail page from a 12-column responsive grid,
+  dragging from a 24-entry component library across Layout/Record/Data/
+  Actions categories, with a Layers panel and a live preview at four
+  widths. Same Draft/Published/role-assignment governance every 2.0-era
+  builder uses, stored in a brand-new `page_layouts` table -
+  `screen_layouts`/`ScreenLayoutsAdmin.tsx` completely untouched, proven
+  by a parity test plus an unchanged, fully-passing re-run of Screen/App
+  Builder's own existing test suite. **5b** - 4 built-in page templates,
+  object-aware, plus a new `page_templates` table so an admin can save a
+  customized page as a reusable Organization Template. A published Page
+  now takes over the real record detail/Overview view it was composed for
+  (desktop: Company and Product; online demo: every object, through the
+  one shared renderer every detail page already funnels through) - every
+  object that's never published a Page keeps rendering through its exact
+  pre-existing path, unchanged. Honestly scoped: Field/Field Group/Record
+  Header/Status Badge/Owner/Record Number/Related List/Table and a KPI's
+  related-record-count source render against real data; a KPI's
+  field-sum/field-count sources, Chart, every Action type and Agent
+  Action show a clearly-labeled "not wired to live data yet" placeholder
+  rather than a fabricated number or a dead button.
+- **UX/UI Modernization, Agent Studio 2.0** (issue #196): a polish pass
+  over the existing, already-production Agent Team Builder
+  (`AgentTeamsAdmin.tsx`) and Agent Foundry (`AiAgentsAdmin.tsx`), not a
+  new canvas. A guided Core/Advanced inspector tab replaces one long
+  agent form, with a capability summary card and a Tone/persona split; a
+  6-template Agent Templates gallery seeds a new agent's tools/policy/
+  output schema in one click; an in-Builder Playground, Evaluation Suite
+  runner and version-compare table turn 3 separate screens into one tab.
+  The Agent Team canvas itself gained live run-highlighting (polling a
+  real `GraphRun`, not a simulation), 5 one-click orchestration presets
+  each hand-verified against `validate_for_publish`'s own cycle/branch
+  rules and covered by a dedicated Rust test, plus two genuinely new
+  capabilities: an `agent` node can be **Embedded** - persona/tools live
+  only in that node, run through an ephemeral, never-persisted
+  `AiAgentDefinition` - instead of Reusable, with a one-click "Promote"
+  turning it into a real, independently reusable agent via the exact same
+  `ai_agent_service::create` a manual "+ New agent" already uses; and a
+  `run_agent_team` node can target another Execution Graph directly
+  instead of only an old-style Pipeline, with its own variable mapping,
+  double-click-to-open its canvas, and a breadcrumb trail back to the
+  parent team. Honestly scoped: no token streaming exists anywhere in
+  this codebase yet, so the Playground and a live run's output are both
+  one-shot; an Embedded sub-agent's memory tools are wired but silently
+  no-op, since there's no saved agent row for persistent cross-run Memory
+  to attach to.
+- **UX/UI Modernization, Admin Control Center Modernization** (issue
+  #197): Admin already had a real control-center-style landing grid
+  (`Settings.tsx`'s `ADMIN_CATEGORIES`), so this is additive chrome and
+  cross-navigation on top of it, not a rebuild. The landing page gains a
+  Setup Progress checklist (hides itself once every item is done), a
+  Needs Attention panel surfacing real counts - failed/stuck integration
+  connections and jobs, unpublished screen/page/dashboard/theme drafts,
+  workflow and agent-team run failures, expiring integration credentials
+  - each a direct link into the admin tab that fixes it, a Platform
+  Health strip of real KPI chips, and a Recent Changes feed reading a new
+  `audit_repo::list_recent` across every admin domain (roughly 30
+  previously-unaudited service functions now call the same
+  `audit_repo::record` every other instrumented write already used). A
+  new global Admin Search (`admin_search_service`) and a Ctrl/Cmd+K
+  Command Palette find any admin configuration object by name and jump
+  straight to its tab; Recently Viewed/Pinned admin tabs round out the
+  landing page. Object detail cross-links now show real reference counts
+  and block deleting an object that's still referenced, with the exact
+  domains listed rather than a generic refusal. Honestly scoped: Needs
+  Attention and Platform Health compute every count from real data with
+  zero fabricated numbers; a desktop-only concept with no honest demo
+  equivalent (workspace backups) is left out of the online demo mirror
+  rather than faked.
+- **Agent Access Governance** (issue #245): auditing the claim "the
+  Policy Engine firewalls every tool call; the Access Inspector shows
+  exactly what each agent can touch" against the real code surfaced two
+  genuine gaps rather than naming/documentation drift. First:
+  `chat_service::execute_agent_tool` dispatched six Foundry-internal tool
+  names (`update_memory`, `remember`, `get_memory`, `search_knowledge`,
+  `use_skill`, `delegate_to_agent`) before the Tool-Call Firewall ever
+  saw them - `tool_source` now classifies all six, and the firewall check
+  moved to cover every tool name unconditionally. Second, deeper gap:
+  `access_service::require_capability`'s own "`actor_user_id: None` means
+  unattributed/system, always Allow" convention meant every AI-driven
+  record write ran completely unscoped by Access Control v1, regardless
+  of who was chatting or which role they held. A new opt-in
+  `enforce_record_access` flag on a Policy Engine policy (workspace-
+  default or per-agent) gives this real teeth: when on, `create_record`/
+  `update_record`/`archive_record` check for real against either the
+  agent's own new, optional `acts_as_user_id` bound identity or whoever
+  is actually chatting - default `false`, so no existing workspace's
+  behavior changes until an admin opts in. The actually-missing feature:
+  a real **Agent Access Inspector** (Admin → AI Agents) - pick an agent
+  and a tool, optionally simulate a user and a record, and trace whether
+  the tool is even in that agent's own list, the exact Policy Engine
+  decision and which policy produced it, and - once enforcement is on -
+  the identical `access_service::explain_access` trace the real
+  user-facing Access Inspector already renders. Shipped on the desktop
+  edition (10 new Rust tests in `agent_access_governance.rs`) and
+  mirrored in the online demo's AI Agent Foundry panel.
 
 ## What's deferred to a later phase
 
