@@ -1241,12 +1241,49 @@ docker run -p 8080:8080 -v lanesra-data:/data \
   user-facing Access Inspector already renders. Shipped on the desktop
   edition (10 new Rust tests in `agent_access_governance.rs`) and
   mirrored in the online demo's AI Agent Foundry panel.
+- **UX/UI Modernization, Runtime UX Modernization** (issue #198): the
+  previous seven pieces modernized admin-side builders; this one is the
+  first aimed at the runtime surfaces every end user actually lives in
+  day to day. A new shared `ListTable` component (sorting, column
+  visibility, a saved view's column order) replaces several
+  near-duplicate hand-rolled tables across every list screen, with a
+  click-through quick-preview drawer so skimming a record no longer
+  means leaving the list. A shared `RecordHeader` fills in the record
+  detail page's identity/actions slot consistently across every object,
+  and every core field on a detail page now supports inline edit-in-place
+  - save on blur/Enter, revert on Escape - instead of only through the
+  full edit form. Admin → Dashboards gained real widget geometry:
+  `DashboardWidget` now carries an optional `x/y/w/h` grid position
+  (purely additive - a widget saved without one is auto-placed, so every
+  dashboard built before this still loads unchanged), a drag/resize grid
+  replaces the old reorder-arrows list in Edit mode, and 4 new widget
+  kinds (Table, Saved View, Task Queue, Agent Insight) join the original
+  KPI/Chart/Record List trio. A new `chart` token group
+  (`ThemeTokens.chart.palette`, 6 hex colors, `#[serde(default)]` so
+  every theme saved before this field existed just deserializes with the
+  built-in default) gives every curated preset its own harmonized
+  palette instead of every chart bar sharing one accent color; genuinely
+  categorical charts cycle through it by group index, while a true time
+  series (Revenue by month) correctly keeps the single accent color a
+  palette wouldn't help. List and detail screens also collapse to a card
+  layout below a 640px breakpoint rather than forcing horizontal table
+  scroll on a phone. Shipped on the desktop edition (28 Rust tests
+  across `dashboard_layouts.rs` and `workspace_theme_studio.rs`) and
+  mirrored in the online demo - including the chart palette editor and
+  every categorical report bar - with one honestly-scoped gap: the
+  dashboard's 4 new widget kinds and its drag/resize grid stay
+  desktop-only here, keeping the demo's simpler reorder-arrows list and
+  original 3 widget kinds rather than half-rebuilding an interactive
+  canvas for a marketing mirror.
 
 ## What's deferred to a later phase
 
 - Custom fields as extra columns on list screens, and in CSV import/export
 - A full drag-and-drop report/dashboard builder beyond the simple
-  group-by-and-aggregate report builder, and reordering Dashboard KPI tiles
+  group-by-and-aggregate report builder (Dashboard KPI/chart/record-list/
+  table/saved-view/task-queue/agent-insight widgets can now be dragged
+  and resized on a grid - see Runtime UX Modernization above - a
+  from-scratch drag-and-drop *report* builder is the part still deferred)
 - The Approval Framework, Data Quality Center, and Form Builder sections
   of the v1.3 spec - each is its own substantial subsystem, out of scope
   for the phases done so far
