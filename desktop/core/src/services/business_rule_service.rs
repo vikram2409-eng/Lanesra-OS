@@ -194,12 +194,28 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
     Ok(())
 }
 
+/// FND-01 System Graph: a rule always depends on the object it's defined
+/// on, the same `entity_type` -> `custom_object` edge
+/// `custom_field_service`'s own sync helper uses.
+fn sync_graph_node(conn: &Connection, workspace_id: &str, rule: &BusinessRule) -> AppResult<()> {
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "business_rule",
+        &rule.id,
+        &rule.name,
+        "{}",
+        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: rule.entity_type.clone() }],
+    )
+}
+
 pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleInput, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, &input.entity_type, input)?;
     let id = crate::domain::ids::new_uuid();
     let created = business_rule_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "business_rule", &created.id, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("business_rule"), Some(&created.id), &format!("Created business rule '{}'", created.name), None)?;
     Ok(created)
 }
@@ -285,6 +301,7 @@ pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, a
         actor_user_id,
     )?;
     super::solution_component_service::tag_local(conn, &parent.workspace_id, "business_rule", &created.id, actor_user_id)?;
+    sync_graph_node(conn, &parent.workspace_id, &created)?;
     Ok(created)
 }
 
@@ -357,6 +374,7 @@ pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, acto
     let snapshot_json = serde_json::to_string(&existing).expect("BusinessRule is always serializable");
     business_rule_repo::insert_version(conn, id, &snapshot_json)?;
     let updated = business_rule_repo::update(conn, id, input, actor_user_id)?;
+    sync_graph_node(conn, &existing.workspace_id, &updated)?;
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("business_rule"), Some(id), &format!("Updated business rule '{}'", updated.name), None)?;
     Ok(updated)
 }
@@ -473,6 +491,7 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
     };
     let new_id = crate::domain::ids::new_uuid();
     let created = business_rule_repo::create(conn, &new_id, &existing.workspace_id, &input, actor_user_id)?;
+    sync_graph_node(conn, &existing.workspace_id, &created)?;
     let deactivate = BusinessRuleUpdate {
         name: created.name.clone(),
         description: created.description.clone(),

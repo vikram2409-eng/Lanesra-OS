@@ -37,6 +37,9 @@ import type {
   ExecutionGraph,
   ExecutionGraphInput,
   GraphRun,
+  SystemNodeType,
+  SystemNode,
+  SystemGraphHit,
   MemoryType,
   MemoryItem,
   KnowledgeCollection,
@@ -455,6 +458,16 @@ export const api = {
   resumeGraphRun: (id: string) => call<GraphRun>("resume_graph_run", { id }),
   resolveGraphRunApproval: (id: string, approve: boolean, notes?: string | null) => call<GraphRun>("resolve_graph_run_approval", { id, approve, notes: notes ?? null }),
   cancelGraphRun: (id: string) => call<GraphRun>("cancel_graph_run", { id }),
+
+  // Next-Gen program, Domain A (Intelligence Foundation), FND-01: the
+  // Lanesra System Graph. Read-only - a node's data always comes from its
+  // owning service's own sync, never authored through these calls.
+  listSystemNodes: (nodeType: SystemNodeType) => call<SystemNode[]>("list_system_nodes", { nodeType }),
+  getSystemNode: (nodeType: SystemNodeType, componentId: string) => call<SystemNode | null>("get_system_node", { nodeType, componentId }),
+  getSystemNodeDependencies: (nodeType: SystemNodeType, componentId: string) => call<SystemGraphHit[]>("get_system_node_dependencies", { nodeType, componentId }),
+  getSystemNodeDependents: (nodeType: SystemNodeType, componentId: string) => call<SystemGraphHit[]>("get_system_node_dependents", { nodeType, componentId }),
+  getSystemNodeLineage: (nodeType: SystemNodeType, componentId: string) => call<SystemGraphHit[]>("get_system_node_lineage", { nodeType, componentId }),
+  getSystemNodeImpact: (nodeType: SystemNodeType, componentId: string) => call<SystemGraphHit[]>("get_system_node_impact", { nodeType, componentId }),
 
   // AI Agent Platform v2, Phase 4: Memory Inspector + Document RAG
   // (Knowledge Collections/Sources). Source create/update/search call the

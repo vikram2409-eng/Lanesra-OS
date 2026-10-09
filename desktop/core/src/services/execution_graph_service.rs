@@ -74,10 +74,33 @@ fn validate_input(input: &ExecutionGraphInput) -> AppResult<()> {
     Ok(())
 }
 
+/// FND-01 System Graph: an execution graph (Agent Team) INVOKES each
+/// agent referenced by one of its own `agent`-type nodes' `config_json`
+/// (`{"agent_id": ...}, see `graph_runtime_service`'s own parsing of the
+/// same field) - an embedded-persona agent node (no `agent_id` set yet)
+/// contributes no edge, which is correct: there's no real Agent
+/// component to point at until it's promoted.
+fn sync_graph_node(conn: &Connection, workspace_id: &str, graph: &ExecutionGraph) -> AppResult<()> {
+    let mut edges = Vec::new();
+    for node in &graph.nodes {
+        if node.node_type == "agent" {
+            if let Ok(config) = serde_json::from_str::<serde_json::Value>(&node.config_json) {
+                if let Some(agent_id) = config.get("agent_id").and_then(|v| v.as_str()) {
+                    if !agent_id.is_empty() {
+                        edges.push(crate::models::system_graph::SystemEdgeTarget { edge_type: "invokes".into(), to_node_type: "ai_agent".into(), to_component_id: agent_id.to_string() });
+                    }
+                }
+            }
+        }
+    }
+    super::system_graph_service::sync_node(conn, workspace_id, "execution_graph", &graph.id, &graph.name, "{}", &edges)
+}
+
 pub fn create(conn: &Connection, workspace_id: &str, input: &ExecutionGraphInput, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
     require_admin(conn, actor_user_id)?;
     validate_input(input)?;
     let created = execution_graph_repo::create(conn, &crate::domain::ids::new_uuid(), workspace_id, input, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("execution_graph"), Some(&created.id), &format!("Created execution graph '{}'", created.name), None)?;
     Ok(created)
 }
@@ -112,6 +135,7 @@ pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &Execution
     }
     validate_input(input)?;
     let updated = execution_graph_repo::update(conn, id, input, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &updated)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("execution_graph"), Some(id), &format!("Updated execution graph '{}'", updated.name), None)?;
     Ok(updated)
 }

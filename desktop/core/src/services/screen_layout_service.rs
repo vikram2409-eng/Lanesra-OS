@@ -91,6 +91,10 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &ScreenLayout
     let draft_json = serde_json::to_string(&seeded_tabs(&input.initial_fields)).expect("LayoutTabs always serializes");
     screen_layout_repo::create(conn, &id, workspace_id, &input.entity_type, input.name.trim(), is_default, "[]", &draft_json, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "screen_layout", &id, actor_user_id)?;
+    super::system_graph_service::sync_node(
+        conn, workspace_id, "screen_layout", &id, input.name.trim(), "{}",
+        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: input.entity_type.clone() }],
+    )?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("screen_layout"), Some(&id), &format!("Created screen layout '{}'", input.name.trim()), None)?;
     get_layout(conn, &id)
 }
@@ -100,10 +104,15 @@ pub fn update_layout(conn: &Connection, id: &str, update: &ScreenLayoutUpdate, a
     if update.name.trim().is_empty() {
         return Err(AppError::Validation("Layout name is required".into()));
     }
+    let entity_type = get_layout(conn, id)?.entity_type;
     let workspace_id = get_layout(conn, id)?.workspace_id;
     let roles_json = serde_json::to_string(&update.roles).expect("Vec<String> always serializes");
     let draft_json = serde_json::to_string(&update.draft).expect("LayoutTabs always serializes");
     screen_layout_repo::update_meta_and_draft(conn, id, update.name.trim(), &roles_json, &draft_json, actor_user_id)?;
+    super::system_graph_service::sync_node(
+        conn, &workspace_id, "screen_layout", id, update.name.trim(), "{}",
+        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: entity_type }],
+    )?;
     audit_repo::record(conn, &workspace_id, actor_user_id, "update", Some("screen_layout"), Some(id), &format!("Updated screen layout '{}'", update.name.trim()), None)?;
     get_layout(conn, id)
 }
@@ -158,6 +167,7 @@ pub fn delete_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -
         return Err(AppError::Validation("The last layout for an object can't be deleted".into()));
     }
     screen_layout_repo::delete(conn, id)?;
+    super::system_graph_service::remove_node(conn, &layout.workspace_id, "screen_layout", id)?;
     audit_repo::record(conn, &layout.workspace_id, actor_user_id, "delete", Some("screen_layout"), Some(id), &format!("Deleted screen layout '{}'", layout.name), None)?;
     Ok(())
 }

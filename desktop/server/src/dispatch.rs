@@ -83,7 +83,7 @@ use lanesra_core::services::{
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
     ownership_service, page_layout_service, page_template_service,
     publisher_service, product_service,
-    quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, task_service,
+    quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, system_graph_service, task_service,
     user_service, vector_search_service,
     voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service, voice_session_service,
     theme_service, webhook_service, work_team_service, workflow_service, workspace_service,
@@ -1741,6 +1741,39 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_graph_runs" => {
             let graph_id: String = arg(args, "graphId")?;
             to_value(graph_runtime_service::list_runs_for_graph(conn, &graph_id, &require_workspace_id(conn)?, actor)?)
+        }
+
+        // Next-Gen program, Domain A, FND-01: System Graph read-only
+        // query API - writes happen only as a side effect of each owning
+        // service's own create/update/delete, never through a route here.
+        "list_system_nodes" => {
+            let node_type: String = arg(args, "nodeType")?;
+            to_value(system_graph_service::list_nodes_by_type(conn, &require_workspace_id(conn)?, &node_type)?)
+        }
+        "get_system_node" => {
+            let node_type: String = arg(args, "nodeType")?;
+            let component_id: String = arg(args, "componentId")?;
+            to_value(system_graph_service::get_node(conn, &require_workspace_id(conn)?, &node_type, &component_id)?)
+        }
+        "get_system_node_dependencies" => {
+            let node_type: String = arg(args, "nodeType")?;
+            let component_id: String = arg(args, "componentId")?;
+            to_value(system_graph_service::get_dependencies(conn, &require_workspace_id(conn)?, &node_type, &component_id)?)
+        }
+        "get_system_node_dependents" => {
+            let node_type: String = arg(args, "nodeType")?;
+            let component_id: String = arg(args, "componentId")?;
+            to_value(system_graph_service::get_dependents(conn, &require_workspace_id(conn)?, &node_type, &component_id)?)
+        }
+        "get_system_node_lineage" => {
+            let node_type: String = arg(args, "nodeType")?;
+            let component_id: String = arg(args, "componentId")?;
+            to_value(system_graph_service::get_lineage(conn, &require_workspace_id(conn)?, &node_type, &component_id)?)
+        }
+        "get_system_node_impact" => {
+            let node_type: String = arg(args, "nodeType")?;
+            let component_id: String = arg(args, "componentId")?;
+            to_value(system_graph_service::get_impact(conn, &require_workspace_id(conn)?, &node_type, &component_id)?)
         }
 
         // AI Agent Platform v2, Phase 4: Memory Inspector listing/delete and

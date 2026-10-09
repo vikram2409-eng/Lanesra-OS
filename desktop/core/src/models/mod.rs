@@ -51,6 +51,7 @@ pub mod screen_layout;
 pub mod solution;
 pub mod solution_component;
 pub mod status_transition;
+pub mod system_graph;
 pub mod task;
 pub mod user;
 pub mod voice;

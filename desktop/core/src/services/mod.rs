@@ -83,6 +83,7 @@ pub mod secret_service;
 pub mod solution_component_service;
 pub mod solution_service;
 pub mod status_transition_service;
+pub mod system_graph_service;
 pub mod task_service;
 pub mod user_service;
 pub mod vector_search_service;

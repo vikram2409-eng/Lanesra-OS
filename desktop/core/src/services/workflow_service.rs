@@ -270,12 +270,42 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
 
 // --- CRUD ---------------------------------------------------------------
 
+/// FND-01 System Graph: a workflow always depends on the object it's
+/// defined on; it also INVOKES an Agent for each `run_ai_agent` action
+/// whose `target_type == "agent"` (a `"pipeline"` target isn't one of
+/// this v1 slice's node types yet - skipped, not guessed), and INVOKES
+/// its own upgraded Execution Graph when `graph_id` is set (Workflow
+/// Studio 2.0). A malformed `params_json` on some other action type is
+/// never this function's problem to raise - it only reads the one shape
+/// it already knows, and ignores anything it can't parse.
+fn sync_graph_node(conn: &Connection, workspace_id: &str, wf: &WorkflowDefinition) -> AppResult<()> {
+    let mut edges = vec![crate::models::system_graph::SystemEdgeTarget {
+        edge_type: "depends_on".into(),
+        to_node_type: "custom_object".into(),
+        to_component_id: wf.entity_type.clone(),
+    }];
+    for action in &wf.actions {
+        if action.action_type == "run_ai_agent" {
+            if let Ok(p) = parse_params::<RunAiAgentParams>(&action.action_type, &action.params_json) {
+                if p.target_type == "agent" {
+                    edges.push(crate::models::system_graph::SystemEdgeTarget { edge_type: "invokes".into(), to_node_type: "ai_agent".into(), to_component_id: p.target_id });
+                }
+            }
+        }
+    }
+    if let Some(graph_id) = &wf.graph_id {
+        edges.push(crate::models::system_graph::SystemEdgeTarget { edge_type: "invokes".into(), to_node_type: "execution_graph".into(), to_component_id: graph_id.clone() });
+    }
+    super::system_graph_service::sync_node(conn, workspace_id, "workflow", &wf.id, &wf.name, "{}", &edges)
+}
+
 pub fn create_rule(conn: &Connection, workspace_id: &str, input: &WorkflowDefinitionInput, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, &input.entity_type, input)?;
     let id = new_uuid();
     let created = workflow_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "workflow_definition", &created.id, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("workflow"), Some(&created.id), &format!("Created workflow '{}'", created.name), None)?;
     Ok(created)
 }
@@ -313,6 +343,7 @@ pub fn update_rule(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate
     let snapshot_json = serde_json::to_string(&existing).expect("WorkflowDefinition is always serializable");
     workflow_repo::insert_version(conn, id, &snapshot_json)?;
     let updated = workflow_repo::update(conn, id, input, actor_user_id)?;
+    sync_graph_node(conn, &existing.workspace_id, &updated)?;
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("workflow"), Some(id), &format!("Updated workflow '{}'", updated.name), None)?;
     Ok(updated)
 }

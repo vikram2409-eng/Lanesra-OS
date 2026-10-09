@@ -49,6 +49,24 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     access_service::require_admin_or_explicit_update(conn, actor_user_id, "CustomField", "Only an Administrator can manage custom fields")
 }
 
+/// FND-01 System Graph: a field always depends on the object it's
+/// defined on - `entity_type` is already the exact string
+/// `custom_object_service` keys its own node by (a built-in type like
+/// "company" with no real `custom_objects` row gets a stub node here,
+/// which is the correct, honest answer - there's no fuller record to
+/// resolve it to).
+fn sync_graph_node(conn: &Connection, workspace_id: &str, def: &CustomFieldDefinition) -> AppResult<()> {
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "custom_field",
+        &def.id,
+        &def.label,
+        "{}",
+        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: def.entity_type.clone() }],
+    )
+}
+
 /// Turns a label into a stable field key: lowercase, non-alphanumeric
 /// runs collapsed to a single underscore, trimmed. Auto-uniquified
 /// against existing keys for the same entity type by appending "_2",
@@ -238,6 +256,7 @@ pub fn create_definition(
     let id = crate::domain::ids::new_uuid();
     let created = custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created custom field '{}'", created.label), None)?;
     Ok(created)
 }
@@ -274,6 +293,7 @@ pub fn create_definition_with_key(
     let id = crate::domain::ids::new_uuid();
     let created = custom_field_repo::create_definition(conn, &id, workspace_id, key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created custom field '{}'", created.label), None)?;
     Ok(created)
 }
@@ -308,6 +328,7 @@ pub fn update_definition(
         input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
     )?;
     let updated = custom_field_repo::update_definition(conn, id, input, actor_user_id)?;
+    sync_graph_node(conn, &existing.workspace_id, &updated)?;
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("custom_field"), Some(id), &format!("Updated custom field '{}'", input.label), None)?;
     Ok(updated)
 }
