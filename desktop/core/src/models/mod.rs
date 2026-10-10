@@ -48,6 +48,7 @@ pub mod report;
 pub mod quote;
 pub mod saved_view;
 pub mod screen_layout;
+pub mod semantic;
 pub mod solution;
 pub mod solution_component;
 pub mod status_transition;

@@ -29,6 +29,8 @@ import { AiAgentPipelinesAdmin } from "./AiAgentPipelinesAdmin";
 import { AiEvalSuitesAdmin } from "./AiEvalSuitesAdmin";
 import { AgentTeamsAdmin } from "./AgentTeamsAdmin";
 import { DependencyExplorerAdmin } from "./DependencyExplorerAdmin";
+import { BusinessGlossaryAdmin } from "./BusinessGlossaryAdmin";
+import { MetricDefinitionsAdmin } from "./MetricDefinitionsAdmin";
 import { ThemeStudioAdmin } from "./ThemeStudioAdmin";
 import { HelpAdmin } from "./HelpAdmin";
 import { ChatPanel } from "../../components/ChatPanel";
@@ -99,6 +101,8 @@ export type AdminTab =
   | "aiEvalSuites"
   | "agentTeams"
   | "dependencyExplorer"
+  | "businessGlossary"
+  | "metricDefinitions"
   | "help";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
@@ -132,6 +136,8 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "aiEvalSuites", label: "Evaluations" },
   { key: "agentTeams", label: "Agent Teams" },
   { key: "dependencyExplorer", label: "Dependency Explorer" },
+  { key: "businessGlossary", label: "Business Glossary" },
+  { key: "metricDefinitions", label: "Metric Definitions" },
   { key: "help", label: "Help" },
 ];
 
@@ -322,11 +328,11 @@ function AdminHomeExtras({ onOpenTab }: { onOpenTab: (key: AdminTab) => void }) 
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles"] },
-  { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields", "dependencyExplorer"] },
+  { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields", "dependencyExplorer", "businessGlossary"] },
   { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts", "pageBuilder", "themeStudio"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
-  { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards"] },
+  { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards", "metricDefinitions"] },
   { key: "solutions", label: "Deployment Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
   { key: "integrations", label: "Integrations", icon: "🔌", note: "Connect Lanesra to the outside world", items: ["integrations"] },
   { key: "ai", label: "LLM & MCP", icon: "✦", note: "Bring your own LLM key, and (once built) the MCP server that lets agents work with your data", items: ["ai"] },
@@ -466,6 +472,8 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
       {tab === "dependencyExplorer" && <DependencyExplorerAdmin />}
+      {tab === "businessGlossary" && <BusinessGlossaryAdmin />}
+      {tab === "metricDefinitions" && <MetricDefinitionsAdmin />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}
       {tab === "pageBuilder" && <PageBuilderAdmin />}
       {tab === "themeStudio" && <ThemeStudioAdmin />}

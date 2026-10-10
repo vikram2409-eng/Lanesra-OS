@@ -4241,7 +4241,9 @@ export type SystemNodeType =
   | "screen_layout"
   | "page_layout"
   | "ai_agent"
-  | "execution_graph";
+  | "execution_graph"
+  | "business_glossary_term"
+  | "metric_definition";
 
 export type SystemEdgeType =
   | "uses"
@@ -4273,4 +4275,102 @@ export interface SystemGraphHit {
   node: SystemNode;
   edge_type: SystemEdgeType;
   depth: number;
+}
+
+// Next-Gen program, Domain A (Intelligence Foundation), FND-02: the
+// Semantic Metadata Layer. `MetricDefinition` is a declarative
+// description (aggregation/source/grain/filters/time logic), not a
+// working formula evaluator - see models::semantic's own doc comment
+// (Rust).
+export type DataClassification = "standard" | "sensitive" | "restricted";
+export type MetricAggregation = "sum" | "avg" | "count" | "count_distinct" | "min" | "max";
+export type SemanticRole =
+  | "customer" | "policyholder" | "amount" | "currency" | "quantity" | "percentage" | "effective_date" | "expiration_date"
+  | "region" | "owner" | "status" | "identifier" | "email" | "phone";
+
+export interface BusinessGlossaryTerm {
+  id: string;
+  workspace_id: string;
+  name: string;
+  definition: string;
+  owner_user_id: string | null;
+  synonyms: string[];
+  data_classification: DataClassification;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface BusinessGlossaryTermInput {
+  name: string;
+  definition: string;
+  owner_user_id?: string | null;
+  synonyms?: string[];
+  data_classification?: DataClassification;
+}
+
+export interface SemanticMapping {
+  id: string;
+  workspace_id: string;
+  entity_type: string;
+  field_key: string | null;
+  glossary_term_id: string | null;
+  semantic_role: SemanticRole | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface SemanticMappingInput {
+  entity_type: string;
+  field_key?: string | null;
+  glossary_term_id?: string | null;
+  semantic_role?: SemanticRole | null;
+}
+
+export interface MetricDefinition {
+  id: string;
+  workspace_id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  source_entity_type: string;
+  source_field_key: string | null;
+  aggregation: MetricAggregation;
+  grain: string | null;
+  filters_json: string;
+  time_logic: string | null;
+  owner_user_id: string | null;
+  glossary_term_id: string | null;
+  version: number;
+  effective_start_date: string | null;
+  effective_end_date: string | null;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface MetricDefinitionInput {
+  name: string;
+  description?: string | null;
+  source_entity_type: string;
+  source_field_key?: string | null;
+  aggregation: MetricAggregation;
+  grain?: string | null;
+  filters_json?: string;
+  time_logic?: string | null;
+  owner_user_id?: string | null;
+  glossary_term_id?: string | null;
+  effective_start_date?: string | null;
+  effective_end_date?: string | null;
+}
+
+export interface MetricVersion {
+  id: string;
+  metric_definition_id: string;
+  snapshot: MetricDefinition;
+  saved_at: string;
 }

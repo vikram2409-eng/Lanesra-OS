@@ -40,6 +40,13 @@ import type {
   SystemNodeType,
   SystemNode,
   SystemGraphHit,
+  BusinessGlossaryTerm,
+  BusinessGlossaryTermInput,
+  SemanticMapping,
+  SemanticMappingInput,
+  MetricDefinition,
+  MetricDefinitionInput,
+  MetricVersion,
   MemoryType,
   MemoryItem,
   KnowledgeCollection,
@@ -468,6 +475,23 @@ export const api = {
   getSystemNodeDependents: (nodeType: SystemNodeType, componentId: string) => call<SystemGraphHit[]>("get_system_node_dependents", { nodeType, componentId }),
   getSystemNodeLineage: (nodeType: SystemNodeType, componentId: string) => call<SystemGraphHit[]>("get_system_node_lineage", { nodeType, componentId }),
   getSystemNodeImpact: (nodeType: SystemNodeType, componentId: string) => call<SystemGraphHit[]>("get_system_node_impact", { nodeType, componentId }),
+
+  // Next-Gen program, Domain A (Intelligence Foundation), FND-02: the
+  // Semantic Metadata Layer.
+  listGlossaryTerms: (activeOnly: boolean) => call<BusinessGlossaryTerm[]>("list_glossary_terms", { activeOnly }),
+  createGlossaryTerm: (input: BusinessGlossaryTermInput) => call<BusinessGlossaryTerm>("create_glossary_term", { input }),
+  updateGlossaryTerm: (id: string, input: BusinessGlossaryTermInput) => call<BusinessGlossaryTerm>("update_glossary_term", { id, input }),
+  deactivateGlossaryTerm: (id: string) => call<BusinessGlossaryTerm>("deactivate_glossary_term", { id }),
+  listSemanticMappingsForEntity: (entityType: string) => call<SemanticMapping[]>("list_semantic_mappings_for_entity", { entityType }),
+  listSemanticMappingsForTerm: (termId: string) => call<SemanticMapping[]>("list_semantic_mappings_for_term", { termId }),
+  createSemanticMapping: (input: SemanticMappingInput) => call<SemanticMapping>("create_semantic_mapping", { input }),
+  deleteSemanticMapping: (id: string) => call<void>("delete_semantic_mapping", { id }),
+  listMetricDefinitions: (activeOnly: boolean) => call<MetricDefinition[]>("list_metric_definitions", { activeOnly }),
+  createMetricDefinition: (input: MetricDefinitionInput) => call<MetricDefinition>("create_metric_definition", { input }),
+  updateMetricDefinition: (id: string, input: MetricDefinitionInput) => call<MetricDefinition>("update_metric_definition", { id, input }),
+  listMetricVersions: (metricId: string) => call<MetricVersion[]>("list_metric_versions", { metricId }),
+  deactivateMetricDefinition: (id: string) => call<MetricDefinition>("deactivate_metric_definition", { id }),
+  deleteMetricDefinition: (id: string) => call<void>("delete_metric_definition", { id }),
 
   // AI Agent Platform v2, Phase 4: Memory Inspector + Document RAG
   // (Knowledge Collections/Sources). Source create/update/search call the
