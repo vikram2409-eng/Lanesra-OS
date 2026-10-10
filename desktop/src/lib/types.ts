@@ -4226,3 +4226,51 @@ export interface ThemeContrastIssue {
 // (preset_key, display_name, character_blurb, tokens) - see
 // `theme_service::built_in_presets` (Rust).
 export type ThemePreset = [string, string, string, ThemeTokens];
+
+// Next-Gen program, Domain A (Intelligence Foundation), FND-01: the
+// Lanesra System Graph. This v1 slice syncs 9 node types and populates 3
+// of the spec's 10 edge types - see `system_graph.rs`'s own doc comment
+// (Rust) for the full scoping note; the Dependency Explorer below is
+// built against exactly this subset, not the full future vocabulary.
+export type SystemNodeType =
+  | "custom_object"
+  | "custom_field"
+  | "relationship"
+  | "business_rule"
+  | "workflow"
+  | "screen_layout"
+  | "page_layout"
+  | "ai_agent"
+  | "execution_graph";
+
+export type SystemEdgeType =
+  | "uses"
+  | "reads"
+  | "writes"
+  | "depends_on"
+  | "exposes"
+  | "triggers"
+  | "invokes"
+  | "packaged_in"
+  | "grants_access_to"
+  | "derives_from";
+
+export interface SystemNode {
+  id: string;
+  workspace_id: string;
+  node_type: SystemNodeType;
+  component_id: string;
+  label: string;
+  metadata_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// A `SystemNode` plus the direct edge that reached it from the query's
+// root - see `system_graph_service::get_dependents`/`get_dependencies`'s
+// doc comment (Rust).
+export interface SystemGraphHit {
+  node: SystemNode;
+  edge_type: SystemEdgeType;
+  depth: number;
+}

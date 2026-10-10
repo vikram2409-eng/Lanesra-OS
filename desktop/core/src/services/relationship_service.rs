@@ -24,6 +24,27 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     access_service::require_admin_or_explicit_update(conn, actor_user_id, "Relationship", "Only an Administrator can manage relationships")
 }
 
+/// FND-01 System Graph: a relationship depends on its source entity type
+/// always, and its target entity type unless the target is polymorphic
+/// (migration 0049) - there's no single fixed type to point an edge at
+/// in that case, so this v1 slice leaves the target side unsynced rather
+/// than guessing one.
+fn sync_graph_node(conn: &Connection, workspace_id: &str, def: &RelationshipDefinition) -> AppResult<()> {
+    let mut edges = vec![crate::models::system_graph::SystemEdgeTarget {
+        edge_type: "depends_on".into(),
+        to_node_type: "custom_object".into(),
+        to_component_id: def.source_entity_type.clone(),
+    }];
+    if !def.target_is_polymorphic {
+        edges.push(crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "depends_on".into(),
+            to_node_type: "custom_object".into(),
+            to_component_id: def.target_entity_type.clone(),
+        });
+    }
+    super::system_graph_service::sync_node(conn, workspace_id, "relationship", &def.id, &def.forward_label, "{}", &edges)
+}
+
 fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<()> {
     if entity_registry::CORE_ENTITY_TYPES.contains(&entity_type) {
         return Ok(());
@@ -87,6 +108,7 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &RelationshipDefinit
     let id = crate::domain::ids::new_uuid();
     let created = relationship_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "relationship_definition", &created.id, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("relationship"), Some(&created.id), &format!("Created relationship '{}'", created.forward_label), None)?;
     Ok(created)
 }
@@ -114,6 +136,7 @@ pub fn update(conn: &Connection, id: &str, input: &RelationshipDefinitionUpdate,
         return Err(AppError::Validation("Both direction labels are required".into()));
     }
     let updated = relationship_repo::update_definition(conn, id, input, actor_user_id)?;
+    sync_graph_node(conn, &existing.workspace_id, &updated)?;
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("relationship"), Some(id), &format!("Updated relationship '{}'", input.forward_label), None)?;
     Ok(updated)
 }
@@ -134,6 +157,7 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
         )));
     }
     relationship_repo::delete_definition(conn, id)?;
+    super::system_graph_service::remove_node(conn, &existing.workspace_id, "relationship", id)?;
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "delete", Some("relationship"), Some(id), &format!("Deleted relationship '{}'", existing.forward_label), None)?;
     Ok(())
 }

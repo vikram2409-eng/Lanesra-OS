@@ -688,7 +688,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -702,7 +702,7 @@ const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
- {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields']},
+ {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields','dependencyExplorer']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
@@ -713,6 +713,7 @@ const ADMIN_CATEGORIES=[
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
  {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
 ];
+let dependencyExplorerState={type:'custom_object',id:null,transitive:null};
 let cfEntity='companies';
 let ruleEntity='companies';
 let wfEntity='companies';
@@ -2811,6 +2812,127 @@ function adminCrossLinkRow(entityKey){
   link('workflow','Workflows',flows),link('users','Access',0),
  ].join('')}</div>`;
 }
+// Next-Gen program, Domain A (Intelligence Foundation), FND-01: the
+// Lanesra System Graph, mirrored client-side the same way every other
+// meta/introspection admin feature in this demo is - computed live from
+// the demo's own real arrays (adminNeedsAttentionItems/adminRecentChanges's
+// own doc comment above), never a parallel fixture. Covers the same 9
+// node types and 3 edge types (depends_on/invokes/delegates_to) the real
+// desktop/server edition's `system_graph.rs` v1 slice syncs - see that
+// module's own doc comment for the full scoping note.
+const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team'};
+function systemGraphNodes(){
+ const nodes=[];
+ (data.customObjects||[]).forEach(o=>nodes.push({type:'custom_object',id:o.key,label:o.labelPlural||o.label||o.key}));
+ (data.customFields||[]).forEach(f=>nodes.push({type:'custom_field',id:f.id,label:f.label}));
+ (data.relationshipDefinitions||[]).forEach(r=>nodes.push({type:'relationship',id:r.id,label:r.forwardLabel||r.key}));
+ (data.fieldRules||[]).forEach(r=>nodes.push({type:'business_rule',id:r.id,label:r.name||'Untitled rule'}));
+ (data.workflowRules||[]).forEach(w=>nodes.push({type:'workflow',id:w.id,label:w.name||'Untitled workflow'}));
+ Object.values(data.uiLayouts||{}).forEach(arr=>(arr||[]).forEach(l=>nodes.push({type:'screen_layout',id:l.id,label:l.name})));
+ Object.values(data.pageLayouts||{}).forEach(arr=>(arr||[]).forEach(l=>nodes.push({type:'page_layout',id:l.id,label:l.name})));
+ (data.aiAgents||[]).forEach(a=>nodes.push({type:'ai_agent',id:a.id,label:a.name}));
+ (data.aiExecutionGraphs||[]).forEach(g=>nodes.push({type:'execution_graph',id:g.id,label:g.name}));
+ return nodes;
+}
+// `{edgeType, fromType, fromId, toType, toId}` - the 3 of the spec's 10
+// edge types (depends_on/invokes/delegates_to) this v1 slice populates,
+// derived from already-reliable fields only, matching the real edition's
+// own sync_graph_node helpers in each owning Rust service.
+function systemGraphEdges(){
+ const edges=[];
+ const add=(edgeType,fromType,fromId,toType,toId)=>{if(fromId&&toId)edges.push({edgeType,fromType,fromId,toType,toId})};
+ (data.customFields||[]).forEach(f=>add('depends_on','custom_field',f.id,'custom_object',f.entity));
+ (data.relationshipDefinitions||[]).forEach(r=>{
+  add('depends_on','relationship',r.id,'custom_object',r.sourceEntity);
+  if(!r.targetIsPolymorphic)add('depends_on','relationship',r.id,'custom_object',r.targetEntity);
+ });
+ (data.fieldRules||[]).forEach(r=>add('depends_on','business_rule',r.id,'custom_object',r.entity));
+ (data.workflowRules||[]).forEach(w=>{
+  add('depends_on','workflow',w.id,'custom_object',w.entity);
+  (w.actions||[]).forEach(a=>{if(a.type==='run_ai_agent'&&a.targetType==='agent')add('invokes','workflow',w.id,'ai_agent',a.targetId)});
+ });
+ Object.entries(data.uiLayouts||{}).forEach(([entityKey,arr])=>(arr||[]).forEach(l=>add('depends_on','screen_layout',l.id,'custom_object',entityKey)));
+ Object.entries(data.pageLayouts||{}).forEach(([entityKey,arr])=>(arr||[]).forEach(l=>add('depends_on','page_layout',l.id,'custom_object',entityKey)));
+ (data.aiAgents||[]).forEach(a=>(a.delegateAgentIds||[]).forEach(d=>add('delegates_to','ai_agent',a.id,'ai_agent',d)));
+ (data.aiExecutionGraphs||[]).forEach(g=>(g.nodes||[]).forEach(n=>{if(n.type==='agent'&&n.config&&n.config.agentId)add('invokes','execution_graph',g.id,'ai_agent',n.config.agentId)}));
+ return edges;
+}
+function systemGraphNodeLabel(type,id){
+ const n=systemGraphNodes().find(n=>n.type===type&&n.id===id);
+ return n?n.label:id;
+}
+// Direct (depth-1) neighbors only - `direction:'dependents'` is "what
+// points at this" (upstream), `'dependencies'` is "what this points at"
+// (downstream) - same two directions `system_graph_service::
+// get_dependents`/`get_dependencies` expose in the real edition.
+function systemGraphDirect(type,id,direction){
+ const edges=systemGraphEdges();
+ const matches=direction==='dependents'?edges.filter(e=>e.toType===type&&e.toId===id):edges.filter(e=>e.fromType===type&&e.fromId===id);
+ return matches.map(e=>direction==='dependents'?{type:e.fromType,id:e.fromId,edgeType:e.edgeType}:{type:e.toType,id:e.toId,edgeType:e.edgeType});
+}
+// Transitive closure in one direction, bounded by `maxDepth` - the same
+// "bound runaway recursion" safety net `system_graph_service::
+// MAX_TRAVERSAL_DEPTH` uses, since a delegate-agent cycle is just as
+// possible to create in this demo as in the real edition. Dedupes to
+// each node's shortest depth, same as the real `traverse`'s own
+// dedupe step.
+function systemGraphTransitive(type,id,direction,maxDepth){
+ const edges=systemGraphEdges();
+ const visited=new Map();
+ let frontier=[{type,id}];
+ for(let depth=1;depth<=maxDepth&&frontier.length;depth++){
+  const next=[];
+  frontier.forEach(node=>{
+   const matches=direction==='dependents'?edges.filter(e=>e.toType===node.type&&e.toId===node.id):edges.filter(e=>e.fromType===node.type&&e.fromId===node.id);
+   matches.forEach(e=>{
+    const n=direction==='dependents'?{type:e.fromType,id:e.fromId}:{type:e.toType,id:e.toId};
+    const key=n.type+':'+n.id;
+    if(!visited.has(key)){visited.set(key,{type:n.type,id:n.id,edgeType:e.edgeType,depth});next.push(n)}
+   });
+  });
+  frontier=next;
+ }
+ return Array.from(visited.values()).sort((a,b)=>a.depth-b.depth);
+}
+function dependencyExplorerTab(body){
+ const nodes=systemGraphNodes();
+ const types=Object.keys(SYSTEM_NODE_TYPE_LABELS);
+ if(!dependencyExplorerState.id){
+  const first=nodes.find(n=>n.type===dependencyExplorerState.type)||nodes[0];
+  if(first)dependencyExplorerState={type:first.type,id:first.id,transitive:null};
+ }
+ const options=nodes.filter(n=>n.type===dependencyExplorerState.type);
+ const rowHtml=(hit)=>`<button type="button" class="btn btn-secondary" data-dep-node="${hit.type}:${hit.id}" title="Edge: ${hit.edgeType}">${SYSTEM_NODE_TYPE_LABELS[hit.type]}: ${systemGraphNodeLabel(hit.type,hit.id)}</button>`;
+ body.innerHTML=`<div class="panel">
+  <h3>Dependency Explorer</h3>
+  <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
+  <div class="form-row">
+   <label>Component type<select id="depType">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
+   <label>Component<select id="depComponent">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
+  </div>
+  ${!dependencyExplorerState.id?'<div class="empty">Nothing synced yet for this type.</div>':`
+  <div class="actions" style="margin:12px 0">
+   <button type="button" class="btn ${dependencyExplorerState.transitive==='impact'?'btn-primary':''}" data-dep-transitive="impact">Full impact (everything upstream)</button>
+   <button type="button" class="btn ${dependencyExplorerState.transitive==='lineage'?'btn-primary':''}" data-dep-transitive="lineage">Full lineage (everything downstream)</button>
+  </div>
+  ${!dependencyExplorerState.transitive?(()=>{
+    const dependents=systemGraphDirect(dependencyExplorerState.type,dependencyExplorerState.id,'dependents');
+    const dependencies=systemGraphDirect(dependencyExplorerState.type,dependencyExplorerState.id,'dependencies');
+    return `<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:start">
+     <div><h4>Depends on this</h4>${dependents.length?dependents.map(rowHtml).join('<br>'):'<span class="muted">Nothing</span>'}</div>
+     <div style="text-align:center;padding-top:28px"><div class="badge">${SYSTEM_NODE_TYPE_LABELS[dependencyExplorerState.type]}</div><br><b>${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)}</b></div>
+     <div><h4>This depends on</h4>${dependencies.length?dependencies.map(rowHtml).join('<br>'):'<span class="muted">Nothing</span>'}</div>
+    </div>`;
+   })():(()=>{
+    const hits=systemGraphTransitive(dependencyExplorerState.type,dependencyExplorerState.id,dependencyExplorerState.transitive==='impact'?'dependents':'dependencies',25);
+    return hits.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Depth</th><th>Type</th><th>Component</th><th>Via edge</th></tr></thead><tbody>${hits.map(h=>`<tr><td>${h.depth}</td><td>${SYSTEM_NODE_TYPE_LABELS[h.type]}</td><td><button type="button" class="link-btn" data-dep-node="${h.type}:${h.id}">${systemGraphNodeLabel(h.type,h.id)}</button></td><td>${h.edgeType}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing found.</div>';
+   })()}`}
+ </div>`;
+ $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,transitive:null};renderAdminTab()};
+ $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,transitive:null};renderAdminTab()});
+ body.querySelectorAll('[data-dep-transitive]').forEach(b=>b.onclick=()=>{const v=b.dataset.depTransitive;dependencyExplorerState={...dependencyExplorerState,transitive:dependencyExplorerState.transitive===v?null:v};renderAdminTab()});
+ body.querySelectorAll('[data-dep-node]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depNode.split(':');dependencyExplorerState={type,id,transitive:null};renderAdminTab()});
+}
 function adminRecentNavHtml(){
  const hist=(data.adminNavHistory||[]).slice().sort((a,b)=>b.lastViewedAt.localeCompare(a.lastViewedAt));
  const pinned=hist.filter(h=>h.pinned);
@@ -2859,7 +2981,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;

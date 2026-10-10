@@ -85,6 +85,19 @@ fn validate_agent_input(conn: &Connection, workspace_id: &str, id: Option<&str>,
     Ok(())
 }
 
+/// FND-01 System Graph: an agent DELEGATES_TO each agent in its own
+/// `delegate_agent_ids` - the one already-reliable cross-agent reference
+/// this v1 slice syncs (tool/skill/model-routing references are a
+/// documented future gap, not modeled yet).
+fn sync_graph_node(conn: &Connection, workspace_id: &str, agent: &AiAgentDefinition) -> AppResult<()> {
+    let edges: Vec<_> = agent
+        .delegate_agent_ids
+        .iter()
+        .map(|target_id| crate::models::system_graph::SystemEdgeTarget { edge_type: "delegates_to".into(), to_node_type: "ai_agent".into(), to_component_id: target_id.clone() })
+        .collect();
+    super::system_graph_service::sync_node(conn, workspace_id, "ai_agent", &agent.id, &agent.name, "{}", &edges)
+}
+
 pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_agent_input(conn, workspace_id, None, input)?;
@@ -105,8 +118,10 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor
     // install's own retag pass corrects this afterward for an agent that
     // came from a package instead of an admin's own hand.
     super::solution_component_service::tag_local(conn, workspace_id, "ai_agent", &created.id, actor_user_id)?;
+    let hydrated = ai_agent_repo::get(conn, &created.id)?.expect("just created");
+    sync_graph_node(conn, workspace_id, &hydrated)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("ai_agent"), Some(&created.id), &format!("Created AI agent '{}'", created.name), None)?;
-    Ok(ai_agent_repo::get(conn, &created.id)?.expect("just created"))
+    Ok(hydrated)
 }
 
 pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
@@ -114,6 +129,7 @@ pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentIn
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     validate_agent_input(conn, workspace_id, Some(id), input)?;
     let updated = ai_agent_repo::update(conn, id, input, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &updated)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("ai_agent"), Some(id), &format!("Updated AI agent '{}'", updated.name), None)?;
     Ok(updated)
 }

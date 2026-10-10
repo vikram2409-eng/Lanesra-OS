@@ -108,6 +108,7 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &CustomObjectDefinit
     let id = crate::domain::ids::new_uuid();
     let created = custom_object_repo::create(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "custom_object", &created.id, actor_user_id)?;
+    super::system_graph_service::sync_node(conn, workspace_id, "custom_object", &created.key, &created.plural_label, "{}", &[])?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_object"), Some(&created.id), &format!("Created custom object '{}'", created.plural_label), None)?;
     Ok(created)
 }
@@ -142,6 +143,7 @@ pub fn create_with_key(
     let id = crate::domain::ids::new_uuid();
     let created = custom_object_repo::create(conn, &id, workspace_id, key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "custom_object", &created.id, actor_user_id)?;
+    super::system_graph_service::sync_node(conn, workspace_id, "custom_object", &created.key, &created.plural_label, "{}", &[])?;
     Ok(created)
 }
 
@@ -178,6 +180,7 @@ pub fn update(conn: &Connection, id: &str, input: &CustomObjectDefinitionUpdate,
         return Err(AppError::Validation("Digit width must be between 1 and 10".into()));
     }
     let updated = custom_object_repo::update(conn, id, input, actor_user_id)?;
+    super::system_graph_service::sync_node(conn, &updated.workspace_id, "custom_object", &updated.key, &updated.plural_label, "{}", &[])?;
     audit_repo::record(conn, &updated.workspace_id, actor_user_id, "update", Some("custom_object"), Some(id), &format!("Updated custom object '{}'", updated.plural_label), None)?;
     Ok(updated)
 }
@@ -271,6 +274,7 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
         )));
     }
     custom_object_repo::delete(conn, id)?;
+    super::system_graph_service::remove_node(conn, &existing.workspace_id, "custom_object", &existing.key)?;
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "delete", Some("custom_object"), Some(id), &format!("Deleted custom object '{}'", existing.plural_label), None)?;
     Ok(())
 }

@@ -28,6 +28,7 @@ import { AiSkillsAdmin } from "./AiSkillsAdmin";
 import { AiAgentPipelinesAdmin } from "./AiAgentPipelinesAdmin";
 import { AiEvalSuitesAdmin } from "./AiEvalSuitesAdmin";
 import { AgentTeamsAdmin } from "./AgentTeamsAdmin";
+import { DependencyExplorerAdmin } from "./DependencyExplorerAdmin";
 import { ThemeStudioAdmin } from "./ThemeStudioAdmin";
 import { HelpAdmin } from "./HelpAdmin";
 import { ChatPanel } from "../../components/ChatPanel";
@@ -97,6 +98,7 @@ export type AdminTab =
   | "aiAgentPipelines"
   | "aiEvalSuites"
   | "agentTeams"
+  | "dependencyExplorer"
   | "help";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
@@ -129,6 +131,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "aiAgentPipelines", label: "Orchestration" },
   { key: "aiEvalSuites", label: "Evaluations" },
   { key: "agentTeams", label: "Agent Teams" },
+  { key: "dependencyExplorer", label: "Dependency Explorer" },
   { key: "help", label: "Help" },
 ];
 
@@ -319,7 +322,7 @@ function AdminHomeExtras({ onOpenTab }: { onOpenTab: (key: AdminTab) => void }) 
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles"] },
-  { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields"] },
+  { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields", "dependencyExplorer"] },
   { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts", "pageBuilder", "themeStudio"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
@@ -462,6 +465,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "objects" && <CustomObjectsAdmin onOpenHelp={openHelpTopic} onOpenTab={(t) => openTab(t as AdminTab)} />}
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
+      {tab === "dependencyExplorer" && <DependencyExplorerAdmin />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}
       {tab === "pageBuilder" && <PageBuilderAdmin />}
       {tab === "themeStudio" && <ThemeStudioAdmin />}

@@ -143,6 +143,10 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &PageLayoutIn
     let draft_json = serde_json::to_string(&empty_page()).expect("PageDefinition always serializes");
     page_layout_repo::create(conn, &id, workspace_id, &input.entity_type, input.name.trim(), is_default, "[]", &draft_json, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "page_layout", &id, actor_user_id)?;
+    super::system_graph_service::sync_node(
+        conn, workspace_id, "page_layout", &id, input.name.trim(), "{}",
+        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: input.entity_type.clone() }],
+    )?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("page_layout"), Some(&id), &format!("Created page layout '{}'", input.name.trim()), None)?;
     get_layout(conn, &id)
 }
@@ -153,10 +157,15 @@ pub fn update_layout(conn: &Connection, id: &str, update: &PageLayoutUpdate, act
         return Err(AppError::Validation("Page name is required".into()));
     }
     validate_page(&update.draft)?;
+    let entity_type = get_layout(conn, id)?.entity_type;
     let workspace_id = get_layout(conn, id)?.workspace_id;
     let roles_json = serde_json::to_string(&update.roles).expect("Vec<String> always serializes");
     let draft_json = serde_json::to_string(&update.draft).expect("PageDefinition always serializes");
     page_layout_repo::update_meta_and_draft(conn, id, update.name.trim(), &roles_json, &draft_json, actor_user_id)?;
+    super::system_graph_service::sync_node(
+        conn, &workspace_id, "page_layout", id, update.name.trim(), "{}",
+        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: entity_type }],
+    )?;
     audit_repo::record(conn, &workspace_id, actor_user_id, "update", Some("page_layout"), Some(id), &format!("Updated page layout '{}'", update.name.trim()), None)?;
     get_layout(conn, id)
 }
@@ -207,6 +216,7 @@ pub fn delete_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -
         return Err(AppError::Validation("The last page for an object can't be deleted".into()));
     }
     page_layout_repo::delete(conn, id)?;
+    super::system_graph_service::remove_node(conn, &layout.workspace_id, "page_layout", id)?;
     audit_repo::record(conn, &layout.workspace_id, actor_user_id, "delete", Some("page_layout"), Some(id), &format!("Deleted page layout '{}'", layout.name), None)?;
     Ok(())
 }
