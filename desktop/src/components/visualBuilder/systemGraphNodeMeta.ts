@@ -1,7 +1,7 @@
-// Next-Gen program, Domain A, FND-01: per-node-type metadata for the
-// Dependency Explorer - pure data, no JSX/hooks, same split
-// `graphNodeMeta.ts` already establishes. Scoped to exactly the 9 node
-// types `system_graph.rs`'s `NODE_TYPES` syncs in this v1 slice.
+// Next-Gen program, Domain A, FND-01/FND-02: per-node-type metadata for
+// the Dependency Explorer - pure data, no JSX/hooks, same split
+// `graphNodeMeta.ts` already establishes. Scoped to exactly the node
+// types `system_graph.rs`'s `NODE_TYPES` syncs.
 
 import type { SystemNodeType } from "../../lib/types";
 
@@ -15,8 +15,11 @@ export const SYSTEM_NODE_TYPE_META: Record<SystemNodeType, { label: string; colo
   page_layout: { label: "Page Layout", color: "#0284c7" },
   ai_agent: { label: "AI Agent", color: "#9333ea" },
   execution_graph: { label: "Agent Team", color: "#9333ea" },
+  business_glossary_term: { label: "Glossary Term", color: "#0d9488" },
+  metric_definition: { label: "Metric", color: "#ca8a04" },
 };
 
 export const SYSTEM_NODE_TYPES: SystemNodeType[] = [
   "custom_object", "custom_field", "relationship", "business_rule", "workflow", "screen_layout", "page_layout", "ai_agent", "execution_graph",
+  "business_glossary_term", "metric_definition",
 ];

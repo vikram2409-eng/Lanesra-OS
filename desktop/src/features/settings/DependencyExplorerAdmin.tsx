@@ -91,8 +91,8 @@ export function DependencyExplorerAdmin() {
       <h3>Dependency Explorer</h3>
       <p style={{ color: "var(--text-muted)", maxWidth: 720 }}>
         Pick any synced component to see what depends on it and what it depends on. Covers {SYSTEM_NODE_TYPES.length} component
-        types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams) -
-        the rest of the platform's components are a documented follow-up, not silently missing.
+        types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams,
+        glossary terms, metrics) - the rest of the platform's components are a documented follow-up, not silently missing.
       </p>
 
       <div className="form-grid" style={{ marginBottom: 16 }}>

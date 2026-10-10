@@ -24,6 +24,12 @@
 //! full spec vocabulary so a later domain can target it even before every
 //! edge kind is populated, the same forward-compatible-vocabulary
 //! approach `ai_agent_model_refs`' logical names already used.
+//!
+//! **FND-02 (Semantic Metadata Layer) addition**: `business_glossary_term`
+//! and `metric_definition` node types - see `models::semantic`'s own doc
+//! comment. Reuses the existing `depends_on` edge type and is the first
+//! to populate `derives_from` (a term/metric's link to what it's mapped
+//! to or sourced from) - 4 of the 10 edge types now populated.
 
 pub const NODE_TYPES: &[&str] = &[
     "custom_object",
@@ -35,6 +41,9 @@ pub const NODE_TYPES: &[&str] = &[
     "page_layout",
     "ai_agent",
     "execution_graph",
+    // FND-02 (Semantic Metadata Layer) additions.
+    "business_glossary_term",
+    "metric_definition",
 ];
 
 pub const EDGE_TYPES: &[&str] = &[

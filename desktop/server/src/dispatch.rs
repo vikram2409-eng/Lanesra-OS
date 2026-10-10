@@ -28,6 +28,7 @@ use lanesra_core::models::product::ProductInput;
 use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues};
+use lanesra_core::models::semantic::{BusinessGlossaryTermInput, MetricDefinitionInput, SemanticMappingInput};
 use lanesra_core::models::custom_object::{CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
 use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
@@ -83,6 +84,7 @@ use lanesra_core::services::{
     invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
     ownership_service, page_layout_service, page_template_service,
     publisher_service, product_service,
+    glossary_service, metric_service, semantic_mapping_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, system_graph_service, task_service,
     user_service, vector_search_service,
     voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service, voice_session_service,
@@ -1774,6 +1776,70 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let node_type: String = arg(args, "nodeType")?;
             let component_id: String = arg(args, "componentId")?;
             to_value(system_graph_service::get_impact(conn, &require_workspace_id(conn)?, &node_type, &component_id)?)
+        }
+
+        // Next-Gen program, Domain A, FND-02: the Semantic Metadata Layer
+        // - Business Glossary terms, object/field semantic mappings and
+        // Metric definitions. All plain sync.
+        "list_glossary_terms" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(glossary_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_glossary_term" => {
+            let input: BusinessGlossaryTermInput = arg(args, "input")?;
+            to_value(glossary_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_glossary_term" => {
+            let id: String = arg(args, "id")?;
+            let input: BusinessGlossaryTermInput = arg(args, "input")?;
+            to_value(glossary_service::update(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "deactivate_glossary_term" => {
+            let id: String = arg(args, "id")?;
+            to_value(glossary_service::deactivate(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "list_semantic_mappings_for_entity" => {
+            let entity_type: String = arg(args, "entityType")?;
+            to_value(semantic_mapping_service::list_for_entity(conn, &require_workspace_id(conn)?, &entity_type)?)
+        }
+        "list_semantic_mappings_for_term" => {
+            let term_id: String = arg(args, "termId")?;
+            to_value(semantic_mapping_service::list_for_term(conn, &term_id)?)
+        }
+        "create_semantic_mapping" => {
+            let input: SemanticMappingInput = arg(args, "input")?;
+            to_value(semantic_mapping_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "delete_semantic_mapping" => {
+            let id: String = arg(args, "id")?;
+            semantic_mapping_service::delete(conn, &id, &require_workspace_id(conn)?, actor)?;
+            to_value(())
+        }
+        "list_metric_definitions" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(metric_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_metric_definition" => {
+            let input: MetricDefinitionInput = arg(args, "input")?;
+            to_value(metric_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_metric_definition" => {
+            let id: String = arg(args, "id")?;
+            let input: MetricDefinitionInput = arg(args, "input")?;
+            to_value(metric_service::update(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "list_metric_versions" => {
+            let metric_id: String = arg(args, "metricId")?;
+            to_value(metric_service::list_versions(conn, &metric_id, actor)?)
+        }
+        "deactivate_metric_definition" => {
+            let id: String = arg(args, "id")?;
+            to_value(metric_service::deactivate(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "delete_metric_definition" => {
+            let id: String = arg(args, "id")?;
+            metric_service::delete(conn, &id, &require_workspace_id(conn)?, actor)?;
+            to_value(())
         }
 
         // AI Agent Platform v2, Phase 4: Memory Inspector listing/delete and

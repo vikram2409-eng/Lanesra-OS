@@ -688,7 +688,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -702,11 +702,11 @@ const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
- {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields','dependencyExplorer']},
+ {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields','dependencyExplorer','businessGlossary']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
- {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards']},
+ {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards','metricDefinitions']},
  {key:'solutions',label:'Deployment Management',icon:'🗂',note:"What's installed, what it created, and who published it",items:['solutions']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
@@ -2820,7 +2820,7 @@ function adminCrossLinkRow(entityKey){
 // node types and 3 edge types (depends_on/invokes/delegates_to) the real
 // desktop/server edition's `system_graph.rs` v1 slice syncs - see that
 // module's own doc comment for the full scoping note.
-const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team'};
+const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team',business_glossary_term:'Glossary Term',metric_definition:'Metric'};
 function systemGraphNodes(){
  const nodes=[];
  (data.customObjects||[]).forEach(o=>nodes.push({type:'custom_object',id:o.key,label:o.labelPlural||o.label||o.key}));
@@ -2832,10 +2832,12 @@ function systemGraphNodes(){
  Object.values(data.pageLayouts||{}).forEach(arr=>(arr||[]).forEach(l=>nodes.push({type:'page_layout',id:l.id,label:l.name})));
  (data.aiAgents||[]).forEach(a=>nodes.push({type:'ai_agent',id:a.id,label:a.name}));
  (data.aiExecutionGraphs||[]).forEach(g=>nodes.push({type:'execution_graph',id:g.id,label:g.name}));
+ (data.businessGlossaryTerms||[]).forEach(t=>nodes.push({type:'business_glossary_term',id:t.id,label:t.name}));
+ (data.metricDefinitions||[]).forEach(m=>nodes.push({type:'metric_definition',id:m.id,label:m.name}));
  return nodes;
 }
-// `{edgeType, fromType, fromId, toType, toId}` - the 3 of the spec's 10
-// edge types (depends_on/invokes/delegates_to) this v1 slice populates,
+// `{edgeType, fromType, fromId, toType, toId}` - 4 of the spec's 10 edge
+// types (depends_on/invokes/delegates_to/derives_from) populated so far,
 // derived from already-reliable fields only, matching the real edition's
 // own sync_graph_node helpers in each owning Rust service.
 function systemGraphEdges(){
@@ -2855,7 +2857,196 @@ function systemGraphEdges(){
  Object.entries(data.pageLayouts||{}).forEach(([entityKey,arr])=>(arr||[]).forEach(l=>add('depends_on','page_layout',l.id,'custom_object',entityKey)));
  (data.aiAgents||[]).forEach(a=>(a.delegateAgentIds||[]).forEach(d=>add('delegates_to','ai_agent',a.id,'ai_agent',d)));
  (data.aiExecutionGraphs||[]).forEach(g=>(g.nodes||[]).forEach(n=>{if(n.type==='agent'&&n.config&&n.config.agentId)add('invokes','execution_graph',g.id,'ai_agent',n.config.agentId)}));
+ // FND-02 (Semantic Metadata Layer): a glossary term's edges are derived
+ // from whatever semantic_mappings point at it - a custom field gets a
+ // precise custom_field edge, a built-in field or whole-object mapping
+ // falls back to the object itself (same resolution
+ // glossary_service::sync_graph_edges uses, Rust).
+ (data.semanticMappings||[]).forEach(m=>{
+  if(!m.glossaryTermId)return;
+  if(m.fieldKey){
+   const field=(data.customFields||[]).find(f=>f.entity===m.entityType&&f.key===m.fieldKey);
+   if(field)add('derives_from','business_glossary_term',m.glossaryTermId,'custom_field',field.id);
+   else add('derives_from','business_glossary_term',m.glossaryTermId,'custom_object',m.entityType);
+  }else add('derives_from','business_glossary_term',m.glossaryTermId,'custom_object',m.entityType);
+ });
+ (data.metricDefinitions||[]).forEach(metric=>{
+  add('depends_on','metric_definition',metric.id,'custom_object',metric.sourceEntityType);
+  if(metric.sourceFieldKey){
+   const field=(data.customFields||[]).find(f=>f.entity===metric.sourceEntityType&&f.key===metric.sourceFieldKey);
+   if(field)add('depends_on','metric_definition',metric.id,'custom_field',field.id);
+  }
+  if(metric.glossaryTermId)add('derives_from','metric_definition',metric.id,'business_glossary_term',metric.glossaryTermId);
+ });
  return edges;
+}
+function semanticEntityLabel(key){return entityLabel(key)||(data.customObjects||[]).find(o=>o.key===key)?.labelPlural||key}
+
+// Next-Gen program, Domain A (Intelligence Foundation), FND-02: the
+// Semantic Metadata Layer - Business Glossary terms, object/field
+// semantic mappings, and Metric definitions. `metricDefinitions` is a
+// declarative description (aggregation/source/grain/filters/time logic),
+// not a working formula evaluator - see models::semantic's own doc
+// comment (Rust) for why; no computation happens here either.
+const DATA_CLASSIFICATIONS=['standard','sensitive','restricted'];
+const DATA_CLASSIFICATION_LABELS={standard:'Standard',sensitive:'Sensitive',restricted:'Restricted'};
+const METRIC_AGGREGATIONS=['sum','avg','count','count_distinct','min','max'];
+const SEMANTIC_ROLES=['customer','policyholder','amount','currency','quantity','percentage','effective_date','expiration_date','region','owner','status','identifier','email','phone'];
+
+function businessGlossaryTab(body){
+ const terms=data.businessGlossaryTerms||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Business Glossary</h3><button class="btn btn-primary" id="addGlossaryTerm">+ New term</button></div>
+ <p class="muted">Define business terms once - name, definition, synonyms, data classification - then map them onto the objects and fields they describe. Agents and generated analytics query this instead of guessing from a field's label.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Definition</th><th>Classification</th><th>Status</th><th>Actions</th></tr></thead><tbody>${terms.map(t=>`<tr><td><b>${t.name}</b>${t.synonyms&&t.synonyms.length?`<br><small class="muted">aka ${t.synonyms.join(', ')}</small>`:''}</td><td style="max-width:360px">${t.definition}</td><td>${DATA_CLASSIFICATION_LABELS[t.dataClassification]}</td><td>${badgeMaybe(t.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-mappings-term="${t.id}">Mapped to</button><button class="icon-btn" data-edit-term="${t.id}">Edit</button>${t.active?`<button class="icon-btn" data-deactivate-term="${t.id}">Deactivate</button>`:''}</div></td></tr>`).join('')}</tbody></table>${terms.length?'':'<div class="empty">No glossary terms yet</div>'}</div></div>`;
+ $('#addGlossaryTerm').onclick=()=>glossaryTermModal();
+ body.querySelectorAll('[data-edit-term]').forEach(b=>b.onclick=()=>glossaryTermModal(terms.find(t=>t.id===b.dataset.editTerm)));
+ body.querySelectorAll('[data-mappings-term]').forEach(b=>b.onclick=()=>mappingsModal(terms.find(t=>t.id===b.dataset.mappingsTerm)));
+ body.querySelectorAll('[data-deactivate-term]').forEach(b=>b.onclick=()=>{
+  const t=terms.find(x=>x.id===b.dataset.deactivateTerm); if(!t)return;
+  t.active=false; stampUpdate(t); save(); toast('Glossary term deactivated'); renderAdminTab();
+ });
+}
+function glossaryTermModal(term){
+ const isEdit=!!term;
+ const users=data.users||[];
+ const body=`<form id="glossaryForm" class="form-grid">
+ <div class="field"><label>Name</label><input name="name" value="${term?.name||''}" required></div>
+ <div class="field"><label>Data classification</label><select name="dataClassification">${DATA_CLASSIFICATIONS.map(c=>`<option value="${c}" ${(term?.dataClassification||'standard')===c?'selected':''}>${DATA_CLASSIFICATION_LABELS[c]}</option>`).join('')}</select></div>
+ <div class="field"><label>Owner</label><select name="ownerUserId"><option value="">Unassigned</option>${users.map(u=>`<option value="${u.id}" ${term?.ownerUserId===u.id?'selected':''}>${u.displayName||u.username}</option>`).join('')}</select></div>
+ <div class="field full"><label>Definition</label><textarea name="definition" rows="3" required>${term?.definition||''}</textarea></div>
+ <div class="field full"><label>Synonyms (comma-separated)</label><input name="synonyms" value="${(term?.synonyms||[]).join(', ')}"></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save term':'Create term'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit "${term.name}"`:'New glossary term',body);
+ $('[data-close]').onclick=closeModal;
+ $('#glossaryForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.name.trim()||!fd.definition.trim())return alert('Name and definition are required.');
+  const synonyms=fd.synonyms.split(',').map(s=>s.trim()).filter(Boolean);
+  if(isEdit){
+   Object.assign(term,{name:fd.name,definition:fd.definition,ownerUserId:fd.ownerUserId||null,synonyms,dataClassification:fd.dataClassification});
+   stampUpdate(term);
+  }else{
+   if(!data.businessGlossaryTerms)data.businessGlossaryTerms=[];
+   const newTerm=stampCreate({id:uid(),name:fd.name,definition:fd.definition,ownerUserId:fd.ownerUserId||null,synonyms,dataClassification:fd.dataClassification,active:true});
+   data.businessGlossaryTerms.push(newTerm);
+   tagLocalComponent('businessGlossaryTerm',newTerm.id);
+  }
+  save();closeModal();toast(isEdit?'Term saved':'Term created');renderAdminTab();
+ };
+}
+function mappingsModal(term){
+ if(!term)return;
+ const render=()=>{
+  const mappings=(data.semanticMappings||[]).filter(m=>m.glossaryTermId===term.id);
+  const keys=allEntityTypeKeys();
+  const entityType=mappingsModal._entityType||keys[0];
+  const fieldOptions=(data.customFields||[]).filter(f=>f.entity===entityType&&f.active!==false);
+  const body=`<p class="muted" style="font-size:12px">Where "${term.name}" applies - an object, or a specific field on it.</p>
+  <div id="mappingsList">${mappings.map(m=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span>${semanticEntityLabel(m.entityType)}${m.fieldKey?`.${m.fieldKey}`:''}${m.semanticRole?` — role: ${m.semanticRole}`:''}</span><button class="icon-btn" data-remove-mapping="${m.id}">Remove</button></div>`).join('')||'<p class="muted" style="font-size:12px">Not mapped to anything yet.</p>'}</div>
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+   <select id="mapEntityType">${keys.map(k=>`<option value="${k}" ${k===entityType?'selected':''}>${semanticEntityLabel(k)}</option>`).join('')}</select>
+   <select id="mapFieldKey"><option value="">Whole object</option>${fieldOptions.map(f=>`<option value="${f.key}">${f.label}</option>`).join('')}</select>
+   <select id="mapSemanticRole"><option value="">No semantic role</option>${SEMANTIC_ROLES.map(r=>`<option value="${r}">${r}</option>`).join('')}</select>
+   <button type="button" class="btn" id="addMapping">+ Add mapping</button>
+  </div>
+  <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Close</button></div>`;
+  closeModal();
+  modal(`Mapped to — ${term.name}`,body);
+  $('[data-close]').onclick=closeModal;
+  $('#mapEntityType').onchange=e=>{mappingsModal._entityType=e.target.value;render()};
+  $('#addMapping').onclick=()=>{
+   const fieldKey=$('#mapFieldKey').value||null, semanticRole=$('#mapSemanticRole').value||null;
+   if(!data.semanticMappings)data.semanticMappings=[];
+   const exists=(data.semanticMappings||[]).some(m=>m.entityType===(entityType)&&m.fieldKey===fieldKey&&m.glossaryTermId===term.id&&m.semanticRole===semanticRole);
+   if(exists)return alert('This exact mapping already exists.');
+   data.semanticMappings.push(stampCreate({id:uid(),entityType:$('#mapEntityType').value,fieldKey,glossaryTermId:term.id,semanticRole}));
+   save();toast('Mapping added');render();
+  };
+  body_querySelectorAll_remove();
+  function body_querySelectorAll_remove(){
+   document.querySelectorAll('[data-remove-mapping]').forEach(b=>b.onclick=()=>{
+    data.semanticMappings=(data.semanticMappings||[]).filter(m=>m.id!==b.dataset.removeMapping);
+    save();toast('Mapping removed');render();
+   });
+  }
+ };
+ render();
+}
+
+function metricDefinitionsTab(body){
+ const metrics=data.metricDefinitions||[];
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Metric Definitions</h3><button class="btn btn-primary" id="addMetric">+ New metric</button></div>
+ <p class="muted">Declare what a metric means - its source, aggregation, grain and filters - so it has one traceable definition instead of being redefined ad hoc in every report. No computation happens here yet; this is the metadata layer later analytics builds on.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Source</th><th>Aggregation</th><th>Version</th><th>Status</th><th>Actions</th></tr></thead><tbody>${metrics.map(m=>`<tr><td><b>${m.name}</b>${m.description?`<br><small class="muted">${m.description}</small>`:''}</td><td>${semanticEntityLabel(m.sourceEntityType)}${m.sourceFieldKey?`.${m.sourceFieldKey}`:''}</td><td>${m.aggregation}</td><td>v${m.version||1}</td><td>${badgeMaybe(m.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-versions-metric="${m.id}">Versions</button><button class="icon-btn" data-edit-metric="${m.id}">Edit</button>${m.active?`<button class="icon-btn" data-deactivate-metric="${m.id}">Deactivate</button>`:''}<button class="icon-btn" data-delete-metric="${m.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${metrics.length?'':'<div class="empty">No metric definitions yet</div>'}</div></div>`;
+ $('#addMetric').onclick=()=>metricModal();
+ body.querySelectorAll('[data-edit-metric]').forEach(b=>b.onclick=()=>metricModal(metrics.find(m=>m.id===b.dataset.editMetric)));
+ body.querySelectorAll('[data-versions-metric]').forEach(b=>b.onclick=()=>metricVersionsModal(metrics.find(m=>m.id===b.dataset.versionsMetric)));
+ body.querySelectorAll('[data-deactivate-metric]').forEach(b=>b.onclick=()=>{
+  const m=metrics.find(x=>x.id===b.dataset.deactivateMetric); if(!m)return;
+  m.active=false; stampUpdate(m); save(); toast('Metric deactivated'); renderAdminTab();
+ });
+ body.querySelectorAll('[data-delete-metric]').forEach(b=>b.onclick=()=>{
+  if(!confirm('Delete this metric?'))return;
+  data.metricDefinitions=(data.metricDefinitions||[]).filter(m=>m.id!==b.dataset.deleteMetric);
+  save();toast('Metric deleted');renderAdminTab();
+ });
+}
+function metricModal(metric){
+ const isEdit=!!metric;
+ const keys=allEntityTypeKeys();
+ const sourceEntityType=metric?.sourceEntityType||keys[0];
+ const fieldOptions=(data.customFields||[]).filter(f=>f.entity===sourceEntityType&&f.active!==false);
+ const terms=data.businessGlossaryTerms||[];
+ const body=`<form id="metricForm" class="form-grid">
+ <div class="field"><label>Name</label><input name="name" value="${metric?.name||''}" required></div>
+ <div class="field"><label>Aggregation</label><select name="aggregation">${METRIC_AGGREGATIONS.map(a=>`<option value="${a}" ${(metric?.aggregation||'sum')===a?'selected':''}>${a}</option>`).join('')}</select></div>
+ <div class="field"><label>Source object</label><select name="sourceEntityType" id="metricSourceEntity">${keys.map(k=>`<option value="${k}" ${k===sourceEntityType?'selected':''}>${semanticEntityLabel(k)}</option>`).join('')}</select></div>
+ <div class="field"><label>Source field</label><select name="sourceFieldKey"><option value="">Record count / whole object</option>${fieldOptions.map(f=>`<option value="${f.key}" ${metric?.sourceFieldKey===f.key?'selected':''}>${f.label}</option>`).join('')}</select></div>
+ <div class="field"><label>Grain</label><input name="grain" placeholder="e.g. monthly, by region" value="${metric?.grain||''}"></div>
+ <div class="field"><label>Time logic</label><input name="timeLogic" placeholder="e.g. trailing 30 days" value="${metric?.timeLogic||''}"></div>
+ <div class="field"><label>Glossary term</label><select name="glossaryTermId"><option value="">None</option>${terms.map(t=>`<option value="${t.id}" ${metric?.glossaryTermId===t.id?'selected':''}>${t.name}</option>`).join('')}</select></div>
+ <div class="field"><label>Effective start date</label><input type="date" name="effectiveStartDate" value="${metric?.effectiveStartDate||''}"></div>
+ <div class="field"><label>Effective end date</label><input type="date" name="effectiveEndDate" value="${metric?.effectiveEndDate||''}"></div>
+ <div class="field full"><label>Description</label><textarea name="description" rows="2">${metric?.description||''}</textarea></div>
+ <div class="field full"><label>Filters (JSON)</label><textarea name="filtersJson" rows="2">${metric?.filtersJson||'{}'}</textarea></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save metric':'Create metric'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit "${metric.name}"`:'New metric',body);
+ $('[data-close]').onclick=closeModal;
+ $('#metricForm').onsubmit=e=>{
+  e.preventDefault();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.name.trim())return alert('Metric name is required.');
+  try{JSON.parse(fd.filtersJson||'{}')}catch(err){return alert('Filters must be valid JSON.')}
+  const payload={name:fd.name,description:fd.description||null,sourceEntityType:fd.sourceEntityType,sourceFieldKey:fd.sourceFieldKey||null,aggregation:fd.aggregation,grain:fd.grain||null,filtersJson:fd.filtersJson||'{}',timeLogic:fd.timeLogic||null,glossaryTermId:fd.glossaryTermId||null,effectiveStartDate:fd.effectiveStartDate||null,effectiveEndDate:fd.effectiveEndDate||null};
+  if(isEdit){
+   if(!metric.versions)metric.versions=[];
+   metric.versions.unshift({id:uid(),snapshot:{...metric},savedAt:new Date().toISOString()});
+   metric.versions=metric.versions.slice(0,20);
+   Object.assign(metric,payload,{version:(metric.version||1)+1});
+   stampUpdate(metric);
+  }else{
+   if(!data.metricDefinitions)data.metricDefinitions=[];
+   const base=fd.name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')||'metric';
+   let key=base,suffix=2;
+   while((data.metricDefinitions||[]).some(m=>m.key===key))key=`${base}_${suffix++}`;
+   const newMetric=stampCreate({id:uid(),key,...payload,version:1,active:true,versions:[]});
+   data.metricDefinitions.push(newMetric);
+   tagLocalComponent('metricDefinition',newMetric.id);
+  }
+  save();closeModal();toast(isEdit?'Metric saved':'Metric created');renderAdminTab();
+ };
+ $('#metricSourceEntity').onchange=()=>{closeModal();metricModal(metric?{...metric,sourceEntityType:$('#metricSourceEntity').value}:{sourceEntityType:$('#metricSourceEntity').value})};
+}
+function metricVersionsModal(metric){
+ if(!metric)return;
+ const versions=metric.versions||[];
+ const body=`${versions.length?versions.map(v=>`<div style="margin-bottom:6px;font-size:13px"><b>${new Date(v.savedAt).toLocaleString()}</b> — ${v.snapshot.aggregation} of ${semanticEntityLabel(v.snapshot.sourceEntityType)}${v.snapshot.sourceFieldKey?`.${v.snapshot.sourceFieldKey}`:''}, grain: ${v.snapshot.grain||'—'}</div>`).join(''):'<p class="muted" style="font-size:12px">No saved versions yet - versions are recorded on each edit.</p>'}
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Close</button></div>`;
+ modal(`Versions — ${metric.name}`,body);
+ $('[data-close]').onclick=closeModal;
 }
 function systemGraphNodeLabel(type,id){
  const n=systemGraphNodes().find(n=>n.type===type&&n.id===id);
@@ -2905,7 +3096,7 @@ function dependencyExplorerTab(body){
  const rowHtml=(hit)=>`<button type="button" class="btn btn-secondary" data-dep-node="${hit.type}:${hit.id}" title="Edge: ${hit.edgeType}">${SYSTEM_NODE_TYPE_LABELS[hit.type]}: ${systemGraphNodeLabel(hit.type,hit.id)}</button>`;
  body.innerHTML=`<div class="panel">
   <h3>Dependency Explorer</h3>
-  <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
+  <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams, glossary terms, metrics) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
   <div class="form-row">
    <label>Component type<select id="depType">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
    <label>Component<select id="depComponent">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
@@ -2981,7 +3172,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
