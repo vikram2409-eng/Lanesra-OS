@@ -24,6 +24,8 @@ import { ORDER_STATUSES, type CustomFieldValues, type Order, type OrderInput } f
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { Object360Modal } from "../../components/Object360Modal";
+import { sectionForEntityType } from "../../lib/object360Nav";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -342,6 +344,7 @@ function OrderDetail({
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [showObject360, setShowObject360] = useState(false);
   const canWriteOrder = useCanWriteObject("Order");
   useReportVoiceContext("Order", id);
   // convert_to_invoice is gated on Invoice write access, not Order (it
@@ -377,7 +380,22 @@ function OrderDetail({
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && (
+        <Object360Modal
+          entityType="Order"
+          entityId={o.id}
+          label={o.order_number}
+          onOpenRecord={(entityType, entityId) => {
+            setShowObject360(false);
+            onNavigateTo?.(sectionForEntityType(entityType), { openId: entityId });
+          }}
+          onClose={() => setShowObject360(false)}
+        />
+      )}
       <h2>
         {o.order_number} <StatusBadge status={o.status} />
       </h2>

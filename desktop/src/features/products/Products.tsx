@@ -23,6 +23,7 @@ import { PRODUCT_TYPES, type CustomFieldValues, type Product, type ProductInput 
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { useReportVoiceContext } from "../voice/VoiceContext";
+import { Object360Modal } from "../../components/Object360Modal";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -417,6 +418,7 @@ function ProductDetail({
   onOpenAdminTab?: (adminTab: string) => void;
 }) {
   const canWrite = useCanWriteObject("Product");
+  const [showObject360, setShowObject360] = useState(false);
   useReportVoiceContext("Product", id);
   const product = useQuery({ queryKey: ["product", id], queryFn: () => api.getProduct(id) });
   const effectivePage = useEffectivePage("Product");
@@ -435,7 +437,11 @@ function ProductDetail({
         <button className="btn" onClick={onEdit} disabled={!canWrite} title={canWrite ? undefined : "You have view-only access to Products through an app"}>
           Edit
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && <Object360Modal entityType="Product" entityId={p.id} label={p.name} onClose={() => setShowObject360(false)} />}
       <RecordHeader
         title={p.name}
         status={statusBadge}

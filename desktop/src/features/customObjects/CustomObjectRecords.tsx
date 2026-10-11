@@ -26,6 +26,7 @@ import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { useReportVoiceContext } from "../voice/VoiceContext";
+import { Object360Modal } from "../../components/Object360Modal";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -252,6 +253,7 @@ function RecordForm({
     owner_user_id: null,
     notes: null,
   });
+  const [showObject360, setShowObject360] = useState(false);
   const [customValues, setCustomValues] = useState<CustomFieldValues>({});
   const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -300,12 +302,27 @@ function RecordForm({
   return (
     <div>
       {existing.data ? (
-        <RecordHeader
-          title={existing.data.primary_name}
-          status={<StatusBadge status={existing.data.status} />}
-          recordNumber={existing.data.display_number}
-          owner={<OwnershipByline objectKey={definition.key} recordId={existing.data.id} />}
-        />
+        <>
+          <div className="toolbar">
+            <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+              View in Object 360
+            </button>
+          </div>
+          {showObject360 && (
+            <Object360Modal
+              entityType={definition.key}
+              entityId={existing.data.id}
+              label={existing.data.primary_name}
+              onClose={() => setShowObject360(false)}
+            />
+          )}
+          <RecordHeader
+            title={existing.data.primary_name}
+            status={<StatusBadge status={existing.data.status} />}
+            recordNumber={existing.data.display_number}
+            owner={<OwnershipByline objectKey={definition.key} recordId={existing.data.id} />}
+          />
+        </>
       ) : (
         <h2>New {definition.singular_label.toLowerCase()}</h2>
       )}

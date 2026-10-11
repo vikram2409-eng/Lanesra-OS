@@ -32,6 +32,8 @@ import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { COMPANY_STATUSES, PREFERRED_CONTACT_METHODS, type Company, type CompanyInput, type CustomFieldValues } from "../../lib/types";
+import { Object360Modal } from "../../components/Object360Modal";
+import { sectionForEntityType } from "../../lib/object360Nav";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -706,6 +708,7 @@ function CompanyDetail({
   onOpenAdminTab?: (adminTab: string) => void;
 }) {
   const [tab, setTab] = useState<CompanyTab>("overview");
+  const [showObject360, setShowObject360] = useState(false);
   const canWrite = useCanWriteObject("Company");
   useReportVoiceContext("Company", id);
   const company = useQuery({ queryKey: ["company", id], queryFn: () => api.getCompany(id) });
@@ -770,7 +773,22 @@ function CompanyDetail({
         <button className="btn" onClick={onEdit} disabled={!canWrite} title={canWrite ? undefined : "You have view-only access to Companies through an app"}>
           Edit
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && (
+        <Object360Modal
+          entityType="Company"
+          entityId={id}
+          label={company.data.name}
+          onOpenRecord={(entityType, entityId) => {
+            setShowObject360(false);
+            onNavigateTo?.(sectionForEntityType(entityType), { openId: entityId });
+          }}
+          onClose={() => setShowObject360(false)}
+        />
+      )}
       <RecordHeader
         title={company.data.name}
         status={<StatusBadge status={company.data.status} />}

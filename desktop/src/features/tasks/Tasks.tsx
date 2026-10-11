@@ -28,6 +28,8 @@ import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { useReportVoiceContext } from "../voice/VoiceContext";
+import { Object360Modal } from "../../components/Object360Modal";
+import { sectionForEntityType } from "../../lib/object360Nav";
 
 type Tab = "today" | "upcoming" | "overdue" | "completed" | "owner" | "related";
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
@@ -577,6 +579,7 @@ function TaskDetail({
   const invoices = useQuery({ queryKey: ["invoices"], queryFn: () => api.listInvoices() });
   const contracts = useQuery({ queryKey: ["contracts"], queryFn: () => api.listContracts() });
   const canWrite = useCanWriteObject("Task");
+  const [showObject360, setShowObject360] = useState(false);
   useReportVoiceContext("Task", id);
 
   if (!task.data) return <p>Loading...</p>;
@@ -610,7 +613,22 @@ function TaskDetail({
         >
           Edit
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && (
+        <Object360Modal
+          entityType="Task"
+          entityId={t.id}
+          label={t.title}
+          onOpenRecord={(entityType, entityId) => {
+            setShowObject360(false);
+            onNavigateTo?.(sectionForEntityType(entityType), { openId: entityId });
+          }}
+          onClose={() => setShowObject360(false)}
+        />
+      )}
       <h2>
         {t.title} <span className="badge">{t.status}</span>
       </h2>

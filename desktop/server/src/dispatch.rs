@@ -1301,6 +1301,12 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
                 conn, &workspace_id, &arg::<String>(args, "entityType")?, &arg::<String>(args, "entityId")?,
             )?)
         }
+        "list_native_related_records" => {
+            let workspace_id = require_workspace_id(conn)?;
+            to_value(relationship_service::native_related_records_for(
+                conn, &workspace_id, &arg::<String>(args, "entityType")?, &arg::<String>(args, "entityId")?,
+            )?)
+        }
 
         "create_backup" => to_value(backup_service::create_backup(conn, actor)?),
         // "restore_backup" is deliberately absent here - it replaces the
@@ -1514,6 +1520,13 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "list_ai_agents" => {
             let active_only: bool = arg(args, "activeOnly")?;
             to_value(ai_agent_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        // Object 360 (issue #352): any authenticated user, same access
+        // model as `list_audit_events` below.
+        "list_ai_agents_scoped_to_object_type" => {
+            let entity_type: String = arg(args, "entityType")?;
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(ai_agent_service::list_scoped_to_object_type(conn, &require_workspace_id(conn)?, &entity_type, active_only)?)
         }
         "create_ai_agent" => {
             let input: AiAgentInput = arg(args, "input")?;

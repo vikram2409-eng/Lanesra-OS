@@ -23,6 +23,18 @@ pub fn list_ai_agents(state: State<AppState>, active_only: bool) -> AppResult<Ve
     ai_agent_service::list(&conn, &workspace_id, active_only)
 }
 
+/// Object 360 (issue #352): any authenticated user can see which agents
+/// are scoped to an object type they're already viewing a record of -
+/// same "viewing this needs no more privilege than viewing the record
+/// itself" access model `audit_commands::list_audit_events` already
+/// documents.
+#[tauri::command]
+pub fn list_ai_agents_scoped_to_object_type(state: State<AppState>, entity_type: String, active_only: bool) -> AppResult<Vec<AiAgentDefinition>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    ai_agent_service::list_scoped_to_object_type(&conn, &workspace_id, &entity_type, active_only)
+}
+
 #[tauri::command]
 pub fn create_ai_agent(state: State<AppState>, input: AiAgentInput) -> AppResult<AiAgentDefinition> {
     let conn = state.conn.lock().unwrap();

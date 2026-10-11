@@ -21,6 +21,8 @@ import { useReportVoiceContext } from "../voice/VoiceContext";
 import { CONTRACT_STATUSES, type Contract, type ContractInput, type CustomFieldValues } from "../../lib/types";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { Object360Modal } from "../../components/Object360Modal";
+import { sectionForEntityType } from "../../lib/object360Nav";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string } | { mode: "detail"; id: string };
 
@@ -498,6 +500,7 @@ function ContractDetail({
   const quotes = useQuery({ queryKey: ["quotes"], queryFn: () => api.listQuotes() });
   const tasks = useQuery({ queryKey: ["tasksByRelated", "Contract", id], queryFn: () => api.listTasksByRelated("Contract", id) });
   const canWrite = useCanWriteObject("Contract");
+  const [showObject360, setShowObject360] = useState(false);
   useReportVoiceContext("Contract", id);
 
   if (!contract.data) return <p>Loading...</p>;
@@ -517,7 +520,22 @@ function ContractDetail({
         >
           Edit
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && (
+        <Object360Modal
+          entityType="Contract"
+          entityId={c.id}
+          label={c.title}
+          onOpenRecord={(entityType, entityId) => {
+            setShowObject360(false);
+            onNavigateTo?.(sectionForEntityType(entityType), { openId: entityId });
+          }}
+          onClose={() => setShowObject360(false)}
+        />
+      )}
       <h2>
         {c.title} <StatusBadge status={c.status} />
         {isRenewingSoon(c.renewal_date) && <span className="badge badge-warning" style={{ marginLeft: 6 }}>Renewing soon</span>}

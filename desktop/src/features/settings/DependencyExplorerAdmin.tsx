@@ -52,14 +52,24 @@ function TypeDot({ nodeType, size = 10 }: { nodeType: SystemNodeType; size?: num
   );
 }
 
-function Legend() {
+// The legend doubles as a toggle-filter (issue #339's own design text:
+// "identify/toggle what's showing") - clicking a type dims every node of
+// that type in the graph below rather than removing it outright, so the
+// root/edge layout never has to reflow around a hidden node.
+function Legend({ hidden, onToggle }: { hidden: Set<SystemNodeType>; onToggle: (t: SystemNodeType) => void }) {
   return (
     <div className="ontology-legend">
       {SYSTEM_NODE_TYPES.map((t) => (
-        <span key={t} className="ontology-legend-item">
+        <button
+          key={t}
+          type="button"
+          className={`ontology-legend-item${hidden.has(t) ? " ontology-legend-item-off" : ""}`}
+          onClick={() => onToggle(t)}
+          title={hidden.has(t) ? `Show ${SYSTEM_NODE_TYPE_META[t].label}` : `Hide ${SYSTEM_NODE_TYPE_META[t].label}`}
+        >
           <TypeDot nodeType={t} />
           {SYSTEM_NODE_TYPE_META[t].label}
-        </span>
+        </button>
       ))}
     </div>
   );
@@ -107,6 +117,16 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
   const [root, setRoot] = useState<RootRef | null>(initialRoot ?? null);
   const [inspecting, setInspecting] = useState<RootRef | null>(initialRoot ?? null);
   const [transitiveMode, setTransitiveMode] = useState<"impact" | "lineage" | null>(null);
+  const [hiddenTypes, setHiddenTypes] = useState<Set<SystemNodeType>>(() => new Set());
+
+  function toggleTypeVisibility(t: SystemNodeType) {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  }
 
   // Ontology Layer epic, issue #345: lets Object Types deep-link straight
   // into a specific object's node here instead of landing on this
@@ -260,7 +280,7 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
         glossary terms, metrics, test cases) - the rest of the platform's components are a documented follow-up, not silently missing.
       </p>
 
-      <Legend />
+      <Legend hidden={hiddenTypes} onToggle={toggleTypeVisibility} />
 
       <div className="form-grid" style={{ marginBottom: 16 }}>
         <div className="form-field">
@@ -316,7 +336,7 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
             </button>
           </div>
 
-          <div className="graph-canvas-wrap" style={{ position: "relative" }}>
+          <div className="graph-canvas-wrap ontology-canvas-wrap" style={{ position: "relative" }}>
             <VisualBuilderCanvas<LaidOutNode>
               nodes={nodes}
               edges={edges}
@@ -327,10 +347,11 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
               renderNode={(n) => {
                 const meta = SYSTEM_NODE_TYPE_META[n.nodeType];
                 const isInspecting = inspecting?.nodeType === n.nodeType && inspecting?.componentId === n.componentId;
+                const isDimmed = !n.isRoot && hiddenTypes.has(n.nodeType);
                 return (
                   <div
                     key={n.key}
-                    className={`ontology-node-dot${n.isRoot ? " ontology-node-root" : ""}${isInspecting && !n.isRoot ? " ontology-node-inspecting" : ""}`}
+                    className={`ontology-node-dot${n.isRoot ? " ontology-node-root" : ""}${isInspecting && !n.isRoot ? " ontology-node-inspecting" : ""}${isDimmed ? " ontology-node-dimmed" : ""}`}
                     style={{ left: n.x - n.size / 2, top: n.y - n.size / 2, width: n.size, height: n.size, background: `var(--chart-${meta.colorIndex})` }}
                     onClick={() => inspect(n.nodeType, n.componentId)}
                     title={`${meta.label}: ${n.label}${n.edgeType ? ` (${n.edgeType})` : ""}`}

@@ -24,6 +24,8 @@ import type { CustomFieldValues, Invoice, InvoiceInput, PaymentInput } from "../
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { Object360Modal } from "../../components/Object360Modal";
+import { sectionForEntityType } from "../../lib/object360Nav";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -353,6 +355,7 @@ function InvoiceDetail({
   const [paymentAmount, setPaymentAmount] = useState("0.00");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [printing, setPrinting] = useState(false);
+  const [showObject360, setShowObject360] = useState(false);
   const canWrite = useCanWriteObject("Invoice");
   useReportVoiceContext("Invoice", id);
 
@@ -392,7 +395,22 @@ function InvoiceDetail({
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && (
+        <Object360Modal
+          entityType="Invoice"
+          entityId={inv.id}
+          label={inv.invoice_number}
+          onOpenRecord={(entityType, entityId) => {
+            setShowObject360(false);
+            onNavigateTo?.(sectionForEntityType(entityType), { openId: entityId });
+          }}
+          onClose={() => setShowObject360(false)}
+        />
+      )}
       <h2>
         {inv.invoice_number} <StatusBadge status={inv.status} />
       </h2>
