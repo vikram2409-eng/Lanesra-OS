@@ -1,4 +1,5 @@
 pub mod access_role_repo;
+pub mod action_type_repo;
 pub mod activity_repo;
 pub mod admin_nav_repo;
 pub mod ai_agent_pending_run_repo;

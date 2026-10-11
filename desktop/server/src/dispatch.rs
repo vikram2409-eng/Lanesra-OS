@@ -30,6 +30,7 @@ use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues};
 use lanesra_core::models::semantic::{BusinessGlossaryTermInput, MetricDefinitionInput, SemanticMappingInput};
 use lanesra_core::models::test_eval::TestCaseDefinitionInput;
+use lanesra_core::models::action_type::ActionTypeDefinitionInput;
 use lanesra_core::models::custom_object::{CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
 use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
@@ -82,7 +83,7 @@ use lanesra_core::services::{
     ai_knowledge_service, ai_memory_service, mcp_client_service,
     industry_package_service,
     integration_job_service, integration_log_service,
-    invoice_service, mapping_service, numbering_service, ontology_service, opportunity_service, order_service, org_unit_service, organization_service,
+    action_type_service, invoice_service, mapping_service, numbering_service, ontology_service, opportunity_service, order_service, org_unit_service, organization_service,
     ownership_service, page_layout_service, page_template_service,
     publisher_service, product_service,
     glossary_service, metric_service, semantic_mapping_service,
@@ -1884,6 +1885,31 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "get_object_type_detail" => {
             let object_type: String = arg(args, "objectType")?;
             to_value(ontology_service::get_object_type_detail(conn, &require_workspace_id(conn)?, &object_type)?)
+        }
+
+        "list_action_types" => {
+            let target_object_type: Option<String> = arg(args, "targetObjectType")?;
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(action_type_service::list(conn, &require_workspace_id(conn)?, target_object_type.as_deref(), active_only)?)
+        }
+        "create_action_type" => {
+            let input: ActionTypeDefinitionInput = arg(args, "input")?;
+            to_value(action_type_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_action_type" => {
+            let id: String = arg(args, "id")?;
+            let input: ActionTypeDefinitionInput = arg(args, "input")?;
+            to_value(action_type_service::update(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "deactivate_action_type" => {
+            let id: String = arg(args, "id")?;
+            to_value(action_type_service::deactivate(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "invoke_action_type" => {
+            let action_type_id: String = arg(args, "actionTypeId")?;
+            let record_id: String = arg(args, "recordId")?;
+            let input_params: std::collections::HashMap<String, String> = arg(args, "inputParams")?;
+            to_value(action_type_service::invoke(conn, &require_workspace_id(conn)?, &action_type_id, &record_id, &input_params, actor)?)
         }
 
         // AI Agent Platform v2, Phase 4: Memory Inspector listing/delete and

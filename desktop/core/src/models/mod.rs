@@ -1,4 +1,5 @@
 pub mod access_role;
+pub mod action_type;
 pub mod activity;
 pub mod admin_home;
 pub mod admin_nav;

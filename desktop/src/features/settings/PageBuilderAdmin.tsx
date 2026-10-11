@@ -169,6 +169,9 @@ export function PageBuilderAdmin() {
     .filter((d) => d.show_related_list && (d.source_entity_type === entityType || d.target_entity_type === entityType))
     .map((d) => ({ key: d.key, label: d.source_entity_type === entityType ? d.forward_label : d.reverse_label }));
 
+  const actionTypesQuery = useQuery({ queryKey: ["actionTypes", entityType, "active"], queryFn: () => api.listActionTypes(entityType, true) });
+  const actionTypes: { key: string; label: string }[] = (actionTypesQuery.data ?? []).map((a) => ({ key: a.id, label: a.name }));
+
   const layouts = useQuery({ queryKey: ["pageLayouts", entityType], queryFn: () => api.listPageLayouts(entityType) });
 
   function invalidate() {
@@ -253,6 +256,7 @@ export function PageBuilderAdmin() {
           layout={selected}
           fields={fields}
           relatedLists={relatedLists}
+          actionTypes={actionTypes}
           layoutCount={list.length}
           onChanged={invalidate}
           onDeleted={() => {
@@ -423,6 +427,7 @@ function PageBuilderEditor({
   layout,
   fields,
   relatedLists,
+  actionTypes,
   layoutCount,
   onChanged,
   onDeleted,
@@ -430,6 +435,7 @@ function PageBuilderEditor({
   layout: PageLayout;
   fields: { key: string; label: string }[];
   relatedLists: { key: string; label: string }[];
+  actionTypes: { key: string; label: string }[];
   layoutCount: number;
   onChanged: () => void;
   onDeleted: () => void;
@@ -661,6 +667,7 @@ function PageBuilderEditor({
               breakpoint={breakpoint}
               fields={fields}
               relatedLists={relatedLists}
+              actionTypes={actionTypes}
               onConfigChange={(key, value) => updateNodeConfig(selectedNode.id, key, value)}
               onLayoutChange={(patch) => updateNodeLayout(selectedNode.id, patch)}
             />
@@ -931,6 +938,7 @@ function Inspector({
   breakpoint,
   fields,
   relatedLists,
+  actionTypes,
   onConfigChange,
   onLayoutChange,
 }: {
@@ -938,6 +946,7 @@ function Inspector({
   breakpoint: Breakpoint;
   fields: { key: string; label: string }[];
   relatedLists: { key: string; label: string }[];
+  actionTypes: { key: string; label: string }[];
   onConfigChange: (key: string, value: unknown) => void;
   onLayoutChange: (patch: Partial<NodeLayout>) => void;
 }) {
@@ -957,6 +966,7 @@ function Inspector({
           schema={field}
           value={cfg[field.key]}
           fields={field.type === "field_picker" ? fields : undefined}
+          actionTypes={field.type === "action_type_picker" ? actionTypes : undefined}
           onChange={(v) => onConfigChange(field.key, v)}
         />
       ))}
@@ -1020,11 +1030,13 @@ function ConfigFieldInput({
   schema,
   value,
   fields,
+  actionTypes,
   onChange,
 }: {
   schema: ConfigFieldSchema;
   value: unknown;
   fields?: { key: string; label: string }[];
+  actionTypes?: { key: string; label: string }[];
   onChange: (v: unknown) => void;
 }) {
   if (schema.type === "field_picker") {
@@ -1040,6 +1052,26 @@ function ConfigFieldInput({
           ))}
         </select>
         {schema.help && <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>{schema.help}</p>}
+      </div>
+    );
+  }
+  if (schema.type === "action_type_picker") {
+    return (
+      <div className="form-field">
+        <label>{schema.label}</label>
+        <select value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Choose an Action Type...</option>
+          {(actionTypes ?? []).map((a) => (
+            <option key={a.key} value={a.key}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+        {(actionTypes ?? []).length === 0 && (
+          <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
+            No Action Types defined yet for this object - add one under Ontology → Action Types.
+          </p>
+        )}
       </div>
     );
   }

@@ -1,5 +1,6 @@
 pub mod access_role_service;
 pub mod access_service;
+pub mod action_type_service;
 pub mod activity_service;
 pub mod admin_home_service;
 pub mod admin_nav_service;
