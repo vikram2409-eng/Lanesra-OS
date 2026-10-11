@@ -502,7 +502,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "objects" && <CustomObjectsAdmin onOpenHelp={openHelpTopic} onOpenTab={(t) => openTab(t as AdminTab)} />}
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
-      {tab === "dependencyExplorer" && <DependencyExplorerAdmin initialRoot={depExplorerRoot} />}
+      {tab === "dependencyExplorer" && <DependencyExplorerAdmin initialRoot={depExplorerRoot} onOpenTab={(t) => openTab(t as AdminTab)} />}
       {tab === "businessGlossary" && <BusinessGlossaryAdmin />}
       {tab === "metricDefinitions" && <MetricDefinitionsAdmin />}
       {tab === "testEval" && <TestEvalAdmin />}

@@ -715,7 +715,7 @@ const ADMIN_CATEGORIES=[
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
  {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
 ];
-let dependencyExplorerState={type:'custom_object',id:null,transitive:null};
+let dependencyExplorerState={type:'custom_object',id:null,inspectType:null,inspectId:null,transitive:null};
 let testEvalView={selected:new Set()};
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -3661,18 +3661,117 @@ function systemGraphTransitive(type,id,direction,maxDepth){
  }
  return Array.from(visited.values()).sort((a,b)=>a.depth-b.depth);
 }
+// Ontology Explorer visual language (issue #339): which admin tab owns
+// each System Graph node type, and a fixed --chart-N index per type -
+// hand-mirrored from desktop's own `systemGraphNodeMeta.ts` (same values)
+// so the legend/dots read identically on both surfaces.
+const NODE_TYPE_ADMIN_TAB={custom_object:'objectTypes',custom_field:'fields',relationship:'relationships',business_rule:'rules',workflow:'workflow',screen_layout:'layouts',page_layout:'pageBuilder',ai_agent:'aiAgents',execution_graph:'agentTeams',business_glossary_term:'businessGlossary',metric_definition:'metricDefinitions',test_case_definition:'testEval'};
+const SYSTEM_NODE_TYPE_COLOR_INDEX={custom_object:1,custom_field:2,relationship:3,business_rule:4,workflow:5,screen_layout:6,page_layout:1,ai_agent:2,execution_graph:3,business_glossary_term:4,metric_definition:5,test_case_definition:6};
+const ONTOLOGY_ROOT_SIZE=26,ONTOLOGY_NODE_SIZE=15,ONTOLOGY_RING_RADIUS=170,ONTOLOGY_CLOUD_RING_GAP=110;
+function typeDotHtml(nodeType,size){size=size||10;return `<span style="display:inline-block;flex-shrink:0;width:${size}px;height:${size}px;border-radius:50%;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[nodeType]})"></span>`}
+function legendHtml(){return `<div class="ontology-legend">${Object.keys(SYSTEM_NODE_TYPE_LABELS).map(t=>`<span class="ontology-legend-item">${typeDotHtml(t)}${SYSTEM_NODE_TYPE_LABELS[t]}</span>`).join('')}</div>`}
+// The floating inspector targets `inspectType`/`inspectId` - which starts
+// out equal to the centered root but can be a not-yet-centered neighbor
+// just clicked on, grouped by edge type ("Campaign · came from" style),
+// with a custom_object's Business Glossary one-liner (FND-02) where one
+// is mapped, same restriction `ontologyDescriptionFor` already enforces
+// (whole-object mappings only).
+function inspectorCardHtml(){
+ const s=dependencyExplorerState;
+ if(!s.inspectType||!s.inspectId)return '';
+ const label=systemGraphNodeLabel(s.inspectType,s.inspectId);
+ const dependents=systemGraphDirect(s.inspectType,s.inspectId,'dependents');
+ const dependencies=systemGraphDirect(s.inspectType,s.inspectId,'dependencies');
+ const groups=new Map();
+ [...dependents.map(h=>({...h,dir:'dependents'})),...dependencies.map(h=>({...h,dir:'dependencies'}))].forEach(h=>{
+  const list=groups.get(h.edgeType)||[]; list.push(h); groups.set(h.edgeType,list);
+ });
+ const isRoot=s.inspectType===s.type&&s.inspectId===s.id;
+ const definition=s.inspectType==='custom_object'?ontologyDescriptionFor(s.inspectId):null;
+ return `<div class="ontology-inspector-card">
+  <div class="ontology-inspector-head">${typeDotHtml(s.inspectType,14)}<div><strong>${label}</strong><div class="ontology-inspector-subtitle">${SYSTEM_NODE_TYPE_LABELS[s.inspectType]}</div></div></div>
+  ${definition?`<p class="ontology-inspector-definition">${definition}</p>`:''}
+  <div class="ontology-inspector-actions">
+   <button type="button" class="btn btn-primary" id="depOpenAdmin">Open in its admin screen</button>
+   <button type="button" class="btn btn-secondary" id="depRecenter" ${isRoot?'disabled':''}>Show what's around it</button>
+  </div>
+  <div class="ontology-inspector-groups">
+   ${Array.from(groups.entries()).map(([edgeType,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${edgeType}</div>${members.map(m=>`<button type="button" class="ontology-inspector-bullet" data-dep-bullet="${m.type}:${m.id}">${typeDotHtml(m.type)}${systemGraphNodeLabel(m.type,m.id)}</button>`).join('')}</div>`).join('')}
+   ${groups.size===0?'<p class="muted" style="font-size:12px">Nothing else synced depends on or is depended on by this.</p>':''}
+  </div>
+ </div>`;
+}
 function dependencyExplorerTab(body){
  const nodes=systemGraphNodes();
  const types=Object.keys(SYSTEM_NODE_TYPE_LABELS);
  if(!dependencyExplorerState.id){
   const first=nodes.find(n=>n.type===dependencyExplorerState.type)||nodes[0];
-  if(first)dependencyExplorerState={type:first.type,id:first.id,transitive:null};
+  if(first)dependencyExplorerState={type:first.type,id:first.id,inspectType:first.type,inspectId:first.id,transitive:null};
+ }
+ if(dependencyExplorerState.id&&!dependencyExplorerState.inspectId){
+  dependencyExplorerState={...dependencyExplorerState,inspectType:dependencyExplorerState.type,inspectId:dependencyExplorerState.id};
  }
  const options=nodes.filter(n=>n.type===dependencyExplorerState.type);
- const rowHtml=(hit)=>`<button type="button" class="btn btn-secondary" data-dep-node="${hit.type}:${hit.id}" title="Edge: ${hit.edgeType}">${SYSTEM_NODE_TYPE_LABELS[hit.type]}: ${systemGraphNodeLabel(hit.type,hit.id)}</button>`;
+
+ let graphHtml='';
+ if(dependencyExplorerState.id){
+  if(dependencyExplorerState.transitive){
+   // Zoomed-out "cloud" overview: the union of the transitive closure in
+   // one direction, grouped into concentric rings by depth - position
+   // only, no connecting lines, since a `SystemGraphHit` (depth + edge
+   // type from the root) carries no per-hop parent to draw an exact line
+   // from once depth > 1, and a precise one isn't worth a new query just
+   // for this overview.
+   const hits=systemGraphTransitive(dependencyExplorerState.type,dependencyExplorerState.id,dependencyExplorerState.transitive==='impact'?'dependents':'dependencies',25);
+   const maxDepth=hits.reduce((m,h)=>Math.max(m,h.depth),0);
+   const radius=Math.max(ONTOLOGY_RING_RADIUS,(maxDepth+1)*ONTOLOGY_CLOUD_RING_GAP);
+   const cx=radius+60,cy=radius+60;
+   const byDepth=new Map();
+   hits.forEach(h=>{const list=byDepth.get(h.depth)||[];list.push(h);byDepth.set(h.depth,list)});
+   const dotsHtml=[`<div class="ontology-node-dot ontology-node-root" style="left:${cx-ONTOLOGY_ROOT_SIZE/2}px;top:${cy-ONTOLOGY_ROOT_SIZE/2}px;width:${ONTOLOGY_ROOT_SIZE}px;height:${ONTOLOGY_ROOT_SIZE}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[dependencyExplorerState.type]})" title="${SYSTEM_NODE_TYPE_LABELS[dependencyExplorerState.type]}: ${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)}" data-dep-inspect="${dependencyExplorerState.type}:${dependencyExplorerState.id}"></div>`];
+   Array.from(byDepth.entries()).forEach(([depth,depthHits])=>{
+    const r=depth*ONTOLOGY_CLOUD_RING_GAP;
+    const size=Math.max(8,ONTOLOGY_NODE_SIZE-depth);
+    depthHits.forEach((h,i)=>{
+     const angle=(i/depthHits.length)*Math.PI*2;
+     const x=cx+r*Math.cos(angle),y=cy+r*Math.sin(angle);
+     const isInspecting=h.type===dependencyExplorerState.inspectType&&h.id===dependencyExplorerState.inspectId;
+     dotsHtml.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}" style="left:${x-size/2}px;top:${y-size/2}px;width:${size}px;height:${size}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[h.type]})" title="${SYSTEM_NODE_TYPE_LABELS[h.type]}: ${systemGraphNodeLabel(h.type,h.id)} (${h.edgeType})" data-dep-inspect="${h.type}:${h.id}"></div>`);
+    });
+   });
+   graphHtml=`<div class="ontology-graph-wrap"><div class="ontology-graph-canvas" style="width:${cx*2}px;height:${cy*2}px">${dotsHtml.join('')}${inspectorCardHtml()}</div></div>`;
+  }else{
+   // Direct view: dependents (what points at this) fan out across the
+   // left semicircle, dependencies (what this points at) across the
+   // right - a radial take on the old left/root/right column layout, not
+   // a fully undirected cloud, so the existing "depends on" mental model
+   // still reads at a glance.
+   const dependents=systemGraphDirect(dependencyExplorerState.type,dependencyExplorerState.id,'dependents');
+   const dependencies=systemGraphDirect(dependencyExplorerState.type,dependencyExplorerState.id,'dependencies');
+   const cx=ONTOLOGY_RING_RADIUS+120,cy=ONTOLOGY_RING_RADIUS+60;
+   const dotsHtml=[`<div class="ontology-node-dot ontology-node-root" style="left:${cx-ONTOLOGY_ROOT_SIZE/2}px;top:${cy-ONTOLOGY_ROOT_SIZE/2}px;width:${ONTOLOGY_ROOT_SIZE}px;height:${ONTOLOGY_ROOT_SIZE}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[dependencyExplorerState.type]})" title="${SYSTEM_NODE_TYPE_LABELS[dependencyExplorerState.type]}: ${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)}" data-dep-inspect="${dependencyExplorerState.type}:${dependencyExplorerState.id}"></div>`];
+   const edgesSvg=[];
+   const place=(hits,startDeg,endDeg)=>{
+    hits.forEach((hit,i)=>{
+     const deg=hits.length===1?(startDeg+endDeg)/2:startDeg+((endDeg-startDeg)*i)/(hits.length-1);
+     const rad=deg*Math.PI/180;
+     const x=cx+ONTOLOGY_RING_RADIUS*Math.cos(rad),y=cy+ONTOLOGY_RING_RADIUS*Math.sin(rad);
+     const isInspecting=hit.type===dependencyExplorerState.inspectType&&hit.id===dependencyExplorerState.inspectId;
+     dotsHtml.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}" style="left:${x-ONTOLOGY_NODE_SIZE/2}px;top:${y-ONTOLOGY_NODE_SIZE/2}px;width:${ONTOLOGY_NODE_SIZE}px;height:${ONTOLOGY_NODE_SIZE}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[hit.type]})" title="${SYSTEM_NODE_TYPE_LABELS[hit.type]}: ${systemGraphNodeLabel(hit.type,hit.id)} (${hit.edgeType})" data-dep-inspect="${hit.type}:${hit.id}"></div>`);
+     edgesSvg.push(`<line x1="${x}" y1="${y}" x2="${cx}" y2="${cy}" stroke="var(--line)" stroke-width="1.5"/>`);
+    });
+   };
+   place(dependents,100,260);
+   place(dependencies,-80,80);
+   const w=cx+ONTOLOGY_RING_RADIUS+60,h=cy+ONTOLOGY_RING_RADIUS+60;
+   graphHtml=`<div class="ontology-graph-wrap"><div class="ontology-graph-canvas" style="width:${w}px;height:${h}px"><svg width="${w}" height="${h}" style="position:absolute;top:0;left:0;pointer-events:none">${edgesSvg.join('')}</svg>${dotsHtml.join('')}${inspectorCardHtml()}</div></div>`;
+  }
+ }
+
  body.innerHTML=`<div class="panel">
   <h3>Dependency Explorer</h3>
   <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams, glossary terms, metrics, test cases) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
+  ${legendHtml()}
   <div class="form-row">
    <label>Component type<select id="depType">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
    <label>Component<select id="depComponent">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
@@ -3682,23 +3781,15 @@ function dependencyExplorerTab(body){
    <button type="button" class="btn ${dependencyExplorerState.transitive==='impact'?'btn-primary':''}" data-dep-transitive="impact">Full impact (everything upstream)</button>
    <button type="button" class="btn ${dependencyExplorerState.transitive==='lineage'?'btn-primary':''}" data-dep-transitive="lineage">Full lineage (everything downstream)</button>
   </div>
-  ${!dependencyExplorerState.transitive?(()=>{
-    const dependents=systemGraphDirect(dependencyExplorerState.type,dependencyExplorerState.id,'dependents');
-    const dependencies=systemGraphDirect(dependencyExplorerState.type,dependencyExplorerState.id,'dependencies');
-    return `<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:start">
-     <div><h4>Depends on this</h4>${dependents.length?dependents.map(rowHtml).join('<br>'):'<span class="muted">Nothing</span>'}</div>
-     <div style="text-align:center;padding-top:28px"><div class="badge">${SYSTEM_NODE_TYPE_LABELS[dependencyExplorerState.type]}</div><br><b>${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)}</b></div>
-     <div><h4>This depends on</h4>${dependencies.length?dependencies.map(rowHtml).join('<br>'):'<span class="muted">Nothing</span>'}</div>
-    </div>`;
-   })():(()=>{
-    const hits=systemGraphTransitive(dependencyExplorerState.type,dependencyExplorerState.id,dependencyExplorerState.transitive==='impact'?'dependents':'dependencies',25);
-    return hits.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Depth</th><th>Type</th><th>Component</th><th>Via edge</th></tr></thead><tbody>${hits.map(h=>`<tr><td>${h.depth}</td><td>${SYSTEM_NODE_TYPE_LABELS[h.type]}</td><td><button type="button" class="link-btn" data-dep-node="${h.type}:${h.id}">${systemGraphNodeLabel(h.type,h.id)}</button></td><td>${h.edgeType}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nothing found.</div>';
-   })()}`}
+  ${graphHtml}`}
  </div>`;
- $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,transitive:null};renderAdminTab()};
- $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,transitive:null};renderAdminTab()});
+ $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,inspectType:t,inspectId:first?first.id:null,transitive:null};renderAdminTab()};
+ $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,inspectType:dependencyExplorerState.type,inspectId:e.target.value,transitive:null};renderAdminTab()});
  body.querySelectorAll('[data-dep-transitive]').forEach(b=>b.onclick=()=>{const v=b.dataset.depTransitive;dependencyExplorerState={...dependencyExplorerState,transitive:dependencyExplorerState.transitive===v?null:v};renderAdminTab()});
- body.querySelectorAll('[data-dep-node]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depNode.split(':');dependencyExplorerState={type,id,transitive:null};renderAdminTab()});
+ body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depInspect.split(':');dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
+ body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,inspectType:type,inspectId:id,transitive:null};renderAdminTab()});
+ const recenterBtn=$('#depRecenter'); if(recenterBtn)recenterBtn.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,type:dependencyExplorerState.inspectType,id:dependencyExplorerState.inspectId,transitive:null};renderAdminTab()};
+ const openBtn=$('#depOpenAdmin'); if(openBtn)openBtn.onclick=()=>{adminTab=NODE_TYPE_ADMIN_TAB[dependencyExplorerState.inspectType];adminView='tool';renderView()};
 }
 function adminRecentNavHtml(){
  const hist=(data.adminNavHistory||[]).slice().sort((a,b)=>b.lastViewedAt.localeCompare(a.lastViewedAt));
