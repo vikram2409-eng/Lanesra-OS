@@ -63,7 +63,7 @@ fn anthropic_tool_use_body(id: &str, name: &str, input: serde_json::Value) -> St
 fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str) -> lanesra_core::models::ai_agent::AiAgentDefinition {
     ai_agent_service::create(
         conn, ws,
-        &AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(admin),
     )
     .unwrap()
@@ -286,7 +286,7 @@ async fn policy_compliance_evaluator_checks_for_a_blocked_tool_call_with_no_judg
     let (conn, ws, admin) = setup_workspace();
     let agent = ai_agent_service::create(
         &conn, &ws,
-        &AiAgentInput { name: "Lister".into(), description: None, icon: "🤖".into(), system_prompt: "You list objects.".into(), action_names: vec!["list_objects".into()], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Lister".into(), description: None, icon: "🤖".into(), system_prompt: "You list objects.".into(), action_names: vec!["list_objects".into()], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();

@@ -24,7 +24,7 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
 fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str, delegate_agent_ids: Vec<String>) -> lanesra_core::models::ai_agent::AiAgentDefinition {
     ai_agent_service::create(
         conn, ws,
-        &AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."), action_names: vec![], delegate_agent_ids, skill_ids: vec![] },
+        &AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."), action_names: vec![], delegate_agent_ids, skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(admin),
     )
     .unwrap()
@@ -144,7 +144,7 @@ fn hierarchy_handles_a_delegation_cycle_without_recursing_forever() {
     // itself hard-blocks.
     let agent_a = ai_agent_service::update(
         &conn, &agent_a.id, &ws,
-        &AiAgentInput { name: agent_a.name.clone(), description: None, icon: "🤖".into(), system_prompt: agent_a.system_prompt.clone(), action_names: vec![], delegate_agent_ids: vec![agent_b.id.clone()], skill_ids: vec![] },
+        &AiAgentInput { name: agent_a.name.clone(), description: None, icon: "🤖".into(), system_prompt: agent_a.system_prompt.clone(), action_names: vec![], delegate_agent_ids: vec![agent_b.id.clone()], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();

@@ -183,6 +183,8 @@ pub fn promote_embedded_agent_node(
         action_names,
         delegate_agent_ids: Vec::new(),
         skill_ids: Vec::new(),
+        object_type_scopes: Vec::new(),
+        action_type_ids: Vec::new(),
     };
     let agent = ai_agent_service::create(conn, workspace_id, &agent_input, actor_user_id)?;
 

@@ -8,6 +8,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::ai::AiAgentModelRouting;
 
+/// Ontology Layer epic, issue #344: one object type this agent may touch
+/// through the generic record tools (`list_records`/`create_record`/
+/// `update_record`/`archive_record`/etc.), and which of the 5
+/// `models::access_role::Capability` values (as the same plain validated
+/// strings `action_type_definitions.required_capability` already uses -
+/// "create"/"read"/"update"/"delete"/"assign") it may exercise there.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObjectTypeScope {
+    pub object_type: String,
+    pub capabilities: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct AiAgentDefinition {
     pub id: String,
@@ -69,6 +81,20 @@ pub struct AiAgentDefinition {
     /// use. See `chat_service::effective_write_actor` for where this is
     /// actually read.
     pub acts_as_user_id: Option<String>,
+    /// Ontology Layer epic, issue #344: empty (the default) means
+    /// *unscoped* - this agent's `action_names` tools work exactly as
+    /// they did before this feature, against any object type. Only once
+    /// an admin adds an entry here does `chat_service`'s dispatch start
+    /// checking a record tool's `object_key` against it - opt-in, never
+    /// silently retrofitted onto an agent that predates this column.
+    pub object_type_scopes: Vec<ObjectTypeScope>,
+    /// Ontology Layer epic, issue #344: specific Action Type (issue #343)
+    /// ids this agent's `invoke_action` tool may call - empty means this
+    /// agent cannot invoke any Action Type at all (unlike
+    /// `object_type_scopes`, there is no "unscoped" reading for this one,
+    /// since `invoke_action` is a brand-new tool with no prior
+    /// all-objects behavior to preserve).
+    pub action_type_ids: Vec<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
@@ -86,6 +112,10 @@ pub struct AiAgentInput {
     /// conditions/actions already use - not a diff against the prior set.
     pub delegate_agent_ids: Vec<String>,
     pub skill_ids: Vec<String>,
+    #[serde(default)]
+    pub object_type_scopes: Vec<ObjectTypeScope>,
+    #[serde(default)]
+    pub action_type_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

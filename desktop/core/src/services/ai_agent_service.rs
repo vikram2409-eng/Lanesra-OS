@@ -13,7 +13,9 @@ use rusqlite::Connection;
 use crate::domain::{AppError, AppResult};
 use crate::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiSkill, AiSkillInput};
-use crate::repositories::{ai_agent_repo, ai_provider_repo, ai_token_usage_repo, audit_repo};
+use crate::models::action_type::ACTION_CAPABILITIES;
+use crate::repositories::{action_type_repo, ai_agent_repo, ai_provider_repo, ai_token_usage_repo, audit_repo};
+use crate::services::{custom_object_service, entity_registry};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -80,6 +82,37 @@ fn validate_agent_input(conn: &Connection, workspace_id: &str, id: Option<&str>,
         let skill = ai_agent_repo::get_skill(conn, skill_id)?.ok_or_else(|| AppError::Validation("Selected skill does not exist".into()))?;
         if skill.workspace_id != workspace_id || !skill.is_active {
             return Err(AppError::Validation("Selected skill does not exist".into()));
+        }
+    }
+    validate_object_type_scopes(conn, workspace_id, &input.object_type_scopes)?;
+    for action_type_id in &input.action_type_ids {
+        let action_type = action_type_repo::get(conn, action_type_id)?.ok_or_else(|| AppError::Validation("Selected Action Type does not exist".into()))?;
+        if action_type.workspace_id != workspace_id {
+            return Err(AppError::Validation("Selected Action Type does not exist".into()));
+        }
+    }
+    Ok(())
+}
+
+/// Ontology Layer epic, issue #344: `object_type` is checked the same
+/// broad way `metric_service::require_valid_entity_type` already does
+/// (any built-in or active Custom Object) - broader than Action Types'
+/// own writable-only restriction, since the generic record tools this
+/// scopes include read-only access to Opportunity/Quote/Order/Invoice/
+/// Contract too, not just the writable set.
+fn validate_object_type_scopes(conn: &Connection, workspace_id: &str, scopes: &[crate::models::ai_agent::ObjectTypeScope]) -> AppResult<()> {
+    for scope in scopes {
+        let is_builtin = entity_registry::CORE_ENTITY_TYPES.contains(&scope.object_type.as_str());
+        if !is_builtin && !custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, &scope.object_type)? {
+            return Err(AppError::Validation(format!("'{}' is not a recognized object type", scope.object_type)));
+        }
+        if scope.capabilities.is_empty() {
+            return Err(AppError::Validation(format!("'{}' needs at least one capability", scope.object_type)));
+        }
+        for capability in &scope.capabilities {
+            if !ACTION_CAPABILITIES.contains(&capability.as_str()) {
+                return Err(AppError::Validation(format!("Invalid capability '{capability}'")));
+            }
         }
     }
     Ok(())

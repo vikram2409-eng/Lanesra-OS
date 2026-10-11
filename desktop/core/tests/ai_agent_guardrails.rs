@@ -99,7 +99,7 @@ fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str, ac
         conn, ws,
         &AiAgentInput {
             name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."),
-            action_names, delegate_agent_ids: vec![], skill_ids: vec![],
+            action_names, delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
         },
         Some(admin),
     )
@@ -185,7 +185,7 @@ fn a_solution_export_round_trips_an_agent_its_skill_and_its_delegate_into_a_seco
 
     let sub_agent = ai_agent_service::create(
         &conn_a, &ws_a,
-        &AiAgentInput { name: "Policy Lookup Agent".into(), description: None, icon: "📄".into(), system_prompt: "You look up policy details.".into(), action_names: vec!["get_record".into()], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Policy Lookup Agent".into(), description: None, icon: "📄".into(), system_prompt: "You look up policy details.".into(), action_names: vec!["get_record".into()], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin_a),
     )
     .unwrap();
@@ -195,7 +195,7 @@ fn a_solution_export_round_trips_an_agent_its_skill_and_its_delegate_into_a_seco
         &AiAgentInput {
             name: "Claims Auditor".into(), description: Some("Audits incoming claims".into()), icon: "🕵️".into(),
             system_prompt: "You audit insurance claims against policy.".into(), action_names: vec!["list_records".into()],
-            delegate_agent_ids: vec![sub_agent.id.clone()], skill_ids: vec![skill.id.clone()],
+            delegate_agent_ids: vec![sub_agent.id.clone()], skill_ids: vec![skill.id.clone()], object_type_scopes: vec![], action_type_ids: vec![],
         },
         Some(&admin_a),
     )

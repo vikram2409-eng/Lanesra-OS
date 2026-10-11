@@ -232,7 +232,7 @@ fn an_agent_specific_policy_takes_precedence_over_the_workspace_default() {
     let (conn, ws, admin) = setup_workspace("Precedence Test Co");
     let agent = ai_agent_service::create(
         &conn, &ws,
-        &AiAgentInput { name: "Unrestricted Reporter".into(), description: None, icon: "📊".into(), system_prompt: "You report on records.".into(), action_names: vec!["list_objects".into()], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Unrestricted Reporter".into(), description: None, icon: "📊".into(), system_prompt: "You report on records.".into(), action_names: vec!["list_objects".into()], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();

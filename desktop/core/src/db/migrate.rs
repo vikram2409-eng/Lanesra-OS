@@ -81,6 +81,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (74, include_str!("migrations/0074_semantic_metadata_layer.sql")),
     (75, include_str!("migrations/0075_unified_test_eval_framework.sql")),
     (76, include_str!("migrations/0076_ontology_action_types.sql")),
+    (77, include_str!("migrations/0077_ontology_agent_binding.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -144,7 +145,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 76);
+        assert_eq!(version, 77);
 
         let table_count: i64 = conn
             .query_row(

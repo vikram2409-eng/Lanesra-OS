@@ -256,7 +256,7 @@ fn validate_action_names_rejects_a_connector_tool_that_is_not_currently_availabl
     let unavailable = AiAgentInput {
         name: "Bad Agent".into(), description: None, icon: "🤖".into(), system_prompt: "You help.".into(),
         action_names: vec![format!("connector_action:{}:getItem", connector.id)],
-        delegate_agent_ids: vec![], skill_ids: vec![],
+        delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
     };
     let err = ai_agent_service::create(&conn, &ws, &unavailable, Some(&admin)).unwrap_err();
     assert!(err.to_string().contains("isn't currently available"), "{err}");
@@ -268,7 +268,7 @@ fn validate_action_names_rejects_a_connector_tool_that_is_not_currently_availabl
     let available = AiAgentInput {
         name: "Good Agent".into(), description: None, icon: "🤖".into(), system_prompt: "You help.".into(),
         action_names: vec![format!("connector_action:{}:getItem", connector.id)],
-        delegate_agent_ids: vec![], skill_ids: vec![],
+        delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
     };
     assert!(ai_agent_service::create(&conn, &ws, &available, Some(&admin)).is_ok());
 }
@@ -287,7 +287,7 @@ async fn an_agent_with_a_write_capable_connector_tool_requires_administrator() {
         &AiAgentInput {
             name: "Writer".into(), description: None, icon: "🤖".into(), system_prompt: "You write things.".into(),
             action_names: vec![format!("connector_write_action:{}:createItem", connector.id)],
-            delegate_agent_ids: vec![], skill_ids: vec![],
+            delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
         },
         Some(&admin),
     )

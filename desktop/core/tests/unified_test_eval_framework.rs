@@ -299,7 +299,7 @@ async fn running_a_mixed_run_grades_a_deterministic_and_a_real_ai_case_into_one_
     // A real agent_eval case - one stub response for the agent's own
     // reply, one for the judge call, same request shape
     // ai_eval_service::run_suite's own tests already prove.
-    let agent = ai_agent_service::create(&conn, &ws, &AiAgentInput { name: "Answerer".into(), description: None, icon: "🤖".into(), system_prompt: "You are Answerer.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] }, admin_ref).unwrap();
+    let agent = ai_agent_service::create(&conn, &ws, &AiAgentInput { name: "Answerer".into(), description: None, icon: "🤖".into(), system_prompt: "You are Answerer.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] }, admin_ref).unwrap();
     let agent_case = test_eval_service::create(
         &conn, &ws,
         &TestCaseDefinitionInput { name: "Answerer greets correctly".into(), description: None, test_type: "agent_eval".into(), target_id: agent.id.clone(), dataset_json: serde_json::json!({"input_text": "hi", "success_criteria": "The response greets the user."}).to_string(), cost_threshold_usd: None, latency_threshold_ms: None },
@@ -342,7 +342,7 @@ fn an_agent_team_eval_case_traces_in_the_system_graph_and_deactivating_keeps_its
     let (conn, ws, admin) = setup_workspace("Graph Trace Co");
     let admin_ref = Some(admin.as_str());
 
-    let agent = ai_agent_service::create(&conn, &ws, &AiAgentInput { name: "Teammate".into(), description: None, icon: "🤖".into(), system_prompt: "You are Teammate.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] }, admin_ref).unwrap();
+    let agent = ai_agent_service::create(&conn, &ws, &AiAgentInput { name: "Teammate".into(), description: None, icon: "🤖".into(), system_prompt: "You are Teammate.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] }, admin_ref).unwrap();
     let graph = execution_graph_service::create(
         &conn, &ws,
         &ExecutionGraphInput {

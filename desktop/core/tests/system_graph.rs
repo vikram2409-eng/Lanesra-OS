@@ -39,7 +39,7 @@ fn vendor_input() -> CustomObjectDefinitionInput {
 }
 
 fn agent_input(name: &str, delegate_agent_ids: Vec<String>) -> AiAgentInput {
-    AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: "P.".into(), action_names: vec![], delegate_agent_ids, skill_ids: vec![] }
+    AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: "P.".into(), action_names: vec![], delegate_agent_ids, skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] }
 }
 
 #[test]
