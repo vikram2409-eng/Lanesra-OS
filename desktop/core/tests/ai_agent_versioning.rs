@@ -31,7 +31,7 @@ fn creating_an_agent_backfills_a_published_v1_version() {
             name: "Claims Auditor".into(), description: Some("Audits claims".into()), icon: "🕵".into(),
             system_prompt: "You are a claims auditor.".into(),
             action_names: vec!["get_record".into(), "list_records".into()],
-            delegate_agent_ids: vec![], skill_ids: vec![],
+            delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
         },
         Some(&admin),
     )
@@ -63,13 +63,13 @@ fn a_second_agent_gets_its_own_independent_v1() {
     let (conn, workspace_id, admin) = setup_workspace("Versioning Co 2");
     let a = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Agent A".into(), description: None, icon: "🤖".into(), system_prompt: "A.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Agent A".into(), description: None, icon: "🤖".into(), system_prompt: "A.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
     let b = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Agent B".into(), description: None, icon: "🤖".into(), system_prompt: "B.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Agent B".into(), description: None, icon: "🤖".into(), system_prompt: "B.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
@@ -87,7 +87,7 @@ fn deleting_an_agent_cascades_its_versions() {
     let (conn, workspace_id, admin) = setup_workspace("Versioning Co 3");
     let agent = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Temp Agent".into(), description: None, icon: "🤖".into(), system_prompt: "Temp.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Temp Agent".into(), description: None, icon: "🤖".into(), system_prompt: "Temp.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
@@ -141,7 +141,7 @@ fn approval_round_trips_pending_to_resolved() {
     let (conn, workspace_id, admin) = setup_workspace("Approvals Co");
     let agent = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Reviewed Agent".into(), description: None, icon: "🤖".into(), system_prompt: "Reviewed.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Reviewed Agent".into(), description: None, icon: "🤖".into(), system_prompt: "Reviewed.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();

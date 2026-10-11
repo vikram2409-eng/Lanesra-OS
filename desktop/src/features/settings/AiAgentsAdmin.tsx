@@ -32,6 +32,7 @@ import type {
   KnowledgeSearchHit,
   MemoryItem,
   MemoryType,
+  ActionCapability,
   McpServer,
   McpServerInput,
   McpServerUpdate,
@@ -108,9 +109,10 @@ const ADMIN_ACTIONS: [string, string][] = [
   ["create_ai_skill", "Create AI skill"],
 ];
 const ICON_CHOICES = ["🤖", "🧠", "🛠️", "📊", "📥", "🔎", "✉️", "📅", "🗂️", "⚡", "📄"];
+const ONTOLOGY_CAPABILITIES: ActionCapability[] = ["create", "read", "update", "delete", "assign"];
 
 function emptyInput(): AiAgentInput {
-  return { name: "", description: "", icon: "🤖", system_prompt: "", action_names: [], delegate_agent_ids: [], skill_ids: [] };
+  return { name: "", description: "", icon: "🤖", system_prompt: "", action_names: [], delegate_agent_ids: [], skill_ids: [], object_type_scopes: [], action_type_ids: [] };
 }
 
 // Agent Studio 2.0 (issue #196): "Tone" is a guided Core-tab field with no
@@ -330,6 +332,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                 <th>Actions</th>
                 <th>Skills</th>
                 <th>Delegates</th>
+                <th>Ontology scope</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -345,6 +348,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                   <td>{a.action_names.length}</td>
                   <td>{a.skill_ids.length}</td>
                   <td>{a.delegate_agent_ids.length}</td>
+                  <td>{a.object_type_scopes.length === 0 ? <span className="muted">Unscoped</span> : `${a.object_type_scopes.length} object type(s)`}</td>
                   <td>
                     <span className={`badge${a.is_active ? " badge-success" : ""}`}>{a.is_active ? "Active" : "Inactive"}</span>
                   </td>
@@ -1000,6 +1004,8 @@ function AiAgentForm({
           action_names: initial.action_names,
           delegate_agent_ids: initial.delegate_agent_ids,
           skill_ids: initial.skill_ids,
+          object_type_scopes: initial.object_type_scopes,
+          action_type_ids: initial.action_type_ids,
         }
       : emptyInput(),
   );
@@ -1017,6 +1023,9 @@ function AiAgentForm({
     queryFn: () => api.getAiAgentPolicy(initial?.id ?? null),
     enabled: !!initial,
   });
+  // Ontology Layer epic, issue #344.
+  const objectTypesQuery = useQuery({ queryKey: ["ontologyObjectTypes"], queryFn: () => api.listObjectTypes() });
+  const actionTypesQuery = useQuery({ queryKey: ["actionTypes", "all", "all"], queryFn: () => api.listActionTypes(undefined, true) });
 
   function toggleAction(name: string) {
     setInput((prev) => ({
@@ -1032,6 +1041,27 @@ function AiAgentForm({
       ...prev,
       delegate_agent_ids: prev.delegate_agent_ids.includes(id) ? prev.delegate_agent_ids.filter((d) => d !== id) : [...prev.delegate_agent_ids, id],
     }));
+  }
+  function toggleObjectTypeScope(objectType: string) {
+    setInput((prev) => ({
+      ...prev,
+      object_type_scopes: prev.object_type_scopes.some((s) => s.object_type === objectType)
+        ? prev.object_type_scopes.filter((s) => s.object_type !== objectType)
+        : [...prev.object_type_scopes, { object_type: objectType, capabilities: ["read"] as ActionCapability[] }],
+    }));
+  }
+  function toggleScopeCapability(objectType: string, capability: ActionCapability) {
+    setInput((prev) => ({
+      ...prev,
+      object_type_scopes: prev.object_type_scopes.map((s) =>
+        s.object_type === objectType
+          ? { ...s, capabilities: s.capabilities.includes(capability) ? s.capabilities.filter((c) => c !== capability) : [...s.capabilities, capability] }
+          : s,
+      ),
+    }));
+  }
+  function toggleActionType(id: string) {
+    setInput((prev) => ({ ...prev, action_type_ids: prev.action_type_ids.includes(id) ? prev.action_type_ids.filter((a) => a !== id) : [...prev.action_type_ids, id] }));
   }
 
   const delegateChoices = agents.filter((a) => a.is_active && a.id !== initial?.id);
@@ -1193,6 +1223,49 @@ function AiAgentForm({
                     <label key={a.id} style={{ fontSize: 13 }}>
                       <input type="checkbox" checked={input.delegate_agent_ids.includes(a.id)} onChange={() => toggleDelegate(a.id)} /> {a.icon}{" "}
                       {a.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="field full">
+              <label>Ontology scope</label>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+                Empty means unscoped - this agent's Record tools above work against any object type, exactly as before this
+                feature. Add an object type to restrict this agent to it, and which capabilities it may exercise there.
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
+                {(objectTypesQuery.data ?? []).map((o) => {
+                  const scope = input.object_type_scopes.find((s) => s.object_type === o.key);
+                  return (
+                    <label key={o.key} style={{ fontSize: 13 }}>
+                      <input type="checkbox" checked={!!scope} onChange={() => toggleObjectTypeScope(o.key)} /> {o.label_plural}
+                    </label>
+                  );
+                })}
+              </div>
+              {input.object_type_scopes.map((scope) => (
+                <div key={scope.object_type} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 12, marginBottom: 4 }}>
+                  <span style={{ width: 140 }}>{scope.object_type}:</span>
+                  {ONTOLOGY_CAPABILITIES.map((c) => (
+                    <label key={c} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                      <input type="checkbox" checked={scope.capabilities.includes(c)} onChange={() => toggleScopeCapability(scope.object_type, c)} /> {c}
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+            {(actionTypesQuery.data ?? []).length > 0 && (
+              <div className="field full">
+                <label>Action Types this agent may invoke</label>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+                  Grants the new `invoke_action` tool, scoped to exactly the Action Types checked here - each still enforces
+                  its own required capability independent of the Ontology scope above.
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {(actionTypesQuery.data ?? []).map((a) => (
+                    <label key={a.id} style={{ fontSize: 13 }}>
+                      <input type="checkbox" checked={input.action_type_ids.includes(a.id)} onChange={() => toggleActionType(a.id)} /> {a.name} ({a.target_object_type})
                     </label>
                   ))}
                 </div>

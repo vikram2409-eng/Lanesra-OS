@@ -120,7 +120,7 @@ fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str, ac
         conn, ws,
         &AiAgentInput {
             name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."),
-            action_names, delegate_agent_ids: vec![], skill_ids: vec![],
+            action_names, delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
         },
         Some(admin),
     )
@@ -134,7 +134,7 @@ async fn agent_and_skill_crud_and_non_admin_rejected_on_create() {
 
     let agent_input = AiAgentInput {
         name: "Helper".into(), description: Some("A helper".into()), icon: "🤖".into(), system_prompt: "Be helpful.".into(),
-        action_names: vec!["list_records".into()], delegate_agent_ids: vec![], skill_ids: vec![],
+        action_names: vec!["list_records".into()], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
     };
     let denied = ai_agent_service::create(&conn, &ws, &agent_input, Some(&rep));
     assert!(denied.unwrap_err().to_string().contains("Administrator"));
@@ -218,7 +218,7 @@ async fn an_attached_skills_use_skill_tool_returns_its_full_instructions() {
     .unwrap();
     let agent = ai_agent_service::create(
         &conn, &ws,
-        &AiAgentInput { name: "Hygiene Bot".into(), description: None, icon: "🤖".into(), system_prompt: "Keep records tidy.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![skill.id.clone()] },
+        &AiAgentInput { name: "Hygiene Bot".into(), description: None, icon: "🤖".into(), system_prompt: "Keep records tidy.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![skill.id.clone()], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
@@ -241,7 +241,7 @@ async fn delegation_runs_a_sub_agent_and_returns_its_answer() {
     let helper = make_agent(&conn, &ws, &admin, "Helper", vec![]);
     let supervisor = ai_agent_service::create(
         &conn, &ws,
-        &AiAgentInput { name: "Supervisor".into(), description: None, icon: "🤖".into(), system_prompt: "Delegate math questions.".into(), action_names: vec![], delegate_agent_ids: vec![helper.id.clone()], skill_ids: vec![] },
+        &AiAgentInput { name: "Supervisor".into(), description: None, icon: "🤖".into(), system_prompt: "Delegate math questions.".into(), action_names: vec![], delegate_agent_ids: vec![helper.id.clone()], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
@@ -305,7 +305,7 @@ async fn the_delegation_depth_guard_stops_a_chain_with_a_tool_error_not_a_crash(
 }
 
 fn agent_input(name: &str, delegate_agent_ids: Vec<String>) -> AiAgentInput {
-    AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."), action_names: vec![], delegate_agent_ids, skill_ids: vec![] }
+    AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."), action_names: vec![], delegate_agent_ids, skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] }
 }
 
 #[tokio::test]

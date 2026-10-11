@@ -958,6 +958,8 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
                 action_names: agent_input.action_names.clone(),
                 delegate_agent_ids: Vec::new(),
                 skill_ids,
+                object_type_scopes: Vec::new(),
+                action_type_ids: Vec::new(),
             },
             actor_user_id,
         )?;
@@ -994,6 +996,8 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
                 action_names: current.action_names,
                 delegate_agent_ids: delegate_ids,
                 skill_ids: current.skill_ids,
+                object_type_scopes: current.object_type_scopes,
+                action_type_ids: current.action_type_ids,
             },
             actor_user_id,
         )?;

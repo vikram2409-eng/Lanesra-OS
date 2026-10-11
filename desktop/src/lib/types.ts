@@ -2556,10 +2556,20 @@ export interface AiAgentDefinition {
   current_version_id: string | null;
   /** Agent Access Governance (issue #245): this agent's own bound identity for record-write access-control purposes - `null` changes nothing. */
   acts_as_user_id: string | null;
+  /** Ontology Layer epic, issue #344: empty means unscoped - this agent's tools work against any object type, exactly as before this feature. */
+  object_type_scopes: ObjectTypeScope[];
+  /** Ontology Layer epic, issue #344: specific Action Types (issue #343) this agent's `invoke_action` tool may call. */
+  action_type_ids: string[];
   created_at: string;
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
+}
+
+/** Ontology Layer epic, issue #344: see `AiAgentDefinition.object_type_scopes`'s own doc comment. `capabilities` is the same plain validated string vocabulary `ActionCapability` already uses. */
+export interface ObjectTypeScope {
+  object_type: string;
+  capabilities: ActionCapability[];
 }
 
 export interface AiAgentInput {
@@ -2570,6 +2580,8 @@ export interface AiAgentInput {
   action_names: string[];
   delegate_agent_ids: string[];
   skill_ids: string[];
+  object_type_scopes: ObjectTypeScope[];
+  action_type_ids: string[];
 }
 
 export interface AiAgentMemoryUpdate {

@@ -108,7 +108,7 @@ fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str, ac
         conn, ws,
         &AiAgentInput {
             name: name.into(), description: None, icon: "🤖".into(), system_prompt: format!("You are {name}."),
-            action_names, delegate_agent_ids: vec![], skill_ids: vec![],
+            action_names, delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
         },
         Some(admin),
     )

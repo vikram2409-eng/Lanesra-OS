@@ -385,6 +385,8 @@ async fn execute_node(
                     is_active: true,
                     current_version_id: None,
                     acts_as_user_id: None,
+                    object_type_scopes: Vec::new(),
+                    action_type_ids: Vec::new(),
                     created_at: now_iso(),
                     created_by: None,
                     updated_at: now_iso(),

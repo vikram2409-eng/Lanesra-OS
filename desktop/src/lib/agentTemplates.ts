@@ -33,6 +33,8 @@ function base(name: string, icon: string, description: string, tone: string, per
     action_names,
     delegate_agent_ids: [],
     skill_ids: [],
+    object_type_scopes: [],
+    action_type_ids: [],
   };
 }
 

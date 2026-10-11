@@ -57,6 +57,8 @@ use crate::services::ai_memory_service;
 use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
 use crate::services::api_object_service;
 use crate::services::policy_engine_service;
+use crate::repositories::action_type_repo;
+use crate::services::action_type_service;
 
 const MAX_ROUNDS: u8 = 8;
 
@@ -124,6 +126,46 @@ fn required_str<'a>(args: &'a Value, key: &str) -> AppResult<&'a str> {
 fn required_object<'a>(args: &'a Value, key: &str) -> AppResult<&'a Value> {
     let v = args.get(key).ok_or_else(|| AppError::Validation(format!("Missing required argument '{key}'")))?;
     if v.is_object() { Ok(v) } else { Err(AppError::Validation(format!("'{key}' must be an object"))) }
+}
+
+/// The plain validated capability string (`models::access_role::Capability`'s
+/// own 5 values, as everything else in this codebase keys them) a record
+/// tool exercises - `None` for `list_objects`/`get_platform_overview`,
+/// which name no single object type to check a scope against.
+fn implied_capability(tool_name: &str) -> Option<&'static str> {
+    match tool_name {
+        "create_record" => Some("create"),
+        "update_record" => Some("update"),
+        "archive_record" => Some("delete"),
+        "list_records" | "get_record" | "search_records" | "get_related_records" | "semantic_search_records" | "get_object_metadata" => Some("read"),
+        _ => None,
+    }
+}
+
+/// Ontology Layer epic, issue #344: `agent.object_type_scopes` empty
+/// means unscoped - every record tool call dispatches exactly as it did
+/// before this feature, by construction (this function is a no-op). Once
+/// an admin adds a scope entry, every record tool naming an `object_key`
+/// is checked against it - fail-closed, the same stance this codebase's
+/// other gap-closing phases (e.g. Agent Access Governance, issue #245)
+/// already took: no `object_key` argument at all is a deny too, not an
+/// unchecked pass-through, since a scoped agent must always declare
+/// which object type it's touching to be checked against its own scope.
+fn check_object_type_scope(agent: &AiAgentDefinition, tool_name: &str, arguments: &Value) -> AppResult<()> {
+    if agent.object_type_scopes.is_empty() {
+        return Ok(());
+    }
+    let Some(capability) = implied_capability(tool_name) else { return Ok(()) };
+    let object_key = arguments.get("object_key").and_then(Value::as_str);
+    let Some(object_key) = object_key else {
+        return Err(AppError::Validation(format!("'{tool_name}' needs an object_key - this agent is scoped to specific object types and cannot be called without naming one")));
+    };
+    let scope = agent.object_type_scopes.iter().find(|s| s.object_type == object_key);
+    match scope {
+        Some(s) if s.capabilities.iter().any(|c| c == capability) => Ok(()),
+        Some(_) => Err(AppError::Validation(format!("This agent's Ontology scope for '{object_key}' does not grant '{capability}'"))),
+        None => Err(AppError::Validation(format!("This agent is not scoped to act on '{object_key}'"))),
+    }
 }
 
 /// `access_actor` is Agent Access Governance's (issue #245) effective
@@ -356,7 +398,7 @@ fn admin_tools() -> Vec<ToolSpec> {
 /// Firewall never saw them. Classified as their own source so a workspace
 /// can still block/risk-gate `delegate_to_agent`, say, without this
 /// function pretending they're record/admin tools.
-const AGENT_INTERNAL_TOOLS: &[&str] = &["update_memory", "remember", "get_memory", "search_knowledge", "use_skill", "delegate_to_agent"];
+const AGENT_INTERNAL_TOOLS: &[&str] = &["update_memory", "remember", "get_memory", "search_knowledge", "use_skill", "delegate_to_agent", "invoke_action"];
 
 pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
     if record_tools().iter().any(|t| t.name == name) {
@@ -951,6 +993,38 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
         ));
     }
 
+    // Ontology Layer epic, issue #344: this agent's own governed Action
+    // Types (issue #343) - only offered when it actually has at least one,
+    // same "no point offering a tool with nothing behind it" reasoning
+    // `use_skill`/`delegate_to_agent` above already follow. Each name is
+    // listed with its description so the model can decide which one (if
+    // any) fits, the same way `use_skill`'s own prompt lists skill names.
+    if !agent.action_type_ids.is_empty() {
+        let mut descriptions = Vec::new();
+        for action_type_id in &agent.action_type_ids {
+            if let Some(def) = action_type_repo::get(conn, action_type_id).map_err(AppError::from)? {
+                if def.is_active {
+                    let params = if def.parameters.is_empty() {
+                        "no parameters".to_string()
+                    } else {
+                        def.parameters.iter().map(|p| format!("{} ({}{})", p.key, p.field_type, if p.required { ", required" } else { "" })).collect::<Vec<_>>().join(", ")
+                    };
+                    descriptions.push(format!("'{}' on {} - {} [params: {params}]", def.name, def.target_object_type, def.description));
+                }
+            }
+        }
+        if !descriptions.is_empty() {
+            tools.push(tool(
+                "invoke_action",
+                &format!(
+                    "Invoke one of your granted Action Types against a specific record - always goes through that object's real write path, with its own required capability and any Business Rules enforced exactly as a human's edit would be. Arguments: action_type_name (one of the names listed below), record_id, params (an object of parameter key -> string value, per the Action Type's own parameters). Your granted Action Types: {}",
+                    descriptions.join("; ")
+                ),
+                object_schema(),
+            ));
+        }
+    }
+
     Ok(tools)
 }
 
@@ -1075,10 +1149,41 @@ fn execute_agent_tool<'a>(
                 let outcome = run_agent_once(conn, workspace_id, master_key, actor, &target, seed, memory_context).await?;
                 Ok(json!({"answer": outcome.final_text}))
             }
+            "invoke_action" => {
+                let action_type_name = required_str(&call.arguments, "action_type_name")?;
+                let mut matched_id = None;
+                for candidate_id in &agent.action_type_ids {
+                    if let Some(def) = action_type_repo::get(conn, candidate_id).map_err(AppError::from)? {
+                        if def.is_active && def.name == action_type_name {
+                            matched_id = Some(def.id);
+                            break;
+                        }
+                    }
+                }
+                let action_type_id = matched_id.ok_or_else(|| AppError::Validation(format!("'{action_type_name}' isn't one of this agent's granted Action Types")))?;
+                let record_id = required_str(&call.arguments, "record_id")?;
+                let params: std::collections::HashMap<String, String> = call
+                    .arguments
+                    .get("params")
+                    .and_then(|v| v.as_object())
+                    .map(|obj| obj.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect())
+                    .unwrap_or_default();
+                // Action Types are a governed primitive by design (issue
+                // #343's own `required_capability` check) - always
+                // attributed to a real actor when one exists, independent
+                // of whether `enforce_record_access` has opted generic
+                // record writes into attribution, unlike the "record"
+                // branch below. An Assign-gated Action Type must still
+                // deny an agent/actor without Assign even when this
+                // agent's own Ontology scope only grants `update`.
+                let invoking_actor = agent.acts_as_user_id.as_deref().or(actor);
+                action_type_service::invoke(conn, workspace_id, &action_type_id, record_id, &params, invoking_actor)
+            }
             other => match tool_source(other) {
                 Some(src @ ("record" | "admin" | "connector_read" | "connector_write" | "mcp_read" | "mcp_write")) => {
                     match src {
                         "record" => {
+                            check_object_type_scope(agent, other, &call.arguments)?;
                             let access_actor = effective_write_actor(conn, workspace_id, Some(&agent.id), actor, agent.acts_as_user_id.as_deref())?;
                             dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments, access_actor.as_deref()).await
                         }

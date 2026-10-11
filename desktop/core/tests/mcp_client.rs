@@ -250,7 +250,7 @@ fn validate_action_names_rejects_an_mcp_tool_that_is_not_currently_available() {
     let unavailable = AiAgentInput {
         name: "Bad Agent".into(), description: None, icon: "🤖".into(), system_prompt: "You help.".into(),
         action_names: vec!["mcp_tool:not_a_real_server:get_widget".into()],
-        delegate_agent_ids: vec![], skill_ids: vec![],
+        delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
     };
     let err = ai_agent_service::create(&conn, &ws, &unavailable, Some(&admin)).unwrap_err();
     assert!(err.to_string().contains("isn't currently available"), "{err}");
@@ -276,7 +276,7 @@ async fn an_agent_with_a_write_capable_mcp_tool_requires_administrator() {
         &AiAgentInput {
             name: "Writer".into(), description: None, icon: "🤖".into(), system_prompt: "You create widgets.".into(),
             action_names: vec![format!("mcp_write_tool:{}:create_widget", server.id)],
-            delegate_agent_ids: vec![], skill_ids: vec![],
+            delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![],
         },
         Some(&admin),
     )

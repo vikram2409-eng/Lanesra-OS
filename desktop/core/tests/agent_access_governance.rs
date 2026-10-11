@@ -106,7 +106,7 @@ fn no_op_policy() -> AiAgentPolicyInput {
 fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, action_names: Vec<String>) -> lanesra_core::models::ai_agent::AiAgentDefinition {
     ai_agent_service::create(
         conn, ws,
-        &AiAgentInput { name: "Records Agent".into(), description: None, icon: "🤖".into(), system_prompt: "You act on records.".into(), action_names, delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Records Agent".into(), description: None, icon: "🤖".into(), system_prompt: "You act on records.".into(), action_names, delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(admin),
     )
     .unwrap()

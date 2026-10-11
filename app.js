@@ -9441,7 +9441,7 @@ function aiAgentsTab(body){
  body.innerHTML=`<div class="panel">
  <div class="panel-head"><h3>AI Agents</h3><button class="btn btn-primary" id="addAgent">+ New agent</button></div>
  <p class="muted" style="font-size:13px">Each agent is a persona layered over a set of actions it can take, with its own persistent memory and attached skills - real, structured data in this browser; chatting with one simulates the reply with a keyword match, since this static demo has no server to run a real tool-calling loop from. A supervisor agent with no actions of its own can delegate to named sub-agents instead (depth-guarded against runaway recursion, same as the real edition).</p>
- <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Delegates to</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${(a.delegateAgentIds||[]).length||'—'}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-guardrails-agent="${a.id}">Guardrails</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-versions-agent="${a.id}">Versions</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Delegates to</th><th>Ontology scope</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${(a.delegateAgentIds||[]).length||'—'}</td><td>${(a.objectTypeScopes||[]).length===0?'<span class="muted">Unscoped</span>':`${a.objectTypeScopes.length} object type(s)`}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-guardrails-agent="${a.id}">Guardrails</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-versions-agent="${a.id}">Versions</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
  <div id="agentChatWrap"></div>
  <div id="agentMemoryWrap"></div>
  <div id="agentGuardrailsWrap"></div>
@@ -10374,6 +10374,20 @@ function aiAgentModal(agent){
  <div class="field full"><label>Skills</label><select name="skillIds" multiple>${(data.aiSkills||[]).map(s=>`<option value="${s.id}" ${(agent?.skillIds||[]).includes(s.id)?'selected':''}>${s.name}</option>`).join('')}</select></div>
  <div class="field full"><label>Delegates to (optional)</label><select name="delegateAgentIds" multiple>${(data.aiAgents||[]).filter(a=>!agent||a.id!==agent.id).map(a=>`<option value="${a.id}" ${(agent?.delegateAgentIds||[]).includes(a.id)?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select><small class="field-help">A supervisor agent with no actions of its own hands the request to the first active delegate picked here instead - depth-guarded against runaway recursion.</small></div>
  <div class="field full"><label>Acts as (optional)</label><select name="actsAsUserId"><option value="">— Unattributed (today's behavior) —</option>${(data.users||[]).map(u=>`<option value="${u.id}" ${agent?.actsAsUserId===u.id?'selected':''}>${u.name}</option>`).join('')}</select><small class="field-help">This agent's own bound identity for record-write access-control purposes - see the Agent Access Inspector below.</small></div>
+ <div class="field full">
+  <label>Ontology scope (optional)</label>
+  <small class="field-help">Empty means unscoped - this agent's Actions above work against any object type, exactly as before this feature. Check an object type to restrict this agent to it, and which capabilities it may exercise there.</small>
+  <div style="max-height:160px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;padding:6px;margin-top:4px">
+   ${ontologyObjectTypes().map(t=>{
+     const existing=(agent?.objectTypeScopes||[]).find(s=>s.objectType===t.key);
+     return `<div style="display:flex;gap:10px;align-items:center;font-size:13px;margin-bottom:4px">
+      <label style="width:140px"><input type="checkbox" data-scope-type="${t.key}" ${existing?'checked':''}> ${t.labelPlural}</label>
+      ${ACTION_CAPABILITIES.map(c=>`<label style="display:flex;gap:3px;align-items:center"><input type="checkbox" data-scope-cap="${t.key}:${c}" ${(existing?.capabilities||['read']).includes(c)?'checked':''}> ${c}</label>`).join('')}
+     </div>`;
+   }).join('')}
+  </div>
+ </div>
+ ${(data.actionTypeDefinitions||[]).filter(a=>a.isActive).length?`<div class="field full"><label>Action Types this agent may invoke</label><small class="field-help">Grants the invoke_action tool, scoped to exactly the Action Types checked here - each still enforces its own required capability independent of the Ontology scope above.</small><select name="actionTypeIds" multiple style="min-height:80px">${(data.actionTypeDefinitions||[]).filter(a=>a.isActive).map(a=>`<option value="${a.id}" ${(agent?.actionTypeIds||[]).includes(a.id)?'selected':''}>${a.name} (${a.targetObjectType})</option>`).join('')}</select></div>`:''}
  <div class="modal-actions">${isEdit?`<button type="button" class="btn btn-secondary" data-delete-agent>Delete</button>`:''}<button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save agent':'Create agent'}</button></div>
  </form>`;
  modal(isEdit?`Edit ${agent.name}`:'New agent',body);
@@ -10385,7 +10399,12 @@ function aiAgentModal(agent){
   const skillIds=Array.from(e.target.elements.skillIds.selectedOptions).map(o=>o.value);
   const delegateAgentIds=Array.from(e.target.elements.delegateAgentIds.selectedOptions).map(o=>o.value);
   const actsAsUserId=fd.get('actsAsUserId')||null;
-  const obj={name:fd.get('name'),icon:fd.get('icon'),description:fd.get('description')||'',systemPrompt:fd.get('systemPrompt'),actionNames,skillIds,delegateAgentIds,actsAsUserId};
+  const objectTypeScopes=ontologyObjectTypes()
+   .filter(t=>e.target.querySelector(`[data-scope-type="${t.key}"]`).checked)
+   .map(t=>({objectType:t.key,capabilities:ACTION_CAPABILITIES.filter(c=>e.target.querySelector(`[data-scope-cap="${t.key}:${c}"]`).checked)}))
+   .filter(s=>s.capabilities.length>0);
+  const actionTypeIds=e.target.elements.actionTypeIds?Array.from(e.target.elements.actionTypeIds.selectedOptions).map(o=>o.value):[];
+  const obj={name:fd.get('name'),icon:fd.get('icon'),description:fd.get('description')||'',systemPrompt:fd.get('systemPrompt'),actionNames,skillIds,delegateAgentIds,actsAsUserId,objectTypeScopes,actionTypeIds};
   if(isEdit)Object.assign(agent,obj);
   else{
    obj.id='agt_'+uid();obj.isActive=true;obj.memoryMd='';obj.createdAt=new Date().toISOString();

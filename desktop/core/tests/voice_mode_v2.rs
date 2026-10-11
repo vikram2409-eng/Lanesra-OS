@@ -141,7 +141,7 @@ fn create_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str) 
     ai_agent_service::create(
         conn,
         ws,
-        &AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: "You are a helpful assistant.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: name.into(), description: None, icon: "🤖".into(), system_prompt: "You are a helpful assistant.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(admin),
     )
     .unwrap()

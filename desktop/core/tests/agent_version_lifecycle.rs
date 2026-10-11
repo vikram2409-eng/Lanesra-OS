@@ -42,7 +42,7 @@ fn publishing_a_new_version_deprecates_the_previous_published_one() {
     let (conn, workspace_id, admin) = setup_workspace("Version Lifecycle Co");
     let agent = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Auditor".into(), description: None, icon: "🕵".into(), system_prompt: "You audit.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Auditor".into(), description: None, icon: "🕵".into(), system_prompt: "You audit.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
@@ -70,7 +70,7 @@ fn illegal_transitions_are_rejected() {
     let (conn, workspace_id, admin) = setup_workspace("Illegal Transition Co");
     let agent = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Agent".into(), description: None, icon: "🤖".into(), system_prompt: "P.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Agent".into(), description: None, icon: "🤖".into(), system_prompt: "P.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
@@ -92,7 +92,7 @@ fn a_published_version_is_immutable() {
     let (conn, workspace_id, admin) = setup_workspace("Immutability Co");
     let agent = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Agent".into(), description: None, icon: "🤖".into(), system_prompt: "P.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Agent".into(), description: None, icon: "🤖".into(), system_prompt: "P.".into(), action_names: vec![], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();
@@ -232,7 +232,7 @@ async fn publishing_is_blocked_by_a_failing_policy_compliance_eval_run() {
     let (conn, workspace_id, admin) = setup_workspace("Publish Gate Co");
     let agent = ai_agent_service::create(
         &conn, &workspace_id,
-        &AiAgentInput { name: "Lister".into(), description: None, icon: "🤖".into(), system_prompt: "You list objects.".into(), action_names: vec!["list_objects".into()], delegate_agent_ids: vec![], skill_ids: vec![] },
+        &AiAgentInput { name: "Lister".into(), description: None, icon: "🤖".into(), system_prompt: "You list objects.".into(), action_names: vec!["list_objects".into()], delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
         Some(&admin),
     )
     .unwrap();

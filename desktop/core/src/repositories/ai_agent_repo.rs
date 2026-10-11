@@ -7,10 +7,12 @@ use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::now_iso;
 use crate::models::ai::AiAgentModelRouting;
-use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiAgentMemorySnapshot, AiSkill, AiSkillInput};
+use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiAgentMemorySnapshot, AiSkill, AiSkillInput, ObjectTypeScope};
 
 fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
     let action_names_json: String = row.get("action_names_json")?;
+    let object_type_scopes_json: String = row.get("object_type_scopes_json")?;
+    let action_type_ids_json: String = row.get("action_type_ids_json")?;
     Ok(AiAgentDefinition {
         id: row.get("id")?,
         workspace_id: row.get("workspace_id")?,
@@ -28,6 +30,8 @@ fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
         is_active: row.get("is_active")?,
         current_version_id: row.get("current_version_id")?,
         acts_as_user_id: row.get("acts_as_user_id")?,
+        object_type_scopes: serde_json::from_str::<Vec<ObjectTypeScope>>(&object_type_scopes_json).unwrap_or_default(),
+        action_type_ids: serde_json::from_str(&action_type_ids_json).unwrap_or_default(),
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -117,10 +121,12 @@ fn replace_skills(conn: &Connection, agent_id: &str, skill_ids: &[String]) -> ru
 pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentDefinition> {
     let now = now_iso();
     let action_names_json = serde_json::to_string(&input.action_names).unwrap_or_else(|_| "[]".into());
+    let object_type_scopes_json = serde_json::to_string(&input.object_type_scopes).unwrap_or_else(|_| "[]".into());
+    let action_type_ids_json = serde_json::to_string(&input.action_type_ids).unwrap_or_else(|_| "[]".into());
     conn.execute(
-        "INSERT INTO ai_agents (id, workspace_id, name, description, icon, system_prompt, memory_md, action_names_json, is_active, created_at, created_by, updated_at, updated_by)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '', ?7, 1, ?8, ?9, ?8, ?9)",
-        rusqlite::params![id, workspace_id, input.name, input.description, input.icon, input.system_prompt, action_names_json, now, actor_user_id],
+        "INSERT INTO ai_agents (id, workspace_id, name, description, icon, system_prompt, memory_md, action_names_json, object_type_scopes_json, action_type_ids_json, is_active, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '', ?7, ?8, ?9, 1, ?10, ?11, ?10, ?11)",
+        rusqlite::params![id, workspace_id, input.name, input.description, input.icon, input.system_prompt, action_names_json, object_type_scopes_json, action_type_ids_json, now, actor_user_id],
     )?;
     replace_delegates(conn, id, &input.delegate_agent_ids)?;
     replace_skills(conn, id, &input.skill_ids)?;
@@ -169,9 +175,11 @@ pub fn create_initial_version(conn: &Connection, agent: &AiAgentDefinition, acto
 pub fn update(conn: &Connection, id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentDefinition> {
     let now = now_iso();
     let action_names_json = serde_json::to_string(&input.action_names).unwrap_or_else(|_| "[]".into());
+    let object_type_scopes_json = serde_json::to_string(&input.object_type_scopes).unwrap_or_else(|_| "[]".into());
+    let action_type_ids_json = serde_json::to_string(&input.action_type_ids).unwrap_or_else(|_| "[]".into());
     conn.execute(
-        "UPDATE ai_agents SET name = ?1, description = ?2, icon = ?3, system_prompt = ?4, action_names_json = ?5, updated_at = ?6, updated_by = ?7 WHERE id = ?8",
-        rusqlite::params![input.name, input.description, input.icon, input.system_prompt, action_names_json, now, actor_user_id, id],
+        "UPDATE ai_agents SET name = ?1, description = ?2, icon = ?3, system_prompt = ?4, action_names_json = ?5, object_type_scopes_json = ?6, action_type_ids_json = ?7, updated_at = ?8, updated_by = ?9 WHERE id = ?10",
+        rusqlite::params![input.name, input.description, input.icon, input.system_prompt, action_names_json, object_type_scopes_json, action_type_ids_json, now, actor_user_id, id],
     )?;
     replace_delegates(conn, id, &input.delegate_agent_ids)?;
     replace_skills(conn, id, &input.skill_ids)?;
