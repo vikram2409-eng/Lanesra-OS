@@ -716,6 +716,13 @@ const ADMIN_CATEGORIES=[
  {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
 ];
 let dependencyExplorerState={type:'custom_object',id:null,inspectType:null,inspectId:null,transitive:null};
+// Legend toggle-filter (issue #339's own design text: "identify/toggle
+// what's showing") - kept as its own module-level Set rather than inside
+// `dependencyExplorerState` since it's a pure display filter, orthogonal
+// to which root/component is selected, and several call sites already
+// replace that whole state object wholesale.
+let depExplorerHiddenTypes=new Set();
+let object360HiddenTypes=new Set();
 let testEvalView={selected:new Set()};
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -2106,7 +2113,10 @@ function detail360Header(breadcrumbLabel,title,eyebrow,metaHtml,auditHtml){
  return `<div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><button data-back-list>${breadcrumbLabel}</button><span>›</span><span>${title}</span></div>
  <div class="rule360-header">
   <div><div class="eyebrow">${eyebrow||''}</div><h1>${title}</h1><div class="rule360-meta">${metaHtml}</div>${auditHtml||''}</div>
-  <button class="btn btn-secondary" id="editDetailRecord">Edit</button>
+  <div style="display:flex;gap:8px">
+   <button class="btn btn-secondary" id="openObject360">View in Object 360</button>
+   <button class="btn btn-secondary" id="editDetailRecord">Edit</button>
+  </div>
  </div>`;
 }
 
@@ -2183,11 +2193,208 @@ function wireActivityTimelines(root){
   };
  });
 }
-function wireDetail360Nav(editHandler){
+function wireDetail360Nav(editHandler,object360Handler){
  document.querySelector('[data-clear-filter]')?.addEventListener('click',()=>{current='dashboard';viewFilter=null;detailRecord=null;renderView()});
  $('[data-back-list]').onclick=()=>{detailRecord=null;renderView()};
  $('#editDetailRecord').onclick=editHandler;
+ if(object360Handler)$('#openObject360').onclick=object360Handler;
  wireRelatedRows($('#view'));
+}
+// Object 360 (issue #352): a record-level counterpart to the Ontology
+// Explorer (#339) - given one real record, shows every record directly
+// linked to it across every relationship it participates in (one dot per
+// actual related record, not per object type - reuses `relatedRecordsFor`
+// unchanged), plus its Business Unit, the active Business Rules/Workflows
+// that apply to records of its type, the AI Agents scoped to that type,
+// and its own Interactions log (this demo's closest honest substitute for
+// a full audit trail - see app.js's own "no audit-event log" note). Same
+// `.ontology-*` CSS classes and radial layout math as the Dependency
+// Explorer, applied to a different data source.
+function entityDotHtml(entityType,size){size=size||10;return `<span style="display:inline-block;flex-shrink:0;width:${size}px;height:${size}px;border-radius:50%;background:var(--chart-${ontologyColorIndex(entityType)})"></span>`}
+// Object 360 (issue #352): this demo's built-in CRM relationships
+// (company_id/contact_id on contacts/opportunities/quotes/orders/
+// invoices/contracts, task relatedType/relatedId, order.quoteId,
+// invoice.orderId) are plain hardcoded fields the same way the real
+// edition's are native FK columns - they were never modeled as
+// `data.relationshipDefinitions`/`relationshipInstances` rows (that
+// generic system is for admin-defined/custom-object relationships only),
+// so `relatedRecordsFor` alone would show every built-in record as having
+// no related records at all. Mirrors exactly the field pairs
+// `companyDetail()`/`contactDetail()` already hand-filter for their own
+// hardcoded related cards above, consolidated once here instead of
+// re-deriving per caller.
+function nativeRelatedRecordsFor(entityType,entityId){
+ const out=[];
+ const push=(targetType,targetId,groupLabel,defKey)=>{
+  const rec=byId(targetType,targetId); if(!rec)return;
+  out.push({instanceId:targetId,defKey,groupLabel,entityType:targetType,entityId:targetId,displayName:recordDisplayName(targetType,rec),status:rec.status||''});
+ };
+ if(entityType==='companies'){
+  data.contacts.filter(x=>x.companyId===entityId).forEach(x=>push('contacts',x.id,'Contacts','company_contacts'));
+  data.opportunities.filter(x=>x.companyId===entityId).forEach(x=>push('opportunities',x.id,'Sales Pipeline','company_opportunities'));
+  data.quotes.filter(x=>x.companyId===entityId).forEach(x=>push('quotes',x.id,'Quotes','company_quotes'));
+  data.orders.filter(x=>x.companyId===entityId).forEach(x=>push('orders',x.id,'Orders','company_orders'));
+  data.invoices.filter(x=>x.companyId===entityId).forEach(x=>push('invoices',x.id,'Invoices','company_invoices'));
+  data.contracts.filter(x=>x.companyId===entityId).forEach(x=>push('contracts',x.id,'Contracts','company_contracts'));
+  data.tasks.filter(x=>x.relatedType==='Company'&&x.relatedId===entityId).forEach(x=>push('tasks',x.id,'Tasks','company_tasks'));
+ }else if(entityType==='contacts'){
+  data.opportunities.filter(x=>x.contactId===entityId).forEach(x=>push('opportunities',x.id,'Sales Pipeline','contact_opportunities'));
+  data.quotes.filter(x=>x.contactId===entityId).forEach(x=>push('quotes',x.id,'Quotes','contact_quotes'));
+  data.orders.filter(x=>x.contactId===entityId).forEach(x=>push('orders',x.id,'Orders','contact_orders'));
+  data.contracts.filter(x=>x.contactId===entityId).forEach(x=>push('contracts',x.id,'Contracts','contact_contracts'));
+  data.tasks.filter(x=>x.relatedType==='Contact'&&x.relatedId===entityId).forEach(x=>push('tasks',x.id,'Tasks','contact_tasks'));
+ }else if(entityType==='opportunities'){
+  data.quotes.filter(x=>x.opportunityId===entityId).forEach(x=>push('quotes',x.id,'Quotes','opportunity_quotes'));
+  data.tasks.filter(x=>x.relatedType==='Opportunity'&&x.relatedId===entityId).forEach(x=>push('tasks',x.id,'Tasks','opportunity_tasks'));
+ }else if(entityType==='quotes'){
+  data.orders.filter(x=>x.quoteId===entityId).forEach(x=>push('orders',x.id,'Orders','quote_orders'));
+  data.tasks.filter(x=>x.relatedType==='Quote'&&x.relatedId===entityId).forEach(x=>push('tasks',x.id,'Tasks','quote_tasks'));
+ }else if(entityType==='orders'){
+  data.invoices.filter(x=>x.orderId===entityId).forEach(x=>push('invoices',x.id,'Invoices','order_invoices'));
+  data.tasks.filter(x=>x.relatedType==='Order'&&x.relatedId===entityId).forEach(x=>push('tasks',x.id,'Tasks','order_tasks'));
+ }else if(entityType==='invoices'){
+  data.tasks.filter(x=>x.relatedType==='Invoice'&&x.relatedId===entityId).forEach(x=>push('tasks',x.id,'Tasks','invoice_tasks'));
+ }else if(entityType==='contracts'){
+  data.tasks.filter(x=>x.relatedType==='Contract'&&x.relatedId===entityId).forEach(x=>push('tasks',x.id,'Tasks','contract_tasks'));
+ }else if(entityType==='tasks'){
+  const t=byId('tasks',entityId);
+  if(t&&t.relatedType&&t.relatedId){
+   const targetType=entityKeyForRelatedType(t.relatedType);
+   if(targetType)push(targetType,t.relatedId,'Related to','task_related_to');
+  }
+ }
+ return out;
+}
+// Task.relatedType stores the human-facing singular ("Company","Contact",
+// "Opportunity",...) - the same vocabulary `relatedLabelByType` on each
+// desktop Tasks.tsx detail page already keys by - not this demo's own
+// lowercase-plural data-array keys, so this is the one explicit mapping
+// between the two conventions.
+function entityKeyForRelatedType(relatedType){
+ return {Company:'companies',Contact:'contacts',Opportunity:'opportunities',Quote:'quotes',Order:'orders',Invoice:'invoices',Contract:'contracts'}[relatedType]||null;
+}
+let object360State=null;
+function object360Modal(entityType,entityId,label){
+ object360State={root:{entityType,entityId,label},inspect:{entityType,entityId,label}};
+ modal('Object 360: '+label,'<div id="object360Body"></div>');
+ const modalEl=document.querySelector('#modal .modal');
+ if(modalEl)modalEl.style.cssText+=';width:min(1100px,95vw);max-height:92vh';
+ renderObject360Body();
+}
+function renderObject360Body(){
+ const s=object360State; if(!s)return;
+ const body=$('#object360Body'); if(!body)return;
+ const related=[...relatedRecordsFor(s.root.entityType,s.root.entityId),...nativeRelatedRecordsFor(s.root.entityType,s.root.entityId)];
+ const groups=new Map();
+ related.forEach(r=>{const list=groups.get(r.defKey)||[];list.push(r);groups.set(r.defKey,list)});
+ const groupEntries=Array.from(groups.entries());
+ const rootRecord=byId(s.root.entityType,s.root.entityId);
+ const orgUnit=rootRecord&&rootRecord.owningOrgUnitId?(data.orgUnits||[]).find(o=>o.id===rootRecord.owningOrgUnitId):null;
+
+ const RING=170,ROOTSZ=26,NODESZ=15,MAXPER=20;
+ const cx=RING+60,cy=RING+60;
+ const totalArcs=groupEntries.length+(orgUnit?1:0);
+ const dots=[`<div class="ontology-node-dot ontology-node-root" style="left:${cx-ROOTSZ/2}px;top:${cy-ROOTSZ/2}px;width:${ROOTSZ}px;height:${ROOTSZ}px;background:var(--chart-${ontologyColorIndex(s.root.entityType)})" title="${s.root.label}"></div>`];
+ const edgesSvg=[];
+ let arcIndex=0;
+ if(totalArcs>0){
+  // The fixed inspector card (top:16, right:16) can grow tall - up to 11
+  // groups (related records, Business Unit, Rules, Workflows, Agents,
+  // Activity) - so a quadrant-sized gap isn't enough; dots are confined
+  // to the left semicircle (90deg-270deg, i.e. x <= center) so none can
+  // ever land under it, whatever its height ends up being.
+  const startAngle=Math.PI/2;
+  const arcSize=Math.PI/totalArcs;
+  groupEntries.forEach(([key,members])=>{
+   const start=startAngle+arcIndex*arcSize;
+   const shown=members.slice(0,MAXPER);
+   shown.forEach((m,i)=>{
+    const angle=start+(shown.length===1?arcSize/2:(arcSize*i)/Math.max(1,shown.length-1));
+    const x=cx+RING*Math.cos(angle),y=cy+RING*Math.sin(angle);
+    const isInspecting=s.inspect.entityType===m.entityType&&s.inspect.entityId===m.entityId;
+    const isDimmed=object360HiddenTypes.has(m.entityType);
+    dots.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}${isDimmed?' ontology-node-dimmed':''}" style="left:${x-NODESZ/2}px;top:${y-NODESZ/2}px;width:${NODESZ}px;height:${NODESZ}px;background:var(--chart-${ontologyColorIndex(m.entityType)})" title="${m.displayName}" data-o360-inspect="${m.entityType}:${m.entityId}:${encodeURIComponent(m.displayName)}"></div>`);
+    edgesSvg.push(`<line x1="${x}" y1="${y}" x2="${cx}" y2="${cy}" stroke="var(--line)" stroke-width="1.5"/>`);
+   });
+   arcIndex++;
+  });
+  if(orgUnit){
+   const angle=startAngle+arcIndex*arcSize+arcSize/2;
+   const x=cx+RING*Math.cos(angle),y=cy+RING*Math.sin(angle);
+   const orgUnitDimmed=object360HiddenTypes.has('orgUnit');
+   dots.push(`<div class="ontology-node-dot${orgUnitDimmed?' ontology-node-dimmed':''}" style="left:${x-NODESZ/2}px;top:${y-NODESZ/2}px;width:${NODESZ}px;height:${NODESZ}px;background:var(--chart-6)" title="${orgUnit.name}" data-o360-inspect="orgUnit:${orgUnit.id}:${encodeURIComponent(orgUnit.name)}"></div>`);
+   edgesSvg.push(`<line x1="${x}" y1="${y}" x2="${cx}" y2="${cy}" stroke="var(--line)" stroke-width="1.5"/>`);
+  }
+ }
+ // Dedicated right-side lane for the inspector card, clear of every dot
+ // regardless of the card's height (up to 11 groups) - simpler and more
+ // robust than fine-tuning angles against its 280px width.
+ const w=cx+RING+60+340,h=cy*2;
+
+ const inspectIsRoot=s.inspect.entityType===s.root.entityType&&s.inspect.entityId===s.root.entityId;
+ const isOrgUnitInspect=s.inspect.entityType==='orgUnit';
+ let inspectorHtml;
+ if(isOrgUnitInspect){
+  inspectorHtml=`<div class="ontology-inspector-card">
+   <div class="ontology-inspector-head"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--chart-6);flex-shrink:0"></span><div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">Business Unit</div></div></div>
+   <p class="muted" style="font-size:12px">Business Units aren't individually re-centerable here - see Admin → Organization Units for its own detail.</p>
+  </div>`;
+ }else{
+  let groupsHtml='';
+  if(inspectIsRoot){
+   const rules=(data.fieldRules||[]).filter(r=>r.entity===s.root.entityType&&r.active);
+   const workflows=(data.workflowRules||[]).filter(w=>w.entity===s.root.entityType&&w.active);
+   const agents=(data.aiAgents||[]).filter(a=>a.isActive&&((a.objectTypeScopes||[]).length===0||(a.objectTypeScopes||[]).some(sc=>sc.objectType===s.root.entityType)));
+   const activities=(data.activities||[]).filter(a=>a.entityType===s.root.entityType&&a.entityId===s.root.entityId).slice().sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)).slice(0,10);
+   groupsHtml=`${groupEntries.map(([key,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${(members[0]&&members[0].groupLabel)||key}</div>${members.slice(0,MAXPER).map(m=>`<button type="button" class="ontology-inspector-bullet" data-o360-inspect="${m.entityType}:${m.entityId}:${encodeURIComponent(m.displayName)}">${entityDotHtml(m.entityType)}${m.displayName}</button>`).join('')}${members.length>MAXPER?`<div class="muted" style="font-size:12px">+${members.length-MAXPER} more</div>`:''}</div>`).join('')}
+    ${groupEntries.length===0?'<p class="muted" style="font-size:12px">No related records yet.</p>':''}
+    ${orgUnit?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Business Unit</div><div style="font-size:13px">${orgUnit.name}</div></div>`:''}
+    ${rules.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Business Rules that apply</div>${rules.map(r=>`<div style="font-size:13px">${r.name}</div>`).join('')}</div>`:''}
+    ${workflows.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Workflows that apply</div>${workflows.map(w=>`<div style="font-size:13px">${w.name}</div>`).join('')}</div>`:''}
+    ${agents.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">AI Agents scoped to this object type</div>${agents.map(a=>`<div style="font-size:13px">${a.icon} ${a.name}</div>`).join('')}</div>`:''}
+    ${activities.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Activity</div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}`;
+  }
+  inspectorHtml=`<div class="ontology-inspector-card">
+   <div class="ontology-inspector-head">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${entityLabel(s.inspect.entityType)||s.inspect.entityType}</div></div></div>
+   <div class="ontology-inspector-actions">
+    <button type="button" class="btn btn-primary" id="o360OpenRecord">Open record</button>
+    <button type="button" class="btn btn-secondary" id="o360Recenter" ${inspectIsRoot?'disabled':''}>Show what's around it</button>
+   </div>
+   ${inspectIsRoot?`<div class="ontology-inspector-groups">${groupsHtml}</div>`:''}
+  </div>`;
+ }
+
+ // Legend (doubling as a toggle-filter, same as the Dependency
+ // Explorer's) built from whichever types actually appear among this
+ // record's neighbors - not a fixed list, since any one record only ever
+ // touches a handful of the platform's object types.
+ const legendKeys=Array.from(new Set(related.map(r=>r.entityType)));
+ if(orgUnit)legendKeys.push('orgUnit');
+ const legendHtmlStr=legendKeys.length?`<div class="ontology-legend">${legendKeys.map(k=>{
+  const lbl=k==='orgUnit'?'Business Unit':(entityLabel(k)||k);
+  const color=k==='orgUnit'?6:ontologyColorIndex(k);
+  const isOff=object360HiddenTypes.has(k);
+  return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl}"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:var(--chart-${color})"></span>${lbl}</button>`;
+ }).join('')}</div>`:'';
+
+ body.innerHTML=`<p class="muted" style="font-size:13px;max-width:720px">Every record directly linked to ${s.root.label}, its Business Unit, the Business Rules/Workflows that apply to records like it, and which AI Agents are scoped to act on it.</p>
+ ${legendHtmlStr}
+ <div class="ontology-graph-wrap" style="height:${h+40}px">
+  <div class="ontology-graph-canvas" style="width:${w}px;height:${h}px">
+   <svg width="${w}" height="${h}" style="position:absolute;top:0;left:0;pointer-events:none">${edgesSvg.join('')}</svg>
+   ${dots.join('')}
+   ${inspectorHtml}
+  </div>
+ </div>`;
+
+ body.querySelectorAll('[data-o360-inspect]').forEach(el=>el.onclick=()=>{
+  const [entityType,entityId,labelEnc]=el.dataset.o360Inspect.split(':');
+  object360State={...object360State,inspect:{entityType,entityId,label:decodeURIComponent(labelEnc)}};
+  renderObject360Body();
+ });
+ const openBtn=$('#o360OpenRecord'); if(openBtn)openBtn.onclick=()=>{const t=object360State.inspect;closeModal();openRecordDetail(t.entityType,t.entityId)};
+ const recenterBtn=$('#o360Recenter'); if(recenterBtn)recenterBtn.onclick=()=>{object360State={root:object360State.inspect,inspect:object360State.inspect};renderObject360Body()};
+ body.querySelectorAll('[data-o360-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.o360LegendToggle;if(object360HiddenTypes.has(t))object360HiddenTypes.delete(t);else object360HiddenTypes.add(t);renderObject360Body()});
 }
 function companyDetail(id){
  const c=byId('companies',id);
@@ -2215,7 +2422,7 @@ function companyDetail(id){
    ${activityTimelineHtml('Company',id)}
   </div>
  </div>`;
- wireDetail360Nav(()=>recordModal('companies',fieldsFor('companies',companyFields),c));
+ wireDetail360Nav(()=>recordModal('companies',fieldsFor('companies',companyFields),c),()=>object360Modal('companies',id,c.name));
  wireActivityTimelines($('#view'));
 }
 function contactDetail(id){
@@ -2240,7 +2447,7 @@ function contactDetail(id){
    ${activityTimelineHtml('Contact',id)}
   </div>
  </div>`;
- wireDetail360Nav(()=>recordModal('contacts',fieldsFor('contacts',contactFields),c));
+ wireDetail360Nav(()=>recordModal('contacts',fieldsFor('contacts',contactFields),c),()=>object360Modal('contacts',id,c.name));
  wireActivityTimelines($('#view'));
 }
 // ---- Generic record detail pages for Products/Quotes/Orders/Invoices/
@@ -2448,7 +2655,7 @@ function genericRecordDetail(key,id){
   </div>
   <div>${recordRelatedDefs(key,r).map(([title,items,navKey,labelFn,metaFn])=>relatedCardHtml(title,items,navKey,labelFn,metaFn)).join('')}${customRelatedCardsHtml(key,id)}</div>
  </div>`;
- wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r));
+ wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r),()=>object360Modal(key,id,r[DETAIL_TITLE_FIELD[key]]||'—'));
 }
 function recordModal(key,fields,record={}){
  const isDoc=['quotes','orders','invoices'].includes(key);
@@ -3669,7 +3876,10 @@ const NODE_TYPE_ADMIN_TAB={custom_object:'objectTypes',custom_field:'fields',rel
 const SYSTEM_NODE_TYPE_COLOR_INDEX={custom_object:1,custom_field:2,relationship:3,business_rule:4,workflow:5,screen_layout:6,page_layout:1,ai_agent:2,execution_graph:3,business_glossary_term:4,metric_definition:5,test_case_definition:6};
 const ONTOLOGY_ROOT_SIZE=26,ONTOLOGY_NODE_SIZE=15,ONTOLOGY_RING_RADIUS=170,ONTOLOGY_CLOUD_RING_GAP=110;
 function typeDotHtml(nodeType,size){size=size||10;return `<span style="display:inline-block;flex-shrink:0;width:${size}px;height:${size}px;border-radius:50%;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[nodeType]})"></span>`}
-function legendHtml(){return `<div class="ontology-legend">${Object.keys(SYSTEM_NODE_TYPE_LABELS).map(t=>`<span class="ontology-legend-item">${typeDotHtml(t)}${SYSTEM_NODE_TYPE_LABELS[t]}</span>`).join('')}</div>`}
+function legendHtml(hidden){
+ hidden=hidden||new Set();
+ return `<div class="ontology-legend">${Object.keys(SYSTEM_NODE_TYPE_LABELS).map(t=>`<button type="button" class="ontology-legend-item${hidden.has(t)?' ontology-legend-item-off':''}" data-legend-toggle="${t}" title="${hidden.has(t)?'Show':'Hide'} ${SYSTEM_NODE_TYPE_LABELS[t]}">${typeDotHtml(t)}${SYSTEM_NODE_TYPE_LABELS[t]}</button>`).join('')}</div>`;
+}
 // The floating inspector targets `inspectType`/`inspectId` - which starts
 // out equal to the centered root but can be a not-yet-centered neighbor
 // just clicked on, grouped by edge type ("Campaign · came from" style),
@@ -3736,7 +3946,8 @@ function dependencyExplorerTab(body){
      const angle=(i/depthHits.length)*Math.PI*2;
      const x=cx+r*Math.cos(angle),y=cy+r*Math.sin(angle);
      const isInspecting=h.type===dependencyExplorerState.inspectType&&h.id===dependencyExplorerState.inspectId;
-     dotsHtml.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}" style="left:${x-size/2}px;top:${y-size/2}px;width:${size}px;height:${size}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[h.type]})" title="${SYSTEM_NODE_TYPE_LABELS[h.type]}: ${systemGraphNodeLabel(h.type,h.id)} (${h.edgeType})" data-dep-inspect="${h.type}:${h.id}"></div>`);
+     const isDimmed=depExplorerHiddenTypes.has(h.type);
+     dotsHtml.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}${isDimmed?' ontology-node-dimmed':''}" style="left:${x-size/2}px;top:${y-size/2}px;width:${size}px;height:${size}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[h.type]})" title="${SYSTEM_NODE_TYPE_LABELS[h.type]}: ${systemGraphNodeLabel(h.type,h.id)} (${h.edgeType})" data-dep-inspect="${h.type}:${h.id}"></div>`);
     });
    });
    graphHtml=`<div class="ontology-graph-wrap"><div class="ontology-graph-canvas" style="width:${cx*2}px;height:${cy*2}px">${dotsHtml.join('')}${inspectorCardHtml()}</div></div>`;
@@ -3757,7 +3968,8 @@ function dependencyExplorerTab(body){
      const rad=deg*Math.PI/180;
      const x=cx+ONTOLOGY_RING_RADIUS*Math.cos(rad),y=cy+ONTOLOGY_RING_RADIUS*Math.sin(rad);
      const isInspecting=hit.type===dependencyExplorerState.inspectType&&hit.id===dependencyExplorerState.inspectId;
-     dotsHtml.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}" style="left:${x-ONTOLOGY_NODE_SIZE/2}px;top:${y-ONTOLOGY_NODE_SIZE/2}px;width:${ONTOLOGY_NODE_SIZE}px;height:${ONTOLOGY_NODE_SIZE}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[hit.type]})" title="${SYSTEM_NODE_TYPE_LABELS[hit.type]}: ${systemGraphNodeLabel(hit.type,hit.id)} (${hit.edgeType})" data-dep-inspect="${hit.type}:${hit.id}"></div>`);
+     const isDimmed=depExplorerHiddenTypes.has(hit.type);
+     dotsHtml.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}${isDimmed?' ontology-node-dimmed':''}" style="left:${x-ONTOLOGY_NODE_SIZE/2}px;top:${y-ONTOLOGY_NODE_SIZE/2}px;width:${ONTOLOGY_NODE_SIZE}px;height:${ONTOLOGY_NODE_SIZE}px;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[hit.type]})" title="${SYSTEM_NODE_TYPE_LABELS[hit.type]}: ${systemGraphNodeLabel(hit.type,hit.id)} (${hit.edgeType})" data-dep-inspect="${hit.type}:${hit.id}"></div>`);
      edgesSvg.push(`<line x1="${x}" y1="${y}" x2="${cx}" y2="${cy}" stroke="var(--line)" stroke-width="1.5"/>`);
     });
    };
@@ -3771,7 +3983,7 @@ function dependencyExplorerTab(body){
  body.innerHTML=`<div class="panel">
   <h3>Dependency Explorer</h3>
   <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams, glossary terms, metrics, test cases) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
-  ${legendHtml()}
+  ${legendHtml(depExplorerHiddenTypes)}
   <div class="form-row">
    <label>Component type<select id="depType">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
    <label>Component<select id="depComponent">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
@@ -3788,6 +4000,7 @@ function dependencyExplorerTab(body){
  body.querySelectorAll('[data-dep-transitive]').forEach(b=>b.onclick=()=>{const v=b.dataset.depTransitive;dependencyExplorerState={...dependencyExplorerState,transitive:dependencyExplorerState.transitive===v?null:v};renderAdminTab()});
  body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depInspect.split(':');dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
  body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,inspectType:type,inspectId:id,transitive:null};renderAdminTab()});
+ body.querySelectorAll('[data-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.legendToggle;if(depExplorerHiddenTypes.has(t))depExplorerHiddenTypes.delete(t);else depExplorerHiddenTypes.add(t);renderAdminTab()});
  const recenterBtn=$('#depRecenter'); if(recenterBtn)recenterBtn.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,type:dependencyExplorerState.inspectType,id:dependencyExplorerState.inspectId,transitive:null};renderAdminTab()};
  const openBtn=$('#depOpenAdmin'); if(openBtn)openBtn.onclick=()=>{adminTab=NODE_TYPE_ADMIN_TAB[dependencyExplorerState.inspectType];adminView='tool';renderView()};
 }

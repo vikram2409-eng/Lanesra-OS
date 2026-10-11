@@ -63,3 +63,15 @@ pub fn list_related_records(state: State<AppState>, entity_type: String, entity_
     let workspace_id = require_workspace_id(&conn)?;
     relationship_service::related_records_for(&conn, &workspace_id, &entity_type, &entity_id)
 }
+
+/// Object 360 (issue #352): the built-in CRM's own FK-based relationships
+/// (`company_id` on contacts/opportunities/..., `Task.related_type`/
+/// `related_id`, ...) - see `native_related_records_for`'s own doc
+/// comment for why this is separate from `list_related_records` above
+/// rather than folded into it.
+#[tauri::command]
+pub fn list_native_related_records(state: State<AppState>, entity_type: String, entity_id: String) -> AppResult<Vec<RelatedRecord>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    relationship_service::native_related_records_for(&conn, &workspace_id, &entity_type, &entity_id)
+}

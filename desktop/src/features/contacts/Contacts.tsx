@@ -27,6 +27,8 @@ import { formatCents } from "../../lib/money";
 import { useSavedViews } from "../../lib/useSavedViews";
 import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { Object360Modal } from "../../components/Object360Modal";
+import { sectionForEntityType } from "../../lib/object360Nav";
 import {
   CONTACT_STATUSES,
   PREFERRED_CONTACT_METHODS,
@@ -616,6 +618,7 @@ function ContactDetail({
   onNavigateTo?: (section: Section, prefill: Prefill) => void;
 }) {
   const [tab, setTab] = useState<ContactTab>("overview");
+  const [showObject360, setShowObject360] = useState(false);
   const canWrite = useCanWriteObject("Contact");
   useReportVoiceContext("Contact", id);
   const contact = useQuery({ queryKey: ["contact", id], queryFn: () => api.getContact(id) });
@@ -671,7 +674,22 @@ function ContactDetail({
         <button className="btn" onClick={onEdit} disabled={!canWrite} title={canWrite ? undefined : "You have view-only access to Contacts through an app"}>
           Edit
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && (
+        <Object360Modal
+          entityType="Contact"
+          entityId={c.id}
+          label={`${c.first_name} ${c.last_name}`}
+          onOpenRecord={(entityType, entityId) => {
+            setShowObject360(false);
+            onNavigateTo?.(sectionForEntityType(entityType), { openId: entityId });
+          }}
+          onClose={() => setShowObject360(false)}
+        />
+      )}
       <RecordHeader
         title={`${c.first_name} ${c.last_name}`}
         status={<StatusBadge status={c.status} />}

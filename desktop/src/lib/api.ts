@@ -426,6 +426,8 @@ export const api = {
     callAdminAction<ChatMessage[]>("send_agent_message", { agentId, text }, "POST", `/api/admin/chat/agent/${encodeURIComponent(agentId)}/send`, { text }),
   getAgentChatHistory: (agentId: string) => call<ChatMessage[]>("get_agent_chat_history", { agentId }),
   listAiAgents: (activeOnly: boolean) => call<AiAgentDefinition[]>("list_ai_agents", { activeOnly }),
+  listAiAgentsScopedToObjectType: (entityType: string, activeOnly: boolean) =>
+    call<AiAgentDefinition[]>("list_ai_agents_scoped_to_object_type", { entityType, activeOnly }),
   createAiAgent: (input: AiAgentInput) => call<AiAgentDefinition>("create_ai_agent", { input }),
   updateAiAgent: (id: string, input: AiAgentInput) => call<AiAgentDefinition>("update_ai_agent", { id, input }),
   setAiAgentActive: (id: string, isActive: boolean) => call<AiAgentDefinition>("set_ai_agent_active", { id, isActive }),
@@ -1031,6 +1033,8 @@ export const api = {
   unlinkRecords: (instanceId: string) => call<void>("unlink_records", { instanceId }),
   listRelatedRecords: (entityType: string, entityId: string) =>
     call<RelatedRecord[]>("list_related_records", { entityType, entityId }),
+  listNativeRelatedRecords: (entityType: string, entityId: string) =>
+    call<RelatedRecord[]>("list_native_related_records", { entityType, entityId }),
 
   createBackup: () => call<BackupPackage>("create_backup"),
   restoreBackup: (packageBase64: string) =>

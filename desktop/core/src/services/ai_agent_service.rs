@@ -181,6 +181,19 @@ pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResu
     Ok(ai_agent_repo::list(conn, workspace_id, active_only)?)
 }
 
+/// Object 360 (issue #352): which agents are relevant to a given object
+/// type - every agent whose `object_type_scopes` (#344) is empty
+/// (unscoped - applies to any object type, by that field's own design) or
+/// explicitly names `entity_type`. Built from `list` above plus an
+/// in-memory filter rather than a new repo query - this is a small,
+/// read-only derivation, not a new data shape.
+pub fn list_scoped_to_object_type(conn: &Connection, workspace_id: &str, entity_type: &str, active_only: bool) -> AppResult<Vec<AiAgentDefinition>> {
+    Ok(ai_agent_repo::list(conn, workspace_id, active_only)?
+        .into_iter()
+        .filter(|a| a.object_type_scopes.is_empty() || a.object_type_scopes.iter().any(|s| s.object_type == entity_type))
+        .collect())
+}
+
 pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;

@@ -15,7 +15,10 @@ use crate::models::relationship::{
     DELETE_BEHAVIORS, RELATIONSHIP_TYPES,
 };
 use crate::repositories::{audit_repo, relationship_repo};
-use crate::services::{access_service, custom_object_service, entity_registry};
+use crate::services::{
+    access_service, contact_service, contract_service, custom_object_service, entity_registry, invoice_service, opportunity_service, order_service,
+    quote_service, task_service,
+};
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
 /// passes with an explicit Access Role grant on "Relationship" - see
@@ -301,6 +304,87 @@ pub fn related_records_for(conn: &Connection, workspace_id: &str, entity_type: &
         }
     }
 
+    Ok(out)
+}
+
+/// Object 360 (issue #352): the built-in CRM's own FK-based relationships
+/// (`company_id` on contacts/opportunities/quotes/orders/invoices/
+/// contracts, `Task.related_type`/`related_id`, `Quote.opportunity_id`,
+/// `Order.source_quote_id`, `Invoice.source_order_id`, ...) completely
+/// bypass `relationship_definitions`/`relationship_instances` above - they
+/// predate that generic, admin-authored system and were never migrated
+/// onto it. `related_records_for` alone would show a fresh workspace's
+/// own Company/Contact/etc. records as having no related records at all,
+/// since nothing there is admin-defined. This is the same enumerated set
+/// of pairs every existing detail page already hand-queries for its own
+/// "Related" cards (see `Companies.tsx`'s own `listContactsByCompany`/
+/// `listOpportunitiesByCompany`/... calls) - consolidated once here
+/// instead of re-deriving per caller. Object 360 unions this with
+/// `related_records_for` above rather than one replacing the other.
+pub fn native_related_records_for(conn: &Connection, workspace_id: &str, entity_type: &str, entity_id: &str) -> AppResult<Vec<RelatedRecord>> {
+    let mut out = Vec::new();
+    let push = |conn: &Connection, out: &mut Vec<RelatedRecord>, target_type: &str, target_id: &str, group_label: &str, relationship_key: &str| -> AppResult<()> {
+        if let Some(other) = entity_registry::resolve(conn, target_type, target_id)? {
+            out.push(RelatedRecord {
+                instance_id: target_id.to_string(),
+                relationship_definition_id: String::new(),
+                relationship_key: relationship_key.to_string(),
+                label: group_label.to_string(),
+                entity_type: target_type.to_string(),
+                entity_id: target_id.to_string(),
+                display_name: other.display_name,
+                status: other.status,
+                archived: other.archived,
+            });
+        }
+        Ok(())
+    };
+
+    match entity_type {
+        "Company" => {
+            for c in contact_service::list_by_company(conn, entity_id)? { push(conn, &mut out, "Contact", &c.id, "Contacts", "company_contacts")?; }
+            for o in opportunity_service::list_by_company(conn, entity_id)? { push(conn, &mut out, "Opportunity", &o.id, "Opportunities", "company_opportunities")?; }
+            for q in quote_service::list(conn, workspace_id)?.into_iter().filter(|q| q.company_id == entity_id) { push(conn, &mut out, "Quote", &q.id, "Quotes", "company_quotes")?; }
+            for o in order_service::list(conn, workspace_id)?.into_iter().filter(|o| o.company_id == entity_id) { push(conn, &mut out, "Order", &o.id, "Orders", "company_orders")?; }
+            for i in invoice_service::list(conn, workspace_id)?.into_iter().filter(|i| i.company_id == entity_id) { push(conn, &mut out, "Invoice", &i.id, "Invoices", "company_invoices")?; }
+            for c in contract_service::list_by_company(conn, entity_id)? { push(conn, &mut out, "Contract", &c.id, "Contracts", "company_contracts")?; }
+            for t in task_service::list_by_related(conn, "Company", entity_id)? { push(conn, &mut out, "Task", &t.id, "Tasks", "company_tasks")?; }
+        }
+        "Contact" => {
+            for o in opportunity_service::list(conn, workspace_id)?.into_iter().filter(|o| o.primary_contact_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Opportunity", &o.id, "Opportunities", "contact_opportunities")?; }
+            for q in quote_service::list(conn, workspace_id)?.into_iter().filter(|q| q.contact_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Quote", &q.id, "Quotes", "contact_quotes")?; }
+            for o in order_service::list(conn, workspace_id)?.into_iter().filter(|o| o.contact_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Order", &o.id, "Orders", "contact_orders")?; }
+            for i in invoice_service::list(conn, workspace_id)?.into_iter().filter(|i| i.contact_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Invoice", &i.id, "Invoices", "contact_invoices")?; }
+            for c in contract_service::list(conn, workspace_id)?.into_iter().filter(|c| c.contact_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Contract", &c.id, "Contracts", "contact_contracts")?; }
+            for t in task_service::list_by_related(conn, "Contact", entity_id)? { push(conn, &mut out, "Task", &t.id, "Tasks", "contact_tasks")?; }
+        }
+        "Opportunity" => {
+            for q in quote_service::list(conn, workspace_id)?.into_iter().filter(|q| q.opportunity_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Quote", &q.id, "Quotes", "opportunity_quotes")?; }
+            for t in task_service::list_by_related(conn, "Opportunity", entity_id)? { push(conn, &mut out, "Task", &t.id, "Tasks", "opportunity_tasks")?; }
+        }
+        "Quote" => {
+            for o in order_service::list(conn, workspace_id)?.into_iter().filter(|o| o.source_quote_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Order", &o.id, "Orders", "quote_orders")?; }
+            for c in contract_service::list(conn, workspace_id)?.into_iter().filter(|c| c.source_quote_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Contract", &c.id, "Contracts", "quote_contracts")?; }
+            for t in task_service::list_by_related(conn, "Quote", entity_id)? { push(conn, &mut out, "Task", &t.id, "Tasks", "quote_tasks")?; }
+        }
+        "Order" => {
+            for i in invoice_service::list(conn, workspace_id)?.into_iter().filter(|i| i.source_order_id.as_deref() == Some(entity_id)) { push(conn, &mut out, "Invoice", &i.id, "Invoices", "order_invoices")?; }
+            for t in task_service::list_by_related(conn, "Order", entity_id)? { push(conn, &mut out, "Task", &t.id, "Tasks", "order_tasks")?; }
+        }
+        "Invoice" => {
+            for t in task_service::list_by_related(conn, "Invoice", entity_id)? { push(conn, &mut out, "Task", &t.id, "Tasks", "invoice_tasks")?; }
+        }
+        "Contract" => {
+            for t in task_service::list_by_related(conn, "Contract", entity_id)? { push(conn, &mut out, "Task", &t.id, "Tasks", "contract_tasks")?; }
+        }
+        "Task" => {
+            let task = task_service::get(conn, entity_id)?;
+            if let (Some(related_type), Some(related_id)) = (task.related_type, task.related_id) {
+                push(conn, &mut out, &related_type, &related_id, "Related to", "task_related_to")?;
+            }
+        }
+        _ => {}
+    }
     Ok(out)
 }
 

@@ -24,6 +24,8 @@ import { QUOTE_STATUSES, type CustomFieldValues, type Quote, type QuoteInput } f
 import type { LineInput } from "../../lib/lineCalc";
 import { useCustomFieldFilters } from "../../lib/useCustomFieldFilters";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { Object360Modal } from "../../components/Object360Modal";
+import { sectionForEntityType } from "../../lib/object360Nav";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "detail"; id: string };
 
@@ -363,6 +365,7 @@ function QuoteDetail({
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listOrders() });
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [showObject360, setShowObject360] = useState(false);
   const canWriteQuote = useCanWriteObject("Quote");
   useReportVoiceContext("Quote", id);
   // convert_to_order is gated on Order write access, not Quote (it never
@@ -397,7 +400,22 @@ function QuoteDetail({
         <button className="btn" onClick={onBack}>
           ← Back
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          View in Object 360
+        </button>
       </div>
+      {showObject360 && (
+        <Object360Modal
+          entityType="Quote"
+          entityId={q.id}
+          label={q.quote_number}
+          onOpenRecord={(entityType, entityId) => {
+            setShowObject360(false);
+            onNavigateTo?.(sectionForEntityType(entityType), { openId: entityId });
+          }}
+          onClose={() => setShowObject360(false)}
+        />
+      )}
       <h2>
         {q.quote_number} <StatusBadge status={q.status} />
       </h2>
