@@ -688,7 +688,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['objectTypes','Object Types'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['objectTypes','Object Types'],['agentBindings','Agent Bindings'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -703,7 +703,7 @@ const ADMIN_CATEGORIES=[
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields','dependencyExplorer','businessGlossary']},
- {key:'ontology',label:'Ontology',icon:'◈',note:'Every object as one typed registry, Palantir-style - Link Types now, governed Action Types and AI agent bindings as this lands',items:['objectTypes']},
+ {key:'ontology',label:'Ontology',icon:'◈',note:'Every object as one typed registry, Palantir-style - Object Types, Link Types, governed Action Types, and which AI agents may touch what',items:['objectTypes','agentBindings']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
@@ -2834,6 +2834,16 @@ function adminCrossLinkRow(entityKey){
 const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team',business_glossary_term:'Glossary Term',metric_definition:'Metric',test_case_definition:'Test Case'};
 function systemGraphNodes(){
  const nodes=[];
+ // Ontology Layer epic, issue #345: the real edition's `sync_node` stubs
+ // in a node for any referenced component_id the first time something
+ // points at it (see `system_graph_service::sync_node`'s own "stub"
+ // comment), so a built-in object type gets a real node the moment any
+ // custom field/rule/workflow/layout references it - it never needed a
+ // dedicated owning service of its own. This flat array has no such
+ // implicit stub mechanism, so built-ins are pushed explicitly here
+ // instead - otherwise Object Types' "Open in Dependency Explorer" deep
+ // link would land on an empty, unmatched state for every built-in object.
+ ONTOLOGY_BUILTIN_TYPES.forEach(([key,,plural])=>nodes.push({type:'custom_object',id:key,label:plural}));
  (data.customObjects||[]).forEach(o=>nodes.push({type:'custom_object',id:o.key,label:o.labelPlural||o.label||o.key}));
  (data.customFields||[]).forEach(f=>nodes.push({type:'custom_field',id:f.id,label:f.label}));
  (data.relationshipDefinitions||[]).forEach(r=>nodes.push({type:'relationship',id:r.id,label:r.forwardLabel||r.key}));
@@ -3158,7 +3168,7 @@ function objectTypesTab(body){
     <button type="button" class="btn btn-secondary" data-admin-cross-link="relationships">Open in Relationships</button>
     <button type="button" class="btn btn-secondary" data-admin-cross-link="rules">Open in Business Rules</button>
     <button type="button" class="btn btn-secondary" data-admin-cross-link="workflow">Open in Workflow Automation</button>
-    <button type="button" class="btn btn-secondary" data-admin-cross-link="dependencyExplorer">Open in Dependency Explorer</button>
+    <button type="button" class="btn btn-secondary" id="openDepExplorerForType">Open in Dependency Explorer</button>
    </div>
    <h4>Link Types (${linkTypes.length})</h4>
    ${linkTypes.length===0?'<p class="muted">No relationships involve this object type yet.</p>':`
@@ -3181,6 +3191,11 @@ function objectTypesTab(body){
  </div>`;
  body.querySelectorAll('[data-ontology-select]').forEach(b=>b.onclick=()=>{ontologyState.selected=b.dataset.ontologySelect;actionTypeFormState=null;renderAdminTab()});
  body.querySelectorAll('[data-admin-cross-link]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminCrossLink;adminView='tool';renderView()});
+ const depExplorerBtn=$('#openDepExplorerForType');
+ if(depExplorerBtn)depExplorerBtn.onclick=()=>{
+  dependencyExplorerState={type:'custom_object',id:sel.key,transitive:null};
+  adminTab='dependencyExplorer';adminView='tool';renderView();
+ };
  const addBtn=$('#addActionType'); if(addBtn)addBtn.onclick=()=>{actionTypeFormState=newActionTypeFormState(sel.key);renderAdminTab()};
  body.querySelectorAll('[data-edit-action-type]').forEach(b=>b.onclick=()=>{
   const def=actionTypes.find(a=>a.id===b.dataset.editActionType);
@@ -3193,6 +3208,21 @@ function objectTypesTab(body){
   def.isActive=false; stampUpdate(def); save(); toast('Action Type deactivated'); renderAdminTab();
  });
  wireActionTypeForm();
+}
+
+// Ontology Layer epic, issue #345 (Ontology Manager): a standalone screen
+// listing every AI agent's Ontology scope at a glance. "Edit scope" opens
+// the exact same `aiAgentModal` the AI Agent Foundry's own Edit button
+// opens - same modal, same save path - so there is no second copy of this
+// editor to drift out of sync with it, the same reasoning the desktop
+// edition's `AgentOntologyScopeEditor.tsx` extraction used.
+function agentBindingsTab(body){
+ const agents=data.aiAgents||[];
+ body.innerHTML=`<div class="panel"><h3>Agent Bindings</h3>
+ <p class="muted">Every AI agent's Ontology scope in one place - which object types and capabilities it may touch, and which Action Types it may invoke. Editing here or from an agent's own AI Agent Foundry form saves to the exact same place.</p>
+ <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Agent</th><th>Ontology scope</th><th>Action Types</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b></td><td>${(a.objectTypeScopes||[]).length===0?'<span class="muted">Unscoped</span>':`${a.objectTypeScopes.length} object type(s)`}</td><td>${(a.actionTypeIds||[]).length===0?'<span class="muted">None</span>':`${a.actionTypeIds.length} granted`}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><button class="icon-btn" data-edit-binding-agent="${a.id}">Edit scope</button></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No AI agents yet - create one in AI Agent Foundry first.</div>'}</div>
+ </div>`;
+ body.querySelectorAll('[data-edit-binding-agent]').forEach(b=>b.onclick=()=>aiAgentModal(agents.find(a=>a.id===b.dataset.editBindingAgent)));
 }
 
 // Next-Gen program, Domain A (Intelligence Foundation), FND-02: the
@@ -3718,7 +3748,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,objectTypes:objectTypesTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,objectTypes:objectTypesTab,agentBindings:agentBindingsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;

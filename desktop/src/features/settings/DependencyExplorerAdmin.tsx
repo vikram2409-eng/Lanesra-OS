@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../../lib/api";
@@ -23,10 +23,23 @@ type RootRef = { nodeType: SystemNodeType; componentId: string };
  * "Full impact"/"Full lineage" below give the transitive closure as a
  * plain grouped list instead, for exactly that reason.
  */
-export function DependencyExplorerAdmin() {
-  const [nodeType, setNodeType] = useState<SystemNodeType>("custom_object");
-  const [root, setRoot] = useState<RootRef | null>(null);
+export function DependencyExplorerAdmin({ initialRoot }: { initialRoot?: RootRef | null }) {
+  const [nodeType, setNodeType] = useState<SystemNodeType>(initialRoot?.nodeType ?? "custom_object");
+  const [root, setRoot] = useState<RootRef | null>(initialRoot ?? null);
   const [transitiveMode, setTransitiveMode] = useState<"impact" | "lineage" | null>(null);
+
+  // Ontology Layer epic, issue #345: lets Object Types deep-link straight
+  // into a specific object's node here instead of landing on this
+  // screen's own default (first custom_object) - same
+  // `initialTopicSlug`/`HelpAdmin` pattern this file's sibling screens
+  // already use for a cross-admin-screen deep link.
+  useEffect(() => {
+    if (initialRoot) {
+      setNodeType(initialRoot.nodeType);
+      setRoot(initialRoot);
+      setTransitiveMode(null);
+    }
+  }, [initialRoot]);
 
   const options = useQuery({ queryKey: ["systemNodes", nodeType], queryFn: () => api.listSystemNodes(nodeType) });
 
