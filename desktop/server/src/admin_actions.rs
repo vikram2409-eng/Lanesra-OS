@@ -38,7 +38,7 @@ use lanesra_core::models::ai_knowledge::KnowledgeSourceInput;
 use lanesra_core::models::voice::ConfirmVoicePlanInput;
 use lanesra_core::services::{
     agent_service, ai_eval_service, ai_knowledge_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service,
-    external_object_service, graph_runtime_service, integration_job_service, mcp_client_service, vector_search_service, voice_execution_service, webhook_service,
+    external_object_service, graph_runtime_service, integration_job_service, mcp_client_service, test_eval_service, vector_search_service, voice_execution_service, webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -55,6 +55,8 @@ pub fn router() -> Router<SharedState> {
         .route("/api/admin/ai-agents/:id/run", post(run_ai_agent_manual))
         .route("/api/admin/ai-agent-pipelines/:id/run", post(run_ai_agent_pipeline_manual))
         .route("/api/admin/ai-eval-suites/:id/run", post(run_ai_eval_suite))
+        .route("/api/admin/test-runs", post(run_tests))
+        .route("/api/admin/solutions/:id/validate", post(run_tests_for_solution))
         .route("/api/admin/ai-agent-runs/:id/approve", post(approve_ai_agent_pending_step))
         .route("/api/admin/ai-agent-runs/:id/push-otlp", post(push_ai_agent_run_otlp))
         .route("/api/admin/ai/vector-search/reindex", post(reindex_vector_search))
@@ -364,6 +366,28 @@ async fn run_ai_eval_suite(State(state): State<SharedState>, jar: CookieJar, Pat
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move { ai_eval_service::run_suite(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+#[derive(Debug, Deserialize)]
+struct RunTestsBody {
+    case_ids: Vec<String>,
+}
+
+async fn run_tests(State(state): State<SharedState>, jar: CookieJar, Json(body): Json<RunTestsBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        test_eval_service::run_tests(&conn, &workspace_id, &master_key, &body.case_ids, None, "manual", Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+}
+
+async fn run_tests_for_solution(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move { test_eval_service::run_for_solution(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
     Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
 }
 

@@ -72,6 +72,7 @@ pub mod solution_repo;
 pub mod status_transition_repo;
 pub mod system_graph_repo;
 pub mod task_repo;
+pub mod test_eval_repo;
 pub mod team_membership_repo;
 pub mod user_access_role_repo;
 pub mod user_repo;

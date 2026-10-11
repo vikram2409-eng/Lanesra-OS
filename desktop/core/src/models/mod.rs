@@ -54,6 +54,7 @@ pub mod solution_component;
 pub mod status_transition;
 pub mod system_graph;
 pub mod task;
+pub mod test_eval;
 pub mod user;
 pub mod voice;
 pub mod work_team;

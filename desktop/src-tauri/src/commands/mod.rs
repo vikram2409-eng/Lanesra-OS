@@ -52,6 +52,7 @@ pub mod search_commands;
 pub mod solution_commands;
 pub mod status_transition_commands;
 pub mod task_commands;
+pub mod test_eval_commands;
 pub mod theme_commands;
 pub mod user_commands;
 pub mod voice_commands;

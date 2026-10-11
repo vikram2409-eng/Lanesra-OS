@@ -31,6 +31,7 @@ import { AgentTeamsAdmin } from "./AgentTeamsAdmin";
 import { DependencyExplorerAdmin } from "./DependencyExplorerAdmin";
 import { BusinessGlossaryAdmin } from "./BusinessGlossaryAdmin";
 import { MetricDefinitionsAdmin } from "./MetricDefinitionsAdmin";
+import { TestEvalAdmin } from "./TestEvalAdmin";
 import { ThemeStudioAdmin } from "./ThemeStudioAdmin";
 import { HelpAdmin } from "./HelpAdmin";
 import { ChatPanel } from "../../components/ChatPanel";
@@ -103,6 +104,7 @@ export type AdminTab =
   | "dependencyExplorer"
   | "businessGlossary"
   | "metricDefinitions"
+  | "testEval"
   | "help";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
@@ -138,6 +140,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "dependencyExplorer", label: "Dependency Explorer" },
   { key: "businessGlossary", label: "Business Glossary" },
   { key: "metricDefinitions", label: "Metric Definitions" },
+  { key: "testEval", label: "Test & Evaluation Framework" },
   { key: "help", label: "Help" },
 ];
 
@@ -334,6 +337,13 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
   { key: "analytics", label: "Analytics", icon: "📊", note: "What shows on the dashboard", items: ["kpis", "dashboards", "metricDefinitions"] },
   { key: "solutions", label: "Deployment Management", icon: "🗂", note: "What's installed, what it created, and what it depends on", items: ["solutions"] },
+  {
+    key: "testing",
+    label: "Testing & Quality",
+    icon: "✅",
+    note: "Define deterministic and AI test cases, and run a mix of them together for one readiness result",
+    items: ["testEval"],
+  },
   { key: "integrations", label: "Integrations", icon: "🔌", note: "Connect Lanesra to the outside world", items: ["integrations"] },
   { key: "ai", label: "LLM & MCP", icon: "✦", note: "Bring your own LLM key, and (once built) the MCP server that lets agents work with your data", items: ["ai"] },
   { key: "assistant", label: "Admin Assistant", icon: "💬", note: "Chat to build workflows, business rules, integrations and the rest of the admin surface", items: ["assistant"] },
@@ -474,6 +484,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "dependencyExplorer" && <DependencyExplorerAdmin />}
       {tab === "businessGlossary" && <BusinessGlossaryAdmin />}
       {tab === "metricDefinitions" && <MetricDefinitionsAdmin />}
+      {tab === "testEval" && <TestEvalAdmin />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}
       {tab === "pageBuilder" && <PageBuilderAdmin />}
       {tab === "themeStudio" && <ThemeStudioAdmin />}

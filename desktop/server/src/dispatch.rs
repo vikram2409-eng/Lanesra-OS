@@ -29,6 +29,7 @@ use lanesra_core::models::quote::QuoteInput;
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::custom_field::{CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues};
 use lanesra_core::models::semantic::{BusinessGlossaryTermInput, MetricDefinitionInput, SemanticMappingInput};
+use lanesra_core::models::test_eval::TestCaseDefinitionInput;
 use lanesra_core::models::custom_object::{CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
 use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use lanesra_core::models::custom_report::{CustomReportInput, CustomReportUpdate};
@@ -85,7 +86,7 @@ use lanesra_core::services::{
     ownership_service, page_layout_service, page_template_service,
     publisher_service, product_service,
     glossary_service, metric_service, semantic_mapping_service,
-    quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, system_graph_service, task_service,
+    quote_service, relationship_service, report_service, saved_view_service, screen_layout_service, search_service, solution_component_service, solution_service, status_transition_service, system_graph_service, task_service, test_eval_service,
     user_service, vector_search_service,
     voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service, voice_session_service,
     theme_service, webhook_service, work_team_service, workflow_service, workspace_service,
@@ -1840,6 +1841,41 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
             let id: String = arg(args, "id")?;
             metric_service::delete(conn, &id, &require_workspace_id(conn)?, actor)?;
             to_value(())
+        }
+        "list_test_case_definitions" => {
+            let active_only: bool = arg(args, "activeOnly")?;
+            to_value(test_eval_service::list(conn, &require_workspace_id(conn)?, active_only)?)
+        }
+        "create_test_case_definition" => {
+            let input: TestCaseDefinitionInput = arg(args, "input")?;
+            to_value(test_eval_service::create(conn, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "update_test_case_definition" => {
+            let id: String = arg(args, "id")?;
+            let input: TestCaseDefinitionInput = arg(args, "input")?;
+            to_value(test_eval_service::update(conn, &id, &require_workspace_id(conn)?, &input, actor)?)
+        }
+        "deactivate_test_case_definition" => {
+            let id: String = arg(args, "id")?;
+            to_value(test_eval_service::deactivate(conn, &id, &require_workspace_id(conn)?, actor)?)
+        }
+        "delete_test_case_definition" => {
+            let id: String = arg(args, "id")?;
+            test_eval_service::delete(conn, &id, &require_workspace_id(conn)?, actor)?;
+            to_value(())
+        }
+        "list_test_runs" => {
+            let limit: i64 = arg(args, "limit")?;
+            to_value(test_eval_service::list_runs(conn, &require_workspace_id(conn)?, limit)?)
+        }
+        "list_test_runs_for_solution" => {
+            let solution_id: String = arg(args, "solutionId")?;
+            let limit: i64 = arg(args, "limit")?;
+            to_value(test_eval_service::list_runs_for_solution(conn, &solution_id, limit)?)
+        }
+        "get_test_run" => {
+            let id: String = arg(args, "id")?;
+            to_value(test_eval_service::get_run(conn, &id)?)
         }
 
         // AI Agent Platform v2, Phase 4: Memory Inspector listing/delete and
