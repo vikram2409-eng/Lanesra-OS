@@ -703,7 +703,7 @@ const ADMIN_CATEGORIES=[
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields','dependencyExplorer','businessGlossary']},
- {key:'ontology',label:'Ontology',icon:'◈',note:'Every object as one typed registry, Palantir-style - Object Types, Link Types, governed Action Types, and which AI agents may touch what',items:['objectTypes','agentBindings']},
+ {key:'ontology',label:'Ontology',icon:'◈',note:'Every object as one typed registry, Palantir-style - Object Types, Link Types, governed Action Types, and which AI agents may touch what',items:['objectTypes','dependencyExplorer','agentBindings']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},

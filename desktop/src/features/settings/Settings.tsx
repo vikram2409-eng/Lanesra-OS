@@ -343,7 +343,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
     label: "Ontology",
     icon: "◈",
     note: "Every object as one typed registry, Palantir-style - Object Types, Link Types, governed Action Types, and which AI agents may touch what",
-    items: ["objectTypes", "agentBindings"],
+    items: ["objectTypes", "dependencyExplorer", "agentBindings"],
   },
   { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts", "pageBuilder", "themeStudio"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
