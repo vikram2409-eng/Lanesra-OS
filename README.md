@@ -42,6 +42,16 @@ Lanesra OS is a free, open-source, self-hosted platform for building business ap
 - **App Builder** — group a set of objects, their screens and a dashboard into one named, publishable app; grant it to roles or users as Viewer or Editor, enforced server-side on every create/edit/archive and status-lifecycle action, not just hidden in the UI
 - **Theme Studio** — brand colors, typography, shape and density for the whole workspace, from 4 curated presets or from scratch, with Draft → Published → Archived versioning, rollback, and a real WCAG contrast check gating every publish
 
+**Ontology Layer — a typed registry over every object, Palantir-style:**
+
+- **Object Types & Link Types** — a typed registry unifying every built-in and Custom Object, with identity, a plain-English Business Glossary description where one is mapped, and every relationship it participates in as a Link Type; a read model, no new store
+- **Action Types** — named, parameterized, governed write operations ("Mark Company Inactive," "Reassign Company Owner") invokable identically by a human's Quick Action button or a governed AI agent, always through the object's own real write path so a Business Rule that would block the result blocks the Action too
+- **AI Agent Ontology Binding** — scope an agent to exactly the Object Types and Action Types it may touch, layered on top of the Policy Engine's risk-tier firewall, opt-in and additive so a pre-existing agent keeps running unscoped unchanged
+- **Ontology Explorer** — a radial dependency graph over the Lanesra System Graph with a type-color legend that doubles as a click-to-dim filter, a floating inspector card, and a zoomed-out full-impact/full-lineage view
+- **Object 360** — given one real record, see every other real record directly linked to it, its Business Unit, the Business Rules/Workflows that apply to records like it, the AI Agents scoped to act on it, and its own real activity history
+- **Business Glossary & Metric definitions** — named terms and declarative metrics (aggregation, source, grain, filters, time logic), versioned with capped history and traced to their exact source via the Dependency Explorer
+- **Unified Test & Evaluation Framework** — one Test Run unifying Business Rule, Workflow, Access/Security, Screen Visibility, Integration Mapping, Agent Evaluation and Agent Team Evaluation checks into a single readiness result, wrapping each type's own existing dry-run logic rather than re-implementing it
+
 **Organization & Access Control — who owns what, and who reports to whom:**
 
 - **Organizations & Organization Units** — a hierarchy of Organization Units (regions, divisions, teams) under one Organization per workspace, with create/edit and a move-with-impact-preview (descendant units and owned records affected, before you commit)
