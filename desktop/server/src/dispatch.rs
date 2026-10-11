@@ -82,7 +82,7 @@ use lanesra_core::services::{
     ai_knowledge_service, ai_memory_service, mcp_client_service,
     industry_package_service,
     integration_job_service, integration_log_service,
-    invoice_service, mapping_service, numbering_service, opportunity_service, order_service, org_unit_service, organization_service,
+    invoice_service, mapping_service, numbering_service, ontology_service, opportunity_service, order_service, org_unit_service, organization_service,
     ownership_service, page_layout_service, page_template_service,
     publisher_service, product_service,
     glossary_service, metric_service, semantic_mapping_service,
@@ -1876,6 +1876,14 @@ pub fn dispatch(command: &str, args: &Value, conn: &Connection, actor: Option<&s
         "get_test_run" => {
             let id: String = arg(args, "id")?;
             to_value(test_eval_service::get_run(conn, &id)?)
+        }
+
+        "list_object_types" => {
+            to_value(ontology_service::list_object_types(conn, &require_workspace_id(conn)?)?)
+        }
+        "get_object_type_detail" => {
+            let object_type: String = arg(args, "objectType")?;
+            to_value(ontology_service::get_object_type_detail(conn, &require_workspace_id(conn)?, &object_type)?)
         }
 
         // AI Agent Platform v2, Phase 4: Memory Inspector listing/delete and

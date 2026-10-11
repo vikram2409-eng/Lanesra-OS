@@ -50,6 +50,8 @@ import type {
   TestCaseDefinition,
   TestCaseDefinitionInput,
   TestRun,
+  ObjectTypeSummary,
+  ObjectTypeDetail,
   MemoryType,
   MemoryItem,
   KnowledgeCollection,
@@ -512,6 +514,12 @@ export const api = {
   runTests: (caseIds: string[]) => callAdminAction<TestRun>("run_tests", { caseIds }, "POST", "/api/admin/test-runs", { case_ids: caseIds }),
   runTestsForSolution: (solutionId: string) =>
     callAdminAction<TestRun>("run_tests_for_solution", { solutionId }, "POST", `/api/admin/solutions/${encodeURIComponent(solutionId)}/validate`),
+
+  // Ontology Layer (Next-Gen program, issues #340-#345): the unified
+  // Object Type registry (#341) and Link Types (#342) - both plain,
+  // read-only sync calls over data that already exists.
+  listObjectTypes: () => call<ObjectTypeSummary[]>("list_object_types", {}),
+  getObjectTypeDetail: (objectType: string) => call<ObjectTypeDetail>("get_object_type_detail", { objectType }),
 
   // AI Agent Platform v2, Phase 4: Memory Inspector + Document RAG
   // (Knowledge Collections/Sources). Source create/update/search call the

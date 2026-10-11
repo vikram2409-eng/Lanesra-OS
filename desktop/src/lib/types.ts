@@ -4440,3 +4440,31 @@ export interface TestRun {
   finished_at: string | null;
   results: TestRunCaseResult[];
 }
+
+// Ontology Layer (Next-Gen program, issues #340-#345): the unified
+// Object Type registry (#341) and its Link Types (#342). A read model
+// over data that already exists - see `ontology_service`'s own doc
+// comment (Rust) for how each field is resolved.
+export interface ObjectTypeSummary {
+  key: string;
+  is_custom: boolean;
+  label_singular: string;
+  label_plural: string;
+  icon: string;
+  color_index: number;
+  description: string | null;
+}
+
+export interface LinkTypeSummary {
+  relationship_id: string;
+  name: string;
+  inverse_name: string;
+  from_object_type: string;
+  to_object_type: string | null;
+  relationship_type: string;
+}
+
+export interface ObjectTypeDetail {
+  object_type: ObjectTypeSummary;
+  link_types: LinkTypeSummary[];
+}

@@ -29,6 +29,7 @@ import { AiAgentPipelinesAdmin } from "./AiAgentPipelinesAdmin";
 import { AiEvalSuitesAdmin } from "./AiEvalSuitesAdmin";
 import { AgentTeamsAdmin } from "./AgentTeamsAdmin";
 import { DependencyExplorerAdmin } from "./DependencyExplorerAdmin";
+import { ObjectTypesAdmin } from "./ObjectTypesAdmin";
 import { BusinessGlossaryAdmin } from "./BusinessGlossaryAdmin";
 import { MetricDefinitionsAdmin } from "./MetricDefinitionsAdmin";
 import { TestEvalAdmin } from "./TestEvalAdmin";
@@ -105,6 +106,7 @@ export type AdminTab =
   | "businessGlossary"
   | "metricDefinitions"
   | "testEval"
+  | "objectTypes"
   | "help";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
@@ -141,6 +143,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "businessGlossary", label: "Business Glossary" },
   { key: "metricDefinitions", label: "Metric Definitions" },
   { key: "testEval", label: "Test & Evaluation Framework" },
+  { key: "objectTypes", label: "Object Types" },
   { key: "help", label: "Help" },
 ];
 
@@ -332,6 +335,13 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles"] },
   { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields", "dependencyExplorer", "businessGlossary"] },
+  {
+    key: "ontology",
+    label: "Ontology",
+    icon: "◈",
+    note: "Every object as one typed registry, Palantir-style - Link Types now, governed Action Types and AI agent bindings as this lands",
+    items: ["objectTypes"],
+  },
   { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts", "pageBuilder", "themeStudio"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
   { key: "apps", label: "Apps", icon: "⬡", note: "Package objects into a focused app, or install one ready-made", items: ["apps", "packages"] },
@@ -485,6 +495,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "businessGlossary" && <BusinessGlossaryAdmin />}
       {tab === "metricDefinitions" && <MetricDefinitionsAdmin />}
       {tab === "testEval" && <TestEvalAdmin />}
+      {tab === "objectTypes" && <ObjectTypesAdmin onOpenTab={(t) => openTab(t as AdminTab)} />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}
       {tab === "pageBuilder" && <PageBuilderAdmin />}
       {tab === "themeStudio" && <ThemeStudioAdmin />}

@@ -34,6 +34,7 @@ pub mod industry_package;
 pub mod integration;
 pub mod invoice;
 pub mod numbering_override;
+pub mod ontology;
 pub mod opportunity;
 pub mod order;
 pub mod organization;
