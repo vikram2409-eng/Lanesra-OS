@@ -52,6 +52,8 @@ import type {
   TestRun,
   ObjectTypeSummary,
   ObjectTypeDetail,
+  ActionTypeDefinition,
+  ActionTypeDefinitionInput,
   MemoryType,
   MemoryItem,
   KnowledgeCollection,
@@ -520,6 +522,15 @@ export const api = {
   // read-only sync calls over data that already exists.
   listObjectTypes: () => call<ObjectTypeSummary[]>("list_object_types", {}),
   getObjectTypeDetail: (objectType: string) => call<ObjectTypeDetail>("get_object_type_detail", { objectType }),
+
+  // Ontology Layer, issue #343: Action Types. `invokeActionType` is a
+  // plain sync DB write through the target object's real write path - no
+  // model call - so it's a direct `call`, not `callAdminAction`.
+  listActionTypes: (targetObjectType: string | undefined, activeOnly: boolean) => call<ActionTypeDefinition[]>("list_action_types", { targetObjectType, activeOnly }),
+  createActionType: (input: ActionTypeDefinitionInput) => call<ActionTypeDefinition>("create_action_type", { input }),
+  updateActionType: (id: string, input: ActionTypeDefinitionInput) => call<ActionTypeDefinition>("update_action_type", { id, input }),
+  deactivateActionType: (id: string) => call<ActionTypeDefinition>("deactivate_action_type", { id }),
+  invokeActionType: (actionTypeId: string, recordId: string, inputParams: Record<string, string>) => call<unknown>("invoke_action_type", { actionTypeId, recordId, inputParams }),
 
   // AI Agent Platform v2, Phase 4: Memory Inspector + Document RAG
   // (Knowledge Collections/Sources). Source create/update/search call the

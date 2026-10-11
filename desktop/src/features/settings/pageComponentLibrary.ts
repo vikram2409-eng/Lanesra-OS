@@ -12,7 +12,7 @@
 
 export type PageComponentCategory = "layout" | "record" | "data" | "actions" | "content" | "navigation" | "utility";
 
-export type ConfigFieldType = "text" | "textarea" | "select" | "number" | "boolean" | "field_picker";
+export type ConfigFieldType = "text" | "textarea" | "select" | "number" | "boolean" | "field_picker" | "action_type_picker";
 
 export interface ConfigFieldSchema {
   key: string;
@@ -72,7 +72,7 @@ export const PAGE_COMPONENT_LIBRARY: PageComponentDef[] = [
   // Actions
   { type: "button", category: "actions", label: "Button", icon: "🔘", isContainer: false, description: "A single labeled action button.", configSchema: [{ key: "label", label: "Label", type: "text", placeholder: "Edit" }, { key: "style", label: "Style", type: "select", options: ["primary", "secondary"], defaultValue: "secondary" }, { key: "action", label: "Action", type: "select", options: ["none", "edit", "navigate"], defaultValue: "none" }], defaultColumnSpan: 3 },
   { type: "command_bar", category: "actions", label: "Command Bar", icon: "⌘", isContainer: false, description: "A row of several buttons together, like a page's own toolbar.", configSchema: [{ key: "buttonLabels", label: "Buttons (comma-separated)", type: "text", placeholder: "Edit, Clone, Delete" }], defaultColumnSpan: 12 },
-  { type: "quick_action", category: "actions", label: "Quick Action", icon: "⚡", isContainer: false, description: "A one-click action that changes a status or field without opening the full edit form.", configSchema: [{ key: "label", label: "Label", type: "text", placeholder: "Mark Won" }, { key: "target_status", label: "Sets status to", type: "text" }], defaultColumnSpan: 3 },
+  { type: "quick_action", category: "actions", label: "Quick Action", icon: "⚡", isContainer: false, description: "Invokes a governed Action Type (Ontology Layer, issue #343) against this record - a one-click button for a zero-parameter action, a small inline form for one that takes input.", configSchema: [{ key: "label", label: "Label", type: "text", placeholder: "Mark Won" }, { key: "action_type_id", label: "Action Type", type: "action_type_picker" }], defaultColumnSpan: 3 },
   { type: "agent_action", category: "actions", label: "Agent Action", icon: "🤖", isContainer: false, description: "Runs a named AI Agent or Pipeline against this record.", configSchema: [{ key: "label", label: "Label", type: "text", placeholder: "Summarize with AI" }, { key: "agent_name", label: "Agent or Pipeline name", type: "text", help: "Matched by name at render time - a picker bound to the real Agent Foundry list is 5b scope." }], defaultColumnSpan: 3 },
 
   // Content / Navigation / Utility - one representative type each; the

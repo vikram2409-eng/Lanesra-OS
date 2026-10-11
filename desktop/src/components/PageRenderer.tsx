@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { useEffectivePage } from "../lib/useEffectivePage";
 import { useIsAdmin } from "../lib/useCurrentUser";
 import type { PageNode } from "../lib/types";
@@ -27,13 +27,14 @@ import { RelatedRecordsCard } from "./RelatedRecordsCard";
  * element, however that entity's detail page already renders a value
  * (money formatting, a linked record, whatever) - a `field` node just
  * places that same element, it never re-derives a value itself. The
- * `recordHeader`/`statusBadge`/`owner`/`recordNumber`/`onEdit`/
- * `onQuickAction` slots are the equivalent for the handful of component
- * types that need something *other* than a field value; each is
- * optional, and a node that needs a slot the caller didn't supply renders
- * a small explanatory placeholder instead of silently vanishing or
- * throwing - see `wire PageRenderer into record detail pages` for which
- * entities currently pass which slots.
+ * `recordHeader`/`statusBadge`/`owner`/`recordNumber`/`onEdit` slots are
+ * the equivalent for the handful of component types that need something
+ * *other* than a field value; each is optional, and a node that needs a
+ * slot the caller didn't supply renders a small explanatory placeholder
+ * instead of silently vanishing or throwing - see `wire PageRenderer into
+ * record detail pages` for which entities currently pass which slots.
+ * `quick_action` needs no slot of its own - see `QuickActionButton` below,
+ * it invokes the Ontology Layer's Action Types (issue #343) directly.
  *
  * Honestly scoped for 5b, matching the KPI/Chart config fields' own
  * `pageComponentLibrary.ts` help text: a `kpi` node computes
@@ -55,7 +56,6 @@ export function PageRenderer({
   owner,
   recordNumber,
   onEdit,
-  onQuickAction,
   onOpenAdminTab,
 }: {
   entityType: string;
@@ -66,7 +66,6 @@ export function PageRenderer({
   owner?: ReactNode;
   recordNumber?: ReactNode;
   onEdit?: () => void;
-  onQuickAction?: (targetStatus: string) => void;
   onOpenAdminTab?: (adminTab: string) => void;
 }) {
   const effective = useEffectivePage(entityType);
@@ -84,7 +83,7 @@ export function PageRenderer({
     relatedCounts[r.relationship_key] = (relatedCounts[r.relationship_key] ?? 0) + 1;
   }
 
-  const slots = { recordHeader, statusBadge, owner, recordNumber, onEdit, onQuickAction, fields, relatedCounts, entityType, entityId };
+  const slots = { recordHeader, statusBadge, owner, recordNumber, onEdit, fields, relatedCounts, entityType, entityId };
 
   return (
     <div>
@@ -151,7 +150,6 @@ type Slots = {
   owner?: ReactNode;
   recordNumber?: ReactNode;
   onEdit?: () => void;
-  onQuickAction?: (targetStatus: string) => void;
   fields: Record<string, ReactNode>;
   relatedCounts: Record<string, number>;
   entityType: string;
@@ -172,6 +170,86 @@ function PageGrid({ nodes, slots }: { nodes: PageNode[]; slots: Slots }) {
 
 function Placeholder({ text }: { text: string }) {
   return <p style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", margin: 0 }}>{text}</p>;
+}
+
+/**
+ * Ontology Layer, issue #343: a `quick_action` node invokes a governed
+ * Action Type directly - self-contained, unlike every other slot-based
+ * node type, since there's nothing page-specific for a caller to supply
+ * (the Action Type itself already names the object type, the capability
+ * it requires, and its own parameters). A zero-parameter Action Type is
+ * one click; one with parameters expands a small inline form first.
+ */
+function QuickActionButton({ actionTypeId, label, entityType, entityId }: { actionTypeId: string; label: string; entityType: string; entityId: string }) {
+  const actionTypes = useQuery({ queryKey: ["actionTypes", entityType, "active"], queryFn: () => api.listActionTypes(entityType, true) });
+  const definition = actionTypes.data?.find((a) => a.id === actionTypeId);
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  if (!actionTypeId) {
+    return (
+      <button className="btn" disabled title="No Action Type chosen yet for this button">
+        {label}
+      </button>
+    );
+  }
+  if (actionTypes.data && !definition) {
+    return (
+      <button className="btn" disabled title="This Action Type no longer exists, or is deactivated">
+        {label}
+      </button>
+    );
+  }
+
+  async function invoke() {
+    if (!definition) return;
+    setPending(true);
+    setError(null);
+    try {
+      await api.invokeActionType(definition.id, entityId, values);
+      setOpen(false);
+      setValues({});
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Action failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (definition && definition.parameters.length === 0) {
+    return (
+      <button className="btn" disabled={pending} onClick={invoke}>
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ display: "inline-block" }}>
+      <button className="btn" onClick={() => setOpen((v) => !v)}>
+        {label}
+      </button>
+      {open && definition && (
+        <div className="card" style={{ marginTop: 8, maxWidth: 320 }}>
+          {definition.parameters.map((p) => (
+            <div className="form-field" key={p.key}>
+              <label>
+                {p.label}
+                {p.required ? " *" : ""}
+              </label>
+              <input value={values[p.key] ?? p.default_value ?? ""} onChange={(e) => setValues((v) => ({ ...v, [p.key]: e.target.value }))} />
+            </div>
+          ))}
+          {error && <p style={{ color: "var(--danger)", fontSize: 12 }}>{error}</p>}
+          <button className="btn btn-primary" disabled={pending} onClick={invoke}>
+            Run
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PageNodeView({ node, slots }: { node: PageNode; slots: Slots }) {
@@ -265,17 +343,13 @@ function PageNodeView({ node, slots }: { node: PageNode; slots: Slots }) {
         </div>
       );
     }
-    case "button":
     case "quick_action": {
       const label = typeof cfg.label === "string" && cfg.label ? cfg.label : def?.label ?? "Action";
-      if (node.component_type === "quick_action") {
-        const target = typeof cfg.target_status === "string" ? cfg.target_status : "";
-        return (
-          <button className="btn" disabled={!slots.onQuickAction || !target} title={slots.onQuickAction ? undefined : "Not wired to a live action on this page yet"} onClick={() => target && slots.onQuickAction?.(target)}>
-            {label}
-          </button>
-        );
-      }
+      const actionTypeId = typeof cfg.action_type_id === "string" ? cfg.action_type_id : "";
+      return <QuickActionButton actionTypeId={actionTypeId} label={label} entityType={slots.entityType} entityId={slots.entityId} />;
+    }
+    case "button": {
+      const label = typeof cfg.label === "string" && cfg.label ? cfg.label : def?.label ?? "Action";
       const action = cfg.action;
       return (
         <button

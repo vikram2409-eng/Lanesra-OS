@@ -40,7 +40,7 @@ use crate::services::{
 /// Built-ins this dispatcher can read - a superset of the ones it can
 /// also write (see this module's own doc comment).
 const READABLE_BUILTINS: &[&str] = &["Company", "Contact", "Product", "Task", "Opportunity", "Quote", "Order", "Invoice", "Contract"];
-const WRITABLE_BUILTINS: &[&str] = &["Company", "Contact", "Product", "Task"];
+pub(crate) const WRITABLE_BUILTINS: &[&str] = &["Company", "Contact", "Product", "Task"];
 
 fn is_custom(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<bool> {
     Ok(!READABLE_BUILTINS.contains(&object_key) && custom_object_service::get_by_key(conn, workspace_id, object_key)?.is_some())

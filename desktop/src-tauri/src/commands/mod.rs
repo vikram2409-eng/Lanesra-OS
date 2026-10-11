@@ -1,4 +1,5 @@
 pub mod access_role_commands;
+pub mod action_type_commands;
 pub mod activity_commands;
 pub mod admin_commands;
 pub mod agent_commands;

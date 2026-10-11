@@ -4468,3 +4468,46 @@ export interface ObjectTypeDetail {
   object_type: ObjectTypeSummary;
   link_types: LinkTypeSummary[];
 }
+
+// Ontology Layer, issue #343: Action Types - a named, parameterized write
+// operation scoped to one Object Type, invoked through the object's own
+// real write path. See `action_type_service`'s own doc comment (Rust) for
+// what each `effect` does and how `effect_config_json` is shaped per
+// effect.
+export type ActionEffect = "set_status" | "set_fields" | "reassign_owner";
+export type ActionCapability = "create" | "read" | "update" | "delete" | "assign";
+
+export interface ActionParameterSpec {
+  key: string;
+  label: string;
+  field_type: string;
+  required: boolean;
+  default_value: string | null;
+}
+
+export interface ActionTypeDefinition {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  target_object_type: string;
+  required_capability: ActionCapability;
+  parameters: ActionParameterSpec[];
+  effect: ActionEffect;
+  effect_config_json: string;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface ActionTypeDefinitionInput {
+  name: string;
+  description: string;
+  target_object_type: string;
+  required_capability: ActionCapability;
+  parameters: ActionParameterSpec[];
+  effect: ActionEffect;
+  effect_config_json: string;
+}

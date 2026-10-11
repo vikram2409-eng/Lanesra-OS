@@ -2356,11 +2356,12 @@ function pageLiveGridHtml(nodes,entityKey,record,entityId){
 // Honestly scoped the same way PageRenderer.tsx is on the desktop side -
 // see that file's own doc comment for exactly which component types are
 // real here (field/field_group/record_header/status_badge/owner/
-// record_number/related_list/table/kpi's related_count source) vs. a
-// clearly-labeled "not live yet" placeholder (kpi's field_sum/field_count
-// sources, chart, every Action type, agent_action - this demo's chat is
-// a canned simulation, not a real agent, so there's nothing genuine to
-// invoke here either).
+// record_number/related_list/table/kpi's related_count source, and now
+// quick_action - Ontology Layer issue #343 - which invokes a real Action
+// Type through invokeActionType()) vs. a clearly-labeled "not live yet"
+// placeholder (kpi's field_sum/field_count sources, chart, agent_action -
+// this demo's chat is a canned simulation, not a real agent, so there's
+// nothing genuine to invoke here either).
 function pageLiveNodeHtml(node,entityKey,record,entityId){
  const def=pageComponentDef(node.componentType);
  const cfg=node.config||{};
@@ -2401,7 +2402,14 @@ function pageLiveNodeHtml(node,entityKey,record,entityId){
    return `<div class="panel" style="text-align:center"><div style="font-size:24px;font-weight:700;color:#9ca3af">—</div><div class="muted" style="font-size:12px">${label}</div>${placeholder("Field-based KPIs aren't wired to live data yet.")}</div>`;
   }
   case 'chart':return `<div class="panel"><div style="font-size:12px;font-weight:700">${cfg.metric_label||'Chart'}</div>${placeholder("Chart rendering isn't wired to live data yet.")}</div>`;
-  case 'button':case 'quick_action':return `<button type="button" class="btn btn-secondary" disabled title="Not wired to a live action on this page yet">${cfg.label||(def?def.label:'Action')}</button>`;
+  case 'quick_action':{
+   const actionTypeId=cfg.action_type_id||'';
+   const actionDef=(data.actionTypeDefinitions||[]).find(a=>a.id===actionTypeId&&a.isActive);
+   const label=cfg.label||(actionDef?actionDef.name:def?def.label:'Action');
+   if(!actionDef)return `<button type="button" class="btn btn-secondary" disabled title="${actionTypeId?'This Action Type no longer exists, or is deactivated':'No Action Type chosen yet for this button'}">${label}</button>`;
+   return `<button type="button" class="btn" data-quick-action="${actionDef.id}" data-quick-action-record="${entityId}">${label}</button>`;
+  }
+  case 'button':return `<button type="button" class="btn btn-secondary" disabled title="Not wired to a live action on this page yet">${cfg.label||(def?def.label:'Action')}</button>`;
   case 'command_bar':{
    const labels=(cfg.buttonLabels||'').split(',').map(s=>s.trim()).filter(Boolean);
    return `<div style="display:flex;gap:8px;flex-wrap:wrap">${labels.map(l=>`<button type="button" class="btn btn-secondary" disabled title="Not wired to a live action on this page yet">${l}</button>`).join('')}</div>`;
@@ -2951,13 +2959,194 @@ function ontologyLinkTypesFor(objectType){
  });
  return out;
 }
+
+// Ontology Layer, issue #343: Action Types - a named, parameterized write
+// operation scoped to one Object Type, invoked identically by a record
+// page's generalized Quick Action button (below) and, later, a governed
+// AI agent. Mirrors `action_type_service` (Rust): no separate invocation-
+// log table here either - this demo has no audit-event log at all (every
+// admin screen's own Recent Changes view already derives from each
+// entity's own createdAt/updatedAt instead), so `stampUpdate` on the
+// written record is this mirror's whole "audit" story, matching that
+// established convention rather than inventing a second log.
+const ACTION_EFFECTS=['set_status','set_fields','reassign_owner'];
+const ACTION_CAPABILITIES=['create','read','update','delete','assign'];
+// Same vocabulary the Custom Fields admin screen's own type select uses
+// (inline there, named here since Action Type parameters reuse it too).
+const CUSTOM_FIELD_TYPES=['text','number','date','boolean','select'];
+// The same boundary api_object_service::update_record enforces on the
+// desktop side (see models::action_type's own doc comment, Rust):
+// Opportunity/Quote/Order/Invoice/Contract are compound documents with
+// their own conversion workflow, read-only through the generic record
+// API, so no Action Type can target them yet either.
+const ACTION_TYPE_WRITABLE_BUILTINS=['companies','contacts','products','tasks'];
+function actionTypeTargetIsWritable(objectType){
+ return ACTION_TYPE_WRITABLE_BUILTINS.includes(objectType)||activeCustomObjects().some(o=>o.key===objectType);
+}
+function actionTypesFor(objectType){return (data.actionTypeDefinitions||[]).filter(a=>a.targetObjectType===objectType)}
+function invokeActionType(actionTypeId,recordId,inputParams){
+ const def=(data.actionTypeDefinitions||[]).find(a=>a.id===actionTypeId);
+ if(!def)throw new Error('Action Type not found');
+ if(!def.isActive)throw new Error(`Action Type '${def.name}' is deactivated`);
+ for(const p of def.parameters){
+  const v=(inputParams[p.key]||'').trim();
+  if(p.required&&!v)throw new Error(`'${p.label}' is required`);
+ }
+ const entityKey=def.targetObjectType;
+ const record=(data[entityKey]||[]).find(r=>r.id===recordId);
+ if(!record)throw new Error('Record not found');
+ const decision=requireCapability(CURRENT_USER_ID,entityKey,'can'+def.requiredCapability[0].toUpperCase()+def.requiredCapability.slice(1),record);
+ if(!decision.allowed)throw new Error(decision.reason);
+ const config=JSON.parse(def.effectConfigJson||'{}');
+ if(def.effect==='set_status'){
+  record.status=config.targetStatus||'';
+ }else if(def.effect==='reassign_owner'){
+  const newOwnerId=inputParams[config.ownerParam]||'';
+  record.ownerType='USER';record.ownerId=newOwnerId;record.owner=ownerName(record);
+ }else if(def.effect==='set_fields'){
+  const draft={...record};
+  Object.entries(config.fieldSources||{}).forEach(([fieldKey,paramKey])=>{draft[fieldKey]=inputParams[paramKey]||''});
+  const ruleOutcome=evaluateFieldRulesForSave(entityKey,draft);
+  if(ruleOutcome.blocked)throw new Error(ruleOutcome.blocked);
+  Object.assign(draft,ruleOutcome.setValues);
+  Object.keys(config.fieldSources||{}).forEach(fieldKey=>{record[fieldKey]=draft[fieldKey]});
+ }else{
+  throw new Error(`Unknown Action Type effect '${def.effect}'`);
+ }
+ stampUpdate(record);
+ save();
+ return record;
+}
+// Live record pages (`pageLiveNodeHtml`'s `quick_action` case) render a
+// real, enabled button with `data-quick-action`/`data-quick-action-record`
+// once wired to a valid Action Type - delegated here (rather than wired
+// per-render in each of companyDetail/contactDetail/genericRecordDetail)
+// since the button can appear inside any of them. A zero-parameter Action
+// Type invokes immediately; one with parameters collects them in a modal
+// first, the same `modal()` helper every other form in this file uses.
+document.addEventListener('click',e=>{
+ const btn=e.target.closest('[data-quick-action]');
+ if(!btn)return;
+ const def=(data.actionTypeDefinitions||[]).find(a=>a.id===btn.dataset.quickAction);
+ const recordId=btn.dataset.quickActionRecord;
+ if(!def)return;
+ if(!def.parameters.length){
+  try{invokeActionType(def.id,recordId,{});toast(`'${def.name}' applied`);renderView()}
+  catch(err){alert(err.message)}
+  return;
+ }
+ const body=`<form id="quickActionForm" class="form-grid">
+  ${def.parameters.map(p=>`<div class="field"><label>${p.label}${p.required?' *':''}</label><input name="${p.key}" value="${p.defaultValue||''}" ${p.required?'required':''}></div>`).join('')}
+  <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">Run</button></div>
+ </form>`;
+ modal(def.name,body);
+ $('[data-close]').onclick=closeModal;
+ $('#quickActionForm').onsubmit=ev=>{
+  ev.preventDefault();
+  const inputParams=Object.fromEntries(new FormData(ev.target).entries());
+  try{invokeActionType(def.id,recordId,inputParams);closeModal();toast(`'${def.name}' applied`);renderView()}
+  catch(err){alert(err.message)}
+ };
+});
+
+// Action Type create/edit draft state for the Ontology admin screen below
+// - kept outside React-style component state since this file renders by
+// re-building innerHTML each time, the same pattern every other
+// multi-field admin form here (e.g. relationshipModal) already follows.
+let actionTypeFormState=null;
+function newActionTypeFormState(objectType){return {id:null,targetObjectType:objectType,name:'',description:'',requiredCapability:'update',effect:'set_status',parameters:[],targetStatus:'',ownerParam:'',fieldSources:{}}}
+function actionTypeFormStateFromDef(def){
+ const config=JSON.parse(def.effectConfigJson||'{}');
+ return {id:def.id,targetObjectType:def.targetObjectType,name:def.name,description:def.description,requiredCapability:def.requiredCapability,effect:def.effect,parameters:def.parameters.map(p=>({...p})),targetStatus:config.targetStatus||'',ownerParam:config.ownerParam||'',fieldSources:{...(config.fieldSources||{})}};
+}
+function captureActionTypeFormInputs(){
+ const f=actionTypeFormState; if(!f)return;
+ if($('#atName'))f.name=$('#atName').value;
+ if($('#atDescription'))f.description=$('#atDescription').value;
+ if($('#atCapability'))f.requiredCapability=$('#atCapability').value;
+ if($('#atEffect'))f.effect=$('#atEffect').value;
+ if($('#atTargetStatus'))f.targetStatus=$('#atTargetStatus').value;
+ if($('#atOwnerParam'))f.ownerParam=$('#atOwnerParam').value;
+ document.querySelectorAll('[data-param-row]').forEach((row,i)=>{
+  if(!f.parameters[i])return;
+  f.parameters[i].key=row.querySelector('[data-param-key]').value;
+  f.parameters[i].label=row.querySelector('[data-param-label]').value;
+  f.parameters[i].fieldType=row.querySelector('[data-param-type]').value;
+  f.parameters[i].required=row.querySelector('[data-param-required]').checked;
+  f.parameters[i].defaultValue=row.querySelector('[data-param-default]').value||null;
+ });
+ document.querySelectorAll('[data-field-source]').forEach(el=>{f.fieldSources[el.dataset.fieldSource]=el.value});
+}
+function actionTypeFormHtml(){
+ const f=actionTypeFormState;
+ const customFields=(data.customFields||[]).filter(fd=>fd.entity===f.targetObjectType&&fd.active!==false);
+ return `<div class="panel" style="margin-bottom:16px">
+  <div class="form-grid">
+   <div class="field"><label>Name</label><input id="atName" value="${f.name}" placeholder="Mark Won"></div>
+   <div class="field"><label>Required capability</label><select id="atCapability">${ACTION_CAPABILITIES.map(c=>`<option value="${c}" ${f.requiredCapability===c?'selected':''}>${c}</option>`).join('')}</select></div>
+   <div class="field"><label>Effect</label><select id="atEffect">${ACTION_EFFECTS.map(e=>`<option value="${e}" ${f.effect===e?'selected':''}>${e}</option>`).join('')}</select></div>
+   <div class="field full"><label>Description</label><textarea id="atDescription" rows="2">${f.description||''}</textarea></div>
+  </div>
+  <div style="margin-top:12px">
+   <div style="display:flex;justify-content:space-between;align-items:center"><strong style="font-size:13px">Parameters</strong><button type="button" class="btn" id="atAddParam">+ Add parameter</button></div>
+   ${f.parameters.length===0?'<p class="muted" style="font-size:12px">No parameters - this action runs with no input.</p>':''}
+   ${f.parameters.map((p,i)=>`<div data-param-row style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+    <input data-param-key placeholder="key" value="${p.key}" style="width:110px">
+    <input data-param-label placeholder="Label" value="${p.label}" style="width:130px">
+    <select data-param-type>${CUSTOM_FIELD_TYPES.map(t=>`<option value="${t}" ${p.fieldType===t?'selected':''}>${t}</option>`).join('')}</select>
+    <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" data-param-required ${p.required?'checked':''}> Required</label>
+    <input data-param-default placeholder="Default" value="${p.defaultValue||''}" style="width:110px">
+    <button type="button" class="icon-btn" data-remove-param="${i}">Remove</button>
+   </div>`).join('')}
+  </div>
+  <div style="margin-top:12px">
+   <strong style="font-size:13px">Effect configuration</strong>
+   ${f.effect==='set_status'?`<div class="field" style="max-width:260px"><label>Sets status to</label><input id="atTargetStatus" value="${f.targetStatus}" placeholder="Won"></div>`:''}
+   ${f.effect==='reassign_owner'?`<div class="field" style="max-width:260px"><label>New owner comes from parameter</label><select id="atOwnerParam"><option value="">Choose a parameter...</option>${f.parameters.map(p=>`<option value="${p.key}" ${f.ownerParam===p.key?'selected':''}>${p.key}</option>`).join('')}</select></div>`:''}
+   ${f.effect==='set_fields'?`<p class="muted" style="font-size:12px">Map each Custom Field this action writes to the parameter supplying its value.</p>${customFields.map(fd=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span style="width:160px">${fd.label}</span><select data-field-source="${fd.key}"><option value="">Not written by this action</option>${f.parameters.map(p=>`<option value="${p.key}" ${f.fieldSources[fd.key]===p.key?'selected':''}>${p.key}</option>`).join('')}</select></div>`).join('')||'<p class="muted" style="font-size:12px">No Custom Fields defined on this object yet.</p>'}`:''}
+  </div>
+  <div class="modal-actions" style="margin-top:12px">
+   <button type="button" class="btn" id="atCancel">Cancel</button>
+   <button type="button" class="btn btn-primary" id="atSave">${f.id?'Save':'Create'}</button>
+  </div>
+ </div>`;
+}
+function wireActionTypeForm(){
+ if(!actionTypeFormState)return;
+ $('#atEffect').onchange=()=>{captureActionTypeFormInputs();actionTypeFormState.effect=$('#atEffect').value;renderAdminTab()};
+ $('#atAddParam').onclick=()=>{captureActionTypeFormInputs();actionTypeFormState.parameters.push({key:'',label:'',fieldType:'text',required:false,defaultValue:null});renderAdminTab()};
+ document.querySelectorAll('[data-remove-param]').forEach(b=>b.onclick=()=>{captureActionTypeFormInputs();actionTypeFormState.parameters.splice(Number(b.dataset.removeParam),1);renderAdminTab()});
+ $('#atCancel').onclick=()=>{actionTypeFormState=null;renderAdminTab()};
+ $('#atSave').onclick=()=>{
+  captureActionTypeFormInputs();
+  const f=actionTypeFormState;
+  if(!f.name.trim())return alert('Name is required.');
+  const effectConfigJson=f.effect==='set_status'?JSON.stringify({targetStatus:f.targetStatus})
+   :f.effect==='reassign_owner'?JSON.stringify({ownerParam:f.ownerParam})
+   :JSON.stringify({fieldSources:Object.fromEntries(Object.entries(f.fieldSources).filter(([,v])=>v))});
+  if(f.id){
+   const def=data.actionTypeDefinitions.find(a=>a.id===f.id);
+   Object.assign(def,{name:f.name,description:f.description,requiredCapability:f.requiredCapability,parameters:f.parameters,effect:f.effect,effectConfigJson});
+   stampUpdate(def);
+  }else{
+   if(!data.actionTypeDefinitions)data.actionTypeDefinitions=[];
+   const created=stampCreate({id:uid(),targetObjectType:f.targetObjectType,name:f.name,description:f.description,requiredCapability:f.requiredCapability,parameters:f.parameters,effect:f.effect,effectConfigJson,isActive:true});
+   data.actionTypeDefinitions.push(created);
+   tagLocalComponent('actionTypeDefinition',created.id);
+  }
+  save();actionTypeFormState=null;toast(f.id?'Action Type saved':'Action Type created');renderAdminTab();
+ };
+}
+
 function objectTypesTab(body){
  const types=ontologyObjectTypes();
  if(!ontologyState.selected||!types.some(t=>t.key===ontologyState.selected))ontologyState.selected=types[0]?.key||null;
  const sel=types.find(t=>t.key===ontologyState.selected);
  const linkTypes=sel?ontologyLinkTypesFor(sel.key):[];
+ const actionTypes=sel?actionTypesFor(sel.key):[];
+ const writable=sel?actionTypeTargetIsWritable(sel.key):false;
  body.innerHTML=`<div class="panel"><h3>Object Types</h3>
- <p class="muted">Every object in the system - built-in and Custom Object alike - as one typed registry: its identity (label, icon, color), its plain-English description where one is mapped in the Business Glossary, and the Link Types it participates in.</p>
+ <p class="muted">Every object in the system - built-in and Custom Object alike - as one typed registry: its identity (label, icon, color), its plain-English description where one is mapped in the Business Glossary, and the Link Types and Action Types it defines.</p>
  <div style="display:flex;gap:20px;align-items:flex-start">
   <div class="table-wrap" style="flex:0 0 320px"><table class="table"><tbody>${types.map(t=>`<tr style="cursor:pointer;${t.key===ontologyState.selected?'background:#fcfcff':''}" data-ontology-select="${t.key}"><td style="width:28px;text-align:center;color:var(--chart-${t.colorIndex})">${t.icon}</td><td><b>${t.labelPlural}</b>${t.isCustom?' <span class="badge">Custom</span>':''}</td></tr>`).join('')}</tbody></table></div>
   <div class="panel" style="flex:1;min-width:0">
@@ -2974,12 +3163,36 @@ function objectTypesTab(body){
    <h4>Link Types (${linkTypes.length})</h4>
    ${linkTypes.length===0?'<p class="muted">No relationships involve this object type yet.</p>':`
    <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Inverse name</th><th>Linked to</th><th>Type</th></tr></thead><tbody>${linkTypes.map(l=>`<tr><td>${l.name}</td><td>${l.inverseName}</td><td>${semanticEntityLabel(l.toObjectType)}</td><td>${RELATIONSHIP_TYPE_LABELS[l.relationshipType]}</td></tr>`).join('')}</tbody></table></div>`}
+
+   <div style="margin-top:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+     <h4 style="margin:0">Action Types (${actionTypes.length})</h4>
+     ${writable?'<button type="button" class="btn btn-primary" id="addActionType">+ New Action Type</button>':''}
+    </div>
+    <p class="muted" style="font-size:12px">A named, governed write - "Mark Won," "Approve," "Reassign owner" - that always runs through this object's real write path (business rules and access checks apply exactly as they would to a manual edit).</p>
+    ${!writable?'<p class="muted">This object type is read-only through the generic record API (a compound document with its own conversion workflow) - no Action Type can target it yet.</p>':''}
+    ${actionTypeFormState&&actionTypeFormState.targetObjectType===sel.key?actionTypeFormHtml():''}
+    ${actionTypes.length===0?'<p class="muted">No Action Types defined yet for this object.</p>':`
+    <table class="table"><thead><tr><th>Name</th><th>Effect</th><th>Required capability</th><th>Status</th><th>Actions</th></tr></thead><tbody>${actionTypes.map(a=>`<tr><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${a.effect}</td><td>${a.requiredCapability}</td><td>${a.isActive?'<span class="badge badge-success">Active</span>':'<span class="badge">Inactive</span>'}</td><td><div class="actions"><button class="icon-btn" data-edit-action-type="${a.id}">Edit</button>${a.isActive?`<button class="icon-btn" data-deactivate-action-type="${a.id}">Deactivate</button>`:''}</div></td></tr>`).join('')}</tbody></table>`}
+   </div>
    `}
   </div>
  </div>
  </div>`;
- body.querySelectorAll('[data-ontology-select]').forEach(b=>b.onclick=()=>{ontologyState.selected=b.dataset.ontologySelect;renderAdminTab()});
+ body.querySelectorAll('[data-ontology-select]').forEach(b=>b.onclick=()=>{ontologyState.selected=b.dataset.ontologySelect;actionTypeFormState=null;renderAdminTab()});
  body.querySelectorAll('[data-admin-cross-link]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminCrossLink;adminView='tool';renderView()});
+ const addBtn=$('#addActionType'); if(addBtn)addBtn.onclick=()=>{actionTypeFormState=newActionTypeFormState(sel.key);renderAdminTab()};
+ body.querySelectorAll('[data-edit-action-type]').forEach(b=>b.onclick=()=>{
+  const def=actionTypes.find(a=>a.id===b.dataset.editActionType);
+  if(def)actionTypeFormState=actionTypeFormStateFromDef(def);
+  renderAdminTab();
+ });
+ body.querySelectorAll('[data-deactivate-action-type]').forEach(b=>b.onclick=()=>{
+  const def=actionTypes.find(a=>a.id===b.dataset.deactivateActionType);
+  if(!def)return;
+  def.isActive=false; stampUpdate(def); save(); toast('Action Type deactivated'); renderAdminTab();
+ });
+ wireActionTypeForm();
 }
 
 // Next-Gen program, Domain A (Intelligence Foundation), FND-02: the
@@ -5933,7 +6146,7 @@ const PAGE_COMPONENT_LIBRARY=[
  {type:'chart',category:'data',label:'Chart',icon:'📈',isContainer:false,description:"A small bar/line/pie chart over related data.",configSchema:[{key:'chart_type',label:'Chart type',type:'select',options:['bar','line','pie'],defaultValue:'bar'},{key:'metric_label',label:'Label',type:'text'}],defaultColumnSpan:6},
  {type:'button',category:'actions',label:'Button',icon:'🔘',isContainer:false,description:"A single labeled action button.",configSchema:[{key:'label',label:'Label',type:'text',placeholder:'Edit'},{key:'style',label:'Style',type:'select',options:['primary','secondary'],defaultValue:'secondary'},{key:'action',label:'Action',type:'select',options:['none','edit','navigate'],defaultValue:'none'}],defaultColumnSpan:3},
  {type:'command_bar',category:'actions',label:'Command Bar',icon:'⌘',isContainer:false,description:"A row of several buttons together, like a page's own toolbar.",configSchema:[{key:'buttonLabels',label:'Buttons (comma-separated)',type:'text',placeholder:'Edit, Clone, Delete'}],defaultColumnSpan:12},
- {type:'quick_action',category:'actions',label:'Quick Action',icon:'⚡',isContainer:false,description:"A one-click action that changes a status or field without opening the full edit form.",configSchema:[{key:'label',label:'Label',type:'text',placeholder:'Mark Won'},{key:'target_status',label:'Sets status to',type:'text'}],defaultColumnSpan:3},
+ {type:'quick_action',category:'actions',label:'Quick Action',icon:'⚡',isContainer:false,description:"Invokes a governed Action Type (Ontology Layer, issue #343) against this record - a one-click button for a zero-parameter action, a small form first for one that takes input.",configSchema:[{key:'label',label:'Label',type:'text',placeholder:'Mark Won'},{key:'action_type_id',label:'Action Type',type:'action_type_picker'}],defaultColumnSpan:3},
  {type:'agent_action',category:'actions',label:'Agent Action',icon:'🤖',isContainer:false,description:"Runs a named AI Agent or Pipeline against this record.",configSchema:[{key:'label',label:'Label',type:'text',placeholder:'Summarize with AI'},{key:'agent_name',label:'Agent or Pipeline name',type:'text',help:"Matched by name at render time - a picker bound to the real Agent Foundry list is 5b scope."}],defaultColumnSpan:3},
  {type:'rich_text',category:'content',label:'Rich Text',icon:'📝',isContainer:false,description:"A block of admin-authored formatted text.",configSchema:[{key:'text',label:'Text',type:'textarea',placeholder:'Write something...'}],defaultColumnSpan:12},
  {type:'anchor_link',category:'navigation',label:'Anchor Link',icon:'⚓',isContainer:false,description:"A jump-to-section link, useful on a long detail page.",configSchema:[{key:'label',label:'Link text',type:'text'},{key:'target_section_id',label:'Jumps to (Section id)',type:'text'}],defaultColumnSpan:3},
@@ -6372,6 +6585,10 @@ function pageConfigFieldHtml(entityKey,schema,value){
  if(schema.type==='field_picker'){
   const fields=allFieldsFor(entityKey);
   return `<div class="field"><label>${schema.label}</label><select data-pb-cfg="${schema.key}"><option value="">Choose a field...</option>${fields.map(f=>`<option value="${f[0]}" ${v===f[0]?'selected':''}>${f[1]}</option>`).join('')}</select>${schema.help?`<p class="muted" style="font-size:11px">${schema.help}</p>`:''}</div>`;
+ }
+ if(schema.type==='action_type_picker'){
+  const options=actionTypesFor(entityKey).filter(a=>a.isActive);
+  return `<div class="field"><label>${schema.label}</label><select data-pb-cfg="${schema.key}"><option value="">Choose an Action Type...</option>${options.map(a=>`<option value="${a.id}" ${v===a.id?'selected':''}>${a.name}</option>`).join('')}</select>${options.length===0?'<p class="muted" style="font-size:11px">No Action Types defined yet for this object - add one under Admin → Ontology → Object Types.</p>':''}</div>`;
  }
  if(schema.type==='select'){
   return `<div class="field"><label>${schema.label}</label><select data-pb-cfg="${schema.key}">${(schema.options||[]).map(o=>`<option value="${o}" ${(v??schema.defaultValue)===o?'selected':''}>${o}</option>`).join('')}</select></div>`;

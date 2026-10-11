@@ -1,8 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "../../lib/api";
-import type { ObjectTypeSummary } from "../../lib/types";
+import { api, ApiError } from "../../lib/api";
+import type { ActionCapability, ActionEffect, ActionParameterSpec, ActionTypeDefinition, ActionTypeDefinitionInput, ObjectTypeSummary } from "../../lib/types";
+import { CUSTOM_FIELD_TYPES } from "../../lib/types";
+
+const ACTION_EFFECTS: ActionEffect[] = ["set_status", "set_fields", "reassign_owner"];
+const ACTION_CAPABILITIES: ActionCapability[] = ["create", "read", "update", "delete", "assign"];
 
 /**
  * Next-Gen program, Ontology Layer epic (issues #340-#345): the
@@ -17,6 +21,7 @@ import type { ObjectTypeSummary } from "../../lib/types";
  */
 export function ObjectTypesAdmin({ onOpenTab }: { onOpenTab?: (adminTab: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const objectTypes = useQuery({ queryKey: ["ontologyObjectTypes"], queryFn: () => api.listObjectTypes() });
   const detail = useQuery({
@@ -24,6 +29,14 @@ export function ObjectTypesAdmin({ onOpenTab }: { onOpenTab?: (adminTab: string)
     queryFn: () => api.getObjectTypeDetail(selected!),
     enabled: !!selected,
   });
+  const actionTypes = useQuery({
+    queryKey: ["actionTypes", selected, "all"],
+    queryFn: () => api.listActionTypes(selected!, false),
+    enabled: !!selected,
+  });
+  function invalidateActionTypes() {
+    queryClient.invalidateQueries({ queryKey: ["actionTypes", selected] });
+  }
 
   return (
     <div>
@@ -116,9 +129,303 @@ export function ObjectTypesAdmin({ onOpenTab }: { onOpenTab?: (adminTab: string)
                   </tbody>
                 </table>
               )}
+
+              <ActionTypesSection targetObjectType={selected!} actionTypes={actionTypes.data ?? []} onChanged={invalidateActionTypes} />
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ontology Layer, issue #343: Action Types - a named, parameterized write
+ * operation scoped to this object type, invokable identically by a
+ * record page's generalized Quick Action button (`PageRenderer`'s
+ * `QuickActionButton`) and, later, a governed AI agent (issue #344).
+ * Deactivate only, never delete - a page layout's `quick_action`
+ * component or an agent binding may still reference this id.
+ */
+function ActionTypesSection({
+  targetObjectType,
+  actionTypes,
+  onChanged,
+}: {
+  targetObjectType: string;
+  actionTypes: ActionTypeDefinition[];
+  onChanged: () => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = actionTypes.find((a) => a.id === editingId) ?? null;
+  const deactivate = useMutation({ mutationFn: (id: string) => api.deactivateActionType(id), onSuccess: onChanged });
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div className="toolbar">
+        <h4 style={{ margin: 0 }}>Action Types ({actionTypes.length})</h4>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setCreating((v) => !v);
+            setEditingId(null);
+          }}
+        >
+          + New Action Type
+        </button>
+      </div>
+      <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
+        A named, governed write - "Mark Won," "Approve," "Reassign owner" - that always runs through this object's
+        real write path (business rules and access checks apply exactly as they would to a manual edit).
+      </p>
+
+      {creating && (
+        <ActionTypeForm
+          targetObjectType={targetObjectType}
+          onDone={() => {
+            onChanged();
+            setCreating(false);
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      )}
+      {editing && (
+        <ActionTypeForm
+          targetObjectType={targetObjectType}
+          actionType={editing}
+          onDone={() => {
+            onChanged();
+            setEditingId(null);
+          }}
+          onCancel={() => setEditingId(null)}
+        />
+      )}
+
+      {actionTypes.length === 0 && !creating && <p style={{ color: "var(--text-muted)" }}>No Action Types defined yet for this object.</p>}
+      {actionTypes.length > 0 && (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Effect</th>
+              <th>Required capability</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {actionTypes.map((a) => (
+              <tr key={a.id}>
+                <td>
+                  <b>{a.name}</b>
+                  {a.description && (
+                    <>
+                      <br />
+                      <small className="muted">{a.description}</small>
+                    </>
+                  )}
+                </td>
+                <td>{a.effect}</td>
+                <td>{a.required_capability}</td>
+                <td>{a.is_active ? <span className="badge badge-success">Active</span> : <span className="badge">Inactive</span>}</td>
+                <td>
+                  <div className="actions">
+                    <button
+                      className="icon-btn"
+                      onClick={() => {
+                        setEditingId(a.id);
+                        setCreating(false);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    {a.is_active && (
+                      <button className="icon-btn" onClick={() => deactivate.mutate(a.id)}>
+                        Deactivate
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function emptyParameter(): ActionParameterSpec {
+  return { key: "", label: "", field_type: "text", required: false, default_value: null };
+}
+
+function ActionTypeForm({
+  targetObjectType,
+  actionType,
+  onDone,
+  onCancel,
+}: {
+  targetObjectType: string;
+  actionType?: ActionTypeDefinition;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const customFields = useQuery({ queryKey: ["customFieldDefinitions", targetObjectType, "active"], queryFn: () => api.listCustomFieldDefinitions(targetObjectType, true) });
+
+  const [name, setName] = useState(actionType?.name ?? "");
+  const [description, setDescription] = useState(actionType?.description ?? "");
+  const [requiredCapability, setRequiredCapability] = useState<ActionCapability>(actionType?.required_capability ?? "update");
+  const [effect, setEffect] = useState<ActionEffect>(actionType?.effect ?? "set_status");
+  const [parameters, setParameters] = useState<ActionParameterSpec[]>(actionType?.parameters ?? []);
+  const initialConfig = actionType ? (JSON.parse(actionType.effect_config_json) as Record<string, unknown>) : {};
+  const [targetStatus, setTargetStatus] = useState<string>((initialConfig.target_status as string) ?? "");
+  const [ownerParam, setOwnerParam] = useState<string>((initialConfig.owner_param as string) ?? "");
+  const [fieldSources, setFieldSources] = useState<Record<string, string>>((initialConfig.field_sources as Record<string, string>) ?? {});
+  const [error, setError] = useState<string | null>(null);
+
+  function buildInput(): ActionTypeDefinitionInput {
+    const effect_config_json =
+      effect === "set_status"
+        ? JSON.stringify({ target_status: targetStatus })
+        : effect === "reassign_owner"
+          ? JSON.stringify({ owner_param: ownerParam })
+          : JSON.stringify({ field_sources: Object.fromEntries(Object.entries(fieldSources).filter(([, v]) => v)) });
+    return { name, description, target_object_type: targetObjectType, required_capability: requiredCapability, parameters, effect, effect_config_json };
+  }
+
+  const save = useMutation({
+    mutationFn: () => (actionType ? api.updateActionType(actionType.id, buildInput()) : api.createActionType(buildInput())),
+    onSuccess: onDone,
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this Action Type"),
+  });
+
+  function updateParam(i: number, patch: Partial<ActionParameterSpec>) {
+    setParameters(parameters.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+
+  return (
+    <div className="panel" style={{ marginBottom: 16 }}>
+      {error && <div className="error-banner">{error}</div>}
+      <div className="form-grid">
+        <div className="form-field">
+          <label>Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Mark Won" />
+        </div>
+        <div className="form-field">
+          <label>Required capability</label>
+          <select value={requiredCapability} onChange={(e) => setRequiredCapability(e.target.value as ActionCapability)}>
+            {ACTION_CAPABILITIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Effect</label>
+          <select value={effect} onChange={(e) => setEffect(e.target.value as ActionEffect)}>
+            {ACTION_EFFECTS.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="form-field" style={{ gridColumn: "1 / -1" }}>
+          <label>Description (shown on the button, and to an agent deciding whether to call it)</label>
+          <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <div className="toolbar">
+          <strong style={{ fontSize: 13 }}>Parameters</strong>
+          <button className="btn" onClick={() => setParameters([...parameters, emptyParameter()])}>
+            + Add parameter
+          </button>
+        </div>
+        {parameters.length === 0 && <p className="muted" style={{ fontSize: 12 }}>No parameters - this action runs with no input.</p>}
+        {parameters.map((p, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <input placeholder="key" value={p.key} onChange={(e) => updateParam(i, { key: e.target.value })} style={{ width: 120 }} />
+            <input placeholder="Label" value={p.label} onChange={(e) => updateParam(i, { label: e.target.value })} style={{ width: 140 }} />
+            <select value={p.field_type} onChange={(e) => updateParam(i, { field_type: e.target.value })}>
+              {CUSTOM_FIELD_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <label style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12 }}>
+              <input type="checkbox" checked={p.required} onChange={(e) => updateParam(i, { required: e.target.checked })} />
+              Required
+            </label>
+            <input
+              placeholder="Default value"
+              value={p.default_value ?? ""}
+              onChange={(e) => updateParam(i, { default_value: e.target.value || null })}
+              style={{ width: 120 }}
+            />
+            <button className="icon-btn" onClick={() => setParameters(parameters.filter((_, idx) => idx !== i))}>
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <strong style={{ fontSize: 13 }}>Effect configuration</strong>
+        {effect === "set_status" && (
+          <div className="form-field" style={{ maxWidth: 260 }}>
+            <label>Sets status to</label>
+            <input value={targetStatus} onChange={(e) => setTargetStatus(e.target.value)} placeholder="Won" />
+          </div>
+        )}
+        {effect === "reassign_owner" && (
+          <div className="form-field" style={{ maxWidth: 260 }}>
+            <label>New owner comes from parameter</label>
+            <select value={ownerParam} onChange={(e) => setOwnerParam(e.target.value)}>
+              <option value="">Choose a parameter...</option>
+              {parameters.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.key}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {effect === "set_fields" && (
+          <div>
+            <p className="muted" style={{ fontSize: 12 }}>Map each Custom Field this action writes to the parameter supplying its value.</p>
+            {(customFields.data ?? []).map((f) => (
+              <div key={f.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                <span style={{ width: 160 }}>{f.label}</span>
+                <select
+                  value={fieldSources[f.key] ?? ""}
+                  onChange={(e) => setFieldSources({ ...fieldSources, [f.key]: e.target.value })}
+                >
+                  <option value="">Not written by this action</option>
+                  {parameters.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.key}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+            {(customFields.data ?? []).length === 0 && <p className="muted" style={{ fontSize: 12 }}>No Custom Fields defined on this object yet.</p>}
+          </div>
+        )}
+      </div>
+
+      <div className="actions" style={{ marginTop: 12 }}>
+        <button className="btn btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
+          {actionType ? "Save" : "Create"}
+        </button>
+        <button className="btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     </div>
   );
