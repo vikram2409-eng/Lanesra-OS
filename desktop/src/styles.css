@@ -1562,6 +1562,134 @@ tr:hover td {
   justify-content: center;
 }
 
+/* Ontology Explorer visual language (issue #339): the Dependency
+   Explorer's own node shape (a small colored dot, not a boxed card), so
+   these are scoped new classes rather than edits to .graph-node/
+   .graph-canvas above - those stay exactly as every other
+   VisualBuilderCanvas consumer (Agent Team Builder, Workflow Studio,
+   Business Rule Board) already depends on. */
+.ontology-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.ontology-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ontology-node-dot {
+  position: absolute;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s ease;
+}
+
+.ontology-node-dot:hover {
+  transform: scale(1.25);
+}
+
+.ontology-node-root {
+  box-shadow: 0 0 0 3px var(--accent), 0 1px 3px rgba(0, 0, 0, 0.15);
+  cursor: default;
+}
+
+.ontology-node-inspecting {
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.ontology-inspector-card {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 280px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+}
+
+.ontology-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ontology-inspector-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ontology-inspector-definition {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.ontology-inspector-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ontology-inspector-actions .btn {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.ontology-inspector-groups {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.ontology-inspector-group {
+  margin-bottom: 8px;
+}
+
+.ontology-inspector-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.ontology-inspector-bullet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 3px 0;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ontology-inspector-bullet:hover {
+  color: var(--accent);
+}
+
 .graph-property-panel {
   border: 1px solid var(--border);
   border-radius: 10px;

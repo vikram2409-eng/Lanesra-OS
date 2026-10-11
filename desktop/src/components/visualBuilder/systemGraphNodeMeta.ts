@@ -2,22 +2,28 @@
 // the Dependency Explorer - pure data, no JSX/hooks, same split
 // `graphNodeMeta.ts` already establishes. Scoped to exactly the node
 // types `system_graph.rs`'s `NODE_TYPES` syncs.
-
+//
+// Ontology Explorer visual language (issue #339): `colorIndex` replaces
+// this map's old hardcoded hex `color` field - every node now renders
+// through Theme Studio's own categorical `--chart-1`..`--chart-6` tokens
+// (the same `ontologyColorIndex`-style convention Object Types' own
+// per-type color already uses), so a Theme Studio preset switch re-colors
+// this graph too instead of a second, untouchable palette.
 import type { SystemNodeType } from "../../lib/types";
 
-export const SYSTEM_NODE_TYPE_META: Record<SystemNodeType, { label: string; color: string }> = {
-  custom_object: { label: "Object", color: "#4f7cff" },
-  custom_field: { label: "Field", color: "#0891b2" },
-  relationship: { label: "Relationship", color: "#db2777" },
-  business_rule: { label: "Business Rule", color: "#d97706" },
-  workflow: { label: "Workflow", color: "#16a34a" },
-  screen_layout: { label: "Screen Layout", color: "#64748b" },
-  page_layout: { label: "Page Layout", color: "#0284c7" },
-  ai_agent: { label: "AI Agent", color: "#9333ea" },
-  execution_graph: { label: "Agent Team", color: "#9333ea" },
-  business_glossary_term: { label: "Glossary Term", color: "#0d9488" },
-  metric_definition: { label: "Metric", color: "#ca8a04" },
-  test_case_definition: { label: "Test Case", color: "#e11d48" },
+export const SYSTEM_NODE_TYPE_META: Record<SystemNodeType, { label: string; colorIndex: number }> = {
+  custom_object: { label: "Object", colorIndex: 1 },
+  custom_field: { label: "Field", colorIndex: 2 },
+  relationship: { label: "Relationship", colorIndex: 3 },
+  business_rule: { label: "Business Rule", colorIndex: 4 },
+  workflow: { label: "Workflow", colorIndex: 5 },
+  screen_layout: { label: "Screen Layout", colorIndex: 6 },
+  page_layout: { label: "Page Layout", colorIndex: 1 },
+  ai_agent: { label: "AI Agent", colorIndex: 2 },
+  execution_graph: { label: "Agent Team", colorIndex: 3 },
+  business_glossary_term: { label: "Glossary Term", colorIndex: 4 },
+  metric_definition: { label: "Metric", colorIndex: 5 },
+  test_case_definition: { label: "Test Case", colorIndex: 6 },
 };
 
 export const SYSTEM_NODE_TYPES: SystemNodeType[] = [
