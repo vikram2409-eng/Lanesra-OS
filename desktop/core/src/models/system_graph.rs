@@ -30,6 +30,19 @@
 //! comment. Reuses the existing `depends_on` edge type and is the first
 //! to populate `derives_from` (a term/metric's link to what it's mapped
 //! to or sourced from) - 4 of the 10 edge types now populated.
+//!
+//! **FND-03 (Unified Test & Evaluation Framework) addition**:
+//! `test_case_definition` - the spec's own "tests" node type, named in
+//! this module's scope note from the start. See
+//! `services::test_eval_service::sync_graph_node` for its `depends_on`
+//! edge: a business_rule/workflow/access_security/screen_visibility case
+//! targets an entity_type, so it points at that `custom_object` node
+//! (there's no single rule/workflow id to point at - those test types
+//! exercise every active rule/workflow for the entity, the same scope
+//! `test_rules`/`test_workflows` already test at); an agent_eval/
+//! agent_team_eval case points at its `ai_agent`/`execution_graph` node.
+//! An integration_mapping case has no edge - `Mapping` isn't a System
+//! Graph node type yet, named as a follow-up rather than fabricated.
 
 pub const NODE_TYPES: &[&str] = &[
     "custom_object",
@@ -44,6 +57,8 @@ pub const NODE_TYPES: &[&str] = &[
     // FND-02 (Semantic Metadata Layer) additions.
     "business_glossary_term",
     "metric_definition",
+    // FND-03 (Unified Test & Evaluation Framework) addition.
+    "test_case_definition",
 ];
 
 pub const EDGE_TYPES: &[&str] = &[

@@ -23,7 +23,12 @@ use crate::models::integration::{ApiListQuery, CsvImportInput, CsvImportResult, 
 use crate::services::integration_log_service::{self, FinishOutcome};
 use crate::services::{api_object_service, mapping_service};
 
-fn build_record_value(row: &HashMap<String, String>, field_map: &[FieldMapEntry]) -> Value {
+/// `pub(crate)`: also the per-row transform `test_eval_service`'s
+/// `integration_mapping` test type executor reuses, so an "is this
+/// Mapping still doing what I expect" test case runs the exact same
+/// source-row-to-target-fields logic a real import would, rather than a
+/// second, parallel one.
+pub(crate) fn build_record_value(row: &HashMap<String, String>, field_map: &[FieldMapEntry]) -> Value {
     let mut obj = serde_json::Map::new();
     for entry in field_map {
         let raw = match &entry.constant {

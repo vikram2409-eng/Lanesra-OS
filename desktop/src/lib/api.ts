@@ -47,6 +47,9 @@ import type {
   MetricDefinition,
   MetricDefinitionInput,
   MetricVersion,
+  TestCaseDefinition,
+  TestCaseDefinitionInput,
+  TestRun,
   MemoryType,
   MemoryItem,
   KnowledgeCollection,
@@ -492,6 +495,23 @@ export const api = {
   listMetricVersions: (metricId: string) => call<MetricVersion[]>("list_metric_versions", { metricId }),
   deactivateMetricDefinition: (id: string) => call<MetricDefinition>("deactivate_metric_definition", { id }),
   deleteMetricDefinition: (id: string) => call<void>("delete_metric_definition", { id }),
+
+  // Next-Gen program, Domain A, FND-03: the Unified Test & Evaluation
+  // Framework. Case CRUD/run-history reads are plain sync;
+  // `runTests`/`runTestsForSolution` can make a real model call per
+  // agent_eval/agent_team_eval case, so they go through
+  // `callAdminAction` same as `runAiEvalSuite`.
+  listTestCaseDefinitions: (activeOnly: boolean) => call<TestCaseDefinition[]>("list_test_case_definitions", { activeOnly }),
+  createTestCaseDefinition: (input: TestCaseDefinitionInput) => call<TestCaseDefinition>("create_test_case_definition", { input }),
+  updateTestCaseDefinition: (id: string, input: TestCaseDefinitionInput) => call<TestCaseDefinition>("update_test_case_definition", { id, input }),
+  deactivateTestCaseDefinition: (id: string) => call<TestCaseDefinition>("deactivate_test_case_definition", { id }),
+  deleteTestCaseDefinition: (id: string) => call<void>("delete_test_case_definition", { id }),
+  listTestRuns: (limit: number) => call<TestRun[]>("list_test_runs", { limit }),
+  listTestRunsForSolution: (solutionId: string, limit: number) => call<TestRun[]>("list_test_runs_for_solution", { solutionId, limit }),
+  getTestRun: (id: string) => call<TestRun | null>("get_test_run", { id }),
+  runTests: (caseIds: string[]) => callAdminAction<TestRun>("run_tests", { caseIds }, "POST", "/api/admin/test-runs", { case_ids: caseIds }),
+  runTestsForSolution: (solutionId: string) =>
+    callAdminAction<TestRun>("run_tests_for_solution", { solutionId }, "POST", `/api/admin/solutions/${encodeURIComponent(solutionId)}/validate`),
 
   // AI Agent Platform v2, Phase 4: Memory Inspector + Document RAG
   // (Knowledge Collections/Sources). Source create/update/search call the

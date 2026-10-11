@@ -4243,7 +4243,8 @@ export type SystemNodeType =
   | "ai_agent"
   | "execution_graph"
   | "business_glossary_term"
-  | "metric_definition";
+  | "metric_definition"
+  | "test_case_definition";
 
 export type SystemEdgeType =
   | "uses"
@@ -4373,4 +4374,69 @@ export interface MetricVersion {
   metric_definition_id: string;
   snapshot: MetricDefinition;
   saved_at: string;
+}
+
+// Next-Gen program, Domain A (Intelligence Foundation), FND-03: the
+// Unified Test & Evaluation Framework. `dataset_json`'s shape depends on
+// `test_type` - see models::test_eval's own doc comment (Rust) for the
+// exact per-type keys; not modeled as a TS union here since the admin
+// screen edits it as free-form JSON, the same `filters_json`-style
+// opaque-string convention `MetricDefinition` already uses.
+export type TestType = "business_rule" | "workflow" | "access_security" | "screen_visibility" | "integration_mapping" | "agent_eval" | "agent_team_eval";
+
+export interface TestCaseDefinition {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  test_type: TestType;
+  target_id: string;
+  dataset_json: string;
+  cost_threshold_usd: number | null;
+  latency_threshold_ms: number | null;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface TestCaseDefinitionInput {
+  name: string;
+  description?: string | null;
+  test_type: TestType;
+  target_id: string;
+  dataset_json?: string;
+  cost_threshold_usd?: number | null;
+  latency_threshold_ms?: number | null;
+}
+
+export interface TestRunCaseResult {
+  id: string;
+  run_id: string;
+  test_case_id: string | null;
+  test_case_name: string;
+  test_type: TestType;
+  passed: boolean;
+  evidence_json: string;
+  trace_text: string | null;
+  runtime_ms: number;
+  retries: number;
+  cost_usd: number | null;
+  policy_outcome: string;
+  component_version_ref: string | null;
+  created_at: string;
+}
+
+export interface TestRun {
+  id: string;
+  workspace_id: string;
+  solution_id: string | null;
+  status: "running" | "completed";
+  passed_count: number;
+  failed_count: number;
+  triggered_by: string;
+  started_at: string;
+  finished_at: string | null;
+  results: TestRunCaseResult[];
 }

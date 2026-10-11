@@ -688,7 +688,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -708,12 +708,14 @@ const ADMIN_CATEGORIES=[
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
  {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards','metricDefinitions']},
  {key:'solutions',label:'Deployment Management',icon:'🗂',note:"What's installed, what it created, and who published it",items:['solutions']},
+ {key:'testing',label:'Testing & Quality',icon:'✅',note:'Define deterministic and AI test cases, and run a mix of them together for one readiness result',items:['testEval']},
  {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
  {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
 ];
 let dependencyExplorerState={type:'custom_object',id:null,transitive:null};
+let testEvalView={selected:new Set()};
 let cfEntity='companies';
 let ruleEntity='companies';
 let wfEntity='companies';
@@ -2820,7 +2822,7 @@ function adminCrossLinkRow(entityKey){
 // node types and 3 edge types (depends_on/invokes/delegates_to) the real
 // desktop/server edition's `system_graph.rs` v1 slice syncs - see that
 // module's own doc comment for the full scoping note.
-const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team',business_glossary_term:'Glossary Term',metric_definition:'Metric'};
+const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team',business_glossary_term:'Glossary Term',metric_definition:'Metric',test_case_definition:'Test Case'};
 function systemGraphNodes(){
  const nodes=[];
  (data.customObjects||[]).forEach(o=>nodes.push({type:'custom_object',id:o.key,label:o.labelPlural||o.label||o.key}));
@@ -2834,6 +2836,7 @@ function systemGraphNodes(){
  (data.aiExecutionGraphs||[]).forEach(g=>nodes.push({type:'execution_graph',id:g.id,label:g.name}));
  (data.businessGlossaryTerms||[]).forEach(t=>nodes.push({type:'business_glossary_term',id:t.id,label:t.name}));
  (data.metricDefinitions||[]).forEach(m=>nodes.push({type:'metric_definition',id:m.id,label:m.name}));
+ (data.testCaseDefinitions||[]).forEach(c=>nodes.push({type:'test_case_definition',id:c.id,label:c.name}));
  return nodes;
 }
 // `{edgeType, fromType, fromId, toType, toId}` - 4 of the spec's 10 edge
@@ -2877,6 +2880,17 @@ function systemGraphEdges(){
    if(field)add('depends_on','metric_definition',metric.id,'custom_field',field.id);
   }
   if(metric.glossaryTermId)add('derives_from','metric_definition',metric.id,'business_glossary_term',metric.glossaryTermId);
+ });
+ // FND-03 (Unified Test & Evaluation Framework): a test case `depends_on`
+ // its target's own node, when one exists - the four object-scoped test
+ // types point at the custom_object node only if the target is a real
+ // Custom Object (a built-in entity type never gets one - same rule
+ // metric_definition/business_glossary_term edges already follow).
+ (data.testCaseDefinitions||[]).forEach(c=>{
+  if(['business_rule','workflow','access_security','screen_visibility'].includes(c.testType)){
+   if((data.customObjects||[]).some(o=>o.key===c.targetId))add('depends_on','test_case_definition',c.id,'custom_object',c.targetId);
+  }else if(c.testType==='agent_eval')add('depends_on','test_case_definition',c.id,'ai_agent',c.targetId);
+  else if(c.testType==='agent_team_eval')add('depends_on','test_case_definition',c.id,'execution_graph',c.targetId);
  });
  return edges;
 }
@@ -3048,6 +3062,239 @@ function metricVersionsModal(metric){
  modal(`Versions — ${metric.name}`,body);
  $('[data-close]').onclick=closeModal;
 }
+// Next-Gen program, Domain A (Intelligence Foundation), FND-03: the
+// Unified Test & Evaluation Framework. One framework for mixed
+// deterministic and AI test cases, run together as one Test Run with one
+// readiness result - see test_eval_service's own doc comment (Rust) for
+// the full design. Every executor below wraps a dry-run/real function
+// this demo already has rather than re-implementing one: fieldEffectsFor/
+// evaluateFieldRulesForSave (business rules), the workflow condition
+// match wireWorkflowTestPanel already uses, explainAccess (Access
+// Inspector), the resolved default layout (Screen/App Builder), and
+// chatSimAgentReply/agentTeamStartRun graded by simEvalJudge (the same
+// judge AI Eval Suites already uses). No `integration_mapping` test type
+// here - this demo never mirrored Integration Hub's reusable Mapping
+// entity in the first place, so there's nothing for it to test against;
+// the real edition's own test_eval_service.rs still supports it.
+const TEST_TYPES=[
+ ['business_rule','Business Rule'],
+ ['workflow','Workflow'],
+ ['access_security','Access / Security'],
+ ['screen_visibility','Screen Visibility'],
+ ['agent_eval','Agent Evaluation'],
+ ['agent_team_eval','Agent Team Evaluation'],
+];
+const TEST_TYPE_LABELS=Object.fromEntries(TEST_TYPES);
+const TEST_DATASET_PLACEHOLDERS={
+ business_rule:'{\n  "ctx": {"field_key": "value"},\n  "expect_field_effects": {"field_key": "hide"},\n  "expect_blocked": false,\n  "expect_errors": []\n}',
+ workflow:'{\n  "ctx": {"field_key": "value"},\n  "expect_matched_workflow_names": ["Notify owner"]\n}',
+ access_security:'{\n  "actor_user_id": "...",\n  "capability": "update",\n  "record_id": null,\n  "expect_allowed": true\n}',
+ screen_visibility:'{\n  "expect_visible_fields": ["name"],\n  "expect_hidden_fields": ["internal_notes"]\n}',
+ agent_eval:'{\n  "input_text": "...",\n  "success_criteria": "..."\n}',
+ agent_team_eval:'{\n  "input_text": "...",\n  "success_criteria": "..."\n}',
+};
+function ensureTestEval(){if(!data.testCaseDefinitions)data.testCaseDefinitions=[];if(!data.testRuns)data.testRuns=[]}
+function testCaseTargetLabel(c){
+ if(c.testType==='agent_eval')return(data.aiAgents||[]).find(a=>a.id===c.targetId)?.name||c.targetId;
+ if(c.testType==='agent_team_eval')return(data.aiExecutionGraphs||[]).find(g=>g.id===c.targetId)?.name||c.targetId;
+ return semanticEntityLabel(c.targetId)||c.targetId;
+}
+// Dispatches on testCase.testType and grades the result - mirrors
+// test_eval_service::execute_case's own per-type match arms (Rust) one
+// for one, just against this browser's own in-memory data instead of a
+// real SQLite connection.
+function executeTestCase(c){
+ const started=performance.now();
+ let dataset={};
+ try{dataset=JSON.parse(c.datasetJson||'{}')}
+ catch(e){return{passed:false,evidence:{error:`Invalid dataset: ${e.message}`},trace:`Invalid dataset: ${e.message}`,policyOutcome:'n/a',runtimeMs:Math.round(performance.now()-started)}}
+ const fail=(evidence,trace)=>({passed:false,evidence,trace,policyOutcome:'n/a',runtimeMs:Math.round(performance.now()-started)});
+ const ok=(passed,evidence,trace,policyOutcome)=>({passed,evidence,trace,policyOutcome:policyOutcome||'n/a',runtimeMs:Math.round(performance.now()-started)});
+ if(c.testType==='business_rule'){
+  const ctx=dataset.ctx||{};
+  const rules=(data.fieldRules||[]).filter(r=>r.entity===c.targetId&&r.active);
+  const fieldEffects=fieldEffectsFor(rules,ctx);
+  const saveResult=evaluateFieldRulesForSave(c.targetId,ctx);
+  const failures=[];
+  if(dataset.expect_field_effects){
+   Object.entries(dataset.expect_field_effects).forEach(([k,v])=>{
+    const actual=fieldEffects[k];
+    if(actual!==v)failures.push(`field '${k}': expected effect '${v}', got ${actual?`'${actual}'`:'none'}`);
+   });
+  }
+  if(typeof dataset.expect_blocked==='boolean'){
+   const actuallyBlocked=!!saveResult.blocked;
+   if(actuallyBlocked!==dataset.expect_blocked)failures.push(`expected blocked=${dataset.expect_blocked}, got ${actuallyBlocked}`);
+  }
+  if(dataset.expect_errors){
+   const expectedSorted=[...dataset.expect_errors].sort();
+   const actualSorted=[...(saveResult.errors||[])].sort();
+   if(JSON.stringify(expectedSorted)!==JSON.stringify(actualSorted))failures.push(`expected errors ${JSON.stringify(expectedSorted)}, got ${JSON.stringify(actualSorted)}`);
+  }
+  return ok(failures.length===0,{fieldEffects,blocked:saveResult.blocked,errors:saveResult.errors},failures.join('; ')||null);
+ }
+ if(c.testType==='workflow'){
+  const ctx=dataset.ctx||{};
+  const matches=(data.workflowRules||[]).filter(r=>r.entity===c.targetId&&r.active).filter(r=>r.conditions&&r.conditions.length&&conditionsMatch(r.matchType||'all',r.conditions,ctx));
+  const matchedNames=matches.map(m=>m.name||'Untitled workflow');
+  const failures=[];
+  if(dataset.expect_matched_workflow_names){
+   const expectedSorted=[...dataset.expect_matched_workflow_names].sort();
+   const actualSorted=[...matchedNames].sort();
+   if(JSON.stringify(expectedSorted)!==JSON.stringify(actualSorted))failures.push(`expected matched workflows ${JSON.stringify(expectedSorted)}, got ${JSON.stringify(actualSorted)}`);
+  }
+  return ok(failures.length===0,{matchedWorkflowNames:matchedNames},failures.join('; ')||null);
+ }
+ if(c.testType==='access_security'){
+  if(!dataset.actor_user_id||!dataset.capability)return fail({error:'actor_user_id and capability are required'},'actor_user_id and capability are required');
+  // The dataset's own capability vocabulary (create/read/update/delete/
+  // assign) matches the real edition's Capability enum exactly - this
+  // demo's internal grant object happens to key the same 5 capabilities
+  // as canCreate/canRead/canUpdate/canDelete/canAssign (see CAPABILITIES),
+  // so translate rather than leak that internal naming into the dataset
+  // contract an admin actually types.
+  const capabilityKey='can'+dataset.capability.charAt(0).toUpperCase()+dataset.capability.slice(1);
+  const record=dataset.record_id?byId(c.targetId,dataset.record_id):null;
+  const result=explainAccess(dataset.actor_user_id,c.targetId,capabilityKey,record);
+  const passed=result.allowed===!!dataset.expect_allowed;
+  return ok(passed,{allowed:result.allowed,reason:result.reason},result.reason);
+ }
+ if(c.testType==='screen_visibility'){
+  // This demo has no signed-in user (same note layoutsTab's own doc
+  // comment makes) - always resolves the entity's Default layout,
+  // unlike the real edition's own per-actor role resolution.
+  const fields=actionableFieldsFor(c.targetId);
+  const tabs=defaultLayoutFor(c.targetId).publishedTabs;
+  const visible=new Set(orderedTabsFor(fields,tabs).flatMap(t=>t.groups.flatMap(g=>g.items.map(it=>it.field[0]))));
+  const failures=[];
+  (dataset.expect_visible_fields||[]).forEach(f=>{if(!visible.has(f))failures.push(`expected '${f}' visible, but it is not on the resolved layout`)});
+  (dataset.expect_hidden_fields||[]).forEach(f=>{if(visible.has(f))failures.push(`expected '${f}' hidden, but it is on the resolved layout`)});
+  return ok(failures.length===0,{visibleFields:[...visible]},failures.join('; ')||null);
+ }
+ if(c.testType==='agent_eval'){
+  const agent=(data.aiAgents||[]).find(a=>a.id===c.targetId);
+  if(!agent)return fail({error:'Agent not found'},'Agent not found');
+  const actualOutput=chatSimAgentReply(agent,dataset.input_text||'');
+  const{passed,reasoning}=simEvalJudge({successCriteria:dataset.success_criteria},actualOutput);
+  return ok(passed,{actualOutput,judgeReasoning:reasoning},reasoning);
+ }
+ if(c.testType==='agent_team_eval'){
+  const graph=(data.aiExecutionGraphs||[]).find(g=>g.id===c.targetId);
+  if(!graph)return fail({error:'Agent team not found'},'Agent team not found');
+  if(graph.status!=='published')return fail({error:'This agent team must be published before it can be run'},'This agent team must be published before it can be run');
+  ensureExecutionGraphs();
+  const run=agentTeamStartRun(graph,{input:dataset.input_text||''});
+  if(run.status!=='completed')return fail({error:run.errorMessage||`Run did not complete (status: ${run.status})`},run.errorMessage||`Run did not complete (status: ${run.status})`);
+  const actualOutput=JSON.stringify(run.nodeRuns.map(n=>({node:n.nodeKey,output:n.output})));
+  const{passed,reasoning}=simEvalJudge({successCriteria:dataset.success_criteria},actualOutput);
+  return ok(passed,{actualOutput,judgeReasoning:reasoning},reasoning);
+ }
+ return fail({error:`Unknown test type '${c.testType}'`},`Unknown test type '${c.testType}'`);
+}
+// The unified runner - runs an arbitrary mixed set of case ids as one
+// Test Run with one rolled-up readiness verdict, mirroring
+// test_eval_service::run_tests (Rust) exactly.
+function runTestsNow(caseIds){
+ ensureTestEval();
+ const cases=data.testCaseDefinitions.filter(c=>caseIds.includes(c.id));
+ const results=cases.map(c=>{
+  const outcome=executeTestCase(c);
+  return{id:uid(),testCaseId:c.id,testCaseName:c.name,testType:c.testType,passed:outcome.passed,evidence:outcome.evidence,trace:outcome.trace,runtimeMs:outcome.runtimeMs,retries:0,costUsd:null,policyOutcome:outcome.policyOutcome,componentVersionRef:'live'};
+ });
+ const run={id:uid(),solutionId:null,status:'completed',triggeredBy:'manual',startedAt:new Date().toISOString(),finishedAt:new Date().toISOString(),passedCount:results.filter(r=>r.passed).length,failedCount:results.filter(r=>!r.passed).length,results};
+ data.testRuns.unshift(run);
+ if(data.testRuns.length>20)data.testRuns.length=20;
+ save();
+ return run;
+}
+function testEvalTab(body){
+ ensureTestEval();
+ const cases=data.testCaseDefinitions;
+ const selected=testEvalView.selected;
+ body.innerHTML=`<div class="panel"><div class="panel-head"><h3>Test & Evaluation Framework</h3><div class="actions"><button class="btn btn-primary" id="runSelectedTests" ${selected.size?'':'disabled'}>Run selected (${selected.size})</button><button class="btn btn-primary" id="addTestCase">+ New test case</button></div></div>
+ <p class="muted" style="font-size:13px">One execution framework for deterministic tests and AI evaluations: pick any mix of cases below and run them together as one Test Run with one pass/fail readiness result. No case re-invents its own checking logic - each wraps a dry-run tool this demo already has (Test Rules, Test Workflows, the Access Inspector, the resolved screen layout, or a real agent/agent-team run graded by the same judge call Evaluations uses).</p>
+ ${cases.length?`<div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Type</th><th>Target</th><th>Status</th><th>Actions</th></tr></thead><tbody>${cases.map(c=>`<tr><td><input type="checkbox" data-select-case="${c.id}" ${selected.has(c.id)?'checked':''}></td><td><b>${c.name}</b>${c.description?`<br><small class="muted">${c.description}</small>`:''}</td><td>${TEST_TYPE_LABELS[c.testType]}</td><td><code>${testCaseTargetLabel(c)}</code></td><td>${badgeMaybe(c.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-case="${c.id}">Edit</button><button class="icon-btn" data-toggle-case="${c.id}">${c.active?'Deactivate':'Activate'}</button><button class="icon-btn" data-delete-case="${c.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No test cases yet</div>'}
+ <div id="testRunResult"></div>
+ <div class="panel" style="margin-top:16px;background:#f9fafb"><h4 style="margin-top:0">Recent runs</h4><div id="testRunHistory"></div></div>
+ </div>`;
+ $('#addTestCase').onclick=()=>testCaseModal();
+ body.querySelectorAll('[data-edit-case]').forEach(b=>b.onclick=()=>testCaseModal(cases.find(c=>c.id===b.dataset.editCase)));
+ body.querySelectorAll('[data-select-case]').forEach(b=>b.onclick=()=>{
+  if(b.checked)selected.add(b.dataset.selectCase);else selected.delete(b.dataset.selectCase);
+  $('#runSelectedTests').disabled=selected.size===0;
+  $('#runSelectedTests').textContent=`Run selected (${selected.size})`;
+ });
+ body.querySelectorAll('[data-toggle-case]').forEach(b=>b.onclick=()=>{
+  const c=cases.find(x=>x.id===b.dataset.toggleCase); if(!c)return;
+  c.active=!c.active;stampUpdate(c);save();toast(c.active?'Test case activated':'Test case deactivated');testEvalTab(body);
+ });
+ body.querySelectorAll('[data-delete-case]').forEach(b=>b.onclick=()=>{
+  if(!confirm('Delete this test case?'))return;
+  data.testCaseDefinitions=data.testCaseDefinitions.filter(x=>x.id!==b.dataset.deleteCase);
+  selected.delete(b.dataset.deleteCase);
+  save();toast('Test case deleted');testEvalTab(body);
+ });
+ $('#runSelectedTests').onclick=()=>{
+  const run=runTestsNow([...selected]);
+  $('#testRunResult').innerHTML=runResultHtml(run);
+  renderTestRunHistory();
+ };
+ renderTestRunHistory();
+ function renderTestRunHistory(){
+  const runs=data.testRuns||[];
+  $('#testRunHistory').innerHTML=runs.length?runs.map(r=>`<button type="button" class="link-btn" data-open-run="${r.id}" style="display:block;margin-bottom:4px">${new Date(r.startedAt).toLocaleString()} - ${r.passedCount} passed / ${r.failedCount} failed${r.triggeredBy==='deployment_validation'?' (deployment validation)':''}</button>`).join(''):'<p class="muted" style="font-size:13px">No runs yet.</p>';
+  $('#testRunHistory').querySelectorAll('[data-open-run]').forEach(b=>b.onclick=()=>{
+   const r=runs.find(x=>x.id===b.dataset.openRun); if(!r)return;
+   $('#testRunResult').innerHTML=runResultHtml(r);
+  });
+ }
+}
+function runResultHtml(run){
+ const ready=run.status==='completed'&&run.failedCount===0;
+ return `<div class="panel" style="margin-top:16px"><h4 style="margin-top:0">Run result: ${ready?'Ready':'Not ready'} <span class="badge${run.failedCount===0?' badge-success':''}">${run.passedCount} passed / ${run.failedCount} failed</span></h4>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Case</th><th>Type</th><th>Result</th><th>Runtime</th><th>Policy</th><th>Trace</th></tr></thead><tbody>${run.results.map(r=>`<tr><td>${r.testCaseName}</td><td>${TEST_TYPE_LABELS[r.testType]}</td><td>${r.passed?'<span class="badge badge-success">Pass</span>':'<span class="badge">Fail</span>'}</td><td>${r.runtimeMs}ms</td><td>${r.policyOutcome}</td><td style="max-width:320px"><small>${r.trace||'—'}</small></td></tr>`).join('')}</tbody></table></div>
+ </div>`;
+}
+function testCaseModal(testCase){
+ const isEdit=!!testCase;
+ const testType=testCase?.testType||'business_rule';
+ const targetOptionsFor=(tt)=>{
+  if(tt==='agent_eval')return(data.aiAgents||[]).map(a=>[a.id,a.name]);
+  if(tt==='agent_team_eval')return(data.aiExecutionGraphs||[]).map(g=>[g.id,g.name]);
+  return allEntityTypeKeys().map(k=>[k,semanticEntityLabel(k)]);
+ };
+ const body=`<form id="testCaseForm" class="form-grid">
+ <div class="field"><label>Name</label><input name="name" value="${testCase?.name||''}" required></div>
+ <div class="field"><label>Test type</label><select name="testType" id="tcTestType">${TEST_TYPES.map(([v,l])=>`<option value="${v}" ${v===testType?'selected':''}>${l}</option>`).join('')}</select></div>
+ <div class="field"><label>Target</label><select name="targetId" id="tcTargetId">${targetOptionsFor(testType).map(([v,l])=>`<option value="${v}" ${v===testCase?.targetId?'selected':''}>${l}</option>`).join('')}</select></div>
+ <div class="field full"><label>Description</label><textarea name="description" rows="2">${testCase?.description||''}</textarea></div>
+ <div class="field full"><label>Dataset (JSON)</label><textarea name="datasetJson" id="tcDataset" rows="6" style="font-family:monospace;font-size:12px" placeholder="${TEST_DATASET_PLACEHOLDERS[testType]}">${testCase?.datasetJson||'{}'}</textarea></div>
+ <div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Cancel</button><button class="btn btn-primary">${isEdit?'Save':'Create'}</button></div>
+ </form>`;
+ modal(isEdit?`Edit "${testCase.name}"`:'New test case',body);
+ $('[data-close]').onclick=closeModal;
+ $('#tcTestType').onchange=e=>{
+  const tt=e.target.value;
+  $('#tcTargetId').innerHTML=targetOptionsFor(tt).map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  $('#tcDataset').placeholder=TEST_DATASET_PLACEHOLDERS[tt];
+ };
+ $('#testCaseForm').onsubmit=e=>{
+  e.preventDefault();
+  ensureTestEval();
+  const fd=Object.fromEntries(new FormData(e.target).entries());
+  if(!fd.name.trim())return alert('Name is required.');
+  try{JSON.parse(fd.datasetJson||'{}')}catch(err){return alert(`Dataset must be valid JSON: ${err.message}`)}
+  if(isEdit){
+   Object.assign(testCase,{name:fd.name,description:fd.description||null,testType:fd.testType,targetId:fd.targetId,datasetJson:fd.datasetJson||'{}'});
+   stampUpdate(testCase);
+  }else{
+   const newCase=stampCreate({id:uid(),name:fd.name,description:fd.description||null,testType:fd.testType,targetId:fd.targetId,datasetJson:fd.datasetJson||'{}',active:true});
+   data.testCaseDefinitions.push(newCase);
+   tagLocalComponent('testCaseDefinition',newCase.id);
+  }
+  save();closeModal();toast(isEdit?'Test case saved':'Test case created');renderAdminTab();
+ };
+}
 function systemGraphNodeLabel(type,id){
  const n=systemGraphNodes().find(n=>n.type===type&&n.id===id);
  return n?n.label:id;
@@ -3096,7 +3343,7 @@ function dependencyExplorerTab(body){
  const rowHtml=(hit)=>`<button type="button" class="btn btn-secondary" data-dep-node="${hit.type}:${hit.id}" title="Edge: ${hit.edgeType}">${SYSTEM_NODE_TYPE_LABELS[hit.type]}: ${systemGraphNodeLabel(hit.type,hit.id)}</button>`;
  body.innerHTML=`<div class="panel">
   <h3>Dependency Explorer</h3>
-  <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams, glossary terms, metrics) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
+  <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams, glossary terms, metrics, test cases) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
   <div class="form-row">
    <label>Component type<select id="depType">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
    <label>Component<select id="depComponent">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
@@ -3172,7 +3419,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
