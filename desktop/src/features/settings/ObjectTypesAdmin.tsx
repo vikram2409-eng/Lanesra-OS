@@ -19,7 +19,13 @@ const ACTION_CAPABILITIES: ActionCapability[] = ["create", "read", "update", "de
  * later phase of this same epic (#343-#345) and will extend this screen
  * rather than replace it.
  */
-export function ObjectTypesAdmin({ onOpenTab }: { onOpenTab?: (adminTab: string) => void }) {
+export function ObjectTypesAdmin({
+  onOpenTab,
+  onOpenDependencyExplorerFor,
+}: {
+  onOpenTab?: (adminTab: string) => void;
+  onOpenDependencyExplorerFor?: (objectType: string) => void;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -99,7 +105,11 @@ export function ObjectTypesAdmin({ onOpenTab }: { onOpenTab?: (adminTab: string)
                   <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("workflow")}>
                     Open in Workflow Automation
                   </button>
-                  <button type="button" className="btn btn-secondary" onClick={() => onOpenTab("dependencyExplorer")}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => (onOpenDependencyExplorerFor ? onOpenDependencyExplorerFor(selected) : onOpenTab("dependencyExplorer"))}
+                  >
                     Open in Dependency Explorer
                   </button>
                 </div>

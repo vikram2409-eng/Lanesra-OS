@@ -30,6 +30,7 @@ import { AiEvalSuitesAdmin } from "./AiEvalSuitesAdmin";
 import { AgentTeamsAdmin } from "./AgentTeamsAdmin";
 import { DependencyExplorerAdmin } from "./DependencyExplorerAdmin";
 import { ObjectTypesAdmin } from "./ObjectTypesAdmin";
+import { AgentBindingsAdmin } from "./AgentBindingsAdmin";
 import { BusinessGlossaryAdmin } from "./BusinessGlossaryAdmin";
 import { MetricDefinitionsAdmin } from "./MetricDefinitionsAdmin";
 import { TestEvalAdmin } from "./TestEvalAdmin";
@@ -107,6 +108,7 @@ export type AdminTab =
   | "metricDefinitions"
   | "testEval"
   | "objectTypes"
+  | "agentBindings"
   | "help";
 
 const ADMIN_TABS: { key: AdminTab; label: string }[] = [
@@ -144,6 +146,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "metricDefinitions", label: "Metric Definitions" },
   { key: "testEval", label: "Test & Evaluation Framework" },
   { key: "objectTypes", label: "Object Types" },
+  { key: "agentBindings", label: "Agent Bindings" },
   { key: "help", label: "Help" },
 ];
 
@@ -339,8 +342,8 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
     key: "ontology",
     label: "Ontology",
     icon: "◈",
-    note: "Every object as one typed registry, Palantir-style - Link Types now, governed Action Types and AI agent bindings as this lands",
-    items: ["objectTypes"],
+    note: "Every object as one typed registry, Palantir-style - Object Types, Link Types, governed Action Types, and which AI agents may touch what",
+    items: ["objectTypes", "agentBindings"],
   },
   { key: "experience", label: "Experience", icon: "▦", note: "How records look on screen", items: ["layouts", "pageBuilder", "themeStudio"] },
   { key: "automation", label: "Automation", icon: "⚡", note: "Rules and workflows that run themselves", items: ["rules", "workflow", "transitions"] },
@@ -396,6 +399,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
   // it so a plain click into the Help category from the landing page always
   // opens on the hub, not a stale deep link left over from an earlier visit.
   const [helpTopicSlug, setHelpTopicSlug] = useState<string | null>(null);
+  const [depExplorerRoot, setDepExplorerRoot] = useState<{ nodeType: "custom_object"; componentId: string } | null>(null);
   const queryClient = useQueryClient();
   const workspace = useQuery({ queryKey: ["workspaceStatus"], queryFn: () => api.workspaceStatus() });
 
@@ -405,6 +409,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
 
   function openTab(key: AdminTab) {
     setHelpTopicSlug(null);
+    setDepExplorerRoot(null);
     setTab(key);
     setView("tool");
     // Admin Control Center Modernization (issue #197): best-effort,
@@ -415,6 +420,12 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
   function openHelpTopic(slug: string) {
     setHelpTopicSlug(slug);
     setTab("help");
+    setView("tool");
+  }
+
+  function openDependencyExplorerFor(objectType: string) {
+    setDepExplorerRoot({ nodeType: "custom_object", componentId: objectType });
+    setTab("dependencyExplorer");
     setView("tool");
   }
 
@@ -491,11 +502,14 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "objects" && <CustomObjectsAdmin onOpenHelp={openHelpTopic} onOpenTab={(t) => openTab(t as AdminTab)} />}
       {tab === "relationships" && <RelationshipsAdmin />}
       {tab === "fields" && <CustomFieldsAdmin />}
-      {tab === "dependencyExplorer" && <DependencyExplorerAdmin />}
+      {tab === "dependencyExplorer" && <DependencyExplorerAdmin initialRoot={depExplorerRoot} />}
       {tab === "businessGlossary" && <BusinessGlossaryAdmin />}
       {tab === "metricDefinitions" && <MetricDefinitionsAdmin />}
       {tab === "testEval" && <TestEvalAdmin />}
-      {tab === "objectTypes" && <ObjectTypesAdmin onOpenTab={(t) => openTab(t as AdminTab)} />}
+      {tab === "objectTypes" && (
+        <ObjectTypesAdmin onOpenTab={(t) => openTab(t as AdminTab)} onOpenDependencyExplorerFor={openDependencyExplorerFor} />
+      )}
+      {tab === "agentBindings" && <AgentBindingsAdmin />}
       {tab === "layouts" && <ScreenLayoutsAdmin />}
       {tab === "pageBuilder" && <PageBuilderAdmin />}
       {tab === "themeStudio" && <ThemeStudioAdmin />}
