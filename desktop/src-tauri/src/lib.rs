@@ -400,6 +400,8 @@ pub fn run() {
             commands::test_eval_commands::get_test_run,
             commands::test_eval_commands::run_tests,
             commands::test_eval_commands::run_tests_for_solution,
+            commands::ontology_commands::list_object_types,
+            commands::ontology_commands::get_object_type_detail,
             commands::ai_memory_commands::list_memory_items,
             commands::ai_memory_commands::forget_memory_item,
             commands::ai_memory_commands::list_knowledge_collections,

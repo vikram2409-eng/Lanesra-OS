@@ -688,7 +688,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Dependency Explorer'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['objectTypes','Object Types'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -703,6 +703,7 @@ const ADMIN_CATEGORIES=[
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields','dependencyExplorer','businessGlossary']},
+ {key:'ontology',label:'Ontology',icon:'◈',note:'Every object as one typed registry, Palantir-style - Link Types now, governed Action Types and AI agent bindings as this lands',items:['objectTypes']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
@@ -2896,6 +2897,91 @@ function systemGraphEdges(){
 }
 function semanticEntityLabel(key){return entityLabel(key)||(data.customObjects||[]).find(o=>o.key===key)?.labelPlural||key}
 
+// Next-Gen program, Ontology Layer epic (issues #340-#345): the unified
+// Object Type registry (#341) and Link Types (#342). A read model over
+// data that already exists - the same built-in/Custom Object list every
+// other admin screen enumerates, `relationshipDefinitions` for links, and
+// the Business Glossary (FND-02) for a whole-object description where one
+// is mapped - not a new object/relationship store. Every relationship in
+// this demo already names one fixed target type (no polymorphic-target
+// concept exists here, unlike the desktop edition's Task "related to"
+// case), so `toObjectType` is never null here - an honest difference
+// documented rather than faked.
+const ONTOLOGY_BUILTIN_TYPES=[
+ ['companies','Company','Companies','◫'],
+ ['contacts','Contact','Contacts','◎'],
+ ['opportunities','Opportunity','Opportunities','⌁'],
+ ['quotes','Quote','Quotes','▤'],
+ ['orders','Order','Orders','▣'],
+ ['invoices','Invoice','Invoices','$'],
+ ['contracts','Contract','Contracts','▧'],
+ ['tasks','Task','Tasks','✓'],
+ ['products','Product','Products','◇'],
+];
+let ontologyState={selected:null};
+// Deterministic and stable across calls - the same object type always
+// maps to the same of the 6 Theme Studio categorical chart tokens.
+function ontologyColorIndex(key){
+ let sum=0; for(let i=0;i<key.length;i++)sum+=key.charCodeAt(i);
+ return (sum%6)+1;
+}
+function ontologyDescriptionFor(key){
+ const m=(data.semanticMappings||[]).find(m=>m.entityType===key&&!m.fieldKey&&m.glossaryTermId);
+ if(!m)return null;
+ const term=(data.businessGlossaryTerms||[]).find(t=>t.id===m.glossaryTermId);
+ return term?term.definition:null;
+}
+function ontologyObjectTypes(){
+ const out=ONTOLOGY_BUILTIN_TYPES.map(([key,singular,plural,icon])=>({key,isCustom:false,labelSingular:singular,labelPlural:plural,icon,colorIndex:ontologyColorIndex(key),description:ontologyDescriptionFor(key)}));
+ activeCustomObjects().forEach(o=>out.push({key:o.key,isCustom:true,labelSingular:o.label,labelPlural:o.labelPlural,icon:o.icon,colorIndex:ontologyColorIndex(o.key),description:ontologyDescriptionFor(o.key)}));
+ return out;
+}
+// Every Link Type `objectType` participates in, as source or target,
+// oriented so `name`/`inverseName` read naturally from `objectType`'s own
+// side - mirrors `ontology_service::link_types_for` (Rust).
+function ontologyLinkTypesFor(objectType){
+ const out=[];
+ (data.relationshipDefinitions||[]).filter(r=>r.active).forEach(r=>{
+  if(r.sourceEntity===objectType){
+   out.push({relationshipId:r.id,name:r.forwardLabel,inverseName:r.reverseLabel,fromObjectType:objectType,toObjectType:r.targetEntity,relationshipType:r.relType});
+  }
+  if(r.targetEntity===objectType&&r.sourceEntity!==objectType){
+   out.push({relationshipId:r.id,name:r.reverseLabel,inverseName:r.forwardLabel,fromObjectType:objectType,toObjectType:r.sourceEntity,relationshipType:r.relType});
+  }
+ });
+ return out;
+}
+function objectTypesTab(body){
+ const types=ontologyObjectTypes();
+ if(!ontologyState.selected||!types.some(t=>t.key===ontologyState.selected))ontologyState.selected=types[0]?.key||null;
+ const sel=types.find(t=>t.key===ontologyState.selected);
+ const linkTypes=sel?ontologyLinkTypesFor(sel.key):[];
+ body.innerHTML=`<div class="panel"><h3>Object Types</h3>
+ <p class="muted">Every object in the system - built-in and Custom Object alike - as one typed registry: its identity (label, icon, color), its plain-English description where one is mapped in the Business Glossary, and the Link Types it participates in.</p>
+ <div style="display:flex;gap:20px;align-items:flex-start">
+  <div class="table-wrap" style="flex:0 0 320px"><table class="table"><tbody>${types.map(t=>`<tr style="cursor:pointer;${t.key===ontologyState.selected?'background:#fcfcff':''}" data-ontology-select="${t.key}"><td style="width:28px;text-align:center;color:var(--chart-${t.colorIndex})">${t.icon}</td><td><b>${t.labelPlural}</b>${t.isCustom?' <span class="badge">Custom</span>':''}</td></tr>`).join('')}</tbody></table></div>
+  <div class="panel" style="flex:1;min-width:0">
+   ${!sel?'<p class="muted">Select an object type to see its details.</p>':`
+   <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><span style="font-size:24px;color:var(--chart-${sel.colorIndex})">${sel.icon}</span><h4 style="margin:0">${sel.labelSingular}</h4>${sel.isCustom?'<span class="badge">Custom Object</span>':''}</div>
+   <p class="muted">${sel.description||'No Business Glossary mapping yet for this object.'}</p>
+   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+    <button type="button" class="btn btn-secondary" data-admin-cross-link="fields">Open in Fields</button>
+    <button type="button" class="btn btn-secondary" data-admin-cross-link="relationships">Open in Relationships</button>
+    <button type="button" class="btn btn-secondary" data-admin-cross-link="rules">Open in Business Rules</button>
+    <button type="button" class="btn btn-secondary" data-admin-cross-link="workflow">Open in Workflow Automation</button>
+    <button type="button" class="btn btn-secondary" data-admin-cross-link="dependencyExplorer">Open in Dependency Explorer</button>
+   </div>
+   <h4>Link Types (${linkTypes.length})</h4>
+   ${linkTypes.length===0?'<p class="muted">No relationships involve this object type yet.</p>':`
+   <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Inverse name</th><th>Linked to</th><th>Type</th></tr></thead><tbody>${linkTypes.map(l=>`<tr><td>${l.name}</td><td>${l.inverseName}</td><td>${semanticEntityLabel(l.toObjectType)}</td><td>${RELATIONSHIP_TYPE_LABELS[l.relationshipType]}</td></tr>`).join('')}</tbody></table></div>`}
+   `}
+  </div>
+ </div>
+ </div>`;
+ body.querySelectorAll('[data-ontology-select]').forEach(b=>b.onclick=()=>{ontologyState.selected=b.dataset.ontologySelect;renderAdminTab()});
+ body.querySelectorAll('[data-admin-cross-link]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminCrossLink;adminView='tool';renderView()});
+}
+
 // Next-Gen program, Domain A (Intelligence Foundation), FND-02: the
 // Semantic Metadata Layer - Business Glossary terms, object/field
 // semantic mappings, and Metric definitions. `metricDefinitions` is a
@@ -3419,7 +3505,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,objectTypes:objectTypesTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;

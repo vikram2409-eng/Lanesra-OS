@@ -64,6 +64,7 @@ pub mod sftp_service;
 pub mod smtp_service;
 pub mod invoice_service;
 pub mod numbering_service;
+pub mod ontology_service;
 pub mod opportunity_service;
 pub mod order_service;
 pub mod organization_service;
