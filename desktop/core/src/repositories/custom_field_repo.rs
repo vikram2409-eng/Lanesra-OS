@@ -34,6 +34,8 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomFieldDefinition> {
         help_text: row.get("help_text")?,
         placeholder: row.get("placeholder")?,
         is_hidden_by_default: row.get("is_hidden_by_default")?,
+        lookup_target_entity_type: row.get("lookup_target_entity_type")?,
+        lookup_relationship_definition_id: row.get("lookup_relationship_definition_id")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -67,6 +69,75 @@ pub fn create_definition(
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just inserted"))
+}
+
+/// Dedicated insert for auto-created Lookup fields - bypasses
+/// `CustomFieldDefinitionInput` entirely (lookup fields are never
+/// admin-created) and hardcodes sensible defaults for every column an
+/// ordinary field's create form would otherwise ask about. Only
+/// `custom_field_service::create_lookup_field` calls this.
+#[allow(clippy::too_many_arguments)]
+pub fn create_lookup_definition(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    entity_type: &str,
+    key: &str,
+    label: &str,
+    lookup_target_entity_type: &str,
+    lookup_relationship_definition_id: &str,
+    sort_order: i64,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<CustomFieldDefinition> {
+    let now = now_iso();
+    conn.execute(
+        "INSERT INTO custom_field_definitions
+            (id, workspace_id, entity_type, key, label, field_type, options_json, required, show_in_list, sort_order, is_active,
+             is_searchable, is_filterable, is_reportable, is_unique, is_hidden_by_default,
+             lookup_target_entity_type, lookup_relationship_definition_id,
+             created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'lookup', '[]', 0, 1, ?6, 1,
+                 0, 0, 0, 0, 0,
+                 ?7, ?8,
+                 ?9, ?10, ?9, ?10)",
+        rusqlite::params![
+            id, workspace_id, entity_type, key, label, sort_order,
+            lookup_target_entity_type, lookup_relationship_definition_id,
+            now, actor_user_id,
+        ],
+    )?;
+    get_definition(conn, id).map(|d| d.expect("just inserted"))
+}
+
+/// Every active or inactive Lookup field auto-created from this
+/// relationship, on whichever side(s) it was created - the lookup
+/// `deactivate_lookup_fields_for_relationship` uses to find the field(s)
+/// to deactivate when the relationship itself is deactivated or deleted.
+pub fn find_by_lookup_relationship(
+    conn: &Connection,
+    relationship_definition_id: &str,
+) -> rusqlite::Result<Vec<CustomFieldDefinition>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM custom_field_definitions WHERE lookup_relationship_definition_id = ?1",
+    )?;
+    let rows = stmt.query_map([relationship_definition_id], map_row)?.collect();
+    rows
+}
+
+/// Clears the back-reference on every Lookup field that still points at
+/// this relationship - `lookup_relationship_definition_id` is a foreign
+/// key, so a relationship that's about to be hard-deleted (never one
+/// that's merely deactivated, which keeps the row and the reference)
+/// would otherwise leave that FK dangling. Called only alongside
+/// deactivating those same fields, never on its own - see
+/// `custom_field_service::deactivate_lookup_fields_for_relationship`'s
+/// caller in `relationship_service::delete`.
+pub fn clear_lookup_relationship_reference(conn: &Connection, relationship_definition_id: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE custom_field_definitions SET lookup_relationship_definition_id = NULL WHERE lookup_relationship_definition_id = ?1",
+        [relationship_definition_id],
+    )?;
+    Ok(())
 }
 
 pub fn get_definition(conn: &Connection, id: &str) -> rusqlite::Result<Option<CustomFieldDefinition>> {

@@ -145,9 +145,15 @@ export function CustomFieldsAdmin() {
                   <span className={`badge${d.is_active ? " badge-success" : ""}`}>{d.is_active ? "Active" : "Inactive"}</span>
                 </td>
                 <td>
-                  <button className="btn" onClick={() => setEditingId(d.id)}>
-                    Edit
-                  </button>
+                  {d.field_type === "lookup" ? (
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }} title="Auto-created from a Relationship - deactivate the relationship instead to remove it">
+                      From a relationship
+                    </span>
+                  ) : (
+                    <button className="btn" onClick={() => setEditingId(d.id)}>
+                      Edit
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

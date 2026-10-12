@@ -125,6 +125,16 @@ fn validate_definition_shape(
     if !CUSTOM_FIELD_TYPES.contains(&field_type) {
         return Err(AppError::Validation(format!("Invalid field type '{field_type}'")));
     }
+    // Lookup fields only ever come from relationship_service's
+    // auto-creation (see create_lookup_field below), which writes directly
+    // through custom_field_repo and never calls this function - an admin
+    // trying to hand-create or hand-edit one here would produce an orphan
+    // field with no relationship to write through.
+    if field_type == "lookup" {
+        return Err(AppError::Validation(
+            "A lookup field can't be created directly - build a relationship between the two objects instead".into(),
+        ));
+    }
     if field_type == "select" && options.is_empty() {
         return Err(AppError::Validation("A select field needs at least one option".into()));
     }
@@ -363,6 +373,75 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
     Ok(updated)
 }
 
+/// The only function that ever creates a `"lookup"`-typed definition -
+/// called from `relationship_service::create` (and cascade re-creation
+/// paths), never from the admin custom-field form. Bypasses
+/// `validate_definition_shape`/`CustomFieldDefinitionInput` entirely since
+/// a lookup field's shape is fully determined by the relationship it came
+/// from, not an admin's own choices. `label` is the relationship's own
+/// `forward_label`/`reverse_label` (e.g. "Customer") - the slug still goes
+/// through the same `slugify` every other field uses, so it can't collide
+/// with an existing field key on the same entity_type.
+pub fn create_lookup_field(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    label: &str,
+    lookup_target_entity_type: &str,
+    lookup_relationship_definition_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomFieldDefinition> {
+    let key = slugify(conn, workspace_id, entity_type, label)?;
+    let sort_order = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+        .iter()
+        .map(|d| d.sort_order)
+        .max()
+        .map(|m| m + 1)
+        .unwrap_or(0);
+    let id = crate::domain::ids::new_uuid();
+    let created = custom_field_repo::create_lookup_definition(
+        conn, &id, workspace_id, entity_type, &key, label, lookup_target_entity_type, lookup_relationship_definition_id, sort_order, actor_user_id,
+    )?;
+    super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
+    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created lookup field '{}' from a relationship", created.label), None)?;
+    Ok(created)
+}
+
+/// Deactivates every Lookup field auto-created from this relationship
+/// (soft, same "deactivate never hard-delete a referenceable definition"
+/// rule every other definition in this codebase follows) - called when the
+/// relationship itself is deactivated or deleted. Already-inactive fields
+/// are left alone (no-op update, no duplicate audit entries).
+pub fn deactivate_lookup_fields_for_relationship(
+    conn: &Connection,
+    relationship_definition_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
+    for def in custom_field_repo::find_by_lookup_relationship(conn, relationship_definition_id)? {
+        if def.is_active {
+            deactivate_definition(conn, &def.id, actor_user_id)?;
+        }
+    }
+    Ok(())
+}
+
+/// Same deactivation as above, plus clearing the field(s)'
+/// `lookup_relationship_definition_id` back-reference - needed only when
+/// the relationship itself is about to be hard-deleted (`relationship_
+/// service::delete`), since that FK would otherwise block the delete.
+/// Deactivating a still-existing relationship (`update`, `is_active`
+/// false) deliberately keeps the reference - see this crate's own
+/// "deactivate never hard-delete a referenceable definition" convention.
+pub fn detach_lookup_fields_for_deleted_relationship(
+    conn: &Connection,
+    relationship_definition_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
+    deactivate_lookup_fields_for_relationship(conn, relationship_definition_id, actor_user_id)?;
+    Ok(custom_field_repo::clear_lookup_relationship_reference(conn, relationship_definition_id)?)
+}
+
 /// Admin UX polish (spec §10): the query half of the dependency-warning
 /// flow. The frontend calls this before letting an admin deactivate a
 /// custom field (via either `update_definition` with `is_active: false` or
@@ -518,15 +597,37 @@ pub fn set_entity_values(
             return Err(AppError::Validation(format!("{} is required", def.label)));
         }
         if !value.is_empty() {
-            validate_typed_value(&def.field_type, &def.options, def.min_value.as_deref(), def.max_value.as_deref(), def.max_length, def.regex_pattern.as_deref(), &def.label, value)?;
-            if def.is_unique && custom_field_repo::value_exists_elsewhere(conn, &def.id, entity_id, value)? {
-                return Err(AppError::Validation(format!("{} must be unique - '{value}' is already used", def.label)));
+            if def.field_type == "lookup" {
+                // A lookup field's value must resolve to a real, existing
+                // record of its target type - reuses the same generic
+                // resolver Object 360's native_related_records_for already
+                // relies on, rather than trusting an arbitrary id string.
+                let target_type = def.lookup_target_entity_type.as_deref().unwrap_or("");
+                if !super::entity_registry::exists(conn, target_type, value)? {
+                    return Err(AppError::Validation(format!("{} does not point to an existing {target_type} record", def.label)));
+                }
+            } else {
+                validate_typed_value(&def.field_type, &def.options, def.min_value.as_deref(), def.max_value.as_deref(), def.max_length, def.regex_pattern.as_deref(), &def.label, value)?;
+                if def.is_unique && custom_field_repo::value_exists_elsewhere(conn, &def.id, entity_id, value)? {
+                    return Err(AppError::Validation(format!("{} must be unique - '{value}' is already used", def.label)));
+                }
             }
         }
         if before_values.get(&def.key).map(|s| s.as_str()).unwrap_or("") != value {
             changed_keys.push(def.key.clone());
         }
         custom_field_repo::set_value(conn, &def.id, entity_id, value)?;
+        // The field's own value_text is only a cache - the data of record
+        // is the relationship_instances row this writes through, so
+        // related_records_for/Object 360/the Related-list UI never drift
+        // from what the lookup field itself shows (see
+        // relationship_service::set_lookup_value's own doc comment).
+        if def.field_type == "lookup" {
+            if let Some(relationship_definition_id) = def.lookup_relationship_definition_id.as_deref() {
+                let new_value = if value.is_empty() { None } else { Some(value) };
+                super::relationship_service::set_lookup_value(conn, &workspace_id, relationship_definition_id, entity_type, entity_id, new_value, actor_user_id)?;
+            }
+        }
     }
 
     // ADM-WF: field_changed workflows fire from the same seam ADM-BR uses -

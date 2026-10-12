@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { api } from "../lib/api";
 import { fieldEffectsFor, restrictedChoicesFor } from "../lib/businessRules";
 import type { CustomFieldDefinition, CustomFieldValues } from "../lib/types";
+import { LookupFieldPicker } from "./LookupFieldPicker";
 
 const LIST_SEPARATOR = "|";
 
@@ -95,6 +96,15 @@ export function useCustomFieldElements({
             <option value="true">Yes</option>
             <option value="false">No</option>
           </select>
+        )}
+        {def.field_type === "lookup" && (
+          <LookupFieldPicker
+            value={values[def.key] ?? ""}
+            onChange={(id) => setValue(def.key, id)}
+            targetEntityType={def.lookup_target_entity_type ?? ""}
+            required={required}
+            disabled={locked}
+          />
         )}
         {(def.field_type === "text" || def.field_type === "number" || def.field_type === "date") && (
           <input
