@@ -967,6 +967,12 @@ export interface CustomFieldDefinition {
   // enforced server-side in custom_field_service::set_entity_values, so a
   // hidden-by-default+required field can never block a save on its own.
   is_hidden_by_default: boolean;
+  // Only set (by relationship_service's auto-creation, never the admin
+  // create/edit form) when field_type === "lookup" - see
+  // custom_field_service::create_lookup_field. null for every ordinary
+  // field.
+  lookup_target_entity_type: string | null;
+  lookup_relationship_definition_id: string | null;
   created_at: string;
   created_by: string | null;
   updated_at: string;

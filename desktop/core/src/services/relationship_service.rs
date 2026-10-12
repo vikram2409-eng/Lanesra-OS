@@ -16,8 +16,8 @@ use crate::models::relationship::{
 };
 use crate::repositories::{audit_repo, relationship_repo};
 use crate::services::{
-    access_service, contact_service, contract_service, custom_object_service, entity_registry, invoice_service, opportunity_service, order_service,
-    quote_service, task_service,
+    access_service, contact_service, contract_service, custom_field_service, custom_object_service, entity_registry, invoice_service,
+    opportunity_service, order_service, quote_service, task_service,
 };
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
@@ -103,6 +103,45 @@ fn validate_shape(conn: &Connection, workspace_id: &str, input: &RelationshipDef
     Ok(())
 }
 
+/// Builds the pickable field(s) the relationship itself promises ("build a
+/// relationship and a lookup field appears on the right object(s)"),
+/// instead of leaving the relationship only ever reachable as a
+/// post-creation Related list. A single lookup field can only ever mean
+/// "exactly one specific other record", so this only fires for the two
+/// shapes that guarantee that: `many_to_one` (one field, on the "many"/
+/// source side - e.g. Policy gets a "Customer" field) and `one_to_one`
+/// (genuinely symmetric - one field on each side). `many_to_many` and a
+/// polymorphic target are deliberately skipped - "many" can't collapse
+/// into one field, and a polymorphic target has no single fixed type for
+/// the field to point at (see this definition's own `sync_graph_node` doc
+/// comment for the same reasoning). Not a hard requirement: if either
+/// side's field creation fails (e.g. a key collision this relationship
+/// didn't anticipate), the relationship itself still exists and is usable
+/// via Related lists - the error is surfaced, not swallowed, but it never
+/// un-does the relationship that was just created.
+fn auto_create_lookup_fields(conn: &Connection, workspace_id: &str, def: &RelationshipDefinition, actor_user_id: Option<&str>) -> AppResult<()> {
+    if def.target_is_polymorphic {
+        return Ok(());
+    }
+    match def.relationship_type.as_str() {
+        "many_to_one" => {
+            custom_field_service::create_lookup_field(
+                conn, workspace_id, &def.source_entity_type, &def.forward_label, &def.target_entity_type, &def.id, actor_user_id,
+            )?;
+        }
+        "one_to_one" => {
+            custom_field_service::create_lookup_field(
+                conn, workspace_id, &def.source_entity_type, &def.forward_label, &def.target_entity_type, &def.id, actor_user_id,
+            )?;
+            custom_field_service::create_lookup_field(
+                conn, workspace_id, &def.target_entity_type, &def.reverse_label, &def.source_entity_type, &def.id, actor_user_id,
+            )?;
+        }
+        _ => {} // many_to_many: no single-record field makes sense
+    }
+    Ok(())
+}
+
 pub fn create(conn: &Connection, workspace_id: &str, input: &RelationshipDefinitionInput, actor_user_id: Option<&str>) -> AppResult<RelationshipDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, input)?;
@@ -112,6 +151,7 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &RelationshipDefinit
     let created = relationship_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "relationship_definition", &created.id, actor_user_id)?;
     sync_graph_node(conn, workspace_id, &created)?;
+    auto_create_lookup_fields(conn, workspace_id, &created, actor_user_id)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("relationship"), Some(&created.id), &format!("Created relationship '{}'", created.forward_label), None)?;
     Ok(created)
 }
@@ -140,6 +180,15 @@ pub fn update(conn: &Connection, id: &str, input: &RelationshipDefinitionUpdate,
     }
     let updated = relationship_repo::update_definition(conn, id, input, actor_user_id)?;
     sync_graph_node(conn, &existing.workspace_id, &updated)?;
+    // Deactivating a relationship deactivates its auto-created Lookup
+    // field(s) too (soft, same "deactivate never hard-delete a
+    // referenceable definition" rule every other definition here follows)
+    // - re-activating the relationship does NOT re-activate the field(s),
+    // since the admin may have deliberately removed it from a form since;
+    // creating a brand new relationship is how a lookup field comes back.
+    if existing.is_active && !updated.is_active {
+        custom_field_service::deactivate_lookup_fields_for_relationship(conn, id, actor_user_id)?;
+    }
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("relationship"), Some(id), &format!("Updated relationship '{}'", input.forward_label), None)?;
     Ok(updated)
 }
@@ -159,6 +208,12 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
             "Cannot delete this relationship - {count} record(s) are still linked through it. Unlink them first, or deactivate the relationship instead."
         )));
     }
+    // Deactivate any auto-created Lookup field(s) and clear their
+    // back-reference *before* the hard delete below -
+    // `lookup_relationship_definition_id` is a foreign key against this
+    // row, so the delete would otherwise fail with those fields still
+    // pointing at it.
+    custom_field_service::detach_lookup_fields_for_deleted_relationship(conn, id, actor_user_id)?;
     relationship_repo::delete_definition(conn, id)?;
     super::system_graph_service::remove_node(conn, &existing.workspace_id, "relationship", id)?;
     audit_repo::record(conn, &existing.workspace_id, actor_user_id, "delete", Some("relationship"), Some(id), &format!("Deleted relationship '{}'", existing.forward_label), None)?;
@@ -242,6 +297,68 @@ pub fn link(
 pub fn unlink(conn: &Connection, instance_id: &str, _actor_user_id: Option<&str>) -> AppResult<()> {
     relationship_repo::get_instance(conn, instance_id)?.ok_or_else(|| AppError::NotFound("Link".into()))?;
     Ok(relationship_repo::delete_instance(conn, instance_id)?)
+}
+
+/// Writes a Lookup Custom Field's value as a real relationship link -
+/// called from `custom_field_service::set_entity_values` whenever a
+/// `field_type == "lookup"` field is saved, so `related_records_for`,
+/// Object 360, and the Related-list UI all see the exact same link a
+/// lookup field shows, never a second shadow state that can drift from
+/// it (the field's own `value_text` cache is written separately, by the
+/// caller, from the same value this function is given).
+///
+/// `field_entity_type`/`field_entity_id` identify the record the lookup
+/// field lives on, which is either this relationship's source or target
+/// side (both are possible - see `auto_create_lookup_fields`'
+/// `one_to_one` branch, which creates a field on each side of the same
+/// definition). `new_value` is the id of the record to link to; `None` or
+/// empty clears whatever link currently exists for this side.
+pub fn set_lookup_value(
+    conn: &Connection,
+    workspace_id: &str,
+    relationship_definition_id: &str,
+    field_entity_type: &str,
+    field_entity_id: &str,
+    new_value: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
+    let def = relationship_repo::get_definition(conn, relationship_definition_id)?
+        .ok_or_else(|| AppError::NotFound("Relationship".into()))?;
+    let field_is_source = def.source_entity_type == field_entity_type;
+    let other_entity_type = if field_is_source { def.target_entity_type.clone() } else { def.source_entity_type.clone() };
+
+    let existing_instance = if field_is_source {
+        relationship_repo::list_instances_where_source(conn, &def.id, field_entity_id)?.into_iter().next()
+    } else {
+        relationship_repo::list_instances_where_target(conn, &def.id, field_entity_id)?.into_iter().next()
+    };
+
+    let new_target_id = match new_value.map(|v| v.trim()).filter(|v| !v.is_empty()) {
+        Some(v) => v,
+        None => {
+            if let Some(inst) = existing_instance {
+                unlink(conn, &inst.id, actor_user_id)?;
+            }
+            return Ok(());
+        }
+    };
+
+    if let Some(inst) = &existing_instance {
+        let currently_linked_to = if field_is_source { inst.target_id.as_str() } else { inst.source_id.as_str() };
+        if currently_linked_to == new_target_id {
+            return Ok(()); // already linked to this record - no-op
+        }
+    }
+    if let Some(inst) = existing_instance {
+        unlink(conn, &inst.id, actor_user_id)?;
+    }
+
+    if field_is_source {
+        link(conn, workspace_id, &def.id, field_entity_type, field_entity_id, &other_entity_type, new_target_id, actor_user_id)?;
+    } else {
+        link(conn, workspace_id, &def.id, &other_entity_type, new_target_id, field_entity_type, field_entity_id, actor_user_id)?;
+    }
+    Ok(())
 }
 
 /// Every related record for `entity_type`/`entity_id`, across every active

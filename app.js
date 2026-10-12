@@ -679,6 +679,60 @@ function relationshipLinkError(def,sourceId,targetId){
   return 'These two records are already linked.';
  return null;
 }
+// Lookup Custom Field Type: "build a relationship between two objects and
+// a lookup field should appear on them" - a many_to_one relationship gets
+// one auto-created field on its source ("many") side; one_to_one is
+// genuinely symmetric and gets a field on each side; many_to_many has no
+// single-record field to create (mirrors relationship_service's own
+// auto_create_lookup_fields - this demo's relationshipDefinitions never
+// has a polymorphic target, so that exclusion doesn't apply here).
+function autoCreateLookupFields(rel){
+ if(rel.relType==='many_to_one'){
+  createLookupField(rel.sourceEntity,rel.targetEntity,rel.forwardLabel,rel.id);
+ }else if(rel.relType==='one_to_one'){
+  createLookupField(rel.sourceEntity,rel.targetEntity,rel.forwardLabel,rel.id);
+  createLookupField(rel.targetEntity,rel.sourceEntity,rel.reverseLabel,rel.id);
+ }
+}
+function createLookupField(entityKey,targetEntityKey,label,relationshipId){
+ const base=slugify(label);
+ const existingKeys=(data.customFields||[]).filter(f=>f.entity===entityKey).map(f=>f.key);
+ let key=base,suffix=2;
+ while(existingKeys.includes(key))key=`${base}${suffix++}`;
+ const field=stampCreate({id:uid(),entity:entityKey,key,label,type:'lookup',lookupTargetEntity:targetEntityKey,lookupRelationshipId:relationshipId,active:true});
+ data.customFields.push(field);
+ tagLocalComponent('customField',field.id);
+}
+// Deactivates (never hard-deletes - same convention every other definition
+// in this app follows) every lookup field auto-created from this
+// relationship - called when the relationship itself is deactivated or
+// deleted.
+function deactivateLookupFieldsForRelationship(relId){
+ (data.customFields||[]).filter(f=>f.lookupRelationshipId===relId&&f.active).forEach(f=>{f.active=false;stampUpdate(f)});
+}
+// A lookup field's value is a cache (the linked record's id, already
+// written like any other field value by the generic record save handler
+// just above this call) - this keeps the real relationshipInstances row
+// in sync with it, the same data relatedRecordsFor/the Related-list UI
+// read, mirroring relationship_service::set_lookup_value. Called once per
+// save with the just-saved record.
+function syncLookupFieldLinks(entityKey,record){
+ (data.customFields||[]).filter(f=>f.entity===entityKey&&f.active&&f.type==='lookup').forEach(f=>{
+  const rel=(data.relationshipDefinitions||[]).find(d=>d.id===f.lookupRelationshipId);
+  if(!rel)return;
+  const fieldIsSource=rel.sourceEntity===entityKey;
+  const otherEntity=fieldIsSource?rel.targetEntity:rel.sourceEntity;
+  const existing=(data.relationshipInstances||[]).find(i=>i.definitionId===rel.id&&(fieldIsSource?(i.sourceEntity===entityKey&&i.sourceId===record.id):(i.targetEntity===entityKey&&i.targetId===record.id)));
+  const newOtherId=record[f.key]||'';
+  const currentOtherId=existing?(fieldIsSource?existing.targetId:existing.sourceId):'';
+  if(newOtherId===currentOtherId)return;
+  if(existing)data.relationshipInstances=data.relationshipInstances.filter(i=>i.id!==existing.id);
+  if(!newOtherId)return;
+  const sourceEntity=fieldIsSource?entityKey:otherEntity, sourceId=fieldIsSource?record.id:newOtherId;
+  const targetEntity=fieldIsSource?otherEntity:entityKey, targetId=fieldIsSource?newOtherId:record.id;
+  data.relationshipInstances.push({id:uid(),definitionId:rel.id,sourceEntity,sourceId,targetEntity,targetId,createdAt:new Date().toISOString(),createdBy:CURRENT_USER_ID});
+ });
+}
 // Admin panel: entities that support custom fields & business rules are every object with numbering.
 // Workflow automation is limited to the entities Tasks can relate to (see relatedTypeFor).
 let adminTab='profile';
@@ -887,6 +941,11 @@ function customFieldsFor(entityKey){
   if(f.type==='select')return [f.key,f.label,'select',f.options||'',extra];
   if(f.type==='number')return [f.key,f.label,'number',undefined,extra];
   if(f.type==='date')return [f.key,f.label,'date',undefined,extra];
+  // Lookup Custom Field Type: auto-created by autoCreateLookupFields when
+  // a Relationship is built (never admin-created - see fieldsTab's "From
+  // a relationship" treatment) - opts carries the target entity's data[]
+  // key, same convention the built-in 'relation' type already uses.
+  if(f.type==='lookup')return [f.key,f.label,'lookup',f.lookupTargetEntity,extra];
   return [f.key,f.label,'text',undefined,extra];
  });
 }
@@ -2079,7 +2138,7 @@ function badgeMaybe(v){const vals=['Active','Inactive','Customer','Prospect','Le
 // section's admin-set full_width choice takes effect. Left undefined
 // (every call site outside the layout system), the pre-Phase-2 default
 // applies: only the "title" field is full-width.
-function fieldHtml(f,record,full){const [name,label,type,opts]=f;const extra=f[4];const val=record[name]??(!record.id&&extra?.defaultValue?extra.defaultValue:'');const help=extra?.helpText?`<small class="field-help">${extra.helpText}</small>`:'';const req=extra?.required?'required':(['name','title','number'].includes(name)?'required':'');const cls=`field${(full??name==='title')?' full':''}`;if(type==='auto')return `<div class="${cls}"><label>${label}</label><input name="${name}" value="${val}" readonly placeholder="Generated automatically"><small class="field-help">Generated when the record is saved</small></div>`;if(type==='select')return `<div class="${cls}"><label>${label}</label><select name="${name}" ${req}>${opts.split('|').map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>${help}</div>`;if(type==='relation')return selectHtml(name,label,data[opts],val,true,cls);if(type==='filteredContact')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="contact">${optionalOptions(data.contacts.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No contact')}</select></div>`;if(type==='filteredOpportunity')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="opportunity">${optionalOptions(data.opportunities.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No opportunity',x=>x.title)}</select></div>`;if(type==='filteredQuote')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="quote">${optionalOptions(data.quotes.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source quote',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='filteredOrder')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="order">${optionalOptions(data.orders.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source order',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='dynamicRelation')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-dynamic-related></select></div>`;
+function fieldHtml(f,record,full){const [name,label,type,opts]=f;const extra=f[4];const val=record[name]??(!record.id&&extra?.defaultValue?extra.defaultValue:'');const help=extra?.helpText?`<small class="field-help">${extra.helpText}</small>`:'';const req=extra?.required?'required':(['name','title','number'].includes(name)?'required':'');const cls=`field${(full??name==='title')?' full':''}`;if(type==='auto')return `<div class="${cls}"><label>${label}</label><input name="${name}" value="${val}" readonly placeholder="Generated automatically"><small class="field-help">Generated when the record is saved</small></div>`;if(type==='select')return `<div class="${cls}"><label>${label}</label><select name="${name}" ${req}>${opts.split('|').map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>${help}</div>`;if(type==='relation')return selectHtml(name,label,data[opts],val,true,cls);if(type==='lookup')return `<div class="${cls}"><label>${label}</label><select name="${name}">${optionalOptions(data[opts]||[],val,'— None —',x=>recordDisplayName(opts,x))}</select>${help}</div>`;if(type==='filteredContact')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="contact">${optionalOptions(data.contacts.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No contact')}</select></div>`;if(type==='filteredOpportunity')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="opportunity">${optionalOptions(data.opportunities.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No opportunity',x=>x.title)}</select></div>`;if(type==='filteredQuote')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="quote">${optionalOptions(data.quotes.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source quote',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='filteredOrder')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-filter="order">${optionalOptions(data.orders.filter(x=>!record.companyId||x.companyId===record.companyId),val,'No source order',x=>x.number+' · '+money(docTotal(x)))}</select></div>`;if(type==='dynamicRelation')return `<div class="${cls}"><label>${label}</label><select name="${name}" data-dynamic-related></select></div>`;
  // Enterprise Access Foundation, Phase 1 mirror: a record's owner is a
  // single picker over both Users and Work Teams (an "USER:<id>"/"TEAM:<id>"
  // composite value, split back out in recordModal's submit handler) rather
@@ -2798,8 +2857,8 @@ function recordModal(key,fields,record={}){
  // Audit trail: every entity through this shared save path gets stamped
  // except users (the desktop User model carries no created_by/updated_by
  // either - see audit_trail.rs's own scope).
- if(wasEdit){const target=byId(key,record.id);Object.assign(target,obj);if(key!=='users')stampUpdate(target)}
- else{const rule=effectiveRule(key);if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);const created={id:uid(),...obj};if(key!=='users')stampCreate(created);data[key].unshift(created)}
+ if(wasEdit){const target=byId(key,record.id);Object.assign(target,obj);if(key!=='users')stampUpdate(target);syncLookupFieldLinks(key,target)}
+ else{const rule=effectiveRule(key);if(rule&&!obj[rule.field])obj[rule.field]=nextNumber(key);const created={id:uid(),...obj};if(key!=='users')stampCreate(created);data[key].unshift(created);syncLookupFieldLinks(key,created)}
  // Workflow execution isn't limited to relatedTypeFor's built-ins anymore -
  // create_record/update_related_record/update_field don't need a Task
  // relatedType at all, and create_task itself already falls back to
@@ -5924,8 +5983,10 @@ function relationshipModal(def){
   const fd=Object.fromEntries(new FormData(e.target).entries());
   if(!fd.forwardLabel.trim()||!fd.reverseLabel.trim())return alert('Both direction labels are required.');
   if(isEdit){
+   const wasActive=def.active;
    Object.assign(def,{forwardLabel:fd.forwardLabel,reverseLabel:fd.reverseLabel,deleteBehavior:fd.deleteBehavior,showRelatedList:fd.showRelatedList==='true',required:fd.required==='true',active:fd.active==='true'});
    stampUpdate(def);
+   if(wasActive&&!def.active)deactivateLookupFieldsForRelationship(def.id);
   }else{
    if(fd.source===fd.target)return alert('A relationship must connect two different object types.');
    const base=`${fd.source}_${fd.target}`;
@@ -5934,6 +5995,7 @@ function relationshipModal(def){
    const newRel=stampCreate({id:uid(),key,sourceEntity:fd.source,targetEntity:fd.target,relType:fd.relType,forwardLabel:fd.forwardLabel,reverseLabel:fd.reverseLabel,deleteBehavior:fd.deleteBehavior,showRelatedList:fd.showRelatedList==='true',required:fd.required==='true',active:true,protected:false});
    data.relationshipDefinitions.push(newRel);
    tagLocalComponent('relationship',newRel.id);
+   autoCreateLookupFields(newRel);
   }
   save();closeModal();toast(isEdit?'Relationship saved':'Relationship created');renderAdminTab();
  };
@@ -5944,6 +6006,7 @@ function relationshipModal(def){
    const count=(data.relationshipInstances||[]).filter(i=>i.definitionId===def.id).length;
    if(count)return alert(`Cannot delete this relationship — ${count} record(s) are still linked through it. Unlink them first, or deactivate the relationship instead.`);
    if(!confirm('Delete this relationship? This only works if no records are linked through it.'))return;
+   deactivateLookupFieldsForRelationship(def.id);
    data.relationshipDefinitions=data.relationshipDefinitions.filter(d=>d.id!==def.id);
    save();closeModal();toast('Relationship deleted');renderAdminTab();
   };
@@ -9070,7 +9133,7 @@ function fieldsTab(body){
  const list=(data.customFields||[]).filter(f=>f.entity===cfEntity);
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Custom fields</h3><p class="muted">Add fields to any object. They appear automatically on that object's create/edit form, with an optional default value, uniqueness check, placeholder and help text.</p>
  ${entityPills(keys,cfEntity)}
- <div class="table-wrap"><table class="table"><thead><tr><th>Field</th><th>Type</th><th>Options</th><th>Settings</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(f=>`<tr><td>${f.label}</td><td>${f.type}</td><td>${f.type==='select'?f.options:'—'}</td><td class="muted">${fieldExtrasSummary(f)}</td><td>${badgeMaybe(f.active?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-edit-field="${f.id}">Edit</button><button class="icon-btn" data-del-field="${f.id}">Delete</button></div></td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No custom fields on '+entityLabel(cfEntity)+' yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Field</th><th>Type</th><th>Options</th><th>Settings</th><th>Active</th><th>Actions</th></tr></thead><tbody>${list.map(f=>`<tr><td>${f.label}</td><td>${f.type}</td><td>${f.type==='select'?f.options:'—'}</td><td class="muted">${fieldExtrasSummary(f)}</td><td>${badgeMaybe(f.active?'Active':'Inactive')}</td><td>${f.type==='lookup'?`<span class="muted" title="Auto-created from a Relationship - deactivate the relationship instead to remove it">From a relationship</span>`:`<div class="actions"><button class="icon-btn" data-edit-field="${f.id}">Edit</button><button class="icon-btn" data-del-field="${f.id}">Delete</button></div>`}</td></tr>`).join('')}</tbody></table>${list.length?'':'<div class="empty">No custom fields on '+entityLabel(cfEntity)+' yet</div>'}</div>
  <button class="btn btn-secondary" id="addField" style="margin-top:14px">+ New field</button>
  </div>`;
  body.querySelectorAll('[data-entity]').forEach(b=>b.onclick=()=>{cfEntity=b.dataset.entity;renderAdminTab()});

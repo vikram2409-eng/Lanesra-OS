@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-pub const CUSTOM_FIELD_TYPES: &[&str] = &["text", "number", "date", "boolean", "select"];
+pub const CUSTOM_FIELD_TYPES: &[&str] = &["text", "number", "date", "boolean", "select", "lookup"];
 /// Admin flexibility: every major entity, not just Company/Contact from
 /// Phase 1 - matches WORKFLOW_ENTITY_TYPES plus Product (which has no
 /// status/stage field to trigger a workflow on, but can still carry custom
@@ -60,6 +60,19 @@ pub struct CustomFieldDefinition {
     /// and its condition currently matches - see migration 0020 and
     /// `business_rule_service::RuleEvaluation::field_effects`.
     pub is_hidden_by_default: bool,
+    /// Only meaningful when `field_type == "lookup"`, set only by
+    /// `custom_field_service::create_lookup_field` - the entity_type a
+    /// value for this field must resolve against via
+    /// `entity_registry::resolve`. `None` for every ordinary field.
+    pub lookup_target_entity_type: Option<String>,
+    /// Only meaningful when `field_type == "lookup"`, set only by
+    /// `custom_field_service::create_lookup_field` - the relationship this
+    /// field was auto-created from and writes through
+    /// (`relationship_service::link`/`unlink`), and the back-reference
+    /// `deactivate_lookup_fields_for_relationship` uses to find it again
+    /// when that relationship is deactivated or deleted. `None` for every
+    /// ordinary field.
+    pub lookup_relationship_definition_id: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,
