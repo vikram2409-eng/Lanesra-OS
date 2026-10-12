@@ -1,0 +1,30 @@
+name: Apply Ontology PR transform
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: 'Transform script path in scripts/'
+        required: true
+        default: 'apply_ontology_pr1.py'
+      branch:
+        description: 'Branch to transform and push'
+        required: true
+        default: 'ontology-graph/pr1-foundation'
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: ${{ inputs.branch }} }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: python3 scripts/${{ inputs.script }}
+      - run: node --check app.js
+      - run: |
+          git config user.name "Muse (Ontology Graph build)"
+          git config user.email "muse@lanesraos.com"
+          git add app.js
+          git diff --cached --quiet || git commit -m "feat: Ontology Graph PR1 — rename + typed edges + traversal + colors + demo data"
+          git push origin ${{ inputs.branch }}
