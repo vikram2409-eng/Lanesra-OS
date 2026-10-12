@@ -552,6 +552,19 @@ function ensureAdminData(){
   ogScope('Ops Supervisor',[{objectType:'companies',capabilities:['read','update']}],['at_send_email']);
   ogScope('Draft Writer',[]);
  }
+ // Object 360 (epic #359, PR 3): one-time demo data so company records show
+ // live Rules/Workflows sections and the depth-2 record graph for the
+ // flagship demo company (BrightPath Logistics) reaches the OB-1 bar of
+ // 20 nodes. Same id-guarded one-time convention as the ontology block.
+ if(!data.workspace.object360Seeded){
+  data.workspace.object360Seeded=true;
+  const o360HasId=(arr,id)=>(arr||[]).some(x=>x.id===id);
+  if(!o360HasId(data.fieldRules,'fr_co_industry'))data.fieldRules.push(stampCreate({id:'fr_co_industry',name:'Require Industry',entity:'companies',matchType:'all',active:true,conditions:[{fieldKey:'industry',operator:'is_empty',value:'',compareField:null,groupId:null}],actions:[{type:'block_save',message:'Industry is required before saving a company.'}]}));
+  if(!o360HasId(data.workflowRules,'wf_co_welcome'))data.workflowRules.push(stampCreate({id:'wf_co_welcome',name:'Company Welcome Sequence',entity:'companies',matchType:'all',active:true,conditions:[{fieldKey:'status',operator:'equals',value:'Customer',compareField:null,groupId:null}],actions:[{type:'create_task',taskTitle:'Send welcome package',daysOffset:1}],notify:false}));
+  if(!o360HasId(data.workflowRules,'wf_co_health'))data.workflowRules.push(stampCreate({id:'wf_co_health',name:'Company Health Check',entity:'companies',matchType:'all',active:true,conditions:[{fieldKey:'industry',operator:'equals',value:'Logistics',compareField:null,groupId:null}],actions:[{type:'create_task',taskTitle:'Quarterly health check',daysOffset:7}],notify:false}));
+  if(!o360HasId(data.tasks,'t_360_o1'))data.tasks.push({id:'t_360_o1',title:'Prepare Platform Modernization demo',relatedType:'Opportunity',relatedId:'o1',owner:'Maya Chen',due:'2026-10-20',priority:'High',status:'Open'});
+  if(!o360HasId(data.tasks,'t_360_p1'))data.tasks.push({id:'t_360_p1',title:'Intro call with Ava Martin',relatedType:'Contact',relatedId:'p1',owner:'Maya Chen',due:'2026-10-18',priority:'Medium',status:'Open'});
+ }
  if(!data.aiSettings.vectorSearch)data.aiSettings.vectorSearch={embeddingModel:'',embeddedCount:0,pendingCount:0,lastReindexAt:null};
  if(data.aiSettings.otlpEndpoint===undefined)data.aiSettings.otlpEndpoint='';
  (data.integrationJobs||[]).forEach(j=>{if(j.active===undefined)j.active=true;if(!j.runs)j.runs=[]});
@@ -823,7 +836,9 @@ const ADMIN_CATEGORIES=[
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
  {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
 ];
-let dependencyExplorerState={type:'custom_object',id:null,depth:'2',inspectType:null,inspectId:null,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
+let dependencyExplorerState={type:'custom_object',id:null,depth:'2',inspectType:null,inspectId:null,showImpact:true,showLineage:true,expanded:{},collapsed:{},zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};
+// PR3-A power tools: last canvas size (for centering) + one-time document-level pan listeners.
+let depLastCanvasW=0,depLastCanvasH=0,depPanWired=false,depDragPanEl=null,depDragState=null;
 function depMaxDepth(){const d=dependencyExplorerState.depth;return d==='all'?25:(parseInt(d,10)||2)}
 // Legend toggle-filter (issue #339's own design text: "identify/toggle
 // what's showing") - kept as its own module-level Set rather than inside
@@ -2420,9 +2435,124 @@ function nativeRelatedRecordsFor(entityType,entityId){
 function entityKeyForRelatedType(relatedType){
  return {Company:'companies',Contact:'contacts',Opportunity:'opportunities',Quote:'quotes',Order:'orders',Invoice:'invoices',Contract:'contracts'}[relatedType]||null;
 }
+// ===== Object 360 record graph (PR3-B, issues #372/#373/#374) =====
+// The shared graph engine driven at record scope: record nodes use the
+// entity key itself (e.g. 'companies') plus pseudo-types 'business_rule',
+// 'workflow', 'ai_agent' and 'orgUnit'. Record-level edge taxonomy
+// (spec section 12.2 OB-4): linked_record, has_business_unit, applies_to,
+// ran_on, scoped_agent, agent_can_read, agent_can_update.
+function recordNodeLabel(type,id){
+ if(type==='business_rule'){const r=(data.fieldRules||[]).find(x=>x.id===id);return r?(r.name||'Untitled rule'):id}
+ if(type==='workflow'){const w=(data.workflowRules||[]).find(x=>x.id===id);return w?(w.name||'Untitled workflow'):id}
+ if(type==='ai_agent'){const a=(data.aiAgents||[]).find(x=>x.id===id);return a?a.name:id}
+ if(type==='orgUnit'){const o=(data.orgUnits||[]).find(x=>x.id===id);return o?o.name:id}
+ const rec=byId(type,id);
+ return rec?recordDisplayName(type,rec):id;
+}
+// Direct (depth-1) neighbors of one record. Related records are neighbors in
+// both directions; the owning org unit is a dependency (record -> org unit);
+// rules, workflows and scoped agents all point at the record (dependents).
+function recordGraphDirect(entityType,entityId,direction){
+ const out=[],seen=new Set();
+ const push=(type,id,edgeType,label)=>{const k=type+':'+id+':'+edgeType;if(seen.has(k))return;seen.add(k);out.push({type,id,edgeType,label})};
+ [...relatedRecordsFor(entityType,entityId),...nativeRelatedRecordsFor(entityType,entityId)]
+  .forEach(r=>push(r.entityType,r.entityId,'linked_record',r.displayName));
+ if(direction==='dependencies'){
+  const rec=byId(entityType,entityId);
+  const ou=rec&&rec.owningOrgUnitId?(data.orgUnits||[]).find(o=>o.id===rec.owningOrgUnitId):null;
+  if(ou)push('orgUnit',ou.id,'has_business_unit',ou.name);
+ }
+ if(direction==='dependents'){
+  (data.fieldRules||[]).filter(r=>r.entity===entityType&&r.active)
+   .forEach(r=>push('business_rule',r.id,'applies_to',r.name||'Untitled rule'));
+  (data.workflowRules||[]).filter(w=>w.entity===entityType&&w.active)
+   .forEach(w=>push('workflow',w.id,'ran_on',w.name||'Untitled workflow'));
+  (data.aiAgents||[])
+   .filter(a=>a.isActive&&((a.objectTypeScopes||[]).length===0||(a.objectTypeScopes||[]).some(sc=>sc.objectType===entityType)))
+   .forEach(a=>{
+    push('ai_agent',a.id,'scoped_agent',a.name);
+    systemGraphEdges()
+     .filter(e=>(e.edgeType==='can_read'||e.edgeType==='can_update')&&e.fromType==='ai_agent'&&e.fromId===a.id&&e.toType==='custom_object'&&e.toId===entityType)
+     .forEach(e=>push('ai_agent',a.id,e.edgeType==='can_read'?'agent_can_read':'agent_can_update',a.name));
+   });
+ }
+ return out;
+}
+function o360RecordDriver(rootEntityType,rootEntityId){
+ const s=object360State||{};
+ const depth=parseInt(s.depth,10);
+ return {
+  rootType:rootEntityType,rootId:rootEntityId,
+  nodeKey:(t,i)=>'rec:'+t+':'+i,
+  splitKey:(k)=>{const m=/^rec:([^:]+):([\s\S]*)$/.exec(k);return m?[m[1],m[2]]:depSplitKey(k)},
+  label:recordNodeLabel,
+  origin:(t)=>ONTOLOGY_BUILTIN_TYPES.some(b=>b[0]===t)?'OOB':'Custom',
+  direct:recordGraphDirect,
+  dirs:[s.showLineage===false?null:'dependencies',s.showImpact===false?null:'dependents'].filter(Boolean),
+  maxDepth:(depth>=1&&depth<=3)?depth:2,
+  expanded:s.expanded||{},
+  collapsed:s.collapsed||{},
+  typeLabel:(t)=>t==='business_rule'?'Business Rule':t==='workflow'?'Workflow':t==='ai_agent'?'AI Agent':t==='orgUnit'?'Business Unit':(entityLabel(t)||t)
+ };
+}
+function o360ClusterOrder(driver,model){
+ const order=[driver.rootType];
+ model.nodes.forEach(n=>{if(order.indexOf(n.type)<0)order.push(n.type)});
+ return order;
+}
+function o360GraphModel(){
+ const s=object360State;
+ return graphModel(o360RecordDriver(s.root.entityType,s.root.entityId));
+}
+// Access chips for one agent row (issue #374): derived from the agent's
+// capability edges onto this object type in systemGraphEdges().
+function o360AgentChips(agent,entityType){
+ const caps=systemGraphEdges().filter(e=>e.fromType==='ai_agent'&&e.fromId===agent.id&&e.toType==='custom_object'&&e.toId===entityType);
+ const chips=[];
+ if(caps.some(e=>e.edgeType==='can_read'))chips.push('can read');
+ if(caps.some(e=>e.edgeType==='can_update'))chips.push('can update');
+ if(caps.some(e=>e.edgeType==='can_delete'))chips.push('can delete');
+ if(!chips.length)chips.push((agent.objectTypeScopes||[]).length===0?'unscoped':'scoped · no record access');
+ return chips;
+}
+function o360TypeDot(type){
+ return '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--chart-'+ontologyColorIndex(type)+');flex-shrink:0"></span>';
+}
+// Pivot (issue #374): push the current root onto the breadcrumb trail,
+// re-center on the new record, and fix the modal title. newTrail overrides
+// the push when pivoting back via a breadcrumb crumb.
+function o360PivotTo(entityType,entityId,label,newTrail){
+ const cur=object360State; if(!cur)return;
+ const trail=newTrail||[...(cur.trail||[]),{entityType:cur.root.entityType,entityId:cur.root.entityId,label:cur.root.label}];
+ object360State={...cur,trail,root:{entityType,entityId,label},inspect:{entityType,entityId,label}};
+ if(typeof document!=='undefined'){
+  const h2=document.querySelector('#modal .modal-head h2');
+  if(h2)h2.textContent='Object 360: '+label;
+ }
+}
+// Cross-links both ways (issue #374).
+function openOntologyGraphFor(entityTypeKey){
+ closeModal();
+ dependencyExplorerState={type:'custom_object',id:entityTypeKey,depth:'2',inspectType:'custom_object',inspectId:entityTypeKey,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
+ current='admin';adminTab='dependencyExplorer';adminView='tool';renderView();
+}
+function openObject360ForEntity(entityTypeKey){
+ let rec=null;
+ const arr=data[entityTypeKey];
+ if(Array.isArray(arr)&&arr.length)rec=arr[0];
+ if(!rec){
+  for(const o of (data.customObjects||[])){
+   if(o.key!==entityTypeKey)continue;
+   const a=data[o.key];
+   if(Array.isArray(a)&&a.length){rec=a[0];break}
+  }
+ }
+ if(!rec){toast('No records yet');return}
+ object360Modal(entityTypeKey,rec.id,recordDisplayName(entityTypeKey,rec));
+}
 let object360State=null;
 function object360Modal(entityType,entityId,label){
- object360State={root:{entityType,entityId,label},inspect:{entityType,entityId,label}};
+ object360State={root:{entityType,entityId,label},inspect:{entityType,entityId,label},trail:[]};
  modal('Object 360: '+label,'<div id="object360Body"></div>');
  const modalEl=document.querySelector('#modal .modal');
  if(modalEl)modalEl.style.cssText+=';width:min(1100px,95vw);max-height:92vh';
@@ -2431,118 +2561,157 @@ function object360Modal(entityType,entityId,label){
 function renderObject360Body(){
  const s=object360State; if(!s)return;
  const body=$('#object360Body'); if(!body)return;
+ const driver=o360RecordDriver(s.root.entityType,s.root.entityId);
+ const model=graphModel(driver);
+ // Canvas scales with the model, like the Ontology Graph's.
+ const W=Math.max(880,Math.min(1500,Math.round(560+model.nodes.length*5)));
+ const H=Math.max(600,Math.min(940,Math.round(440+model.nodes.length*3.2)));
+ const colors={},typeLabels={};
+ model.nodes.forEach(n=>{
+  if(!colors[n.type])colors[n.type]='var(--chart-'+ontologyColorIndex(n.type)+')';
+  if(!typeLabels[n.type])typeLabels[n.type]=driver.typeLabel(n.type);
+ });
+ const graphHtml=graphRender(model,{
+  colors:colors,typeLabels:typeLabels,
+  hiddenTypes:object360HiddenTypes,
+  rootKey:driver.nodeKey(s.root.entityType,s.root.entityId),
+  inspectType:s.inspect.entityType,inspectId:s.inspect.entityId,
+  inspectKey:driver.nodeKey(s.inspect.entityType,s.inspect.entityId),
+  inspectAttr:'data-o360g-inspect',
+  collapseAttr:'data-o360g-collapse',
+  edgeLabelFn:edgeTypeLabel,
+  isAccessEdgeFn:(t)=>t==='agent_can_read'||t==='agent_can_update',
+  nodeSize:15,rootSize:26,
+  rootClass:'ontology-node-root',
+  clusterOrder:o360ClusterOrder(driver,model),
+  labelMode:'all'
+ },W,H);
+
+ const rootRecord=byId(s.root.entityType,s.root.entityId);
  const related=[...relatedRecordsFor(s.root.entityType,s.root.entityId),...nativeRelatedRecordsFor(s.root.entityType,s.root.entityId)];
  const groups=new Map();
  related.forEach(r=>{const list=groups.get(r.defKey)||[];list.push(r);groups.set(r.defKey,list)});
  const groupEntries=Array.from(groups.entries());
- const rootRecord=byId(s.root.entityType,s.root.entityId);
  const orgUnit=rootRecord&&rootRecord.owningOrgUnitId?(data.orgUnits||[]).find(o=>o.id===rootRecord.owningOrgUnitId):null;
 
- const RING=170,ROOTSZ=26,NODESZ=15,MAXPER=20;
- const cx=RING+60,cy=RING+60;
- const totalArcs=groupEntries.length+(orgUnit?1:0);
- const dots=[`<div class="ontology-node-dot ontology-node-root" style="left:${cx-ROOTSZ/2}px;top:${cy-ROOTSZ/2}px;width:${ROOTSZ}px;height:${ROOTSZ}px;background:var(--chart-${ontologyColorIndex(s.root.entityType)})" title="${s.root.label}"></div>`];
- const edgesSvg=[];
- let arcIndex=0;
- if(totalArcs>0){
-  // The fixed inspector card (top:16, right:16) can grow tall - up to 11
-  // groups (related records, Business Unit, Rules, Workflows, Agents,
-  // Activity) - so a quadrant-sized gap isn't enough; dots are confined
-  // to the left semicircle (90deg-270deg, i.e. x <= center) so none can
-  // ever land under it, whatever its height ends up being.
-  const startAngle=Math.PI/2;
-  const arcSize=Math.PI/totalArcs;
-  groupEntries.forEach(([key,members])=>{
-   const start=startAngle+arcIndex*arcSize;
-   const shown=members.slice(0,MAXPER);
-   shown.forEach((m,i)=>{
-    const angle=start+(shown.length===1?arcSize/2:(arcSize*i)/Math.max(1,shown.length-1));
-    const x=cx+RING*Math.cos(angle),y=cy+RING*Math.sin(angle);
-    const isInspecting=s.inspect.entityType===m.entityType&&s.inspect.entityId===m.entityId;
-    const isDimmed=object360HiddenTypes.has(m.entityType);
-    dots.push(`<div class="ontology-node-dot${isInspecting?' ontology-node-inspecting':''}${isDimmed?' ontology-node-dimmed':''}" style="left:${x-NODESZ/2}px;top:${y-NODESZ/2}px;width:${NODESZ}px;height:${NODESZ}px;background:var(--chart-${ontologyColorIndex(m.entityType)})" title="${m.displayName}" data-o360-inspect="${m.entityType}:${m.entityId}:${encodeURIComponent(m.displayName)}"></div>`);
-    edgesSvg.push(`<line x1="${x}" y1="${y}" x2="${cx}" y2="${cy}" stroke="var(--line)" stroke-width="1.5"/>`);
-   });
-   arcIndex++;
-  });
-  if(orgUnit){
-   const angle=startAngle+arcIndex*arcSize+arcSize/2;
-   const x=cx+RING*Math.cos(angle),y=cy+RING*Math.sin(angle);
-   const orgUnitDimmed=object360HiddenTypes.has('orgUnit');
-   dots.push(`<div class="ontology-node-dot${orgUnitDimmed?' ontology-node-dimmed':''}" style="left:${x-NODESZ/2}px;top:${y-NODESZ/2}px;width:${NODESZ}px;height:${NODESZ}px;background:var(--chart-6)" title="${orgUnit.name}" data-o360-inspect="orgUnit:${orgUnit.id}:${encodeURIComponent(orgUnit.name)}"></div>`);
-   edgesSvg.push(`<line x1="${x}" y1="${y}" x2="${cx}" y2="${cy}" stroke="var(--line)" stroke-width="1.5"/>`);
-  }
- }
- // Dedicated right-side lane for the inspector card, clear of every dot
- // regardless of the card's height (up to 11 groups) - simpler and more
- // robust than fine-tuning angles against its 280px width.
- const w=cx+RING+60+340,h=cy*2;
-
+ const MAXPER=20;
  const inspectIsRoot=s.inspect.entityType===s.root.entityType&&s.inspect.entityId===s.root.entityId;
- const isOrgUnitInspect=s.inspect.entityType==='orgUnit';
- let inspectorHtml;
+ const inspectIsPseudo=['business_rule','workflow','ai_agent'].indexOf(s.inspect.entityType)>=0;
  const o360CardPosStyle=object360CardPos?` style="left:${object360CardPos.left}px;top:${object360CardPos.top}px;right:auto"`:'';
- if(isOrgUnitInspect){
+ let inspectorHtml;
+ if(s.inspect.entityType==='orgUnit'){
   inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
-   <div class="ontology-inspector-head" id="o360InspectorHead"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--chart-6);flex-shrink:0"></span><div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">Business Unit</div></div></div>
+   <div class="ontology-inspector-head" id="o360InspectorHead">${o360TypeDot('orgUnit')}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">Business Unit</div></div></div>
    <p class="muted" style="font-size:12px">Business Units aren't individually re-centerable here - see Admin → Organization Units for its own detail.</p>
+  </div>`;
+ }else if(inspectIsPseudo){
+  // Rule / workflow / agent node: no record to open, so the card deep-links
+  // to the owning admin screen instead of offering a broken Open button.
+  const pseudoTab={business_rule:'rules',workflow:'workflow',ai_agent:'aiAgents'}[s.inspect.entityType];
+  const pseudoTabLabel={business_rule:'Business Rules',workflow:'Workflows',ai_agent:'AI Agents'}[s.inspect.entityType];
+  inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
+   <div class="ontology-inspector-head" id="o360InspectorHead">${o360TypeDot(s.inspect.entityType)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${driver.typeLabel(s.inspect.entityType)}</div></div></div>
+   <div class="ontology-inspector-actions">
+    <button type="button" class="btn btn-secondary" id="o360OpenPseudoAdmin">Open in Admin → ${pseudoTabLabel}</button>
+   </div>
   </div>`;
  }else{
   let groupsHtml='';
   if(inspectIsRoot){
    const rules=(data.fieldRules||[]).filter(r=>r.entity===s.root.entityType&&r.active);
-   const workflows=(data.workflowRules||[]).filter(w=>w.entity===s.root.entityType&&w.active);
+   const workflows=(data.workflowRules||[]).filter(w=>w.entity===s.root.entityType).sort((a,b)=>(b.active?1:0)-(a.active?1:0));
    const agents=(data.aiAgents||[]).filter(a=>a.isActive&&((a.objectTypeScopes||[]).length===0||(a.objectTypeScopes||[]).some(sc=>sc.objectType===s.root.entityType)));
    const activities=(data.activities||[]).filter(a=>a.entityType===s.root.entityType&&a.entityId===s.root.entityId).slice().sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt)).slice(0,10);
-   groupsHtml=`${groupEntries.map(([key,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${(members[0]&&members[0].groupLabel)||key}</div>${members.slice(0,MAXPER).map(m=>`<button type="button" class="ontology-inspector-bullet" data-o360-inspect="${m.entityType}:${m.entityId}:${encodeURIComponent(m.displayName)}">${entityDotHtml(m.entityType)}${m.displayName}</button>`).join('')}${members.length>MAXPER?`<div class="muted" style="font-size:12px">+${members.length-MAXPER} more</div>`:''}</div>`).join('')}
+   // Issue #372: live pass/fail per rule via ruleConditionsMatch, each row
+   // deep-linking to Admin → Business Rules.
+   const ruleRows=rules.map(r=>{
+    // Pass/fail: validation rules (block_save/show_error) fire when the
+    // record violates them, so the record passes when their conditions do
+    // NOT match. Effect rules have no pass/fail - show whether they apply.
+    const isValidation=(r.actions||[]).some(a=>a.type==='block_save'||a.type==='show_error');
+    const matched=rootRecord?ruleConditionsMatch(r,rootRecord):null;
+    const verdict=matched===null?null:(isValidation?(matched?'failing':'passing'):(matched?'applying':'not applying'));
+    const chipCls=(verdict==='passing'||verdict==='applying')?'o360-chip-pass':(verdict==='failing'?'o360-chip-fail':'o360-chip-neutral');
+    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="rules" title="Open in Admin → Business Rules"><span style="flex:1;text-align:left">${r.name||'Untitled rule'}</span>${verdict?`<span class="o360-chip ${chipCls}">${verdict}</span>`:''}</button>`;
+   }).join('');
+   // Issue #372: Active/Inactive + a live trigger check per workflow. The
+   // demo keeps no workflow run history, so this is honestly labeled
+   // "Trigger check" - never a faked "last run" timestamp.
+   const wfRows=workflows.map(w=>{
+    const trig=rootRecord?conditionsMatch(w.matchType||'all',w.conditions||[],rootRecord):null;
+    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="workflow" title="Open in Admin → Workflows"><span style="flex:1;text-align:left">${w.name||'Untitled workflow'}</span><span class="o360-chip ${w.active?'o360-chip-pass':'o360-chip-neutral'}">${w.active?'Active':'Inactive'}</span>${trig===null?'':`<span class="o360-chip o360-chip-neutral" title="Trigger check: this workflow's conditions evaluated against the record right now">${trig?'would trigger on this record':'conditions not met'}</span>`}</button>`;
+   }).join('');
+   // Issue #374: access chips per agent from its capability edges.
+   const agentRows=agents.map(a=>{
+    const chips=o360AgentChips(a,s.root.entityType);
+    return `<div class="ontology-inspector-bullet" style="cursor:default"><span style="flex:1;text-align:left">${a.icon||''} ${a.name}</span>${chips.map(c=>`<span class="o360-chip ${c==='can read'||c==='can update'||c==='can delete'?'o360-chip-pass':'o360-chip-neutral'}">${c}</span>`).join('')}</div>`;
+   }).join('');
+   groupsHtml=`${groupEntries.map(([key,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${(members[0]&&members[0].groupLabel)||key}</div>${members.slice(0,MAXPER).map(m=>`<button type="button" class="ontology-inspector-bullet" data-o360g-inspect="${m.entityType}:${m.entityId}">${entityDotHtml(m.entityType)}${m.displayName}</button>`).join('')}${members.length>MAXPER?`<div class="muted" style="font-size:12px">+${members.length-MAXPER} more</div>`:''}</div>`).join('')}
     ${groupEntries.length===0?'<p class="muted" style="font-size:12px">No related records yet.</p>':''}
     ${orgUnit?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Business Unit</div><div style="font-size:13px">${orgUnit.name}</div></div>`:''}
-    ${rules.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Business Rules that apply</div>${rules.map(r=>`<div style="font-size:13px">${r.name}</div>`).join('')}</div>`:''}
-    ${workflows.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Workflows that apply</div>${workflows.map(w=>`<div style="font-size:13px">${w.name}</div>`).join('')}</div>`:''}
-    ${agents.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">AI Agents scoped to this object type</div>${agents.map(a=>`<div style="font-size:13px">${a.icon} ${a.name}</div>`).join('')}</div>`:''}
+    ${rules.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Business Rules that apply</div>${ruleRows}</div>`:''}
+    ${workflows.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Workflows that apply</div><div class="o360-trigger-note">Trigger check evaluates each workflow's conditions against this record live — the demo keeps no run history, so there is no "last run" to show.</div>${wfRows}</div>`:''}
+    ${agents.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">AI Agents scoped to this object type</div>${agentRows}</div>`:''}
     ${activities.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Activity</div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}`;
   }
   inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
-   <div class="ontology-inspector-head" id="o360InspectorHead">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${entityLabel(s.inspect.entityType)||s.inspect.entityType}</div></div></div>
+   <div class="ontology-inspector-head" id="o360InspectorHead">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${driver.typeLabel(s.inspect.entityType)}</div></div></div>
    <div class="ontology-inspector-actions">
     <button type="button" class="btn btn-primary" id="o360OpenRecord">Open record</button>
     <button type="button" class="btn btn-secondary" id="o360Recenter" ${inspectIsRoot?'disabled':''}>Show what's around it</button>
+    ${inspectIsRoot?`<button type="button" class="btn btn-secondary" id="o360OpenOntology">View ${entityLabel(s.root.entityType)||s.root.entityType} in Ontology Graph</button>`:''}
    </div>
    ${inspectIsRoot?`<div class="ontology-inspector-groups">${groupsHtml}</div>`:''}
   </div>`;
  }
 
- // Legend (doubling as a toggle-filter, same as the Dependency
- // Explorer's) built from whichever types actually appear among this
- // record's neighbors - not a fixed list, since any one record only ever
- // touches a handful of the platform's object types.
- const legendKeys=Array.from(new Set(related.map(r=>r.entityType)));
- if(orgUnit)legendKeys.push('orgUnit');
- const legendHtmlStr=legendKeys.length?`<div class="ontology-legend">${legendKeys.map(k=>{
-  const lbl=k==='orgUnit'?'Business Unit':(entityLabel(k)||k);
-  const color=k==='orgUnit'?6:ontologyColorIndex(k);
+ // Legend doubles as the toggle-filter; built from the types actually in
+ // this record's model, now including rules/workflows/agents/orgUnit.
+ const legendTypes=[];
+ model.nodes.forEach(n=>{if(legendTypes.indexOf(n.type)<0)legendTypes.push(n.type)});
+ const legendHtmlStr=legendTypes.length?`<div class="ontology-legend">${legendTypes.map(k=>{
+  const lbl=driver.typeLabel(k);
   const isOff=object360HiddenTypes.has(k);
-  return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl}"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:var(--chart-${color})"></span>${lbl}</button>`;
+  return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl}"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${colors[k]}"></span>${lbl}</button>`;
  }).join('')}</div>`:'';
 
+ // Breadcrumb back through the pivot trail (issue #374).
+ const trail=s.trail||[];
+ const crumbHtml=trail.length?`<div class="o360-breadcrumb">${trail.map((t,i)=>`<button type="button" class="o360-crumb" data-o360-crumb="${i}" title="Pivot back to ${t.label}">${t.label}</button><span class="o360-crumb-sep">›</span>`).join('')}<span class="o360-crumb-current">${s.root.label}</span></div>`:'';
+
  body.innerHTML=`<p class="muted" style="font-size:13px;max-width:720px">Every record directly linked to ${s.root.label}, its Business Unit, the Business Rules/Workflows that apply to records like it, and which AI Agents are scoped to act on it.</p>
- ${legendHtmlStr}
- <div class="ontology-graph-wrap" style="height:${h+40}px">
-  <div class="ontology-graph-canvas" style="width:${w}px;height:${h}px">
-   <svg width="${w}" height="${h}" style="position:absolute;top:0;left:0;pointer-events:none">${edgesSvg.join('')}</svg>
-   ${dots.join('')}
-   ${inspectorHtml}
-  </div>
+ ${crumbHtml}
+ <div class="o360-toolbar">${legendHtmlStr}<label class="o360-depth">Depth <select id="o360Depth">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label></div>
+ <div class="ontology-graph-wrap" style="height:${H+40}px">
+  <div class="ontology-graph-canvas" style="width:${W}px;height:${H}px">${graphHtml}${inspectorHtml}</div>
  </div>`;
 
- body.querySelectorAll('[data-o360-inspect]').forEach(el=>el.onclick=()=>{
-  const [entityType,entityId,labelEnc]=el.dataset.o360Inspect.split(':');
-  object360State={...object360State,inspect:{entityType,entityId,label:decodeURIComponent(labelEnc)}};
+ body.querySelectorAll('[data-o360g-inspect]').forEach(el=>el.onclick=()=>{
+  const v=el.dataset.o360gInspect,ci=v.indexOf(':');
+  const entityType=v.slice(0,ci),entityId=v.slice(ci+1);
+  object360State={...object360State,inspect:{entityType,entityId,label:driver.label(entityType,entityId)}};
   renderObject360Body();
  });
- const openBtn=$('#o360OpenRecord'); if(openBtn)openBtn.onclick=()=>{const t=object360State.inspect;closeModal();openRecordDetail(t.entityType,t.entityId)};
- const recenterBtn=$('#o360Recenter'); if(recenterBtn)recenterBtn.onclick=()=>{object360State={root:object360State.inspect,inspect:object360State.inspect};renderObject360Body()};
+ body.querySelectorAll('[data-o360g-collapse]').forEach(el=>el.onclick=()=>{
+  const t=el.dataset.o360gCollapse;
+  const c={...(object360State.collapsed||{})};
+  if(c[t])delete c[t];else c[t]=true;
+  object360State={...object360State,collapsed:c};
+  renderObject360Body();
+ });
  body.querySelectorAll('[data-o360-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.o360LegendToggle;if(object360HiddenTypes.has(t))object360HiddenTypes.delete(t);else object360HiddenTypes.add(t);renderObject360Body()});
+ body.querySelectorAll('[data-o360-crumb]').forEach(b=>b.onclick=()=>{
+  const i=parseInt(b.dataset.o360Crumb,10);
+  const t=object360State.trail[i];
+  o360PivotTo(t.entityType,t.entityId,t.label,object360State.trail.slice(0,i));
+  renderObject360Body();
+ });
+ body.querySelectorAll('[data-o360-admin]').forEach(b=>b.onclick=()=>{const t=b.dataset.o360Admin;closeModal();current='admin';adminTab=t;adminView='tool';renderView()});
+ const openBtn=$('#o360OpenRecord'); if(openBtn)openBtn.onclick=()=>{const t=object360State.inspect;closeModal();openRecordDetail(t.entityType,t.entityId)};
+ const recenterBtn=$('#o360Recenter'); if(recenterBtn)recenterBtn.onclick=()=>{const t=object360State.inspect;o360PivotTo(t.entityType,t.entityId,t.label);renderObject360Body()};
+ const ontoBtn=$('#o360OpenOntology'); if(ontoBtn)ontoBtn.onclick=()=>openOntologyGraphFor(object360State.root.entityType);
+ const pseudoBtn=$('#o360OpenPseudoAdmin'); if(pseudoBtn)pseudoBtn.onclick=()=>{const t={business_rule:'rules',workflow:'workflow',ai_agent:'aiAgents'}[object360State.inspect.entityType];closeModal();current='admin';adminTab=t;adminView='tool';renderView()};
+ const depthSel=$('#o360Depth'); if(depthSel)depthSel.onchange=(e)=>{object360State={...object360State,depth:e.target.value};renderObject360Body()};
  makeInspectorCardDraggable($('#o360InspectorCard'),$('#o360InspectorHead'),(left,top)=>{object360CardPos={left,top}});
 }
 function companyDetail(id){
@@ -4105,32 +4274,57 @@ function depActiveDirs(){
  if(s.showImpact||s.showLineage)return [s.showImpact?'dependents':null,s.showLineage?'dependencies':null].filter(Boolean);
  return ['dependents','dependencies'];
 }
+// ===== Shared graph engine (PR3-B, epic #359, issues #372/#373/#374) =====
+// depGraphModel's traversal, depLayoutPositions' layout and depRenderGraph's
+// renderer, generalized over a driver + ui contract so the Object 360 record
+// graph reuses the exact same implementation instead of a second one.
+// Behavior for the Ontology Graph is unchanged: depGraphModel,
+// depLayoutPositions and depRenderGraph are thin wrappers below.
+// Driver contract:
+//   {rootType, rootId, nodeKey(t,i), splitKey(key)->[t,i], label(t,i),
+//    origin(t,i), direct(t,i,dir)->[{type,id,edgeType}], dirs[], maxDepth,
+//    expanded{}, collapsed{}, typeLabel(t)}
+function depOntologyDriver(){
+ const s=dependencyExplorerState;
+ const bothOff=!s.showImpact&&!s.showLineage;
+ return {
+  rootType:s.type,rootId:s.id,
+  nodeKey:depNodeKey,
+  splitKey:depSplitKey,
+  label:systemGraphNodeLabel,
+  origin:depNodeOrigin,
+  direct:systemGraphDirect,
+  dirs:depActiveDirs(),
+  maxDepth:bothOff?1:depMaxDepth(),
+  expanded:s.expanded||{},
+  collapsed:s.collapsed||{},
+  typeLabel:(t)=>SYSTEM_NODE_TYPE_LABELS[t]||t
+ };
+}
 // Unified graph model with real per-hop edges: BFS from the root honoring
 // toggles + depth selector (fan-out guard: >150 new nodes per expansion
 // reports the rest via `truncated`), plus one-hop neighborhoods for
 // incrementally expanded nodes. Collapsed cluster types become single
 // stacked pseudo-nodes via depApplyCollapse.
-function depGraphModel(){
- const s=dependencyExplorerState;
+function graphModel(driver){
  const nodes=new Map(),edges=[];
  const edgeSeen=new Set();
- const addNode=(type,id,depth)=>{const k=depNodeKey(type,id);const n=nodes.get(k);if(!n)nodes.set(k,{key:k,type,id,depth,label:systemGraphNodeLabel(type,id),origin:depNodeOrigin(type,id)});else if(depth<n.depth)n.depth=depth};
- const addEdge=(ft,fi,tt,ti,edgeType)=>{const k=ft+':'+fi+'>'+tt+':'+ti+':'+edgeType;if(edgeSeen.has(k))return;edgeSeen.add(k);edges.push({fromKey:depNodeKey(ft,fi),toKey:depNodeKey(tt,ti),edgeType})};
- addNode(s.type,s.id,0);
- const dirs=depActiveDirs();
- const bothOff=!s.showImpact&&!s.showLineage;
- const maxDepth=bothOff?1:depMaxDepth();
- const seen=new Set([depNodeKey(s.type,s.id)]);
- let frontier=[{type:s.type,id:s.id}],truncated=0;
+ const addNode=(type,id,depth)=>{const k=driver.nodeKey(type,id);const n=nodes.get(k);if(!n)nodes.set(k,{key:k,type,id,depth,label:driver.label(type,id),origin:driver.origin(type,id)});else if(depth<n.depth)n.depth=depth};
+ const addEdge=(ft,fi,tt,ti,edgeType)=>{const k=ft+':'+fi+'>'+tt+':'+ti+':'+edgeType;if(edgeSeen.has(k))return;edgeSeen.add(k);edges.push({fromKey:driver.nodeKey(ft,fi),toKey:driver.nodeKey(tt,ti),edgeType})};
+ addNode(driver.rootType,driver.rootId,0);
+ const dirs=driver.dirs;
+ const maxDepth=driver.maxDepth;
+ const seen=new Set([driver.nodeKey(driver.rootType,driver.rootId)]);
+ let frontier=[{type:driver.rootType,id:driver.rootId}],truncated=0;
  for(let depth=1;depth<=maxDepth&&frontier.length;depth++){
   const next=[];
   for(const node of frontier)for(const dir of dirs){
-   const hits=systemGraphDirect(node.type,node.id,dir);
+   const hits=driver.direct(node.type,node.id,dir);
    let added=0;
    for(const h of hits){
     if(dir==='dependents')addEdge(h.type,h.id,node.type,node.id,h.edgeType);
     else addEdge(node.type,node.id,h.type,h.id,h.edgeType);
-    const k=depNodeKey(h.type,h.id);
+    const k=driver.nodeKey(h.type,h.id);
     if(!seen.has(k)){
      if(added>=150){truncated++;continue}
      added++;seen.add(k);addNode(h.type,h.id,depth);next.push({type:h.type,id:h.id});
@@ -4141,32 +4335,37 @@ function depGraphModel(){
  }
  // Incremental expansions ("Show what's around it"): one hop around each
  // expanded node, honoring the direction toggles.
- for(const exKey of Object.keys(s.expanded||{})){
-  const parts=depSplitKey(exKey),et=parts[0],ei=parts[1];
+ for(const exKey of Object.keys(driver.expanded||{})){
+  const parts=driver.splitKey(exKey),et=parts[0],ei=parts[1];
   const exNode=nodes.get(exKey);
   const baseDepth=exNode?exNode.depth:1;
-  for(const dir of dirs)for(const h of systemGraphDirect(et,ei,dir)){
+  for(const dir of dirs)for(const h of driver.direct(et,ei,dir)){
    if(dir==='dependents')addEdge(h.type,h.id,et,ei,h.edgeType);
    else addEdge(et,ei,h.type,h.id,h.edgeType);
-   const k=depNodeKey(h.type,h.id);
+   const k=driver.nodeKey(h.type,h.id);
    if(!seen.has(k)){seen.add(k);addNode(h.type,h.id,baseDepth+1)}
   }
  }
  const model={nodes:Array.from(nodes.values()),edges,truncated};
- depApplyCollapse(model);
+ depApplyCollapse(model,driver.collapsed,driver.typeLabel);
  return model;
+}
+// Thin wrapper: the Ontology Graph's driver over the shared engine.
+function depGraphModel(){
+ return graphModel(depOntologyDriver());
 }
 // Collapse cluster halos: replace a collapsed type's nodes with one stacked
 // pseudo-node; remap edges onto it, drop internal edges, dedupe.
-function depApplyCollapse(model){
- const collapsed=dependencyExplorerState.collapsed||{};
+function depApplyCollapse(model,collapsed,typeLabel){
+ collapsed=collapsed||dependencyExplorerState.collapsed||{};
+ typeLabel=typeLabel||((t)=>SYSTEM_NODE_TYPE_LABELS[t]||t);
  const types=Object.keys(collapsed).filter(t=>collapsed[t]);
  if(!types.length)return;
  const remap=new Map();
  types.forEach(t=>{
   const members=model.nodes.filter(n=>n.type===t&&n.id!=='__cluster__');
   if(!members.length)return;
-  const label=SYSTEM_NODE_TYPE_LABELS[t]||t;
+  const label=typeLabel(t);
   const pseudo={key:'cluster:'+t,type:t,id:'__cluster__',clusterType:t,depth:Math.min.apply(null,members.map(n=>n.depth)),label:label+' · '+members.length,origin:'',count:members.length};
   model.nodes.push(pseudo);
   members.forEach(n=>remap.set(n.key,pseudo.key));
@@ -4185,16 +4384,19 @@ function depApplyCollapse(model){
 // nodes pull toward a shared anchor on an ellipse, so each type forms a
 // visible clump. Deterministic per node-set (seeded PRNG), so re-renders
 // (e.g. selecting a node) never reshuffle the graph.
-function depLayoutPositions(model,W,H){
+// layout: {rootKey, clusterOrder[], W, H} - rootKey/clusterOrder are the
+// contract; W/H (canvas size) ride along since the body needs them.
+function graphLayoutPositions(model,layout){
+ const W=layout.W,H=layout.H;
  const visible=model.nodes;
  const rng=depSeededRandom(depHashStr(visible.map(n=>n.key).sort().join('|')));
  const anchors={};
- DEP_CLUSTER_ORDER.forEach((t,i)=>{
-  const a=(i/DEP_CLUSTER_ORDER.length)*Math.PI*2-Math.PI/2;
+ (layout.clusterOrder||[]).forEach((t,i)=>{
+  const a=(i/layout.clusterOrder.length)*Math.PI*2-Math.PI/2;
   anchors[t]={x:W/2+Math.cos(a)*W*0.36,y:H/2+Math.sin(a)*H*0.36};
  });
  const pos=new Map();
- const rootKey=depNodeKey(dependencyExplorerState.type,dependencyExplorerState.id);
+ const rootKey=layout.rootKey;
  visible.forEach(n=>{
   if(n.key===rootKey){pos.set(n.key,{x:W/2,y:H/2});return}
   const a=anchors[n.type]||{x:W/2,y:H/2};
@@ -4241,6 +4443,9 @@ function depLayoutPositions(model,W,H){
  }
  return pos;
 }
+function depLayoutPositions(model,W,H){
+ return graphLayoutPositions(model,{rootKey:depNodeKey(dependencyExplorerState.type,dependencyExplorerState.id),clusterOrder:DEP_CLUSTER_ORDER,W:W,H:H});
+}
 // Andrew's monotone chain convex hull, for cluster halos.
 function depConvexHull(pts){
  if(pts.length<3)return pts.slice();
@@ -4253,20 +4458,35 @@ function depConvexHull(pts){
  return lower.concat(upper);
 }
 // Renders halos + edges + edge labels + nodes into the graph canvas.
-function depRenderGraph(model,W,H){
- const s=dependencyExplorerState;
- const pos=depLayoutPositions(model,W,H);
- const rootKey=depNodeKey(s.type,s.id);
+// Generalized over a ui contract (PR3-B) so Object 360 reuses this exact
+// renderer at record scope. ui:
+//   {colors{}, typeLabels{}, hiddenTypes:Set, rootKey, inspectType,
+//    inspectId, inspectKey, inspectAttr, collapseAttr, edgeLabelFn,
+//    isAccessEdgeFn, nodeSize, rootSize, rootClass, clusterOrder[],
+//    highlight?{pathKeys[]|null, simKeys[]|null, simChange|null},
+//    labelMode? 'all'|'neighborhood'}
+// highlight.pathKeys dims everything off the path and rings path nodes
+// (ontology-node-path); highlight.simKeys rings those nodes
+// (ontology-node-sim, plus ontology-node-sim-<simChange> when simChange is
+// set) and dims the rest; labelMode 'neighborhood' renders edge-label pills
+// only for edges touching the inspected node (spec section 7.6 declutter).
+function graphRender(model,ui,W,H){
+ const pos=graphLayoutPositions(model,{rootKey:ui.rootKey,clusterOrder:ui.clusterOrder||[],W:W,H:H});
  const byKey=new Map(model.nodes.map(n=>[n.key,n]));
+ const inspectKey=ui.inspectKey;
+ const hl=ui.highlight||{};
+ const pathSet=hl.pathKeys?new Set(hl.pathKeys):null;
+ const simSet=hl.simKeys?new Set(hl.simKeys):null;
+ const hlActive=!!(pathSet||simSet);
  const haloSvg=[],haloLabels=[];
  const clusters=new Map();
  model.nodes.forEach(n=>{if(n.id==='__cluster__')return;const l=clusters.get(n.type)||[];l.push(n);clusters.set(n.type,l)});
  clusters.forEach((members,type)=>{
-  if(depExplorerHiddenTypes.has(type))return;
+  if(ui.hiddenTypes.has(type))return;
   const pts=members.map(n=>pos.get(n.key)).filter(Boolean);
   if(!pts.length)return;
-  const color=SYSTEM_NODE_TYPE_COLORS[type]||'#888';
-  const label=(SYSTEM_NODE_TYPE_LABELS[type]||type)+' · '+members.length;
+  const color=ui.colors[type]||'#888';
+  const label=(ui.typeLabels[type]||type)+' · '+members.length;
   let d;
   if(pts.length===1){const p=pts[0];d='M '+(p.x-36).toFixed(1)+' '+p.y.toFixed(1)+' a 36 36 0 1 0 72 0 a 36 36 0 1 0 -72 0'}
   else{
@@ -4278,14 +4498,14 @@ function depRenderGraph(model,W,H){
   haloSvg.push('<path d="'+d+'" fill="'+color+'" fill-opacity="0.10" stroke="'+color+'" stroke-opacity="0.35" stroke-width="1.5"/>');
   const lx=(Math.min.apply(null,pts.map(p=>p.x))+Math.max.apply(null,pts.map(p=>p.x)))/2;
   const ly=Math.min.apply(null,pts.map(p=>p.y))-16;
-  haloLabels.push('<button type="button" class="ontology-halo-label" data-dep-collapse="'+type+'" style="left:'+lx.toFixed(1)+'px;top:'+ly.toFixed(1)+'px" title="Collapse '+label+' into a single node">'+label+' ▾</button>');
+  haloLabels.push('<button type="button" class="ontology-halo-label" '+ui.collapseAttr+'="'+type+'" style="left:'+lx.toFixed(1)+'px;top:'+ly.toFixed(1)+'px" title="Collapse '+label+' into a single node">'+label+' ▾</button>');
  });
  // Collapsed clusters: dashed halo + expand affordance.
  model.nodes.filter(n=>n.id==='__cluster__').forEach(n=>{
   const p=pos.get(n.key);if(!p)return;
-  const color=SYSTEM_NODE_TYPE_COLORS[n.type]||'#888';
+  const color=ui.colors[n.type]||'#888';
   haloSvg.push('<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="36" fill="'+color+'" fill-opacity="0.10" stroke="'+color+'" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="5 4"/>');
-  haloLabels.push('<button type="button" class="ontology-halo-label" data-dep-collapse="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y-48).toFixed(1)+'px" title="Expand '+n.label+'">'+n.label+' ▸</button>');
+  haloLabels.push('<button type="button" class="ontology-halo-label" '+ui.collapseAttr+'="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y-48).toFixed(1)+'px" title="Expand '+n.label+'">'+n.label+' ▸</button>');
  });
  const edgeSvg=[],edgeLabels=[];
  model.edges.forEach(e=>{
@@ -4293,30 +4513,61 @@ function depRenderGraph(model,W,H){
   if(!a||!b)return;
   const an=byKey.get(e.fromKey),bn=byKey.get(e.toKey);
   if(!an||!bn)return;
-  if(depExplorerHiddenTypes.has(an.type)||depExplorerHiddenTypes.has(bn.type))return;
-  const access=depIsAccessEdge(e.edgeType);
-  const color=SYSTEM_NODE_TYPE_COLORS[an.type]||'#888';
-  edgeSvg.push('<line x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'" stroke="'+color+'" stroke-opacity="0.5" stroke-width="1.5"'+(access?' stroke-dasharray="6 4"':'')+'><title>'+an.label+' — '+edgeTypeLabel(e.edgeType)+' → '+bn.label+'</title></line>');
-  edgeLabels.push('<div class="ontology-edge-label'+(access?' ontology-edge-label-access':'')+'" style="left:'+((a.x+b.x)/2).toFixed(1)+'px;top:'+((a.y+b.y)/2).toFixed(1)+'px" title="'+an.label+' — '+edgeTypeLabel(e.edgeType)+' → '+bn.label+'">'+(access?'🔒 ':'')+edgeTypeLabel(e.edgeType)+'</div>');
+  if(ui.hiddenTypes.has(an.type)||ui.hiddenTypes.has(bn.type))return;
+  const access=ui.isAccessEdgeFn(e.edgeType);
+  const eLabel=ui.edgeLabelFn(e.edgeType);
+  const eOnPath=pathSet?pathSet.has(e.fromKey)&&pathSet.has(e.toKey):false;
+  const eInSim=simSet?simSet.has(e.fromKey)&&simSet.has(e.toKey):false;
+  const eDimmed=hlActive&&!eOnPath&&!eInSim;
+  const color=ui.colors[an.type]||'#888';
+  edgeSvg.push('<line x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'" stroke="'+color+'" stroke-opacity="'+(eDimmed?'0.12':'0.5')+'" stroke-width="1.5"'+(access?' stroke-dasharray="6 4"':'')+'><title>'+an.label+' — '+eLabel+' → '+bn.label+'</title></line>');
+  if(ui.labelMode!=='neighborhood'||e.fromKey===inspectKey||e.toKey===inspectKey)
+   edgeLabels.push('<div class="ontology-edge-label'+(access?' ontology-edge-label-access':'')+(eDimmed?' ontology-node-dimmed':'')+'" style="left:'+((a.x+b.x)/2).toFixed(1)+'px;top:'+((a.y+b.y)/2).toFixed(1)+'px" title="'+an.label+' — '+eLabel+' → '+bn.label+'">'+(access?'🔒 ':'')+eLabel+'</div>');
  });
  const nodeDivs=[];
  model.nodes.forEach(n=>{
   const p=pos.get(n.key);if(!p)return;
-  const isRoot=n.key===rootKey;
-  const isDimmed=depExplorerHiddenTypes.has(n.type);
-  const isInspecting=!isRoot&&n.type===s.inspectType&&n.id===s.inspectId;
-  const color=SYSTEM_NODE_TYPE_COLORS[n.type]||'#888';
+  const isRoot=n.key===ui.rootKey;
+  const onPath=pathSet?pathSet.has(n.key):false;
+  const inSim=simSet?simSet.has(n.key):false;
+  const isDimmed=ui.hiddenTypes.has(n.type)||(hlActive&&!onPath&&!inSim);
+  const isInspecting=!isRoot&&n.type===ui.inspectType&&n.id===ui.inspectId;
+  const color=ui.colors[n.type]||'#888';
   const short=n.label.length>18?n.label.slice(0,17)+'…':n.label;
   if(n.id==='__cluster__'){
-   nodeDivs.push('<div class="ontology-node-cluster" data-dep-collapse="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px;background:'+color+'" title="'+n.label+' — click to expand"><span>'+n.count+'</span></div>');
+   nodeDivs.push('<div class="ontology-node-cluster" '+ui.collapseAttr+'="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px;background:'+color+'" title="'+n.label+' — click to expand"><span>'+n.count+'</span></div>');
    nodeDivs.push('<div class="ontology-node-caption" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y+26).toFixed(1)+'px">'+short+'</div>');
    return;
   }
-  const size=isRoot?ONTOLOGY_ROOT_SIZE:ONTOLOGY_NODE_SIZE;
-  nodeDivs.push('<div class="ontology-node-dot'+(isRoot?' ontology-node-root':'')+(isInspecting?' ontology-node-inspecting':'')+(isDimmed?' ontology-node-dimmed':'')+'" data-dep-inspect="'+n.type+':'+n.id+'" style="left:'+(p.x-size/2).toFixed(1)+'px;top:'+(p.y-size/2).toFixed(1)+'px;width:'+size+'px;height:'+size+'px;background:'+color+'" title="'+(SYSTEM_NODE_TYPE_LABELS[n.type]||n.type)+': '+n.label+'"></div>');
+  const size=isRoot?ui.rootSize:ui.nodeSize;
+  nodeDivs.push('<div class="ontology-node-dot'+(isRoot?' '+ui.rootClass:'')+(isInspecting?' ontology-node-inspecting':'')+(isDimmed?' ontology-node-dimmed':'')+(onPath?' ontology-node-path':'')+(inSim?' ontology-node-sim':'')+(inSim&&hl.simChange?' ontology-node-sim-'+hl.simChange:'')+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" style="left:'+(p.x-size/2).toFixed(1)+'px;top:'+(p.y-size/2).toFixed(1)+'px;width:'+size+'px;height:'+size+'px;background:'+color+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'"></div>');
   nodeDivs.push('<div class="ontology-node-caption'+(isDimmed?' ontology-node-dimmed':'')+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y+size/2+4).toFixed(1)+'px" title="'+n.label+'">'+short+'</div>');
  });
  return '<svg width="'+W+'" height="'+H+'" style="position:absolute;top:0;left:0;pointer-events:none">'+haloSvg.join('')+edgeSvg.join('')+'</svg>'+haloLabels.join('')+edgeLabels.join('')+nodeDivs.join('');
+}
+// Thin wrapper: the Ontology Graph's ui over the shared renderer.
+// pathKeys/simKeys/simChange/labelMode are undefined on
+// dependencyExplorerState today, so this renders exactly like the
+// pre-PR3-B depRenderGraph.
+function depRenderGraph(model,W,H){
+ const s=dependencyExplorerState;
+ return graphRender(model,{
+  colors:SYSTEM_NODE_TYPE_COLORS,
+  typeLabels:SYSTEM_NODE_TYPE_LABELS,
+  hiddenTypes:depExplorerHiddenTypes,
+  rootKey:depNodeKey(s.type,s.id),
+  inspectType:s.inspectType,inspectId:s.inspectId,
+  inspectKey:depNodeKey(s.inspectType,s.inspectId),
+  inspectAttr:'data-dep-inspect',
+  collapseAttr:'data-dep-collapse',
+  edgeLabelFn:edgeTypeLabel,
+  isAccessEdgeFn:depIsAccessEdge,
+  nodeSize:ONTOLOGY_NODE_SIZE,rootSize:ONTOLOGY_ROOT_SIZE,
+  rootClass:'ontology-node-root',
+  clusterOrder:DEP_CLUSTER_ORDER,
+  highlight:{pathKeys:s.pathKeys||null,simKeys:s.simKeys||null,simChange:s.simChange||null},
+  labelMode:s.labelMode||'all'
+ },W,H);
 }
 // Pinned right detail panel (replaces the floating inspector card): type,
 // badges, relationships grouped by edge label with direction, fields for
@@ -4344,6 +4595,7 @@ function depDetailPanelHtml(model){
   +(definition?'<p class="ontology-inspector-definition">'+definition+'</p>':'')
   +'<div class="ontology-detail-actions">'
   +'<button type="button" class="btn btn-primary" id="depOpenAdmin">Open in its admin screen</button>'
+  +(s.inspectType==='custom_object'?'<button type="button" class="btn btn-secondary" id="depOpen360">View records in Object 360</button>':'')
   +'<button type="button" class="btn btn-secondary" id="depExpand"'+(expandable?'':' disabled')+' title="'+(expandable?('Reveal '+expandable+' more neighbor'+(expandable===1?'':'s')+' around this node'):'Every neighbor is already shown')+'">Show what\'s around it'+(expandable?' ('+expandable+')':'')+'</button>'
   +(isRoot?'':'<button type="button" class="btn btn-secondary" id="depRecenter">Re-center graph here</button>')
   +'</div>'
@@ -4356,7 +4608,274 @@ function depDetailPanelHtml(model){
     +ins.map(m=>row(m,'←','Points at this node — click to re-center the graph here')).join('')
     +outs.map(m=>row(m,'→','This node points at it — click to re-center the graph here')).join('')+'</div>';
   }).join(''):'<p class="muted" style="font-size:12px">Nothing else synced depends on or is depended on by this.</p>')
-  +'</div></div>';
+  +'</div>'+depPathSectionHtml()+'</div>';
+}
+// ---------------------------------------------------------------------------
+// PR3-A power tools (issues #369, #370, #371; spec 7.6, FR-9/10/11): zoom/pan
+// toolbar, component search, find-path, change-impact simulation, shareable
+// view state. These only SET dependencyExplorerState fields - the render
+// layer (depRenderGraph, owned by the parallel worker) honors pathKeys,
+// simKeys, simChange and labelMode.
+// ---------------------------------------------------------------------------
+// Shareable view state -------------------------------------------------------
+function depReadShareHash(){
+ try{
+  const h=(typeof location==='undefined'?'':location.hash)||'';
+  if(h.indexOf('#/ontology')!==0)return null;
+  const params=new URLSearchParams(h.slice('#/ontology'.length).replace(/^\?/,''));
+  const out={type:params.get('type')||'',id:params.get('id')||'',depth:params.get('depth')||'2',showImpact:params.get('impact')!=='0',showLineage:params.get('lineage')!=='0',hidden:[],collapsed:{}};
+  const hidden=params.get('hidden');
+  if(hidden)out.hidden=hidden.split(',').filter(Boolean);
+  const collapsed=params.get('collapsed');
+  if(collapsed)collapsed.split(',').filter(Boolean).forEach(k=>{out.collapsed[k]=true});
+  return out;
+ }catch(e){return null}
+}
+function depWriteShareHash(){
+ try{
+  const s=dependencyExplorerState;
+  if(!s.id)return;
+  const hidden=Array.from(depExplorerHiddenTypes).sort().join(',');
+  const collapsed=Object.keys(s.collapsed||{}).filter(k=>s.collapsed[k]).sort().join(',');
+  const parts=[['type',s.type||''],['id',s.id||''],['depth',s.depth||'2'],['impact',s.showImpact?1:0],['lineage',s.showLineage?1:0],['hidden',hidden],['collapsed',collapsed]];
+  history.replaceState(null,'','#/ontology?'+parts.map(p=>p[0]+'='+encodeURIComponent(p[1])).join('&'));
+ }catch(e){}
+}
+function depApplyShareHashIfNeeded(){
+ const s=dependencyExplorerState;
+ if(s.id)return;
+ if(typeof location==='undefined'||!location.hash||location.hash.indexOf('#/ontology')!==0)return;
+ const p=depReadShareHash();
+ if(!p||!p.type||!p.id)return;
+ dependencyExplorerState={...s,type:p.type,id:p.id,depth:p.depth,inspectType:p.type,inspectId:p.id,showImpact:p.showImpact,showLineage:p.showLineage};
+ (p.hidden||[]).forEach(t=>depExplorerHiddenTypes.add(t));
+ if(p.collapsed&&Object.keys(p.collapsed).length)dependencyExplorerState={...dependencyExplorerState,collapsed:p.collapsed};
+}
+// Zoom / pan -----------------------------------------------------------------
+function depSetZoom(z,focusX,focusY){
+ const s=dependencyExplorerState;
+ z=Math.min(3,Math.max(0.25,z));
+ let panX=s.panX||0,panY=s.panY||0;
+ if(focusX!==undefined){
+  const oz=s.zoom||1;
+  const cx=(focusX-panX)/oz,cy=(focusY-panY)/oz;
+  panX=focusX-z*cx;panY=focusY-z*cy;
+ }
+ dependencyExplorerState={...s,zoom:z,panX:Math.round(panX),panY:Math.round(panY),labelMode:z<0.8?'neighborhood':'all'};
+ renderAdminTab();
+}
+function depZoomStep(dir,focusX,focusY){depSetZoom((dependencyExplorerState.zoom||1)*(dir>0?1.2:1/1.2),focusX,focusY)}
+function depResetZoomPan(){
+ const s=dependencyExplorerState;
+ dependencyExplorerState={...s,zoom:1,panX:0,panY:0,labelMode:'all'};
+ renderAdminTab();
+}
+function depCenterOnNode(type,id){
+ const model=depGraphModel();
+ const pos=depLayoutPositions(model,depLastCanvasW,depLastCanvasH);
+ const p=pos.get(depNodeKey(type,id));
+ const vp=document.getElementById('depGraphViewport');
+ if(!p||!vp)return;
+ const z=dependencyExplorerState.zoom||1;
+ dependencyExplorerState={...dependencyExplorerState,panX:Math.round(vp.clientWidth/2-z*p.x),panY:Math.round(vp.clientHeight/2-z*p.y)};
+ renderAdminTab();
+}
+function depWirePanZoom(){
+ const vp=document.getElementById('depGraphViewport'),pan=document.getElementById('depGraphPan');
+ if(!vp||!pan)return;
+ vp.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=vp.getBoundingClientRect();
+  depZoomStep(e.deltaY<0?1:-1,e.clientX-r.left,e.clientY-r.top);
+ },{passive:false});
+ pan.addEventListener('mousedown',e=>{
+  if(e.button!==0||e.target.closest('button,[data-dep-inspect]'))return;
+  depDragState={x:e.clientX,y:e.clientY,panX:dependencyExplorerState.panX||0,panY:dependencyExplorerState.panY||0};
+  depDragPanEl=pan;
+  e.preventDefault();
+ });
+ if(depPanWired)return;
+ depPanWired=true;
+ document.addEventListener('mousemove',e=>{
+  if(!depDragState||!depDragPanEl)return;
+  depDragPanEl.style.transform='translate('+(depDragState.panX+e.clientX-depDragState.x)+'px,'+(depDragState.panY+e.clientY-depDragState.y)+'px) scale('+(dependencyExplorerState.zoom||1)+')';
+ });
+ document.addEventListener('mouseup',e=>{
+  if(!depDragState)return;
+  const panX=Math.round(depDragState.panX+e.clientX-depDragState.x),panY=Math.round(depDragState.panY+e.clientY-depDragState.y);
+  depDragState=null;depDragPanEl=null;
+  dependencyExplorerState={...dependencyExplorerState,panX,panY};
+  renderAdminTab();
+ });
+}
+// Search ---------------------------------------------------------------------
+function depSearchNodes(q){
+ q=(q||'').trim().toLowerCase();
+ if(!q)return[];
+ return systemGraphNodes().filter(n=>(n.label||'').toLowerCase().indexOf(q)>=0).slice(0,8);
+}
+function depWireSearch(inputId,resultsId,onPick){
+ const input=document.getElementById(inputId),box=document.getElementById(resultsId);
+ if(!input||!box)return;
+ input.addEventListener('input',()=>{
+  const hits=depSearchNodes(input.value);
+  if(!hits.length){box.hidden=true;box.innerHTML='';return}
+  box.innerHTML=hits.map(n=>'<button type="button" class="ontology-search-hit" data-type="'+n.type+'" data-id="'+n.id+'">'+typeDotHtml(n.type,10)+'<span><strong>'+n.label+'</strong><br><small class="muted">'+(SYSTEM_NODE_TYPE_LABELS[n.type]||n.type)+'</small></span></button>').join('');
+  box.hidden=false;
+  box.querySelectorAll('.ontology-search-hit').forEach(b=>b.onclick=()=>{box.hidden=true;onPick(b.dataset.type,b.dataset.id)});
+ });
+ input.addEventListener('blur',()=>{setTimeout(()=>{box.hidden=true},150)});
+ input.addEventListener('focus',()=>{if(box.innerHTML)box.hidden=false});
+}
+function depSelectSearchNode(type,id){
+ dependencyExplorerState={type,id,depth:'2',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
+ renderAdminTab();
+ depCenterOnNode(type,id);
+}
+// Find path ------------------------------------------------------------------
+function depFindShortestPath(fromType,fromId,toType,toId){
+ const start=depNodeKey(fromType,fromId),goal=depNodeKey(toType,toId);
+ if(start===goal)return{keys:[start],edges:[]};
+ const prev=new Map(),seen=new Set([start]);
+ let frontier=[{type:fromType,id:fromId}],found=false;
+ for(let depth=1;depth<=6&&frontier.length&&!found;depth++){
+  const next=[];
+  for(const node of frontier){
+   const nbrs=[];
+   systemGraphDirect(node.type,node.id,'dependents').forEach(h=>nbrs.push({type:h.type,id:h.id,edge:{edgeType:h.edgeType,fromType:h.type,fromId:h.id,toType:node.type,toId:node.id}}));
+   systemGraphDirect(node.type,node.id,'dependencies').forEach(h=>nbrs.push({type:h.type,id:h.id,edge:{edgeType:h.edgeType,fromType:node.type,fromId:node.id,toType:h.type,toId:h.id}}));
+   for(const nb of nbrs){
+    const key=depNodeKey(nb.type,nb.id);
+    if(seen.has(key))continue;
+    seen.add(key);
+    prev.set(key,{prevKey:depNodeKey(node.type,node.id),edge:nb.edge});
+    if(key===goal){found=true;break}
+    next.push({type:nb.type,id:nb.id});
+   }
+   if(found)break;
+  }
+  frontier=next;
+ }
+ if(!found)return null;
+ const keys=[goal],edges=[];
+ let cur=goal;
+ while(cur!==start){const p=prev.get(cur);edges.unshift(p.edge);cur=p.prevKey;keys.unshift(cur)}
+ return{keys,edges};
+}
+function depPathPick(type,id){
+ const s=dependencyExplorerState;
+ if(!s.pathFrom||(s.pathFrom&&s.pathTo)){
+  dependencyExplorerState={...s,pathFrom:{type,id},pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,inspectType:type,inspectId:id};
+  renderAdminTab();
+  return;
+ }
+ if(s.pathFrom.type===type&&s.pathFrom.id===id)return;
+ const to={type,id};
+ const res=depFindShortestPath(s.pathFrom.type,s.pathFrom.id,type,id);
+ dependencyExplorerState={...s,pathTo:to,pathKeys:res?res.keys:null,pathEdges:res?res.edges:null,pathUnreachable:!res,inspectType:type,inspectId:id};
+ renderAdminTab();
+}
+function depPathEndpointPick(which,type,id){
+ const s=dependencyExplorerState;
+ const from=which==='from'?{type,id}:s.pathFrom;
+ const to=which==='to'?{type,id}:s.pathTo;
+ let st={...s,pathFrom:from,pathTo:to,pathKeys:null,pathEdges:null,pathUnreachable:false,inspectType:type,inspectId:id};
+ if(from&&to){
+  const res=depFindShortestPath(from.type,from.id,to.type,to.id);
+  st={...st,pathKeys:res?res.keys:null,pathEdges:res?res.edges:null,pathUnreachable:!res};
+ }
+ dependencyExplorerState=st;
+ renderAdminTab();
+}
+function depPathBarHtml(){
+ const s=dependencyExplorerState;
+ if(!s.pathMode)return '';
+ const badge=v=>v?'<span class="badge">'+systemGraphNodeLabel(v.type,v.id)+'</span>':'<span class="muted">—</span>';
+ return '<div class="ontology-path-bar"><span class="muted" style="font-size:12px">Path mode: click two nodes on the canvas, or pick them here.</span>'
+  +'<span class="ontology-search-wrap"><input type="search" id="depPathFrom" class="ontology-search-input" placeholder="From…" autocomplete="off"><div id="depPathFromResults" class="ontology-search-results" hidden></div></span>'
+  +badge(s.pathFrom)
+  +'<span class="muted">→</span>'
+  +'<span class="ontology-search-wrap"><input type="search" id="depPathTo" class="ontology-search-input" placeholder="To…" autocomplete="off"><div id="depPathToResults" class="ontology-search-results" hidden></div></span>'
+  +badge(s.pathTo)
+  +'<button type="button" class="btn btn-secondary" id="depClearPath">Clear path</button></div>';
+}
+function depPathSectionHtml(){
+ const s=dependencyExplorerState;
+ if(!s.pathMode&&!s.pathKeys&&!s.pathUnreachable)return '';
+ let inner='';
+ if(s.pathUnreachable){
+  inner='<p class="muted" style="font-size:12px">No path within 6 hops between the two selected nodes.</p>';
+ }else if(s.pathKeys&&s.pathKeys.length>1){
+  inner='<div class="ontology-path-chain">'+(s.pathEdges||[]).map(e=>'<div class="ontology-path-hop">'+systemGraphNodeLabel(e.fromType,e.fromId)+' —'+edgeTypeLabel(e.edgeType)+'→ '+systemGraphNodeLabel(e.toType,e.toId)+'</div>').join('')+'</div>';
+ }else if(s.pathFrom){
+  inner='<p class="muted" style="font-size:12px">From <strong>'+systemGraphNodeLabel(s.pathFrom.type,s.pathFrom.id)+'</strong> — pick a second node.</p>';
+ }else{
+  inner='<p class="muted" style="font-size:12px">Pick two nodes to trace a path.</p>';
+ }
+ return '<div class="ontology-detail-section"><div class="ontology-detail-section-label">Path</div>'+inner+'<button type="button" class="btn btn-secondary" id="depClearPathBtn" style="margin-top:8px">Clear path</button></div>';
+}
+// Change-impact simulation ----------------------------------------------------
+// Read-only: traverses the graph via systemGraphDirect only. It never writes
+// to `data`, never calls save(), and never touches localStorage.
+function depSimulateImpact(type,id){
+ const seen=new Set(),out=[];
+ const stack=[{type,id}];
+ while(stack.length){
+  const n=stack.pop();
+  const key=depNodeKey(n.type,n.id);
+  if(seen.has(key))continue;
+  seen.add(key);
+  out.push(key);
+  const dependents=systemGraphDirect(n.type,n.id,'dependents');
+  for(let i=0;i<dependents.length;i++)stack.push({type:dependents[i].type,id:dependents[i].id});
+ }
+ return out;
+}
+function depSimBannerHtml(){
+ const s=dependencyExplorerState;
+ if(!s.simKeys||!s.simRoot)return '';
+ const n=s.simKeys.length;
+ const label=systemGraphNodeLabel(s.simRoot.type,s.simRoot.id);
+ return '<div class="ontology-sim-banner"><span><strong>Preview only — no changes applied.</strong> '+n+' component'+(n===1?'':'s')+' would be affected by '+s.simChange+' of '+label+'.</span><button type="button" class="btn btn-secondary" id="depSimOpenAdmin">Open in its admin screen</button><button type="button" class="btn btn-secondary" id="depSimClear">Clear simulation</button></div>';
+}
+// Toolbar wiring ---------------------------------------------------------------
+function depWireToolbar(body){
+ const zi=document.getElementById('depZoomIn');if(zi)zi.onclick=()=>depZoomStep(1);
+ const zo=document.getElementById('depZoomOut');if(zo)zo.onclick=()=>depZoomStep(-1);
+ const fit=document.getElementById('depFit');if(fit)fit.onclick=()=>depResetZoomPan();
+ const rv=document.getElementById('depResetView');
+ if(rv)rv.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};renderAdminTab()};
+ depWirePanZoom();
+ depWireSearch('depSearch','depSearchResults',(t,i)=>depSelectSearchNode(t,i));
+ const pt=document.getElementById('depPathToggle');
+ if(pt)pt.onclick=()=>{const s=dependencyExplorerState;dependencyExplorerState={...s,pathMode:!s.pathMode,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false};renderAdminTab()};
+ depWireSearch('depPathFrom','depPathFromResults',(t,i)=>depPathEndpointPick('from',t,i));
+ depWireSearch('depPathTo','depPathToResults',(t,i)=>depPathEndpointPick('to',t,i));
+ body.querySelectorAll('#depClearPath,#depClearPathBtn').forEach(b=>b.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false};renderAdminTab()});
+ const simToggle=document.getElementById('depSimToggle');
+ const simPicker=document.getElementById('depSimPicker');
+ if(simToggle)simToggle.onclick=()=>{if(simPicker)simPicker.hidden=!simPicker.hidden};
+ const simRun=document.getElementById('depSimRun');
+ if(simRun)simRun.onclick=()=>{
+  const s=dependencyExplorerState;
+  if(!s.inspectType||!s.inspectId){toast('Select a node first');return}
+  const chg=document.getElementById('depSimChange').value;
+  dependencyExplorerState={...s,simKeys:depSimulateImpact(s.inspectType,s.inspectId),simChange:chg,simRoot:{type:s.inspectType,id:s.inspectId}};
+  renderAdminTab();
+ };
+ const simClear=document.getElementById('depSimClear');
+ if(simClear)simClear.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,simKeys:null,simChange:null,simRoot:null};renderAdminTab()};
+ const simOpen=document.getElementById('depSimOpenAdmin');
+ if(simOpen)simOpen.onclick=()=>{const s=dependencyExplorerState;if(s.simRoot){adminTab=NODE_TYPE_ADMIN_TAB[s.simRoot.type];adminView='tool';renderView()}};
+ const copyBtn=document.getElementById('depCopyLink');
+ if(copyBtn)copyBtn.onclick=()=>{
+  depWriteShareHash();
+  const done=()=>toast('Link copied');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(location.href).then(done,()=>toast('Copy failed'));
+  else toast('Copy not available');
+ };
+ const btn360=document.getElementById('depOpen360');
+ if(btn360)btn360.onclick=()=>{if(typeof openObject360ForEntity==='function')openObject360ForEntity(dependencyExplorerState.inspectId);else toast('Object 360 is not available here')};
 }
 function depExpandableCount(model,type,id){
  const inModel=new Set(model.nodes.map(n=>n.key));
@@ -4384,7 +4903,11 @@ function depExpandAround(){
 
 
 function dependencyExplorerTab(body){
+ depApplyShareHashIfNeeded();
  const nodes=systemGraphNodes();
+ // PR3-A: normalize power-tool view state on every render - fresh resets
+ // (which omit these keys) fall back to defaults, re-renders persist them.
+ dependencyExplorerState={zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null,...dependencyExplorerState};
  const types=Object.keys(SYSTEM_NODE_TYPE_LABELS);
  if(!dependencyExplorerState.id){
   const first=nodes.find(n=>n.type===dependencyExplorerState.type)||nodes[0];
@@ -4404,7 +4927,9 @@ function dependencyExplorerTab(body){
   depModel.nodes.forEach(n=>{depCounts[n.type]=(depCounts[n.type]||0)+1});
   const depW=Math.max(880,Math.min(1500,Math.round(560+depModel.nodes.length*5)));
   const depH=Math.max(600,Math.min(940,Math.round(440+depModel.nodes.length*3.2)));
-  graphHtml=`<div class="ontology-graph-layout"><div class="ontology-graph-wrap" style="flex:1;min-width:0"><div class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px">${depRenderGraph(depModel,depW,depH)}</div></div>${depDetailPanelHtml(depModel)}</div>`;
+  depLastCanvasW=depW;depLastCanvasH=depH;
+  const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
+  graphHtml=`<div class="ontology-graph-layout"><div style="flex:1;min-width:0">${depSimBannerHtml()}<div class="ontology-toolbar"><span class="ontology-toolbar-group"><button type="button" class="btn btn-secondary" id="depZoomIn" title="Zoom in">+</button><button type="button" class="btn btn-secondary" id="depZoomOut" title="Zoom out">−</button><button type="button" class="btn btn-secondary" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-secondary" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></span><span class="ontology-search-wrap"><input type="search" id="depSearch" class="ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></span><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'}" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button><button type="button" class="btn btn-secondary" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button></div>${depPathBarHtml()}<div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div>${depDetailPanelHtml(depModel)}</div>`;
  }
 
 
@@ -4429,13 +4954,16 @@ function dependencyExplorerTab(body){
  $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,inspectType:dependencyExplorerState.type,inspectId:e.target.value,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
  $('#depDepth')&&($('#depDepth').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,depth:e.target.value};renderAdminTab()});
  body.querySelectorAll('[data-dep-toggle]').forEach(b=>b.onclick=()=>{const k=b.dataset.depToggle;dependencyExplorerState={...dependencyExplorerState,[k]:!dependencyExplorerState[k]};renderAdminTab()});
- body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depInspect.split(':');dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
+ body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depInspect.split(':');if(dependencyExplorerState.pathMode){depPathPick(type,id);return}dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
  body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,depth:dependencyExplorerState.depth||'2',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
  body.querySelectorAll('[data-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.legendToggle;if(depExplorerHiddenTypes.has(t))depExplorerHiddenTypes.delete(t);else depExplorerHiddenTypes.add(t);renderAdminTab()});
  body.querySelectorAll('[data-dep-collapse]').forEach(b=>b.onclick=()=>{const t=b.dataset.depCollapse;const c={...(dependencyExplorerState.collapsed||{})};if(c[t])delete c[t];else c[t]=true;dependencyExplorerState={...dependencyExplorerState,collapsed:c};renderAdminTab()});
  const expandBtn=$('#depExpand'); if(expandBtn)expandBtn.onclick=()=>depExpandAround();
  const recenterBtn=$('#depRecenter'); if(recenterBtn)recenterBtn.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,type:dependencyExplorerState.inspectType,id:dependencyExplorerState.inspectId,inspectType:dependencyExplorerState.inspectType,inspectId:dependencyExplorerState.inspectId,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()};
  const openBtn=$('#depOpenAdmin'); if(openBtn)openBtn.onclick=()=>{adminTab=NODE_TYPE_ADMIN_TAB[dependencyExplorerState.inspectType];adminView='tool';renderView()};
+ // PR3-A power tools: wire toolbar (zoom/pan, search, path, simulation, share link).
+ depWireToolbar(body);
+ if(dependencyExplorerState.id)depWriteShareHash();
 }
 function adminRecentNavHtml(){
  const hist=(data.adminNavHistory||[]).slice().sort((a,b)=>b.lastViewedAt.localeCompare(a.lastViewedAt));

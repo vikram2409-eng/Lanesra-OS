@@ -1133,3 +1133,41 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 .ontology-detail-section{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .ontology-detail-section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
 .ontology-dir-arrow{display:inline-block;width:14px;color:var(--muted);font-weight:700}
+/* PR3-A power tools */
+.ontology-graph-viewport{position:relative;overflow:hidden;max-height:600px;border:1px solid var(--line);border-radius:10px;background-color:#faf6ee;background-image:radial-gradient(#ece0c4 1.5px,transparent 1.5px);background-size:24px 24px;cursor:grab}
+.ontology-graph-viewport:active{cursor:grabbing}
+.ontology-graph-canvas{will-change:transform}
+.ontology-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.ontology-toolbar-group{display:inline-flex;gap:4px}
+.ontology-search-wrap{position:relative;display:inline-block}
+.ontology-search-input{padding:6px 10px;border:1px solid var(--line);border-radius:8px;min-width:220px;font-size:13px;background:#fff}
+.ontology-search-results{position:absolute;top:calc(100% + 4px);left:0;z-index:60;min-width:280px;max-width:360px;max-height:320px;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px}
+.ontology-search-hit{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:8px;cursor:pointer;font-size:13px;color:inherit}
+.ontology-search-hit:hover{background:#f4f2ff}
+.ontology-sim-banner{margin:0 0 10px;padding:10px 12px;border:1px solid #f5c86b;background:#fff7e6;border-radius:10px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ontology-path-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;background:#fbfbff}
+.ontology-path-chain{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.ontology-path-hop{font-size:12px;background:#f6f4ff;border-radius:6px;padding:4px 8px}
+/* PR3-B object 360 */
+/* Highlight rings for the shared graph renderer (graphRender highlight contract) */
+.ontology-node-path{box-shadow:0 0 0 2px #fff,0 0 0 4px #4f46e5}
+.ontology-node-sim{box-shadow:0 0 0 2px #fff,0 0 0 4px #dc2626}
+.ontology-node-sim-added{box-shadow:0 0 0 2px #fff,0 0 0 4px #16a34a}
+.ontology-node-sim-removed{box-shadow:0 0 0 2px #fff,0 0 0 4px #6b7280}
+/* Object 360 toolbar: legend + depth selector */
+.o360-toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0}
+.o360-depth{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#374151}
+.o360-depth select{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff}
+/* Pivot breadcrumb under the intro line */
+.o360-breadcrumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;margin:8px 0 0}
+.o360-crumb{background:none;border:0;color:#4338ca;font-weight:700;cursor:pointer;padding:2px 4px;border-radius:6px;font-size:12.5px}
+.o360-crumb:hover{text-decoration:underline}
+.o360-crumb-sep{color:var(--muted)}
+.o360-crumb-current{font-weight:800;color:var(--text)}
+/* Rule pass/fail, workflow state, and agent access chips */
+.o360-chip{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700;white-space:nowrap;margin:1px 2px}
+.o360-chip-pass{background:#dcfce7;color:#15803d}
+.o360-chip-fail{background:#fee2e2;color:#b91c1c}
+.o360-chip-neutral{background:#eef2ff;color:#4338ca}
+/* Honesty note under the Workflows group: no run history exists in the demo */
+.o360-trigger-note{font-size:11px;color:var(--muted);margin:2px 0 8px}
