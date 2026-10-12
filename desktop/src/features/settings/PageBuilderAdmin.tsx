@@ -147,6 +147,7 @@ export function PageBuilderAdmin() {
   const [entityType, setEntityType] = useState<string>("Company");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const customObjects = useQuery({ queryKey: ["customObjects", "active"], queryFn: () => api.listCustomObjects(true) });
@@ -179,7 +180,7 @@ export function PageBuilderAdmin() {
   }
 
   const list = layouts.data ?? [];
-  const selected = list.find((l) => l.id === selectedId) ?? list.find((l) => l.is_default) ?? list[0] ?? null;
+  const selected = list.find((l) => l.id === selectedId) ?? null;
 
   const create = useMutation({
     mutationFn: (name: string) => api.createPageLayout({ entity_type: entityType, name }),
@@ -190,10 +191,36 @@ export function PageBuilderAdmin() {
     },
   });
 
+  // Same two-step compose as ScreenLayoutsAdmin's own duplicate - bootstrap
+  // an empty page, then overwrite its draft with the original's (no
+  // backend change needed; create_page_layout already accepts no initial
+  // content, and update_page_layout already accepts a full draft). Roles
+  // are left blank on the copy, same reasoning as the screen-layout one.
+  const duplicate = useMutation({
+    mutationFn: async (original: PageLayout) => {
+      const created = await api.createPageLayout({ entity_type: entityType, name: `Copy of ${original.name}` });
+      return api.updatePageLayout(created.id, { name: created.name, roles: [], draft: original.draft });
+    },
+    onSuccess: (copy) => {
+      invalidate();
+      setSelectedId(copy.id);
+    },
+    onError: (err) => setListError(err instanceof ApiError ? err.message : "Could not duplicate this page"),
+  });
+
   return (
     <div className="card">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Page Builder</h3>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setCreating((v) => !v);
+            setSelectedId(null);
+          }}
+        >
+          {creating ? "Cancel" : "+ New page"}
+        </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         Compose a record detail page from a 12-column grid of Layout, Record, Data, Actions, Content, Navigation and
@@ -218,28 +245,7 @@ export function PageBuilderAdmin() {
         ))}
       </div>
 
-      {layouts.isLoading && <p>Loading...</p>}
-
-      {list.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "12px 0" }}>
-          {list.map((l) => (
-            <button
-              key={l.id}
-              className={`tab${selected?.id === l.id ? " active" : ""}`}
-              onClick={() => {
-                setSelectedId(l.id);
-                setCreating(false);
-              }}
-            >
-              {l.name}
-              {l.is_default ? " · Default" : ""}
-            </button>
-          ))}
-          <button className="btn" onClick={() => setCreating((v) => !v)}>
-            + New page
-          </button>
-        </div>
-      )}
+      {listError && <div className="error-banner">{listError}</div>}
 
       {creating && (
         <NewPageForm
@@ -248,6 +254,51 @@ export function PageBuilderAdmin() {
           error={create.error instanceof ApiError ? create.error.message : null}
           pending={create.isPending}
         />
+      )}
+
+      {layouts.isLoading && !creating && <p>Loading...</p>}
+      {list.length === 0 && !layouts.isLoading && !creating && <p className="empty-state">No pages yet for this object.</p>}
+
+      {!creating && !selected && list.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Roles</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((l) => {
+              const hasPublished = l.published !== null;
+              const draftMatchesPublished = hasPublished && JSON.stringify(l.draft) === JSON.stringify(l.published);
+              return (
+                <tr key={l.id}>
+                  <td>
+                    {l.name}
+                    {l.is_default && <span className="badge badge-success" style={{ marginLeft: 6 }}>Default</span>}
+                  </td>
+                  <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{l.roles.length ? l.roles.join(", ") : "—"}</td>
+                  <td>
+                    <span className={`badge${hasPublished ? " badge-success" : ""}`}>{hasPublished ? "Published" : "Draft only"}</span>
+                    {hasPublished && !draftMatchesPublished && <span className="badge badge-warning" style={{ marginLeft: 4 }}>Unpublished changes</span>}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="btn" onClick={() => setSelectedId(l.id)}>
+                        Edit
+                      </button>
+                      <button className="btn" onClick={() => duplicate.mutate(l)} disabled={duplicate.isPending} title="Duplicate as a new, unpublished page">
+                        Duplicate
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
       {selected && !creating && (
@@ -263,6 +314,7 @@ export function PageBuilderAdmin() {
             invalidate();
             setSelectedId(null);
           }}
+          onBack={() => setSelectedId(null)}
         />
       )}
     </div>
@@ -431,6 +483,7 @@ function PageBuilderEditor({
   layoutCount,
   onChanged,
   onDeleted,
+  onBack,
 }: {
   layout: PageLayout;
   fields: { key: string; label: string }[];
@@ -439,6 +492,7 @@ function PageBuilderEditor({
   layoutCount: number;
   onChanged: () => void;
   onDeleted: () => void;
+  onBack: () => void;
 }) {
   const [name, setName] = useState(layout.name);
   const [roles, setRoles] = useState<string[]>(layout.roles);
@@ -575,6 +629,9 @@ function PageBuilderEditor({
 
   return (
     <div>
+      <button type="button" className="link-button" onClick={onBack} style={{ marginBottom: 8 }}>
+        ← Back to pages
+      </button>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <input value={name} onChange={(e) => setName(e.target.value)} onBlur={() => save(page, name, roles)} style={{ flex: "1 1 220px" }} />
         <span className={`badge${layout.is_default ? " badge-success" : ""}`}>{layout.is_default ? "Default page" : "Not default"}</span>

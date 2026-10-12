@@ -6042,6 +6042,14 @@ const SECTION_COLUMN_CHOICES=[1,2,3];
 let layoutsEntityKey=null;
 let layoutsSelectedLayoutId=null;
 let layoutsActiveTabIdx=0;
+// UX/UI Modernization: 'list' (a real table of every layout, with distinct
+// per-row Edit/Duplicate) vs 'edit' (the tab/section builder for one
+// layout) - previously the builder was always shown, auto-selecting the
+// Default the moment any layout existed, so there was never an actual
+// "pick one" list and "+ New layout" sat in the same flat pill-row as the
+// layouts themselves with no visual distinction. Mirrors the desktop
+// edition's identical ScreenLayoutsAdmin.tsx fix.
+let layoutsView='list';
 let dashboardsSelectedId=null;
 function allFieldsFor(entityKey){return fieldsFor(entityKey,fieldsFnFor(entityKey))}
 // Screen/App Builder Phase 2: a section field is `{key,full}` - `full`
@@ -6352,18 +6360,38 @@ function layoutsTab(body){
  if(!layoutsEntityKey||!keys.includes(layoutsEntityKey))layoutsEntityKey=keys[0];
  const entityKey=layoutsEntityKey;
  const layouts=ensureLayouts(entityKey);
- if(!layoutsSelectedLayoutId||!layouts.some(l=>l.id===layoutsSelectedLayoutId))layoutsSelectedLayoutId=defaultLayoutFor(entityKey).id;
+ if(layoutsView==='edit'&&(!layoutsSelectedLayoutId||!layouts.some(l=>l.id===layoutsSelectedLayoutId))){
+  layoutsSelectedLayoutId=defaultLayoutFor(entityKey).id;
+ }
+ const headHtml=`<div class="panel-head"><h3>Screen layouts</h3><div style="display:flex;gap:8px;align-items:center"><select id="layoutsEntitySelect">${keys.map(k=>`<option value="${k}" ${k===entityKey?'selected':''}>${entityLabel(k)}</option>`).join('')}</select><button class="btn btn-primary" id="addLayout" type="button">+ New layout</button></div></div>
+ <p class="muted" style="font-size:13px">Build multiple named layouts for ${entityLabel(entityKey)}'s create/edit form, each with its own tabs of drag-ordered field sections, and assign roles to each. There's no signed-in user in this browser demo, so the live form always uses the <b>Default</b> layout — role assignment here is illustrative, the same as Users & roles; the desktop edition resolves it against the real signed-in user.</p>`;
+
+ if(layoutsView!=='edit'){
+  body.innerHTML=`<div class="panel">${headHtml}
+  <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Roles</th><th>Status</th><th></th></tr></thead><tbody>${layouts.map(l=>{
+   const isPublished=!!l.publishedTabs;
+   const hasDraftChanges=isPublished&&JSON.stringify(l.draftTabs)!==JSON.stringify(l.publishedTabs);
+   return `<tr><td>${l.name}${l.isDefault?' <span class="badge">Default</span>':''}</td><td class="muted" style="font-size:12px">${l.roles.length?l.roles.join(', '):'—'}</td><td><span class="badge${isPublished?' badge-success':''}">${isPublished?'Published':'Draft only'}</span>${hasDraftChanges?' <span class="badge badge-warning">Unpublished changes</span>':''}</td><td><div class="actions"><button class="icon-btn" data-edit-layout="${l.id}">Edit</button><button class="icon-btn" data-dup-layout="${l.id}">Duplicate</button></div></td></tr>`;
+  }).join('')}</tbody></table>${layouts.length?'':'<div class="empty">No layouts yet</div>'}</div>
+  </div>`;
+  $('#layoutsEntitySelect').onchange=e=>{layoutsEntityKey=e.target.value;layoutsSelectedLayoutId=null;layoutsActiveTabIdx=0;layoutsTab(body)};
+  $('#addLayout').onclick=()=>{const name=prompt('New layout name?','New layout');if(!name)return;const l=freshLayout(entityKey,name.trim(),false);layouts.push(l);tagLocalComponent('screenLayout',l.id);save();layoutsSelectedLayoutId=l.id;layoutsActiveTabIdx=0;layoutsView='edit';layoutsTab(body)};
+  body.querySelectorAll('[data-edit-layout]').forEach(b=>b.onclick=()=>{layoutsSelectedLayoutId=b.dataset.editLayout;layoutsActiveTabIdx=0;layoutsView='edit';layoutsTab(body)});
+  body.querySelectorAll('[data-dup-layout]').forEach(b=>b.onclick=()=>{
+   const original=layouts.find(l=>l.id===b.dataset.dupLayout); if(!original)return;
+   const copy={id:uid(),name:`Copy of ${original.name}`,isDefault:false,roles:[],draftTabs:structuredClone(original.draftTabs),publishedTabs:null,updatedAt:null};
+   layouts.push(copy);tagLocalComponent('screenLayout',copy.id);save();
+   layoutsSelectedLayoutId=copy.id;layoutsActiveTabIdx=0;layoutsView='edit';layoutsTab(body);
+  });
+  return;
+ }
+
  const layout=layoutById(entityKey,layoutsSelectedLayoutId);
  if(layoutsActiveTabIdx>=layout.draftTabs.length)layoutsActiveTabIdx=0;
  const isPublished=!!layout.publishedTabs;
  const hasDraftChanges=JSON.stringify(layout.draftTabs)!==JSON.stringify(layout.publishedTabs);
  body.innerHTML=`<div class="panel">
- <div class="panel-head"><h3>Screen layouts</h3><select id="layoutsEntitySelect">${keys.map(k=>`<option value="${k}" ${k===entityKey?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
- <p class="muted" style="font-size:13px">Build multiple named layouts for ${entityLabel(entityKey)}'s create/edit form, each with its own tabs of drag-ordered field sections, and assign roles to each. There's no signed-in user in this browser demo, so the live form always uses the <b>Default</b> layout — role assignment here is illustrative, the same as Users & roles; the desktop edition resolves it against the real signed-in user.</p>
- <div class="panel-head" style="margin-top:4px">
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${layouts.map(l=>`<button type="button" class="tab ${l.id===layout.id?'active':''}" data-select-layout="${l.id}">${l.name}${l.isDefault?' · Default':''}</button>`).join('')}</div>
-  <button class="btn btn-secondary" id="addLayout" type="button">+ New layout</button>
- </div>
+ <button type="button" class="link-btn" id="layoutBackToList" style="margin-bottom:8px">← Back to layouts</button>
  <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
   <div class="field" style="margin:0"><label>Layout name</label><input id="layoutName" value="${layout.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
   <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${demoLayoutRoles().map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-layout-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
@@ -6383,9 +6411,7 @@ function layoutsTab(body){
   ${isPublished?'<button class="btn btn-secondary" id="unpublishLayout" type="button">Unpublish</button>':''}
  </div>
  </div>`;
- $('#layoutsEntitySelect').onchange=e=>{layoutsEntityKey=e.target.value;layoutsSelectedLayoutId=null;layoutsActiveTabIdx=0;layoutsTab(body)};
- body.querySelectorAll('[data-select-layout]').forEach(b=>b.onclick=()=>{layoutsSelectedLayoutId=b.dataset.selectLayout;layoutsActiveTabIdx=0;layoutsTab(body)});
- $('#addLayout').onclick=()=>{const name=prompt('New layout name?','New layout');if(!name)return;const l=freshLayout(entityKey,name.trim(),false);layouts.push(l);tagLocalComponent('screenLayout',l.id);save();layoutsSelectedLayoutId=l.id;layoutsActiveTabIdx=0;layoutsTab(body)};
+ $('#layoutBackToList').onclick=()=>{layoutsView='list';layoutsTab(body)};
  // setTimeout defers the re-render past this same change event's own
  // dispatch/blur handling - re-rendering (tearing down #layoutName) while
  // the browser is still processing the event that fired on it throws
@@ -6401,7 +6427,7 @@ function layoutsTab(body){
   if(layouts.length<=1||layout.isDefault)return;
   if(!confirm(`Delete the "${layout.name}" layout? This can't be undone.`))return;
   data.uiLayouts[entityKey]=layouts.filter(l=>l.id!==layout.id);
-  save();layoutsSelectedLayoutId=null;layoutsActiveTabIdx=0;toast('Layout deleted');layoutsTab(body);
+  save();layoutsSelectedLayoutId=null;layoutsActiveTabIdx=0;layoutsView='list';toast('Layout deleted');layoutsTab(body);
  };
  body.querySelectorAll('[data-select-tab]').forEach(b=>b.onclick=()=>{layoutsActiveTabIdx=Number(b.dataset.selectTab);layoutsTab(body)});
  $('#addTab').onclick=()=>{layout.draftTabs.push(freshTabEmpty());save();layoutsActiveTabIdx=layout.draftTabs.length-1;layoutsTab(body)};
@@ -6667,6 +6693,8 @@ function insertPageNode(root,parentId,index,node){
 let pbEntityKey=null;
 let pbSelectedLayoutId=null;
 let pbSelectedNodeId=null;
+// Same 'list'/'edit' split as layoutsView above, for the same reason.
+let pbView='list';
 let pbPreviewPreset='w1440';
 let pbCustomWidth=null;
 let pbDrag=null; // {kind:'new',componentType} | {kind:'move',nodeId}
@@ -6735,17 +6763,40 @@ function pageBuilderTab(body){
  if(!pbEntityKey||!keys.includes(pbEntityKey))pbEntityKey=keys[0];
  const entityKey=pbEntityKey;
  const layouts=ensurePageLayouts(entityKey);
+ const headHtml=`<div class="panel-head"><h3>Page Builder</h3><div style="display:flex;gap:8px;align-items:center"><select id="pbEntitySelect">${keys.map(k=>`<option value="${k}" ${k===entityKey?'selected':''}>${entityLabel(k)}</option>`).join('')}</select><button class="btn btn-primary" id="pbAddLayout" type="button">+ New page</button></div></div>
+ <p class="muted" style="font-size:13px">Compose a record detail page from a 12-column grid of Layout, Record, Data, Actions, Content, Navigation and Utility components — drag from the palette, nest inside a Section/Grid/Columns/Tabs/Sticky Panel/Field Group container, and resize with the column-span steppers. This is a separate system from Screen layouts above (which still only builds the create/edit form). Publishing a page here now takes over that object's own Overview tab — open any record of this type to see it live.</p>`;
+
+ if(pbView!=='edit'){
+  body.innerHTML=`<div class="panel">${headHtml}
+  <div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Roles</th><th>Status</th><th></th></tr></thead><tbody>${layouts.map(l=>{
+   const hasPublished=!!l.published;
+   const draftPublishedMatch=hasPublished&&JSON.stringify(l.published)===JSON.stringify(l.draft);
+   return `<tr><td>${l.name}${l.isDefault?' <span class="badge">Default</span>':''}</td><td class="muted" style="font-size:12px">${l.roles.length?l.roles.join(', '):'—'}</td><td><span class="badge${hasPublished?' badge-success':''}">${hasPublished?'Published':'Draft only'}</span>${hasPublished&&!draftPublishedMatch?' <span class="badge badge-warning">Unpublished changes</span>':''}</td><td><div class="actions"><button class="icon-btn" data-pb-edit-layout="${l.id}">Edit</button><button class="icon-btn" data-pb-dup-layout="${l.id}">Duplicate</button></div></td></tr>`;
+  }).join('')}</tbody></table>${layouts.length?'':'<div class="empty">No pages yet</div>'}</div>
+  </div>`;
+  $('#pbEntitySelect').onchange=e=>{pbEntityKey=e.target.value;pbSelectedLayoutId=null;pbSelectedNodeId=null;pageBuilderTab(body)};
+  $('#pbAddLayout').onclick=()=>{
+   const name=prompt('New page name?','New page');if(!name)return;
+   const l=freshPageLayout(name.trim(),false);
+   layouts.push(l);tagLocalComponent('pageLayout',l.id);save();
+   pbSelectedLayoutId=l.id;pbSelectedNodeId=null;pbView='edit';pageBuilderTab(body);
+  };
+  body.querySelectorAll('[data-pb-edit-layout]').forEach(b=>b.onclick=()=>{pbSelectedLayoutId=b.dataset.pbEditLayout;pbSelectedNodeId=null;pbView='edit';pageBuilderTab(body)});
+  body.querySelectorAll('[data-pb-dup-layout]').forEach(b=>b.onclick=()=>{
+   const original=layouts.find(l=>l.id===b.dataset.pbDupLayout); if(!original)return;
+   const copy={id:uid(),name:`Copy of ${original.name}`,isDefault:false,roles:[],draft:structuredClone(original.draft),published:null,updatedAt:null};
+   layouts.push(copy);tagLocalComponent('pageLayout',copy.id);save();
+   pbSelectedLayoutId=copy.id;pbSelectedNodeId=null;pbView='edit';pageBuilderTab(body);
+  });
+  return;
+ }
+
  if(!pbSelectedLayoutId||!layouts.some(l=>l.id===pbSelectedLayoutId))pbSelectedLayoutId=defaultPageLayoutFor(entityKey).id;
  const layout=pageLayoutById(entityKey,pbSelectedLayoutId);
  const hasPublished=!!layout.published;
  const draftPublishedMatch=hasPublished&&JSON.stringify(layout.published)===JSON.stringify(layout.draft);
  body.innerHTML=`<div class="panel">
- <div class="panel-head"><h3>Page Builder</h3><select id="pbEntitySelect">${keys.map(k=>`<option value="${k}" ${k===entityKey?'selected':''}>${entityLabel(k)}</option>`).join('')}</select></div>
- <p class="muted" style="font-size:13px">Compose a record detail page from a 12-column grid of Layout, Record, Data, Actions, Content, Navigation and Utility components — drag from the palette, nest inside a Section/Grid/Columns/Tabs/Sticky Panel/Field Group container, and resize with the column-span steppers. This is a separate system from Screen layouts above (which still only builds the create/edit form). Publishing a page here now takes over that object's own Overview tab — open any record of this type to see it live.</p>
- <div class="panel-head" style="margin-top:4px">
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${layouts.map(l=>`<button type="button" class="tab ${l.id===layout.id?'active':''}" data-pb-select-layout="${l.id}">${l.name}${l.isDefault?' · Default':''}</button>`).join('')}</div>
-  <button class="btn btn-secondary" id="pbAddLayout" type="button">+ New page</button>
- </div>
+ <button type="button" class="link-btn" id="pbBackToList" style="margin-bottom:8px">← Back to pages</button>
  <div class="layout-meta" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:12px 0">
   <div class="field" style="margin:0"><label>Page name</label><input id="pbName" value="${layout.name}" style="border:1px solid var(--line);border-radius:8px;padding:6px 9px"></div>
   <div class="field" style="margin:0"><label>Visible to roles</label><div style="display:flex;gap:10px;flex-wrap:wrap;padding-top:6px">${demoLayoutRoles().map(r=>`<label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" data-pb-role="${r}" ${layout.roles.includes(r)?'checked':''}> ${r}</label>`).join('')}</div></div>
@@ -6771,14 +6822,7 @@ function pageBuilderTab(body){
   ${hasPublished&&!draftPublishedMatch?'<button class="btn btn-secondary" id="pbRevert" type="button">Revert draft to published</button>':''}
  </div>
  </div>`;
- $('#pbEntitySelect').onchange=e=>{pbEntityKey=e.target.value;pbSelectedLayoutId=null;pbSelectedNodeId=null;pageBuilderTab(body)};
- body.querySelectorAll('[data-pb-select-layout]').forEach(b=>b.onclick=()=>{pbSelectedLayoutId=b.dataset.pbSelectLayout;pbSelectedNodeId=null;pageBuilderTab(body)});
- $('#pbAddLayout').onclick=()=>{
-  const name=prompt('New page name?','New page');if(!name)return;
-  const l=freshPageLayout(name.trim(),false);
-  layouts.push(l);tagLocalComponent('pageLayout',l.id);save();
-  pbSelectedLayoutId=l.id;pbSelectedNodeId=null;pageBuilderTab(body);
- };
+ $('#pbBackToList').onclick=()=>{pbView='list';pageBuilderTab(body)};
  // Same deferred-re-render reasoning as #layoutName in layoutsTab above -
  // re-rendering while this change event is still being dispatched throws
  // "node is no longer a child of this node".
@@ -6793,7 +6837,7 @@ function pageBuilderTab(body){
   if(layouts.length<=1||layout.isDefault)return;
   if(!confirm(`Delete page "${layout.name}"? This can't be undone.`))return;
   data.pageLayouts[entityKey]=layouts.filter(l=>l.id!==layout.id);
-  save();pbSelectedLayoutId=null;pbSelectedNodeId=null;toast('Page deleted');pageBuilderTab(body);
+  save();pbSelectedLayoutId=null;pbSelectedNodeId=null;pbView='list';toast('Page deleted');pageBuilderTab(body);
  };
  $('#pbPublish').onclick=()=>{layout.published=structuredClone(layout.draft);layout.updatedAt=new Date().toISOString();save();toast('Page published');pageBuilderTab(body)};
  const unpub=$('#pbUnpublish'); if(unpub)unpub.onclick=()=>{if(!confirm("Unpublish this page? Any role assigned to it falls back to the Default page until you publish again."))return;layout.published=null;save();toast('Page unpublished');pageBuilderTab(body)};

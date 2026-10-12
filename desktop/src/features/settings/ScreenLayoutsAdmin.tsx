@@ -56,6 +56,7 @@ export function ScreenLayoutsAdmin() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Same entity-tab set as Custom fields: the 9 built-in entities plus
@@ -93,13 +94,41 @@ export function ScreenLayoutsAdmin() {
   }
 
   const list = layouts.data ?? [];
-  const selected = list.find((l) => l.id === selectedId) ?? list.find((l) => l.is_default) ?? list[0] ?? null;
+  const selected = list.find((l) => l.id === selectedId) ?? null;
   const previewLayout = list.find((l) => l.id === previewId) ?? null;
+
+  // Exact copy of an existing layout's tabs/sections/fields, under a new
+  // name - the two-step compose create_layout/update_layout already
+  // support: bootstrap an empty layout (no backend change needed), then
+  // overwrite its draft with the original's. Roles are deliberately left
+  // blank on the copy (never inherited) so it can't silently start
+  // competing with the original for the same roles before an admin has
+  // looked at it.
+  const duplicate = useMutation({
+    mutationFn: async (original: ScreenLayout) => {
+      const created = await api.createScreenLayout({ entity_type: entityType, name: `Copy of ${original.name}`, initial_fields: [] });
+      return api.updateScreenLayout(created.id, { name: created.name, roles: [], draft: original.draft });
+    },
+    onSuccess: (copy) => {
+      invalidate();
+      setSelectedId(copy.id);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not duplicate this layout"),
+  });
 
   return (
     <div className="card">
       <div className="toolbar">
         <h3 style={{ margin: 0 }}>Screen layouts</h3>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setCreating((v) => !v);
+            setSelectedId(null);
+          }}
+        >
+          {creating ? "Cancel" : "+ New layout"}
+        </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         Design the create/edit form for any object - tabs of field sections, assigned to roles. Anyone whose roles
@@ -122,28 +151,7 @@ export function ScreenLayoutsAdmin() {
         ))}
       </div>
 
-      {layouts.isLoading && <p>Loading...</p>}
-
-      {list.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "12px 0" }}>
-          {list.map((l) => (
-            <button
-              key={l.id}
-              className={`tab${selected?.id === l.id ? " active" : ""}`}
-              onClick={() => {
-                setSelectedId(l.id);
-                setCreating(false);
-              }}
-            >
-              {l.name}
-              {l.is_default ? " · Default" : ""}
-            </button>
-          ))}
-          <button className="btn" onClick={() => setCreating((v) => !v)}>
-            + New layout
-          </button>
-        </div>
-      )}
+      {error && <div className="error-banner">{error}</div>}
 
       {creating && (
         <NewLayoutForm
@@ -156,6 +164,51 @@ export function ScreenLayoutsAdmin() {
           }}
           onCancel={() => setCreating(false)}
         />
+      )}
+
+      {layouts.isLoading && !creating && <p>Loading...</p>}
+      {list.length === 0 && !layouts.isLoading && !creating && <p className="empty-state">No layouts yet for this object.</p>}
+
+      {!creating && !selected && list.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Roles</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((l) => {
+              const hasPublished = l.published !== null;
+              const draftMatchesPublished = hasPublished && JSON.stringify(l.draft) === JSON.stringify(l.published);
+              return (
+                <tr key={l.id}>
+                  <td>
+                    {l.name}
+                    {l.is_default && <span className="badge badge-success" style={{ marginLeft: 6 }}>Default</span>}
+                  </td>
+                  <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{l.roles.length ? l.roles.join(", ") : "—"}</td>
+                  <td>
+                    <span className={`badge${hasPublished ? " badge-success" : ""}`}>{hasPublished ? "Published" : "Draft only"}</span>
+                    {hasPublished && !draftMatchesPublished && <span className="badge badge-warning" style={{ marginLeft: 4 }}>Unpublished changes</span>}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="btn" onClick={() => setSelectedId(l.id)}>
+                        Edit
+                      </button>
+                      <button className="btn" onClick={() => duplicate.mutate(l)} disabled={duplicate.isPending} title="Duplicate as a new, unpublished layout">
+                        Duplicate
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
       {selected && !creating && (
@@ -172,6 +225,7 @@ export function ScreenLayoutsAdmin() {
             setSelectedId(null);
           }}
           onPreview={() => setPreviewId(selected.id)}
+          onBack={() => setSelectedId(null)}
         />
       )}
 
@@ -238,6 +292,7 @@ function LayoutEditor({
   onChanged,
   onDeleted,
   onPreview,
+  onBack,
 }: {
   layout: ScreenLayout;
   fields: { key: string; label: string }[];
@@ -247,6 +302,7 @@ function LayoutEditor({
   onChanged: () => void;
   onDeleted: () => void;
   onPreview: () => void;
+  onBack: () => void;
 }) {
   const [name, setName] = useState(layout.name);
   const [roles, setRoles] = useState<string[]>(layout.roles);
@@ -444,6 +500,9 @@ function LayoutEditor({
 
   return (
     <div>
+      <button type="button" className="link-button" onClick={onBack} style={{ marginBottom: 8 }}>
+        ← Back to layouts
+      </button>
       {error && <div className="error-banner">{error}</div>}
 
       <div className="card" style={{ background: "var(--surface-2, transparent)", marginBottom: 16 }}>
