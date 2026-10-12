@@ -4256,7 +4256,8 @@ export type SystemNodeType =
   | "execution_graph"
   | "business_glossary_term"
   | "metric_definition"
-  | "test_case_definition";
+  | "test_case_definition"
+  | "action_type_definition";
 
 export type SystemEdgeType =
   | "uses"

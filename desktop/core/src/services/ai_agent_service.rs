@@ -122,12 +122,33 @@ fn validate_object_type_scopes(conn: &Connection, workspace_id: &str, scopes: &[
 /// `delegate_agent_ids` - the one already-reliable cross-agent reference
 /// this v1 slice syncs (tool/skill/model-routing references are a
 /// documented future gap, not modeled yet).
+///
+/// Ontology Layer epic, issue #344: an agent's own Ontology scope is now
+/// synced too - a `depends_on` edge per `object_type_scopes` entry (to
+/// the `custom_object` it may touch) and an `invokes` edge per
+/// `action_type_ids` entry (to the `action_type_definition` it may
+/// call) - so "which agents can touch this object/invoke this Action"
+/// is traceable through the Dependency Explorer the same way every
+/// other component's dependencies already are. An unscoped agent
+/// (empty `object_type_scopes`) adds none of these - matching its own
+/// "applies to every object type" semantics, which isn't a single edge
+/// to point at.
 fn sync_graph_node(conn: &Connection, workspace_id: &str, agent: &AiAgentDefinition) -> AppResult<()> {
-    let edges: Vec<_> = agent
+    let mut edges: Vec<_> = agent
         .delegate_agent_ids
         .iter()
         .map(|target_id| crate::models::system_graph::SystemEdgeTarget { edge_type: "delegates_to".into(), to_node_type: "ai_agent".into(), to_component_id: target_id.clone() })
         .collect();
+    edges.extend(agent.object_type_scopes.iter().map(|scope| crate::models::system_graph::SystemEdgeTarget {
+        edge_type: "depends_on".into(),
+        to_node_type: "custom_object".into(),
+        to_component_id: scope.object_type.clone(),
+    }));
+    edges.extend(agent.action_type_ids.iter().map(|action_type_id| crate::models::system_graph::SystemEdgeTarget {
+        edge_type: "invokes".into(),
+        to_node_type: "action_type_definition".into(),
+        to_component_id: action_type_id.clone(),
+    }));
     super::system_graph_service::sync_node(conn, workspace_id, "ai_agent", &agent.id, &agent.name, "{}", &edges)
 }
 

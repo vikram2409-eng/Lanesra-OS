@@ -24,9 +24,10 @@ export const SYSTEM_NODE_TYPE_META: Record<SystemNodeType, { label: string; colo
   business_glossary_term: { label: "Glossary Term", colorIndex: 4 },
   metric_definition: { label: "Metric", colorIndex: 5 },
   test_case_definition: { label: "Test Case", colorIndex: 6 },
+  action_type_definition: { label: "Action Type", colorIndex: 1 },
 };
 
 export const SYSTEM_NODE_TYPES: SystemNodeType[] = [
   "custom_object", "custom_field", "relationship", "business_rule", "workflow", "screen_layout", "page_layout", "ai_agent", "execution_graph",
-  "business_glossary_term", "metric_definition", "test_case_definition",
+  "business_glossary_term", "metric_definition", "test_case_definition", "action_type_definition",
 ];

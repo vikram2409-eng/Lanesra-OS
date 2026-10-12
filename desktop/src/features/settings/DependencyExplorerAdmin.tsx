@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../../lib/api";
@@ -34,6 +34,11 @@ const NODE_TYPE_ADMIN_TAB: Record<SystemNodeType, string> = {
   business_glossary_term: "businessGlossary",
   metric_definition: "metricDefinitions",
   test_case_definition: "testEval",
+  // Action Types have no admin screen of their own - they live inside
+  // the Object Types screen (Admin -> Ontology -> Object Types -> Action
+  // Types), same place `ai_agent`'s own Ontology-scope cross-link
+  // already points an agent's scoped object types to.
+  action_type_definition: "objectTypes",
 };
 
 function TypeDot({ nodeType, size = 10 }: { nodeType: SystemNodeType; size?: number }) {
@@ -116,8 +121,33 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
   const [nodeType, setNodeType] = useState<SystemNodeType>(initialRoot?.nodeType ?? "custom_object");
   const [root, setRoot] = useState<RootRef | null>(initialRoot ?? null);
   const [inspecting, setInspecting] = useState<RootRef | null>(initialRoot ?? null);
-  const [transitiveMode, setTransitiveMode] = useState<"impact" | "lineage" | null>(null);
+  // Both default to true: the graph shows the combined multi-hop
+  // upstream+downstream cloud out of the box, with no click required.
+  // Turning one off narrows to a single-direction cloud (this screen's
+  // original "Full impact"/"Full lineage" behavior); turning both off
+  // falls back to the direct 1-hop view with real SVG edge lines, for
+  // when the admin wants that more focused, edge-labeled read instead.
+  const [showImpact, setShowImpact] = useState(true);
+  const [showLineage, setShowLineage] = useState(true);
   const [hiddenTypes, setHiddenTypes] = useState<Set<SystemNodeType>>(() => new Set());
+  const [cardOffset, setCardOffset] = useState<{ left: number; top: number } | null>(null);
+  const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; origLeft: number; origTop: number } | null>(null);
+
+  function startCardDrag(e: ReactPointerEvent<HTMLElement>) {
+    const card = (e.currentTarget as HTMLElement).closest(".ontology-inspector-card") as HTMLElement | null;
+    if (!card) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragStateRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origLeft: card.offsetLeft, origTop: card.offsetTop };
+    e.preventDefault();
+  }
+  function onCardDragMove(e: ReactPointerEvent<HTMLElement>) {
+    const d = dragStateRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    setCardOffset({ left: d.origLeft + (e.clientX - d.startX), top: d.origTop + (e.clientY - d.startY) });
+  }
+  function endCardDrag(e: ReactPointerEvent<HTMLElement>) {
+    if (dragStateRef.current?.pointerId === e.pointerId) dragStateRef.current = null;
+  }
 
   function toggleTypeVisibility(t: SystemNodeType) {
     setHiddenTypes((prev) => {
@@ -138,7 +168,9 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
       setNodeType(initialRoot.nodeType);
       setRoot(initialRoot);
       setInspecting(initialRoot);
-      setTransitiveMode(null);
+      setShowImpact(true);
+      setShowLineage(true);
+      setCardOffset(null);
     }
   }, [initialRoot]);
 
@@ -159,10 +191,15 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
     queryFn: () => api.getSystemNodeDependencies(root!.nodeType, root!.componentId),
     enabled: !!root,
   });
-  const transitive = useQuery({
-    queryKey: ["systemNodeTransitive", transitiveMode, root?.nodeType, root?.componentId],
-    queryFn: () => (transitiveMode === "impact" ? api.getSystemNodeImpact(root!.nodeType, root!.componentId) : api.getSystemNodeLineage(root!.nodeType, root!.componentId)),
-    enabled: !!root && !!transitiveMode,
+  const impactQuery = useQuery({
+    queryKey: ["systemNodeImpact", root?.nodeType, root?.componentId],
+    queryFn: () => api.getSystemNodeImpact(root!.nodeType, root!.componentId),
+    enabled: !!root && showImpact,
+  });
+  const lineageQuery = useQuery({
+    queryKey: ["systemNodeLineage", root?.nodeType, root?.componentId],
+    queryFn: () => api.getSystemNodeLineage(root!.nodeType, root!.componentId),
+    enabled: !!root && showLineage,
   });
 
   // The floating inspector targets `inspecting`, which starts out as
@@ -206,8 +243,8 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
   const { nodes, edges, canvasWidth, canvasHeight } = useMemo<{ nodes: LaidOutNode[]; edges: CanvasEdgeView[]; canvasWidth: number; canvasHeight: number }>(() => {
     if (!root || !rootNode.data) return { nodes: [], edges: [], canvasWidth: 200, canvasHeight: 200 };
 
-    if (transitiveMode) {
-      const hits = transitive.data ?? [];
+    if (showImpact || showLineage) {
+      const hits = [...(showImpact ? impactQuery.data ?? [] : []), ...(showLineage ? lineageQuery.data ?? [] : [])];
       const maxDepth = hits.reduce((m, h) => Math.max(m, h.depth), 0);
       const radius = Math.max(RING_RADIUS, (maxDepth + 1) * CLOUD_RING_GAP);
       const cx = radius + 60;
@@ -259,12 +296,13 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
     place(deps, 100, 260, "dep");
     place(reqs, -80, 80, "req");
     return { nodes: laidOut, edges: edgeViews, canvasWidth: cx + RING_RADIUS + 60, canvasHeight: cy + RING_RADIUS + 60 };
-  }, [root, rootNode.data, dependents.data, dependencies.data, transitiveMode, transitive.data]);
+  }, [root, rootNode.data, dependents.data, dependencies.data, showImpact, showLineage, impactQuery.data, lineageQuery.data]);
 
   function selectRoot(nt: SystemNodeType, componentId: string) {
     setRoot({ nodeType: nt, componentId });
     setInspecting({ nodeType: nt, componentId });
-    setTransitiveMode(null);
+    setShowImpact(true);
+    setShowLineage(true);
   }
 
   function inspect(nt: SystemNodeType, componentId: string) {
@@ -328,10 +366,10 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
       {root && rootNode.data && (
         <>
           <div className="toolbar" style={{ marginBottom: 8 }}>
-            <button className={`btn ${transitiveMode === "impact" ? "btn-primary" : ""}`} onClick={() => setTransitiveMode(transitiveMode === "impact" ? null : "impact")}>
+            <button className={`btn ${showImpact ? "btn-primary" : ""}`} onClick={() => setShowImpact((v) => !v)}>
               Full impact (everything upstream)
             </button>
-            <button className={`btn ${transitiveMode === "lineage" ? "btn-primary" : ""}`} onClick={() => setTransitiveMode(transitiveMode === "lineage" ? null : "lineage")}>
+            <button className={`btn ${showLineage ? "btn-primary" : ""}`} onClick={() => setShowLineage((v) => !v)}>
               Full lineage (everything downstream)
             </button>
           </div>
@@ -361,8 +399,15 @@ export function DependencyExplorerAdmin({ initialRoot, onOpenTab }: { initialRoo
             />
 
             {inspecting && (inspectingIsRoot ? rootNode.data : inspectingNode.data) && (
-              <div className="ontology-inspector-card">
-                <div className="ontology-inspector-head">
+              <div className="ontology-inspector-card" style={cardOffset ? { left: cardOffset.left, top: cardOffset.top, right: "auto" } : undefined}>
+                <div
+                  className="ontology-inspector-head"
+                  style={{ cursor: "grab", touchAction: "none" }}
+                  onPointerDown={startCardDrag}
+                  onPointerMove={onCardDragMove}
+                  onPointerUp={endCardDrag}
+                  onPointerCancel={endCardDrag}
+                >
                   <TypeDot nodeType={inspecting.nodeType} size={14} />
                   <div>
                     <strong>{inspectorNodeLabel}</strong>

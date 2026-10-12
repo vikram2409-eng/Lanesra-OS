@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
@@ -52,6 +52,8 @@ export function Object360Modal({
   const [root, setRoot] = useState<RootRef>({ entityType, entityId, label });
   const [inspecting, setInspecting] = useState<InspectTarget>({ entityType, entityId, label });
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(() => new Set());
+  const [cardOffset, setCardOffset] = useState<{ left: number; top: number } | null>(null);
+  const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; origLeft: number; origTop: number } | null>(null);
 
   function toggleLegendType(key: string) {
     setHiddenTypes((prev) => {
@@ -60,6 +62,22 @@ export function Object360Modal({
       else next.add(key);
       return next;
     });
+  }
+
+  function startCardDrag(e: ReactPointerEvent<HTMLElement>) {
+    const card = (e.currentTarget as HTMLElement).closest(".ontology-inspector-card") as HTMLElement | null;
+    if (!card) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragStateRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origLeft: card.offsetLeft, origTop: card.offsetTop };
+    e.preventDefault();
+  }
+  function onCardDragMove(e: ReactPointerEvent<HTMLElement>) {
+    const d = dragStateRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    setCardOffset({ left: d.origLeft + (e.clientX - d.startX), top: d.origTop + (e.clientY - d.startY) });
+  }
+  function endCardDrag(e: ReactPointerEvent<HTMLElement>) {
+    if (dragStateRef.current?.pointerId === e.pointerId) dragStateRef.current = null;
   }
 
   const objectTypes = useQuery({ queryKey: ["ontologyObjectTypes"], queryFn: () => api.listObjectTypes() });
@@ -228,10 +246,17 @@ export function Object360Modal({
             }}
           />
 
-            <div className="ontology-inspector-card">
+            <div className="ontology-inspector-card" style={cardOffset ? { left: cardOffset.left, top: cardOffset.top, right: "auto" } : undefined}>
               {"kind" in inspecting ? (
                 <>
-                  <div className="ontology-inspector-head">
+                  <div
+                    className="ontology-inspector-head"
+                    style={{ cursor: "grab", touchAction: "none" }}
+                    onPointerDown={startCardDrag}
+                    onPointerMove={onCardDragMove}
+                    onPointerUp={endCardDrag}
+                    onPointerCancel={endCardDrag}
+                  >
                     <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: "50%", background: "var(--chart-6)", flexShrink: 0 }} />
                     <div>
                       <strong>{inspecting.label}</strong>
@@ -242,7 +267,14 @@ export function Object360Modal({
                 </>
               ) : (
                 <>
-                  <div className="ontology-inspector-head">
+                  <div
+                    className="ontology-inspector-head"
+                    style={{ cursor: "grab", touchAction: "none" }}
+                    onPointerDown={startCardDrag}
+                    onPointerMove={onCardDragMove}
+                    onPointerUp={endCardDrag}
+                    onPointerCancel={endCardDrag}
+                  >
                     <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: "50%", background: `var(--chart-${colorIndexFor(inspecting.entityType)})`, flexShrink: 0 }} />
                     <div>
                       <strong>{inspecting.label}</strong>

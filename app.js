@@ -715,7 +715,7 @@ const ADMIN_CATEGORIES=[
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
  {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
 ];
-let dependencyExplorerState={type:'custom_object',id:null,inspectType:null,inspectId:null,transitive:null};
+let dependencyExplorerState={type:'custom_object',id:null,inspectType:null,inspectId:null,showImpact:true,showLineage:true};
 // Legend toggle-filter (issue #339's own design text: "identify/toggle
 // what's showing") - kept as its own module-level Set rather than inside
 // `dependencyExplorerState` since it's a pure display filter, orthogonal
@@ -723,6 +723,39 @@ let dependencyExplorerState={type:'custom_object',id:null,inspectType:null,inspe
 // replace that whole state object wholesale.
 let depExplorerHiddenTypes=new Set();
 let object360HiddenTypes=new Set();
+// Draggable inspector card: last position the admin dragged it to, kept
+// across re-renders the same way the legend's hiddenTypes Sets are -
+// `null` means "use the default CSS position" (top-right).
+let depExplorerCardPos=null;
+let object360CardPos=null;
+// Generic pointer-based (mouse+touch) drag for a `.ontology-inspector-card`
+// via its own `.ontology-inspector-head` - mirrors the desktop edition's
+// React pointer-event drag handling exactly, just against the DOM
+// directly since this demo has no component state to re-render from.
+function makeInspectorCardDraggable(cardEl,headEl,onMove){
+ if(!cardEl||!headEl)return;
+ headEl.style.cursor='grab';
+ headEl.style.touchAction='none';
+ headEl.onpointerdown=(e)=>{
+  headEl.setPointerCapture(e.pointerId);
+  const startX=e.clientX,startY=e.clientY,origLeft=cardEl.offsetLeft,origTop=cardEl.offsetTop;
+  headEl.style.cursor='grabbing';
+  const onPointerMove=(ev)=>{
+   const left=origLeft+(ev.clientX-startX),top=origTop+(ev.clientY-startY);
+   cardEl.style.left=left+'px';cardEl.style.top=top+'px';cardEl.style.right='auto';
+   onMove(left,top);
+  };
+  const onPointerUp=()=>{
+   headEl.style.cursor='grab';
+   headEl.removeEventListener('pointermove',onPointerMove);
+   headEl.removeEventListener('pointerup',onPointerUp);
+   headEl.removeEventListener('pointercancel',onPointerUp);
+  };
+  headEl.addEventListener('pointermove',onPointerMove);
+  headEl.addEventListener('pointerup',onPointerUp);
+  headEl.addEventListener('pointercancel',onPointerUp);
+ };
+}
 let testEvalView={selected:new Set()};
 let cfEntity='companies';
 let ruleEntity='companies';
@@ -2334,9 +2367,10 @@ function renderObject360Body(){
  const inspectIsRoot=s.inspect.entityType===s.root.entityType&&s.inspect.entityId===s.root.entityId;
  const isOrgUnitInspect=s.inspect.entityType==='orgUnit';
  let inspectorHtml;
+ const o360CardPosStyle=object360CardPos?` style="left:${object360CardPos.left}px;top:${object360CardPos.top}px;right:auto"`:'';
  if(isOrgUnitInspect){
-  inspectorHtml=`<div class="ontology-inspector-card">
-   <div class="ontology-inspector-head"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--chart-6);flex-shrink:0"></span><div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">Business Unit</div></div></div>
+  inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
+   <div class="ontology-inspector-head" id="o360InspectorHead"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--chart-6);flex-shrink:0"></span><div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">Business Unit</div></div></div>
    <p class="muted" style="font-size:12px">Business Units aren't individually re-centerable here - see Admin → Organization Units for its own detail.</p>
   </div>`;
  }else{
@@ -2354,8 +2388,8 @@ function renderObject360Body(){
     ${agents.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">AI Agents scoped to this object type</div>${agents.map(a=>`<div style="font-size:13px">${a.icon} ${a.name}</div>`).join('')}</div>`:''}
     ${activities.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Activity</div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}`;
   }
-  inspectorHtml=`<div class="ontology-inspector-card">
-   <div class="ontology-inspector-head">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${entityLabel(s.inspect.entityType)||s.inspect.entityType}</div></div></div>
+  inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
+   <div class="ontology-inspector-head" id="o360InspectorHead">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${entityLabel(s.inspect.entityType)||s.inspect.entityType}</div></div></div>
    <div class="ontology-inspector-actions">
     <button type="button" class="btn btn-primary" id="o360OpenRecord">Open record</button>
     <button type="button" class="btn btn-secondary" id="o360Recenter" ${inspectIsRoot?'disabled':''}>Show what's around it</button>
@@ -2395,6 +2429,7 @@ function renderObject360Body(){
  const openBtn=$('#o360OpenRecord'); if(openBtn)openBtn.onclick=()=>{const t=object360State.inspect;closeModal();openRecordDetail(t.entityType,t.entityId)};
  const recenterBtn=$('#o360Recenter'); if(recenterBtn)recenterBtn.onclick=()=>{object360State={root:object360State.inspect,inspect:object360State.inspect};renderObject360Body()};
  body.querySelectorAll('[data-o360-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.o360LegendToggle;if(object360HiddenTypes.has(t))object360HiddenTypes.delete(t);else object360HiddenTypes.add(t);renderObject360Body()});
+ makeInspectorCardDraggable($('#o360InspectorCard'),$('#o360InspectorHead'),(left,top)=>{object360CardPos={left,top}});
 }
 function companyDetail(id){
  const c=byId('companies',id);
@@ -3038,7 +3073,7 @@ function adminCrossLinkRow(entityKey){
 // node types and 3 edge types (depends_on/invokes/delegates_to) the real
 // desktop/server edition's `system_graph.rs` v1 slice syncs - see that
 // module's own doc comment for the full scoping note.
-const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team',business_glossary_term:'Glossary Term',metric_definition:'Metric',test_case_definition:'Test Case'};
+const SYSTEM_NODE_TYPE_LABELS={custom_object:'Object',custom_field:'Field',relationship:'Relationship',business_rule:'Business Rule',workflow:'Workflow',screen_layout:'Screen Layout',page_layout:'Page Layout',ai_agent:'AI Agent',execution_graph:'Agent Team',business_glossary_term:'Glossary Term',metric_definition:'Metric',test_case_definition:'Test Case',action_type_definition:'Action Type'};
 function systemGraphNodes(){
  const nodes=[];
  // Ontology Layer epic, issue #345: the real edition's `sync_node` stubs
@@ -3063,6 +3098,7 @@ function systemGraphNodes(){
  (data.businessGlossaryTerms||[]).forEach(t=>nodes.push({type:'business_glossary_term',id:t.id,label:t.name}));
  (data.metricDefinitions||[]).forEach(m=>nodes.push({type:'metric_definition',id:m.id,label:m.name}));
  (data.testCaseDefinitions||[]).forEach(c=>nodes.push({type:'test_case_definition',id:c.id,label:c.name}));
+ (data.actionTypeDefinitions||[]).forEach(a=>nodes.push({type:'action_type_definition',id:a.id,label:a.name}));
  return nodes;
 }
 // `{edgeType, fromType, fromId, toType, toId}` - 4 of the spec's 10 edge
@@ -3085,6 +3121,15 @@ function systemGraphEdges(){
  Object.entries(data.uiLayouts||{}).forEach(([entityKey,arr])=>(arr||[]).forEach(l=>add('depends_on','screen_layout',l.id,'custom_object',entityKey)));
  Object.entries(data.pageLayouts||{}).forEach(([entityKey,arr])=>(arr||[]).forEach(l=>add('depends_on','page_layout',l.id,'custom_object',entityKey)));
  (data.aiAgents||[]).forEach(a=>(a.delegateAgentIds||[]).forEach(d=>add('delegates_to','ai_agent',a.id,'ai_agent',d)));
+ // Ontology Layer epic, issue #344: an agent's own Ontology scope is
+ // traceable too now - a depends_on edge per object_type_scopes entry
+ // and an invokes edge per granted Action Type, the same edges the real
+ // edition's `ai_agent_service::sync_graph_node` now adds.
+ (data.aiAgents||[]).forEach(a=>{
+  (a.objectTypeScopes||[]).forEach(scope=>add('depends_on','ai_agent',a.id,'custom_object',scope.objectType));
+  (a.actionTypeIds||[]).forEach(actionTypeId=>add('invokes','ai_agent',a.id,'action_type_definition',actionTypeId));
+ });
+ (data.actionTypeDefinitions||[]).forEach(a=>add('depends_on','action_type_definition',a.id,'custom_object',a.targetObjectType));
  (data.aiExecutionGraphs||[]).forEach(g=>(g.nodes||[]).forEach(n=>{if(n.type==='agent'&&n.config&&n.config.agentId)add('invokes','execution_graph',g.id,'ai_agent',n.config.agentId)}));
  // FND-02 (Semantic Metadata Layer): a glossary term's edges are derived
  // from whatever semantic_mappings point at it - a custom field gets a
@@ -3400,7 +3445,7 @@ function objectTypesTab(body){
  body.querySelectorAll('[data-admin-cross-link]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminCrossLink;adminView='tool';renderView()});
  const depExplorerBtn=$('#openDepExplorerForType');
  if(depExplorerBtn)depExplorerBtn.onclick=()=>{
-  dependencyExplorerState={type:'custom_object',id:sel.key,transitive:null};
+  dependencyExplorerState={type:'custom_object',id:sel.key,showImpact:true,showLineage:true};
   adminTab='dependencyExplorer';adminView='tool';renderView();
  };
  const addBtn=$('#addActionType'); if(addBtn)addBtn.onclick=()=>{actionTypeFormState=newActionTypeFormState(sel.key);renderAdminTab()};
@@ -3872,8 +3917,8 @@ function systemGraphTransitive(type,id,direction,maxDepth){
 // each System Graph node type, and a fixed --chart-N index per type -
 // hand-mirrored from desktop's own `systemGraphNodeMeta.ts` (same values)
 // so the legend/dots read identically on both surfaces.
-const NODE_TYPE_ADMIN_TAB={custom_object:'objectTypes',custom_field:'fields',relationship:'relationships',business_rule:'rules',workflow:'workflow',screen_layout:'layouts',page_layout:'pageBuilder',ai_agent:'aiAgents',execution_graph:'agentTeams',business_glossary_term:'businessGlossary',metric_definition:'metricDefinitions',test_case_definition:'testEval'};
-const SYSTEM_NODE_TYPE_COLOR_INDEX={custom_object:1,custom_field:2,relationship:3,business_rule:4,workflow:5,screen_layout:6,page_layout:1,ai_agent:2,execution_graph:3,business_glossary_term:4,metric_definition:5,test_case_definition:6};
+const NODE_TYPE_ADMIN_TAB={custom_object:'objectTypes',custom_field:'fields',relationship:'relationships',business_rule:'rules',workflow:'workflow',screen_layout:'layouts',page_layout:'pageBuilder',ai_agent:'aiAgents',execution_graph:'agentTeams',business_glossary_term:'businessGlossary',metric_definition:'metricDefinitions',test_case_definition:'testEval',action_type_definition:'objectTypes'};
+const SYSTEM_NODE_TYPE_COLOR_INDEX={custom_object:1,custom_field:2,relationship:3,business_rule:4,workflow:5,screen_layout:6,page_layout:1,ai_agent:2,execution_graph:3,business_glossary_term:4,metric_definition:5,test_case_definition:6,action_type_definition:1};
 const ONTOLOGY_ROOT_SIZE=26,ONTOLOGY_NODE_SIZE=15,ONTOLOGY_RING_RADIUS=170,ONTOLOGY_CLOUD_RING_GAP=110;
 function typeDotHtml(nodeType,size){size=size||10;return `<span style="display:inline-block;flex-shrink:0;width:${size}px;height:${size}px;border-radius:50%;background:var(--chart-${SYSTEM_NODE_TYPE_COLOR_INDEX[nodeType]})"></span>`}
 function legendHtml(hidden){
@@ -3898,8 +3943,9 @@ function inspectorCardHtml(){
  });
  const isRoot=s.inspectType===s.type&&s.inspectId===s.id;
  const definition=s.inspectType==='custom_object'?ontologyDescriptionFor(s.inspectId):null;
- return `<div class="ontology-inspector-card">
-  <div class="ontology-inspector-head">${typeDotHtml(s.inspectType,14)}<div><strong>${label}</strong><div class="ontology-inspector-subtitle">${SYSTEM_NODE_TYPE_LABELS[s.inspectType]}</div></div></div>
+ const posStyle=depExplorerCardPos?` style="left:${depExplorerCardPos.left}px;top:${depExplorerCardPos.top}px;right:auto"`:'';
+ return `<div class="ontology-inspector-card" id="depInspectorCard"${posStyle}>
+  <div class="ontology-inspector-head" id="depInspectorHead">${typeDotHtml(s.inspectType,14)}<div><strong>${label}</strong><div class="ontology-inspector-subtitle">${SYSTEM_NODE_TYPE_LABELS[s.inspectType]}</div></div></div>
   ${definition?`<p class="ontology-inspector-definition">${definition}</p>`:''}
   <div class="ontology-inspector-actions">
    <button type="button" class="btn btn-primary" id="depOpenAdmin">Open in its admin screen</button>
@@ -3916,7 +3962,7 @@ function dependencyExplorerTab(body){
  const types=Object.keys(SYSTEM_NODE_TYPE_LABELS);
  if(!dependencyExplorerState.id){
   const first=nodes.find(n=>n.type===dependencyExplorerState.type)||nodes[0];
-  if(first)dependencyExplorerState={type:first.type,id:first.id,inspectType:first.type,inspectId:first.id,transitive:null};
+  if(first)dependencyExplorerState={type:first.type,id:first.id,inspectType:first.type,inspectId:first.id,showImpact:true,showLineage:true};
  }
  if(dependencyExplorerState.id&&!dependencyExplorerState.inspectId){
   dependencyExplorerState={...dependencyExplorerState,inspectType:dependencyExplorerState.type,inspectId:dependencyExplorerState.id};
@@ -3925,14 +3971,18 @@ function dependencyExplorerTab(body){
 
  let graphHtml='';
  if(dependencyExplorerState.id){
-  if(dependencyExplorerState.transitive){
-   // Zoomed-out "cloud" overview: the union of the transitive closure in
-   // one direction, grouped into concentric rings by depth - position
-   // only, no connecting lines, since a `SystemGraphHit` (depth + edge
-   // type from the root) carries no per-hop parent to draw an exact line
-   // from once depth > 1, and a precise one isn't worth a new query just
-   // for this overview.
-   const hits=systemGraphTransitive(dependencyExplorerState.type,dependencyExplorerState.id,dependencyExplorerState.transitive==='impact'?'dependents':'dependencies',25);
+  if(dependencyExplorerState.showImpact||dependencyExplorerState.showLineage){
+   // Zoomed-out "cloud" overview: by default the union of BOTH transitive
+   // directions (upstream dependents + downstream dependencies), grouped
+   // into concentric rings by depth - position only, no connecting
+   // lines, since a `SystemGraphHit` (depth + edge type from the root)
+   // carries no per-hop parent to draw an exact line from once depth > 1,
+   // and a precise one isn't worth a new query just for this overview.
+   // Turning either toggle off narrows to just that one direction.
+   const hits=[
+    ...(dependencyExplorerState.showImpact?systemGraphTransitive(dependencyExplorerState.type,dependencyExplorerState.id,'dependents',25):[]),
+    ...(dependencyExplorerState.showLineage?systemGraphTransitive(dependencyExplorerState.type,dependencyExplorerState.id,'dependencies',25):[]),
+   ];
    const maxDepth=hits.reduce((m,h)=>Math.max(m,h.depth),0);
    const radius=Math.max(ONTOLOGY_RING_RADIUS,(maxDepth+1)*ONTOLOGY_CLOUD_RING_GAP);
    const cx=radius+60,cy=radius+60;
@@ -3990,19 +4040,20 @@ function dependencyExplorerTab(body){
   </div>
   ${!dependencyExplorerState.id?'<div class="empty">Nothing synced yet for this type.</div>':`
   <div class="actions" style="margin:12px 0">
-   <button type="button" class="btn ${dependencyExplorerState.transitive==='impact'?'btn-primary':''}" data-dep-transitive="impact">Full impact (everything upstream)</button>
-   <button type="button" class="btn ${dependencyExplorerState.transitive==='lineage'?'btn-primary':''}" data-dep-transitive="lineage">Full lineage (everything downstream)</button>
+   <button type="button" class="btn ${dependencyExplorerState.showImpact?'btn-primary':''}" data-dep-toggle="showImpact">Full impact (everything upstream)</button>
+   <button type="button" class="btn ${dependencyExplorerState.showLineage?'btn-primary':''}" data-dep-toggle="showLineage">Full lineage (everything downstream)</button>
   </div>
   ${graphHtml}`}
  </div>`;
- $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,inspectType:t,inspectId:first?first.id:null,transitive:null};renderAdminTab()};
- $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,inspectType:dependencyExplorerState.type,inspectId:e.target.value,transitive:null};renderAdminTab()});
- body.querySelectorAll('[data-dep-transitive]').forEach(b=>b.onclick=()=>{const v=b.dataset.depTransitive;dependencyExplorerState={...dependencyExplorerState,transitive:dependencyExplorerState.transitive===v?null:v};renderAdminTab()});
+ $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,inspectType:t,inspectId:first?first.id:null,showImpact:true,showLineage:true};renderAdminTab()};
+ $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,inspectType:dependencyExplorerState.type,inspectId:e.target.value,showImpact:true,showLineage:true};renderAdminTab()});
+ body.querySelectorAll('[data-dep-toggle]').forEach(b=>b.onclick=()=>{const k=b.dataset.depToggle;dependencyExplorerState={...dependencyExplorerState,[k]:!dependencyExplorerState[k]};renderAdminTab()});
  body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depInspect.split(':');dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
- body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,inspectType:type,inspectId:id,transitive:null};renderAdminTab()});
+ body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,inspectType:type,inspectId:id,showImpact:true,showLineage:true};renderAdminTab()});
  body.querySelectorAll('[data-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.legendToggle;if(depExplorerHiddenTypes.has(t))depExplorerHiddenTypes.delete(t);else depExplorerHiddenTypes.add(t);renderAdminTab()});
- const recenterBtn=$('#depRecenter'); if(recenterBtn)recenterBtn.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,type:dependencyExplorerState.inspectType,id:dependencyExplorerState.inspectId,transitive:null};renderAdminTab()};
+ const recenterBtn=$('#depRecenter'); if(recenterBtn)recenterBtn.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,type:dependencyExplorerState.inspectType,id:dependencyExplorerState.inspectId,showImpact:true,showLineage:true};renderAdminTab()};
  const openBtn=$('#depOpenAdmin'); if(openBtn)openBtn.onclick=()=>{adminTab=NODE_TYPE_ADMIN_TAB[dependencyExplorerState.inspectType];adminView='tool';renderView()};
+ makeInspectorCardDraggable($('#depInspectorCard'),$('#depInspectorHead'),(left,top)=>{depExplorerCardPos={left,top}});
 }
 function adminRecentNavHtml(){
  const hist=(data.adminNavHistory||[]).slice().sort((a,b)=>b.lastViewedAt.localeCompare(a.lastViewedAt));
