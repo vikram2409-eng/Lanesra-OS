@@ -115,12 +115,33 @@ fn validate(conn: &Connection, workspace_id: &str, input: &ActionTypeDefinitionI
     Ok(())
 }
 
+/// Ontology Layer epic (#340): an Action Type `depends_on` its target
+/// Object Type, the same `entity_type` -> `custom_object` edge shape
+/// `business_rule_service`'s own sync helper already uses - this is the
+/// one piece of System Graph wiring issue #343 never added.
+fn sync_graph_node(conn: &Connection, workspace_id: &str, action_type: &ActionTypeDefinition) -> AppResult<()> {
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "action_type_definition",
+        &action_type.id,
+        &action_type.name,
+        "{}",
+        &[crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "depends_on".into(),
+            to_node_type: "custom_object".into(),
+            to_component_id: action_type.target_object_type.clone(),
+        }],
+    )
+}
+
 pub fn create(conn: &Connection, workspace_id: &str, input: &ActionTypeDefinitionInput, actor_user_id: Option<&str>) -> AppResult<ActionTypeDefinition> {
     require_admin(conn, actor_user_id)?;
     validate(conn, workspace_id, input)?;
     let id = crate::domain::ids::new_uuid();
     let created = action_type_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
     super::solution_component_service::tag_local(conn, workspace_id, "action_type_definition", &created.id, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &created)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("action_type_definition"), Some(&created.id), &format!("Created Action Type '{}'", created.name), None)?;
     Ok(created)
 }
@@ -139,6 +160,7 @@ pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &ActionTyp
     validate(conn, workspace_id, input)?;
     action_type_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Action Type".into()))?;
     let updated = action_type_repo::update(conn, id, input, actor_user_id)?;
+    sync_graph_node(conn, workspace_id, &updated)?;
     audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("action_type_definition"), Some(id), &format!("Updated Action Type '{}'", updated.name), None)?;
     Ok(updated)
 }

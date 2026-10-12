@@ -43,6 +43,17 @@
 //! agent_team_eval case points at its `ai_agent`/`execution_graph` node.
 //! An integration_mapping case has no edge - `Mapping` isn't a System
 //! Graph node type yet, named as a follow-up rather than fabricated.
+//!
+//! **Ontology Layer epic (#340) addition**: `action_type_definition` -
+//! Action Types (issue #343) never synced a node at all before this;
+//! `action_type_service::sync_graph_node` now adds one with a
+//! `depends_on` edge to its `target_object_type`'s `custom_object` node.
+//! Separately, `ai_agent_service::sync_graph_node` - previously only
+//! `delegates_to` other agents - now also adds a `depends_on` edge per
+//! entry in the agent's own `object_type_scopes` (issue #344) and an
+//! `invokes` edge per entry in its `action_type_ids`, so an agent's
+//! Ontology scope is finally traceable through the Dependency Explorer
+//! the same way every other component's dependencies already are.
 
 pub const NODE_TYPES: &[&str] = &[
     "custom_object",
@@ -59,6 +70,13 @@ pub const NODE_TYPES: &[&str] = &[
     "metric_definition",
     // FND-03 (Unified Test & Evaluation Framework) addition.
     "test_case_definition",
+    // Ontology Layer epic (#340) addition: an Action Type `depends_on`
+    // its target Object Type, the same edge shape `business_rule`'s own
+    // `entity_type` -> `custom_object` edge already uses. An AI agent's
+    // own `object_type_scopes`/`action_type_ids` (issue #344) add edges
+    // from the existing `ai_agent` node to this one and to `custom_object`
+    // - see `ai_agent_service::sync_graph_node`'s own doc comment.
+    "action_type_definition",
 ];
 
 pub const EDGE_TYPES: &[&str] = &[
