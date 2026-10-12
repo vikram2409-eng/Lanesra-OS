@@ -6,7 +6,7 @@ literals use PLAIN quotes. Only single-quoted JS strings use \' escapes.
 """
 import sys
 
-PATH = '/tmp/lanesra-os/app.js'
+PATH = 'app.js'
 src = open(PATH).read()
 fails = []
 
