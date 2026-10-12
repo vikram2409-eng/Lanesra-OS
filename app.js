@@ -362,6 +362,12 @@ function ensureAdminData(){
  if(!data.workspace)data.workspace={name:'Northstar Digital Solutions',address:'120 Bay Street, Suite 400',city:'Toronto, ON',phone:'416-555-0142',logo:''};
  if(!data.users)data.users=[{id:'u1',name:'Maya Chen',email:'maya@northstar.example',role:'Administrator',status:'Active'}];
  if(!data.roles)data.roles=defaultRoles();
+ if(!data.businessGlossaryTerms)data.businessGlossaryTerms=[];
+ if(!data.metricDefinitions)data.metricDefinitions=[];
+ if(!data.testCaseDefinitions)data.testCaseDefinitions=[];
+ if(!data.actionTypeDefinitions)data.actionTypeDefinitions=[];
+ if(!data.aiExecutionGraphs)data.aiExecutionGraphs=[];
+ if(!data.tasks)data.tasks=[];
  (data.roles||[]).forEach(r=>{if(!r.objectPermissions)r.objectPermissions={};if(!r.aiPermissions)r.aiPermissions={assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]};if(!r.voicePermissions)r.voicePermissions=defaultVoicePermissions()});
  // Access Control v1 (Phase 2) mirror: upgrade any role still carrying the
  // old none/read/read_write string shape (persisted in an existing
