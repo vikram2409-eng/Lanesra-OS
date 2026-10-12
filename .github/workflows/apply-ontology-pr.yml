@@ -10,6 +10,10 @@ on:
         description: 'Branch to transform and push'
         required: true
         default: 'ontology-graph/pr1-foundation'
+      message:
+        description: 'Commit message'
+        required: false
+        default: 'feat: Ontology Graph PR1 — rename + typed edges + traversal + colors + demo data'
 jobs:
   apply:
     runs-on: ubuntu-latest
@@ -28,5 +32,5 @@ jobs:
           git config user.name "Muse (Ontology Graph build)"
           git config user.email "muse@lanesraos.com"
           git add app.js
-          git diff --cached --quiet || git commit -m "feat: Ontology Graph PR1 — rename + typed edges + traversal + colors + demo data"
+          git diff --cached --quiet || git commit -m "${{ inputs.message }}"
           git push origin ${{ inputs.branch }}
