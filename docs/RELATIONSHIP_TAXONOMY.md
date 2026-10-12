@@ -36,6 +36,7 @@ OOB-vs-custom is a node flag, never an edge variant.
 | `reads` / `writes` | Workflow → Field | Workflow reads/updates the field | "Company score sync" `writes` → Health Score |
 | `covers` | Test Case → Component (any) | Test exercises the component | "Company dedupe test" `covers` → Companies |
 | `enables` | Action Type → Workflow / AI Agent | Workflow or agent uses this action | "Send email" `enables` → "New company onboarding" |
+| `acts_on` | Action Type → Object | Action operates on records of the object type | "Send Email" `acts_on` → Companies |
 
 ## Access edges (who can touch it)
 
