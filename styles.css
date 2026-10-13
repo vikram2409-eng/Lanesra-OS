@@ -1164,6 +1164,11 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 .o360-crumb:hover{text-decoration:underline}
 .o360-crumb-sep{color:var(--muted)}
 .o360-crumb-current{font-weight:800;color:var(--text)}
+/* PR4: Object 360 modal resize grip + Fields toggle */
+.o360-resize-handle{width:24px;height:24px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 0%,transparent 55%,#9ca3af 55%,#9ca3af 65%,transparent 65%,transparent 75%,#9ca3af 75%,#9ca3af 85%,transparent 85%);border-radius:0 0 6px 0;opacity:.75}
+.o360-resize-handle:hover{opacity:1}
+.ontology-fields-toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;cursor:pointer;white-space:nowrap;user-select:none}
+.ontology-fields-toggle input{accent-color:#4F46E5;width:15px;height:15px;cursor:pointer}
 /* Rule pass/fail, workflow state, and agent access chips */
 .o360-chip{display:inline-flex;align-items:center;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700;white-space:nowrap;margin:1px 2px}
 .o360-chip-pass{background:#dcfce7;color:#15803d}
