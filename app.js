@@ -5272,12 +5272,80 @@ function depSimulateImpact(type,id){
  }
  return out;
 }
+
+function depSimAddField(type,id,fieldName){
+ const seen=new Set(),out=[];
+ const stack=[{type,id}];
+ while(stack.length){
+  const n=stack.pop();
+  const key=depNodeKey(n.type,n.id);
+  if(seen.has(key))continue;
+  seen.add(key);out.push(key);
+  ['dependencies','dependents'].forEach(dir=>{
+   systemGraphDirect(n.type,n.id,dir).forEach(h=>stack.push({type:h.type,id:h.id}));
+  });
+ }
+ return {keys:out,label:'add field \u2018'+fieldName+'\u2019 to '+systemGraphNodeLabel(type,id),detail:out.length+' connected components would need review'};
+}
+function depSimAddObject(name,relType,relId){
+ const key=depNodeKey(relType,relId);
+ const seen=new Set([key]),out=[key];
+ ['dependencies','dependents'].forEach(dir=>{
+  systemGraphDirect(relType,relId,dir).forEach(h=>{
+   const k=depNodeKey(h.type,h.id);
+   if(!seen.has(k)){seen.add(k);out.push(k)}
+  });
+ });
+ return {keys:out,label:'add object \u2018'+name+'\u2019 related to '+systemGraphNodeLabel(relType,relId),detail:'would connect through '+out.length+' neighboring components'};
+}
+function depSimAddRelationship(fType,fId,tType,tId){
+ const fromKey=depNodeKey(fType,fId),toKey=depNodeKey(tType,tId);
+ const visited=new Set(),stack=[{type:tType,id:tId}];
+ let cycle=false;
+ while(stack.length&&!cycle){
+  const n=stack.pop();
+  const k=depNodeKey(n.type,n.id);
+  if(k===fromKey){cycle=true;break}
+  if(visited.has(k))continue;
+  visited.add(k);
+  systemGraphDirect(n.type,n.id,'dependencies').forEach(h=>stack.push({type:h.type,id:h.id}));
+ }
+ return {keys:[fromKey,toKey],label:'link '+systemGraphNodeLabel(fType,fId)+' \u2192 '+systemGraphNodeLabel(tType,tId),detail:cycle?'WARNING: circular dependency would be created':'new edge; no cycles detected'};
+}
+function depSimAddWorkflow(triggerType,triggerId,wfName){
+ const keys=depSimulateImpact(triggerType,triggerId);
+ return {keys:keys,label:'new workflow \u2018'+wfName+'\u2019 on '+systemGraphNodeLabel(triggerType,triggerId),detail:keys.length+' downstream components could be affected'};
+}
+function depSimRenderInputs(){
+ const sel=document.getElementById('depSimChange');
+ const host=document.getElementById('depSimInputs');
+ if(!sel||!host)return;
+ const v=sel.value;
+ let html='';
+ if(v==='add-field'){
+  html='<input type="text" id="depSimFieldName" class="input" placeholder="Field name…" style="width:140px" aria-label="Field name">';
+ }else if(v==='add-object'){
+  html='<input type="text" id="depSimObjName" class="input" placeholder="Object name…" style="width:140px" aria-label="Object name">';
+ }else if(v==='add-relationship'){
+  html='<select id="depSimRelTarget" class="select" aria-label="Relate to"><option value="">Relate to…</option></select>';
+ }else if(v==='add-workflow'){
+  html='<input type="text" id="depSimWfName" class="input" placeholder="Workflow name…" style="width:140px" aria-label="Workflow name">';
+ }
+ host.innerHTML=html;
+ const tgt=document.getElementById('depSimRelTarget');
+ if(tgt){
+  const nodes=systemGraphNodes();
+  tgt.innerHTML='<option value="">Relate to…</option>'+nodes.slice(0,80).map(n=>'<option value="'+n.type+':'+n.id+'">'+systemGraphNodeLabel(n.type,n.id)+'</option>').join('');
+ }
+}
 function depSimBannerHtml(){
  const s=dependencyExplorerState;
  if(!s.simKeys||!s.simRoot)return '';
  const n=s.simKeys.length;
  const label=systemGraphNodeLabel(s.simRoot.type,s.simRoot.id);
- return '<div class="ontology-sim-banner"><span><strong>Preview only — no changes applied.</strong> '+n+' component'+(n===1?'':'s')+' would be affected by '+s.simChange+' of '+label+'.</span><button type="button" class="btn btn-secondary" id="depSimOpenAdmin">Open in its admin screen</button><button type="button" class="btn btn-secondary" id="depSimClear">Clear simulation</button></div>';
+ const simTitle=s.simLabel||(n+' component'+(n===1?'':'s')+' would be affected by '+s.simChange+' of '+label);
+ const simSub=s.simDetail?'<br><span class="muted">'+s.simDetail+'</span>':'';
+ return '<div class="ontology-sim-banner"><span><strong>Preview only — no changes applied.</strong> '+simTitle+'.'+simSub+'</span><button type="button" class="btn btn-secondary" id="depSimOpenAdmin">Open in its admin screen</button><button type="button" class="btn btn-secondary" id="depSimClear">Clear simulation</button></div>';
 }
 // Toolbar wiring ---------------------------------------------------------------
 function depWireToolbar(body){
@@ -5301,9 +5369,31 @@ function depWireToolbar(body){
   const s=dependencyExplorerState;
   if(!s.inspectType||!s.inspectId){toast('Select a node first');return}
   const chg=document.getElementById('depSimChange').value;
-  dependencyExplorerState={...s,simKeys:depSimulateImpact(s.inspectType,s.inspectId),simChange:chg,simRoot:{type:s.inspectType,id:s.inspectId}};
+  let simResult=null;
+  if(chg==='add-field'){
+   const fn=(document.getElementById('depSimFieldName')||{}).value||'new_field';
+   simResult=depSimAddField(s.inspectType,s.inspectId,fn);
+  }else if(chg==='add-object'){
+   const nm=(document.getElementById('depSimObjName')||{}).value||'New Object';
+   simResult=depSimAddObject(nm,s.inspectType,s.inspectId);
+  }else if(chg==='add-relationship'){
+   const tv=(document.getElementById('depSimRelTarget')||{}).value||'';
+   if(!tv){toast('Pick a target object');return}
+   const ci=tv.indexOf(':');
+   simResult=depSimAddRelationship(s.inspectType,s.inspectId,tv.slice(0,ci),tv.slice(ci+1));
+  }else if(chg==='add-workflow'){
+   const wn=(document.getElementById('depSimWfName')||{}).value||'New Workflow';
+   simResult=depSimAddWorkflow(s.inspectType,s.inspectId,wn);
+  }
+  if(simResult){
+   dependencyExplorerState={...s,simKeys:simResult.keys,simChange:chg,simRoot:{type:s.inspectType,id:s.inspectId},simLabel:simResult.label,simDetail:simResult.detail};
+  }else{
+   dependencyExplorerState={...s,simKeys:depSimulateImpact(s.inspectType,s.inspectId),simChange:chg,simRoot:{type:s.inspectType,id:s.inspectId}};
+  }
   renderAdminTab();
  };
+ const simSel=document.getElementById('depSimChange');
+ if(simSel){simSel.onchange=depSimRenderInputs;depSimRenderInputs()}
  const simClear=document.getElementById('depSimClear');
  if(simClear)simClear.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,simKeys:null,simChange:null,simRoot:null};renderAdminTab()};
  const simOpen=document.getElementById('depSimOpenAdmin');
@@ -5373,7 +5463,7 @@ function dependencyExplorerTab(body){
   <div class="tool-group"><label class="tool-inline">Depth <select id="depDepth" class="select" aria-label="Depth">${['1','2','3','all'].map(d=>`<option value="${d}" ${String(dependencyExplorerState.depth)===d?'selected':''}>${d==='all'?'All':d+' hop'+(d==='1'?'':'s')}</option>`).join('')}</select></label></div></div>
   <div class="tool-group"><div class="chip-row" role="group" aria-label="Analysis"><button type="button" class="toggle-chip${dependencyExplorerState.showImpact?' active':''}" data-dep-toggle="showImpact" title="Toggle full impact">Impact</button><button type="button" class="toggle-chip${dependencyExplorerState.showLineage?' active':''}" data-dep-toggle="showLineage" title="Toggle full lineage">Lineage</button></div></div>
   <div class="tool-group"><div class="chip-row"><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div></div>
-  <div class="tool-group"><div class="path-fields"><button type="button" class="btn btn-secondary btn-sm" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange" class="select"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary btn-sm" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary btn-sm" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button></div></div>
+  <div class="tool-group"><div class="path-fields"><button type="button" class="btn btn-secondary btn-sm" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange" class="select"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option><option value="add-field">add field</option><option value="add-object">add object</option><option value="add-relationship">add relationship</option><option value="add-workflow">add workflow</option></select> <span id="depSimInputs"></span> <button type="button" class="btn btn-primary btn-sm" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary btn-sm" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button></div></div>
  </div>`;
  let graphHtml='';
  let truncatedHits=0;
