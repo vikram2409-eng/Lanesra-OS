@@ -4960,12 +4960,15 @@ function graphRender(model,ui,W,H){
 }
 
 // Graph UX: hover spotlight + double-click to expand.
-function wireGraphHoverFx(host, onExpand){
- const canvas=host?host.querySelector('.ontology-graph-canvas'):null;
- if(!canvas||canvas.dataset.hoverWired)return;canvas.dataset.hoverWired='1';
- const clear=()=>{canvas.classList.remove('graph-hover-dim');canvas.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'))};
- canvas.addEventListener('mouseover',e=>{
-  const dot=e.target.closest('.ontology-node-dot');if(!dot||!dot.dataset.nodeKey)return;
+// Uses document-level delegation so it survives graph re-renders.
+(function(){
+ if(window.__graphHoverDelegated)return;window.__graphHoverDelegated=true;
+ const clearCanvas=(canvas)=>{canvas.classList.remove('graph-hover-dim');canvas.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'))};
+ document.addEventListener('mouseover',e=>{
+  const dot=e.target.closest?e.target.closest('.ontology-node-dot'):null;
+  const canvas=dot?dot.closest('.ontology-graph-canvas'):null;
+  if(!dot||!canvas||!dot.dataset.nodeKey)return;
+  document.querySelectorAll('.ontology-graph-canvas.graph-hover-dim').forEach(c=>{if(c!==canvas)clearCanvas(c)});
   const key=dot.dataset.nodeKey;
   const connected=new Set([key]);
   canvas.querySelectorAll('line[data-edge-from]').forEach(l=>{
@@ -4980,14 +4983,19 @@ function wireGraphHoverFx(host, onExpand){
    el.classList.toggle('graph-hover-on',el.dataset.edgeFrom===key||el.dataset.edgeTo===key);
   });
  });
- canvas.addEventListener('mouseleave',clear);
- canvas.addEventListener('mouseout',e=>{if(!e.relatedTarget||!canvas.contains(e.relatedTarget))clear()});
- if(onExpand){
-  canvas.addEventListener('dblclick',e=>{
-   const dot=e.target.closest('.ontology-node-dot');if(!dot||!dot.dataset.nodeKey)return;
-   e.preventDefault();e.stopPropagation();onExpand(dot.dataset.nodeKey);
-  });
- }
+ document.addEventListener('mouseout',e=>{
+  const canvas=e.target.closest?e.target.closest('.ontology-graph-canvas'):null;
+  if(!canvas)return;
+  if(!e.relatedTarget||!canvas.contains(e.relatedTarget))clearCanvas(canvas);
+ });
+})();
+function wireGraphHoverFx(host, onExpand){
+ const canvas=host?host.querySelector('.ontology-graph-canvas'):null;
+ if(!canvas||canvas.dataset.dblWired||!onExpand)return;canvas.dataset.dblWired='1';
+ canvas.addEventListener('dblclick',e=>{
+  const dot=e.target.closest('.ontology-node-dot');if(!dot||!dot.dataset.nodeKey)return;
+  e.preventDefault();e.stopPropagation();onExpand(dot.dataset.nodeKey);
+ });
 }
 // Thin wrapper: the Ontology Graph's ui over the shared renderer.
 // pathKeys/simKeys/simChange/labelMode are undefined on
