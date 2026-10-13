@@ -1911,7 +1911,7 @@ function dashboardChartWidgetHtml(w){
 function dashboardRecordListWidgetHtml(w){
  const {entityKey,mode,limit}=w.config;
  const rows=dashboardRecordListRows(entityKey,mode,limit);
- return `<section class="panel"><div class="panel-head"><h3>${entityLabel(entityKey)} — ${mode==='due_soon'?'due soon':'recent'}</h3></div>${rows.length?rows.map(r=>`<div class="deal" style="cursor:pointer" data-open-record="${entityKey}:${r.id}"><strong>${r.title}</strong>${r.subtitle?`<small class="muted"> · ${r.subtitle}</small>`:''}</div>`).join(''):'<div class="empty">Nothing here yet.</div>'}</section>`;
+ return `<section class="card"><div class="card-header prb-card-head"><h3>${entityLabel(entityKey)} — ${mode==='due_soon'?'due soon':'recent'}</h3></div><div class="card-content">${rows.length?rows.map(r=>`<div class="prb-row" data-open-record="${entityKey}:${r.id}"><strong>${r.title}</strong>${r.subtitle?`<small class="muted"> · ${r.subtitle}</small>`:''}</div>`).join(''):'<div class="empty">Nothing here yet.</div>'}</div></section>`;
 }
 function dashboard(){
  // Dashboard customization: a published Default dashboard's widgets
@@ -1932,7 +1932,7 @@ function dashboard(){
   :visibleKpis();
  const chartWidgets=effective?effective.filter(w=>w.kind==='chart'&&(data.customReports||[]).some(r=>r.id===w.config.reportId)):[];
  const listWidgets=effective?effective.filter(w=>w.kind==='record_list'):[];
- $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1>Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div>${onboardBannerSeen?'':`<div class="onboard-row" id="onboardRow"><div class="onboard-copy"><strong>This is the apps side.</strong> Lanesra is also AI-native — see the rest in two clicks.</div><div class="onboard-actions"><button class="btn btn-secondary" data-onboard="agents">Build an AI Agent →</button><button class="btn btn-secondary" data-onboard="apps">Install an Industry App →</button><button class="onboard-dismiss" id="onboardDismiss" aria-label="Dismiss">×</button></div></div>`}<div class="kpi-grid">${kpis.map(k=>`<button class="kpi kpi-link" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value()}</div><span>View ${k.label.toLowerCase()} →</span></button>`).join('')}</div>${(chartWidgets.length||listWidgets.length)?`<div class="grid-2">${chartWidgets.map(dashboardChartWidgetHtml).join('')}${listWidgets.map(dashboardRecordListWidgetHtml).join('')}</div>`:''}<div class="grid-2"><section class="panel"><div class="panel-head"><h3>Pipeline snapshot</h3><button class="link-btn" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div>${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="deal"><div style="display:flex;justify-content:space-between"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</section><section class="panel"><div class="panel-head"><h3>Tasks requiring attention</h3><button class="link-btn" data-nav2="tasks" data-filter2="open">View tasks</button></div>${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="deal"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</section></div>`;
+ $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1 class="prb-greeting">Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary btn-shimmer" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div>${onboardBannerSeen?'':`<div class="onboard-row" id="onboardRow"><div class="onboard-copy"><strong>This is the apps side.</strong> Lanesra is also AI-native — see the rest in two clicks.</div><div class="onboard-actions"><button class="btn btn-secondary" data-onboard="agents">Build an AI Agent →</button><button class="btn btn-secondary" data-onboard="apps">Install an Industry App →</button><button class="onboard-dismiss" id="onboardDismiss" aria-label="Dismiss">×</button></div></div>`}<div class="kpi-grid">${kpis.map((k,i)=>`<button class="card prb-kpi${i===0?' prb-beam':''}" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="prb-kpi-label">${k.label}</div><div class="prb-kpi-value">${k.value()}</div><span class="prb-kpi-link">View ${k.label.toLowerCase()} →</span></button>`).join('')}</div>${(chartWidgets.length||listWidgets.length)?`<div class="grid-2">${chartWidgets.map(dashboardChartWidgetHtml).join('')}${listWidgets.map(dashboardRecordListWidgetHtml).join('')}</div>`:''}<div class="grid-2"><section class="card"><div class="card-header prb-card-head"><h3>Pipeline snapshot</h3><button class="btn btn-link" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div><div class="card-content">${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="prb-row"><div class="prb-row-spread"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</div></section><section class="card"><div class="card-header prb-card-head"><h3>Tasks requiring attention</h3><button class="btn btn-link" data-nav2="tasks" data-filter2="open">View tasks</button></div><div class="card-content">${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="prb-row"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</div></section></div>`;
  document.querySelectorAll('[data-onboard]').forEach(b=>b.onclick=()=>{const target=b.dataset.onboard;onboardBannerSeen=true;current='admin';adminView='tool';adminTab=target==='agents'?'aiAgents':'packages';renderView()});
  if($('#onboardDismiss'))$('#onboardDismiss').onclick=()=>{onboardBannerSeen=true;$('#onboardRow').remove()};
  document.querySelectorAll('[data-kpi-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.kpiNav;viewFilter=b.dataset.kpiFilter;detailRecord=null;renderView()});
@@ -1963,7 +1963,7 @@ function pipeline(){
  let stages=['Lead','Qualified','Discovery','Proposal','Negotiation','Won','Lost'];
  if(viewFilter==='open')stages=['Lead','Qualified','Discovery','Proposal','Negotiation'];
  if(viewFilter==='won')stages=['Won'];
- $('#view').innerHTML=`<div class="page-head"><div><h1>${viewFilter==='won'?'Won Opportunities':viewFilter==='open'?'Open Pipeline':'Sales Pipeline'}</h1><p class="muted">Opportunities are optional sales records linked to a customer and, when useful, a primary contact.</p></div><button class="btn btn-primary" id="addDeal">+ New opportunity</button></div><div class="kanban">${stages.map(s=>{const items=data.opportunities.filter(o=>o.stage===s);return `<div class="kanban-col"><div class="kanban-head"><span>${s}</span><span>${items.length}</span></div>${items.map(o=>`<article class="deal"><div class="deal-title">${o.title}</div><small class="muted">${companyName(o.companyId)}${o.contactId?' · '+contactName(o.contactId):''}</small><div class="deal-value">${money(o.value)}</div><small class="muted">${o.probability}% · ${o.close}</small><div class="actions"><button class="icon-btn" data-edit="${o.id}">Edit</button><button class="icon-btn" data-del="${o.id}">Delete</button></div></article>`).join('')}</div>`}).join('')}</div>`;
+ $('#view').innerHTML=`<div class="page-head"><div><h1>${viewFilter==='won'?'Won Opportunities':viewFilter==='open'?'Open Pipeline':'Sales Pipeline'}</h1><p class="muted">Opportunities are optional sales records linked to a customer and, when useful, a primary contact.</p></div><button class="btn btn-primary btn-shimmer" id="addDeal">+ New opportunity</button></div><div class="kanban">${stages.map(s=>{const items=data.opportunities.filter(o=>o.stage===s);return `<section class="card prb-kanban-col"><div class="prb-kanban-head"><h3>${s}</h3><span class="badge badge-secondary">${items.length}</span></div><div class="prb-kanban-body">${items.map(o=>`<article class="card prb-deal"><div class="prb-deal-title">${o.title}</div><small class="muted">${companyName(o.companyId)}${o.contactId?' · '+contactName(o.contactId):''}</small><div class="prb-deal-value">${money(o.value)}</div><small class="muted">${o.probability}% · ${o.close}</small><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${o.id}">Edit</button><button class="btn btn-ghost btn-sm" data-del="${o.id}">Delete</button></div></article>`).join('')}</div></section>`}).join('')}</div>`;
  $('#addDeal').onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields));
  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields),byId('opportunities',b.dataset.edit)));
  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('opportunities',b.dataset.del));
@@ -2452,9 +2452,9 @@ function tablePage(key,cfg){
  const groups=svCapable?groupRows(arr,ensureViewState(key).groupByField):[{label:null,rows:arr}];
  const sel=svCapable?selectionFor(key):new Set();
  const extraCols=svCapable?1:0;
- const rowHtml=r=>`<tr>${svCapable?`<td><input type="checkbox" class="bulk-check" data-bulk-id="${r.id}" ${sel.has(r.id)?'checked':''}></td>`:''}${cfg.cols.map(c=>`<td>${cellValue(r,c,key)}</td>`).join('')}<td><div class="actions"><button class="icon-btn" data-edit="${r.id}">Edit</button><button class="icon-btn" data-del="${r.id}">Delete</button></div></td></tr>`;
- const bodyHtml=groups.map(g=>`${g.label!==null?`<tr class="group-row"><td colspan="${cfg.cols.length+1+extraCols}" style="font-weight:600;background:var(--surface-2,#f8f9fb)">${g.label}</td></tr>`:''}${g.rows.map(rowHtml).join('')}`).join('');
- $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>${viewFilter?viewFilter.charAt(0).toUpperCase()+viewFilter.slice(1):labels[key]}</span></div><h1>${viewFilter==='open'&&key==='tasks'?'Open Tasks':viewFilter==='outstanding'?'Outstanding Invoices':labels[key]}</h1><p class="muted">${arr.length} connected records in the sample workspace</p></div><button class="btn btn-primary" id="addRecord">+ New ${labels[key].replace(/s$/,'')}</button></div>${svCapable?savedViewBarHtml(key,cfg,statusField):''}<div class="table-wrap"><table class="table"><thead><tr>${svCapable?'<th></th>':''}${cfg.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th>Actions</th></tr></thead><tbody>${bodyHtml}</tbody></table>${arr.length?'':'<div class="empty">No records yet</div>'}</div>${svCapable?bulkActionBarHtml(key,statusField):''}`;
+ const rowHtml=r=>`<tr>${svCapable?`<td><input type="checkbox" class="bulk-check" data-bulk-id="${r.id}" ${sel.has(r.id)?'checked':''}></td>`:''}${cfg.cols.map(c=>`<td>${cellValue(r,c,key)}</td>`).join('')}<td><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${r.id}">Edit</button><button class="btn btn-ghost btn-sm" data-del="${r.id}">Delete</button></div></td></tr>`;
+ const bodyHtml=groups.map(g=>`${g.label!==null?`<tr class="prb-group-row"><td colspan="${cfg.cols.length+1+extraCols}">${g.label}</td></tr>`:''}${g.rows.map(rowHtml).join('')}`).join('');
+ $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>${viewFilter?viewFilter.charAt(0).toUpperCase()+viewFilter.slice(1):labels[key]}</span></div><h1>${viewFilter==='open'&&key==='tasks'?'Open Tasks':viewFilter==='outstanding'?'Outstanding Invoices':labels[key]}</h1><p class="muted">${arr.length} connected records in the sample workspace</p></div><button class="btn btn-primary btn-shimmer" id="addRecord">+ New ${labels[key].replace(/s$/,'')}</button></div>${svCapable?savedViewBarHtml(key,cfg,statusField):''}<div class="table-wrap"><table class="table"><thead><tr>${svCapable?'<th></th>':''}${cfg.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th>Actions</th></tr></thead><tbody>${bodyHtml}</tbody></table>${arr.length?'':'<div class="empty">No records yet</div>'}</div>${svCapable?bulkActionBarHtml(key,statusField):''}`;
  document.querySelector('[data-clear-filter]')?.addEventListener('click',()=>{current='dashboard';viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  $('#addRecord').onclick=()=>recordModal(key,cfg.fields());
@@ -2532,12 +2532,18 @@ function wireRelatedRows(scope){
  });
 }
 function detail360Header(breadcrumbLabel,title,eyebrow,metaHtml,auditHtml){
- return `<div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><button data-back-list>${breadcrumbLabel}</button><span>›</span><span>${title}</span></div>
- <div class="rule360-header">
-  <div><div class="eyebrow">${eyebrow||''}</div><h1>${title}</h1><div class="rule360-meta">${metaHtml}</div>${auditHtml||''}</div>
-  <div style="display:flex;gap:8px">
-   <button class="btn btn-secondary" id="openObject360">View in Object 360</button>
-   <button class="btn btn-secondary" id="editDetailRecord">Edit</button>
+ // Modern UI PR-B2: shadcn-style record header - avatar with initials,
+ // name + badges, primary Edit CTA (shimmer), outline secondary actions.
+ const initials=String(title||'—').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'—';
+ return `<nav class="breadcrumbs prb2-crumbs" aria-label="Breadcrumb"><button data-clear-filter>Dashboard</button><span aria-hidden="true">›</span><button data-back-list>${breadcrumbLabel}</button><span aria-hidden="true">›</span><span aria-current="page">${title}</span></nav>
+ <div class="card record-head">
+  <div class="record-head-id">
+   <span class="avatar record-head-avatar" aria-hidden="true">${initials}</span>
+   <div class="record-head-titles"><div class="eyebrow">${eyebrow||''}</div><h1>${title}</h1><div class="record-head-meta">${metaHtml}</div>${auditHtml||''}</div>
+  </div>
+  <div class="record-head-actions">
+   <button class="btn btn-outline" id="openObject360">View in Object 360</button>
+   <button class="btn btn-primary btn-shimmer" id="editDetailRecord">Edit</button>
   </div>
  </div>`;
 }
@@ -2557,25 +2563,32 @@ const ACTIVITY_CHANNELS=[['email','Email'],['call','Call'],['message','Message']
 function activityNowForInput(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
 function activityTimelineHtml(entityType,entityId){
  const items=(data.activities||[]).filter(a=>a.entityType===entityType&&a.entityId===entityId).slice().sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
- return `<div class="panel" data-activity-panel="${entityType}:${entityId}">
-  <div class="panel-head"><h3 style="margin:0;font-size:16px">Interactions</h3><button type="button" class="btn btn-secondary" data-toggle-log-activity>+ Log an interaction</button></div>
-  <div data-log-activity-fields class="form-grid" style="display:none;margin:12px 0">
-   <div class="field"><label>Channel</label><select data-activity-channel>${ACTIVITY_CHANNELS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
-   <div class="field" data-activity-direction-field><label>Direction</label><select data-activity-direction><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select></div>
-   <div class="field full"><label>Subject</label><input data-activity-subject placeholder="Following up on pricing"></div>
-   <div class="field"><label>When</label><input data-activity-occurred type="datetime-local" value="${activityNowForInput()}"></div>
-   <div class="field"><label>Participants</label><input data-activity-participants placeholder="jane@acme.com"></div>
-   <div class="field full"><label>Notes</label><textarea data-activity-body rows="3"></textarea></div>
-   <div class="field full"><button type="button" class="btn btn-primary" data-log-activity-submit>Log interaction</button></div>
+ return `<div class="card" data-activity-panel="${entityType}:${entityId}">
+  <div class="card-header prb2-card-head-split"><h3 class="card-title">Interactions <span class="badge-secondary">${items.length}</span></h3><button type="button" class="btn btn-outline btn-sm" data-toggle-log-activity>+ Log an interaction</button></div>
+  <div class="card-content">
+   <div data-log-activity-fields class="form-grid prb2-activity-fields" style="display:none;margin:12px 0">
+    <div class="field"><label>Channel</label><select class="select" data-activity-channel>${ACTIVITY_CHANNELS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
+    <div class="field" data-activity-direction-field><label>Direction</label><select class="select" data-activity-direction><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select></div>
+    <div class="field full"><label>Subject</label><input class="input" data-activity-subject placeholder="Following up on pricing"></div>
+    <div class="field"><label>When</label><input class="input" data-activity-occurred type="datetime-local" value="${activityNowForInput()}"></div>
+    <div class="field"><label>Participants</label><input class="input" data-activity-participants placeholder="jane@acme.com"></div>
+    <div class="field full"><label>Notes</label><textarea class="textarea" data-activity-body rows="3"></textarea></div>
+    <div class="field full"><button type="button" class="btn btn-primary" data-log-activity-submit>Log interaction</button></div>
+   </div>
+   <div data-activity-list class="prb2-timeline">${items.length?items.map(activityItemHtml).join(''):'<div class="empty">No interactions logged yet.</div>'}</div>
   </div>
-  <div data-activity-list>${items.length?items.map(activityItemHtml).join(''):'<div class="empty">No interactions logged yet.</div>'}</div>
  </div>`;
 }
 function activityItemHtml(a){
- return `<div style="padding:8px 0;border-bottom:1px solid var(--border,#eee);font-size:13px">
-  <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span class="badge">${a.channel}</span>${a.direction?`<span class="muted" style="font-size:11px">${a.direction}</span>`:''}${a.subject?`<strong>${a.subject}</strong>`:''}</div>
-  <div style="margin-top:4px">${a.body}</div>
-  <div class="muted" style="font-size:11px;margin-top:4px">${a.participants?a.participants+' · ':''}${new Date(a.occurredAt).toLocaleString()}</div>
+ // Modern UI PR-B2: vertical-timeline entry - channel dot + tinted badge.
+ const tone={email:'badge-info',call:'badge-success',message:'badge-secondary'}[a.channel]||'badge-secondary';
+ return `<div class="prb2-tl-item">
+  <span class="prb2-tl-dot prb2-tl-${a.channel}" aria-hidden="true"></span>
+  <div class="prb2-tl-body">
+   <div class="prb2-tl-head"><span class="badge ${tone}">${a.channel}</span>${a.direction?`<span class="prb2-tl-dir">${a.direction}</span>`:''}${a.subject?`<strong>${a.subject}</strong>`:''}</div>
+   <div class="prb2-tl-notes">${a.body}</div>
+   <div class="prb2-tl-meta">${a.participants?a.participants+' · ':''}${new Date(a.occurredAt).toLocaleString()}</div>
+  </div>
  </div>`;
 }
 /** Wires every `[data-activity-panel]` found under `root` - the
@@ -2816,7 +2829,13 @@ function object360Modal(entityType,entityId,label){
  object360State={root:{entityType,entityId,label},inspect:{entityType,entityId,label},trail:[]};
  modal('Object 360: '+label,'<div id="object360Body"></div>');
  const modalEl=document.querySelector('#modal .modal');
- if(modalEl)modalEl.style.cssText+=';width:min(1100px,95vw);max-height:92vh';
+ // Modern UI PR-B: adopt the dialog component's chrome classes for the
+ // Object 360 modal. The shared modal() markup stays untouched - these
+ // classes only add token-driven chrome and sit below the modal's own
+ // inline width/max-height.
+ const overlayEl=document.querySelector('#modal');
+ if(overlayEl)overlayEl.classList.add('dialog-overlay');
+ if(modalEl){modalEl.classList.add('dialog-content');modalEl.style.cssText+=';width:min(1100px,95vw);max-height:92vh'}
  o360WireModalChrome();
  renderObject360Body();
 }
@@ -2862,7 +2881,7 @@ function renderObject360Body(){
  const o360CardPosStyle=object360CardPos?(object360CardPos.dock==='left'?` style="left:16px;top:16px;right:auto"`:(object360CardPos.dock==='right'?` style="right:16px;top:16px;left:auto"`:` style="left:${object360CardPos.left}px;top:${object360CardPos.top}px;right:auto"`)):'';
  let inspectorHtml;
  if(s.inspect.entityType==='orgUnit'){
-  inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
+  inspectorHtml=`<div class="ontology-inspector-card card" id="o360InspectorCard"${o360CardPosStyle}>
    <div class="ontology-inspector-head" id="o360InspectorHead">${o360TypeDot('orgUnit')}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">Business Unit</div></div></div>
    <p class="muted" style="font-size:12px">Business Units aren't individually re-centerable here - see Admin → Organization Units for its own detail.</p>
   </div>`;
@@ -2871,7 +2890,7 @@ function renderObject360Body(){
   // to the owning admin screen instead of offering a broken Open button.
   const pseudoTab={business_rule:'rules',workflow:'workflow',ai_agent:'aiAgents'}[s.inspect.entityType];
   const pseudoTabLabel={business_rule:'Business Rules',workflow:'Workflows',ai_agent:'AI Agents'}[s.inspect.entityType];
-  inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
+  inspectorHtml=`<div class="ontology-inspector-card card" id="o360InspectorCard"${o360CardPosStyle}>
    <div class="ontology-inspector-head" id="o360InspectorHead">${o360TypeDot(s.inspect.entityType)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${driver.typeLabel(s.inspect.entityType)}</div></div></div>
    <div class="ontology-inspector-actions">
     <button type="button" class="btn btn-secondary" id="o360OpenPseudoAdmin">Open in Admin → ${pseudoTabLabel}</button>
@@ -2893,20 +2912,20 @@ function renderObject360Body(){
     const isValidation=(r.actions||[]).some(a=>a.type==='block_save'||a.type==='show_error');
     const matched=rootRecord?ruleConditionsMatch(r,rootRecord):null;
     const verdict=matched===null?null:(isValidation?(matched?'failing':'passing'):(matched?'applying':'not applying'));
-    const chipCls=(verdict==='passing'||verdict==='applying')?'o360-chip-pass':(verdict==='failing'?'o360-chip-fail':'o360-chip-neutral');
-    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="rules" title="Open in Admin → Business Rules"><span style="flex:1;text-align:left">${r.name||'Untitled rule'}</span>${verdict?`<span class="o360-chip ${chipCls}">${verdict}</span>`:''}</button>`;
+    const chipCls=(verdict==='passing'||verdict==='applying')?'badge-success':(verdict==='failing'?'badge-destructive':'badge-secondary');
+    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="rules" title="Open in Admin → Business Rules"><span style="flex:1;text-align:left">${r.name||'Untitled rule'}</span>${verdict?`<span class="badge ${chipCls}">${verdict}</span>`:''}</button>`;
    }).join('');
    // Issue #372: Active/Inactive + a live trigger check per workflow. The
    // demo keeps no workflow run history, so this is honestly labeled
    // "Trigger check" - never a faked "last run" timestamp.
    const wfRows=workflows.map(w=>{
     const trig=rootRecord?conditionsMatch(w.matchType||'all',w.conditions||[],rootRecord):null;
-    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="workflow" title="Open in Admin → Workflows"><span style="flex:1;text-align:left">${w.name||'Untitled workflow'}</span><span class="o360-chip ${w.active?'o360-chip-pass':'o360-chip-neutral'}">${w.active?'Active':'Inactive'}</span>${trig===null?'':`<span class="o360-chip o360-chip-neutral" title="Trigger check: this workflow's conditions evaluated against the record right now">${trig?'would trigger on this record':'conditions not met'}</span>`}</button>`;
+    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="workflow" title="Open in Admin → Workflows"><span style="flex:1;text-align:left">${w.name||'Untitled workflow'}</span><span class="badge ${w.active?'badge-success':'badge-secondary'}">${w.active?'Active':'Inactive'}</span>${trig===null?'':`<span class="badge badge-info" title="Trigger check: this workflow's conditions evaluated against the record right now">${trig?'would trigger on this record':'conditions not met'}</span>`}</button>`;
    }).join('');
    // Issue #374: access chips per agent from its capability edges.
    const agentRows=agents.map(a=>{
     const chips=o360AgentChips(a,s.root.entityType);
-    return `<div class="ontology-inspector-bullet" style="cursor:default"><span style="flex:1;text-align:left">${a.icon||''} ${a.name}</span>${chips.map(c=>`<span class="o360-chip ${c==='can read'||c==='can update'||c==='can delete'?'o360-chip-pass':'o360-chip-neutral'}">${c}</span>`).join('')}</div>`;
+    return `<div class="ontology-inspector-bullet" style="cursor:default"><span style="flex:1;text-align:left">${a.icon||''} ${a.name}</span>${chips.map(c=>`<span class="badge ${c==='can read'||c==='can update'||c==='can delete'?'badge-info':'badge-secondary'}">${c}</span>`).join('')}</div>`;
    }).join('');
    groupsHtml=`${groupEntries.map(([key,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${(members[0]&&members[0].groupLabel)||key}</div>${members.slice(0,MAXPER).map(m=>`<button type="button" class="ontology-inspector-bullet" data-o360g-inspect="${m.entityType}:${m.entityId}">${entityDotHtml(m.entityType)}${m.displayName}</button>`).join('')}${members.length>MAXPER?`<div class="muted" style="font-size:12px">+${members.length-MAXPER} more</div>`:''}</div>`).join('')}
     ${groupEntries.length===0?'<p class="muted" style="font-size:12px">No related records yet.</p>':''}
@@ -2916,7 +2935,7 @@ function renderObject360Body(){
     ${agents.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">AI Agents scoped to this object type</div>${agentRows}</div>`:''}
     ${activities.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Activity</div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}`;
   }
-  inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
+  inspectorHtml=`<div class="ontology-inspector-card card" id="o360InspectorCard"${o360CardPosStyle}>
    <div class="ontology-inspector-head" id="o360InspectorHead">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${driver.typeLabel(s.inspect.entityType)}</div></div></div>
    <div class="ontology-inspector-actions">
     <button type="button" class="btn btn-primary" id="o360OpenRecord">Open record</button>
@@ -2931,10 +2950,12 @@ function renderObject360Body(){
  // this record's model, now including rules/workflows/agents/orgUnit.
  const legendTypes=[];
  model.nodes.forEach(n=>{if(legendTypes.indexOf(n.type)<0)legendTypes.push(n.type)});
+ const legendCounts={};
+ model.nodes.forEach(n=>{legendCounts[n.type]=(legendCounts[n.type]||0)+1});
  const legendHtmlStr=legendTypes.length?`<div class="ontology-legend">${legendTypes.map(k=>{
   const lbl=driver.typeLabel(k);
   const isOff=object360HiddenTypes.has(k);
-  return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl}"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${colors[k]}"></span>${lbl}</button>`;
+  return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl} (${legendCounts[k]||0} shown)"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${colors[k]}"></span>${lbl}<span class="ontology-legend-count">${legendCounts[k]||0}</span></button>`;
  }).join('')}</div>`:'';
 
  // Breadcrumb back through the pivot trail (issue #374).
@@ -2943,7 +2964,7 @@ function renderObject360Body(){
 
  body.innerHTML=`<p class="muted" style="font-size:13px;max-width:720px">Every record directly linked to ${s.root.label}, its Business Unit, the Business Rules/Workflows that apply to records like it, and which AI Agents are scoped to act on it.</p>
  ${crumbHtml}
- <div class="o360-toolbar">${legendHtmlStr}<label class="o360-depth">Depth <select id="o360Depth">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="o360FieldsToggle"${object360HiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>
+ <div class="o360-toolbar">${legendHtmlStr}<label class="o360-depth">Depth <select id="o360Depth" class="select">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="o360FieldsToggle"${object360HiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>
  <div class="ontology-graph-wrap" style="height:${H+40}px">
   <div class="ontology-graph-canvas" style="width:${W}px;height:${H}px">${graphHtml}${inspectorHtml}</div>
  </div>`;
@@ -2990,8 +3011,8 @@ function companyDetail(id){
  const contracts=data.contracts.filter(x=>x.companyId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Company'&&x.relatedId===id);
  $('#view').innerHTML=`${detail360Header('Companies',c.name,c.customerNumber,`${badgeMaybe(c.status)}`,auditByline(c)+ownershipByline(c))}
- <div class="rule360-grid">
-  <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewPanelHtml('companies',overviewFields,c,id)}</div></div>
+ <div class="rule360-grid prb2-detail">
+  <div><div class="card"><div class="card-header"><h3 class="card-title">Overview</h3></div><div class="card-content">${overviewPanelHtml('companies',overviewFields,c,id)}</div></div></div>
   <div>
    ${relatedCardHtml('Contacts',contacts,'contacts',x=>x.name,x=>x.role||'')}
    ${relatedCardHtml('Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value))}
@@ -3017,8 +3038,8 @@ function contactDetail(id){
  const contracts=data.contracts.filter(x=>x.contactId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Contact'&&x.relatedId===id);
  $('#view').innerHTML=`${detail360Header('Contacts',c.name,c.contactNumber,`${badgeMaybe(c.status)}<span>${c.role||'—'}</span><a class="cell-link" data-nav-related="companies:${c.companyId}">${companyName(c.companyId)}</a>`,auditByline(c)+ownershipByline(c))}
- <div class="rule360-grid">
-  <div><div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewPanelHtml('contacts',overviewFields,c,id)}</div></div>
+ <div class="rule360-grid prb2-detail">
+  <div><div class="card"><div class="card-header"><h3 class="card-title">Overview</h3></div><div class="card-content">${overviewPanelHtml('contacts',overviewFields,c,id)}</div></div></div>
   <div>
    ${relatedCardHtml('Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value))}
    ${relatedCardHtml('Quotes',quotes,'quotes',x=>x.number,x=>x.status)}
@@ -3113,7 +3134,9 @@ function overviewGroupsFor(key,fields){
 }
 // Read-only counterpart to groupsHtml, for overviewGroupsFor's output.
 function overviewGroupsHtml(key,groups,record){
- return groups.map(g=>`${g.title?`<h4 style="margin:0 0 8px">${g.title}</h4>`:''}<div class="form-grid" style="grid-template-columns:repeat(${g.columns},1fr);margin-bottom:14px">${g.items.map(it=>`<div class="field${it.full?' full':''}"><label>${it.field[1]}</label><div>${overviewValueHtml(key,it.field,record)}</div></div>`).join('')}</div>`).join('');
+ // Modern UI PR-B2: definition-list field grid - labels in
+ // muted-foreground, values in foreground.
+ return groups.map(g=>`<div class="prb2-field-group">${g.title?`<h4 class="prb2-field-group-title">${g.title}</h4>`:''}<dl class="prb2-field-grid" style="--prb2-cols:${g.columns}">${g.items.map(it=>`<div class="prb2-field-row${it.full?' prb2-field-row-full':''}"><dt>${it.field[1]}</dt><dd>${overviewValueHtml(key,it.field,record)}</dd></div>`).join('')}</dl></div>`).join('');
 }
 // Screen Builder 2.0 (issue #195, 5b): the Overview panel's single choke
 // point across companyDetail/contactDetail/genericRecordDetail - checks
@@ -3228,12 +3251,12 @@ function genericRecordDetail(key,id){
  const relationTypes=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation','ownerPicker','orgUnitPicker'];
  const overviewFields=fieldsFor(key,fieldsFn).filter(f=>!relationTypes.includes(f[2])&&f[0]!==DETAIL_TITLE_FIELD[key]);
  const isDoc=['quotes','orders','invoices'].includes(key);
- const linesHtml=isDoc?`<div class="panel" style="margin-bottom:16px"><h3 style="margin-top:0">Products & services</h3><div class="table-wrap"><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table></div><div class="line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="muted" style="font-size:13px;font-weight:400">· Balance ${money(docBalance(r))}</span>`:''}</div></div>`:'';
+ const linesHtml=isDoc?`<div class="card prb2-lines"><div class="card-header"><h3 class="card-title">Products & services</h3></div><div class="card-content"><div class="table-wrap"><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table></div><div class="prb2-line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="prb2-line-balance">· Balance ${money(docBalance(r))}</span>`:''}</div></div></div>`:'';
  $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],r[DETAIL_TITLE_FIELD[key]]||'—',DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r),auditByline(r)+ownershipByline(r))}
- <div class="rule360-grid">
+ <div class="rule360-grid prb2-detail">
   <div>
    ${linesHtml}
-   <div class="panel"><h3 style="margin-top:0">Overview</h3>${overviewPanelHtml(key,overviewFields,r,id)}</div>
+   <div class="card"><div class="card-header"><h3 class="card-title">Overview</h3></div><div class="card-content">${overviewPanelHtml(key,overviewFields,r,id)}</div></div>
   </div>
   <div>${recordRelatedDefs(key,r).map(([title,items,navKey,labelFn,metaFn])=>relatedCardHtml(title,items,navKey,labelFn,metaFn)).join('')}${customRelatedCardsHtml(key,id)}</div>
  </div>`;
@@ -4858,7 +4881,7 @@ function depRenderGraph(model,W,H){
 // objects, and quick actions.
 function depDetailPanelHtml(model){
  const s=dependencyExplorerState;
- if(!s.inspectType||!s.inspectId)return '<div class="ontology-detail-panel"><p class="muted" style="font-size:13px">Select a node to inspect it.</p></div>';
+ if(!s.inspectType||!s.inspectId)return '<div class="ontology-detail-panel card"><p class="muted" style="font-size:13px">Select a node to inspect it.</p></div>';
  const node=model.nodes.find(n=>n.type===s.inspectType&&n.id===s.inspectId);
  const label=node?node.label:systemGraphNodeLabel(s.inspectType,s.inspectId);
  const dependents=systemGraphDirect(s.inspectType,s.inspectId,'dependents');
@@ -4873,9 +4896,9 @@ function depDetailPanelHtml(model){
  const agent=s.inspectType==='ai_agent'?(data.aiAgents||[]).find(a=>a.id===s.inspectId):null;
  const constrained=!!agent&&systemGraphEdges().some(e=>e.edgeType==='constrained_by'&&e.toType==='ai_agent'&&e.toId===s.inspectId);
  const expandable=depExpandableCount(model,s.inspectType,s.inspectId);
- return '<div class="ontology-detail-panel">'
+ return '<div class="ontology-detail-panel card">'
   +'<div class="ontology-inspector-head">'+typeDotHtml(s.inspectType,14)+'<div><strong>'+label+'</strong><div class="ontology-inspector-subtitle">'+(SYSTEM_NODE_TYPE_LABELS[s.inspectType]||s.inspectType)+'</div></div></div>'
-  +'<div class="ontology-detail-badges"><span class="badge">'+depNodeOrigin(s.inspectType,s.inspectId)+'</span>'+(agent?'<span class="badge">'+((agent.objectTypeScopes||[]).length?'Scoped':'Unscoped')+'</span>':'')+(constrained?'<span class="badge" title="A business rule constrains what this agent may do">policy: constrained</span>':'')+'</div>'
+  +'<div class="ontology-detail-badges"><span class="badge badge-secondary">'+(SYSTEM_NODE_TYPE_LABELS[s.inspectType]||s.inspectType)+'</span><span class="badge badge-outline">'+depNodeOrigin(s.inspectType,s.inspectId)+'</span>'+(agent?'<span class="badge badge-outline">'+((agent.objectTypeScopes||[]).length?'Scoped':'Unscoped')+'</span>':'')+(constrained?'<span class="badge badge-outline" title="A business rule constrains what this agent may do">policy: constrained</span>':'')+'</div>'
   +(definition?'<p class="ontology-inspector-definition">'+definition+'</p>':'')
   +'<div class="ontology-detail-actions">'
   +'<button type="button" class="btn btn-primary" id="depOpenAdmin">Open in its admin screen</button>'
@@ -5215,7 +5238,7 @@ function dependencyExplorerTab(body){
   const depH=Math.max(600,Math.min(940,Math.round(440+depModel.nodes.length*3.2)));
   depLastCanvasW=depW;depLastCanvasH=depH;
   const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
-  graphHtml=`<div class="ontology-graph-layout"><div style="flex:1;min-width:0">${depSimBannerHtml()}<div class="ontology-toolbar"><span class="ontology-toolbar-group"><button type="button" class="btn btn-secondary" id="depZoomIn" title="Zoom in">+</button><button type="button" class="btn btn-secondary" id="depZoomOut" title="Zoom out">−</button><button type="button" class="btn btn-secondary" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-secondary" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></span><span class="ontology-search-wrap"><input type="search" id="depSearch" class="ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></span><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'}" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button><button type="button" class="btn btn-secondary" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>${depPathBarHtml()}<div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div>${depDetailPanelHtml(depModel)}</div>`;
+  graphHtml=`<div class="ontology-graph-layout"><div style="flex:1;min-width:0">${depSimBannerHtml()}<div class="ontology-toolbar"><span class="ontology-toolbar-group"><button type="button" class="btn btn-secondary btn-sm" id="depZoomIn" title="Zoom in">+</button><button type="button" class="btn btn-secondary btn-sm" id="depZoomOut" title="Zoom out">−</button><button type="button" class="btn btn-secondary btn-sm" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-secondary btn-sm" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></span><span class="ontology-search-wrap"><input type="search" id="depSearch" class="input ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></span><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'}" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button><button type="button" class="btn btn-secondary" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange" class="select"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>${depPathBarHtml()}<div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div>${depDetailPanelHtml(depModel)}</div>`;
  }
 
 
@@ -5224,14 +5247,14 @@ function dependencyExplorerTab(body){
   <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams, glossary terms, metrics, test cases) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
   ${legendHtml(depExplorerHiddenTypes,depCounts)}
   <div class="form-row">
-   <label>Component type<select id="depType">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
-   <label>Component<select id="depComponent">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
-   <label>Depth<select id="depDepth">${['1','2','3','all'].map(d=>`<option value="${d}" ${String(dependencyExplorerState.depth)===d?'selected':''}>${d==='all'?'All':d+' hop'+(d==='1'?'':'s')}</option>`).join('')}</select></label>
+   <label>Component type<select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
+   <label>Component<select id="depComponent" class="select">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
+   <label>Depth<select id="depDepth" class="select">${['1','2','3','all'].map(d=>`<option value="${d}" ${String(dependencyExplorerState.depth)===d?'selected':''}>${d==='all'?'All':d+' hop'+(d==='1'?'':'s')}</option>`).join('')}</select></label>
   </div>
   ${!dependencyExplorerState.id?'<div class="empty">Nothing synced yet for this type.</div>':`
   <div class="actions" style="margin:12px 0">
-   <button type="button" class="btn ${dependencyExplorerState.showImpact?'btn-primary':''}" data-dep-toggle="showImpact">Full impact (everything upstream)</button>
-   <button type="button" class="btn ${dependencyExplorerState.showLineage?'btn-primary':''}" data-dep-toggle="showLineage">Full lineage (everything downstream)</button>
+   <button type="button" class="badge ${dependencyExplorerState.showImpact?'badge-info':'badge-secondary'}" data-dep-toggle="showImpact" title="Toggle full impact">Full impact (everything upstream)</button>
+   <button type="button" class="badge ${dependencyExplorerState.showLineage?'badge-info':'badge-secondary'}" data-dep-toggle="showLineage" title="Toggle full lineage">Full lineage (everything downstream)</button>
    ${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}
   </div>
   ${graphHtml}`}
