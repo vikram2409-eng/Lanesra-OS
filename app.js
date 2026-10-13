@@ -832,24 +832,24 @@ const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],[
 const ADMIN_CATEGORIES=[
  {key:'workspace',label:'Workspace',icon:'⚙',note:'How the workspace looks and is identified',items:['profile','numbering']},
  {key:'access',label:'Access',icon:'👤',note:'Who can sign in and what they can do',items:['users','organization','orgUnits','teams','orgHierarchy','accessInspector']},
- {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
  {key:'data-model',label:'Data Model',icon:'🧩',note:'Objects, relationships and fields',items:['objects','relationships','fields','dependencyExplorer','businessGlossary']},
  {key:'ontology',label:'Ontology',icon:'◈',note:'Every object as one typed registry, Palantir-style - Object Types, Link Types, governed Action Types, and which AI agents may touch what',items:['objectTypes','dependencyExplorer','agentBindings']},
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
- {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards','metricDefinitions']},
- {key:'solutions',label:'Deployment Management',icon:'🗂',note:"What's installed, what it created, and who published it",items:['solutions']},
- {key:'testing',label:'Testing & Quality',icon:'✅',note:'Define deterministic and AI test cases, and run a mix of them together for one readiness result',items:['testEval']},
- {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
- {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
- {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
  {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
+ {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
+ {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
+ {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
+ {key:'analytics',label:'Analytics',icon:'📊',note:'What shows on the dashboard',items:['kpis','dashboards','metricDefinitions']},
+ {key:'integrations',label:'Integrations',icon:'🔌',note:'Connect this workspace to other systems',items:['integrations']},
+ {key:'solutions',label:'Deployment Management',icon:'🗂',note:"What's installed, what it created, and who published it",items:['solutions']},
+ {key:'testing',label:'Testing & Quality',icon:'✅',note:'Define deterministic and AI test cases, and run a mix of them together for one readiness result',items:['testEval']}
 ];
-let dependencyExplorerState={type:'custom_object',id:null,depth:'2',inspectType:null,inspectId:null,showImpact:true,showLineage:true,expanded:{},collapsed:{},zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};
+let dependencyExplorerState={type:'custom_object',id:null,depth:'1',inspectType:null,inspectId:null,showImpact:true,showLineage:true,expanded:{},collapsed:{},zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};
 // PR3-A power tools: last canvas size (for centering) + one-time document-level pan listeners.
 let depLastCanvasW=0,depLastCanvasH=0,depPanWired=false,depDragPanEl=null,depDragState=null;
-function depMaxDepth(){const d=dependencyExplorerState.depth;return d==='all'?25:(parseInt(d,10)||2)}
+function depMaxDepth(){const d=dependencyExplorerState.depth;return d==='all'?25:(parseInt(d,10)||1)}
 // Legend toggle-filter (issue #339's own design text: "identify/toggle
 // what's showing") - kept as its own module-level Set rather than inside
 // `dependencyExplorerState` since it's a pure display filter, orthogonal
@@ -2333,18 +2333,18 @@ function savedViewBarHtml(key,cfg,statusField){
   return active.statusFilter!==vs.statusFilter||active.sortField!==vs.sortField||active.sortDirection!==vs.sortDirection||active.groupByField!==vs.groupByField;
  })();
  const activeView=views.find(v=>v.id===vs.activeId);
- return `<div class="view-bar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0">
-  <select id="viewSelect" style="min-width:160px">
+ return `<div class="view-bar">
+  <select id="viewSelect" class="select view-bar-select" style="min-width:170px;width:auto">
    <option value="">All records (no view)</option>
    ${views.map(v=>`<option value="${v.id}" ${v.id===vs.activeId?'selected':''}>${v.isDefault?'★ ':''}${v.name}</option>`).join('')}
   </select>
-  ${statusField?`<label style="display:flex;align-items:center;gap:6px;font-size:13px">Status<select id="viewStatusFilter"><option value="">Any</option>${statusField[3].split('|').map(o=>`<option value="${o}" ${o===vs.statusFilter?'selected':''}>${o}</option>`).join('')}</select></label>`:''}
-  <label style="display:flex;align-items:center;gap:6px;font-size:13px">Sort by
-   <select id="viewSort"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.sortField?'selected':''}>${c[1]}</option>`).join('')}</select>
+  ${statusField?`<label class="view-bar-label">Status<select id="viewStatusFilter" class="select view-bar-select" style="width:auto"><option value="">Any</option>${statusField[3].split('|').map(o=>`<option value="${o}" ${o===vs.statusFilter?'selected':''}>${o}</option>`).join('')}</select></label>`:''}
+  <label class="view-bar-label">Sort by
+   <select id="viewSort" class="select view-bar-select" style="width:auto"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.sortField?'selected':''}>${c[1]}</option>`).join('')}</select>
    ${vs.sortField?`<button type="button" class="icon-btn" id="viewSortDir" title="Toggle direction">${vs.sortDirection==='desc'?'↓':'↑'}</button>`:''}
   </label>
-  <label style="display:flex;align-items:center;gap:6px;font-size:13px">Group by
-   <select id="viewGroup"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.groupByField?'selected':''}>${c[1]}</option>`).join('')}</select>
+  <label class="view-bar-label">Group by
+   <select id="viewGroup" class="select view-bar-select" style="width:auto"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.groupByField?'selected':''}>${c[1]}</option>`).join('')}</select>
   </label>
   ${isDirty?`<button type="button" class="link-btn" id="viewSaveNew">Save as view…</button>`:''}
   ${activeView&&isDirty?`<button type="button" class="link-btn" id="viewUpdate">Update "${activeView.name}"</button>`:''}
@@ -2843,7 +2843,7 @@ function o360RecordDriver(rootEntityType,rootEntityId){
   origin:(t)=>ONTOLOGY_BUILTIN_TYPES.some(b=>b[0]===t)?'OOB':'Custom',
   direct:recordGraphDirect,
   dirs:[s.showLineage===false?null:'dependencies',s.showImpact===false?null:'dependents'].filter(Boolean),
-  maxDepth:(depth>=1&&depth<=3)?depth:2,
+  maxDepth:(depth>=1&&depth<=3)?depth:1,
   expanded:s.expanded||{},
   collapsed:s.collapsed||{},
   typeLabel:(t)=>t==='business_rule'?'Business Rule':t==='workflow'?'Workflow':t==='ai_agent'?'AI Agent':t==='orgUnit'?'Business Unit':(entityLabel(t)||t),
@@ -2888,7 +2888,7 @@ function o360PivotTo(entityType,entityId,label,newTrail){
 // Cross-links both ways (issue #374).
 function openOntologyGraphFor(entityTypeKey){
  closeModal();
- dependencyExplorerState={type:'custom_object',id:entityTypeKey,depth:'2',inspectType:'custom_object',inspectId:entityTypeKey,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
+ dependencyExplorerState={type:'custom_object',id:entityTypeKey,depth:'1',inspectType:'custom_object',inspectId:entityTypeKey,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
  current='admin';adminTab='dependencyExplorer';adminView='tool';renderView();
 }
 function openObject360ForEntity(entityTypeKey){
@@ -2970,7 +2970,7 @@ function renderObject360Body(){
   const isOff=object360HiddenTypes.has(k);
   return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl} (${o360LegendCounts[k]||0} shown)"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${colors[k]}"></span>${lbl}<span class="ontology-legend-count">${o360LegendCounts[k]||0}</span></button>`;
  }).join('')}</div>`:'';
- const viewSectionHtml=`<div class="inspector-section"><div class="panel-title"><div><h3>Graph layers</h3><p class="card-desc">Toggle what the graph shows</p></div></div>${o360LegendHtmlStr}<div class="o360-view-controls"><label class="o360-depth">Depth <select id="o360Depth" class="select">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="o360FieldsToggle"${object360HiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div></div>`;
+ const viewSectionHtml=`<div class="inspector-section"><div class="panel-title"><div><h3>Graph layers</h3><p class="card-desc">Toggle what the graph shows</p></div></div>${o360LegendHtmlStr}<div class="o360-view-controls"><label class="o360-depth">Depth <select id="o360Depth" class="select">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'1')===d?' selected':''}>${d}</option>`).join('')}</select></label><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="o360FieldsToggle"${object360HiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div></div>`;
  let inspectorHtml;
  if(s.inspect.entityType==='orgUnit'){
   inspectorHtml=`<div class="ontology-inspector-card card" id="o360InspectorCard"${o360CardPosStyle}>
@@ -3064,6 +3064,7 @@ function renderObject360Body(){
   object360State={...object360State,collapsed:c};
   renderObject360Body();
  });
+ wireGraphHoverFx(body,(k)=>{const ex={...(object360State.expanded||{})};ex[k]=true;object360State={...object360State,expanded:ex};renderObject360Body()});
  body.querySelectorAll('[data-o360-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.o360LegendToggle;if(object360HiddenTypes.has(t))object360HiddenTypes.delete(t);else object360HiddenTypes.add(t);renderObject360Body()});
  (trailEl||body).querySelectorAll('[data-o360-crumb]').forEach(b=>b.onclick=()=>{
   const i=parseInt(b.dataset.o360Crumb,10);
@@ -4929,9 +4930,9 @@ function graphRender(model,ui,W,H){
   const eInSim=simSet?simSet.has(e.fromKey)&&simSet.has(e.toKey):false;
   const eDimmed=hlActive&&!eOnPath&&!eInSim;
   const color=ui.colors[an.type]||'#888';
-  edgeSvg.push('<line x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'" stroke="'+color+'" stroke-opacity="'+(eDimmed?'0.12':'0.5')+'" stroke-width="1.5"'+(access?' stroke-dasharray="6 4"':'')+'><title>'+an.label+' — '+eLabel+' → '+bn.label+'</title></line>');
+  edgeSvg.push('<line data-edge-from="'+e.fromKey+'" data-edge-to="'+e.toKey+'" x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'" stroke="'+color+'" stroke-opacity="'+(eDimmed?'0.12':'0.5')+'" stroke-width="1.5"'+(access?' stroke-dasharray="6 4"':'')+'><title>'+an.label+' — '+eLabel+' → '+bn.label+'</title></line>');
   if(ui.labelMode!=='neighborhood'||e.fromKey===inspectKey||e.toKey===inspectKey)
-   edgeLabels.push('<div class="ontology-edge-label'+(access?' ontology-edge-label-access':'')+(eDimmed?' ontology-node-dimmed':'')+'" style="left:'+((a.x+b.x)/2).toFixed(1)+'px;top:'+((a.y+b.y)/2).toFixed(1)+'px" title="'+an.label+' — '+eLabel+' → '+bn.label+'">'+(access?'🔒 ':'')+eLabel+'</div>');
+   edgeLabels.push('<div class="ontology-edge-label'+(access?' ontology-edge-label-access':'')+(eDimmed?' ontology-node-dimmed':'')+'" data-edge-from="'+e.fromKey+'" data-edge-to="'+e.toKey+'" style="left:'+((a.x+b.x)/2).toFixed(1)+'px;top:'+((a.y+b.y)/2).toFixed(1)+'px" title="'+an.label+' — '+eLabel+' → '+bn.label+'">'+(access?'🔒 ':'')+eLabel+'</div>');
  });
  const nodeDivs=[];
  model.nodes.forEach(n=>{
@@ -4949,10 +4950,41 @@ function graphRender(model,ui,W,H){
    return;
   }
   const size=isRoot?ui.rootSize:ui.nodeSize;
-  nodeDivs.push('<div class="ontology-node-dot'+(isRoot?' '+ui.rootClass:'')+(isInspecting?' ontology-node-inspecting':'')+(isDimmed?' ontology-node-dimmed':'')+(onPath?' ontology-node-path':'')+(inSim?' ontology-node-sim':'')+(inSim&&hl.simChange?' ontology-node-sim-'+hl.simChange:'')+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" style="left:'+(p.x-size/2).toFixed(1)+'px;top:'+(p.y-size/2).toFixed(1)+'px;width:'+size+'px;height:'+size+'px;background:'+color+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'"></div>');
-  nodeDivs.push('<div class="ontology-node-caption'+(isDimmed?' ontology-node-dimmed':'')+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y+size/2+4).toFixed(1)+'px" title="'+n.label+'">'+short+'</div>');
+  nodeDivs.push('<div class="ontology-node-dot'+(isRoot?' '+ui.rootClass:'')+(isInspecting?' ontology-node-inspecting':'')+(isDimmed?' ontology-node-dimmed':'')+(onPath?' ontology-node-path':'')+(inSim?' ontology-node-sim':'')+(inSim&&hl.simChange?' ontology-node-sim-'+hl.simChange:'')+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" data-node-key="'+n.key+'" style="left:'+(p.x-size/2).toFixed(1)+'px;top:'+(p.y-size/2).toFixed(1)+'px;width:'+size+'px;height:'+size+'px;background:'+color+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'"></div>');
+  nodeDivs.push('<div class="ontology-node-caption'+(isDimmed?' ontology-node-dimmed':'')+'" data-node-key="'+n.key+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y+size/2+4).toFixed(1)+'px" title="'+n.label+'">'+short+'</div>');
  });
  return '<svg width="'+W+'" height="'+H+'" style="position:absolute;top:0;left:0;pointer-events:none">'+haloSvg.join('')+edgeSvg.join('')+'</svg>'+haloLabels.join('')+edgeLabels.join('')+nodeDivs.join('');
+}
+
+// Graph UX: hover spotlight + double-click to expand.
+function wireGraphHoverFx(host, onExpand){
+ const canvas=host?host.querySelector('.ontology-graph-canvas'):null;
+ if(!canvas||canvas.dataset.hoverWired)return;canvas.dataset.hoverWired='1';
+ const clear=()=>{canvas.classList.remove('graph-hover-dim');canvas.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'))};
+ canvas.addEventListener('mouseover',e=>{
+  const dot=e.target.closest('.ontology-node-dot');if(!dot||!dot.dataset.nodeKey)return;
+  const key=dot.dataset.nodeKey;
+  const connected=new Set([key]);
+  canvas.querySelectorAll('line[data-edge-from]').forEach(l=>{
+   if(l.dataset.edgeFrom===key)connected.add(l.dataset.edgeTo);
+   else if(l.dataset.edgeTo===key)connected.add(l.dataset.edgeFrom);
+  });
+  canvas.classList.add('graph-hover-dim');
+  canvas.querySelectorAll('.ontology-node-dot,.ontology-node-caption').forEach(el=>{
+   el.classList.toggle('graph-hover-on',connected.has(el.dataset.nodeKey));
+  });
+  canvas.querySelectorAll('line[data-edge-from],.ontology-edge-label[data-edge-from]').forEach(el=>{
+   el.classList.toggle('graph-hover-on',el.dataset.edgeFrom===key||el.dataset.edgeTo===key);
+  });
+ });
+ canvas.addEventListener('mouseleave',clear);
+ canvas.addEventListener('mouseout',e=>{if(!e.relatedTarget||!canvas.contains(e.relatedTarget))clear()});
+ if(onExpand){
+  canvas.addEventListener('dblclick',e=>{
+   const dot=e.target.closest('.ontology-node-dot');if(!dot||!dot.dataset.nodeKey)return;
+   e.preventDefault();e.stopPropagation();onExpand(dot.dataset.nodeKey);
+  });
+ }
 }
 // Thin wrapper: the Ontology Graph's ui over the shared renderer.
 // pathKeys/simKeys/simChange/labelMode are undefined on
@@ -5046,7 +5078,7 @@ function depWriteShareHash(){
   if(!s.id)return;
   const hidden=Array.from(depExplorerHiddenTypes).sort().join(',');
   const collapsed=Object.keys(s.collapsed||{}).filter(k=>s.collapsed[k]).sort().join(',');
-  const parts=[['type',s.type||''],['id',s.id||''],['depth',s.depth||'2'],['impact',s.showImpact?1:0],['lineage',s.showLineage?1:0],['hidden',hidden],['collapsed',collapsed]];
+  const parts=[['type',s.type||''],['id',s.id||''],['depth',s.depth||'1'],['impact',s.showImpact?1:0],['lineage',s.showLineage?1:0],['hidden',hidden],['collapsed',collapsed]];
   history.replaceState(null,'','#/ontology?'+parts.map(p=>p[0]+'='+encodeURIComponent(p[1])).join('&'));
  }catch(e){}
 }
@@ -5137,7 +5169,7 @@ function depWireSearch(inputId,resultsId,onPick){
  input.addEventListener('focus',()=>{if(box.innerHTML)box.hidden=false});
 }
 function depSelectSearchNode(type,id){
- dependencyExplorerState={type,id,depth:'2',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
+ dependencyExplorerState={type,id,depth:'1',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
  renderAdminTab();
  depCenterOnNode(type,id);
 }
@@ -5240,12 +5272,80 @@ function depSimulateImpact(type,id){
  }
  return out;
 }
+
+function depSimAddField(type,id,fieldName){
+ const seen=new Set(),out=[];
+ const stack=[{type,id}];
+ while(stack.length){
+  const n=stack.pop();
+  const key=depNodeKey(n.type,n.id);
+  if(seen.has(key))continue;
+  seen.add(key);out.push(key);
+  ['dependencies','dependents'].forEach(dir=>{
+   systemGraphDirect(n.type,n.id,dir).forEach(h=>stack.push({type:h.type,id:h.id}));
+  });
+ }
+ return {keys:out,label:'add field \u2018'+fieldName+'\u2019 to '+systemGraphNodeLabel(type,id),detail:out.length+' connected components would need review'};
+}
+function depSimAddObject(name,relType,relId){
+ const key=depNodeKey(relType,relId);
+ const seen=new Set([key]),out=[key];
+ ['dependencies','dependents'].forEach(dir=>{
+  systemGraphDirect(relType,relId,dir).forEach(h=>{
+   const k=depNodeKey(h.type,h.id);
+   if(!seen.has(k)){seen.add(k);out.push(k)}
+  });
+ });
+ return {keys:out,label:'add object \u2018'+name+'\u2019 related to '+systemGraphNodeLabel(relType,relId),detail:'would connect through '+out.length+' neighboring components'};
+}
+function depSimAddRelationship(fType,fId,tType,tId){
+ const fromKey=depNodeKey(fType,fId),toKey=depNodeKey(tType,tId);
+ const visited=new Set(),stack=[{type:tType,id:tId}];
+ let cycle=false;
+ while(stack.length&&!cycle){
+  const n=stack.pop();
+  const k=depNodeKey(n.type,n.id);
+  if(k===fromKey){cycle=true;break}
+  if(visited.has(k))continue;
+  visited.add(k);
+  systemGraphDirect(n.type,n.id,'dependencies').forEach(h=>stack.push({type:h.type,id:h.id}));
+ }
+ return {keys:[fromKey,toKey],label:'link '+systemGraphNodeLabel(fType,fId)+' \u2192 '+systemGraphNodeLabel(tType,tId),detail:cycle?'WARNING: circular dependency would be created':'new edge; no cycles detected'};
+}
+function depSimAddWorkflow(triggerType,triggerId,wfName){
+ const keys=depSimulateImpact(triggerType,triggerId);
+ return {keys:keys,label:'new workflow \u2018'+wfName+'\u2019 on '+systemGraphNodeLabel(triggerType,triggerId),detail:keys.length+' downstream components could be affected'};
+}
+function depSimRenderInputs(){
+ const sel=document.getElementById('depSimChange');
+ const host=document.getElementById('depSimInputs');
+ if(!sel||!host)return;
+ const v=sel.value;
+ let html='';
+ if(v==='add-field'){
+  html='<input type="text" id="depSimFieldName" class="input" placeholder="Field name…" style="width:140px" aria-label="Field name">';
+ }else if(v==='add-object'){
+  html='<input type="text" id="depSimObjName" class="input" placeholder="Object name…" style="width:140px" aria-label="Object name">';
+ }else if(v==='add-relationship'){
+  html='<select id="depSimRelTarget" class="select" aria-label="Relate to"><option value="">Relate to…</option></select>';
+ }else if(v==='add-workflow'){
+  html='<input type="text" id="depSimWfName" class="input" placeholder="Workflow name…" style="width:140px" aria-label="Workflow name">';
+ }
+ host.innerHTML=html;
+ const tgt=document.getElementById('depSimRelTarget');
+ if(tgt){
+  const nodes=systemGraphNodes();
+  tgt.innerHTML='<option value="">Relate to…</option>'+nodes.slice(0,80).map(n=>'<option value="'+n.type+':'+n.id+'">'+systemGraphNodeLabel(n.type,n.id)+'</option>').join('');
+ }
+}
 function depSimBannerHtml(){
  const s=dependencyExplorerState;
  if(!s.simKeys||!s.simRoot)return '';
  const n=s.simKeys.length;
  const label=systemGraphNodeLabel(s.simRoot.type,s.simRoot.id);
- return '<div class="ontology-sim-banner"><span><strong>Preview only — no changes applied.</strong> '+n+' component'+(n===1?'':'s')+' would be affected by '+s.simChange+' of '+label+'.</span><button type="button" class="btn btn-secondary" id="depSimOpenAdmin">Open in its admin screen</button><button type="button" class="btn btn-secondary" id="depSimClear">Clear simulation</button></div>';
+ const simTitle=s.simLabel||(n+' component'+(n===1?'':'s')+' would be affected by '+s.simChange+' of '+label);
+ const simSub=s.simDetail?'<br><span class="muted">'+s.simDetail+'</span>':'';
+ return '<div class="ontology-sim-banner"><span><strong>Preview only — no changes applied.</strong> '+simTitle+'.'+simSub+'</span><button type="button" class="btn btn-secondary" id="depSimOpenAdmin">Open in its admin screen</button><button type="button" class="btn btn-secondary" id="depSimClear">Clear simulation</button></div>';
 }
 // Toolbar wiring ---------------------------------------------------------------
 function depWireToolbar(body){
@@ -5269,9 +5369,31 @@ function depWireToolbar(body){
   const s=dependencyExplorerState;
   if(!s.inspectType||!s.inspectId){toast('Select a node first');return}
   const chg=document.getElementById('depSimChange').value;
-  dependencyExplorerState={...s,simKeys:depSimulateImpact(s.inspectType,s.inspectId),simChange:chg,simRoot:{type:s.inspectType,id:s.inspectId}};
+  let simResult=null;
+  if(chg==='add-field'){
+   const fn=(document.getElementById('depSimFieldName')||{}).value||'new_field';
+   simResult=depSimAddField(s.inspectType,s.inspectId,fn);
+  }else if(chg==='add-object'){
+   const nm=(document.getElementById('depSimObjName')||{}).value||'New Object';
+   simResult=depSimAddObject(nm,s.inspectType,s.inspectId);
+  }else if(chg==='add-relationship'){
+   const tv=(document.getElementById('depSimRelTarget')||{}).value||'';
+   if(!tv){toast('Pick a target object');return}
+   const ci=tv.indexOf(':');
+   simResult=depSimAddRelationship(s.inspectType,s.inspectId,tv.slice(0,ci),tv.slice(ci+1));
+  }else if(chg==='add-workflow'){
+   const wn=(document.getElementById('depSimWfName')||{}).value||'New Workflow';
+   simResult=depSimAddWorkflow(s.inspectType,s.inspectId,wn);
+  }
+  if(simResult){
+   dependencyExplorerState={...s,simKeys:simResult.keys,simChange:chg,simRoot:{type:s.inspectType,id:s.inspectId},simLabel:simResult.label,simDetail:simResult.detail};
+  }else{
+   dependencyExplorerState={...s,simKeys:depSimulateImpact(s.inspectType,s.inspectId),simChange:chg,simRoot:{type:s.inspectType,id:s.inspectId}};
+  }
   renderAdminTab();
  };
+ const simSel=document.getElementById('depSimChange');
+ if(simSel){simSel.onchange=depSimRenderInputs;depSimRenderInputs()}
  const simClear=document.getElementById('depSimClear');
  if(simClear)simClear.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,simKeys:null,simChange:null,simRoot:null};renderAdminTab()};
  const simOpen=document.getElementById('depSimOpenAdmin');
@@ -5322,7 +5444,7 @@ function dependencyExplorerTab(body){
  const types=Object.keys(SYSTEM_NODE_TYPE_LABELS);
  if(!dependencyExplorerState.id){
   const first=nodes.find(n=>n.type===dependencyExplorerState.type)||nodes[0];
-  if(first)dependencyExplorerState={type:first.type,id:first.id,depth:dependencyExplorerState.depth||'2',inspectType:first.type,inspectId:first.id,showImpact:true,showLineage:true};
+  if(first)dependencyExplorerState={type:first.type,id:first.id,depth:dependencyExplorerState.depth||'1',inspectType:first.type,inspectId:first.id,showImpact:true,showLineage:true};
  }
  if(dependencyExplorerState.id&&!dependencyExplorerState.inspectId){
   dependencyExplorerState={...dependencyExplorerState,inspectType:dependencyExplorerState.type,inspectId:dependencyExplorerState.id};
@@ -5333,16 +5455,16 @@ function dependencyExplorerTab(body){
  // sections. Every id and data-* hook is unchanged, so the toolbar wiring
  // (zoom/pan/search/path/sim/share), the depth select, the impact/lineage
  // toggles and the fields toggle keep working exactly as before.
- const depToolsHtml=`<aside class="graph-tools" aria-label="Graph tools">
-  <div class="tool-section"><div class="tool-label">Component</div><div class="path-fields"><label>Component type <select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label><label>Component <select id="depComponent" class="select">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label></div></div>
-  <div class="tool-section"><div class="tool-label">Search graph</div><div class="search-wrap" style="width:100%"><input type="search" id="depSearch" class="input ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></div></div>
-  <div class="tool-section"><div class="tool-label">Find path</div><div class="path-fields"><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'} btn-sm" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button>${depPathBarHtml()}</div></div>
-  <div class="tool-section"><div class="tool-label">Viewport</div><div class="zoom-row"><button type="button" class="btn btn-outline btn-sm" id="depZoomOut" title="Zoom out" aria-label="Zoom out">−</button><button type="button" class="btn btn-outline btn-sm" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-outline btn-sm" id="depZoomIn" title="Zoom in" aria-label="Zoom in">+</button><button type="button" class="btn btn-outline btn-sm" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></div><div class="zoom-readout" data-zoom-readout>${Math.round((dependencyExplorerState.zoom||1)*100)}%</div></div>
-  <div class="tool-section"><div class="tool-label">Depth</div><div class="chip-row"><label>Depth <select id="depDepth" class="select" aria-label="Depth">${['1','2','3','all'].map(d=>`<option value="${d}" ${String(dependencyExplorerState.depth)===d?'selected':''}>${d==='all'?'All':d+' hop'+(d==='1'?'':'s')}</option>`).join('')}</select></label></div></div>
-  <div class="tool-section"><div class="tool-label">Analysis</div><div class="chip-row"><button type="button" class="toggle-chip${dependencyExplorerState.showImpact?' active':''}" data-dep-toggle="showImpact" title="Toggle full impact">Impact</button><button type="button" class="toggle-chip${dependencyExplorerState.showLineage?' active':''}" data-dep-toggle="showLineage" title="Toggle full lineage">Lineage</button></div></div>
-  <div class="tool-section"><div class="tool-label">Content</div><div class="chip-row"><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div></div>
-  <div class="tool-section"><div class="tool-label">Simulate</div><div class="path-fields"><button type="button" class="btn btn-secondary btn-sm" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange" class="select"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary btn-sm" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary btn-sm" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button></div></div>
- </aside>`;
+ const depToolsHtml=`<div class="graph-toolbar" role="toolbar" aria-label="Graph tools">
+  <div class="tool-group"><label class="tool-inline">Type <select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label><label class="tool-inline">Component <select id="depComponent" class="select">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label></div></div>
+  <div class="tool-group"><div class="search-wrap" style="min-width:200px"><input type="search" id="depSearch" class="input ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></div></div>
+  <div class="tool-group"><div class="path-fields"><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'} btn-sm" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button>${depPathBarHtml()}</div></div>
+  <div class="tool-group"><div class="zoom-row" role="group" aria-label="Viewport"><button type="button" class="btn btn-outline btn-sm" id="depZoomOut" title="Zoom out" aria-label="Zoom out">−</button><button type="button" class="btn btn-outline btn-sm" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-outline btn-sm" id="depZoomIn" title="Zoom in" aria-label="Zoom in">+</button><button type="button" class="btn btn-outline btn-sm" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></div><div class="zoom-readout" data-zoom-readout>${Math.round((dependencyExplorerState.zoom||1)*100)}%</div></div>
+  <div class="tool-group"><label class="tool-inline">Depth <select id="depDepth" class="select" aria-label="Depth">${['1','2','3','all'].map(d=>`<option value="${d}" ${String(dependencyExplorerState.depth)===d?'selected':''}>${d==='all'?'All':d+' hop'+(d==='1'?'':'s')}</option>`).join('')}</select></label></div></div>
+  <div class="tool-group"><div class="chip-row" role="group" aria-label="Analysis"><button type="button" class="toggle-chip${dependencyExplorerState.showImpact?' active':''}" data-dep-toggle="showImpact" title="Toggle full impact">Impact</button><button type="button" class="toggle-chip${dependencyExplorerState.showLineage?' active':''}" data-dep-toggle="showLineage" title="Toggle full lineage">Lineage</button></div></div>
+  <div class="tool-group"><div class="chip-row"><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div></div>
+  <div class="tool-group"><div class="path-fields"><button type="button" class="btn btn-secondary btn-sm" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange" class="select"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option><option value="add-field">add field</option><option value="add-object">add object</option><option value="add-relationship">add relationship</option><option value="add-workflow">add workflow</option></select> <span id="depSimInputs"></span> <button type="button" class="btn btn-primary btn-sm" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary btn-sm" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button></div></div>
+ </div>`;
  let graphHtml='';
  let truncatedHits=0;
  const depCounts={};
@@ -5354,17 +5476,18 @@ function dependencyExplorerTab(body){
   const depH=Math.max(600,Math.min(940,Math.round(440+depModel.nodes.length*3.2)));
   depLastCanvasW=depW;depLastCanvasH=depH;
   const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
-  graphHtml=`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)} neighborhood</h3></div><div class="chip-row"><span class="badge badge-outline">Depth ${String(dependencyExplorerState.depth)==='all'?'All':String(dependencyExplorerState.depth||'2')}</span><span class="badge badge-secondary">${depModel.edges.length} relationships</span>${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}</div></div>${depSimBannerHtml()}<div class="graph-canvas"><div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div><div class="graph-legend">${legendHtml(depExplorerHiddenTypes,depCounts)}</div></div><aside class="graph-detail" aria-label="Selected node">${depDetailPanelHtml(depModel)}</aside>`;
+  graphHtml=`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)} neighborhood</h3></div><div class="chip-row"><span class="badge badge-outline">Depth ${String(dependencyExplorerState.depth)==='all'?'All':String(dependencyExplorerState.depth||'1')}</span><span class="badge badge-secondary">${depModel.edges.length} relationships</span>${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}</div></div>${depSimBannerHtml()}<div class="graph-canvas"><div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div><div class="graph-legend">${legendHtml(depExplorerHiddenTypes,depCounts)}</div></div><aside class="graph-detail" aria-label="Selected node">${depDetailPanelHtml(depModel)}</aside>`;
  }
 
 
- body.innerHTML=`<div class="workbench">${depToolsHtml}${graphHtml||`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>Pick a component</h3></div></div><div class="graph-canvas"><div class="empty" style="padding:48px 24px;text-align:center;color:var(--muted-foreground)">Nothing synced yet for this type.</div></div></div>`}</div>`;
- $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,depth:dependencyExplorerState.depth||'2',inspectType:t,inspectId:first?first.id:null,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()};
+ body.innerHTML=`<div class="graph-toolbar-wrap">${depToolsHtml}</div><div class="workbench">${graphHtml||`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>Pick a component</h3></div></div><div class="graph-canvas"><div class="empty" style="padding:48px 24px;text-align:center;color:var(--muted-foreground)">Nothing synced yet for this type.</div></div></div>`}</div>`;
+ $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,depth:dependencyExplorerState.depth||'1',inspectType:t,inspectId:first?first.id:null,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()};
  $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,inspectType:dependencyExplorerState.type,inspectId:e.target.value,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
  $('#depDepth')&&($('#depDepth').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,depth:e.target.value};renderAdminTab()});
  body.querySelectorAll('[data-dep-toggle]').forEach(b=>b.onclick=()=>{const k=b.dataset.depToggle;dependencyExplorerState={...dependencyExplorerState,[k]:!dependencyExplorerState[k]};renderAdminTab()});
  body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depInspect.split(':');if(dependencyExplorerState.pathMode){depPathPick(type,id);return}dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
- body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,depth:dependencyExplorerState.depth||'2',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
+ wireGraphHoverFx(body,(k)=>{const ex={...(dependencyExplorerState.expanded||{})};ex[k]=true;dependencyExplorerState={...dependencyExplorerState,expanded:ex};renderAdminTab()});
+ body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,depth:dependencyExplorerState.depth||'1',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
  body.querySelectorAll('[data-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.legendToggle;if(depExplorerHiddenTypes.has(t))depExplorerHiddenTypes.delete(t);else depExplorerHiddenTypes.add(t);renderAdminTab()});
  body.querySelectorAll('[data-dep-collapse]').forEach(b=>b.onclick=()=>{const t=b.dataset.depCollapse;const c={...(dependencyExplorerState.collapsed||{})};if(c[t])delete c[t];else c[t]=true;dependencyExplorerState={...dependencyExplorerState,collapsed:c};renderAdminTab()});
  const expandBtn=$('#depExpand'); if(expandBtn)expandBtn.onclick=()=>depExpandAround();
@@ -5396,12 +5519,10 @@ function adminLanding(){
  const attention=adminNeedsAttentionItems();
  const recent=adminRecentChanges(8);
  $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active"><div class="page-heading"><div><div class="eyebrow">Administration</div><h2 style="margin-top:5px">Settings</h2><p>Configure your workspace, users and automation. Changes save immediately in this browser.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn btn-outline" id="adminSearchSettings" type="button">Search settings</button><button class="btn btn-ghost btn-sm" data-clear-filter type="button">Back to dashboard</button></div></div>
- ${setupDone?'':`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Setup progress</h3><span class="badge badge-secondary">${setup.filter(s=>s.done).length} of ${setup.length} done</span></div><div class="admin-cat-items">${setup.map(s=>`<div class="admin-cat-item" style="cursor:default"><span class="prc-row-label"><span class="prc-status${s.done?' prc-status-done':''}">${s.done?'✓':'○'}</span>${s.label}</span>${s.done?'<span class="badge badge-success">Done</span>':'<span class="badge badge-outline">To do</span>'}</div>`).join('')}</div></section>`}
- ${attention.length?`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Needs attention</h3><span class="badge badge-warning">${attention.length}</span></div><div class="admin-cat-items">${attention.map(a=>`<button type="button" class="admin-cat-item" data-admin-open="${a.tab}"><span>${a.label}</span><span class="prc-row-meta"><span class="badge badge-warning">${a.count}</span><span class="admin-cat-arrow">›</span></span></button>`).join('')}</div></section>`:''}
- <section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Platform health</h3></div><div class="kpi-grid">${adminPlatformHealthHtml()}</div></section>
- <div class="admin-landing-grid prc-grid-stack">
- ${adminRecentNavHtml()}
+ <section class="card admin-health-strip"><div class="admin-health-items">${adminPlatformHealthHtml()}</div></section>
+ <div class="admin-top-grid">${setupDone?'':`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Setup progress</h3><span class="badge badge-secondary">${setup.filter(s=>s.done).length} of ${setup.length} done</span></div><div class="admin-cat-items">${setup.map(s=>`<div class="admin-cat-item" style="cursor:default"><span class="prc-row-label"><span class="prc-status${s.done?' prc-status-done':''}">${s.done?'✓':'○'}</span>${s.label}</span>${s.done?'<span class="badge badge-success">Done</span>':'<span class="badge badge-outline">To do</span>'}</div>`).join('')}</div></section>`}
  ${recent.length?`<div class="admin-cat-card"><div class="admin-cat-head"><span class="admin-cat-icon">📝</span><div><h3>Recent changes</h3><p class="muted">Across custom objects, fields, rules, workflows, agents and integrations</p></div></div><div class="admin-cat-items">${recent.map(r=>`<div class="admin-cat-item" style="cursor:default;font-weight:400"><span>${r.text}</span><span class="muted" style="font-size:11px">${new Date(r.at).toLocaleDateString()}</span></div>`).join('')}</div></div>`:''}
+ ${attention.length?`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Needs attention</h3><span class="badge badge-warning">${attention.length}</span></div><div class="admin-cat-items">${attention.map(a=>`<button type="button" class="admin-cat-item" data-admin-open="${a.tab}"><span>${a.label}</span><span class="prc-row-meta"><span class="badge badge-warning">${a.count}</span><span class="admin-cat-arrow">›</span></span></button>`).join('')}</div></section>`:''}
  </div>
  <div class="settings-grid">${ADMIN_CATEGORIES.map(c=>`<article class="card settings-card"><span class="settings-icon" aria-hidden="true">${c.icon}</span><div class="settings-copy"><h3>${c.label}</h3><p>${c.note}</p><div class="settings-meta">${c.items.map(k=>`<button type="button" class="settings-count" data-admin-open="${k}" title="Open ${tabLabel(k)}">${tabLabel(k)}</button>`).join('')}</div></div></article>`).join('')}</div></div></div>`;
  $('[data-clear-filter]').onclick=()=>{current='dashboard';viewFilter=null;renderView()};

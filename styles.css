@@ -2014,3 +2014,41 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 /* --- responsive (mirrors the pre-PR-E marketing breakpoints) --- */
 @media(max-width:900px){.site-dark .mkt-nav-links{display:none}.site-dark .mkt-menu-toggle{display:inline-flex}.site-dark .mkt-mobile-drawer{position:absolute;top:74px;right:18px;width:min(330px,calc(100% - 36px));background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:10px;box-shadow:var(--shadow);z-index:50}.site-dark .mkt-mobile-drawer:not([hidden]){display:flex;flex-direction:column}.site-dark .mkt-mobile-drawer a{padding:14px 15px;border-radius:11px;font-weight:750;color:var(--text);min-height:48px;display:flex;align-items:center}.site-dark .mkt-mobile-drawer a:hover{background:color-mix(in srgb,var(--text) 6%,transparent);color:var(--brand)}.site-dark .mkt-mobile-drawer hr{width:100%;border:0;border-top:1px solid var(--line);margin:7px 0}.site-dark .mkt-hero-grid{grid-template-columns:1fr}.site-dark .mkt-card-grid,.site-dark .mkt-card-grid-2,.site-dark .mkt-card-grid-4{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.site-dark .mkt-nav-actions .btn-secondary{display:none}.site-dark .mkt-nav-actions .mobile-try{font-size:14px;padding:12px 14px;border-radius:12px}.site-dark .mkt-menu-toggle{width:44px;height:44px;font-size:21px}.site-dark .mkt-mobile-drawer{top:78px;right:12px;width:calc(100% - 24px)}.site-dark .mkt-hero{padding-top:60px}.site-dark .mkt-hero h1{font-size:43px}.site-dark .mkt-page-hero{padding-top:62px}.site-dark .mkt-page-hero h1{font-size:42px}.site-dark .mkt-card-grid,.site-dark .mkt-card-grid-2,.site-dark .mkt-card-grid-4{grid-template-columns:1fr}.site-dark .mkt-footer-grid{grid-template-columns:1fr}.site-dark .mkt-footer-bottom{flex-direction:column}.site-dark .mkt-bento>.mkt-card,.site-dark .mkt-bento>.mkt-card.mkt-lead{grid-column:span 6}.site-dark .mkt-bento>.mkt-card.mkt-lead{grid-template-columns:1fr}.site-dark .mkt-cta{padding:40px 22px;border-radius:24px}}
+
+/* ===== Graph UX: dropdown hover bridge ===== */
+@media(min-width:901px){.nav-dropdown::before{content:'';position:absolute;top:-8px;left:0;right:0;height:8px}}
+/* ===== Graph UX: hover spotlight ===== */
+.ontology-node-dot{transition:transform .18s ease,box-shadow .18s ease,opacity .2s ease;cursor:pointer}
+.ontology-node-dot:hover{transform:scale(1.32);z-index:6}
+.ontology-node-caption,.ontology-edge-label{transition:opacity .2s ease}
+.ontology-graph-canvas.graph-hover-dim .ontology-node-dot:not(.graph-hover-on){opacity:.14}
+.ontology-graph-canvas.graph-hover-dim .ontology-node-caption:not(.graph-hover-on){opacity:.1}
+.ontology-graph-canvas.graph-hover-dim .ontology-edge-label:not(.graph-hover-on){opacity:.05}
+.ontology-graph-canvas.graph-hover-dim svg line:not(.graph-hover-on){stroke-opacity:.06!important}
+.ontology-node-dot.graph-hover-on{box-shadow:0 0 0 5px color-mix(in srgb,currentColor 22%,transparent),0 4px 12px rgba(0,0,0,.28)}
+.ontology-node-caption.graph-hover-on{font-weight:700}
+/* ===== Admin reorg: health strip + 3-col grid ===== */
+.admin-health-strip{padding:12px 18px;margin-bottom:16px}
+.admin-health-items{display:flex;gap:10px;flex-wrap:wrap}
+.admin-health-items .kpi{flex:1 1 0;min-width:130px;padding:10px 14px;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.admin-health-items .kpi-value{font-size:22px;font-weight:800;line-height:1}
+.admin-health-items .kpi-label{font-size:12px;color:var(--muted);font-weight:600}
+.admin-top-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:20px;align-items:start}
+@media(max-width:1100px){.admin-top-grid{grid-template-columns:minmax(0,1fr)}}
+.admin-top-grid .card{margin:0}
+
+/* ===== Filter bar modernization ===== */
+.view-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg)}
+.view-bar-label{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted)}
+.view-bar-select{width:auto;min-height:36px;padding:7px 30px 7px 12px;font-size:13px;border-color:transparent;background-color:var(--secondary)}
+.view-bar-select:hover{border-color:var(--line)}
+.view-bar-select:focus{border-color:var(--ring)}
+
+/* ===== Graph toolbar: horizontal below header ===== */
+.graph-toolbar-wrap{margin-bottom:14px}
+.graph-toolbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 16px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg)}
+.tool-group{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tool-group + .tool-group{border-left:1px solid var(--line);padding-left:16px}
+.tool-inline{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+.tool-inline .select,.tool-group .select{width:auto;min-height:34px;padding:6px 28px 6px 10px;font-size:13px}
+@media(max-width:900px){.tool-group + .tool-group{border-left:0;padding-left:0}}
