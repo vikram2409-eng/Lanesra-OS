@@ -4805,7 +4805,7 @@ function graphLayoutPositions(model,layout){
   pos.set(n.key,{x:a.x+(rng()-0.5)*90,y:a.y+(rng()-0.5)*90});
  });
  const TICKS=visible.length>260?60:110;
- const K=54,LINK_LEN=125;
+ const K=82,LINK_LEN=185;
  for(let t=0;t<TICKS;t++){
   const disp=new Map(visible.map(n=>[n.key,{x:0,y:0}]));
   for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
@@ -4948,13 +4948,17 @@ function graphRender(model,ui,W,H){
   const color=ui.colors[n.type]||'#888';
   const short=n.label.length>18?n.label.slice(0,17)+'…':n.label;
   if(n.id==='__cluster__'){
-   nodeDivs.push('<div class="ontology-node-cluster" '+ui.collapseAttr+'="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px;background:'+color+'" title="'+n.label+' — click to expand"><span>'+n.count+'</span></div>');
-   nodeDivs.push('<div class="ontology-node-caption" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y+26).toFixed(1)+'px">'+short+'</div>');
+   nodeDivs.push('<div class="og-pill og-pill-cluster" '+ui.collapseAttr+'="'+n.type+'" data-node-key="'+n.key+'" style="left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px" title="'+n.label+' — click to expand" role="button" tabindex="0"><span class="og-pill-dot" style="background:'+color+'"></span><span class="og-pill-label">'+short+' · '+n.count+'</span></div>');
    return;
   }
-  const size=isRoot?ui.rootSize:ui.nodeSize;
-  nodeDivs.push('<div class="ontology-node-dot'+(isRoot?' '+ui.rootClass:'')+(isInspecting?' ontology-node-inspecting':'')+(isDimmed?' ontology-node-dimmed':'')+(onPath?' ontology-node-path':'')+(inSim?' ontology-node-sim':'')+(inSim&&hl.simChange?' ontology-node-sim-'+hl.simChange:'')+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" data-node-key="'+n.key+'" style="left:'+(p.x-size/2).toFixed(1)+'px;top:'+(p.y-size/2).toFixed(1)+'px;width:'+size+'px;height:'+size+'px;background:'+color+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'"></div>');
-  nodeDivs.push('<div class="ontology-node-caption'+(isDimmed?' ontology-node-dimmed':'')+'" data-node-key="'+n.key+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y+size/2+4).toFixed(1)+'px" title="'+n.label+'">'+short+'</div>');
+  const pillCls='og-pill'+(isRoot?' og-pill-root':'')+(isInspecting?' og-pill-inspecting':'')+(isDimmed?' og-pill-dimmed':'')+(onPath?' og-pill-path':'')+(inSim?' og-pill-sim':'')+(inSim&&hl.simChange?' og-pill-sim-'+hl.simChange:'');
+  const pillStyle=isRoot
+   ?'left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px;background:'+color+';border-color:'+color
+   :'left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px';
+  const pillInner=isRoot
+   ?'<span class="og-pill-label">'+short+'</span>'
+   :'<span class="og-pill-dot" style="background:'+color+'"></span><span class="og-pill-label">'+short+'</span>';
+  nodeDivs.push('<div class="'+pillCls+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" data-node-key="'+n.key+'" style="'+pillStyle+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'" role="button" tabindex="0">'+pillInner+'</div>');
  });
  return '<svg width="'+W+'" height="'+H+'" style="position:absolute;top:0;left:0;pointer-events:none">'+haloSvg.join('')+edgeSvg.join('')+'</svg>'+haloLabels.join('')+edgeLabels.join('')+nodeDivs.join('');
 }
@@ -4965,7 +4969,7 @@ function graphRender(model,ui,W,H){
  if(window.__graphHoverDelegated)return;window.__graphHoverDelegated=true;
  const clearCanvas=(canvas)=>{canvas.classList.remove('graph-hover-dim');canvas.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'))};
  document.addEventListener('mouseover',e=>{
-  const dot=e.target.closest?e.target.closest('.ontology-node-dot'):null;
+  const dot=e.target.closest?e.target.closest('.og-pill'):null;
   const canvas=dot?dot.closest('.ontology-graph-canvas'):null;
   if(!dot||!canvas||!dot.dataset.nodeKey)return;
   document.querySelectorAll('.ontology-graph-canvas.graph-hover-dim').forEach(c=>{if(c!==canvas)clearCanvas(c)});
@@ -4976,7 +4980,7 @@ function graphRender(model,ui,W,H){
    else if(l.dataset.edgeTo===key)connected.add(l.dataset.edgeFrom);
   });
   canvas.classList.add('graph-hover-dim');
-  canvas.querySelectorAll('.ontology-node-dot,.ontology-node-caption').forEach(el=>{
+  canvas.querySelectorAll('.og-pill').forEach(el=>{
    el.classList.toggle('graph-hover-on',connected.has(el.dataset.nodeKey));
   });
   canvas.querySelectorAll('line[data-edge-from],.ontology-edge-label[data-edge-from]').forEach(el=>{
@@ -4993,7 +4997,7 @@ function wireGraphHoverFx(host, onExpand){
  const canvas=host?host.querySelector('.ontology-graph-canvas'):null;
  if(!canvas||canvas.dataset.dblWired||!onExpand)return;canvas.dataset.dblWired='1';
  canvas.addEventListener('dblclick',e=>{
-  const dot=e.target.closest('.ontology-node-dot');if(!dot||!dot.dataset.nodeKey)return;
+  const dot=e.target.closest('.og-pill');if(!dot||!dot.dataset.nodeKey)return;
   e.preventDefault();e.stopPropagation();onExpand(dot.dataset.nodeKey);
  });
 }
@@ -5041,18 +5045,20 @@ function depDetailPanelHtml(model){
  const agent=s.inspectType==='ai_agent'?(data.aiAgents||[]).find(a=>a.id===s.inspectId):null;
  const constrained=!!agent&&systemGraphEdges().some(e=>e.edgeType==='constrained_by'&&e.toType==='ai_agent'&&e.toId===s.inspectId);
  const expandable=depExpandableCount(model,s.inspectType,s.inspectId);
- return '<div class="ontology-detail-panel card">'
-  +'<div class="ontology-inspector-head">'+typeDotHtml(s.inspectType,14)+'<div><strong>'+label+'</strong><div class="ontology-inspector-subtitle">'+(SYSTEM_NODE_TYPE_LABELS[s.inspectType]||s.inspectType)+'</div></div></div>'
+ return '<div class="ontology-detail-panel card og-inspector">'
+  +'<div class="og-inspector-overline">'+(SYSTEM_NODE_TYPE_LABELS[s.inspectType]||s.inspectType).toUpperCase()+'</div>'
+  +'<h3 class="og-inspector-title">'+label+'</h3>'
+  +'<div class="ontology-inspector-head" style="display:none">'+typeDotHtml(s.inspectType,14)+'<div><strong>'+label+'</strong><div class="ontology-inspector-subtitle">'+(SYSTEM_NODE_TYPE_LABELS[s.inspectType]||s.inspectType)+'</div></div></div>'
   +'<div class="ontology-detail-badges"><span class="badge badge-secondary">'+(SYSTEM_NODE_TYPE_LABELS[s.inspectType]||s.inspectType)+'</span><span class="badge badge-outline">'+depNodeOrigin(s.inspectType,s.inspectId)+'</span>'+(agent?'<span class="badge badge-outline">'+((agent.objectTypeScopes||[]).length?'Scoped':'Unscoped')+'</span>':'')+(constrained?'<span class="badge badge-outline" title="A business rule constrains what this agent may do">policy: constrained</span>':'')+'</div>'
   +(definition?'<p class="ontology-inspector-definition">'+definition+'</p>':'')
-  +'<div class="ontology-detail-actions">'
-  +'<button type="button" class="btn btn-primary" id="depOpenAdmin">Open in its admin screen</button>'
-  +(s.inspectType==='custom_object'?'<button type="button" class="btn btn-secondary" id="depOpen360">View records in Object 360</button>':'')
-  +'<button type="button" class="btn btn-secondary" id="depExpand"'+(expandable?'':' disabled')+' title="'+(expandable?('Reveal '+expandable+' more neighbor'+(expandable===1?'':'s')+' around this node'):'Every neighbor is already shown')+'">Show what\'s around it'+(expandable?' ('+expandable+')':'')+'</button>'
-  +(isRoot?'':'<button type="button" class="btn btn-secondary" id="depRecenter">Re-center graph here</button>')
+  +'<div class="ontology-detail-actions og-actions">'
+  +'<button type="button" class="btn btn-primary og-btn-full" id="depOpenAdmin">Open in its admin screen</button>'
+  +'<button type="button" class="btn btn-outline og-btn-full" id="depOpen360">View records in Object 360</button>'
+  +'<button type="button" class="btn btn-link og-btn-full" id="depExpand"'+(expandable?'':' disabled')+' title="'+(expandable?('Reveal '+expandable+' more neighbor'+(expandable===1?'':'s')+' around this node'):'Every neighbor is already shown')+'">Show what\'s around it'+(expandable?' ('+expandable+')':'')+'</button>'
+  +(isRoot?'':'<button type="button" class="btn btn-secondary og-btn-full" id="depRecenter">Re-center graph here</button>')
   +'</div>'
-  +(fields.length?'<div class="ontology-detail-section"><div class="ontology-detail-section-label">Fields · '+fields.length+'</div>'+fields.map(f=>'<button type="button" class="ontology-inspector-bullet" data-dep-inspect="custom_field:'+f.id+'">'+typeDotHtml('custom_field')+f.label+'</button>').join('')+'</div>':'')
-  +'<div class="ontology-detail-section"><div class="ontology-detail-section-label">Relationships</div>'
+  +(fields.length?'<div class="ontology-detail-section"><div class="og-section-label">FIELDS · '+fields.length+'</div>'+fields.map(f=>'<button type="button" class="ontology-inspector-bullet" data-dep-inspect="custom_field:'+f.id+'">'+typeDotHtml('custom_field')+f.label+'</button>').join('')+'</div>':'')
+  +'<div class="ontology-detail-section"><div class="og-section-label">RELATIONSHIPS</div>'
   +(groups.size?Array.from(groups.entries()).map(([edgeType,members])=>{
    const ins=members.filter(m=>m.dir==='in'),outs=members.filter(m=>m.dir==='out');
    const row=(m,arrow,tip)=>'<button type="button" class="ontology-inspector-bullet" data-dep-bullet="'+m.type+':'+m.id+'" title="'+tip+'"><span class="ontology-dir-arrow">'+arrow+'</span>'+typeDotHtml(m.type)+systemGraphNodeLabel(m.type,m.id)+'</button>';
@@ -5466,7 +5472,7 @@ function dependencyExplorerTab(body){
  // sections. Every id and data-* hook is unchanged, so the toolbar wiring
  // (zoom/pan/search/path/sim/share), the depth select, the impact/lineage
  // toggles and the fields toggle keep working exactly as before.
- const depToolsHtml=`<div class="graph-toolbar" role="toolbar" aria-label="Graph tools">
+ const depToolsHtml=`<div class="graph-toolbar og-toolbar-card" role="toolbar" aria-label="Graph tools">
   <div class="tool-group"><label class="tool-inline">Type <select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label><label class="tool-inline">Component <select id="depComponent" class="select">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label></div>
   <div class="tool-group"><div class="search-wrap" style="min-width:200px"><input type="search" id="depSearch" class="input ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></div></div>
   <div class="tool-group"><div class="path-fields"><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'} btn-sm" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button>${depPathBarHtml()}</div></div>
@@ -5487,7 +5493,7 @@ function dependencyExplorerTab(body){
   const depH=Math.max(600,Math.min(940,Math.round(440+depModel.nodes.length*3.2)));
   depLastCanvasW=depW;depLastCanvasH=depH;
   const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
-  graphHtml=`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)} neighborhood</h3></div><div class="chip-row"><span class="badge badge-outline">Depth ${String(dependencyExplorerState.depth)==='all'?'All':String(dependencyExplorerState.depth||'1')}</span><span class="badge badge-secondary">${depModel.edges.length} relationships</span>${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}</div></div>${depSimBannerHtml()}<div class="graph-canvas"><div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div><div class="graph-legend">${legendHtml(depExplorerHiddenTypes,depCounts)}</div></div><aside class="graph-detail" aria-label="Selected node">${depDetailPanelHtml(depModel)}</aside>`;
+  graphHtml=`<div class="graph-stage" data-graph-stage><div class="graph-stage-head og-stage-head"><div><h3 class="og-stage-title">${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)} neighborhood</h3></div><div class="chip-row og-stage-chips"><span class="og-pill-chip">Depth ${String(dependencyExplorerState.depth)==='all'?'All':String(dependencyExplorerState.depth||'1')}</span><span class="og-pill-chip">${depModel.edges.length} relationships</span>${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}</div></div>${depSimBannerHtml()}<div class="graph-canvas"><div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div><div class="graph-legend">${legendHtml(depExplorerHiddenTypes,depCounts)}</div></div><aside class="graph-detail" aria-label="Selected node">${depDetailPanelHtml(depModel)}</aside>`;
  }
 
 
