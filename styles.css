@@ -2052,3 +2052,14 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 .tool-inline{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
 .tool-inline .select,.tool-group .select{width:auto;min-height:34px;padding:6px 28px 6px 10px;font-size:13px}
 @media(max-width:900px){.tool-group + .tool-group{border-left:0;padding-left:0}}
+
+.admin-status-strip{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;padding:10px 16px;margin-bottom:16px}
+.status-seg{display:flex;align-items:center;gap:10px;min-width:0}
+.status-seg + .status-seg{border-left:1px solid var(--line);padding-left:20px}
+.status-seg-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.status-seg-value{font-size:13px;font-weight:600}
+.status-progress{width:90px;height:6px;border-radius:99px;background:var(--secondary);overflow:hidden}
+.status-progress-fill{height:100%;border-radius:99px;background:var(--primary);transition:width .3s ease}
+.status-seg-warn .badge{cursor:pointer}
+.status-seg-detail{flex-basis:100%;border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+@media(max-width:900px){.status-seg + .status-seg{border-left:0;padding-left:0}}

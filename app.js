@@ -10607,7 +10607,7 @@ function publisherModal(){
 // on a real schedule - every "run"/"test" is a local simulation against
 // this browser's own demo data, saved to localStorage like everything
 // else, matching the honesty level the rest of this demo already holds to.
-let integrationsSubTab='jobs';
+let integrationsSubTab='overview';
 const JOB_TYPES=['export','import','sync'];
 const JOB_TYPE_LABELS={export:'Export data out',import:'Import data in',sync:'Two-way sync'};
 const SCHEDULE_OPTIONS=['manual','hourly','daily','weekly'];
