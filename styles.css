@@ -1702,6 +1702,7 @@ table.company-table .actions{justify-content:flex-start}
 .bottom-nav button.active{background:color-mix(in srgb,var(--muted) 70%,transparent);color:var(--foreground)}
 .page{padding-bottom:calc(var(--space-8)*3)}
 }
+}
 
 
 
