@@ -2274,3 +2274,16 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 .ontology-graph-viewport{width:100%!important;}
 /* Ensure parent is flex */
 div:has(> .graph-stage){display:flex!important;gap:16px;align-items:flex-start;}
+
+/* og-mobile-bullet-fix: align dots with text in inspector */
+.ontology-inspector-bullet{
+ display:flex!important;align-items:center;gap:8px;
+ text-align:left;width:100%;padding:10px 12px;
+}
+.ontology-inspector-bullet span:first-child{flex-shrink:0;}
+/* Ensure graph canvas visible on mobile */
+@media(max-width:640px){
+ .ontology-graph-canvas{display:block!important;min-height:300px!important;height:40vh!important;}
+ .graph-stage{display:block!important;}
+ .og-stage-head{margin-bottom:8px;}
+}
