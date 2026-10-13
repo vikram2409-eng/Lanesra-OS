@@ -2266,3 +2266,11 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 .graph-stage,.dep-graph-wrap,.ontology-graph-wrap{flex:1 1 auto!important;min-width:0!important;}
 .ontology-detail-panel.og-inspector{flex:0 0 340px!important;max-width:340px!important;}
 .ontology-graph-canvas{width:100%!important;min-height:500px;}
+
+/* og-canvas-width-fix: force canvas to take available width */
+.graph-stage{flex:1 1 0!important;min-width:0!important;max-width:none!important;}
+.graph-stage-head{margin-bottom:12px;}
+.ontology-graph-canvas{width:100%!important;}
+.ontology-graph-viewport{width:100%!important;}
+/* Ensure parent is flex */
+div:has(> .graph-stage){display:flex!important;gap:16px;align-items:flex-start;}
