@@ -2146,3 +2146,103 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
   .ontology-node-caption{font-size:9px;padding:1px 5px}
 }
 
+/* OG-REBUILD: Full rebuild styles matching the mockup */
+.og-toolbar-card{
+ background:#fff;border:1px solid #e5e7eb;border-radius:12px;
+ box-shadow:0 1px 3px rgba(0,0,0,0.08);padding:16px;
+ display:flex;flex-direction:column;gap:12px;margin-bottom:16px;
+}
+.og-toolbar-card .tool-group{
+ display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+ padding-bottom:12px;border-bottom:1px solid #f3f4f6;
+}
+.og-toolbar-card .tool-group:last-child{border-bottom:none;padding-bottom:0;}
+
+/* Pill nodes */
+.og-pill{
+ position:absolute;transform:translate(-50%,-50%);
+ display:inline-flex;align-items:center;gap:6px;
+ padding:6px 12px;border-radius:9999px;
+ background:#fff;border:1.5px solid #e5e7eb;
+ box-shadow:0 1px 3px rgba(0,0,0,0.1);
+ font-size:12px;font-weight:500;color:#1f2937;white-space:nowrap;
+ cursor:pointer;transition:all 0.2s ease;z-index:2;
+}
+.og-pill:hover{transform:translate(-50%,-50%) scale(1.08);box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10;}
+.og-pill-root{
+ background:#4f46e5!important;border-color:#4f46e5!important;
+ color:#fff!important;font-weight:600;font-size:13px;
+ padding:8px 16px;box-shadow:0 2px 8px rgba(79,70,229,0.3);
+}
+.og-pill-dot{
+ width:8px;height:8px;border-radius:50%;flex-shrink:0;
+}
+.og-pill-label{line-height:1.2;}
+.og-pill-cluster{border-style:dashed;}
+.og-pill-inspecting{outline:2px solid #4f46e5;outline-offset:2px;}
+.og-pill-path{background:#eef2ff!important;border-color:#4f46e5!important;}
+.og-pill-dimmed{opacity:0.25;}
+
+/* Hover spotlight for pills */
+.ontology-graph-canvas.graph-hover-dim .og-pill:not(.graph-hover-on){opacity:0.18;}
+.ontology-graph-canvas.graph-hover-dim .og-pill{transition:opacity 0.2s ease;}
+.og-pill.graph-hover-on{opacity:1!important;}
+
+/* Edge labels as pills */
+.ontology-edge-label{
+ background:rgba(255,255,255,0.9);border:1px solid #e5e7eb;
+ border-radius:9999px;padding:2px 8px;font-size:10px;color:#6b7280;
+ transform:translate(-50%,-50%);white-space:nowrap;
+}
+
+/* Graph header */
+.og-stage-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.og-stage-title{font-size:20px;font-weight:600;color:#111827;margin:0;}
+.og-stage-chips{display:flex;gap:8px;}
+.og-pill-chip{
+ background:#f3f4f6;border-radius:9999px;padding:4px 12px;
+ font-size:12px;color:#4b5563;font-weight:500;
+}
+
+/* Inspector */
+.og-inspector{padding:20px;}
+.og-inspector-overline{
+ font-size:11px;font-weight:600;letter-spacing:0.08em;
+ color:#6b7280;text-transform:uppercase;margin-bottom:4px;
+}
+.og-inspector-title{font-size:20px;font-weight:600;color:#111827;margin:0 0 8px 0;}
+.og-actions{display:flex;flex-direction:column;gap:8px;margin:16px 0;}
+.og-btn-full{width:100%;justify-content:center;}
+.og-section-label{
+ font-size:11px;font-weight:600;letter-spacing:0.06em;
+ color:#6b7280;text-transform:uppercase;margin:16px 0 8px 0;
+ padding-bottom:4px;border-bottom:1px solid #f3f4f6;
+}
+
+/* Dot-grid canvas background */
+.ontology-graph-canvas{
+ background-image:radial-gradient(#e5e7eb 1px, transparent 1px);
+ background-size:20px 20px;
+}
+
+/* Legend chips */
+.ontology-legend{
+ display:flex;gap:8px;overflow-x:auto;padding:12px 0;
+ scrollbar-width:thin;
+}
+.ontology-legend-item{
+ display:inline-flex;align-items:center;gap:6px;
+ padding:6px 12px;border-radius:9999px;white-space:nowrap;
+ background:#fff;border:1px solid #e5e7eb;font-size:12px;
+ cursor:pointer;transition:all 0.15s ease;
+}
+.ontology-legend-item:hover{border-color:#4f46e5;}
+.ontology-legend-item-off{opacity:0.4;}
+
+/* Mobile */
+@media (max-width: 640px){
+ .og-toolbar-card{padding:12px;}
+ .og-pill{font-size:11px;padding:4px 10px;}
+ .og-stage-head{flex-direction:column;align-items:flex-start;gap:8px;}
+}
+
