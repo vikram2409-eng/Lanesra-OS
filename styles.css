@@ -2386,3 +2386,29 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
  background-image:radial-gradient(rgba(100,116,139,.18) 1px,transparent 1px)!important;
  background-size:20px 20px!important;
 }
+
+/* og-toolbar-definitive: all controls in card, clean rows */
+/* Desktop: horizontal rows */
+@media(min-width:641px){
+ .og-toolbar-card{
+  display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;
+  align-items:center!important;gap:8px 20px!important;
+  padding:10px 16px!important;
+ }
+ .og-toolbar-card .tool-group{
+  display:flex!important;align-items:center!important;gap:8px!important;
+  border:none!important;padding:0!important;margin:0!important;
+  border-right:1px solid #e5e7eb!important;padding-right:20px!important;
+ }
+ .og-toolbar-card .tool-group:last-child{border-right:none!important;padding-right:0!important;}
+}
+/* Mobile: vertical stack, all inside card */
+@media(max-width:640px){
+ .og-toolbar-card{display:block!important;padding:12px!important;}
+ .og-toolbar-card .tool-group{
+  display:flex!important;align-items:center!important;gap:8px!important;flex-wrap:wrap!important;
+  padding:8px 0!important;margin:0!important;
+  border-bottom:1px solid #f3f4f6!important;
+ }
+ .og-toolbar-card .tool-group:last-child{border-bottom:none!important;}
+}
