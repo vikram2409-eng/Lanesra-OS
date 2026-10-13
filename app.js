@@ -4633,7 +4633,7 @@ function systemGraphTransitive(type,id,direction,maxDepth){
 // (13 unique hues - the old 6-token --chart-N cycle made Object/Page Layout/
 // Action Type indistinguishable).
 const NODE_TYPE_ADMIN_TAB={custom_object:'objectTypes',custom_field:'fields',relationship:'relationships',business_rule:'rules',workflow:'workflow',screen_layout:'layouts',page_layout:'pageBuilder',ai_agent:'aiAgents',execution_graph:'agentTeams',business_glossary_term:'businessGlossary',metric_definition:'metricDefinitions',test_case_definition:'testEval',action_type_definition:'objectTypes'};
-const SYSTEM_NODE_TYPE_COLORS={custom_object:'#4F46E5',custom_field:'#16A34A',relationship:'#D97706',business_rule:'#DC2626',workflow:'#2563EB',screen_layout:'#7C3AED',page_layout:'#0D9488',ai_agent:'#059669',execution_graph:'#EA580C',business_glossary_term:'#E11D48',metric_definition:'#0284C7',test_case_definition:'#9333EA',action_type_definition:'#475569'};
+const SYSTEM_NODE_TYPE_COLORS={custom_object:'#4F46E5',custom_field:'#64748B',relationship:'#D97706',business_rule:'#B45309',workflow:'#0F766E',screen_layout:'#475569',page_layout:'#475569',ai_agent:'#9333EA',execution_graph:'#0F766E',business_glossary_term:'#E11D48',metric_definition:'#0284C7',test_case_definition:'#9333EA',action_type_definition:'#475569'};
 const ONTOLOGY_ROOT_SIZE=26,ONTOLOGY_NODE_SIZE=15,ONTOLOGY_RING_RADIUS=170,ONTOLOGY_CLOUD_RING_GAP=110;
 function typeDotHtml(nodeType,size){size=size||10;return `<span style="display:inline-block;flex-shrink:0;width:${size}px;height:${size}px;border-radius:50%;background:${SYSTEM_NODE_TYPE_COLORS[nodeType]||'#888'}"></span>`}
 function legendHtml(hidden,counts){
@@ -4908,7 +4908,7 @@ function graphRender(model,ui,W,H){
    const padded=hull.map(p=>{const dx=p.x-cx,dy=p.y-cy,dd=Math.sqrt(dx*dx+dy*dy)||1;return{x:p.x+dx/dd*28,y:p.y+dy/dd*28}});
    d='M '+padded.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L ')+' Z';
   }
-  haloSvg.push('<path d="'+d+'" fill="'+color+'" fill-opacity="0.10" stroke="'+color+'" stroke-opacity="0.35" stroke-width="1.5"/>');
+  haloSvg.push('<path d="'+d+'" fill="'+color+'" fill-opacity="0.10" stroke="#cbd5e1" stroke-opacity="0.35" stroke-width="1.5"/>');
   const lx=(Math.min.apply(null,pts.map(p=>p.x))+Math.max.apply(null,pts.map(p=>p.x)))/2;
   const ly=Math.min.apply(null,pts.map(p=>p.y))-16;
   haloLabels.push('<button type="button" class="ontology-halo-label" '+ui.collapseAttr+'="'+type+'" style="left:'+lx.toFixed(1)+'px;top:'+ly.toFixed(1)+'px" title="Collapse '+label+' into a single node">'+label+' ▾</button>');
@@ -4917,7 +4917,7 @@ function graphRender(model,ui,W,H){
  model.nodes.filter(n=>n.id==='__cluster__').forEach(n=>{
   const p=pos.get(n.key);if(!p)return;
   const color=ui.colors[n.type]||'#888';
-  haloSvg.push('<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="36" fill="'+color+'" fill-opacity="0.10" stroke="'+color+'" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="5 4"/>');
+  haloSvg.push('<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="36" fill="'+color+'" fill-opacity="0.10" stroke="#cbd5e1" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="5 4"/>');
   haloLabels.push('<button type="button" class="ontology-halo-label" '+ui.collapseAttr+'="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y-48).toFixed(1)+'px" title="Expand '+n.label+'">'+n.label+' ▸</button>');
  });
  const edgeSvg=[],edgeLabels=[];
@@ -4933,7 +4933,7 @@ function graphRender(model,ui,W,H){
   const eInSim=simSet?simSet.has(e.fromKey)&&simSet.has(e.toKey):false;
   const eDimmed=hlActive&&!eOnPath&&!eInSim;
   const color=ui.colors[an.type]||'#888';
-  edgeSvg.push('<line data-edge-from="'+e.fromKey+'" data-edge-to="'+e.toKey+'" x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'" stroke="'+color+'" stroke-opacity="'+(eDimmed?'0.12':'0.5')+'" stroke-width="1.5"'+(access?' stroke-dasharray="6 4"':'')+'><title>'+an.label+' — '+eLabel+' → '+bn.label+'</title></line>');
+  edgeSvg.push('<line data-edge-from="'+e.fromKey+'" data-edge-to="'+e.toKey+'" x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'" stroke="#cbd5e1" stroke-opacity="'+(eDimmed?'0.12':'0.5')+'" stroke-width="1.5"'+(access?' stroke-dasharray="6 4"':'')+'><title>'+an.label+' — '+eLabel+' → '+bn.label+'</title></line>');
   if(ui.labelMode!=='neighborhood'||e.fromKey===inspectKey||e.toKey===inspectKey)
    edgeLabels.push('<div class="ontology-edge-label'+(access?' ontology-edge-label-access':'')+(eDimmed?' ontology-node-dimmed':'')+'" data-edge-from="'+e.fromKey+'" data-edge-to="'+e.toKey+'" style="left:'+((a.x+b.x)/2).toFixed(1)+'px;top:'+((a.y+b.y)/2).toFixed(1)+'px" title="'+an.label+' — '+eLabel+' → '+bn.label+'">'+(access?'🔒 ':'')+eLabel+'</div>');
  });
