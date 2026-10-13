@@ -2287,3 +2287,7 @@ div:has(> .graph-stage){display:flex!important;gap:16px;align-items:flex-start;}
  .graph-stage{display:block!important;}
  .og-stage-head{margin-bottom:8px;}
 }
+
+/* og-bullet-order-fix: dot + label left, arrow right */
+.ontology-inspector-bullet{display:flex!important;align-items:center;gap:8px;justify-content:flex-start!important;}
+.ontology-inspector-bullet > *:first-child{order:3;margin-left:auto;}

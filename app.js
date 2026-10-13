@@ -5395,6 +5395,18 @@ function depWireToolbar(body){
  const rv=document.getElementById('depResetView');
  if(rv)rv.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};renderAdminTab()};
  depWirePanZoom();
+ // __mobileAutoFit: on narrow screens, auto-fit graph after render
+ try{
+  const vp=document.getElementById('depGraphViewport');
+  if(vp&&vp.clientWidth>0&&vp.clientWidth<500&&!window.__mobileFitDone){
+   window.__mobileFitDone=true;
+   setTimeout(()=>{
+    const fit=document.getElementById('depFit');
+    if(fit)fit.click();
+    window.__mobileFitDone=false;
+   },300);
+  }
+ }catch(e){}
  depWireSearch('depSearch','depSearchResults',(t,i)=>depSelectSearchNode(t,i));
  const pt=document.getElementById('depPathToggle');
  if(pt)pt.onclick=()=>{const s=dependencyExplorerState;dependencyExplorerState={...s,pathMode:!s.pathMode,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false};renderAdminTab()};
