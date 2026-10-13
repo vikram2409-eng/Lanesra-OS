@@ -2327,3 +2327,45 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 /* og-bullet-order-fix: dot + label left, arrow right */
 .ontology-inspector-bullet{display:flex!important;align-items:center;gap:8px;justify-content:flex-start!important;}
 .ontology-inspector-bullet > *:first-child{order:3;margin-left:auto;}
+
+/* og-mockup-parity: exact mockup matching */
+/* B2. Active edges → indigo 3px on hover (mockup .edge.active) */
+.ontology-graph-canvas.graph-hover-dim line.graph-hover-on{stroke:#4f46e5!important;stroke-width:3!important;stroke-opacity:1!important;}
+/* C. Edge labels → mockup style: subtle text, hidden until hover */
+.ontology-edge-label{
+ background:transparent!important;border:none!important;border-radius:0!important;
+ padding:0!important;color:#64748b!important;font-size:10px!important;font-weight:600!important;
+ opacity:0;transition:opacity .18s;pointer-events:none;white-space:nowrap;
+ text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 4px #fff;
+}
+.ontology-edge-label.graph-hover-on{opacity:1!important;}
+/* D. Dim values → mockup (.22 nodes, .14 edges) */
+.ontology-graph-canvas.graph-hover-dim .og-pill:not(.graph-hover-on){opacity:.22!important;}
+.ontology-graph-canvas.graph-hover-dim svg line:not(.graph-hover-on){opacity:.14!important;stroke-opacity:.14!important;}
+/* E. Inspector overline → mockup type-pill */
+.og-inspector-overline{
+ display:inline-flex!important;border-radius:999px!important;
+ background:#eef2ff!important;color:#3730a3!important;
+ padding:5px 8px!important;font-size:9px!important;font-weight:800!important;
+ letter-spacing:.09em!important;text-transform:uppercase;margin-bottom:8px;
+}
+/* F. Header badges → mockup .badge (6px radius, 10px/700) */
+.og-pill-chip{
+ border-radius:6px!important;background:#f1f5f9!important;
+ color:#64748b!important;font-size:10px!important;font-weight:700!important;
+ padding:0 7px!important;height:22px!important;display:inline-flex!important;align-items:center;
+ border:1px solid #e2e8f0;
+}
+/* G. Inspector buttons → mockup .action (36px, 11px/700) */
+#depOpenAdmin,#depOpen360,#depExpand{
+ height:36px!important;font-size:11px!important;font-weight:700!important;
+ border-radius:8px!important;width:100%!important;
+}
+#depOpenAdmin{background:#4f46e5!important;border-color:#4f46e5!important;color:#fff!important;}
+#depOpen360{background:#fff!important;border:1px solid #e2e8f0!important;color:#111827!important;}
+#depExpand{border-color:transparent!important;color:#4f46e5!important;background:transparent!important;}
+/* H. Dotted background → mockup rgba(100,116,139,.18) */
+.ontology-graph-canvas{
+ background-image:radial-gradient(rgba(100,116,139,.18) 1px,transparent 1px)!important;
+ background-size:20px 20px!important;
+}
