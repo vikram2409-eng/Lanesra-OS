@@ -2146,17 +2146,23 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
   .ontology-node-caption{font-size:9px;padding:1px 5px}
 }
 
-/* OG-REBUILD: Full rebuild styles matching the mockup */
+/* OG-REBUILD: Full rebuild styles matching the mockup.
+   flex-direction was 'column' here, which stacked every tool-group (Type/
+   Component, search, Find path, zoom row, Depth) onto its own full-width
+   row instead of one compact horizontal toolbar - the opposite of the
+   "Graph toolbar: horizontal below header" rule a few hundred lines above
+   this one. Row is the correct, intended direction; .tool-group's own
+   flex-wrap still lets controls wrap onto a second line when the toolbar
+   itself is too narrow to fit them all. */
 .og-toolbar-card{
  background:#fff;border:1px solid #e5e7eb;border-radius:12px;
  box-shadow:0 1px 3px rgba(0,0,0,0.08);padding:16px;
- display:flex;flex-direction:column;gap:12px;margin-bottom:16px;
+ display:flex;flex-direction:row;flex-wrap:wrap;gap:12px;margin-bottom:16px;
 }
 .og-toolbar-card .tool-group{
  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
- padding-bottom:12px;border-bottom:1px solid #f3f4f6;
 }
-.og-toolbar-card .tool-group:last-child{border-bottom:none;padding-bottom:0;}
+.og-toolbar-card .tool-group+.tool-group{padding-left:12px;border-left:1px solid #f3f4f6;}
 
 /* Pill nodes */
 .og-pill{
@@ -2246,34 +2252,46 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
  .og-stage-head{flex-direction:column;align-items:flex-start;gap:8px;}
 }
 
-/* og-mobile-fix: prevent cutoff + align inspector rows on small screens */
+/* og-mobile-fix: prevent cutoff + align inspector rows on small screens.
+   overflow:hidden belongs on .ontology-graph-viewport (the clip window),
+   not on .ontology-graph-canvas (the pan/zoom layer itself) - clipping the
+   canvas clips its content in local, pre-transform coordinates and cuts
+   off any node placed beyond the canvas's own un-scaled box. */
 @media(max-width:640px){
- .ontology-graph-canvas{overflow:hidden;touch-action:pan-x pan-y;}
+ .ontology-graph-canvas{touch-action:pan-x pan-y;}
  .og-pill{max-width:44vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px!important;padding:6px 10px!important;}
  .og-pill-root{max-width:54vw;}
  .og-canvas-wrap{overflow:hidden;}
 }
 
-/* og-layout-emergency-fix: repair broken rebuild layout */
-.og-toolbar-card{display:block!important;}
-.og-toolbar-card .tool-group{
- display:flex!important;align-items:center;gap:10px;flex-wrap:wrap;
- margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #f3f4f6;
-}
-.og-toolbar-card .tool-group:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
-/* Main graph + inspector layout: canvas flexes, inspector fixed width */
-.graph-layout,.dep-layout,.ontology-layout{display:flex!important;gap:16px;align-items:flex-start;}
-.graph-stage,.dep-graph-wrap,.ontology-graph-wrap{flex:1 1 auto!important;min-width:0!important;}
+/* Main graph + inspector layout: canvas flexes, inspector fixed width.
+   .ontology-detail-panel.og-inspector is the one real selector here (Object
+   360's modal inspector); .graph-layout/.dep-layout/.ontology-layout/
+   .dep-graph-wrap/.ontology-graph-wrap never appear in app.js's markup -
+   dead rules from an earlier transform pass, left out of this file now
+   that the real bug (below) is fixed at its actual cause. */
 .ontology-detail-panel.og-inspector{flex:0 0 340px!important;max-width:340px!important;}
-.ontology-graph-canvas{width:100%!important;min-height:500px;}
 
-/* og-canvas-width-fix: force canvas to take available width */
-.graph-stage{flex:1 1 0!important;min-width:0!important;max-width:none!important;}
-.graph-stage-head{margin-bottom:12px;}
-.ontology-graph-canvas{width:100%!important;}
-.ontology-graph-viewport{width:100%!important;}
-/* Ensure parent is flex */
-div:has(> .graph-stage){display:flex!important;gap:16px;align-items:flex-start;}
+/* og-canvas-width-fix: force canvas to take available width - desktop
+   only. div:has(> .graph-stage) targets .workbench's own row (the
+   Ontology Graph tab's canvas+inspector pair); forcing it to display:flex
+   unconditionally fought the "@media(max-width:760px){.workbench{display:
+   block}}" rule above, so .graph-detail's own content-sized width left
+   .graph-stage - and the whole canvas inside it - squeezed to 0 on any
+   viewport narrow enough that both no longer fit side by side. Scoped to
+   match that same 760px breakpoint so mobile gets the intended stacked
+   layout back; see the mobile override just below for that side. */
+@media(min-width:761px){
+ .graph-stage{flex:1 1 0!important;min-width:0!important;max-width:none!important;}
+ .ontology-graph-viewport{width:100%!important;}
+ div:has(> .graph-stage){display:flex!important;gap:16px;align-items:flex-start;}
+}
+/* .ontology-graph-canvas keeps its own inline width/height (depW x depH,
+   the full content size) - the viewport above clips it to the visible
+   window and the transform (scale+pan) fits it in. Forcing the canvas
+   itself to width:100% shrinks its layout box below its content's real
+   coordinate space, which (combined with the viewport's clip) cuts off
+   any node placed past that shrunk edge. */
 
 /* og-mobile-bullet-fix: align dots with text in inspector */
 .ontology-inspector-bullet{
@@ -2281,9 +2299,27 @@ div:has(> .graph-stage){display:flex!important;gap:16px;align-items:flex-start;}
  text-align:left;width:100%;padding:10px 12px;
 }
 .ontology-inspector-bullet span:first-child{flex-shrink:0;}
-/* Ensure graph canvas visible on mobile */
+/* Ensure graph canvas visible on mobile - restores the stacked layout
+   @media(max-width:760px){.workbench{display:block}} already intends,
+   against the desktop-only flex-row override above. Without this,
+   div:has(> .graph-stage) stayed display:flex at every width (its own
+   rule carried no media guard before), so .graph-detail's real content
+   width alone could consume the entire 390px-ish mobile viewport, leaving
+   .graph-stage - and the graph canvas inside it - 0px wide and invisible. */
+@media(max-width:760px){
+ div:has(> .graph-stage){display:block!important;}
+ .graph-stage,.graph-detail{width:100%!important;flex:none!important;}
+}
+/* .ontology-graph-canvas keeps its own inline width/height (depW x depH) on
+   mobile too - the visible window height on this breakpoint is already set
+   correctly by .graph-canvas{min-height:470px} above (the actual clip box,
+   via .ontology-graph-viewport's position:absolute;inset:0). Forcing the
+   canvas layer itself to height:40vh shrank its box below depH, and since
+   .ontology-graph-canvas always has overflow:hidden (GRAPH-REVAMP-2026
+   rule), that clipped any node placed past the shrunk edge in local,
+   pre-transform coordinates - invisible on mobile even once panned/scaled
+   into the visible window. */
 @media(max-width:640px){
- .ontology-graph-canvas{display:block!important;min-height:300px!important;height:40vh!important;}
  .graph-stage{display:block!important;}
  .og-stage-head{margin-bottom:8px;}
 }
