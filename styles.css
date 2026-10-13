@@ -2253,3 +2253,16 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
  .og-pill-root{max-width:54vw;}
  .og-canvas-wrap{overflow:hidden;}
 }
+
+/* og-layout-emergency-fix: repair broken rebuild layout */
+.og-toolbar-card{display:block!important;}
+.og-toolbar-card .tool-group{
+ display:flex!important;align-items:center;gap:10px;flex-wrap:wrap;
+ margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #f3f4f6;
+}
+.og-toolbar-card .tool-group:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
+/* Main graph + inspector layout: canvas flexes, inspector fixed width */
+.graph-layout,.dep-layout,.ontology-layout{display:flex!important;gap:16px;align-items:flex-start;}
+.graph-stage,.dep-graph-wrap,.ontology-graph-wrap{flex:1 1 auto!important;min-width:0!important;}
+.ontology-detail-panel.og-inspector{flex:0 0 340px!important;max-width:340px!important;}
+.ontology-graph-canvas{width:100%!important;min-height:500px;}
