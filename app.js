@@ -330,6 +330,7 @@ function defaultRoles(){
   {id:'role_administrator',name:'Administrator',description:'Full read/write access to every object, plus every admin and AI tool.',isSystem:true,
    objectPermissions:{'*':accessGrant({canDelete:true,canAssign:true,recordScope:'ORGANIZATION'})},
    aiPermissions:{assistantAccess:true,agentFoundryAccess:true,manageAiSettings:true,allowedAgentIds:[]},
+   themePermissions:{manageThemes:true},
    voicePermissions:defaultVoicePermissions({canBulkAct:true,canExternalAct:true,canUseAgents:true,maxActionLevel:'act',processingBoundary:'cloud'})},
   {id:'role_sales_rep',name:'Sales Rep',description:'Manages companies, contacts, pipeline, products and quotes within their own team; read-only on orders, invoices and contracts.',isSystem:true,
    objectPermissions:{
@@ -339,10 +340,12 @@ function defaultRoles(){
     contracts:accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'TEAM'}),
    },
    aiPermissions:{assistantAccess:true,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]},
+   themePermissions:{manageThemes:false},
    voicePermissions:defaultVoicePermissions({canBulkAct:false,canExternalAct:false,canUseAgents:false,maxActionLevel:'act_with_confirmation',processingBoundary:'approved_private'})},
   {id:'role_viewer',name:'Viewer',description:'Read-only access across the workspace - no admin tools, no AI Agent Foundry.',isSystem:true,
    objectPermissions:{'*':accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'ORGANIZATION'})},
    aiPermissions:{assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]},
+   themePermissions:{manageThemes:false},
    voicePermissions:defaultVoicePermissions({canCreate:false,canUpdate:false,canAct:false,canBulkAct:false,canExternalAct:false,canUseAgents:false,maxActionLevel:'ask_only',processingBoundary:'local_only'})},
  ];
 }
@@ -368,7 +371,8 @@ function ensureAdminData(){
  if(!data.actionTypeDefinitions)data.actionTypeDefinitions=[];
  if(!data.aiExecutionGraphs)data.aiExecutionGraphs=[];
  if(!data.tasks)data.tasks=[];
- (data.roles||[]).forEach(r=>{if(!r.objectPermissions)r.objectPermissions={};if(!r.aiPermissions)r.aiPermissions={assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]};if(!r.voicePermissions)r.voicePermissions=defaultVoicePermissions()});
+ if(!data.themeAudit)data.themeAudit=[];
+ (data.roles||[]).forEach(r=>{if(!r.objectPermissions)r.objectPermissions={};if(!r.aiPermissions)r.aiPermissions={assistantAccess:false,agentFoundryAccess:false,manageAiSettings:false,allowedAgentIds:[]};if(!r.voicePermissions)r.voicePermissions=defaultVoicePermissions();if(!r.themePermissions)r.themePermissions={manageThemes:false}});
  // Access Control v1 (Phase 2) mirror: upgrade any role still carrying the
  // old none/read/read_write string shape (persisted in an existing
  // browser's localStorage from before this migration) into the real
@@ -1720,7 +1724,7 @@ function appShell(){
  if(startParam==='agents'){current='admin';adminView='tool';adminTab='aiAgents'}
  else if(startParam==='objects'){current='admin';adminView='tool';adminTab='objects'}
  else if(startParam==='apps'){current='admin';adminView='tool';adminTab='packages'}
- $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div><aside class="sidebar" id="appSidebar"><div class="side-brand"><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><button class="btn-icon sidebar-toggle" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«</button><nav class="side-nav" id="sideNav"></nav><div class="side-bottom"><div class="side-meta"><strong title="This number tracks every shipped improvement across the desktop app, this demo and the website. The desktop installer's own version (desktop-v0.14.0 on GitHub) is cut less often, only for a new installer build - see Releases for the full explanation.">Early Access v0.96.0 <a href="/releases" style="color:inherit;text-decoration:underline">ⓘ</a></strong><div class="side-product-links"><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="icon-btn" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
+ $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div><aside class="sidebar" id="appSidebar"><div class="side-brand"><img class="theme-brand-logo" alt="Workspace logo" hidden><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><button class="btn-icon sidebar-toggle" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«</button><nav class="side-nav" id="sideNav"></nav><div class="side-bottom"><div class="side-meta"><strong title="This number tracks every shipped improvement across the desktop app, this demo and the website. The desktop installer's own version (desktop-v0.14.0 on GitHub) is cut less often, only for a new installer build - see Releases for the full explanation.">Early Access v0.96.0 <a href="/releases" style="color:inherit;text-decoration:underline">ⓘ</a></strong><div class="side-product-links"><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><img class="theme-brand-logo topbar-brand-logo" alt="" hidden><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="icon-btn" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
  // Modern UI PR-A: restore persisted shell state (theme + sidebar) before
  // the first render, so a returning visitor never flashes the wrong theme.
  // Best-effort: a fresh visitor with an empty store gets Light + expanded.
@@ -3178,7 +3182,7 @@ function pageLiveNodeHtml(node,entityKey,record,entityId){
  const def=pageComponentDef(node.componentType);
  const cfg=node.config||{};
  if(pageIsContainer(node.componentType)){
-  if(node.componentType==='section')return `<div class="panel">${cfg.title?`<h4 style="margin-top:0">${cfg.title}</h4>`:''}${pageLiveGridHtml(node.children,entityKey,record,entityId)}</div>`;
+  if(node.componentType==='section')return `<div class="${pageSectionStyleClass(cfg.style)}">${cfg.title?`<h4 style="margin-top:0">${cfg.title}</h4>`:''}${pageLiveGridHtml(node.children,entityKey,record,entityId)}</div>`;
   if(node.componentType==='field_group')return `<div>${cfg.title?`<strong style="font-size:13px;display:block;margin-bottom:6px">${cfg.title}</strong>`:''}${pageLiveGridHtml(node.children,entityKey,record,entityId)}</div>`;
   if(node.componentType==='tabs'){
    const labels=(cfg.tabLabels||'').split(',').map(s=>s.trim()).filter(Boolean);
@@ -5296,14 +5300,14 @@ function adminLanding(){
  const attention=adminNeedsAttentionItems();
  const recent=adminRecentChanges(8);
  $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>Admin</span></div><h1>Admin</h1><p class="muted">Configure your workspace, users and automation. Changes save immediately in this browser.</p></div></div>
- ${setupDone?'':`<div class="panel" style="margin-bottom:18px"><h3 style="margin-top:0">Setup progress</h3><div class="admin-cat-items">${setup.map(s=>`<div class="admin-cat-item" style="cursor:default"><span>${s.done?'✓':'○'} ${s.label}</span></div>`).join('')}</div></div>`}
- ${attention.length?`<div class="panel" style="margin-bottom:18px"><h3 style="margin-top:0">Needs attention</h3><div class="admin-cat-items">${attention.map(a=>`<button type="button" class="admin-cat-item" data-admin-open="${a.tab}">${a.label}<span class="admin-cat-arrow">${a.count} →</span></button>`).join('')}</div></div>`:''}
- <div class="panel" style="margin-bottom:18px"><h3 style="margin-top:0">Platform health</h3><div class="kpi-grid">${adminPlatformHealthHtml()}</div></div>
- <div class="admin-landing-grid" style="margin-bottom:18px">
+ ${setupDone?'':`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Setup progress</h3><span class="badge badge-secondary">${setup.filter(s=>s.done).length} of ${setup.length} done</span></div><div class="admin-cat-items">${setup.map(s=>`<div class="admin-cat-item" style="cursor:default"><span class="prc-row-label"><span class="prc-status${s.done?' prc-status-done':''}">${s.done?'✓':'○'}</span>${s.label}</span>${s.done?'<span class="badge badge-success">Done</span>':'<span class="badge badge-outline">To do</span>'}</div>`).join('')}</div></section>`}
+ ${attention.length?`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Needs attention</h3><span class="badge badge-warning">${attention.length}</span></div><div class="admin-cat-items">${attention.map(a=>`<button type="button" class="admin-cat-item" data-admin-open="${a.tab}"><span>${a.label}</span><span class="prc-row-meta"><span class="badge badge-warning">${a.count}</span><span class="admin-cat-arrow">›</span></span></button>`).join('')}</div></section>`:''}
+ <section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Platform health</h3></div><div class="kpi-grid">${adminPlatformHealthHtml()}</div></section>
+ <div class="admin-landing-grid prc-grid-stack">
  ${adminRecentNavHtml()}
  ${recent.length?`<div class="admin-cat-card"><div class="admin-cat-head"><span class="admin-cat-icon">📝</span><div><h3>Recent changes</h3><p class="muted">Across custom objects, fields, rules, workflows, agents and integrations</p></div></div><div class="admin-cat-items">${recent.map(r=>`<div class="admin-cat-item" style="cursor:default;font-weight:400"><span>${r.text}</span><span class="muted" style="font-size:11px">${new Date(r.at).toLocaleDateString()}</span></div>`).join('')}</div></div>`:''}
  </div>
- <div class="admin-landing-grid">${ADMIN_CATEGORIES.map(c=>`<div class="admin-cat-card"><div class="admin-cat-head"><span class="admin-cat-icon">${c.icon}</span><div><h3>${c.label}</h3><p class="muted">${c.note}</p></div></div><div class="admin-cat-items">${c.items.map(k=>`<button class="admin-cat-item" data-admin-open="${k}">${tabLabel(k)}<span class="admin-cat-arrow">→</span></button>`).join('')}</div></div>`).join('')}</div>`;
+ <div class="admin-landing-grid">${ADMIN_CATEGORIES.map(c=>`<div class="admin-cat-card"><div class="admin-cat-head"><span class="admin-cat-icon">${c.icon}</span><div><h3>${c.label}</h3><p class="muted">${c.note}</p></div></div><div class="admin-cat-items">${c.items.map(k=>`<button class="admin-cat-item" data-admin-open="${k}"><span>${tabLabel(k)}</span><span class="admin-cat-arrow">›</span></button>`).join('')}</div></div>`).join('')}</div>`;
  $('[data-clear-filter]').onclick=()=>{current='dashboard';viewFilter=null;renderView()};
  document.querySelectorAll('[data-admin-open]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminOpen;adminView='tool';renderView()});
  document.querySelectorAll('[data-pin-admin]').forEach(b=>b.onclick=e=>{
@@ -7353,7 +7357,144 @@ function themeStatusBadge(status){
  if(status==='draft')return `<span class="badge" style="background:#fef3e2;color:#92400e">draft</span>`;
  return `<span class="badge">${status}</span>`;
 }
+// Modern UI PR-C (TS-8): Theme Studio is gated on the manage_themes
+// capability. There is no signed-in user in this browser demo, so it
+// resolves against the Administrator role the same illustrative way
+// layoutsTab's own role-assignment note describes - the desktop edition
+// resolves it against the real signed-in user's role.
+function canManageThemes(){
+ const admin=(data.roles||[]).find(r=>r.name==='Administrator');
+ return !!(admin&&admin.themePermissions&&admin.themePermissions.manageThemes);
+}
+// Modern UI PR-C (TS-7): the audit log. Every publish, rollback, draft
+// delete and scheduled publish appends {at, by, action, version, name} -
+// backfilled to [] in ensureAdminData() for workspaces saved before this.
+function themeAudit(action,version,name){
+ if(!data.themeAudit)data.themeAudit=[];
+ data.themeAudit.push({at:new Date().toISOString(),by:CURRENT_USER_ID,action,version,name});
+}
+// Modern UI PR-C (TS-7): the publish state transition shared by manual
+// publish, scheduled publish and rollback - contrast-gated, archives the
+// previously published version, clears any schedule, stamps the audit
+// entry. Returns false when the gate (or a bad id) blocks it; callers
+// surface that their own way (an alert for a click, a blocked-audit entry
+// for the silent scheduled path).
+function themePublishCore(theme,auditAction){
+ if(!theme||theme.status!=='draft')return false;
+ if(validateThemeTokensDemo(theme.tokens).length)return false;
+ data.themeVersions.forEach(t=>{if(t.status==='published')t.status='archived'});
+ theme.status='published';theme.publishedAt=new Date().toISOString();theme.publishedBy=CURRENT_USER_ID;theme.scheduledFor=null;
+ themeAudit(auditAction,theme.version,theme.name);
+ themeDraft=null;save();applyWorkspaceTheme();
+ return true;
+}
+// Modern UI PR-C (TS-7): fires at the top of themeStudioTab(). Any draft
+// whose scheduledFor has passed is published with the contrast gate and
+// an audit entry. A scheduled publish is an authorized intent from when it
+// was scheduled, so this runs before the permission gate below; the gate
+// still guards every interactive action. Runs quietly - a blocked schedule
+// is recorded in the audit log (action 'scheduled-publish-blocked') and
+// its scheduledFor cleared so it never nags on later renders.
+function themePublishDueScheduled(){
+ const now=new Date();
+ let fired=false;
+ (data.themeVersions||[]).forEach(v=>{
+  if(v.status!=='draft'||!v.scheduledFor||new Date(v.scheduledFor)>now)return;
+  v.scheduledFor=null;
+  if(validateThemeTokensDemo(v.tokens).length){
+   themeAudit('scheduled-publish-blocked',v.version,v.name);
+  }else if(themePublishCore(v,'scheduled-publish')){
+   fired=true;
+  }
+ });
+ if(fired){toast('Scheduled theme published')}
+}
+// datetime-local inputs want local 'YYYY-MM-DDTHH:MM'; scheduledFor is
+// stored as an ISO string.
+function themeDatetimeLocalValue(iso){
+ const d=new Date(iso),pad=n=>String(n).padStart(2,'0');
+ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+// Modern UI PR-C (TS-7): token-level what-changed between two versions.
+// Walks both token trees (color/typography/shape/density/motion/dark/
+// chart/any TS-3 overrides) plus the version name; one row per leaf whose
+// JSON differs, with a dash for a key missing on one side.
+function themeDiffEntries(a,b){
+ const rows=[];
+ const walk=(path,va,vb)=>{
+  const oa=va&&typeof va==='object'&&!Array.isArray(va),ob=vb&&typeof vb==='object'&&!Array.isArray(vb);
+  if(oa&&ob){
+   [...new Set([...Object.keys(va),...Object.keys(vb)])].forEach(k=>walk([...path,k],va[k],vb[k]));
+   return;
+  }
+  const ja=va===undefined?'—':JSON.stringify(va),jb=vb===undefined?'—':JSON.stringify(vb);
+  if(ja!==jb)rows.push({path:path.join('.'),a:ja,b:jb});
+ };
+ walk([],a?a.tokens||{}:{},b?b.tokens||{}:{});
+ if((a?a.name:'')!==(b?b.name:''))rows.push({path:'name',a:a?a.name:'—',b:b?b.name:'—'});
+ return rows;
+}
+function themeDiffHtml(a,b){
+ const rows=themeDiffEntries(a,b);
+ if(!rows.length)return `<p class="muted">v${a.version} and v${b.version} are identical - no token changed.</p>`;
+ return `<div class="table-wrap"><table class="table"><thead><tr><th>Token</th><th>v${a.version} — ${a.name}</th><th>v${b.version} — ${b.name}</th></tr></thead><tbody>${rows.map(r=>`<tr><td><code>${r.path}</code></td><td style="word-break:break-all">${r.a}</td><td style="word-break:break-all">${r.b}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function themeDiffModal(id){
+ const current=data.themeVersions.find(t=>t.id===id);
+ if(!current)return;
+ const others=(data.themeVersions||[]).filter(t=>t.id!==id).sort((x,y)=>y.version-x.version);
+ modal(`Diff: v${current.version} vs…`,`<div class="field"><label>Compare with</label><select id="themeDiffOther">${others.map(t=>`<option value="${t.id}">v${t.version} — ${t.name} (${t.status})</option>`).join('')}</select></div><div id="themeDiffOut" style="margin-top:12px"></div><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close>Close</button></div>`);
+ const render=()=>{const other=data.themeVersions.find(t=>t.id===$('#themeDiffOther').value);$('#themeDiffOut').innerHTML=other?themeDiffHtml(current,other):'<p class="muted">No other version to compare against.</p>'};
+ $('#themeDiffOther').onchange=render;
+ $('[data-close]').onclick=closeModal;
+ render();
+}
+// Modern UI PR-C (TS-7): one version-list row - Diff for every version,
+// Edit/Publish/Delete plus the scheduled-publish picker for drafts.
+function themeVersionRowHtml(v){
+ const actions=v.status==='draft'
+  ?`<button class="icon-btn" data-edit-theme="${v.id}">Edit</button><button class="icon-btn" data-publish-theme="${v.id}">Publish</button><button class="icon-btn" data-delete-theme="${v.id}">Delete</button>`
+  :v.status==='archived'
+  ?`<button class="icon-btn" data-rollback-theme="${v.version}">Roll back to this</button>`
+  :'';
+ const schedule=v.status==='draft'
+  ?`<div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;margin-top:6px;flex-wrap:wrap"><input type="datetime-local" data-schedule-input="${v.id}" value="${v.scheduledFor?themeDatetimeLocalValue(v.scheduledFor):''}" title="Schedule this draft to publish automatically" style="font-size:12px;border:1px solid var(--line);border-radius:8px;padding:5px 7px"><button class="icon-btn" data-schedule-theme="${v.id}" type="button">Schedule</button>${v.scheduledFor?`<button class="icon-btn" data-unschedule-theme="${v.id}" type="button">Clear</button>`:''}</div>${v.scheduledFor?`<div class="muted" style="font-size:11px;text-align:right">Auto-publishes ${new Date(v.scheduledFor).toLocaleString()}</div>`:''}`
+  :'';
+ return `<tr><td>v${v.version}</td><td>${v.name}</td><td>${themeStatusBadge(v.status)}</td><td>${v.publishedAt?new Date(v.publishedAt).toLocaleString():'—'}</td><td><div class="actions" style="justify-content:flex-end"><button class="icon-btn" data-diff-theme="${v.id}">Diff</button>${actions}</div>${schedule}</td></tr>`;
+}
+// Modern UI PR-C (TS-7): the audit-log panel rendered inside Theme Studio.
+function themeAuditLogHtml(){
+ const rows=(data.themeAudit||[]).slice().reverse();
+ return `<div class="panel"><div class="panel-head"><h3>Audit log</h3></div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Version</th><th>Name</th></tr></thead><tbody>
+ ${rows.map(e=>`<tr><td>${new Date(e.at).toLocaleString()}</td><td>${e.by}</td><td>${e.action}</td><td>v${e.version}</td><td>${e.name}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No theme activity yet - publishes, rollbacks, deletes and scheduled publishes are recorded here.</td></tr>'}
+ </tbody></table></div></div>`;
+}
+// Modern UI PR-C (TS-7): reads the row's datetime-local input and stamps
+// scheduledFor on the draft; themePublishDueScheduled() fires it later.
+function themeScheduleDraft(id,body){
+ if(!canManageThemes())return;
+ const v=data.themeVersions.find(t=>t.id===id);
+ if(!v||v.status!=='draft')return;
+ const input=body.querySelector(`[data-schedule-input="${id}"]`);
+ const val=input?input.value:'';
+ if(!val)return alert('Pick a date and time first.');
+ const when=new Date(val);
+ if(isNaN(when.getTime()))return alert('That date and time is not valid.');
+ v.scheduledFor=when.toISOString();
+ save();toast(`Publish scheduled for ${when.toLocaleString()}`);renderAdminTab();
+}
 function themeStudioTab(body){
+ // Modern UI PR-C (TS-7): scheduled publishes are a system action fired on
+ // visiting the tab - an authorized intent from when they were scheduled,
+ // so this runs before the permission gate below.
+ themePublishDueScheduled();
+ // Modern UI PR-C (TS-8): without the manage_themes capability Theme Studio
+ // is hidden entirely - the tab renders a no-permission panel instead.
+ if(!canManageThemes()){
+  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Theme Studio</h3><p class="muted" style="font-size:13px">Theme management needs the <code>manage_themes</code> capability, and the <b>Administrator</b> role does not have it - so Theme Studio is hidden. (There is no signed-in user in this demo; the desktop edition resolves this against the real signed-in user's role.)</p></div>`;
+  return;
+ }
  const versions=(data.themeVersions||[]).slice().sort((a,b)=>b.version-a.version);
  const published=versions.find(v=>v.status==='published');
  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Theme Studio</h3><p class="muted">Brand colors, typography, shape and density for this workspace. Start from a curated preset or from scratch, then Publish once it passes a WCAG contrast check. Publishing never overwrites history - rolling back creates a new Draft from an older version's tokens and publishes that.</p>
@@ -7363,9 +7504,10 @@ function themeStudioTab(body){
  </div>
  <div class="panel"><div class="panel-head"><h3>Versions</h3></div>
  <div class="table-wrap"><table class="table"><thead><tr><th>Version</th><th>Name</th><th>Status</th><th>Published</th><th></th></tr></thead><tbody>
- ${versions.map(v=>`<tr><td>v${v.version}</td><td>${v.name}</td><td>${themeStatusBadge(v.status)}</td><td>${v.publishedAt?new Date(v.publishedAt).toLocaleString():'—'}</td><td><div class="actions" style="justify-content:flex-end">${v.status==='draft'?`<button class="icon-btn" data-edit-theme="${v.id}">Edit</button><button class="icon-btn" data-publish-theme="${v.id}">Publish</button><button class="icon-btn" data-delete-theme="${v.id}">Delete</button>`:v.status==='archived'?`<button class="icon-btn" data-rollback-theme="${v.version}">Roll back to this</button>`:''}</div></td></tr>`).join('')}
+ ${versions.map(themeVersionRowHtml).join('')}
  ${!versions.length?`<tr><td colspan="5" class="muted">No theme versions yet - start from a preset above. The workspace keeps its current look until you Publish one.</td></tr>`:''}
  </tbody></table></div></div>
+ ${themeAuditLogHtml()}
  ${themeDraft?themeDraftPanel():''}
  ${published&&!themeDraft?`<p class="muted" style="font-size:13px">Currently published: <strong>${published.name}</strong> (v${published.version}), applied live across this demo.</p>`:''}`;
  body.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{
@@ -7380,17 +7522,21 @@ function themeStudioTab(body){
   themeDraft.tokens.chart=themeDraft.tokens.chart||{palette:themeChartPalette(themeDraft.tokens).slice()};
   themeIssues=null;renderAdminTab();
  });
- body.querySelectorAll('[data-delete-theme]').forEach(b=>b.onclick=()=>{
-  if(!confirm('Delete this draft?'))return;
-  data.themeVersions=data.themeVersions.filter(t=>t.id!==b.dataset.deleteTheme);
-  if(themeDraft&&themeDraft.id===b.dataset.deleteTheme)themeDraft=null;
-  save();toast('Draft deleted');renderAdminTab();
+ body.querySelectorAll('[data-delete-theme]').forEach(b=>b.onclick=()=>themeDeleteVersion(b.dataset.deleteTheme));
+ body.querySelectorAll('[data-diff-theme]').forEach(b=>b.onclick=()=>themeDiffModal(b.dataset.diffTheme));
+ body.querySelectorAll('[data-schedule-theme]').forEach(b=>b.onclick=()=>themeScheduleDraft(b.dataset.scheduleTheme,body));
+ body.querySelectorAll('[data-unschedule-theme]').forEach(b=>b.onclick=()=>{
+  if(!canManageThemes())return;
+  const v=data.themeVersions.find(t=>t.id===b.dataset.unscheduleTheme);
+  if(v){v.scheduledFor=null;save();toast('Scheduled publish cleared');renderAdminTab()}
  });
  body.querySelectorAll('[data-publish-theme]').forEach(b=>b.onclick=()=>themePublish(b.dataset.publishTheme));
  body.querySelectorAll('[data-rollback-theme]').forEach(b=>b.onclick=()=>themeRollback(Number(b.dataset.rollbackTheme)));
  if(themeDraft)bindThemeDraftPanel();
 }
 function themePublish(id){
+ // Modern UI PR-C (TS-8): action-level capability guard.
+ if(!canManageThemes())return;
  const theme=data.themeVersions.find(t=>t.id===id);
  if(!theme||theme.status!=='draft')return;
  const issues=validateThemeTokensDemo(theme.tokens);
@@ -7398,16 +7544,114 @@ function themePublish(id){
   alert(`Can't publish: critical contrast failure - ${issues.map(i=>`${i.label} (${i.ratio.toFixed(2)}:1, needs ${i.required.toFixed(1)}:1)`).join('; ')}`);
   return;
  }
- data.themeVersions.forEach(t=>{if(t.status==='published')t.status='archived'});
- theme.status='published';theme.publishedAt=new Date().toISOString();theme.publishedBy=CURRENT_USER_ID;
- themeDraft=null;save();toast('Theme published');applyWorkspaceTheme();renderAdminTab();
+ if(themePublishCore(theme,'publish')){toast('Theme published');renderAdminTab()}
 }
 function themeRollback(fromVersion){
+ // Modern UI PR-C (TS-8): action-level capability guard.
+ if(!canManageThemes())return;
  const source=data.themeVersions.find(t=>t.version===fromVersion);
  if(!source)return;
- const draft=stampCreate({id:'theme_'+uid(),name:`${source.name} (rolled back from v${source.version})`,status:'draft',version:themeNextVersion(),preset_key:source.preset_key,tokens:structuredClone(source.tokens),publishedAt:null,publishedBy:null});
+ const draft=stampCreate({id:'theme_'+uid(),name:`${source.name} (rolled back from v${source.version})`,status:'draft',version:themeNextVersion(),preset_key:source.preset_key,tokens:structuredClone(source.tokens),publishedAt:null,publishedBy:null,scheduledFor:null});
  data.themeVersions.push(draft);
+ themeAudit('rollback',draft.version,draft.name);
  themePublish(draft.id);
+}
+// Modern UI PR-C (TS-7/TS-8): extracted from themeStudioTab's inline delete
+// handler so the capability guard and the audit entry have a home.
+function themeDeleteVersion(id){
+ // Modern UI PR-C (TS-8): action-level capability guard.
+ if(!canManageThemes())return;
+ const v=data.themeVersions.find(t=>t.id===id);
+ if(!v||v.status!=='draft')return;
+ if(!confirm('Delete this draft?'))return;
+ themeAudit('delete',v.version,v.name);
+ data.themeVersions=data.themeVersions.filter(t=>t.id!==id);
+ if(themeDraft&&themeDraft.id===id)themeDraft=null;
+ save();toast('Draft deleted');renderAdminTab();
+}
+// Modern UI PR-C (Worker B, TS-3): option list for a component-override
+// select. Empty value = "Catalog default", which removes the override.
+function themeOverrideOptions(current,pairs){
+ return `<option value="" ${current?'':'selected'}>Catalog default</option>`+pairs.map(([v,l])=>`<option value="${v}" ${current===v?'selected':''}>${l}</option>`).join('');
+}
+// Modern UI PR-C (Worker B, TS-5): neutralize a closing textarea tag
+// inside custom CSS so the draft panel markup can never be broken out of.
+function themeCustomCssTextareaVal(css){return String(css||'').replace(/<\/textarea/gi,'<\\/textarea')}
+// Modern UI PR-C (Worker B, TS-5): guardrailed custom CSS. Strips
+// @import, @font-face blocks with remote URLs, and script-tag
+// sequences; rejects anything over the 64 KB cap with a message.
+const THEME_CUSTOM_CSS_MAX=65536;
+function sanitizeThemeCss(css){
+ if(typeof css!=='string')css='';
+ if(css.length>THEME_CUSTOM_CSS_MAX)return{ok:false,css:'',error:'Custom CSS is '+css.length.toLocaleString()+' characters - the limit is 65,536 (64 KB). Shorten it and try again.'};
+ let out=css;
+ out=out.replace(/@import[^;]*;?/gi,'');
+ out=out.replace(/@font-face\s*\{[^{}]*\}/gi,m=>/url\s*\(\s*['"]?(https?:)?\/\//i.test(m)?'':m);
+ out=out.replace(/<\/?script\b[^>]*>/gi,'');
+ out=out.replace(/<\/textarea/gi,'<\\/textarea');
+ return{ok:true,css:out,error:''};
+}
+// Modern UI PR-C (Worker B, TS-5): writes the published theme's
+// sanitized custom CSS into the theme-owned <style id="themeCustomCss">
+// element. It never touches styles.css (the lint rule exempts this
+// runtime-injected element). Empty CSS removes the element, so deleting
+// the theme version removes its CSS too.
+function themeCustomCssApply(css){
+ const clean=sanitizeThemeCss(css||'');
+ let el=document.getElementById('themeCustomCss');
+ if(!clean.ok||!clean.css){if(el)el.remove();return}
+ if(!el){el=document.createElement('style');el.id='themeCustomCss';document.head.appendChild(el)}
+ if(el.textContent!==clean.css)el.textContent=clean.css;
+}
+// Modern UI PR-C (Worker B, TS-6): brand assets from the published
+// theme version. The logo swaps every <img class="theme-brand-logo">
+// (sidebar, topbar, public nav); the favicon swaps <link rel="icon">;
+// hero artwork sets the homepage hero video poster. Empty assets
+// restore the shipped defaults. Rollback restores the previous set
+// automatically because assets are versioned with the theme.
+function themeAssetsApply(assets){
+ assets=assets||{};
+ document.querySelectorAll('img.theme-brand-logo').forEach(img=>{
+  if(assets.logo){img.src=assets.logo;img.hidden=false}
+  else{img.removeAttribute('src');img.hidden=true}
+ });
+ document.querySelectorAll('.brand-mark').forEach(m=>{
+  const host=m.closest('.side-brand,a.brand');
+  m.style.display=(assets.logo&&host&&host.querySelector('img.theme-brand-logo'))?'none':'';
+ });
+ const icon=document.querySelector('link[rel="icon"]');
+ if(icon){
+  if(icon.dataset.defaultHref===undefined)icon.dataset.defaultHref=icon.getAttribute('href')||'';
+  icon.setAttribute('href',assets.favicon||icon.dataset.defaultHref);
+ }
+ const hero=document.getElementById('heroIntroVideo');
+ if(hero){
+  if(hero.dataset.defaultPoster===undefined)hero.dataset.defaultPoster=hero.getAttribute('poster')||'';
+  if(assets.heroArt)hero.setAttribute('poster',assets.heroArt);
+  else if(hero.dataset.defaultPoster)hero.setAttribute('poster',hero.dataset.defaultPoster);
+  else hero.removeAttribute('poster');
+ }
+ document.querySelectorAll('[data-theme-hero]').forEach(el=>{
+  el.style.backgroundImage=assets.heroArt?('url("'+assets.heroArt+'")'):'';
+ });
+}
+// Modern UI PR-C (Worker B, TS-3/TS-5/TS-6): applies the published
+// theme's component style overrides (as data attributes on #app),
+// guardrailed custom CSS, and brand assets. A "Catalog default" (empty)
+// override removes its data attribute; a null theme clears everything.
+function applyWorkspaceThemeExtras(theme){
+ const appEl=document.getElementById('app');
+ if(!appEl)return;
+ const tokens=(theme&&theme.tokens)||{};
+ const o=tokens.overrides||{};
+ const setOrClear=(name,val)=>{if(val)appEl.dataset[name]=val;else delete appEl.dataset[name]};
+ setOrClear('btnVariant',o.primaryButton||'');
+ setOrClear('cardStyle',o.cardStyle||'');
+ setOrClear('tableDensity',o.tableDensity||'');
+ setOrClear('inputRadius',o.inputRadius||'');
+ setOrClear('badgeStyle',o.badgeStyle||'');
+ themeCustomCssApply(tokens.customCss||'');
+ themeAssetsApply(tokens.assets||{});
 }
 function themeDraftPanel(){
  const d=themeDraft;
@@ -7430,6 +7674,22 @@ function themeDraftPanel(){
  <div class="field"><label>Density preview</label><div id="themeDensityPreview">${themeDensityPreviewHtml(d.tokens)}</div></div>
  <h4>Motion</h4>
  <div class="field"><label>Motion budget</label><select id="themeDraftMotion"><option value="full" ${(d.tokens.motion||'full')==='full'?'selected':''}>Full — all transitions &amp; effects</option><option value="reduced" ${(d.tokens.motion||'full')==='reduced'?'selected':''}>Reduced — subtle only</option><option value="none" ${(d.tokens.motion||'full')==='none'?'selected':''}>None — no animation</option></select><p class="muted" style="font-size:12px;margin:4px 0 0">Reduced keeps motion subtle; None disables transitions and effects app-wide.</p></div>
+ <h4>Component styles</h4>
+ <p class="muted" style="font-size:12px;margin:0 0 8px">Per-component variant defaults — no code needed. "Catalog default" removes the override.</p>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+ <div class="field"><label>Primary button</label><select id="themeDraftBtnVariant">${themeOverrideOptions((d.tokens.overrides||{}).primaryButton||'',[['solid','Solid'],['shimmer','Shimmer'],['outline','Outline']])}</select></div>
+ <div class="field"><label>Card style</label><select id="themeDraftCardStyle">${themeOverrideOptions((d.tokens.overrides||{}).cardStyle||'',[['bordered','Bordered'],['elevated','Elevated'],['beam','Border beam']])}</select></div>
+ <div class="field"><label>Table density</label><select id="themeDraftTableDensity">${themeOverrideOptions((d.tokens.overrides||{}).tableDensity||'',[['comfortable','Comfortable'],['compact','Compact']])}</select></div>
+ <div class="field"><label>Input radius</label><select id="themeDraftInputRadius">${themeOverrideOptions((d.tokens.overrides||{}).inputRadius||'',[['default','Default'],['small','Small'],['large','Large']])}</select></div>
+ <div class="field"><label>Badge style</label><select id="themeDraftBadgeStyle">${themeOverrideOptions((d.tokens.overrides||{}).badgeStyle||'',[['soft','Soft'],['solid','Solid'],['outline','Outline']])}</select></div>
+ </div>
+ <h4>Custom CSS <span class="muted" style="font-size:11px">custom — not covered by presets</span></h4>
+ <div class="field"><label>Scoped custom CSS <span class="muted" style="font-size:11px">(64 KB max · applies only when this version is published)</span></label><textarea id="themeDraftCustomCss" rows="8" style="font-family:var(--font-mono);font-size:12px" placeholder="/* e.g. .card{border-radius:18px} */">${themeCustomCssTextareaVal(d.tokens.customCss)}</textarea><div class="muted" style="font-size:11px;margin-top:4px"><span id="themeCustomCssCount">${(d.tokens.customCss||'').length}</span> / 65536 characters — @import, remote-URL @font-face and script tags are stripped on save.</div></div>
+ <h4>Brand assets</h4>
+ <p class="muted" style="font-size:12px;margin:0 0 8px">Logo, favicon and hero artwork ride with this theme version — publishing swaps them in, rollback restores the previous set. SVG/PNG, 500 KB per file.</p>
+ <div class="field"><label>Logo <span class="muted" style="font-size:11px">(sidebar, topbar, public nav)</span></label><input type="file" id="themeDraftLogo" accept="image/svg+xml,image/png,image/jpeg,image/webp"><div class="muted" style="font-size:11px;margin-top:4px"><span id="themeDraftLogoName"></span> <button type="button" class="link-btn" id="themeDraftLogoClear">Remove</button></div></div>
+ <div class="field"><label>Favicon</label><input type="file" id="themeDraftFavicon" accept="image/svg+xml,image/png,image/x-icon"><div class="muted" style="font-size:11px;margin-top:4px"><span id="themeDraftFaviconName"></span> <button type="button" class="link-btn" id="themeDraftFaviconClear">Remove</button></div></div>
+ <div class="field"><label>Hero artwork <span class="muted" style="font-size:11px">(homepage hero)</span></label><input type="file" id="themeDraftHeroArt" accept="image/svg+xml,image/png,image/jpeg,image/webp"><div class="muted" style="font-size:11px;margin-top:4px"><span id="themeDraftHeroArtName"></span> <button type="button" class="link-btn" id="themeDraftHeroArtClear">Remove</button></div></div>
  <div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn btn-secondary" id="themeCheckContrast">Check contrast</button><button type="button" class="btn btn-primary" id="themeSaveDraft">Save draft</button></div>
  <div id="themeIssuesBox" style="margin-top:8px">${themeIssuesHtml()}</div>
  </div>
@@ -7503,9 +7763,43 @@ function bindThemeDraftPanel(){
  $('#themeDraftShadow').onchange=e=>{themeDraft.tokens.shadow=e.target.value;$('#themeShadowPreview').innerHTML=themeShadowPreviewHtml(themeDraft.tokens)};
  $('#themeDraftDensity').onchange=e=>{themeDraft.tokens.density=e.target.value;$('#themeDensityPreview').innerHTML=themeDensityPreviewHtml(themeDraft.tokens)};
  $('#themeDraftMotion').onchange=e=>{themeDraft.tokens.motion=e.target.value};
+ // Modern UI PR-C (Worker B, TS-3): component style overrides. Empty =
+ // catalog default; the key is deleted so pre-override versions keep working.
+ if(!themeDraft.tokens.overrides)themeDraft.tokens.overrides={};
+ const themeSetOverride=(key,val)=>{if(val)themeDraft.tokens.overrides[key]=val;else delete themeDraft.tokens.overrides[key]};
+ $('#themeDraftBtnVariant').onchange=e=>themeSetOverride('primaryButton',e.target.value);
+ $('#themeDraftCardStyle').onchange=e=>themeSetOverride('cardStyle',e.target.value);
+ $('#themeDraftTableDensity').onchange=e=>themeSetOverride('tableDensity',e.target.value);
+ $('#themeDraftInputRadius').onchange=e=>themeSetOverride('inputRadius',e.target.value);
+ $('#themeDraftBadgeStyle').onchange=e=>themeSetOverride('badgeStyle',e.target.value);
+ // Modern UI PR-C (Worker B, TS-5): guardrailed custom CSS, live char count.
+ const themeCssCount=()=>{$('#themeCustomCssCount').textContent=String(($('#themeDraftCustomCss').value||'').length)};
+ $('#themeDraftCustomCss').oninput=themeCssCount;themeCssCount();
+ // Modern UI PR-C (Worker B, TS-6): brand assets, 500 KB per file, data URLs.
+ if(!themeDraft.tokens.assets)themeDraft.tokens.assets={};
+ [['Logo','logo'],['Favicon','favicon'],['HeroArt','heroArt']].forEach(([idPart,key])=>{
+  const nameEl=$('#themeDraft'+idPart+'Name');
+  const paintAsset=()=>{const v=themeDraft.tokens.assets[key];nameEl.textContent=v?('Set \u00b7 '+Math.round(v.length/1024)+' KB data URL'):'None'};
+  paintAsset();
+  $('#themeDraft'+idPart).onchange=e=>{
+   const f=e.target.files&&e.target.files[0];if(!f)return;
+   if(f.size>512000){alert('Brand asset "'+f.name+'" exceeds the 500 KB per-file cap.');e.target.value='';return}
+   const r=new FileReader();
+   r.onload=()=>{themeDraft.tokens.assets[key]=r.result;paintAsset()};
+   r.readAsDataURL(f);
+  };
+  $('#themeDraft'+idPart+'Clear').onclick=()=>{delete themeDraft.tokens.assets[key];$('#themeDraft'+idPart).value='';paintAsset()};
+ });
  $('#themeCheckContrast').onclick=()=>{themeIssues=validateThemeTokensDemo(themeDraft.tokens);$('#themeIssuesBox').innerHTML=themeIssuesHtml()};
  $('#themeSaveDraft').onclick=()=>{
   if(!themeDraft.name.trim())return alert('Name is required.');
+  // Modern UI PR-C (Worker B, TS-5): sanitize custom CSS before
+  // persisting; over the 64 KB cap the save is rejected with a message.
+  const cssInput=$('#themeDraftCustomCss');
+  const cssCheck=sanitizeThemeCss(cssInput?cssInput.value:(themeDraft.tokens.customCss||''));
+  if(!cssCheck.ok)return alert(cssCheck.error);
+  if(cssCheck.css!==(themeDraft.tokens.customCss||''))toast('Custom CSS sanitized: disallowed rules were stripped.');
+  themeDraft.tokens.customCss=cssCheck.css;
   if(themeDraft.id){
    const existing=data.themeVersions.find(t=>t.id===themeDraft.id);
    Object.assign(existing,{name:themeDraft.name,preset_key:themeDraft.preset_key,tokens:structuredClone(themeDraft.tokens)});
@@ -7531,7 +7825,7 @@ function applyWorkspaceTheme(){
  if(!appEl)return;
  const theme=(data.themeVersions||[]).find(t=>t.status==='published');
  const sidebar=document.getElementById('appSidebar');
- if(!theme){appEl.removeAttribute('style');if(sidebar)sidebar.style.background='';applyWorkspaceThemeDark(null);return}
+ if(!theme){appEl.removeAttribute('style');if(sidebar)sidebar.style.background='';applyWorkspaceThemeDark(null);applyWorkspaceThemeExtras(null);return}
  const c=theme.tokens.color;
  appEl.style.setProperty('--text',c.text_primary);
  appEl.style.setProperty('--muted',c.text_secondary);
@@ -7562,6 +7856,9 @@ function applyWorkspaceTheme(){
  // values override the same token names on documentElement, cascading
  // over the [data-theme="dark"] block in styles.css.
  applyWorkspaceThemeDark(theme.tokens);
+ // Modern UI PR-C (Worker B: TS-3/TS-5/TS-6) - component style overrides,
+ // guardrailed custom CSS and brand assets from the published theme version.
+ applyWorkspaceThemeExtras(theme);
 }
 // Modern UI PR-A: applies theme.tokens.dark pairs (when present and the
 // shell is in dark mode) onto documentElement with the same token names.
@@ -7823,7 +8120,7 @@ const PAGE_COMPONENT_CATEGORIES=[
  {key:'utility',label:'Utility'},
 ];
 const PAGE_COMPONENT_LIBRARY=[
- {type:'section',category:'layout',label:'Section',icon:'▭',isContainer:true,description:"A titled, full-width group that other components stack or arrange inside.",configSchema:[{key:'title',label:'Title',type:'text',placeholder:'Section title'}],defaultColumnSpan:12},
+ {type:'section',category:'layout',label:'Section',icon:'▭',isContainer:true,description:"A titled, full-width group that other components stack or arrange inside.",configSchema:[{key:'title',label:'Title',type:'text',placeholder:'Section title'},{key:'style',label:'Style',type:'select',options:['card','plain','divided'],defaultValue:'card'}],defaultColumnSpan:12},
  {type:'grid',category:'layout',label:'Grid',icon:'▦',isContainer:true,description:"An even grid of sub-columns for cards, tiles or small components.",configSchema:[{key:'columns',label:'Columns',type:'select',options:['2','3','4'],defaultValue:'2'}],defaultColumnSpan:12},
  {type:'columns',category:'layout',label:'Columns',icon:'⫼',isContainer:true,description:"Two or three unevenly-weighted columns side by side.",configSchema:[{key:'ratio',label:'Split',type:'select',options:['50/50','33/33/33','25/75','75/25','33/67'],defaultValue:'50/50'}],defaultColumnSpan:12},
  {type:'tabs',category:'layout',label:'Tabs',icon:'⬒',isContainer:true,description:"A tabbed container - each direct child becomes one tab's content.",configSchema:[{key:'tabLabels',label:'Tab labels (comma-separated)',type:'text',placeholder:'Overview, Activity, Related'}],defaultColumnSpan:12},
@@ -7848,6 +8145,16 @@ const PAGE_COMPONENT_LIBRARY=[
  {type:'anchor_link',category:'navigation',label:'Anchor Link',icon:'⚓',isContainer:false,description:"A jump-to-section link, useful on a long detail page.",configSchema:[{key:'label',label:'Link text',type:'text'},{key:'target_section_id',label:'Jumps to (Section id)',type:'text'}],defaultColumnSpan:3},
  {type:'note',category:'utility',label:'Note',icon:'💬',isContainer:false,description:"A static callout banner for admin-authored guidance.",configSchema:[{key:'text',label:'Text',type:'textarea'},{key:'tone',label:'Tone',type:'select',options:['info','warning'],defaultValue:'info'}],defaultColumnSpan:12},
 ];
+// Modern UI PR-C (TS-4): Page Builder section style presets - card (the
+// historical .panel look), plain (no chrome), divided (ruled separators).
+// Stored on the section's config.style via the configSchema select above;
+// applied as a class at render time in pageLiveNodeHtml().
+const PAGE_SECTION_STYLE_PRESETS=['card','plain','divided'];
+function pageSectionStyleClass(style){
+ if(style==='plain')return 'page-section-plain';
+ if(style==='divided')return 'page-section-divided';
+ return 'panel';
+}
 function pageComponentDef(componentType){return PAGE_COMPONENT_LIBRARY.find(c=>c.type===componentType)}
 function pageIsContainer(componentType){return pageComponentDef(componentType)?.isContainer||false}
 const PAGE_PREVIEW_PRESETS=[
@@ -8398,6 +8705,27 @@ function dashboardWidgetLabel(w,reports){
  if(w.kind==='record_list')return `📋 ${entityLabel(w.config.entityKey)} — ${w.config.mode==='due_soon'?'due soon':'recent'}`;
  return w.kind;
 }
+// Modern UI PR-C (TS-4): one-click dashboard starting points. Each template
+// is an array of widget descriptors matching the existing widget shape
+// ({kind, config}) - applying one maps them through freshDashboardWidget()
+// onto the selected dashboard's draftWidgets, so the existing draft/publish
+// flow (including "Revert draft to published") undoes it; no new flow
+// invented. Only kpi/record_list kinds are used - chart widgets need a real
+// saved report to point at, which a template cannot assume.
+const DASHBOARD_TEMPLATES=[
+ {key:'executive',label:'Executive',blurb:'The four headline numbers - pipeline, revenue, invoices, open tasks.',widgets:[
+  {kind:'kpi',config:{kpiKey:'openPipeline'}},
+  {kind:'kpi',config:{kpiKey:'wonRevenue'}},
+  {kind:'kpi',config:{kpiKey:'outstandingInvoices'}},
+  {kind:'kpi',config:{kpiKey:'openTasks'}}]},
+ {key:'sales-floor',label:'Sales floor',blurb:'Pipeline value, open tasks, and the latest opportunities at a glance.',widgets:[
+  {kind:'kpi',config:{kpiKey:'openPipeline'}},
+  {kind:'kpi',config:{kpiKey:'openTasks'}},
+  {kind:'record_list',config:{entityKey:'opportunities',mode:'recent',limit:5}}]},
+ {key:'minimal',label:'Minimal',blurb:'One number and what is due next - nothing else.',widgets:[
+  {kind:'kpi',config:{kpiKey:'openPipeline'}},
+  {kind:'record_list',config:{entityKey:'tasks',mode:'due_soon',limit:5}}]},
+];
 function dashboardsTab(body){
  const dashboards=ensureDashboards();
  if(!dashboardsSelectedId||!dashboards.some(d=>d.id===dashboardsSelectedId))dashboardsSelectedId=defaultDashboard().id;
@@ -8438,6 +8766,9 @@ function dashboardsTab(body){
       already makes elsewhere (see the AR aging/Sales-by-owner notes
       above). -->
  <div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0">${dash.draftWidgets.length?dash.draftWidgets.map((w,i)=>`<span class="badge" style="display:inline-flex;align-items:center;gap:6px">${dashboardWidgetLabel(w,reports)}<button class="icon-btn" data-move-widget="${w.id}" data-dir="-1" ${i===0?'disabled':''} type="button" title="Move earlier">↑</button><button class="icon-btn" data-move-widget="${w.id}" data-dir="1" ${i===dash.draftWidgets.length-1?'disabled':''} type="button" title="Move later">↓</button><button class="icon-btn" data-remove-widget="${w.id}" type="button" title="Remove">×</button></span>`).join(''):'<span class="muted">No widgets yet.</span>'}</div>
+ <div style="font-weight:700;margin:14px 0 8px">Start from template</div>
+ <p class="muted" style="font-size:12px;margin:0 0 8px">One click replaces this dashboard's draft widgets with a starting point. Publishing stays manual - revert to the published version any time to undo.</p>
+ <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:12px">${DASHBOARD_TEMPLATES.map(t=>`<button type="button" class="template-card" data-dashboard-template="${t.key}" style="text-align:left"><strong>${t.label}</strong><p class="muted" style="font-size:12px;margin:4px 0 0">${t.blurb}</p></button>`).join('')}</div>
  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
   ${availableKpis.length?`<select id="addKpiWidget"><option value="">+ Add KPI tile…</option>${availableKpis.map(k=>`<option value="${k.key}">${k.label}</option>`).join('')}</select>`:''}
   ${reports.length===0?'<span class="muted" style="font-size:12px">No custom reports yet — build one in Reports → Custom reports to add it as a chart here.</span>':(availableReports.length?`<select id="addChartWidget"><option value="">+ Add chart…</option>${availableReports.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')}</select>`:'')}
@@ -8495,6 +8826,13 @@ function dashboardsTab(body){
   save();dashboardsTab(body);
  });
  body.querySelectorAll('[data-remove-widget]').forEach(b=>b.onclick=()=>{dash.draftWidgets=dash.draftWidgets.filter(w=>w.id!==b.dataset.removeWidget);save();dashboardsTab(body)});
+ body.querySelectorAll('[data-dashboard-template]').forEach(b=>b.onclick=()=>{
+  const t=DASHBOARD_TEMPLATES.find(x=>x.key===b.dataset.dashboardTemplate);
+  if(!t)return;
+  if(dash.draftWidgets.length&&!confirm(`Replace the ${dash.draftWidgets.length} widget(s) on "${dash.name}" with the "${t.label}" template? This only changes the draft - publish to go live.`))return;
+  dash.draftWidgets=t.widgets.map(w=>freshDashboardWidget(w.kind,structuredClone(w.config)));
+  save();toast(`"${t.label}" template applied - publish to go live`);dashboardsTab(body);
+ });
  $('#previewDashboard').onclick=()=>dashboardPreviewModal();
  $('#publishDashboard').onclick=()=>{dash.publishedWidgets=structuredClone(dash.draftWidgets);save();toast('Dashboard published');dashboardsTab(body)};
  $('#revertDashboard').onclick=()=>{if(!dash.publishedWidgets)return;dash.draftWidgets=structuredClone(dash.publishedWidgets);save();toast('Draft reverted to the published dashboard');dashboardsTab(body)};
@@ -13764,7 +14102,7 @@ function navDropdownHtml(){
 function navMobileGroupsHtml(){
  return NAV_GROUPS.map(([key,label,items])=>`<details class="drawer-group"><summary>${label}</summary>${items.map(([t,href])=>`<a href="${href}"${href.startsWith('http')?' target="_blank" rel="noopener"':''}>${t}</a>`).join('')}</details>`).join('');
 }
-function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links">${navDropdownHtml()}<a href="/apps">App Catalog</a><a href="/help">Docs</a></div><div class="nav-actions"><a class="btn btn-secondary nav-github" href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank" rel="noopener" aria-label="View on GitHub">GitHub</a><a class="btn btn-primary mobile-try" href="/demo" data-analytics-event="hero_demo_click" data-analytics-props='{"from":"nav"}'>Try Live Demo →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden>${navMobileGroupsHtml()}<a href="/apps">App Catalog</a><a href="/help">Docs</a><hr><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
+function publicNav(){return `<nav class="landing-nav"><div class="container nav-inner"><a class="brand" href="/"><img class="theme-brand-logo" alt="Lanesra OS logo" hidden><span class="brand-mark">L</span>Lanesra OS</a><div class="nav-links">${navDropdownHtml()}<a href="/apps">App Catalog</a><a href="/help">Docs</a></div><div class="nav-actions"><a class="btn btn-secondary nav-github" href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank" rel="noopener" aria-label="View on GitHub">GitHub</a><a class="btn btn-primary mobile-try" href="/demo" data-analytics-event="hero_demo_click" data-analytics-props='{"from":"nav"}'>Try Live Demo →</a><button class="menu-toggle" aria-label="Open navigation" aria-expanded="false">☰</button></div></div><div class="mobile-drawer" hidden>${navMobileGroupsHtml()}<a href="/apps">App Catalog</a><a href="/help">Docs</a><hr><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://vikramgrover.com">Built by Vikram Grover</a></div></nav>`}
 function publicFooter(){return `<footer class="footer"><div class="container footer-grid"><div><a class="brand footer-brand" href="/"><span class="brand-mark">L</span>Lanesra OS</a><span class="muted">The open-source, self-hosted operating system for running your business and its AI agents on data you own.</span></div><div><strong>Product</strong><a href="/platform">Platform</a><a href="/compare">Compare</a><a href="/help">Documentation</a><a href="/download">Download</a></div><div><strong>Development</strong><a href="/roadmap">Roadmap & Backlog</a><a href="/releases">Releases</a><a href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank">GitHub</a></div><div><strong>Trust</strong><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/LICENSE" target="_blank">MIT License</a><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/SECURITY.md" target="_blank">Security</a><a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a><a href="/platform#data-privacy">Data & Privacy</a></div><div><strong>Creator</strong><a href="https://vikramgrover.com">VikramGrover.com</a></div></div><div class="container footer-bottom"><span>© 2026 Lanesra OS</span><span>Created by Vikram Grover</span></div></footer>`}
 function roadmapPage(){
  document.title='Roadmap & Backlog — Lanesra OS';
