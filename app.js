@@ -3051,12 +3051,15 @@ function renderObject360Body(){
 
  body.innerHTML=`${inspectorHtml}`;
 
- body.querySelectorAll('[data-o360g-inspect]').forEach(el=>el.onclick=()=>{
+ const o360InspectHandler=(el)=>{
   const v=el.dataset.o360gInspect,ci=v.indexOf(':');
   const entityType=v.slice(0,ci),entityId=v.slice(ci+1);
   object360State={...object360State,inspect:{entityType,entityId,label:driver.label(entityType,entityId)}};
   renderObject360Body();
- });
+ };
+ body.querySelectorAll('[data-o360g-inspect]').forEach(el=>el.onclick=()=>o360InspectHandler(el));
+ const o360GraphHost=document.querySelector('#o360MiniGraph');
+ if(o360GraphHost)o360GraphHost.querySelectorAll('[data-o360g-inspect]').forEach(el=>el.onclick=(e)=>{e.stopPropagation();o360InspectHandler(el)});
  body.querySelectorAll('[data-o360g-collapse]').forEach(el=>el.onclick=()=>{
   const t=el.dataset.o360gCollapse;
   const c={...(object360State.collapsed||{})};
