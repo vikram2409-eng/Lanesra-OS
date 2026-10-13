@@ -4963,6 +4963,29 @@ function graphRender(model,ui,W,H){
  return '<svg width="'+W+'" height="'+H+'" style="position:absolute;top:0;left:0;pointer-events:none">'+haloSvg.join('')+edgeSvg.join('')+'</svg>'+haloLabels.join('')+edgeLabels.join('')+nodeDivs.join('');
 }
 
+/* MOBILE: touch pinch-zoom for graph canvas */
+(function(){
+ if(window.__graphTouchZoom)return;window.__graphTouchZoom=true;
+ let pinchDist=0,pinchZoom=1;
+ document.addEventListener('touchstart',e=>{
+  const t=e.target,canvas=t.closest?t.closest('.ontology-graph-canvas'):null;
+  if(!canvas||e.touches.length!==2)return;
+  pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  pinchZoom=1;
+  const inner=canvas.querySelector('.og-pan-inner')||canvas.firstElementChild;
+  if(inner&&inner.style.transform){const m=inner.style.transform.match(/scale\(([\d.]+)\)/);if(m)pinchZoom=parseFloat(m[1]);}
+ },{passive:true});
+ document.addEventListener('touchmove',e=>{
+  const t=e.target,canvas=t.closest?t.closest('.ontology-graph-canvas'):null;
+  if(!canvas||e.touches.length!==2||!pinchDist)return;
+  e.preventDefault();
+  const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  const nz=Math.min(3,Math.max(0.4,pinchZoom*(d/pinchDist)));
+  const inner=canvas.querySelector('.og-pan-inner')||canvas.firstElementChild;
+  if(inner)inner.style.transform=`scale(${nz})`;
+ },{passive:false});
+ document.addEventListener('touchend',e=>{if(e.touches.length<2)pinchDist=0;},{passive:true});
+})();
 // Graph UX: hover spotlight + double-click to expand.
 // Uses document-level delegation so it survives graph re-renders.
 (function(){

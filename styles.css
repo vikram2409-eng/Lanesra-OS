@@ -2246,3 +2246,10 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
  .og-stage-head{flex-direction:column;align-items:flex-start;gap:8px;}
 }
 
+/* og-mobile-fix: prevent cutoff + align inspector rows on small screens */
+@media(max-width:640px){
+ .ontology-graph-canvas{overflow:hidden;touch-action:pan-x pan-y;}
+ .og-pill{max-width:44vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px!important;padding:6px 10px!important;}
+ .og-pill-root{max-width:54vw;}
+ .og-canvas-wrap{overflow:hidden;}
+}
