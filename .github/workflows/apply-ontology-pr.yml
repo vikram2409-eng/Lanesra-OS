@@ -31,6 +31,6 @@ jobs:
       - run: |
           git config user.name "Muse (Ontology Graph build)"
           git config user.email "muse@lanesraos.com"
-          git add app.js styles.css
+          git add -A
           git diff --cached --quiet || git commit -m "${{ inputs.message }}"
           git push origin ${{ inputs.branch }}
