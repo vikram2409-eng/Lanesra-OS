@@ -2327,3 +2327,22 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 /* og-bullet-order-fix: dot + label left, arrow right */
 .ontology-inspector-bullet{display:flex!important;align-items:center;gap:8px;justify-content:flex-start!important;}
 .ontology-inspector-bullet > *:first-child{order:3;margin-left:auto;}
+
+/* og-compact-toolbar: slim 1-2 row toolbar on desktop */
+@media(min-width:641px){
+ .og-toolbar-card{padding:8px 12px!important;gap:6px!important;margin-bottom:10px!important;}
+ .og-toolbar-card .tool-group{
+  padding-bottom:6px!important;margin-bottom:6px!important;gap:8px!important;
+ }
+ .og-toolbar-card .tool-group:last-child{padding-bottom:0!important;margin-bottom:0!important;}
+ .og-toolbar-card select,.og-toolbar-card input[type="search"],
+ .og-toolbar-card input[type="text"]{height:30px!important;font-size:12px!important;padding:4px 8px!important;}
+ .og-toolbar-card button,.og-toolbar-card .btn{height:30px!important;font-size:12px!important;padding:4px 10px!important;}
+ .og-toolbar-card label{font-size:12px!important;}
+ /* Try to fit groups side-by-side when space allows */
+ .og-toolbar-card{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;
+  align-items:center!important;gap:8px 16px!important;}
+ .og-toolbar-card .tool-group{border-bottom:none!important;border-right:1px solid #f3f4f6!important;
+  padding-right:16px!important;padding-bottom:0!important;margin-bottom:0!important;}
+ .og-toolbar-card .tool-group:last-child{border-right:none!important;padding-right:0!important;}
+}
