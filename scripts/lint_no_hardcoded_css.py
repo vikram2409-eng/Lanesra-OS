@@ -16,7 +16,7 @@ HEX = re.compile(r"#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{
 FUNC = re.compile(r"\b(?:rgb|rgba|hsl|hsla)\s*\(")
 
 
-BLOCK_START = re.compile(r"(:root|\[data-theme[^\]\n]*\]|@media[^{\n]*)\{")
+BLOCK_START = re.compile(r"(:root|\.site-dark|\[data-theme[^\]\n]*\]|@media[^{\n]*)\{")
 
 
 def strip_blocks(text):
@@ -52,20 +52,39 @@ def main():
     with open(PATH, encoding="utf-8") as f:
         text = f.read()
     stripped = strip_blocks(text)
+    # Comment spans in the stripped text (offsets). A literal inside a
+    # comment is documentation (e.g. issue numbers like #359), not a color.
+    comment_spans = []
+    _ci = 0
+    while True:
+        _cs = stripped.find("/*", _ci)
+        if _cs == -1:
+            break
+        _ce = stripped.find("*/", _cs + 2)
+        _ce = len(stripped) if _ce == -1 else _ce + 2
+        comment_spans.append((_cs, _ce))
+        _ci = _ce
+
+    def _in_comment(off):
+        return any(s <= off < e for s, e in comment_spans)
 
     violations = []
-    for lineno, line in enumerate(stripped.splitlines(), 1):
+    _off = 0
+    for lineno, line in enumerate(stripped.splitlines(keepends=True), 1):
         for m in HEX.finditer(line):
-            violations.append((lineno, m.group(0)))
+            if not _in_comment(_off + m.start()):
+                violations.append((lineno, m.group(0)))
         for m in FUNC.finditer(line):
-            violations.append((lineno, m.group(0).rstrip()))
+            if not _in_comment(_off + m.start()):
+                violations.append((lineno, m.group(0).rstrip()))
+        _off += len(line)
 
     for lineno, lit in violations:
         print(f"{PATH}:{lineno}: {lit}")
     if violations:
         print(f"\n{len(violations)} hardcoded color literal(s) outside exempt blocks", file=sys.stderr)
         return 1
-    print("OK: no hardcoded color literals outside :root / [data-theme] / @media blocks")
+    print("OK: no hardcoded color literals outside :root / .site-dark / [data-theme] / @media blocks")
     return 0
 
 
