@@ -866,17 +866,18 @@ let object360CardPos=null;
 // module-level like the card position so it survives re-renders.
 let o360ModalMax=false;
 let o360ModalSize=null;
-// PR4: wire the Object 360 modal chrome - an expand/reduce button in the
-// header plus a drag-resize grip pinned to the modal's bottom-right corner.
+ // PR-D/3: wire the Object 360 modal chrome - the artifact's .modal-head
+// (title + pivot trail + maximize/close), the drag handle, and the
+// drag-resize grip pinned to the modal's bottom-right corner.
 function o360WireModalChrome(){
  if(typeof document==='undefined')return;
- const modalEl=document.querySelector('#modal .modal');
+ const modalEl=document.querySelector('#modal .object-modal');
  const head=document.querySelector('#modal .modal-head');
  if(!modalEl||!head)return;
  modalEl.style.position='relative';
  if(!head.querySelector('#o360MaxBtn')){
   const btn=document.createElement('button');
-  btn.type='button';btn.id='o360MaxBtn';btn.className='icon-btn';btn.textContent='\u26F6';btn.title='Expand';
+  btn.type='button';btn.id='o360MaxBtn';btn.className='btn btn-outline btn-icon';btn.setAttribute('data-maximize','');btn.textContent='\u26F6';btn.title='Expand';
   btn.style.marginRight='8px';
   head.insertBefore(btn,head.lastElementChild);
   btn.onclick=()=>{o360ModalMax=!o360ModalMax;o360ApplyModalSize()};
@@ -886,7 +887,7 @@ function o360WireModalChrome(){
   grip.id='o360ResizeGrip';grip.className='o360-resize-handle';grip.title='Drag to resize';
   grip.style.position='fixed';grip.style.zIndex='101';
   document.querySelector('#modal').appendChild(grip);
-  const place=()=>{const g=document.querySelector('#o360ResizeGrip');const m=document.querySelector('#modal .modal');if(!g||!m)return;const r=m.getBoundingClientRect();g.style.left=(r.right-36)+'px';g.style.top=(r.bottom-36)+'px'};
+  const place=()=>{const g=document.querySelector('#o360ResizeGrip');const m=document.querySelector('#modal .object-modal');if(!g||!m)return;const r=m.getBoundingClientRect();g.style.left=(r.right-36)+'px';g.style.top=(r.bottom-36)+'px'};
   place();
   modalEl.addEventListener('scroll',place,{passive:true});
   window.addEventListener('resize',place);
@@ -904,11 +905,27 @@ function o360WireModalChrome(){
    grip.addEventListener('pointermove',move);grip.addEventListener('pointerup',up);grip.addEventListener('pointercancel',up);
   };
  }
+ // PR-D/3: the artifact's drag handle moves the modal inside the stage.
+ const dragHandle=head.querySelector('#o360DragHandle');
+ if(dragHandle&&!dragHandle.dataset.wired){
+  dragHandle.dataset.wired='1';
+  dragHandle.style.touchAction='none';
+  dragHandle.onpointerdown=(e)=>{
+   e.preventDefault();
+   try{dragHandle.setPointerCapture(e.pointerId)}catch(_){}
+   const sx=e.clientX,sy=e.clientY;
+   const m=/translate\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px\)/.exec(modalEl.style.transform||'');
+   const ox=m?parseFloat(m[1]):0,oy=m?parseFloat(m[2]):0;
+   const move=(ev)=>{modalEl.style.transform='translate('+(ox+ev.clientX-sx)+'px,'+(oy+ev.clientY-sy)+'px)'};
+   const up=()=>{dragHandle.removeEventListener('pointermove',move);dragHandle.removeEventListener('pointerup',up);dragHandle.removeEventListener('pointercancel',up)};
+   dragHandle.addEventListener('pointermove',move);dragHandle.addEventListener('pointerup',up);dragHandle.addEventListener('pointercancel',up);
+  };
+ }
  o360ApplyModalSize();
 }
 function o360ApplyModalSize(){
  if(typeof document==='undefined')return;
- const modalEl=document.querySelector('#modal .modal');if(!modalEl)return;
+ const modalEl=document.querySelector('#modal .object-modal');if(!modalEl)return;
  const maxBtn=document.querySelector('#o360MaxBtn');
  if(o360ModalMax){
   modalEl.style.width='calc(100vw - 40px)';modalEl.style.height='calc(100vh - 40px)';
@@ -919,7 +936,7 @@ function o360ApplyModalSize(){
   modalEl.style.maxWidth='none';modalEl.style.maxHeight='none';
   if(maxBtn){maxBtn.textContent='\u26F6';maxBtn.title='Expand'}
  }else{
-  modalEl.style.width='min(1100px,95vw)';modalEl.style.height='';modalEl.style.maxWidth='';modalEl.style.maxHeight='92vh';
+  modalEl.style.width='min(1120px,calc(100vw - 72px))';modalEl.style.height='min(760px,calc(100vh - 136px))';modalEl.style.maxWidth='none';modalEl.style.maxHeight='none';
   if(maxBtn){maxBtn.textContent='\u26F6';maxBtn.title='Expand'}
  }
  const grip=document.querySelector('#o360ResizeGrip');
@@ -1724,7 +1741,7 @@ function appShell(){
  if(startParam==='agents'){current='admin';adminView='tool';adminTab='aiAgents'}
  else if(startParam==='objects'){current='admin';adminView='tool';adminTab='objects'}
  else if(startParam==='apps'){current='admin';adminView='tool';adminTab='packages'}
- $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div><aside class="sidebar" id="appSidebar"><div class="side-brand"><img class="theme-brand-logo" alt="Workspace logo" hidden><span class="brand-mark">L</span><span>Lanesra OS</span><span class="demo-pill">DEMO</span></div><button class="btn-icon sidebar-toggle" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«</button><nav class="side-nav" id="sideNav"></nav><div class="side-bottom"><div class="side-meta"><strong title="This number tracks every shipped improvement across the desktop app, this demo and the website. The desktop installer's own version (desktop-v0.14.0 on GitHub) is cut less often, only for a new installer build - see Releases for the full explanation.">Early Access v0.96.0 <a href="/releases" style="color:inherit;text-decoration:underline">ⓘ</a></strong><div class="side-product-links"><a href="/compare">Compare</a><a href="/roadmap">Roadmap</a><a href="/releases">Releases</a></div><span>Created by <a href="https://vikramgrover.com">Vikram Grover</a></span></div><button class="btn btn-secondary" style="width:100%" onclick="location.href='/'">← Website</button></div></aside><main class="app-main"><header class="topbar"><button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><img class="theme-brand-logo topbar-brand-logo" alt="" hidden><div class="search"><input id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="top-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="icon-btn" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button><div class="avatar">MC</div></div></header><div class="content" id="view"></div></main></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
+ $('#app').innerHTML=`<div class="demo-banner">You are exploring the sample workspace. Changes stay in this browser. <button class="link-btn" id="resetDemo">Reset demo</button><a class="link-btn" href="/">Product website</a></div><div class="app-shell"><div class="side-backdrop" id="sidebarBackdrop" data-close-side hidden></div><aside class="sidebar" id="appSidebar"><div class="side-top side-brand"><img class="theme-brand-logo" alt="Workspace logo" hidden><div class="product-mark"><span class="mark brand-mark">L</span><span class="product-name">LanesraOS</span><span class="demo-pill">DEMO</span></div></div><div id="sideNav"></div><button type="button" class="btn btn-ghost collapse-side" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«<span class="collapse-label">Collapse sidebar</span></button></aside><div class="main-area"><header class="topbar"><button type="button" class="btn btn-ghost btn-icon mobile-menu" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><img class="theme-brand-logo topbar-brand-logo" alt="" hidden><div class="search search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input class="input" id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K" aria-label="Search" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="bar-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="btn btn-ghost btn-icon" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button><div class="avatar">MC</div></div></header><div class="content page" id="view"></div><nav class="bottom-nav" id="bottomNav" aria-label="Primary"><button type="button" data-nav="assistant" aria-label="Assistant" title="Assistant"><span class="bn-ic" aria-hidden="true">💬</span></button><button type="button" data-nav="companies" aria-label="Companies" title="Companies"><span class="bn-ic" aria-hidden="true">▤</span></button><button type="button" data-nav="reports" aria-label="Reports" title="Reports"><span class="bn-ic" aria-hidden="true">💡</span></button><button type="button" data-nav="tasks" aria-label="Tasks" title="Tasks"><span class="bn-ic" aria-hidden="true">✓</span></button><button type="button" data-nav="dashboard" aria-label="Dashboard" title="Dashboard"><span class="bn-ic" aria-hidden="true">▦</span></button></nav></div></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
  // Modern UI PR-A: restore persisted shell state (theme + sidebar) before
  // the first render, so a returning visitor never flashes the wrong theme.
  // Best-effort: a fresh visitor with an empty store gets Light + expanded.
@@ -1853,7 +1870,10 @@ function renderSidebarNav(){
  // mobile user a hover/long-press tooltip naming the section - see the
  // "Admin panel: UX/UI consistency pass" backlog item's own complaint that
  // icons alone aren't sufficient for discoverability.
- nav.innerHTML=`${switcherHtml}${navSections().map(k=>`<button data-nav="${k}" aria-label="${labels[k]}" title="${labels[k]}"><b>${icons[k]}</b><span>${labels[k]}</span></button>`).join('')}<button data-nav="admin" class="admin-nav-btn" aria-label="Admin" title="Admin"><b>⚙</b><span>Admin</span></button>`;
+ const wsKeys=navSections().filter(k=>k!=='assistant');
+ const intelKeys=navSections().filter(k=>k==='assistant');
+ const navBtn=k=>`<button type="button" class="nav-item" data-nav="${k}" aria-label="${labels[k]}" title="${labels[k]}"><span class="nav-ic" aria-hidden="true">${icons[k]}</span><span class="nav-label">${labels[k]}</span></button>`;
+ nav.innerHTML=`${switcherHtml}<div class="side-group"><div class="side-label">Workspace</div><nav class="side-nav" aria-label="Workspace">${wsKeys.map(navBtn).join('')}</nav></div><div class="side-group"><div class="side-label">Intelligence</div><nav class="side-nav" aria-label="Intelligence">${intelKeys.map(navBtn).join('')}<button type="button" class="nav-item admin-nav-btn" data-nav="admin" aria-label="Admin" title="Admin"><span class="nav-ic" aria-hidden="true">⚙</span><span class="nav-label">Admin</span></button></nav></div>`;
  document.querySelectorAll('[data-nav]').forEach(b=>{b.onclick=()=>{current=b.dataset.nav;viewFilter=null;detailRecord=null;if(current==='admin')adminView='landing';closeMobileSidebar();renderView()};b.classList.toggle('active',b.dataset.nav===current)});
  const switcher=$('#appSwitcher');
  if(switcher)switcher.onchange=e=>{
@@ -1910,13 +1930,21 @@ function dashboardChartWidgetHtml(w){
  const report=(data.customReports||[]).find(r=>r.id===w.config.reportId);
  const rows=runCustomReport(report);
  const max=Math.max(0,...rows.map(r=>r.value));
- return `<section class="panel"><div class="panel-head"><h3>${report.name}</h3></div>${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max,i)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</section>`;
+ return `<section class="card"><div class="card-head"><h3>${report.name}</h3><p class="card-desc">Custom report</p></div><div class="card-body">${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Group</th><th></th><th>Value</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${r.group}</td><td>${reportBarHtml(r.value,max,i)}</td><td>${report.aggregate==='sum'?r.value.toLocaleString():r.value}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No data yet.</div>'}</div></section>`;
 }
 function dashboardRecordListWidgetHtml(w){
  const {entityKey,mode,limit}=w.config;
  const rows=dashboardRecordListRows(entityKey,mode,limit);
- return `<section class="card"><div class="card-header prb-card-head"><h3>${entityLabel(entityKey)} — ${mode==='due_soon'?'due soon':'recent'}</h3></div><div class="card-content">${rows.length?rows.map(r=>`<div class="prb-row" data-open-record="${entityKey}:${r.id}"><strong>${r.title}</strong>${r.subtitle?`<small class="muted"> · ${r.subtitle}</small>`:''}</div>`).join(''):'<div class="empty">Nothing here yet.</div>'}</div></section>`;
+ return `<section class="card"><div class="card-head panel-title"><h3>${entityLabel(entityKey)} — ${mode==='due_soon'?'due soon':'recent'}</h3></div><div class="card-body">${rows.length?rows.map(r=>`<div class="prb-row" data-open-record="${entityKey}:${r.id}"><strong>${r.title}</strong>${r.subtitle?`<small class="muted"> · ${r.subtitle}</small>`:''}</div>`).join(''):'<div class="empty">Nothing here yet.</div>'}</div></section>`;
 }
+// Modern UI PR-D/1 (issue #395): artifact-fidelity helpers for the
+// dashboard - KPI icon glyphs (the app's own text-glyph icon approach, not
+// the artifact's SVG sprite) and stage-progress widths for the pipeline
+// snapshot's progress bars.
+const KPI_ICONS={openPipeline:'⌁',wonRevenue:'$',outstandingInvoices:'▤',openTasks:'✓'};
+const kpiIcon=key=>KPI_ICONS[key]||'▦';
+const STAGE_ORDER=['Lead','Qualified','Discovery','Proposal','Negotiation'];
+const stagePct=s=>{const i=STAGE_ORDER.indexOf(s);return i<0?100:Math.round((i+1)/STAGE_ORDER.length*100)};
 function dashboard(){
  // Dashboard customization: a published Default dashboard's widgets
  // override the fixed KPI row and add chart/record-list widget rows -
@@ -1936,7 +1964,9 @@ function dashboard(){
   :visibleKpis();
  const chartWidgets=effective?effective.filter(w=>w.kind==='chart'&&(data.customReports||[]).some(r=>r.id===w.config.reportId)):[];
  const listWidgets=effective?effective.filter(w=>w.kind==='record_list'):[];
- $('#view').innerHTML=`<div class="page-head"><div><div class="eyebrow">${data.workspace.name}</div><h1 class="prb-greeting">Good afternoon, Maya</h1><p class="muted">Here is what needs your attention today.</p></div><div class="quick-create"><button class="btn btn-primary btn-shimmer" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div></div>${onboardBannerSeen?'':`<div class="onboard-row" id="onboardRow"><div class="onboard-copy"><strong>This is the apps side.</strong> Lanesra is also AI-native — see the rest in two clicks.</div><div class="onboard-actions"><button class="btn btn-secondary" data-onboard="agents">Build an AI Agent →</button><button class="btn btn-secondary" data-onboard="apps">Install an Industry App →</button><button class="onboard-dismiss" id="onboardDismiss" aria-label="Dismiss">×</button></div></div>`}<div class="kpi-grid">${kpis.map((k,i)=>`<button class="card prb-kpi${i===0?' prb-beam':''}" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><div class="prb-kpi-label">${k.label}</div><div class="prb-kpi-value">${k.value()}</div><span class="prb-kpi-link">View ${k.label.toLowerCase()} →</span></button>`).join('')}</div>${(chartWidgets.length||listWidgets.length)?`<div class="grid-2">${chartWidgets.map(dashboardChartWidgetHtml).join('')}${listWidgets.map(dashboardRecordListWidgetHtml).join('')}</div>`:''}<div class="grid-2"><section class="card"><div class="card-header prb-card-head"><h3>Pipeline snapshot</h3><button class="btn btn-link" data-nav2="pipeline" data-filter2="open">Open pipeline</button></div><div class="card-content">${data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage)).slice(0,5).map(o=>`<div class="prb-row"><div class="prb-row-spread"><strong>${o.title}</strong><strong>${money(o.value)}</strong></div><small class="muted">${companyName(o.companyId)} · ${o.stage}</small></div>`).join('')}</div></section><section class="card"><div class="card-header prb-card-head"><h3>Tasks requiring attention</h3><button class="btn btn-link" data-nav2="tasks" data-filter2="open">View tasks</button></div><div class="card-content">${data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status)).map(t=>`<div class="prb-row"><strong>${t.title}</strong><small class="muted">${relatedLabel(t)} · ${t.due}</small></div>`).join('')}</div></section></div>`;
+ const dashOpps=data.opportunities.filter(o=>!['Won','Lost'].includes(o.stage));
+ const dashTasks=data.tasks.filter(t=>!['Completed','Cancelled'].includes(t.status));
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>Good afternoon, <span class="gradient-name">Maya</span></h2><p>Here is what needs your attention today.</p></div><div class="page-actions"><div class="quick-create"><button class="btn btn-primary btn-shimmer" id="quickNew">+ New</button><div class="quick-menu" id="quickMenu" hidden>${[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']].map(x=>`<button data-create="${x[0]}">${x[1]}</button>`).join('')}</div></div><button type="button" class="btn btn-outline" data-nav2="reports"><span aria-hidden="true">▥</span>View reports</button></div></div>${onboardBannerSeen?'':`<div class="onboard-row" id="onboardRow"><div class="onboard-copy"><strong>This is the apps side.</strong> Lanesra is also AI-native — see the rest in two clicks.</div><div class="onboard-actions"><button class="btn btn-secondary" data-onboard="agents">Build an AI Agent →</button><button class="btn btn-secondary" data-onboard="apps">Install an Industry App →</button><button class="onboard-dismiss" id="onboardDismiss" aria-label="Dismiss">×</button></div></div>`}<div class="kpi-grid">${kpis.map((k,i)=>`<button type="button" class="card kpi-card${i===0?' beam':''}" data-kpi-nav="${k.nav}" data-kpi-filter="${k.filter}"><span class="kpi-label"><span>${k.label}</span><span class="kpi-icon" aria-hidden="true">${kpiIcon(k.key)}</span></span><span class="kpi-number">${k.value()}</span><span class="kpi-meta">View ${k.label.toLowerCase()} →</span></button>`).join('')}</div>${(chartWidgets.length||listWidgets.length)?`<div class="dash-grid">${chartWidgets.map(dashboardChartWidgetHtml).join('')}${listWidgets.map(dashboardRecordListWidgetHtml).join('')}</div>`:''}<div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Pipeline snapshot</h3><p class="card-desc">Active opportunities by stage</p></div><button type="button" class="btn btn-link btn-sm" data-nav2="pipeline" data-filter2="open">View pipeline</button></div><div class="card-body"><div class="pipeline-list">${dashOpps.slice(0,5).map(o=>`<div class="pipeline-row"><div><div class="name">${o.title}</div><div class="sub">${companyName(o.companyId)}</div></div><div class="stage-wrap"><div class="stage"><i style="width:${stagePct(o.stage)}%"></i></div><div class="sub">${o.stage}</div></div><div class="amount">${money(o.value)}</div></div>`).join('')}</div></div></section><section class="card"><div class="card-head"><div><h3>Tasks requiring attention</h3><p class="card-desc">${dashTasks.length} open tasks</p></div></div><div class="card-body"><ul class="task-list">${dashTasks.map(t=>`<li class="task-item"><span class="task-dot${['High','Urgent'].includes(t.priority)?' warn':''}"></span><div><div class="name">${t.title}</div><div class="sub">${relatedLabel(t)}${t.due?' · '+t.due:''}</div></div></li>`).join('')}</ul></div></section></div>`;
  document.querySelectorAll('[data-onboard]').forEach(b=>b.onclick=()=>{const target=b.dataset.onboard;onboardBannerSeen=true;current='admin';adminView='tool';adminTab=target==='agents'?'aiAgents':'packages';renderView()});
  if($('#onboardDismiss'))$('#onboardDismiss').onclick=()=>{onboardBannerSeen=true;$('#onboardRow').remove()};
  document.querySelectorAll('[data-kpi-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.kpiNav;viewFilter=b.dataset.kpiFilter;detailRecord=null;renderView()});
@@ -1967,7 +1997,7 @@ function pipeline(){
  let stages=['Lead','Qualified','Discovery','Proposal','Negotiation','Won','Lost'];
  if(viewFilter==='open')stages=['Lead','Qualified','Discovery','Proposal','Negotiation'];
  if(viewFilter==='won')stages=['Won'];
- $('#view').innerHTML=`<div class="page-head"><div><h1>${viewFilter==='won'?'Won Opportunities':viewFilter==='open'?'Open Pipeline':'Sales Pipeline'}</h1><p class="muted">Opportunities are optional sales records linked to a customer and, when useful, a primary contact.</p></div><button class="btn btn-primary btn-shimmer" id="addDeal">+ New opportunity</button></div><div class="kanban">${stages.map(s=>{const items=data.opportunities.filter(o=>o.stage===s);return `<section class="card prb-kanban-col"><div class="prb-kanban-head"><h3>${s}</h3><span class="badge badge-secondary">${items.length}</span></div><div class="prb-kanban-body">${items.map(o=>`<article class="card prb-deal"><div class="prb-deal-title">${o.title}</div><small class="muted">${companyName(o.companyId)}${o.contactId?' · '+contactName(o.contactId):''}</small><div class="prb-deal-value">${money(o.value)}</div><small class="muted">${o.probability}% · ${o.close}</small><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${o.id}">Edit</button><button class="btn btn-ghost btn-sm" data-del="${o.id}">Delete</button></div></article>`).join('')}</div></section>`}).join('')}</div>`;
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>${viewFilter==='won'?'Won Opportunities':viewFilter==='open'?'Open Pipeline':'Sales Pipeline'}</h2><p>Opportunities are optional sales records linked to a customer and, when useful, a primary contact.</p></div><button class="btn btn-primary btn-shimmer" id="addDeal">+ New opportunity</button></div><div class="kanban">${stages.map(s=>{const items=data.opportunities.filter(o=>o.stage===s);return `<section class="card prb-kanban-col"><div class="prb-kanban-head"><h3>${s}</h3><span class="badge badge-secondary">${items.length}</span></div><div class="prb-kanban-body">${items.map(o=>`<article class="card prb-deal"><div class="prb-deal-title">${o.title}</div><small class="muted">${companyName(o.companyId)}${o.contactId?' · '+contactName(o.contactId):''}</small><div class="prb-deal-value">${money(o.value)}</div><small class="muted">${o.probability}% · ${o.close}</small><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${o.id}">Edit</button><button class="btn btn-ghost btn-sm" data-del="${o.id}">Delete</button></div></article>`).join('')}</div></section>`}).join('')}</div>`;
  $('#addDeal').onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields));
  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal('opportunities',fieldsFor('opportunities',opportunityFields),byId('opportunities',b.dataset.edit)));
  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove('opportunities',b.dataset.del));
@@ -2456,15 +2486,26 @@ function tablePage(key,cfg){
  const groups=svCapable?groupRows(arr,ensureViewState(key).groupByField):[{label:null,rows:arr}];
  const sel=svCapable?selectionFor(key):new Set();
  const extraCols=svCapable?1:0;
- const rowHtml=r=>`<tr>${svCapable?`<td><input type="checkbox" class="bulk-check" data-bulk-id="${r.id}" ${sel.has(r.id)?'checked':''}></td>`:''}${cfg.cols.map(c=>`<td>${cellValue(r,c,key)}</td>`).join('')}<td><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${r.id}">Edit</button><button class="btn btn-ghost btn-sm" data-del="${r.id}">Delete</button></div></td></tr>`;
+ const rowHtml=r=>`<tr>${svCapable?`<td data-label=""><input type="checkbox" class="bulk-check" data-bulk-id="${r.id}" ${sel.has(r.id)?'checked':''}></td>`:''}${cfg.cols.map(c=>`<td data-label="${c[1]}">${cellValue(r,c,key)}</td>`).join('')}<td data-label=""><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${r.id}">Edit</button><button class="btn btn-ghost btn-sm" data-del="${r.id}">Delete</button></div></td></tr>`;
  const bodyHtml=groups.map(g=>`${g.label!==null?`<tr class="prb-group-row"><td colspan="${cfg.cols.length+1+extraCols}">${g.label}</td></tr>`:''}${g.rows.map(rowHtml).join('')}`).join('');
- $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>${viewFilter?viewFilter.charAt(0).toUpperCase()+viewFilter.slice(1):labels[key]}</span></div><h1>${viewFilter==='open'&&key==='tasks'?'Open Tasks':viewFilter==='outstanding'?'Outstanding Invoices':labels[key]}</h1><p class="muted">${arr.length} connected records in the sample workspace</p></div><button class="btn btn-primary btn-shimmer" id="addRecord">+ New ${labels[key].replace(/s$/,'')}</button></div>${svCapable?savedViewBarHtml(key,cfg,statusField):''}<div class="table-wrap"><table class="table"><thead><tr>${svCapable?'<th></th>':''}${cfg.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th>Actions</th></tr></thead><tbody>${bodyHtml}</tbody></table>${arr.length?'':'<div class="empty">No records yet</div>'}</div>${svCapable?bulkActionBarHtml(key,statusField):''}`;
+ $('#view').innerHTML=`<div class="page-heading"><div>${viewFilter?`<nav class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>${viewFilter.charAt(0).toUpperCase()+viewFilter.slice(1)}</span></nav>`:''}<h2>${viewFilter==='open'&&key==='tasks'?'Open Tasks':viewFilter==='outstanding'?'Outstanding Invoices':labels[key]}</h2><p>${arr.length} connected records in the sample workspace</p></div><button class="btn btn-primary btn-shimmer" id="addRecord">+ New ${labels[key].replace(/s$/,'')}</button></div>${svCapable?savedViewBarHtml(key,cfg,statusField):''}<div class="list-toolbar"><div class="list-search"><span class="search-icon" aria-hidden="true">⌕</span><input class="input" id="listSearch" autocomplete="off" placeholder="Search ${labels[key].toLowerCase()}…" aria-label="Search ${labels[key]}"></div></div><section class="card list-card"><div class="table-wrap"><table class="company-table"><thead><tr>${svCapable?'<th></th>':''}${cfg.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th aria-label="Actions"></th></tr></thead><tbody id="listRows">${bodyHtml}</tbody></table>${arr.length?'':'<div class="empty">No records yet</div>'}</div><div class="pagination"><span id="pageInfo"></span><div class="pagination-actions" id="pageBtns"></div></div></section>${svCapable?bulkActionBarHtml(key,statusField):''}`;
  document.querySelector('[data-clear-filter]')?.addEventListener('click',()=>{current='dashboard';viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  $('#addRecord').onclick=()=>recordModal(key,cfg.fields());
  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal(key,cfg.fields(),byId(key,b.dataset.edit)));
  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove(key,b.dataset.del));
  if(svCapable)wireSavedViewsAndBulkActions(key,cfg,statusField);
+ // Modern UI PR-D/1 (issue #395): the artifact's list-toolbar search and
+ // pagination footer, wired client-side over the already-rendered rows -
+ // hiding rows never disturbs the data-edit/data-del/cell-link wiring or
+ // the saved-view bulk-checkbox state built above.
+ const listSearch=$('#listSearch'),pageInfo=$('#pageInfo'),pageBtns=$('#pageBtns');
+ const LIST_PAGE_SIZE=25;let listPage=1;
+ const listRowGroups=()=>{const gs=[];let cur=null;document.querySelectorAll('#listRows tr').forEach(tr=>{if(tr.classList.contains('prb-group-row')){cur={head:tr,rows:[]};gs.push(cur)}else{if(!cur){cur={head:null,rows:[]};gs.push(cur)}cur.rows.push(tr)}});return gs};
+ const applyListQuery=()=>{const q=(listSearch.value||'').trim().toLowerCase();listPage=1;listRowGroups().forEach(g=>{let vis=0;g.rows.forEach(tr=>{const show=!q||tr.textContent.toLowerCase().includes(q);tr.dataset.match=show?'1':'0';if(show)vis++});if(g.head)g.head.dataset.match=vis>0?'1':'0'});renderListPage()};
+ const renderListPage=()=>{const groups=listRowGroups();const vis=groups.flatMap(g=>g.rows.filter(tr=>tr.dataset.match!=='0'));const pages=Math.max(1,Math.ceil(vis.length/LIST_PAGE_SIZE));listPage=Math.min(Math.max(1,listPage),pages);const start=(listPage-1)*LIST_PAGE_SIZE,pageSet=new Set(vis.slice(start,start+LIST_PAGE_SIZE));groups.forEach(g=>{let any=false;g.rows.forEach(tr=>{const s=pageSet.has(tr);tr.style.display=s?'':'none';if(s)any=true});if(g.head)g.head.style.display=any?'':'none'});const from=vis.length?start+1:0,to=Math.min(start+LIST_PAGE_SIZE,vis.length);pageInfo.textContent=`Showing ${from}–${to} of ${vis.length} ${labels[key].toLowerCase()}`;const pgBtn=(label,page,cls,disabled)=>`<button type="button" class="btn ${cls} btn-sm"${disabled?' disabled':''} data-page="${page}">${label}</button>`;let nums='',last=0;for(let p=1;p<=pages;p++){if(p===1||p===pages||Math.abs(p-listPage)<=1){if(p-last>1)nums+='<span class="page-gap">…</span>';nums+=pgBtn(String(p),p,p===listPage?'btn-secondary':'btn-outline',false);last=p}}pageBtns.innerHTML=pgBtn('Previous',listPage-1,'btn-outline',listPage<=1)+nums+pgBtn('Next',listPage+1,'btn-outline',listPage>=pages);pageBtns.querySelectorAll('[data-page]').forEach(b=>{if(b.disabled)return;b.onclick=()=>{listPage=Number(b.dataset.page);renderListPage()}})};
+ listSearch.addEventListener('input',applyListQuery);
+ applyListQuery();
 }
 function badgeMaybe(v){const vals=['Active','Inactive','Customer','Prospect','Lead','Sent','Accepted','Draft','Paid','Overdue','Open','Completed','High','Medium','Low','Urgent','Renewal Due','In Progress','Won','Lost','Confirmed','Cancelled'];return vals.includes(String(v))?`<span class="badge">${v}</span>`:(v??'—')}
 // `full` (Screen/App Builder Phase 2): explicit true/false forces this
@@ -2535,20 +2576,53 @@ function wireRelatedRows(scope){
   openRecordDetail(navKey,id);
  });
 }
+// ===== Modern UI PR-D/2: record detail tabs (artifact fidelity, issue #395) =====
+// The artifact's record page is three tabs - Overview, Related, Activity -
+// under one record header. These helpers render the tab strip and the two
+// related-record shapes the artifact uses: the Overview preview
+// (.related-list > .related-item with a chevron) and the Related tab's
+// grouped .relation-group sections (singular type label + meta badge).
+// Every group is a [title, items, navKey, labelFn, metaFn] tuple, so all
+// real data bindings, links and counts survive unchanged.
+function recordTabsHtml(){
+ return `<div class="tabs company-tabs" role="tablist"><button type="button" class="active" role="tab" aria-selected="true" data-record-tab="rec-overview">Overview</button><button type="button" role="tab" aria-selected="false" data-record-tab="rec-related">Related</button><button type="button" role="tab" aria-selected="false" data-record-tab="rec-activity">Activity</button></div>`;
+}
+function relatedPreviewListHtml(groups){
+ const itemsHtml=groups.map(([title,items,navKey,labelFn])=>items.map(x=>`<li class="related-item"><span><span class="related-type">${title}</span><br><strong><a class="cell-link" data-nav-related="${navKey}:${x.id}">${labelFn(x)}</a></strong></span><span aria-hidden="true">›</span></li>`).join('')).join('');
+ return `<ul class="related-list">${itemsHtml||'<li class="muted" style="padding:13px 20px">None yet</li>'}</ul>`;
+}
+function relatedFullGroupsHtml(groups){
+ return groups.map(([title,items,navKey,labelFn,metaFn])=>{
+  const singular=title.replace(/ies$/,'y').replace(/s$/,'');
+  const rowsHtml=items.map(x=>{const meta=metaFn?metaFn(x):'';return `<li class="related-item"><span><span class="related-type">${singular}</span><br><strong><a class="cell-link" data-nav-related="${navKey}:${x.id}">${labelFn(x)}</a></strong></span>${meta?`<span class="badge outline">${meta}</span>`:'<span aria-hidden="true">›</span>'}</li>`}).join('');
+  return `<div class="relation-group"><h4>${title} (${items.length})</h4>${rowsHtml?`<ul class="related-list">${rowsHtml}</ul>`:'<div class="muted" style="font-size:13px">None yet</div>'}</div>`;
+ }).join('');
+}
+// Custom-object related groups as the same tuples the detail pages use, so
+// admin-defined relationships render in the artifact Related tab and the
+// Overview preview too. Supersedes customRelatedCardsHtml (same data).
+function customRelatedGroups(entityType,entityId){
+ return relatedGroupsFor(entityType,entityId).map(g=>[g.label,g.rows.map(r=>({...r,id:r.entityId})),g.otherType,x=>x.displayName,x=>x.status]);
+}
 function detail360Header(breadcrumbLabel,title,eyebrow,metaHtml,auditHtml){
- // Modern UI PR-B2: shadcn-style record header - avatar with initials,
- // name + badges, primary Edit CTA (shimmer), outline secondary actions.
+ // Modern UI PR-D/2: artifact record header - pivot-trail breadcrumb,
+ // .record-head with .detail-identity (avatar + .record-name + .record-meta)
+ // and .record-actions (primary Edit, outline Object 360). Handler ids and
+ // every data-* attribute are unchanged.
  const initials=String(title||'—').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'—';
- return `<nav class="breadcrumbs prb2-crumbs" aria-label="Breadcrumb"><button data-clear-filter>Dashboard</button><span aria-hidden="true">›</span><button data-back-list>${breadcrumbLabel}</button><span aria-hidden="true">›</span><span aria-current="page">${title}</span></nav>
- <div class="card record-head">
-  <div class="record-head-id">
-   <span class="avatar record-head-avatar" aria-hidden="true">${initials}</span>
-   <div class="record-head-titles"><div class="eyebrow">${eyebrow||''}</div><h1>${title}</h1><div class="record-head-meta">${metaHtml}</div>${auditHtml||''}</div>
+ return `<nav class="pivot-trail" aria-label="Breadcrumb"><button data-clear-filter>Dashboard</button><span aria-hidden="true">›</span><button data-back-list>${breadcrumbLabel}</button><span aria-hidden="true">›</span><strong aria-current="page">${title}</strong></nav>
+ <div class="page-heading">
+  <div class="record-head">
+   <div class="detail-identity">
+    <span class="avatar lg" aria-hidden="true">${initials}</span>
+    <div class="record-identity-text">${eyebrow?`<div class="eyebrow">${eyebrow}</div>`:''}<div class="record-name"><h2>${title}</h2></div><div class="record-meta">${metaHtml}</div></div>
+   </div>
+   <div class="record-actions">
+    <button class="btn btn-primary btn-shimmer" id="editDetailRecord">Edit</button>
+    <button class="btn btn-outline" id="openObject360">View in Object 360</button>
+   </div>
   </div>
-  <div class="record-head-actions">
-   <button class="btn btn-outline" id="openObject360">View in Object 360</button>
-   <button class="btn btn-primary btn-shimmer" id="editDetailRecord">Edit</button>
-  </div>
+  ${auditHtml||''}
  </div>`;
 }
 
@@ -2567,33 +2641,29 @@ const ACTIVITY_CHANNELS=[['email','Email'],['call','Call'],['message','Message']
 function activityNowForInput(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
 function activityTimelineHtml(entityType,entityId){
  const items=(data.activities||[]).filter(a=>a.entityType===entityType&&a.entityId===entityId).slice().sort((a,b)=>b.occurredAt.localeCompare(a.occurredAt));
- return `<div class="card" data-activity-panel="${entityType}:${entityId}">
-  <div class="card-header prb2-card-head-split"><h3 class="card-title">Interactions <span class="badge-secondary">${items.length}</span></h3><button type="button" class="btn btn-outline btn-sm" data-toggle-log-activity>+ Log an interaction</button></div>
-  <div class="card-content">
-   <div data-log-activity-fields class="form-grid prb2-activity-fields" style="display:none;margin:12px 0">
-    <div class="field"><label>Channel</label><select class="select" data-activity-channel>${ACTIVITY_CHANNELS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
-    <div class="field" data-activity-direction-field><label>Direction</label><select class="select" data-activity-direction><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select></div>
-    <div class="field full"><label>Subject</label><input class="input" data-activity-subject placeholder="Following up on pricing"></div>
-    <div class="field"><label>When</label><input class="input" data-activity-occurred type="datetime-local" value="${activityNowForInput()}"></div>
-    <div class="field"><label>Participants</label><input class="input" data-activity-participants placeholder="jane@acme.com"></div>
-    <div class="field full"><label>Notes</label><textarea class="textarea" data-activity-body rows="3"></textarea></div>
-    <div class="field full"><button type="button" class="btn btn-primary" data-log-activity-submit>Log interaction</button></div>
-   </div>
-   <div data-activity-list class="prb2-timeline">${items.length?items.map(activityItemHtml).join(''):'<div class="empty">No interactions logged yet.</div>'}</div>
+ // Modern UI PR-D/2: artifact Activity timeline card - card-head with the
+ // log-interaction action, entries as ul.timeline. Every data-* hook the
+ // log form needs is unchanged.
+ return `<section class="card" data-activity-panel="${entityType}:${entityId}">
+  <div class="card-head card-head-split"><div><h3>Activity timeline <span class="badge-secondary">${items.length}</span></h3><p class="card-desc">Calls, emails and messages logged against this record</p></div><button type="button" class="btn btn-outline btn-sm" data-toggle-log-activity>+ Log an interaction</button></div>
+  <div data-log-activity-fields class="form-grid" style="display:none;margin:12px 20px 0">
+   <div class="field"><label>Channel</label><select class="select" data-activity-channel>${ACTIVITY_CHANNELS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
+   <div class="field" data-activity-direction-field><label>Direction</label><select class="select" data-activity-direction><option value="inbound">Inbound</option><option value="outbound">Outbound</option></select></div>
+   <div class="field full"><label>Subject</label><input class="input" data-activity-subject placeholder="Following up on pricing"></div>
+   <div class="field"><label>When</label><input class="input" data-activity-occurred type="datetime-local" value="${activityNowForInput()}"></div>
+   <div class="field"><label>Participants</label><input class="input" data-activity-participants placeholder="jane@acme.com"></div>
+   <div class="field full"><label>Notes</label><textarea class="textarea" data-activity-body rows="3"></textarea></div>
+   <div class="field full"><button type="button" class="btn btn-primary" data-log-activity-submit>Log interaction</button></div>
   </div>
- </div>`;
+  <ul class="timeline" data-activity-list>${items.length?items.map(activityItemHtml).join(''):'<li><div class="sub">No interactions logged yet.</div></li>'}</ul>
+ </section>`;
 }
 function activityItemHtml(a){
- // Modern UI PR-B2: vertical-timeline entry - channel dot + tinted badge.
+ // Modern UI PR-D/2: artifact timeline entry - .name + .sub. Subject,
+ // channel badge, direction, body, participants and date all preserved.
  const tone={email:'badge-info',call:'badge-success',message:'badge-secondary'}[a.channel]||'badge-secondary';
- return `<div class="prb2-tl-item">
-  <span class="prb2-tl-dot prb2-tl-${a.channel}" aria-hidden="true"></span>
-  <div class="prb2-tl-body">
-   <div class="prb2-tl-head"><span class="badge ${tone}">${a.channel}</span>${a.direction?`<span class="prb2-tl-dir">${a.direction}</span>`:''}${a.subject?`<strong>${a.subject}</strong>`:''}</div>
-   <div class="prb2-tl-notes">${a.body}</div>
-   <div class="prb2-tl-meta">${a.participants?a.participants+' · ':''}${new Date(a.occurredAt).toLocaleString()}</div>
-  </div>
- </div>`;
+ const label=a.subject||`${a.channel[0].toUpperCase()+a.channel.slice(1)}${a.direction?` (${a.direction})`:''}`;
+ return `<li><div class="name">${label} <span class="badge ${tone}">${a.channel}</span></div>${a.body?`<div class="sub">${a.body}</div>`:''}<div class="sub">${a.participants?a.participants+' · ':''}${new Date(a.occurredAt).toLocaleString()}</div></li>`;
 }
 /** Wires every `[data-activity-panel]` found under `root` - the
  * +Log/Cancel toggle, hiding Direction for a call (calls have no
@@ -2637,7 +2707,14 @@ function wireDetail360Nav(editHandler,object360Handler){
  $('[data-back-list]').onclick=()=>{detailRecord=null;renderView()};
  $('#editDetailRecord').onclick=editHandler;
  if(object360Handler)$('#openObject360').onclick=object360Handler;
- wireRelatedRows($('#view'));
+ // Modern UI PR-D/2: artifact tab switching - the active tab button shows
+ // its matching .tab-panel; every wiring line above is behavior-identical.
+ const view=$('#view');
+ view.querySelectorAll('[data-record-tab]').forEach(btn=>{btn.onclick=()=>{
+  view.querySelectorAll('[data-record-tab]').forEach(b=>{const on=b===btn;b.classList.toggle('active',on);b.setAttribute('aria-selected',on?'true':'false')});
+  view.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id===btn.dataset.recordTab));
+ }});
+ wireRelatedRows(view);
 }
 // Object 360 (issue #352): a record-level counterpart to the Ontology
 // Explorer (#339) - given one real record, shows every record directly
@@ -2804,8 +2881,8 @@ function o360PivotTo(entityType,entityId,label,newTrail){
  const trail=newTrail||[...(cur.trail||[]),{entityType:cur.root.entityType,entityId:cur.root.entityId,label:cur.root.label}];
  object360State={...cur,trail,root:{entityType,entityId,label},inspect:{entityType,entityId,label}};
  if(typeof document!=='undefined'){
-  const h2=document.querySelector('#modal .modal-head h2');
-  if(h2)h2.textContent='Object 360: '+label;
+  const h3=document.querySelector('#o360Title');
+  if(h3)h3.textContent='Object 360 · '+label;
  }
 }
 // Cross-links both ways (issue #374).
@@ -2831,15 +2908,14 @@ function openObject360ForEntity(entityTypeKey){
 let object360State=null;
 function object360Modal(entityType,entityId,label){
  object360State={root:{entityType,entityId,label},inspect:{entityType,entityId,label},trail:[]};
- modal('Object 360: '+label,'<div id="object360Body"></div>');
- const modalEl=document.querySelector('#modal .modal');
- // Modern UI PR-B: adopt the dialog component's chrome classes for the
- // Object 360 modal. The shared modal() markup stays untouched - these
- // classes only add token-driven chrome and sit below the modal's own
- // inline width/max-height.
- const overlayEl=document.querySelector('#modal');
- if(overlayEl)overlayEl.classList.add('dialog-overlay');
- if(modalEl){modalEl.classList.add('dialog-content');modalEl.style.cssText+=';width:min(1100px,95vw);max-height:92vh'}
+ // PR-D/3: artifact-fidelity modal chrome - .modal-stage > .record-backdrop
+ // + .object-modal (.modal-head with title + pivot trail + maximize/close,
+ // then .modal-grid with the graph side and the .object-inspector side).
+ // The backdrop keeps id="modal" so the chrome wiring (maximize, resize
+ // grip) and closeModal() keep working unchanged.
+ document.body.insertAdjacentHTML('beforeend','<div class="modal-backdrop modal-stage" id="modal"><div class="record-backdrop" aria-hidden="true"><div class="backdrop-line" style="width:32%"></div><div class="backdrop-line" style="width:58%"></div><div class="card" style="height:260px;margin-top:36px"></div><div class="card" style="height:180px;margin-top:18px;width:66%"></div></div><article class="object-modal card" data-object-modal><header class="modal-head"><span class="drag-handle" id="o360DragHandle" title="Drag modal"><i></i><i></i><i></i></span><div class="modal-title"><h3 id="o360Title">Object 360 · '+label+'</h3><div class="pivot-trail" id="o360PivotTrail"></div></div><button type="button" class="btn btn-ghost btn-icon" id="o360CloseBtn" aria-label="Close preview">×</button></header><div class="modal-grid"><div class="mini-graph" id="o360MiniGraph"></div><aside class="object-inspector" id="object360Body"></aside></div></article></div>');
+ const closeBtn=document.querySelector('#o360CloseBtn');
+ if(closeBtn)closeBtn.onclick=()=>closeModal();
  o360WireModalChrome();
  renderObject360Body();
 }
@@ -2883,11 +2959,24 @@ function renderObject360Body(){
  const inspectIsRoot=s.inspect.entityType===s.root.entityType&&s.inspect.entityId===s.root.entityId;
  const inspectIsPseudo=['business_rule','workflow','ai_agent'].indexOf(s.inspect.entityType)>=0;
  const o360CardPosStyle=object360CardPos?(object360CardPos.dock==='left'?` style="left:16px;top:16px;right:auto"`:(object360CardPos.dock==='right'?` style="right:16px;top:16px;left:auto"`:` style="left:${object360CardPos.left}px;top:${object360CardPos.top}px;right:auto"`)):'';
+ // PR-D/3: legend + view controls are computed before the inspector card so
+ // every variant can include the Graph layers .inspector-section.
+ const o360LegendTypes=[];
+ model.nodes.forEach(n=>{if(o360LegendTypes.indexOf(n.type)<0)o360LegendTypes.push(n.type)});
+ const o360LegendCounts={};
+ model.nodes.forEach(n=>{o360LegendCounts[n.type]=(o360LegendCounts[n.type]||0)+1});
+ const o360LegendHtmlStr=o360LegendTypes.length?`<div class="ontology-legend">${o360LegendTypes.map(k=>{
+  const lbl=driver.typeLabel(k);
+  const isOff=object360HiddenTypes.has(k);
+  return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl} (${o360LegendCounts[k]||0} shown)"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${colors[k]}"></span>${lbl}<span class="ontology-legend-count">${o360LegendCounts[k]||0}</span></button>`;
+ }).join('')}</div>`:'';
+ const viewSectionHtml=`<div class="inspector-section"><div class="panel-title"><div><h3>Graph layers</h3><p class="card-desc">Toggle what the graph shows</p></div></div>${o360LegendHtmlStr}<div class="o360-view-controls"><label class="o360-depth">Depth <select id="o360Depth" class="select">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="o360FieldsToggle"${object360HiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div></div>`;
  let inspectorHtml;
  if(s.inspect.entityType==='orgUnit'){
   inspectorHtml=`<div class="ontology-inspector-card card" id="o360InspectorCard"${o360CardPosStyle}>
    <div class="ontology-inspector-head" id="o360InspectorHead">${o360TypeDot('orgUnit')}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">Business Unit</div></div></div>
-   <p class="muted" style="font-size:12px">Business Units aren't individually re-centerable here - see Admin → Organization Units for its own detail.</p>
+   ${viewSectionHtml}
+   <div class="inspector-section"><p class="muted" style="font-size:12px">Business Units aren't individually re-centerable here - see Admin → Organization Units for its own detail.</p></div>
   </div>`;
  }else if(inspectIsPseudo){
   // Rule / workflow / agent node: no record to open, so the card deep-links
@@ -2899,9 +2988,10 @@ function renderObject360Body(){
    <div class="ontology-inspector-actions">
     <button type="button" class="btn btn-secondary" id="o360OpenPseudoAdmin">Open in Admin → ${pseudoTabLabel}</button>
    </div>
+   ${viewSectionHtml}
   </div>`;
  }else{
-  let groupsHtml='';
+  let sectionsHtml='';
   if(inspectIsRoot){
    const rules=(data.fieldRules||[]).filter(r=>r.entity===s.root.entityType&&r.active);
    const workflows=(data.workflowRules||[]).filter(w=>w.entity===s.root.entityType).sort((a,b)=>(b.active?1:0)-(a.active?1:0));
@@ -2917,27 +3007,27 @@ function renderObject360Body(){
     const matched=rootRecord?ruleConditionsMatch(r,rootRecord):null;
     const verdict=matched===null?null:(isValidation?(matched?'failing':'passing'):(matched?'applying':'not applying'));
     const chipCls=(verdict==='passing'||verdict==='applying')?'badge-success':(verdict==='failing'?'badge-destructive':'badge-secondary');
-    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="rules" title="Open in Admin → Business Rules"><span style="flex:1;text-align:left">${r.name||'Untitled rule'}</span>${verdict?`<span class="badge ${chipCls}">${verdict}</span>`:''}</button>`;
+    return `<button type="button" class="rule-row" data-o360-admin="rules" title="Open in Admin → Business Rules"><span style="flex:1;text-align:left">${r.name||'Untitled rule'}</span>${verdict?`<span class="badge ${chipCls}">${verdict}</span>`:''}</button>`;
    }).join('');
    // Issue #372: Active/Inactive + a live trigger check per workflow. The
    // demo keeps no workflow run history, so this is honestly labeled
    // "Trigger check" - never a faked "last run" timestamp.
    const wfRows=workflows.map(w=>{
     const trig=rootRecord?conditionsMatch(w.matchType||'all',w.conditions||[],rootRecord):null;
-    return `<button type="button" class="ontology-inspector-bullet" data-o360-admin="workflow" title="Open in Admin → Workflows"><span style="flex:1;text-align:left">${w.name||'Untitled workflow'}</span><span class="badge ${w.active?'badge-success':'badge-secondary'}">${w.active?'Active':'Inactive'}</span>${trig===null?'':`<span class="badge badge-info" title="Trigger check: this workflow's conditions evaluated against the record right now">${trig?'would trigger on this record':'conditions not met'}</span>`}</button>`;
+    return `<button type="button" class="flow-row" data-o360-admin="workflow" title="Open in Admin → Workflows"><span style="flex:1;text-align:left">${w.name||'Untitled workflow'}</span><span class="badge ${w.active?'badge-success':'badge-secondary'}">${w.active?'Active':'Inactive'}</span>${trig===null?'':`<span class="badge badge-info" title="Trigger check: this workflow's conditions evaluated against the record right now">${trig?'would trigger on this record':'conditions not met'}</span>`}</button>`;
    }).join('');
    // Issue #374: access chips per agent from its capability edges.
-   const agentRows=agents.map(a=>{
-    const chips=o360AgentChips(a,s.root.entityType);
-    return `<div class="ontology-inspector-bullet" style="cursor:default"><span style="flex:1;text-align:left">${a.icon||''} ${a.name}</span>${chips.map(c=>`<span class="badge ${c==='can read'||c==='can update'||c==='can delete'?'badge-info':'badge-secondary'}">${c}</span>`).join('')}</div>`;
+   const agentChipsHtml=agents.map(a=>{
+    const caps=o360AgentChips(a,s.root.entityType);
+    const pretty=caps.map(c=>c==='can read'?'Read':c==='can update'?'Act':c==='can delete'?'Delete':c).join(' + ');
+    return `<span class="access-chip">${a.icon||''} ${a.name} · ${pretty}</span>`;
    }).join('');
-   groupsHtml=`${groupEntries.map(([key,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${(members[0]&&members[0].groupLabel)||key}</div>${members.slice(0,MAXPER).map(m=>`<button type="button" class="ontology-inspector-bullet" data-o360g-inspect="${m.entityType}:${m.entityId}">${entityDotHtml(m.entityType)}${m.displayName}</button>`).join('')}${members.length>MAXPER?`<div class="muted" style="font-size:12px">+${members.length-MAXPER} more</div>`:''}</div>`).join('')}
-    ${groupEntries.length===0?'<p class="muted" style="font-size:12px">No related records yet.</p>':''}
-    ${orgUnit?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Business Unit</div><div style="font-size:13px">${orgUnit.name}</div></div>`:''}
-    ${rules.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Business Rules that apply</div>${ruleRows}</div>`:''}
-    ${workflows.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Workflows that apply</div><div class="o360-trigger-note">Trigger check evaluates each workflow's conditions against this record live — the demo keeps no run history, so there is no "last run" to show.</div>${wfRows}</div>`:''}
-    ${agents.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">AI Agents scoped to this object type</div>${agentRows}</div>`:''}
-    ${activities.length?`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">Activity</div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}`;
+   sectionsHtml=`${groupEntries.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Related records</h3><p class="card-desc">Linked to this record</p></div><span class="settings-count">${groupEntries.reduce((n,g)=>n+g[1].length,0)} linked</span></div>${groupEntries.map(([key,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${(members[0]&&members[0].groupLabel)||key}</div>${members.slice(0,MAXPER).map(m=>`<button type="button" class="ontology-inspector-bullet" data-o360g-inspect="${m.entityType}:${m.entityId}">${entityDotHtml(m.entityType)}${m.displayName}</button>`).join('')}${members.length>MAXPER?`<div class="muted" style="font-size:12px">+${members.length-MAXPER} more</div>`:''}</div>`).join('')}</div>`:`<div class="inspector-section"><p class="muted" style="font-size:12px">No related records yet.</p></div>`}
+    ${orgUnit?`<div class="inspector-section"><div class="panel-title"><div><h3>Business Unit</h3></div></div><div style="font-size:13px">${orgUnit.name}</div></div>`:''}
+    ${rules.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Business Rules</h3><p class="card-desc">Evaluated for this record</p></div><span class="settings-count">${rules.length} rule${rules.length===1?'':'s'}</span></div>${ruleRows}</div>`:''}
+    ${workflows.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Workflows</h3><p class="card-desc">Connected automation</p></div></div><div class="o360-trigger-note">Trigger check evaluates each workflow's conditions against this record live — the demo keeps no run history, so there is no "last run" to show.</div>${wfRows}</div>`:''}
+    ${agents.length?`<div class="inspector-section"><h3>Agent effective access</h3><p class="card-desc">Inherited and direct permissions</p><div class="access-chips">${agentChipsHtml}</div></div>`:''}
+    ${activities.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Activity</h3><p class="card-desc">Recent work on this record</p></div></div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}`;
   }
   inspectorHtml=`<div class="ontology-inspector-card card" id="o360InspectorCard"${o360CardPosStyle}>
    <div class="ontology-inspector-head" id="o360InspectorHead">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${driver.typeLabel(s.inspect.entityType)}</div></div></div>
@@ -2946,32 +3036,20 @@ function renderObject360Body(){
     <button type="button" class="btn btn-secondary" id="o360Recenter" ${inspectIsRoot?'disabled':''}>Show what's around it</button>
     ${inspectIsRoot?`<button type="button" class="btn btn-secondary" id="o360OpenOntology">View ${entityLabel(s.root.entityType)||s.root.entityType} in Ontology Graph</button>`:''}
    </div>
-   ${inspectIsRoot?`<div class="ontology-inspector-groups">${groupsHtml}</div>`:''}
+   ${viewSectionHtml}
+   ${inspectIsRoot?`${sectionsHtml}`:''}
   </div>`;
  }
 
- // Legend doubles as the toggle-filter; built from the types actually in
- // this record's model, now including rules/workflows/agents/orgUnit.
- const legendTypes=[];
- model.nodes.forEach(n=>{if(legendTypes.indexOf(n.type)<0)legendTypes.push(n.type)});
- const legendCounts={};
- model.nodes.forEach(n=>{legendCounts[n.type]=(legendCounts[n.type]||0)+1});
- const legendHtmlStr=legendTypes.length?`<div class="ontology-legend">${legendTypes.map(k=>{
-  const lbl=driver.typeLabel(k);
-  const isOff=object360HiddenTypes.has(k);
-  return `<button type="button" class="ontology-legend-item${isOff?' ontology-legend-item-off':''}" data-o360-legend-toggle="${k}" title="${isOff?'Show':'Hide'} ${lbl} (${legendCounts[k]||0} shown)"><span style="display:inline-block;flex-shrink:0;width:10px;height:10px;border-radius:50%;background:${colors[k]}"></span>${lbl}<span class="ontology-legend-count">${legendCounts[k]||0}</span></button>`;
- }).join('')}</div>`:'';
-
- // Breadcrumb back through the pivot trail (issue #374).
+ // Pivot trail (issue #374) - PR-D/3 renders it into the modal head's
+ // .pivot-trail; the graph fills the .mini-graph side.
  const trail=s.trail||[];
- const crumbHtml=trail.length?`<div class="o360-breadcrumb">${trail.map((t,i)=>`<button type="button" class="o360-crumb" data-o360-crumb="${i}" title="Pivot back to ${t.label}">${t.label}</button><span class="o360-crumb-sep">›</span>`).join('')}<span class="o360-crumb-current">${s.root.label}</span></div>`:'';
+ const trailEl=document.querySelector('#o360PivotTrail');
+ if(trailEl)trailEl.innerHTML=trail.length?trail.map((t,i)=>`<button type="button" class="o360-crumb" data-o360-crumb="${i}" title="Pivot back to ${t.label}">${t.label}</button><span class="o360-crumb-sep">›</span>`).join('')+`<span class="o360-crumb-current">${s.root.label}</span>`:'';
+ const graphHost=document.querySelector('#o360MiniGraph');
+ if(graphHost)graphHost.innerHTML=`<div class="ontology-graph-canvas" style="width:${W}px;height:${H}px">${graphHtml}</div>`;
 
- body.innerHTML=`<p class="muted" style="font-size:13px;max-width:720px">Every record directly linked to ${s.root.label}, its Business Unit, the Business Rules/Workflows that apply to records like it, and which AI Agents are scoped to act on it.</p>
- ${crumbHtml}
- <div class="o360-toolbar">${legendHtmlStr}<label class="o360-depth">Depth <select id="o360Depth" class="select">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="o360FieldsToggle"${object360HiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>
- <div class="ontology-graph-wrap" style="height:${H+40}px">
-  <div class="ontology-graph-canvas" style="width:${W}px;height:${H}px">${graphHtml}${inspectorHtml}</div>
- </div>`;
+ body.innerHTML=`${inspectorHtml}`;
 
  body.querySelectorAll('[data-o360g-inspect]').forEach(el=>el.onclick=()=>{
   const v=el.dataset.o360gInspect,ci=v.indexOf(':');
@@ -2987,7 +3065,7 @@ function renderObject360Body(){
   renderObject360Body();
  });
  body.querySelectorAll('[data-o360-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.o360LegendToggle;if(object360HiddenTypes.has(t))object360HiddenTypes.delete(t);else object360HiddenTypes.add(t);renderObject360Body()});
- body.querySelectorAll('[data-o360-crumb]').forEach(b=>b.onclick=()=>{
+ (trailEl||body).querySelectorAll('[data-o360-crumb]').forEach(b=>b.onclick=()=>{
   const i=parseInt(b.dataset.o360Crumb,10);
   const t=object360State.trail[i];
   o360PivotTo(t.entityType,t.entityId,t.label,object360State.trail.slice(0,i));
@@ -3014,21 +3092,28 @@ function companyDetail(id){
  const invoices=data.invoices.filter(x=>x.companyId===id);
  const contracts=data.contracts.filter(x=>x.companyId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Company'&&x.relatedId===id);
+ // Modern UI PR-D/2: every related group as a [title,items,navKey,labelFn,
+ // metaFn] tuple - the Overview preview and the Related tab render them in
+ // the artifact's .related-list / .relation-group shapes. Same filters,
+ // same labels, same counts as before.
+ const relGroups=[
+  ['Contacts',contacts,'contacts',x=>x.name,x=>x.role||''],
+  ['Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value)],
+  ['Quotes',quotes,'quotes',x=>x.number,x=>x.status],
+  ['Orders',orders,'orders',x=>x.number,x=>x.status],
+  ['Invoices',invoices,'invoices',x=>x.number,x=>x.status],
+  ['Contracts',contracts,'contracts',x=>x.number,x=>x.status],
+  ['Tasks',tasks,'tasks',x=>x.title,x=>x.status],
+  ...customRelatedGroups('companies',id),
+ ];
  $('#view').innerHTML=`${detail360Header('Companies',c.name,c.customerNumber,`${badgeMaybe(c.status)}`,auditByline(c)+ownershipByline(c))}
- <div class="rule360-grid prb2-detail">
-  <div><div class="card"><div class="card-header"><h3 class="card-title">Overview</h3></div><div class="card-content">${overviewPanelHtml('companies',overviewFields,c,id)}</div></div></div>
-  <div>
-   ${relatedCardHtml('Contacts',contacts,'contacts',x=>x.name,x=>x.role||'')}
-   ${relatedCardHtml('Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value))}
-   ${relatedCardHtml('Quotes',quotes,'quotes',x=>x.number,x=>x.status)}
-   ${relatedCardHtml('Orders',orders,'orders',x=>x.number,x=>x.status)}
-   ${relatedCardHtml('Invoices',invoices,'invoices',x=>x.number,x=>x.status)}
-   ${relatedCardHtml('Contracts',contracts,'contracts',x=>x.number,x=>x.status)}
-   ${relatedCardHtml('Tasks',tasks,'tasks',x=>x.title,x=>x.status)}
-   ${customRelatedCardsHtml('companies',id)}
-   ${activityTimelineHtml('Company',id)}
-  </div>
- </div>`;
+ ${recordTabsHtml()}
+ <div id="rec-overview" class="tab-panel active"><div class="record-grid">
+  <section class="card"><div class="card-head"><h3>Company details</h3><p class="card-desc">Core information for this account</p></div><div class="card-body" style="padding:14px 0 0">${overviewPanelHtml('companies',overviewFields,c,id)}</div></section>
+  <section class="card"><div class="card-head"><h3>Related records</h3><p class="card-desc">Connected across the workspace</p></div><div class="card-body" style="padding:14px 0 0">${relatedPreviewListHtml(relGroups)}</div></section>
+ </div></div>
+ <div id="rec-related" class="tab-panel"><section class="card"><div class="card-head"><h3>All related records</h3><p class="card-desc">Records connected to ${c.name}</p></div><div class="card-body" style="padding:14px 0 6px">${relatedFullGroupsHtml(relGroups)}</div></section></div>
+ <div id="rec-activity" class="tab-panel">${activityTimelineHtml('Company',id)}</div>`;
  wireDetail360Nav(()=>recordModal('companies',fieldsFor('companies',companyFields),c),()=>object360Modal('companies',id,c.name));
  wireActivityTimelines($('#view'));
 }
@@ -3041,19 +3126,23 @@ function contactDetail(id){
  const orders=data.orders.filter(x=>x.contactId===id);
  const contracts=data.contracts.filter(x=>x.contactId===id);
  const tasks=data.tasks.filter(x=>x.relatedType==='Contact'&&x.relatedId===id);
+ // Modern UI PR-D/2: related groups as tuples - see companyDetail.
+ const relGroups=[
+  ['Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value)],
+  ['Quotes',quotes,'quotes',x=>x.number,x=>x.status],
+  ['Orders',orders,'orders',x=>x.number,x=>x.status],
+  ['Contracts',contracts,'contracts',x=>x.number,x=>x.status],
+  ['Tasks',tasks,'tasks',x=>x.title,x=>x.status],
+  ...customRelatedGroups('contacts',id),
+ ];
  $('#view').innerHTML=`${detail360Header('Contacts',c.name,c.contactNumber,`${badgeMaybe(c.status)}<span>${c.role||'—'}</span><a class="cell-link" data-nav-related="companies:${c.companyId}">${companyName(c.companyId)}</a>`,auditByline(c)+ownershipByline(c))}
- <div class="rule360-grid prb2-detail">
-  <div><div class="card"><div class="card-header"><h3 class="card-title">Overview</h3></div><div class="card-content">${overviewPanelHtml('contacts',overviewFields,c,id)}</div></div></div>
-  <div>
-   ${relatedCardHtml('Sales Pipeline',opportunities,'opportunities',x=>x.title,x=>money(x.value))}
-   ${relatedCardHtml('Quotes',quotes,'quotes',x=>x.number,x=>x.status)}
-   ${relatedCardHtml('Orders',orders,'orders',x=>x.number,x=>x.status)}
-   ${relatedCardHtml('Contracts',contracts,'contracts',x=>x.number,x=>x.status)}
-   ${relatedCardHtml('Tasks',tasks,'tasks',x=>x.title,x=>x.status)}
-   ${customRelatedCardsHtml('contacts',id)}
-   ${activityTimelineHtml('Contact',id)}
-  </div>
- </div>`;
+ ${recordTabsHtml()}
+ <div id="rec-overview" class="tab-panel active"><div class="record-grid">
+  <section class="card"><div class="card-head"><h3>Contact details</h3><p class="card-desc">Core information for this contact</p></div><div class="card-body" style="padding:14px 0 0">${overviewPanelHtml('contacts',overviewFields,c,id)}</div></section>
+  <section class="card"><div class="card-head"><h3>Related records</h3><p class="card-desc">Connected across the workspace</p></div><div class="card-body" style="padding:14px 0 0">${relatedPreviewListHtml(relGroups)}</div></section>
+ </div></div>
+ <div id="rec-related" class="tab-panel"><section class="card"><div class="card-head"><h3>All related records</h3><p class="card-desc">Records connected to ${c.name}</p></div><div class="card-body" style="padding:14px 0 6px">${relatedFullGroupsHtml(relGroups)}</div></section></div>
+ <div id="rec-activity" class="tab-panel">${activityTimelineHtml('Contact',id)}</div>`;
  wireDetail360Nav(()=>recordModal('contacts',fieldsFor('contacts',contactFields),c),()=>object360Modal('contacts',id,c.name));
  wireActivityTimelines($('#view'));
 }
@@ -3138,9 +3227,12 @@ function overviewGroupsFor(key,fields){
 }
 // Read-only counterpart to groupsHtml, for overviewGroupsFor's output.
 function overviewGroupsHtml(key,groups,record){
- // Modern UI PR-B2: definition-list field grid - labels in
- // muted-foreground, values in foreground.
- return groups.map(g=>`<div class="prb2-field-group">${g.title?`<h4 class="prb2-field-group-title">${g.title}</h4>`:''}<dl class="prb2-field-grid" style="--prb2-cols:${g.columns}">${g.items.map(it=>`<div class="prb2-field-row${it.full?' prb2-field-row-full':''}"><dt>${it.field[1]}</dt><dd>${overviewValueHtml(key,it.field,record)}</dd></div>`).join('')}</dl></div>`).join('');
+ // Modern UI PR-D/2: artifact .field-grid - .field > .field-label +
+ // .field-value, one grid per published-layout section (.relation-group).
+ return groups.map(g=>{
+  const grid=`<div class="field-grid${(g.columns||2)===1?' cols-1':''}">${g.items.map(it=>`<div class="field${it.full?' field-full':''}"><div class="field-label">${it.field[1]}</div><div class="field-value">${overviewValueHtml(key,it.field,record)}</div></div>`).join('')}</div>`;
+  return g.title?`<div class="relation-group"><h4>${g.title}</h4>${grid}</div>`:grid;
+ }).join('');
 }
 // Screen Builder 2.0 (issue #195, 5b): the Overview panel's single choke
 // point across companyDetail/contactDetail/genericRecordDetail - checks
@@ -3245,9 +3337,6 @@ function pageLiveNodeHtml(node,entityKey,record,entityId){
 // linked record, same as every other card on this page) - link/unlink
 // stays a create/edit-modal action, consistent with how this page's
 // other related cards work.
-function customRelatedCardsHtml(entityType,entityId){
- return relatedGroupsFor(entityType,entityId).map(g=>relatedCardHtml(g.label,g.rows.map(r=>({...r,id:r.entityId})),g.otherType,x=>x.displayName,x=>x.status)).join('');
-}
 function genericRecordDetail(key,id){
  const r=byId(key,id);
  if(!r){current=key;detailRecord=null;return renderView()}
@@ -3255,16 +3344,25 @@ function genericRecordDetail(key,id){
  const relationTypes=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation','ownerPicker','orgUnitPicker'];
  const overviewFields=fieldsFor(key,fieldsFn).filter(f=>!relationTypes.includes(f[2])&&f[0]!==DETAIL_TITLE_FIELD[key]);
  const isDoc=['quotes','orders','invoices'].includes(key);
- const linesHtml=isDoc?`<div class="card prb2-lines"><div class="card-header"><h3 class="card-title">Products & services</h3></div><div class="card-content"><div class="table-wrap"><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table></div><div class="prb2-line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="prb2-line-balance">· Balance ${money(docBalance(r))}</span>`:''}</div></div></div>`:'';
- $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],r[DETAIL_TITLE_FIELD[key]]||'—',DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r),auditByline(r)+ownershipByline(r))}
- <div class="rule360-grid prb2-detail">
+ const singular=(ENTITY_SINGULAR[key]||key).replace(/^./,c=>c.toUpperCase());
+ // Modern UI PR-D/2: line items keep every data binding; the card takes the
+ // artifact's card-head anatomy.
+ const linesHtml=isDoc?`<section class="card prb2-lines" style="margin-bottom:18px"><div class="card-head"><h3>Products & services</h3><p class="card-desc">Line items on this ${singular.toLowerCase()}</p></div><div class="card-body" style="padding-top:14px"><div class="table-wrap"><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table></div><div class="prb2-line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="prb2-line-balance">· Balance ${money(docBalance(r))}</span>`:''}</div></div></section>`:'';
+ // Modern UI PR-D/2: related groups as tuples - see companyDetail.
+ const relGroups=[...recordRelatedDefs(key,r),...customRelatedGroups(key,id)];
+ const title=r[DETAIL_TITLE_FIELD[key]]||'—';
+ $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],title,DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r),auditByline(r)+ownershipByline(r))}
+ ${recordTabsHtml()}
+ <div id="rec-overview" class="tab-panel active"><div class="record-grid">
   <div>
    ${linesHtml}
-   <div class="card"><div class="card-header"><h3 class="card-title">Overview</h3></div><div class="card-content">${overviewPanelHtml(key,overviewFields,r,id)}</div></div>
+   <section class="card"><div class="card-head"><h3>${singular} details</h3><p class="card-desc">Core information for this record</p></div><div class="card-body" style="padding:14px 0 0">${overviewPanelHtml(key,overviewFields,r,id)}</div></section>
   </div>
-  <div>${recordRelatedDefs(key,r).map(([title,items,navKey,labelFn,metaFn])=>relatedCardHtml(title,items,navKey,labelFn,metaFn)).join('')}${customRelatedCardsHtml(key,id)}</div>
- </div>`;
- wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r),()=>object360Modal(key,id,r[DETAIL_TITLE_FIELD[key]]||'—'));
+  <section class="card"><div class="card-head"><h3>Related records</h3><p class="card-desc">Connected across the workspace</p></div><div class="card-body" style="padding:14px 0 0">${relatedPreviewListHtml(relGroups)}</div></section>
+ </div></div>
+ <div id="rec-related" class="tab-panel"><section class="card"><div class="card-head"><h3>All related records</h3><p class="card-desc">Records connected to ${title}</p></div><div class="card-body" style="padding:14px 0 6px">${relatedFullGroupsHtml(relGroups)}</div></section></div>
+ <div id="rec-activity" class="tab-panel"><section class="card"><div class="card-head"><h3>Activity timeline</h3><p class="card-desc">Calls, emails and messages logged against this record</p></div><ul class="timeline"><li><div class="sub">No interactions logged yet.</div></li></ul></section></div>`;
+ wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r),()=>object360Modal(key,id,title));
 }
 function recordModal(key,fields,record={}){
  const isDoc=['quotes','orders','invoices'].includes(key);
@@ -5231,6 +5329,20 @@ function dependencyExplorerTab(body){
  }
  const options=nodes.filter(n=>n.type===dependencyExplorerState.type);
 
+ // PR-D/3: artifact workbench tools rail - .graph-tools with labeled tool
+ // sections. Every id and data-* hook is unchanged, so the toolbar wiring
+ // (zoom/pan/search/path/sim/share), the depth select, the impact/lineage
+ // toggles and the fields toggle keep working exactly as before.
+ const depToolsHtml=`<aside class="graph-tools" aria-label="Graph tools">
+  <div class="tool-section"><div class="tool-label">Component</div><div class="path-fields"><label>Component type <select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label><label>Component <select id="depComponent" class="select">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label></div></div>
+  <div class="tool-section"><div class="tool-label">Search graph</div><div class="search-wrap" style="width:100%"><input type="search" id="depSearch" class="input ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></div></div>
+  <div class="tool-section"><div class="tool-label">Find path</div><div class="path-fields"><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'} btn-sm" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button>${depPathBarHtml()}</div></div>
+  <div class="tool-section"><div class="tool-label">Viewport</div><div class="zoom-row"><button type="button" class="btn btn-outline btn-sm" id="depZoomOut" title="Zoom out" aria-label="Zoom out">−</button><button type="button" class="btn btn-outline btn-sm" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-outline btn-sm" id="depZoomIn" title="Zoom in" aria-label="Zoom in">+</button><button type="button" class="btn btn-outline btn-sm" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></div><div class="zoom-readout" data-zoom-readout>${Math.round((dependencyExplorerState.zoom||1)*100)}%</div></div>
+  <div class="tool-section"><div class="tool-label">Depth</div><div class="chip-row"><label>Depth <select id="depDepth" class="select" aria-label="Depth">${['1','2','3','all'].map(d=>`<option value="${d}" ${String(dependencyExplorerState.depth)===d?'selected':''}>${d==='all'?'All':d+' hop'+(d==='1'?'':'s')}</option>`).join('')}</select></label></div></div>
+  <div class="tool-section"><div class="tool-label">Analysis</div><div class="chip-row"><button type="button" class="toggle-chip${dependencyExplorerState.showImpact?' active':''}" data-dep-toggle="showImpact" title="Toggle full impact">Impact</button><button type="button" class="toggle-chip${dependencyExplorerState.showLineage?' active':''}" data-dep-toggle="showLineage" title="Toggle full lineage">Lineage</button></div></div>
+  <div class="tool-section"><div class="tool-label">Content</div><div class="chip-row"><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div></div>
+  <div class="tool-section"><div class="tool-label">Simulate</div><div class="path-fields"><button type="button" class="btn btn-secondary btn-sm" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange" class="select"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary btn-sm" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary btn-sm" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button></div></div>
+ </aside>`;
  let graphHtml='';
  let truncatedHits=0;
  const depCounts={};
@@ -5242,27 +5354,11 @@ function dependencyExplorerTab(body){
   const depH=Math.max(600,Math.min(940,Math.round(440+depModel.nodes.length*3.2)));
   depLastCanvasW=depW;depLastCanvasH=depH;
   const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
-  graphHtml=`<div class="ontology-graph-layout"><div style="flex:1;min-width:0">${depSimBannerHtml()}<div class="ontology-toolbar"><span class="ontology-toolbar-group"><button type="button" class="btn btn-secondary btn-sm" id="depZoomIn" title="Zoom in">+</button><button type="button" class="btn btn-secondary btn-sm" id="depZoomOut" title="Zoom out">−</button><button type="button" class="btn btn-secondary btn-sm" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-secondary btn-sm" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></span><span class="ontology-search-wrap"><input type="search" id="depSearch" class="input ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></span><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'}" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button><button type="button" class="btn btn-secondary" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange" class="select"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>${depPathBarHtml()}<div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div>${depDetailPanelHtml(depModel)}</div>`;
+  graphHtml=`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)} neighborhood</h3></div><div class="chip-row"><span class="badge badge-outline">Depth ${String(dependencyExplorerState.depth)==='all'?'All':String(dependencyExplorerState.depth||'2')}</span><span class="badge badge-secondary">${depModel.edges.length} relationships</span>${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}</div></div>${depSimBannerHtml()}<div class="graph-canvas"><div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div><div class="graph-legend">${legendHtml(depExplorerHiddenTypes,depCounts)}</div></div><aside class="graph-detail" aria-label="Selected node">${depDetailPanelHtml(depModel)}</aside>`;
  }
 
 
- body.innerHTML=`<div class="panel">
-  <h3>Ontology Graph</h3>
-  <p class="muted" style="font-size:13px;max-width:640px">Pick any synced component to see what depends on it and what it depends on. Covers ${types.length} component types for now (objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams, glossary terms, metrics, test cases) - the rest of the platform's components are a documented follow-up, not silently missing.</p>
-  ${legendHtml(depExplorerHiddenTypes,depCounts)}
-  <div class="form-row">
-   <label>Component type<select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label>
-   <label>Component<select id="depComponent" class="select">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label>
-   <label>Depth<select id="depDepth" class="select">${['1','2','3','all'].map(d=>`<option value="${d}" ${String(dependencyExplorerState.depth)===d?'selected':''}>${d==='all'?'All':d+' hop'+(d==='1'?'':'s')}</option>`).join('')}</select></label>
-  </div>
-  ${!dependencyExplorerState.id?'<div class="empty">Nothing synced yet for this type.</div>':`
-  <div class="actions" style="margin:12px 0">
-   <button type="button" class="badge ${dependencyExplorerState.showImpact?'badge-info':'badge-secondary'}" data-dep-toggle="showImpact" title="Toggle full impact">Full impact (everything upstream)</button>
-   <button type="button" class="badge ${dependencyExplorerState.showLineage?'badge-info':'badge-secondary'}" data-dep-toggle="showLineage" title="Toggle full lineage">Full lineage (everything downstream)</button>
-   ${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}
-  </div>
-  ${graphHtml}`}
- </div>`;
+ body.innerHTML=`<div class="workbench">${depToolsHtml}${graphHtml||`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>Pick a component</h3></div></div><div class="graph-canvas"><div class="empty" style="padding:48px 24px;text-align:center;color:var(--muted-foreground)">Nothing synced yet for this type.</div></div></div>`}</div>`;
  $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,depth:dependencyExplorerState.depth||'2',inspectType:t,inspectId:first?first.id:null,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()};
  $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,inspectType:dependencyExplorerState.type,inspectId:e.target.value,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
  $('#depDepth')&&($('#depDepth').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,depth:e.target.value};renderAdminTab()});
@@ -5299,7 +5395,7 @@ function adminLanding(){
  const setupDone=setup.every(s=>s.done);
  const attention=adminNeedsAttentionItems();
  const recent=adminRecentChanges(8);
- $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>Admin</span></div><h1>Admin</h1><p class="muted">Configure your workspace, users and automation. Changes save immediately in this browser.</p></div></div>
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active"><div class="page-heading"><div><div class="eyebrow">Administration</div><h2 style="margin-top:5px">Settings</h2><p>Configure your workspace, users and automation. Changes save immediately in this browser.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn btn-outline" id="adminSearchSettings" type="button">Search settings</button><button class="btn btn-ghost btn-sm" data-clear-filter type="button">Back to dashboard</button></div></div>
  ${setupDone?'':`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Setup progress</h3><span class="badge badge-secondary">${setup.filter(s=>s.done).length} of ${setup.length} done</span></div><div class="admin-cat-items">${setup.map(s=>`<div class="admin-cat-item" style="cursor:default"><span class="prc-row-label"><span class="prc-status${s.done?' prc-status-done':''}">${s.done?'✓':'○'}</span>${s.label}</span>${s.done?'<span class="badge badge-success">Done</span>':'<span class="badge badge-outline">To do</span>'}</div>`).join('')}</div></section>`}
  ${attention.length?`<section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Needs attention</h3><span class="badge badge-warning">${attention.length}</span></div><div class="admin-cat-items">${attention.map(a=>`<button type="button" class="admin-cat-item" data-admin-open="${a.tab}"><span>${a.label}</span><span class="prc-row-meta"><span class="badge badge-warning">${a.count}</span><span class="admin-cat-arrow">›</span></span></button>`).join('')}</div></section>`:''}
  <section class="card prc-admin-panel"><div class="prc-panel-head"><h3>Platform health</h3></div><div class="kpi-grid">${adminPlatformHealthHtml()}</div></section>
@@ -5307,8 +5403,9 @@ function adminLanding(){
  ${adminRecentNavHtml()}
  ${recent.length?`<div class="admin-cat-card"><div class="admin-cat-head"><span class="admin-cat-icon">📝</span><div><h3>Recent changes</h3><p class="muted">Across custom objects, fields, rules, workflows, agents and integrations</p></div></div><div class="admin-cat-items">${recent.map(r=>`<div class="admin-cat-item" style="cursor:default;font-weight:400"><span>${r.text}</span><span class="muted" style="font-size:11px">${new Date(r.at).toLocaleDateString()}</span></div>`).join('')}</div></div>`:''}
  </div>
- <div class="admin-landing-grid">${ADMIN_CATEGORIES.map(c=>`<div class="admin-cat-card"><div class="admin-cat-head"><span class="admin-cat-icon">${c.icon}</span><div><h3>${c.label}</h3><p class="muted">${c.note}</p></div></div><div class="admin-cat-items">${c.items.map(k=>`<button class="admin-cat-item" data-admin-open="${k}"><span>${tabLabel(k)}</span><span class="admin-cat-arrow">›</span></button>`).join('')}</div></div>`).join('')}</div>`;
+ <div class="settings-grid">${ADMIN_CATEGORIES.map(c=>`<article class="card settings-card"><span class="settings-icon" aria-hidden="true">${c.icon}</span><div class="settings-copy"><h3>${c.label}</h3><p>${c.note}</p><div class="settings-meta">${c.items.map(k=>`<button type="button" class="settings-count" data-admin-open="${k}" title="Open ${tabLabel(k)}">${tabLabel(k)}</button>`).join('')}</div></div></article>`).join('')}</div></div></div>`;
  $('[data-clear-filter]').onclick=()=>{current='dashboard';viewFilter=null;renderView()};
+ const adminSearchBtn=$('#adminSearchSettings');if(adminSearchBtn)adminSearchBtn.onclick=()=>openCmdPalette();
  document.querySelectorAll('[data-admin-open]').forEach(b=>b.onclick=()=>{adminTab=b.dataset.adminOpen;adminView='tool';renderView()});
  document.querySelectorAll('[data-pin-admin]').forEach(b=>b.onclick=e=>{
   e.stopPropagation();
@@ -5316,9 +5413,15 @@ function adminLanding(){
   if(h){h.pinned=!h.pinned;save();adminLanding()}
  });
 }
+// Modern UI PR-D (Worker 4): artifact settings-page language for admin
+// section pages - the eyebrow names the category the tab belongs to and the
+// description reuses that category's own note, so both stay real data.
+function adminCategoryForTab(tab){return ADMIN_CATEGORIES.find(c=>c.items.includes(tab))||null}
+function adminEyebrowSuffix(tab){const c=adminCategoryForTab(tab);return c?` / ${c.label}`:''}
+function adminTabBlurb(tab){const c=adminCategoryForTab(tab);return c?c.note:'Configure this part of the workspace.'}
 function adminToolView(){
  recordAdminVisit(adminTab);
- $('#view').innerHTML=`<div class="page-head"><div><div class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><button data-admin-home>Admin</button><span>›</span><span>${tabLabel(adminTab)}</span></div><h1>${tabLabel(adminTab)}</h1></div></div><div id="adminBody" class="admin-body"></div>`;
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active"><div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" data-clear-filter type="button">Dashboard</button><button class="btn btn-ghost btn-sm" data-admin-home type="button"><span class="chevron-right" aria-hidden="true" style="transform:scaleX(-1);display:inline-block">›</span> All settings</button></div><div class="page-heading"><div><div class="eyebrow">Administration${adminEyebrowSuffix(adminTab)}</div><h2 style="margin-top:5px">${tabLabel(adminTab)}</h2><p>${adminTabBlurb(adminTab)}</p></div></div><div id="adminBody" class="admin-body"></div></div></div>`;
  $('[data-clear-filter]').onclick=()=>{current='dashboard';viewFilter=null;renderView()};
  $('[data-admin-home]').onclick=()=>{adminView='landing';renderView()};
  renderAdminTab();
@@ -7437,7 +7540,7 @@ function themeDiffEntries(a,b){
 function themeDiffHtml(a,b){
  const rows=themeDiffEntries(a,b);
  if(!rows.length)return `<p class="muted">v${a.version} and v${b.version} are identical - no token changed.</p>`;
- return `<div class="table-wrap"><table class="table"><thead><tr><th>Token</th><th>v${a.version} — ${a.name}</th><th>v${b.version} — ${b.name}</th></tr></thead><tbody>${rows.map(r=>`<tr><td><code>${r.path}</code></td><td style="word-break:break-all">${r.a}</td><td style="word-break:break-all">${r.b}</td></tr>`).join('')}</tbody></table></div>`;
+ return `<div class="table-wrap"><table class="token-table"><thead><tr><th>Token</th><th>v${a.version} — ${a.name}</th><th>v${b.version} — ${b.name}</th></tr></thead><tbody>${rows.map(r=>`<tr><td><code>${r.path}</code></td><td style="word-break:break-all">${r.a}</td><td style="word-break:break-all">${r.b}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function themeDiffModal(id){
  const current=data.themeVersions.find(t=>t.id===id);
@@ -7465,10 +7568,10 @@ function themeVersionRowHtml(v){
 // Modern UI PR-C (TS-7): the audit-log panel rendered inside Theme Studio.
 function themeAuditLogHtml(){
  const rows=(data.themeAudit||[]).slice().reverse();
- return `<div class="panel"><div class="panel-head"><h3>Audit log</h3></div>
- <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Version</th><th>Name</th></tr></thead><tbody>
+ return `<section class="card"><div class="card-head"><h3>Audit log</h3><p class="card-desc">Every publish, rollback, draft delete and scheduled publish.</p></div><div class="card-body" style="padding-top:14px">
+ <div class="table-wrap"><table class="token-table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Version</th><th>Name</th></tr></thead><tbody>
  ${rows.map(e=>`<tr><td>${new Date(e.at).toLocaleString()}</td><td>${e.by}</td><td>${e.action}</td><td>v${e.version}</td><td>${e.name}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No theme activity yet - publishes, rollbacks, deletes and scheduled publishes are recorded here.</td></tr>'}
- </tbody></table></div></div>`;
+ </tbody></table></div></div></section>`;
 }
 // Modern UI PR-C (TS-7): reads the row's datetime-local input and stamps
 // scheduledFor on the draft; themePublishDueScheduled() fires it later.
@@ -7492,24 +7595,23 @@ function themeStudioTab(body){
  // Modern UI PR-C (TS-8): without the manage_themes capability Theme Studio
  // is hidden entirely - the tab renders a no-permission panel instead.
  if(!canManageThemes()){
-  body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Theme Studio</h3><p class="muted" style="font-size:13px">Theme management needs the <code>manage_themes</code> capability, and the <b>Administrator</b> role does not have it - so Theme Studio is hidden. (There is no signed-in user in this demo; the desktop edition resolves this against the real signed-in user's role.)</p></div>`;
+  body.innerHTML=`<div class="admin-panel active"><div class="page-heading"><div><div class="eyebrow">Administration / Experience</div><h2 style="margin-top:5px">Theme Studio</h2><p>Brand colors, typography, shape and density for this workspace.</p></div></div><div class="card"><div class="card-body"><p class="muted" style="font-size:13px;margin:0">Theme management needs the <code>manage_themes</code> capability, and the <b>Administrator</b> role does not have it - so Theme Studio is hidden. (There is no signed-in user in this demo; the desktop edition resolves this against the real signed-in user's role.)</p></div></div></div>`;
   return;
  }
  const versions=(data.themeVersions||[]).slice().sort((a,b)=>b.version-a.version);
  const published=versions.find(v=>v.status==='published');
- body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Theme Studio</h3><p class="muted">Brand colors, typography, shape and density for this workspace. Start from a curated preset or from scratch, then Publish once it passes a WCAG contrast check. Publishing never overwrites history - rolling back creates a new Draft from an older version's tokens and publishes that.</p>
- <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">${THEME_PRESETS.map(([key,name,blurb,tokens])=>`<button type="button" class="template-card" data-preset="${key}" style="text-align:left">
-  <div style="display:flex;gap:4px;margin-bottom:8px">${[tokens.color.brand_primary,tokens.color.brand_secondary,tokens.color.surface_sidebar,tokens.color.status_success].map(c=>`<span style="width:20px;height:20px;border-radius:4px;background:${c};border:1px solid var(--line)"></span>`).join('')}</div>
-  <strong>${name}</strong><p class="muted" style="font-size:12px;margin:4px 0 0">${blurb}</p></button>`).join('')}</div>
- </div>
- <div class="panel"><div class="panel-head"><h3>Versions</h3></div>
- <div class="table-wrap"><table class="table"><thead><tr><th>Version</th><th>Name</th><th>Status</th><th>Published</th><th></th></tr></thead><tbody>
+ body.innerHTML=`<div class="admin-panel active"><div class="page-heading"><div><div class="eyebrow">Administration / Experience</div><h2 style="margin-top:5px">Theme Studio</h2><p>Brand colors, typography, shape and density for this workspace. Start from a curated preset or from scratch, then Publish once it passes a WCAG contrast check. Publishing never overwrites history - rolling back creates a new Draft from an older version's tokens and publishes that.</p></div></div>
+ <section class="card"><div class="card-head"><h3>Start from a preset</h3><p class="card-desc">A curated preset becomes a draft you can keep customizing.</p></div><div class="card-body"><div class="preset-grid">${THEME_PRESETS.map(([key,name,blurb,tokens])=>`<button type="button" class="card settings-card" data-preset="${key}">
+  <span class="swatches" aria-hidden="true">${[tokens.color.brand_primary,tokens.color.brand_secondary,tokens.color.surface_sidebar,tokens.color.status_success].map(c=>`<i class="swatch" style="background:${c}"></i>`).join('')}</span>
+  <span class="settings-copy"><h3>${name}</h3><p>${blurb}</p></span><span class="chevron-right" aria-hidden="true">›</span></button>`).join('')}</div></div></section>
+ <section class="card"><div class="card-head panel-title"><div><h3>Versions</h3><p class="card-desc">Draft → Published → Archived. Publishing never overwrites history.</p></div></div><div class="card-body" style="padding-top:14px">
+ <div class="table-wrap"><table class="token-table"><thead><tr><th>Version</th><th>Name</th><th>Status</th><th>Published</th><th></th></tr></thead><tbody>
  ${versions.map(themeVersionRowHtml).join('')}
  ${!versions.length?`<tr><td colspan="5" class="muted">No theme versions yet - start from a preset above. The workspace keeps its current look until you Publish one.</td></tr>`:''}
- </tbody></table></div></div>
+ </tbody></table></div></div></section>
  ${themeAuditLogHtml()}
  ${themeDraft?themeDraftPanel():''}
- ${published&&!themeDraft?`<p class="muted" style="font-size:13px">Currently published: <strong>${published.name}</strong> (v${published.version}), applied live across this demo.</p>`:''}`;
+ ${published&&!themeDraft?`<p class="muted" style="font-size:13px">Currently published: <strong>${published.name}</strong> (v${published.version}), applied live across this demo.</p>`:''}</div>`;
  body.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{
   const [key,name,,tokens]=THEME_PRESETS.find(p=>p[0]===b.dataset.preset);
   themeDraft={id:null,name:`${name} (custom)`,preset_key:key,tokens:structuredClone(tokens)};
@@ -7655,28 +7757,28 @@ function applyWorkspaceThemeExtras(theme){
 }
 function themeDraftPanel(){
  const d=themeDraft;
- return `<div class="panel"><div class="panel-head"><h3>${d.id?'Edit draft':'New draft'}</h3><button type="button" class="icon-btn" id="themeDraftClose">Close</button></div>
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+ return `<section class="card"><div class="card-head panel-title"><div><h3>${d.id?'Edit draft':'New draft'}</h3><p class="card-desc">Token editor - every change previews live on the right.</p></div><button type="button" class="btn btn-ghost btn-sm" id="themeDraftClose">Close</button></div><div class="card-body">
+ <div class="draft-grid">
  <div>
  <div class="field"><label>Name</label><input id="themeDraftName" value="${d.name}"></div>
  <h4>Colors</h4>
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${THEME_COLOR_FIELDS.map(([key,label])=>`<div class="field"><label>${label}</label><div style="display:flex;gap:6px;align-items:center"><input type="color" data-theme-color="${key}" value="${d.tokens.color[key]}" style="width:36px;height:30px;padding:0" aria-label="${label} (light)"><input data-theme-color-text="${key}" value="${d.tokens.color[key]}" style="flex:1" aria-label="${label} hex (light)"></div><div style="display:flex;gap:6px;align-items:center;margin-top:4px"><span class="muted" style="font-size:11px;width:30px">Dark</span><input type="color" data-theme-color-dark="${key}" value="${(d.tokens.dark||{})[key]||d.tokens.color[key]}" style="width:36px;height:30px;padding:0" aria-label="${label} (dark)"><input data-theme-color-dark-text="${key}" value="${(d.tokens.dark||{})[key]||''}" placeholder="Inherit light" style="flex:1" aria-label="${label} hex (dark)"></div></div>`).join('')}</div>
+ <div class="table-wrap"><table class="token-table"><thead><tr><th>Token</th><th>Light</th><th>Dark</th></tr></thead><tbody>${THEME_COLOR_FIELDS.map(([key,label])=>`<tr><td><strong>${label}</strong><div class="muted" style="font-size:11px"><code>${key}</code></div></td><td><div class="control-row"><input type="color" data-theme-color="${key}" value="${d.tokens.color[key]}" style="width:36px;height:30px;padding:0" aria-label="${label} (light)"><input data-theme-color-text="${key}" value="${d.tokens.color[key]}" style="flex:1;min-width:0" aria-label="${label} hex (light)"></div></td><td><div class="control-row"><input type="color" data-theme-color-dark="${key}" value="${(d.tokens.dark||{})[key]||d.tokens.color[key]}" style="width:36px;height:30px;padding:0" aria-label="${label} (dark)"><input data-theme-color-dark-text="${key}" value="${(d.tokens.dark||{})[key]||''}" placeholder="Inherit light" style="flex:1;min-width:0" aria-label="${label} hex (dark)"></div></td></tr>`).join('')}</tbody></table></div>
  <h4 title="The color series a multi-row chart (Reports, dashboard chart widgets) cycles through by group index.">Chart palette</h4>
- <div style="display:flex;flex-wrap:wrap;gap:8px">${d.tokens.chart.palette.map((c,i)=>`<div class="field" style="width:90px"><label>Series ${i+1}</label><div style="display:flex;gap:6px;align-items:center"><input type="color" data-theme-chart="${i}" value="${c}" style="width:36px;height:30px;padding:0"><input data-theme-chart-text="${i}" value="${c}" style="width:70px"></div></div>`).join('')}</div>
+ <div class="form-grid">${d.tokens.chart.palette.map((c,i)=>`<div class="field"><label>Series ${i+1}</label><div class="control-row"><input type="color" data-theme-chart="${i}" value="${c}" style="width:36px;height:30px;padding:0" aria-label="Series ${i+1} color"><input data-theme-chart-text="${i}" value="${c}" style="flex:1;min-width:0" aria-label="Series ${i+1} hex"></div></div>`).join('')}</div>
  <h4>Typography</h4>
- <div class="field"><label>Font family</label><input id="themeDraftFont" value="${d.tokens.typography.font_family}"></div>
- <div class="field"><label>Base size (px)</label><input id="themeDraftSize" type="number" value="${d.tokens.typography.base_size_px}"></div>
+ <div class="form-grid"><div class="field"><label>Font family</label><input id="themeDraftFont" value="${d.tokens.typography.font_family}"></div>
+ <div class="field"><label>Base size (px)</label><input id="themeDraftSize" type="number" value="${d.tokens.typography.base_size_px}"></div></div>
  <h4>Shape &amp; density</h4>
- <div class="field"><label>Corner radius</label><select id="themeDraftRadius"><option value="sharp" ${d.tokens.shape.radius_scale==='sharp'?'selected':''}>Sharp</option><option value="soft" ${d.tokens.shape.radius_scale==='soft'?'selected':''}>Soft</option><option value="rounded" ${d.tokens.shape.radius_scale==='rounded'?'selected':''}>Rounded</option></select></div>
+ <div class="form-grid"><div class="field"><label>Corner radius</label><select id="themeDraftRadius"><option value="sharp" ${d.tokens.shape.radius_scale==='sharp'?'selected':''}>Sharp</option><option value="soft" ${d.tokens.shape.radius_scale==='soft'?'selected':''}>Soft</option><option value="rounded" ${d.tokens.shape.radius_scale==='rounded'?'selected':''}>Rounded</option></select></div>
  <div class="field"><label>Radius override <span class="muted" style="font-size:11px">(px/rem, optional)</span></label><input id="themeDraftRadiusPx" placeholder="e.g. 10px or 0.625rem" value="${d.tokens.shape.radius_px||''}"></div>
  <div class="field"><label>Shadow scale</label><select id="themeDraftShadow"><option value="subtle" ${(d.tokens.shadow||'balanced')==='subtle'?'selected':''}>Subtle</option><option value="balanced" ${(d.tokens.shadow||'balanced')==='balanced'?'selected':''}>Balanced</option><option value="dramatic" ${(d.tokens.shadow||'balanced')==='dramatic'?'selected':''}>Dramatic</option></select><div id="themeShadowPreview" style="margin-top:8px">${themeShadowPreviewHtml(d.tokens)}</div></div>
  <div class="field"><label>Density</label><select id="themeDraftDensity"><option value="comfortable" ${d.tokens.density==='comfortable'?'selected':''}>Comfortable</option><option value="compact" ${d.tokens.density==='compact'?'selected':''}>Compact</option><option value="dense" ${d.tokens.density==='dense'?'selected':''}>Dense</option></select></div>
- <div class="field"><label>Density preview</label><div id="themeDensityPreview">${themeDensityPreviewHtml(d.tokens)}</div></div>
+ <div class="field"><label>Density preview</label><div id="themeDensityPreview">${themeDensityPreviewHtml(d.tokens)}</div></div></div>
  <h4>Motion</h4>
  <div class="field"><label>Motion budget</label><select id="themeDraftMotion"><option value="full" ${(d.tokens.motion||'full')==='full'?'selected':''}>Full — all transitions &amp; effects</option><option value="reduced" ${(d.tokens.motion||'full')==='reduced'?'selected':''}>Reduced — subtle only</option><option value="none" ${(d.tokens.motion||'full')==='none'?'selected':''}>None — no animation</option></select><p class="muted" style="font-size:12px;margin:4px 0 0">Reduced keeps motion subtle; None disables transitions and effects app-wide.</p></div>
  <h4>Component styles</h4>
  <p class="muted" style="font-size:12px;margin:0 0 8px">Per-component variant defaults — no code needed. "Catalog default" removes the override.</p>
- <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+ <div class="form-grid">
  <div class="field"><label>Primary button</label><select id="themeDraftBtnVariant">${themeOverrideOptions((d.tokens.overrides||{}).primaryButton||'',[['solid','Solid'],['shimmer','Shimmer'],['outline','Outline']])}</select></div>
  <div class="field"><label>Card style</label><select id="themeDraftCardStyle">${themeOverrideOptions((d.tokens.overrides||{}).cardStyle||'',[['bordered','Bordered'],['elevated','Elevated'],['beam','Border beam']])}</select></div>
  <div class="field"><label>Table density</label><select id="themeDraftTableDensity">${themeOverrideOptions((d.tokens.overrides||{}).tableDensity||'',[['comfortable','Comfortable'],['compact','Compact']])}</select></div>
@@ -7690,11 +7792,11 @@ function themeDraftPanel(){
  <div class="field"><label>Logo <span class="muted" style="font-size:11px">(sidebar, topbar, public nav)</span></label><input type="file" id="themeDraftLogo" accept="image/svg+xml,image/png,image/jpeg,image/webp"><div class="muted" style="font-size:11px;margin-top:4px"><span id="themeDraftLogoName"></span> <button type="button" class="link-btn" id="themeDraftLogoClear">Remove</button></div></div>
  <div class="field"><label>Favicon</label><input type="file" id="themeDraftFavicon" accept="image/svg+xml,image/png,image/x-icon"><div class="muted" style="font-size:11px;margin-top:4px"><span id="themeDraftFaviconName"></span> <button type="button" class="link-btn" id="themeDraftFaviconClear">Remove</button></div></div>
  <div class="field"><label>Hero artwork <span class="muted" style="font-size:11px">(homepage hero)</span></label><input type="file" id="themeDraftHeroArt" accept="image/svg+xml,image/png,image/jpeg,image/webp"><div class="muted" style="font-size:11px;margin-top:4px"><span id="themeDraftHeroArtName"></span> <button type="button" class="link-btn" id="themeDraftHeroArtClear">Remove</button></div></div>
- <div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn btn-secondary" id="themeCheckContrast">Check contrast</button><button type="button" class="btn btn-primary" id="themeSaveDraft">Save draft</button></div>
+ <div class="control-row" style="margin-top:12px"><button type="button" class="btn btn-secondary" id="themeCheckContrast">Check contrast</button><button type="button" class="btn btn-primary" id="themeSaveDraft">Save draft</button></div>
  <div id="themeIssuesBox" style="margin-top:8px">${themeIssuesHtml()}</div>
  </div>
  <div><h4>Live preview</h4><div id="themePreview"></div></div>
- </div></div>`;
+ </div></div></section>`;
 }
 function themeIssuesHtml(){
  if(!themeIssues)return '';
