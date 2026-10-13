@@ -2333,18 +2333,18 @@ function savedViewBarHtml(key,cfg,statusField){
   return active.statusFilter!==vs.statusFilter||active.sortField!==vs.sortField||active.sortDirection!==vs.sortDirection||active.groupByField!==vs.groupByField;
  })();
  const activeView=views.find(v=>v.id===vs.activeId);
- return `<div class="view-bar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0">
-  <select id="viewSelect" style="min-width:160px">
+ return `<div class="view-bar">
+  <select id="viewSelect" class="select view-bar-select" style="min-width:170px;width:auto">
    <option value="">All records (no view)</option>
    ${views.map(v=>`<option value="${v.id}" ${v.id===vs.activeId?'selected':''}>${v.isDefault?'★ ':''}${v.name}</option>`).join('')}
   </select>
-  ${statusField?`<label style="display:flex;align-items:center;gap:6px;font-size:13px">Status<select id="viewStatusFilter"><option value="">Any</option>${statusField[3].split('|').map(o=>`<option value="${o}" ${o===vs.statusFilter?'selected':''}>${o}</option>`).join('')}</select></label>`:''}
-  <label style="display:flex;align-items:center;gap:6px;font-size:13px">Sort by
-   <select id="viewSort"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.sortField?'selected':''}>${c[1]}</option>`).join('')}</select>
+  ${statusField?`<label class="view-bar-label">Status<select id="viewStatusFilter" class="select view-bar-select" style="width:auto"><option value="">Any</option>${statusField[3].split('|').map(o=>`<option value="${o}" ${o===vs.statusFilter?'selected':''}>${o}</option>`).join('')}</select></label>`:''}
+  <label class="view-bar-label">Sort by
+   <select id="viewSort" class="select view-bar-select" style="width:auto"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.sortField?'selected':''}>${c[1]}</option>`).join('')}</select>
    ${vs.sortField?`<button type="button" class="icon-btn" id="viewSortDir" title="Toggle direction">${vs.sortDirection==='desc'?'↓':'↑'}</button>`:''}
   </label>
-  <label style="display:flex;align-items:center;gap:6px;font-size:13px">Group by
-   <select id="viewGroup"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.groupByField?'selected':''}>${c[1]}</option>`).join('')}</select>
+  <label class="view-bar-label">Group by
+   <select id="viewGroup" class="select view-bar-select" style="width:auto"><option value="">—</option>${sortableFields.map(c=>`<option value="${c[0]}" ${c[0]===vs.groupByField?'selected':''}>${c[1]}</option>`).join('')}</select>
   </label>
   ${isDirty?`<button type="button" class="link-btn" id="viewSaveNew">Save as view…</button>`:''}
   ${activeView&&isDirty?`<button type="button" class="link-btn" id="viewUpdate">Update "${activeView.name}"</button>`:''}

@@ -2036,3 +2036,10 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 .admin-top-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:20px;align-items:start}
 @media(max-width:1100px){.admin-top-grid{grid-template-columns:minmax(0,1fr)}}
 .admin-top-grid .card{margin:0}
+
+/* ===== Filter bar modernization ===== */
+.view-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg)}
+.view-bar-label{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted)}
+.view-bar-select{width:auto;min-height:36px;padding:7px 30px 7px 12px;font-size:13px;border-color:transparent;background-color:var(--secondary)}
+.view-bar-select:hover{border-color:var(--line)}
+.view-bar-select:focus{border-color:var(--ring)}
