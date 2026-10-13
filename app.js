@@ -858,6 +858,84 @@ let object360HiddenTypes=new Set();
 // `null` means "use the default CSS position" (top-right).
 let depExplorerCardPos=null;
 let object360CardPos=null;
+// PR4: Object 360 modal flexibility - maximize/restore + drag-resize state,
+// module-level like the card position so it survives re-renders.
+let o360ModalMax=false;
+let o360ModalSize=null;
+// PR4: wire the Object 360 modal chrome - an expand/reduce button in the
+// header plus a drag-resize grip pinned to the modal's bottom-right corner.
+function o360WireModalChrome(){
+ if(typeof document==='undefined')return;
+ const modalEl=document.querySelector('#modal .modal');
+ const head=document.querySelector('#modal .modal-head');
+ if(!modalEl||!head)return;
+ modalEl.style.position='relative';
+ if(!head.querySelector('#o360MaxBtn')){
+  const btn=document.createElement('button');
+  btn.type='button';btn.id='o360MaxBtn';btn.className='icon-btn';btn.textContent='\u26F6';btn.title='Expand';
+  btn.style.marginRight='8px';
+  head.insertBefore(btn,head.lastElementChild);
+  btn.onclick=()=>{o360ModalMax=!o360ModalMax;o360ApplyModalSize()};
+ }
+ if(!document.querySelector('#o360ResizeGrip')){
+  const grip=document.createElement('div');
+  grip.id='o360ResizeGrip';grip.className='o360-resize-handle';grip.title='Drag to resize';
+  grip.style.position='fixed';grip.style.zIndex='101';
+  document.querySelector('#modal').appendChild(grip);
+  const place=()=>{const g=document.querySelector('#o360ResizeGrip');const m=document.querySelector('#modal .modal');if(!g||!m)return;const r=m.getBoundingClientRect();g.style.left=(r.right-36)+'px';g.style.top=(r.bottom-36)+'px'};
+  place();
+  modalEl.addEventListener('scroll',place,{passive:true});
+  window.addEventListener('resize',place);
+  const obs=new MutationObserver(place);
+  obs.observe(modalEl,{attributes:true,attributeFilter:['style']});
+  grip.onpointerdown=(e)=>{
+   e.preventDefault();
+   try{grip.setPointerCapture(e.pointerId)}catch(_){}
+   const r=modalEl.getBoundingClientRect(),sx=e.clientX,sy=e.clientY,sw=r.width,sh=r.height;
+   const move=(ev)=>{
+    o360ModalSize={w:Math.round(Math.max(480,Math.min(window.innerWidth-40,sw+ev.clientX-sx))),h:Math.round(Math.max(420,Math.min(window.innerHeight-40,sh+ev.clientY-sy)))};
+    o360ModalMax=false;o360ApplyModalSize();
+   };
+   const up=()=>{grip.removeEventListener('pointermove',move);grip.removeEventListener('pointerup',up);grip.removeEventListener('pointercancel',up)};
+   grip.addEventListener('pointermove',move);grip.addEventListener('pointerup',up);grip.addEventListener('pointercancel',up);
+  };
+ }
+ o360ApplyModalSize();
+}
+function o360ApplyModalSize(){
+ if(typeof document==='undefined')return;
+ const modalEl=document.querySelector('#modal .modal');if(!modalEl)return;
+ const maxBtn=document.querySelector('#o360MaxBtn');
+ if(o360ModalMax){
+  modalEl.style.width='calc(100vw - 40px)';modalEl.style.height='calc(100vh - 40px)';
+  modalEl.style.maxWidth='none';modalEl.style.maxHeight='none';
+  if(maxBtn){maxBtn.textContent='\u26F7';maxBtn.title='Reduce'}
+ }else if(o360ModalSize){
+  modalEl.style.width=o360ModalSize.w+'px';modalEl.style.height=o360ModalSize.h+'px';
+  modalEl.style.maxWidth='none';modalEl.style.maxHeight='none';
+  if(maxBtn){maxBtn.textContent='\u26F6';maxBtn.title='Expand'}
+ }else{
+  modalEl.style.width='min(1100px,95vw)';modalEl.style.height='';modalEl.style.maxWidth='';modalEl.style.maxHeight='92vh';
+  if(maxBtn){maxBtn.textContent='\u26F6';maxBtn.title='Expand'}
+ }
+ const grip=document.querySelector('#o360ResizeGrip');
+ if(grip){const r=modalEl.getBoundingClientRect();grip.style.left=(r.right-36)+'px';grip.style.top=(r.bottom-36)+'px'}
+}
+// PR4: dock the Object 360 inspector card left/right as an alternative to
+// dragging it - the card is no longer stuck at a fixed position.
+function o360WireCardDock(){
+ const head=document.querySelector('#o360InspectorHead'),card=document.querySelector('#o360InspectorCard');
+ if(!head||!card||head.querySelector('.o360-dock-btn'))return;
+ const mk=(label,title,side)=>{
+  const b=document.createElement('button');
+  b.type='button';b.className='icon-btn o360-dock-btn';b.textContent=label;b.title=title;
+  b.style.cssText+=';padding:4px 7px;font-size:11px;margin-left:6px;flex-shrink:0';
+  b.onclick=(e)=>{e.stopPropagation();object360CardPos={dock:side};renderObject360Body()};
+  return b;
+ };
+ head.appendChild(mk('\u21E4','Dock panel to the left','left'));
+ head.appendChild(mk('\u21E5','Dock panel to the right','right'));
+}
 // Generic pointer-based (mouse+touch) drag for a `.ontology-inspector-card`
 // via its own `.ontology-inspector-head` - mirrors the desktop edition's
 // React pointer-event drag handling exactly, just against the DOM
@@ -2498,7 +2576,8 @@ function o360RecordDriver(rootEntityType,rootEntityId){
   maxDepth:(depth>=1&&depth<=3)?depth:2,
   expanded:s.expanded||{},
   collapsed:s.collapsed||{},
-  typeLabel:(t)=>t==='business_rule'?'Business Rule':t==='workflow'?'Workflow':t==='ai_agent'?'AI Agent':t==='orgUnit'?'Business Unit':(entityLabel(t)||t)
+  typeLabel:(t)=>t==='business_rule'?'Business Rule':t==='workflow'?'Workflow':t==='ai_agent'?'AI Agent':t==='orgUnit'?'Business Unit':(entityLabel(t)||t),
+  ensureRootEdges:true
  };
 }
 function o360ClusterOrder(driver,model){
@@ -2562,6 +2641,7 @@ function object360Modal(entityType,entityId,label){
  modal('Object 360: '+label,'<div id="object360Body"></div>');
  const modalEl=document.querySelector('#modal .modal');
  if(modalEl)modalEl.style.cssText+=';width:min(1100px,95vw);max-height:92vh';
+ o360WireModalChrome();
  renderObject360Body();
 }
 function renderObject360Body(){
@@ -2603,7 +2683,7 @@ function renderObject360Body(){
  const MAXPER=20;
  const inspectIsRoot=s.inspect.entityType===s.root.entityType&&s.inspect.entityId===s.root.entityId;
  const inspectIsPseudo=['business_rule','workflow','ai_agent'].indexOf(s.inspect.entityType)>=0;
- const o360CardPosStyle=object360CardPos?` style="left:${object360CardPos.left}px;top:${object360CardPos.top}px;right:auto"`:'';
+ const o360CardPosStyle=object360CardPos?(object360CardPos.dock==='left'?` style="left:16px;top:16px;right:auto"`:(object360CardPos.dock==='right'?` style="right:16px;top:16px;left:auto"`:` style="left:${object360CardPos.left}px;top:${object360CardPos.top}px;right:auto"`)):'';
  let inspectorHtml;
  if(s.inspect.entityType==='orgUnit'){
   inspectorHtml=`<div class="ontology-inspector-card" id="o360InspectorCard"${o360CardPosStyle}>
@@ -2687,7 +2767,7 @@ function renderObject360Body(){
 
  body.innerHTML=`<p class="muted" style="font-size:13px;max-width:720px">Every record directly linked to ${s.root.label}, its Business Unit, the Business Rules/Workflows that apply to records like it, and which AI Agents are scoped to act on it.</p>
  ${crumbHtml}
- <div class="o360-toolbar">${legendHtmlStr}<label class="o360-depth">Depth <select id="o360Depth">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label></div>
+ <div class="o360-toolbar">${legendHtmlStr}<label class="o360-depth">Depth <select id="o360Depth">${['1','2','3'].map(d=>`<option value="${d}"${String(s.depth||'2')===d?' selected':''}>${d}</option>`).join('')}</select></label><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="o360FieldsToggle"${object360HiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>
  <div class="ontology-graph-wrap" style="height:${H+40}px">
   <div class="ontology-graph-canvas" style="width:${W}px;height:${H}px">${graphHtml}${inspectorHtml}</div>
  </div>`;
@@ -2718,7 +2798,9 @@ function renderObject360Body(){
  const ontoBtn=$('#o360OpenOntology'); if(ontoBtn)ontoBtn.onclick=()=>openOntologyGraphFor(object360State.root.entityType);
  const pseudoBtn=$('#o360OpenPseudoAdmin'); if(pseudoBtn)pseudoBtn.onclick=()=>{const t={business_rule:'rules',workflow:'workflow',ai_agent:'aiAgents'}[object360State.inspect.entityType];closeModal();current='admin';adminTab=t;adminView='tool';renderView()};
  const depthSel=$('#o360Depth'); if(depthSel)depthSel.onchange=(e)=>{object360State={...object360State,depth:e.target.value};renderObject360Body()};
+ const o360FieldsT=$('#o360FieldsToggle'); if(o360FieldsT)o360FieldsT.onchange=(e)=>{if(e.target.checked)object360HiddenTypes.delete('custom_field');else object360HiddenTypes.add('custom_field');renderObject360Body()};
  makeInspectorCardDraggable($('#o360InspectorCard'),$('#o360InspectorHead'),(left,top)=>{object360CardPos={left,top}});
+ o360WireCardDock();
 }
 function companyDetail(id){
  const c=byId('companies',id);
@@ -4352,6 +4434,15 @@ function graphModel(driver){
    if(!seen.has(k)){seen.add(k);addNode(h.type,h.id,baseDepth+1)}
   }
  }
+  // PR4: Object 360 completeness - every depth-1 member must show a visible
+ // edge to the central record. The drivers already emit one per member;
+ // this is belt-and-braces so a cluster can never silently lose a member.
+ if(driver.ensureRootEdges){
+  const pr4rk=driver.nodeKey(driver.rootType,driver.rootId);
+  const pr4touch=new Set();
+  edges.forEach(e=>{if(e.fromKey===pr4rk)pr4touch.add(e.toKey);if(e.toKey===pr4rk)pr4touch.add(e.fromKey)});
+  nodes.forEach(n=>{if(n.depth===1&&n.key!==pr4rk&&!pr4touch.has(n.key)){addEdge(driver.rootType,driver.rootId,n.type,n.id,'linked_record');pr4touch.add(n.key)}});
+ }
  const model={nodes:Array.from(nodes.values()),edges,truncated};
  depApplyCollapse(model,driver.collapsed,driver.typeLabel);
  return model;
@@ -4406,7 +4497,7 @@ function graphLayoutPositions(model,layout){
  visible.forEach(n=>{
   if(n.key===rootKey){pos.set(n.key,{x:W/2,y:H/2});return}
   const a=anchors[n.type]||{x:W/2,y:H/2};
-  pos.set(n.key,{x:a.x+(rng()-0.5)*170,y:a.y+(rng()-0.5)*170});
+  pos.set(n.key,{x:a.x+(rng()-0.5)*90,y:a.y+(rng()-0.5)*90});
  });
  const TICKS=visible.length>260?60:110;
  const K=54,LINK_LEN=125;
@@ -4437,8 +4528,19 @@ function graphLayoutPositions(model,layout){
    if(n.key===rootKey)return;
    const p=pos.get(n.key),d=disp.get(n.key);
    const a=anchors[n.type]||{x:W/2,y:H/2};
-   d.x+=(a.x-p.x)*0.03+(W/2-p.x)*0.006;
-   d.y+=(a.y-p.y)*0.03+(H/2-p.y)*0.006;
+   d.x+=(a.x-p.x)*0.14+(W/2-p.x)*0.006;
+   d.y+=(a.y-p.y)*0.14+(H/2-p.y)*0.006;
+  });
+  // PR4: intra-cluster cohesion - same-type nodes also pull toward their
+  // type centroid each tick, so every cluster reads as one tight clump.
+  const pr4Centroids=new Map();
+  visible.forEach(n=>{if(n.key===rootKey)return;const c=pr4Centroids.get(n.type)||{x:0,y:0,k:0};const pp=pos.get(n.key);c.x+=pp.x;c.y+=pp.y;c.k++;pr4Centroids.set(n.type,c)});
+  pr4Centroids.forEach(c=>{c.x/=c.k;c.y/=c.k});
+  visible.forEach(n=>{
+   if(n.key===rootKey)return;
+   const c=pr4Centroids.get(n.type);if(!c||c.k<2)return;
+   const pp=pos.get(n.key),dd=disp.get(n.key);
+   dd.x+=(c.x-pp.x)*0.06;dd.y+=(c.y-pp.y)*0.06;
   });
   visible.forEach(n=>{
    if(n.key===rootKey)return;
@@ -4882,6 +4984,8 @@ function depWireToolbar(body){
  };
  const btn360=document.getElementById('depOpen360');
  if(btn360)btn360.onclick=()=>{if(typeof openObject360ForEntity==='function')openObject360ForEntity(dependencyExplorerState.inspectId);else toast('Object 360 is not available here')};
+ const depFieldsT=document.getElementById('depFieldsToggle');
+ if(depFieldsT)depFieldsT.onchange=(e)=>{if(e.target.checked)depExplorerHiddenTypes.delete('custom_field');else depExplorerHiddenTypes.add('custom_field');renderAdminTab()};
 }
 function depExpandableCount(model,type,id){
  const inModel=new Set(model.nodes.map(n=>n.key));
@@ -4935,7 +5039,7 @@ function dependencyExplorerTab(body){
   const depH=Math.max(600,Math.min(940,Math.round(440+depModel.nodes.length*3.2)));
   depLastCanvasW=depW;depLastCanvasH=depH;
   const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
-  graphHtml=`<div class="ontology-graph-layout"><div style="flex:1;min-width:0">${depSimBannerHtml()}<div class="ontology-toolbar"><span class="ontology-toolbar-group"><button type="button" class="btn btn-secondary" id="depZoomIn" title="Zoom in">+</button><button type="button" class="btn btn-secondary" id="depZoomOut" title="Zoom out">−</button><button type="button" class="btn btn-secondary" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-secondary" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></span><span class="ontology-search-wrap"><input type="search" id="depSearch" class="ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></span><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'}" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button><button type="button" class="btn btn-secondary" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button></div>${depPathBarHtml()}<div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div>${depDetailPanelHtml(depModel)}</div>`;
+  graphHtml=`<div class="ontology-graph-layout"><div style="flex:1;min-width:0">${depSimBannerHtml()}<div class="ontology-toolbar"><span class="ontology-toolbar-group"><button type="button" class="btn btn-secondary" id="depZoomIn" title="Zoom in">+</button><button type="button" class="btn btn-secondary" id="depZoomOut" title="Zoom out">−</button><button type="button" class="btn btn-secondary" id="depFit" title="Reset zoom and pan">Fit</button><button type="button" class="btn btn-secondary" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></span><span class="ontology-search-wrap"><input type="search" id="depSearch" class="ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></span><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'}" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button><button type="button" class="btn btn-secondary" id="depSimToggle" title="Preview what a change to the inspected node would affect" ${dependencyExplorerState.inspectId?'':'disabled'}>Simulate change</button><span id="depSimPicker" hidden><select id="depSimChange"><option value="rename">rename</option><option value="delete">delete</option><option value="revoke access">revoke access</option></select> <button type="button" class="btn btn-primary" id="depSimRun">Preview</button></span><button type="button" class="btn btn-secondary" id="depCopyLink" title="Copy a shareable link to this view">Copy link</button><label class="ontology-fields-toggle" title="Field nodes can clutter the graph - hide them here"><input type="checkbox" id="depFieldsToggle"${depExplorerHiddenTypes.has('custom_field')?'':' checked'}> Fields</label></div>${depPathBarHtml()}<div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div>${depDetailPanelHtml(depModel)}</div>`;
  }
 
 
