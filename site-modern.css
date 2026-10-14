@@ -192,3 +192,13 @@
 @media(prefers-reduced-motion:reduce){.modern-site{scroll-behavior:auto}.modern-site .view.active{animation:none}.modern-site *{transition-duration:.001ms!important}}
 .modern-site .logo-img{width:25px;height:25px;border-radius:6px;object-fit:cover;flex-shrink:0}
 .modern-site .wordmark{gap:10px}
+
+/* Collapsible mobile menu groups */
+.modern-site .mobile-group{border-bottom:1px solid var(--line)}
+.modern-site .mobile-group summary{list-style:none;display:flex;align-items:center;justify-content:space-between;padding:12px 4px;font-weight:700;color:var(--text);cursor:pointer}
+.modern-site .mobile-group summary::-webkit-details-marker{display:none}
+.modern-site .mobile-group summary::marker{content:""}
+.modern-site .mobile-plus{font-size:18px;font-weight:400;color:var(--muted);transition:transform .25s ease;line-height:1}
+.modern-site .mobile-group[open] .mobile-plus{transform:rotate(45deg)}
+.modern-site .mobile-group-links{padding:0 0 6px}
+.modern-site .mobile-group-links a{display:block;border-bottom:0;padding:10px 4px 10px 18px;font-weight:600}
