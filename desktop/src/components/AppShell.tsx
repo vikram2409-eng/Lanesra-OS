@@ -6,6 +6,7 @@ import { NotificationBell } from "./NotificationBell";
 import { VoiceModeButton } from "../features/voice/VoiceModeButton";
 import { api } from "../lib/api";
 import type { CustomObjectDefinition, User } from "../lib/types";
+import logoIcon from "../assets/lanesraos-logo-icon.png";
 
 // Custom-object sections are dynamic (admin-defined at runtime), so their
 // key is a template literal - `custom:<objectKey>` - rather than one more
@@ -166,7 +167,10 @@ export function AppShell({
     <div className="app-shell">
       <AdminCommandPalette onNavigate={onNavigate} onOpenRecord={onOpenSearchResult} onOpenAdminTab={onOpenAdminTab} isAdmin={isAdmin} />
       <nav className="sidebar">
-        <div className="sidebar-brand">Lanesra OS</div>
+        <div className="sidebar-brand">
+          <img src={logoIcon} alt="LanesraOS" className="brand-logo" />
+          <span>Lanesra OS</span>
+        </div>
         {accessibleApps.length > 0 && (
           <select
             className="app-switcher"
