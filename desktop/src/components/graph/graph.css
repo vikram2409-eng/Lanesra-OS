@@ -1,0 +1,362 @@
+/**
+ * PR 2 — Desktop Ontology Graph: styles.
+ *
+ * Ported from the demo's styles.css (og-pill, og-toolbar-card,
+ * og-cluster-label, hover spotlight, legend sync). Uses CSS variables
+ * with fallbacks so it works with or without the PR 1 token theme.
+ */
+
+/* Canvas */
+.ontology-graph-canvas {
+  position: relative;
+  background-color: var(--canvas, #fbfcfe);
+  background-image: radial-gradient(rgba(100, 116, 139, 0.18) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: 12px;
+  overflow: hidden;
+  will-change: transform;
+}
+.og-pan-inner {
+  will-change: transform;
+}
+
+/* Toolbar card */
+.og-toolbar-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.og-toolbar-card .tool-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.og-toolbar-card .tool-group + .tool-group {
+  padding-left: 16px;
+  border-left: 1px solid #f3f4f6;
+}
+.og-toolbar-card .tool-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.zoom-readout,
+[data-zoom-readout] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  min-width: 44px;
+  text-align: center;
+}
+.toggle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 0 12px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+  background: #fff;
+  color: inherit;
+  transition: all 0.18s ease;
+}
+.toggle-chip::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transition: background 0.18s ease;
+}
+.toggle-chip.active {
+  color: #3730a3;
+  background: #eef2ff;
+  border-color: #a5b4fc;
+}
+.toggle-chip.active::before {
+  background: #4f46e5;
+}
+.toggle-chip:hover {
+  border-color: #cbd5e1;
+}
+.ontology-fields-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ontology-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow: auto;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+.ontology-search-results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ontology-search-results button:hover {
+  background: #f1f5f9;
+}
+
+/* Pill nodes */
+.og-pill {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 1.5px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-size: 12px;
+  font-weight: 500;
+  color: #1f2937;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 2;
+}
+.og-pill:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+.og-pill-root {
+  background: #4f46e5 !important;
+  border-color: #4f46e5 !important;
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 16px;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+.og-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.og-pill-label {
+  line-height: 1.2;
+}
+.og-pill-cluster {
+  border-style: dashed;
+}
+.og-pill-inspecting {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+.og-pill-path {
+  background: #eef2ff !important;
+  border-color: #4f46e5 !important;
+}
+.og-pill-dimmed {
+  opacity: 0.25;
+}
+
+/* Hover spotlight */
+.ontology-graph-canvas.graph-hover-dim .og-pill:not(.graph-hover-on) {
+  opacity: 0.18;
+}
+.og-pill.graph-hover-on {
+  opacity: 1 !important;
+}
+.ontology-graph-canvas.graph-hover-dim svg line:not(.graph-hover-on) {
+  stroke-opacity: 0.06 !important;
+}
+.ontology-graph-canvas.graph-hover-dim .ontology-edge-label:not(.graph-hover-on) {
+  opacity: 0.05;
+}
+.ontology-graph-canvas svg line {
+  transition: opacity 0.2s ease, stroke 0.2s ease;
+}
+
+/* Cluster boundaries */
+.ontology-halo-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 11px;
+  cursor: pointer;
+  z-index: 2;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  white-space: nowrap;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.ontology-halo-label:hover {
+  transform: translate(-50%, -50%) scale(1.05);
+}
+.og-cluster-label {
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent) !important;
+  background: color-mix(in srgb, currentColor 8%, #fff) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+}
+.og-cluster-label:hover {
+  border-color: currentColor !important;
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+/* Edge labels */
+.ontology-edge-label {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 1;
+}
+.ontology-edge-label-access {
+  border-color: #fbbf24;
+  color: #92400e;
+}
+
+/* Legend */
+.ontology-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+.ontology-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ontology-legend-item:hover {
+  border-color: #a5b4fc;
+  color: #3730a3;
+}
+.ontology-legend-item-off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.ontology-legend-count {
+  background: #f1f5f9;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #475569;
+}
+.ontology-legend-item.legend-dim {
+  opacity: 0.3;
+}
+.ontology-legend-item.legend-highlight {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.35);
+  border-color: #4f46e5;
+}
+
+/* Stage header */
+.og-stage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.og-stage-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+.og-stage-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.og-pill-chip {
+  background: #f3f4f6;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .og-toolbar-card {
+    padding: 12px;
+  }
+  .og-toolbar-card .tool-group {
+    width: 100%;
+  }
+  .og-toolbar-card .tool-group + .tool-group {
+    border-left: 0;
+    border-top: 1px solid #f3f4f6;
+    padding-left: 0;
+    padding-top: 8px;
+  }
+  .og-pill {
+    font-size: 11px;
+    padding: 4px 10px;
+    max-width: 44vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .og-pill-root {
+    max-width: 54vw;
+  }
+}
