@@ -33,8 +33,8 @@
 .modern-site .icon-button svg{width:17px;height:17px}
 .modern-site .nav-cta{min-height:38px;padding:0 14px;border-radius:9px;background:var(--text);color:var(--bg);display:inline-flex;align-items:center;text-decoration:none;font-size:13px;font-weight:800}
 .modern-site .menu-toggle{display:none}
-.modern-site .mobile-panel{display:none;padding:8px 0 18px;border-top:1px solid var(--line)}
-.modern-site .mobile-panel.open{display:grid}
+.modern-site .mobile-panel{display:none;padding:8px 0 18px;border-top:1px solid var(--line);background:var(--bg)}
+.modern-site .mobile-panel.open{display:grid;position:absolute;top:100%;left:0;right:0;z-index:60;max-height:calc(100vh - 60px);overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;box-shadow:0 12px 32px rgba(0,0,0,.12)}
 .modern-site .mobile-panel a,.modern-site .mobile-panel button{padding:12px 4px;text-decoration:none;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;color:var(--text);font-weight:700}
 .modern-site .mobile-group-label{padding:14px 4px 4px;color:var(--faint);font:500 10px DM Mono,monospace}
 .modern-site .view{display:none}

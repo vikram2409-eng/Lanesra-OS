@@ -15916,6 +15916,15 @@ function modernSitePage(pageId){
   if(menuToggle && mobilePanel) menuToggle.addEventListener('click', () => {
     const open = mobilePanel.classList.toggle('open');
     menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+  // Close menu on link click and restore scroll
+  if(mobilePanel) mobilePanel.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      mobilePanel.classList.remove('open');
+      document.body.style.overflow = '';
+      if(menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
+    });
   });
   // Copy-code buttons
   root.querySelectorAll('.copy-code').forEach(btn => {
