@@ -2412,3 +2412,12 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
  }
  .og-toolbar-card .tool-group:last-child{border-bottom:none!important;}
 }
+
+/* __clusterBoundaries: dashed cluster ellipse styles */
+.og-cluster-label{
+ border:1px solid color-mix(in srgb, currentColor 35%, transparent)!important;
+ background:color-mix(in srgb, currentColor 8%, #fff)!important;
+ font-size:10px!important;font-weight:700!important;letter-spacing:.02em;
+}
+.og-cluster-label:hover{border-color:currentColor!important;transform:translate(-50%,-50%) scale(1.05);}
+.ontology-graph-canvas ellipse[data-cluster-type]{transition:opacity .2s ease;}

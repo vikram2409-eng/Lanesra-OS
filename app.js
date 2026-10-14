@@ -4900,24 +4900,24 @@ function graphRender(model,ui,W,H){
   if(!pts.length)return;
   const color=ui.colors[type]||'#888';
   const label=(ui.typeLabels[type]||type)+' · '+members.length;
-  let d;
-  if(pts.length===1){const p=pts[0];d='M '+(p.x-36).toFixed(1)+' '+p.y.toFixed(1)+' a 36 36 0 1 0 72 0 a 36 36 0 1 0 -72 0'}
-  else{
-   const hull=depConvexHull(pts);
-   const cx=hull.reduce((a,p)=>a+p.x,0)/hull.length,cy=hull.reduce((a,p)=>a+p.y,0)/hull.length;
-   const padded=hull.map(p=>{const dx=p.x-cx,dy=p.y-cy,dd=Math.sqrt(dx*dx+dy*dy)||1;return{x:p.x+dx/dd*28,y:p.y+dy/dd*28}});
-   d='M '+padded.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L ')+' Z';
-  }
-  haloSvg.push('<path d="'+d+'" fill="'+color+'" fill-opacity="0.10" stroke="#cbd5e1" stroke-opacity="0.35" stroke-width="1.5"/>');
-  const lx=(Math.min.apply(null,pts.map(p=>p.x))+Math.max.apply(null,pts.map(p=>p.x)))/2;
-  const ly=Math.min.apply(null,pts.map(p=>p.y))-16;
-  haloLabels.push('<button type="button" class="ontology-halo-label" '+ui.collapseAttr+'="'+type+'" style="left:'+lx.toFixed(1)+'px;top:'+ly.toFixed(1)+'px" title="Collapse '+label+' into a single node">'+label+' ▾</button>');
+  // __clusterBoundaries: dashed ellipse around same-type node groups
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+  const minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs);
+  const minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
+  const padX=58,padY=44;
+  const ecx=((minX+maxX)/2).toFixed(1),ecy=((minY+maxY)/2).toFixed(1);
+  const erx=Math.max(70,((maxX-minX)/2+padX)).toFixed(1);
+  const ery=Math.max(48,((maxY-minY)/2+padY)).toFixed(1);
+  haloSvg.push('<ellipse data-cluster-type="'+type+'" cx="'+ecx+'" cy="'+ecy+'" rx="'+erx+'" ry="'+ery+'" fill="'+color+'" fill-opacity="0.04" stroke="'+color+'" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="8 6"/>');
+  const lx=(minX+maxX)/2;
+  const ly=minY-14;
+  haloLabels.push('<button type="button" class="ontology-halo-label og-cluster-label" data-cluster-type="'+type+'" '+ui.collapseAttr+'="'+type+'" style="left:'+lx.toFixed(1)+'px;top:'+ly.toFixed(1)+'px;color:'+color+'" title="Collapse '+label+' into a single node">'+label+' ▾</button>');
  });
  // Collapsed clusters: dashed halo + expand affordance.
  model.nodes.filter(n=>n.id==='__cluster__').forEach(n=>{
   const p=pos.get(n.key);if(!p)return;
   const color=ui.colors[n.type]||'#888';
-  haloSvg.push('<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="36" fill="'+color+'" fill-opacity="0.10" stroke="#cbd5e1" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="5 4"/>');
+  haloSvg.push('<circle data-cluster-type="'+n.type+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="36" fill="'+color+'" fill-opacity="0.06" stroke="'+color+'" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="8 6"/>');
   haloLabels.push('<button type="button" class="ontology-halo-label" '+ui.collapseAttr+'="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y-48).toFixed(1)+'px" title="Expand '+n.label+'">'+n.label+' ▸</button>');
  });
  const edgeSvg=[],edgeLabels=[];
@@ -4958,7 +4958,7 @@ function graphRender(model,ui,W,H){
   const pillInner=isRoot
    ?'<span class="og-pill-label">'+short+'</span>'
    :'<span class="og-pill-dot" style="background:'+color+'"></span><span class="og-pill-label">'+short+'</span>';
-  nodeDivs.push('<div class="'+pillCls+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" data-node-key="'+n.key+'" style="'+pillStyle+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'" role="button" tabindex="0">'+pillInner+'</div>');
+  nodeDivs.push('<div class="'+pillCls+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" data-node-key="'+n.key+'" data-og-type="'+n.type+'" style="'+pillStyle+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'" role="button" tabindex="0">'+pillInner+'</div>');
  });
  return '<svg width="'+W+'" height="'+H+'" style="position:absolute;top:0;left:0;pointer-events:none">'+haloSvg.join('')+edgeSvg.join('')+'</svg>'+haloLabels.join('')+edgeLabels.join('')+nodeDivs.join('');
 }
@@ -4992,6 +4992,22 @@ function graphRender(model,ui,W,H){
  if(window.__graphHoverDelegated)return;window.__graphHoverDelegated=true;
  const clearCanvas=(canvas)=>{canvas.classList.remove('graph-hover-dim');canvas.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'))};
  document.addEventListener('mouseover',e=>{
+  // __clusterHover: hovering a cluster label highlights its type group
+  const lbl=e.target.closest?e.target.closest('.og-cluster-label'):null;
+  if(lbl){
+   const canvas=lbl.closest('.ontology-graph-canvas');
+   if(!canvas||!lbl.dataset.clusterType)return;
+   const ctype=lbl.dataset.clusterType;
+   document.querySelectorAll('.ontology-graph-canvas.graph-hover-dim').forEach(c=>{if(c!==canvas){c.classList.remove('graph-hover-dim');c.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'));}});
+   canvas.classList.add('graph-hover-dim');
+   canvas.querySelectorAll('.og-pill').forEach(el=>{
+    el.classList.toggle('graph-hover-on',el.dataset.ogType===ctype);
+   });
+   canvas.querySelectorAll('ellipse[data-cluster-type]').forEach(el=>{
+    el.classList.toggle('graph-hover-on',el.dataset.clusterType===ctype);
+   });
+   return;
+  }
   const dot=e.target.closest?e.target.closest('.og-pill'):null;
   const canvas=dot?dot.closest('.ontology-graph-canvas'):null;
   if(!dot||!canvas||!dot.dataset.nodeKey)return;
@@ -5005,6 +5021,9 @@ function graphRender(model,ui,W,H){
   canvas.classList.add('graph-hover-dim');
   canvas.querySelectorAll('.og-pill').forEach(el=>{
    el.classList.toggle('graph-hover-on',connected.has(el.dataset.nodeKey));
+  });
+  canvas.querySelectorAll('ellipse[data-cluster-type]').forEach(el=>{
+   el.style.opacity=connected.size>1?'':'0.25';
   });
   canvas.querySelectorAll('line[data-edge-from],.ontology-edge-label[data-edge-from]').forEach(el=>{
    el.classList.toggle('graph-hover-on',el.dataset.edgeFrom===key||el.dataset.edgeTo===key);
