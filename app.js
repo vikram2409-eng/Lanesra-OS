@@ -15928,8 +15928,37 @@ function modernSitePage(pageId){
       });
     });
   });
-  window.scrollTo(0, 0);
+    // Hero video sound toggle (homepage)
+  bindHeroIntroSound();
+  // Docs hub: search + browse categories
+  if(pageId==='docs'){ bindDocsHubSearch(root); renderDocsBrowse(root); }
+window.scrollTo(0, 0);
 }
+// Docs hub search: live-filter HELP_CATEGORIES topics
+function bindDocsHubSearch(root){
+ const input=root.querySelector('#docsHubSearch');
+ const results=root.querySelector('#docsHubResults');
+ if(!input||!results||typeof HELP_CATEGORIES==='undefined')return;
+ const flat=HELP_CATEGORIES.flatMap(c=>c.topics.map(t=>({slug:t.slug,title:t.title,summary:t.summary||'',cat:c.label})));
+ function render(q){
+  q=(q||'').trim().toLowerCase();
+  if(!q){results.hidden=true;results.innerHTML='';return}
+  const hits=flat.filter(t=>(t.title+' '+t.summary+' '+t.cat).toLowerCase().includes(q)).slice(0,12);
+  if(!hits.length){results.hidden=false;results.innerHTML='<div class="no-results">No documentation matches "'+q.replace(/</g,'&lt;')+'".</div>';return}
+  results.hidden=false;
+  results.innerHTML=hits.map(h=>`<a href="/help/${h.slug}"><div class="result-title">${h.title.replace(/</g,'&lt;')}</div><div class="result-cat">${h.cat.replace(/</g,'&lt;')}</div></a>`).join('');
+ }
+ input.addEventListener('input',()=>render(input.value));
+ input.addEventListener('focus',()=>render(input.value));
+ document.addEventListener('click',e=>{ if(!e.target.closest('.docs-search-wrap')) results.hidden=true; });
+}
+// Docs hub: render all categories with topic links
+function renderDocsBrowse(root){
+ const wrap=root.querySelector('#docsBrowseCategories');
+ if(!wrap||typeof HELP_CATEGORIES==='undefined')return;
+ wrap.innerHTML=HELP_CATEGORIES.map(c=>`<div class="docs-browse-cat"><h3>${c.icon} ${c.label}</h3><p class="cat-blurb">${(c.blurb||'').slice(0,140)}${(c.blurb||'').length>140?'...':''}</p><ul>${c.topics.map(t=>`<li><a href="/help/${t.slug}">${t.title}</a></li>`).join('')}</ul></div>`).join('');
+}
+
 
 // content and Changelog was renamed Releases. Netlify 301s these at the
 // edge (see _redirects/netlify.toml); this is a client-side fallback for
