@@ -6,6 +6,7 @@ import { ListTable, type ListTableColumn } from "../../components/ListTable";
 import type { Section } from "../../components/AppShell";
 import { sectionFor } from "../../components/GlobalSearch";
 import { useCurrentUser } from "../../lib/useCurrentUser";
+import { Card, CardContent } from "../../components/ui/card";
 import {
   entityTypeLabel,
   type CustomReport,
@@ -81,14 +82,16 @@ function KpiWidgetCard({
   const kpi = KPI_DEFS.find((k) => k.key === widget.config.kpi_key);
   if (!kpi) return null;
   return (
-    <div
+    <Card
       className="kpi-tile"
       style={{ height: "100%", margin: 0, cursor: interactive ? "pointer" : "default" }}
       onClick={interactive ? () => onNavigate(kpi.section) : undefined}
     >
-      <div className="value">{summary ? kpi.value(summary) : "—"}</div>
-      <div className="label">{summary ? kpi.label(summary) : "Loading..."}</div>
-    </div>
+      <CardContent className="pt-6">
+        <div className="text-3xl font-bold tracking-tight">{summary ? kpi.value(summary) : "—"}</div>
+        <div className="text-sm text-muted-foreground mt-1">{summary ? kpi.label(summary) : "Loading..."}</div>
+      </CardContent>
+    </Card>
   );
 }
 
