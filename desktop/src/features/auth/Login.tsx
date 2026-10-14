@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { api, ApiError } from "../../lib/api";
 import type { User } from "../../lib/types";
+import logoIcon from "../../assets/lanesraos-logo-icon.png";
 
 export function Login({ businessName, onLogin }: { businessName: string; onLogin: (user: User) => void }) {
   const [username, setUsername] = useState("");
@@ -26,6 +27,7 @@ export function Login({ businessName, onLogin }: { businessName: string; onLogin
   return (
     <div className="centered-screen">
       <div className="card auth-card">
+        <img src={logoIcon} alt="LanesraOS" className="auth-logo" />
         <h1>{businessName}</h1>
         <p>Sign in to your local Lanesra OS workspace</p>
         {error && <div className="error-banner">{error}</div>}

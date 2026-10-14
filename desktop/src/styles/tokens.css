@@ -1,0 +1,149 @@
+/* Desktop UI Foundation (PR 1) — design tokens ported from the online demo's
+   Modern UI token system (root styles.css, "Modern UI PR-A" block).
+   Light is the default theme (user decision); dark via [data-theme="dark"]
+   on <html> or the OS prefers-color-scheme preference when no explicit
+   choice is set. Token names match the demo exactly so future
+   demo<->desktop ports are mechanical.
+
+   Deliberate deviations from the demo block (documented, not drift):
+   - The demo's legacy aliases (--bg/--panel/--text/--line/--brand/--brand2/
+     --danger mapped to the new tokens, and --muted mapped to
+     --muted-foreground) are NOT ported: the desktop's own styles.css keeps
+     its --bg/--text/--border/--text-muted/--accent names with desktop
+     values (declared after this import, so they win), and the --muted
+     alias would break shadcn --muted-as-surface semantics used by ui.css.
+     Only --warn -> --warning is kept as a harmless convenience.
+   - Dark selectors are html-qualified (html[data-theme="dark"]) so they
+     beat :root on equal specificity regardless of source order. */
+
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #635bff;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --info: #3b82f6;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #635bff66;
+  --sidebar: #111827;
+  --sidebar-foreground: #f4f4f5;
+  --chart-1: #635bff;
+  --chart-2: #0f9d76;
+  --chart-3: #f59e0b;
+  --chart-4: #ef4444;
+  --chart-5: #3b82f6;
+  --chart-6: #8b5cf6;
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.05);
+  --shadow: 0 1px 3px rgba(9, 9, 11, 0.08);
+  --shadow-md: 0 4px 12px rgba(9, 9, 11, 0.08);
+  --shadow-lg: 0 16px 40px rgba(9, 9, 11, 0.12);
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --warn: var(--warning);
+}
+
+/* Explicit dark theme — html-qualified to outrank :root. */
+html[data-theme="dark"] {
+  --background: #0a0f1e;
+  --foreground: #f4f4f5;
+  --card: #111a30;
+  --card-foreground: #f4f4f5;
+  --popover: #16203a;
+  --popover-foreground: #f4f4f5;
+  --primary: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --secondary: #1e2a4a;
+  --secondary-foreground: #f4f4f5;
+  --muted: #1a2440;
+  --muted-foreground: #9aa4bd;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --info: #60a5fa;
+  --border: #26314f;
+  --input: #26314f;
+  --ring: #8b5cf680;
+  --sidebar: #0a0f1e;
+  --sidebar-foreground: #f4f4f5;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* OS dark preference applies only when the user hasn't made an explicit
+   [data-theme] choice. */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) {
+    --background: #0a0f1e;
+    --foreground: #f4f4f5;
+    --card: #111a30;
+    --card-foreground: #f4f4f5;
+    --popover: #16203a;
+    --popover-foreground: #f4f4f5;
+    --primary: #8b5cf6;
+    --primary-foreground: #ffffff;
+    --secondary: #1e2a4a;
+    --secondary-foreground: #f4f4f5;
+    --muted: #1a2440;
+    --muted-foreground: #9aa4bd;
+    --destructive: #f87171;
+    --destructive-foreground: #ffffff;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --info: #60a5fa;
+    --border: #26314f;
+    --input: #26314f;
+    --ring: #8b5cf680;
+    --sidebar: #0a0f1e;
+    --sidebar-foreground: #f4f4f5;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

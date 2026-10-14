@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { api, ApiError } from "../../lib/api";
 import type { User, Workspace } from "../../lib/types";
+import logoIcon from "../../assets/lanesraos-logo-icon.png";
 
 export function FirstRun({ onComplete }: { onComplete: (workspace: Workspace, user: User) => void }) {
   const [businessName, setBusinessName] = useState("");
@@ -41,6 +42,7 @@ export function FirstRun({ onComplete }: { onComplete: (workspace: Workspace, us
   return (
     <div className="centered-screen">
       <div className="card auth-card">
+        <img src={logoIcon} alt="LanesraOS" className="auth-logo" />
         <h1>Welcome to Lanesra OS</h1>
         <p>Set up your local workspace. Everything stays on this computer.</p>
         {error && <div className="error-banner">{error}</div>}
