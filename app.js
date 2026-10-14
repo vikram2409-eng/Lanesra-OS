@@ -15882,10 +15882,59 @@ function bindAnalyticsClicks(){
 }
 const path=location.pathname.replace(/\/$/,'')||'/';
 // /backlog and /changelog are retired URLs - Roadmap absorbed the backlog
+
+// Modern marketing site (full-site mockup rebuild). Renders one of the 12
+// mockup pages inside a .modern-site wrapper with shared header/footer.
+function modernSitePage(pageId){
+  const pages = window.MODERN_PAGES || {};
+  const html = pages[pageId] || pages['home'] || '';
+  const header = window.MODERN_HEADER || '';
+  const footer = window.MODERN_FOOTER || '';
+  document.title = 'Lanesra OS \u2014 Build apps. Create agents. Orchestrate everything.';
+  $('#app').innerHTML = `<div class="modern-site" id="modernSite">${header}<main>${html}</main>${footer}</div>`;
+  const root = document.getElementById('modernSite');
+  // Mark the current page's content as active and nav link as active
+  root.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === pageId));
+  root.querySelectorAll('.nav-link[data-page]').forEach(a => a.classList.toggle('active', a.dataset.page === pageId));
+  // Theme: respect saved preference, default to OS preference
+  try{
+    const saved = localStorage.getItem('modern-theme');
+    if(saved){ root.setAttribute('data-theme', saved); }
+    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){ root.setAttribute('data-theme', 'dark'); }
+  }catch(e){}
+  // Theme toggle
+  const themeBtn = root.querySelector('.theme-toggle');
+  if(themeBtn) themeBtn.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try{ localStorage.setItem('modern-theme', next); }catch(e){}
+  });
+  // Mobile menu toggle
+  const menuToggle = root.querySelector('.menu-toggle');
+  const mobilePanel = root.querySelector('.mobile-panel');
+  if(menuToggle && mobilePanel) menuToggle.addEventListener('click', () => {
+    const open = mobilePanel.classList.toggle('open');
+    menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  // Copy-code buttons
+  root.querySelectorAll('.copy-code').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.copy);
+      if(!target || !navigator.clipboard) return;
+      navigator.clipboard.writeText(target.innerText).then(() => {
+        const old = btn.textContent; btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = old; }, 1400);
+      });
+    });
+  });
+  window.scrollTo(0, 0);
+}
+
 // content and Changelog was renamed Releases. Netlify 301s these at the
 // edge (see _redirects/netlify.toml); this is a client-side fallback for
 // anyone who lands on the SPA directly (e.g. a stale bookmark hitting a
 // preview deploy without the redirect rules), so old links still work.
 if(path==='/backlog'){history.replaceState(null,'','/roadmap');roadmapPage()}
 else if(path==='/changelog'){history.replaceState(null,'','/releases');releasesPage()}
-else if(path==='/demo')appShell();else if(path==='/roadmap')roadmapPage();else if(path==='/releases')releasesPage();else if(path==='/platform'||path==='/build')platformPage();else if(path==='/agent-foundry')agentFoundryPage();else if(path==='/low-code')lowCodePage();else if(path==='/apps')appCatalogPage();else if(path.startsWith('/apps/'))appDetailPage(path.slice(6));else if(path==='/integrations')integrationsPage();else if(path==='/voice')voicePage();else if(path==='/developers')developersPage();else if(path==='/compare')comparePage();else if(path==='/download')downloadPage();else if(path==='/help')helpHubPage();else if(path.startsWith('/help/'))helpTopicPage(path.slice(6));else landing();
+else if(path==='/demo')appShell();else if(path==='/roadmap')roadmapPage();else if(path==='/releases')releasesPage();else if(path==='/platform'||path==='/build')modernSitePage('product-apps');else if(path==='/agent-foundry')modernSitePage('product-agents');else if(path==='/product/orchestration')modernSitePage('product-orchestration');else if(path==='/low-code')lowCodePage();else if(path==='/apps')appCatalogPage();else if(path.startsWith('/apps/'))appDetailPage(path.slice(6));else if(path==='/integrations')modernSitePage('dev-integrations');else if(path==='/voice')voicePage();else if(path==='/developers')modernSitePage('dev-architecture');else if(path==='/developers/apis')modernSitePage('dev-apis');else if(path==='/developers/mcp')modernSitePage('dev-mcp');else if(path==='/developers/solutions')modernSitePage('dev-solutions');else if(path==='/compare')comparePage();else if(path==='/download')downloadPage();else if(path==='/help')modernSitePage('docs');else if(path==='/pricing')modernSitePage('pricing');else if(path==='/open-source')modernSitePage('open-source');else if(path.startsWith('/help/'))helpTopicPage(path.slice(6));else modernSitePage('home');
