@@ -4986,11 +4986,41 @@ function graphRender(model,ui,W,H){
  },{passive:false});
  document.addEventListener('touchend',e=>{if(e.touches.length<2)pinchDist=0;},{passive:true});
 })();
+// __legendSync: mirror graph spotlight in the legend chips.
+function __findLegendForCanvas(canvas){
+ if(!canvas)return null;
+ // Ontology Graph: legend is a sibling within .graph-stage
+ let legend=canvas.closest?canvas.closest('.graph-stage'):null;
+ if(legend){legend=legend.querySelector('.ontology-legend');if(legend)return legend;}
+ // Object 360: legend lives in #object360Body
+ if(canvas.closest&&canvas.closest('#o360MiniGraph')){
+  legend=document.querySelector('#object360Body .ontology-legend');
+  if(legend)return legend;
+ }
+ return null;
+}
+function __syncLegend(canvas,typeSet){
+ const legend=__findLegendForCanvas(canvas);
+ if(!legend)return;
+ legend.querySelectorAll('.ontology-legend-item').forEach(item=>{
+  const t=item.dataset.legendToggle||item.dataset.o360LegendToggle;
+  const inHood=t&&typeSet.has(t);
+  item.classList.toggle('legend-highlight',!!inHood);
+  item.classList.toggle('legend-dim',!inHood);
+ });
+}
+function __clearLegend(canvas){
+ const legend=__findLegendForCanvas(canvas);
+ if(!legend)return;
+ legend.querySelectorAll('.legend-highlight,.legend-dim').forEach(el=>{
+  el.classList.remove('legend-highlight');el.classList.remove('legend-dim');
+ });
+}
 // Graph UX: hover spotlight + double-click to expand.
 // Uses document-level delegation so it survives graph re-renders.
 (function(){
  if(window.__graphHoverDelegated)return;window.__graphHoverDelegated=true;
- const clearCanvas=(canvas)=>{canvas.classList.remove('graph-hover-dim');canvas.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'))};
+ const clearCanvas=(canvas)=>{canvas.classList.remove('graph-hover-dim');canvas.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'));__clearLegend(canvas);};
  document.addEventListener('mouseover',e=>{
   // __clusterHover: hovering a cluster label highlights its type group
   const lbl=e.target.closest?e.target.closest('.og-cluster-label'):null;
@@ -4998,7 +5028,7 @@ function graphRender(model,ui,W,H){
    const canvas=lbl.closest('.ontology-graph-canvas');
    if(!canvas||!lbl.dataset.clusterType)return;
    const ctype=lbl.dataset.clusterType;
-   document.querySelectorAll('.ontology-graph-canvas.graph-hover-dim').forEach(c=>{if(c!==canvas){c.classList.remove('graph-hover-dim');c.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'));}});
+   document.querySelectorAll('.ontology-graph-canvas.graph-hover-dim').forEach(c=>{if(c!==canvas){c.classList.remove('graph-hover-dim');c.querySelectorAll('.graph-hover-on').forEach(el=>el.classList.remove('graph-hover-on'));__clearLegend(c);}});
    canvas.classList.add('graph-hover-dim');
    canvas.querySelectorAll('.og-pill').forEach(el=>{
     el.classList.toggle('graph-hover-on',el.dataset.ogType===ctype);
@@ -5006,6 +5036,7 @@ function graphRender(model,ui,W,H){
    canvas.querySelectorAll('ellipse[data-cluster-type]').forEach(el=>{
     el.classList.toggle('graph-hover-on',el.dataset.clusterType===ctype);
    });
+   __syncLegend(canvas,new Set([ctype]));
    return;
   }
   const dot=e.target.closest?e.target.closest('.og-pill'):null;
@@ -5022,6 +5053,12 @@ function graphRender(model,ui,W,H){
   canvas.querySelectorAll('.og-pill').forEach(el=>{
    el.classList.toggle('graph-hover-on',connected.has(el.dataset.nodeKey));
   });
+  // __legendSync: highlight legend types in the hovered neighborhood
+  const hoodTypes=new Set();
+  canvas.querySelectorAll('.og-pill').forEach(el=>{
+   if(connected.has(el.dataset.nodeKey)&&el.dataset.ogType)hoodTypes.add(el.dataset.ogType);
+  });
+  __syncLegend(canvas,hoodTypes);
   canvas.querySelectorAll('ellipse[data-cluster-type]').forEach(el=>{
    el.style.opacity=connected.size>1?'':'0.25';
   });

@@ -2421,3 +2421,8 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 }
 .og-cluster-label:hover{border-color:currentColor!important;transform:translate(-50%,-50%) scale(1.05);}
 .ontology-graph-canvas ellipse[data-cluster-type]{transition:opacity .2s ease;}
+
+/* __legendSync: legend chips mirror graph hover spotlight */
+.ontology-legend-item{transition:opacity .2s ease,box-shadow .2s ease,border-color .2s ease;}
+.ontology-legend-item.legend-dim{opacity:.3;}
+.ontology-legend-item.legend-highlight{box-shadow:0 0 0 2px rgba(79,70,229,.35);border-color:#4f46e5;}
