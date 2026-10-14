@@ -27,6 +27,8 @@ import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { useReportVoiceContext } from "../voice/VoiceContext";
 import { Object360Modal } from "../../components/Object360Modal";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent } from "../../components/ui/card";
 
 type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
 
@@ -149,19 +151,20 @@ export function CustomObjectRecords({
   }
 
   return (
-    <div>
-      <div className="toolbar">
-        <h2 style={{ margin: 0 }}>
-          {definition.icon} {definition.plural_label}
-        </h2>
-        <button
-          className="btn btn-primary"
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">
+            {definition.icon} {definition.plural_label}
+          </h1>
+        </div>
+        <Button
           onClick={() => setView({ mode: "create" })}
           disabled={!canWrite}
           title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
         >
           + New {definition.singular_label.toLowerCase()}
-        </button>
+        </Button>
       </div>
       <SavedViewBar
         views={views}
@@ -192,14 +195,15 @@ export function CustomObjectRecords({
             selection={selection}
             resolveUser={(id) => users.data?.find((u) => u.id === id)?.display_name}
             actionsColumn={(r) => (
-              <button
-                className="btn"
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => setView({ mode: "edit", id: r.id })}
                 disabled={!canWrite}
                 title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
               >
                 Edit
-              </button>
+              </Button>
             )}
           />
         );
@@ -300,13 +304,14 @@ function RecordForm({
     .map((d) => d.key);
 
   return (
-    <div>
+    <div className="page">
       {existing.data ? (
         <>
-          <div className="toolbar">
-            <button className="btn btn-secondary" onClick={() => setShowObject360(true)}>
+          <div className="page-header">
+            <div />
+            <Button variant="outline" size="sm" onClick={() => setShowObject360(true)}>
               View in Object 360
-            </button>
+            </Button>
           </div>
           {showObject360 && (
             <Object360Modal
@@ -324,7 +329,11 @@ function RecordForm({
           />
         </>
       ) : (
-        <h2>New {definition.singular_label.toLowerCase()}</h2>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">New {definition.singular_label.toLowerCase()}</h1>
+          </div>
+        </div>
       )}
       {existing.data && (
         <AuditByline
@@ -335,6 +344,8 @@ function RecordForm({
         />
       )}
       {error && <div className="error-banner">{error}</div>}
+      <Card>
+        <CardContent className="pt-6">
       <form
         className="form-grid"
         onSubmit={(e) => {
@@ -392,14 +403,16 @@ function RecordForm({
           }}
         />
         <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={save.isPending}>
+          <Button type="submit" disabled={save.isPending}>
             Save
-          </button>
-          <button className="btn" type="button" onClick={onCancel}>
+          </Button>
+          <Button variant="outline" type="button" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
+        </CardContent>
+      </Card>
       {recordId && <AuditTrail entityType={definition.key} entityId={recordId} />}
     </div>
   );
