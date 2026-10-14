@@ -1,0 +1,435 @@
+#!/usr/bin/env python3
+"""Deploy Desktop Custom Objects Modern UI."""
+
+import os
+
+REPO = "."
+
+def write_file(path, content):
+    full = os.path.join(REPO, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    open(full, "w", encoding="utf-8").write(content)
+    print(f"Wrote {path}")
+
+write_file("desktop/src/features/customObjects/CustomObjectRecords.tsx", """import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { api, ApiError } from "../../lib/api";
+import { showRuleMessages } from "../../lib/ruleMessages";
+import { useCustomFieldElements } from "../../components/CustomFieldsSection";
+import { LayoutFormFields } from "../../components/LayoutFormFields";
+import { CustomFieldFilterBar } from "../../components/CustomFieldFilterBar";
+import { AuditByline, AuditTrail } from "../../components/AuditTrail";
+import { OwnershipByline } from "../../components/OwnershipByline";
+import { SavedViewBar } from "../../components/SavedViewBar";
+import { BulkActionBar, type BulkAction } from "../../components/BulkActionBar";
+import { ListTable, type ListTableColumn } from "../../components/ListTable";
+import { QuickPreviewDrawer } from "../../components/QuickPreviewDrawer";
+import { RecordHeader } from "../../components/RecordHeader";
+import { StatusBadge } from "../../components/StatusBadge";
+import type { Prefill } from "../../components/AppShell";
+import {
+  CUSTOM_RECORD_STATUSES,
+  type CustomFieldValues,
+  type CustomObjectDefinition,
+  type CustomRecord,
+  type CustomRecordInput,
+} from "../../lib/types";
+import { useSavedViews } from "../../lib/useSavedViews";
+import { useBulkSelection } from "../../lib/useBulkSelection";
+import { useCanWriteObject } from "../../lib/useCanWriteObject";
+import { useReportVoiceContext } from "../voice/VoiceContext";
+import { Object360Modal } from "../../components/Object360Modal";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent } from "../../components/ui/card";
+
+type View = { mode: "list" } | { mode: "create" } | { mode: "edit"; id: string };
+
+function makeCustomRecordColumns(onOpen: (id: string) => void): ListTableColumn<CustomRecord>[] {
+  return [
+    {
+      key: "display_number",
+      label: "Number",
+      getValue: (r) => r.display_number,
+      render: (r) => (
+        <span className="id-link" onClick={(e) => { e.stopPropagation(); onOpen(r.id); }}>
+          {r.display_number}
+        </span>
+      ),
+      defaultWidth: 110,
+    },
+    { key: "primary_name", label: "Name", getValue: (r) => r.primary_name, defaultWidth: 220 },
+    { key: "status", label: "Status", format: "status", getValue: (r) => r.status, defaultWidth: 120 },
+    { key: "owner_user_id", label: "Owner", format: "owner", getValue: (r) => r.owner_user_id, defaultWidth: 160 },
+  ];
+}
+const DEFAULT_CUSTOM_RECORD_COLUMNS = ["display_number", "primary_name", "status", "owner_user_id"];
+
+/**
+ * Generic list/create/edit screen for records of one admin-defined custom
+ * object (spec §20.2). Mounted once per active custom object from App.tsx,
+ * the same way Products/Contracts/Tasks etc. are - the only difference is
+ * `objectKey`/`definition` come from data instead of being hardcoded, so
+ * one component serves every custom object rather than one per type.
+ *
+ * `prefill.openId` (global search "jump to a record") reuses the same
+ * one-shot mechanism every other list screen already has - there's no
+ * separate read-only "detail" mode here, so it opens straight into Edit,
+ * which already shows every field plus its related-records lists (see
+ * `LayoutFormFields`'s `entityId`/`relatedKeys` props - Screen/App
+ * Builder Phase 3).
+ */
+export function CustomObjectRecords({
+  definition,
+  prefill,
+  onPrefillConsumed,
+}: {
+  definition: CustomObjectDefinition;
+  prefill?: Prefill | null;
+  onPrefillConsumed?: () => void;
+}) {
+  const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "edit", id: prefill.openId } : { mode: "list" }));
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  useEffect(() => {
+    if (prefill?.openId) onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const queryClient = useQueryClient();
+  const records = useQuery({
+    queryKey: ["customRecords", definition.key],
+    queryFn: () => api.listCustomRecords(definition.key),
+  });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+  const views = useSavedViews(definition.key);
+  const fieldFilters = views.filters;
+  const canWrite = useCanWriteObject(definition.key);
+  useReportVoiceContext(definition.key, view.mode === "edit" ? view.id : undefined);
+
+  function invalidate() {
+    queryClient.invalidateQueries({ queryKey: ["customRecords", definition.key] });
+  }
+
+  const ownerName = (id: string | null): string =>
+    id ? users.data?.find((u) => u.id === id)?.display_name ?? "—" : "—";
+
+  const filteredRows = (records.data ?? []).filter((r) => fieldFilters.matches(r.id));
+  const selection = useBulkSelection(filteredRows, (r) => r.id);
+  const customRecordColumns = makeCustomRecordColumns((id) => setView({ mode: "edit", id }));
+  const previewRow = previewId ? filteredRows.find((r) => r.id === previewId) ?? null : null;
+
+  function recordFieldValue(row: CustomRecord, key: string): string {
+    switch (key) {
+      case "primary_name":
+        return row.primary_name;
+      case "status":
+        return row.status;
+      default:
+        return fieldFilters.values[row.id]?.[key] ?? "";
+    }
+  }
+
+  const bulkActions: BulkAction[] = [
+    {
+      key: "status",
+      label: "Change status",
+      valueOptions: CUSTOM_RECORD_STATUSES.map((s) => ({ key: s, label: s })),
+      run: (ids, value) => api.bulkChangeStatus(definition.key, ids, value),
+    },
+    {
+      key: "owner",
+      label: "Reassign owner",
+      valueOptions: (users.data ?? []).map((u) => ({ key: u.id, label: u.display_name })),
+      run: (ids, value) => api.bulkReassignOwner(definition.key, ids, value),
+    },
+    {
+      key: "archive",
+      label: "Archive",
+      confirmMessage: `Archive {n} selected ${definition.plural_label.toLowerCase()}?`,
+      run: (ids) => api.bulkArchive(definition.key, ids),
+    },
+  ];
+
+  if (view.mode !== "list") {
+    return (
+      <RecordForm
+        definition={definition}
+        recordId={view.mode === "edit" ? view.id : undefined}
+        onDone={() => {
+          invalidate();
+          setView({ mode: "list" });
+        }}
+        onCancel={() => setView({ mode: "list" })}
+      />
+    );
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">
+            {definition.icon} {definition.plural_label}
+          </h1>
+        </div>
+        <Button
+          onClick={() => setView({ mode: "create" })}
+          disabled={!canWrite}
+          title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+        >
+          + New {definition.singular_label.toLowerCase()}
+        </Button>
+      </div>
+      <SavedViewBar
+        views={views}
+        fields={[
+          { key: "primary_name", label: "Name" },
+          { key: "status", label: "Status" },
+        ]}
+      />
+      <CustomFieldFilterBar filters={fieldFilters} />
+      <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
+      {records.isLoading && <p>Loading...</p>}
+      {records.data && records.data.length === 0 && (
+        <p className="empty-state">No {definition.plural_label.toLowerCase()} yet.</p>
+      )}
+      {records.data && records.data.length > 0 && (() => {
+        const groups = views.transform(filteredRows, recordFieldValue);
+        return filteredRows.length === 0 ? (
+          <p className="empty-state">No {definition.plural_label.toLowerCase()} match the current filters.</p>
+        ) : (
+          <ListTable<CustomRecord>
+            storageKey={definition.key}
+            columns={customRecordColumns}
+            visibleKeys={views.columnKeys ?? DEFAULT_CUSTOM_RECORD_COLUMNS}
+            onVisibleKeysChange={views.setColumnKeys}
+            groups={groups}
+            getRowId={(r) => r.id}
+            onRowClick={(r) => setPreviewId(r.id)}
+            selection={selection}
+            resolveUser={(id) => users.data?.find((u) => u.id === id)?.display_name}
+            actionsColumn={(r) => (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setView({ mode: "edit", id: r.id })}
+                disabled={!canWrite}
+                title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+              >
+                Edit
+              </Button>
+            )}
+          />
+        );
+      })()}
+      {previewRow && (
+        <QuickPreviewDrawer
+          title={previewRow.primary_name}
+          subtitle={previewRow.display_number}
+          fields={[
+            { label: "Status", value: previewRow.status },
+            { label: "Owner", value: ownerName(previewRow.owner_user_id) },
+          ]}
+          onClose={() => setPreviewId(null)}
+          onOpenFull={() => {
+            setView({ mode: "edit", id: previewRow.id });
+            setPreviewId(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function RecordForm({
+  definition,
+  recordId,
+  onDone,
+  onCancel,
+}: {
+  definition: CustomObjectDefinition;
+  recordId?: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
+  const existing = useQuery({
+    queryKey: ["customRecord", recordId],
+    queryFn: () => api.getCustomRecord(recordId as string),
+    enabled: !!recordId,
+  });
+  const existingCustomFields = useQuery({
+    queryKey: ["customFieldValues", recordId],
+    queryFn: () => api.getCustomFieldValues(recordId as string),
+    enabled: !!recordId,
+  });
+
+  const [input, setInput] = useState<CustomRecordInput>({
+    object_key: definition.key,
+    primary_name: "",
+    status: "Active",
+    owner_user_id: null,
+    notes: null,
+  });
+  const [showObject360, setShowObject360] = useState(false);
+  const [customValues, setCustomValues] = useState<CustomFieldValues>({});
+  const [loadedFor, setLoadedFor] = useState<string | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+
+  if (existing.data && existingCustomFields.data !== undefined && loadedFor !== recordId) {
+    const { primary_name, status, owner_user_id, notes } = existing.data;
+    setInput({ object_key: definition.key, primary_name, status, owner_user_id, notes });
+    setCustomValues(existingCustomFields.data);
+    setLoadedFor(recordId);
+  }
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const record = recordId
+        ? await api.updateCustomRecord(recordId, {
+            primary_name: input.primary_name,
+            status: input.status,
+            owner_user_id: input.owner_user_id,
+            notes: input.notes,
+          })
+        : await api.createCustomRecord(input);
+      const ruleMessages = await api.setCustomFieldValues(definition.key, record.id, customValues);
+      showRuleMessages(ruleMessages);
+      return record;
+    },
+    onSuccess: onDone,
+    onError: (err) => setError(err instanceof ApiError ? err.message : `Could not save this ${definition.singular_label.toLowerCase()}`),
+  });
+
+  const { order: customFieldOrder, elements: customFieldElements } = useCustomFieldElements({
+    entityType: definition.key,
+    status: input.status,
+    values: customValues,
+    onChange: setCustomValues,
+  });
+
+  // Screen/App Builder Phase 3: every relationship this object can show a
+  // related-list for - same set RelatedRecordsCard itself would show
+  // unfiltered, so LayoutFormFields knows what's still "unplaced" if a
+  // layout only claims some of them for a tab.
+  const relationshipDefs = useQuery({ queryKey: ["relationshipDefinitions", "active"], queryFn: () => api.listRelationshipDefinitions(true) });
+  const relatedKeys = (relationshipDefs.data ?? [])
+    .filter((d) => d.show_related_list && (d.source_entity_type === definition.key || d.target_entity_type === definition.key))
+    .map((d) => d.key);
+
+  return (
+    <div className="page">
+      {existing.data ? (
+        <>
+          <div className="page-header">
+            <div />
+            <Button variant="outline" size="sm" onClick={() => setShowObject360(true)}>
+              View in Object 360
+            </Button>
+          </div>
+          {showObject360 && (
+            <Object360Modal
+              entityType={definition.key}
+              entityId={existing.data.id}
+              label={existing.data.primary_name}
+              onClose={() => setShowObject360(false)}
+            />
+          )}
+          <RecordHeader
+            title={existing.data.primary_name}
+            status={<StatusBadge status={existing.data.status} />}
+            recordNumber={existing.data.display_number}
+            owner={<OwnershipByline objectKey={definition.key} recordId={existing.data.id} />}
+          />
+        </>
+      ) : (
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">New {definition.singular_label.toLowerCase()}</h1>
+          </div>
+        </div>
+      )}
+      {existing.data && (
+        <AuditByline
+          createdAt={existing.data.created_at}
+          createdBy={existing.data.created_by}
+          updatedAt={existing.data.updated_at}
+          updatedBy={existing.data.updated_by}
+        />
+      )}
+      {error && <div className="error-banner">{error}</div>}
+      <Card>
+        <CardContent className="pt-6">
+      <form
+        className="form-grid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <LayoutFormFields
+          entityType={definition.key}
+          order={["primary_name", "status", "owner_user_id", "notes", ...customFieldOrder]}
+          entityId={recordId}
+          relatedKeys={relatedKeys}
+          fields={{
+            primary_name: (
+              <div className="form-field full" key="primary_name">
+                <label>Name</label>
+                <input value={input.primary_name} onChange={(e) => setInput({ ...input, primary_name: e.target.value })} required />
+              </div>
+            ),
+            status: (
+              <div className="form-field" key="status">
+                <label>Status</label>
+                <select value={input.status} onChange={(e) => setInput({ ...input, status: e.target.value })}>
+                  {CUSTOM_RECORD_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            owner_user_id: (
+              <div className="form-field" key="owner_user_id">
+                <label>Owner</label>
+                <select
+                  value={input.owner_user_id ?? ""}
+                  onChange={(e) => setInput({ ...input, owner_user_id: e.target.value || null })}
+                >
+                  <option value="">— Unassigned —</option>
+                  {(users.data ?? []).map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ),
+            notes: (
+              <div className="form-field full" key="notes">
+                <label>Notes</label>
+                <textarea value={input.notes ?? ""} onChange={(e) => setInput({ ...input, notes: e.target.value || null })} />
+              </div>
+            ),
+            ...customFieldElements,
+          }}
+        />
+        <div className="form-field full" style={{ flexDirection: "row", gap: 8 }}>
+          <Button type="submit" disabled={save.isPending}>
+            Save
+          </Button>
+          <Button variant="outline" type="button" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+        </CardContent>
+      </Card>
+      {recordId && <AuditTrail entityType={definition.key} entityId={recordId} />}
+    </div>
+  );
+}
+""")
+
+print("Done")
