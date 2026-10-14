@@ -1539,7 +1539,7 @@ function landing(){
  <section id="open-source" class="section"><div class="container mkt-cta"><div class="eyebrow" style="color:var(--brand)">Build it. Install it. Extend it. Own it.</div><h2>Inspect it. Run it. Improve it.</h2><p style="color:var(--muted);max-width:700px;margin:0 auto 24px">Explore a real Lanesra workspace, inspect the source, or start with an industry package and reshape it around your business.</p><div class="mkt-hero-actions" style="justify-content:center;flex-wrap:wrap"><a class="btn btn-primary" href="/demo" data-analytics-event="hero_demo_click" data-analytics-props='{"from":"final-cta"}'>Try Live Demo →</a><a class="btn btn-secondary" href="/help" data-analytics-event="docs_click" data-analytics-props='{"from":"final-cta"}'>Browse Documentation</a><a class="btn btn-secondary" href="https://github.com/vikram2409-eng/Lanesra-OS" target="_blank" rel="noopener" data-analytics-event="github_click" data-analytics-props='{"from":"final-cta"}'>View GitHub</a></div><p style="margin:16px 0 0"><a href="/roadmap" style="color:inherit;text-decoration:underline">See Roadmap →</a> · <a href="/download" style="color:inherit;text-decoration:underline">Download Desktop →</a></p><div class="mkt-trust-row" style="justify-content:center;margin-top:20px"><span>✓ Open source</span><span>✓ Self-hosted</span><span>✓ Offline-first</span><span>✓ AI-provider neutral</span></div></div></section>
  </main>${publicFooter()}
  </div>`;
- bindPublicNav();
+ bindModernChrome(document.getElementById('modernSite'));
  bindHeroIntroSound();
 }
 
@@ -14654,7 +14654,7 @@ function roadmapPage(){
   ],
  });
 
- $('#app').innerHTML=`<div class="site-dark">${publicNav()}<main class="mkt-page"><section class="mkt-page-hero"><div class="container narrow"><div class="eyebrow">Built from the working codebase</div><h1>Roadmap & backlog.</h1><p>What's being built next, what's still waiting on a decision, and everything already shipped — compiled from the actual code (core/server/src-tauri/frontend) plus the online demo, not a wishlist. Every "Shipped" entry below is running code with tests.</p><div class="status-row"><span class="status-chip">Early Access v0.96.0</span><span class="muted">Last updated October 2026</span></div>
+ $('#app').innerHTML=`<div class="modern-site" id="modernSite">${window.MODERN_HEADER||''}<main><div class="site-dark"><div class="mkt-page"><section class="mkt-page-hero"><div class="container narrow"><div class="eyebrow">Built from the working codebase</div><h1>Roadmap & backlog.</h1><p>What's being built next, what's still waiting on a decision, and everything already shipped — compiled from the actual code (core/server/src-tauri/frontend) plus the online demo, not a wishlist. Every "Shipped" entry below is running code with tests.</p><div class="status-row"><span class="status-chip">Early Access v0.96.0</span><span class="muted">Last updated October 2026</span></div>
  <a class="rm-spotlight" href="#cat-${latestCatIndex}"><span class="rm-spotlight-eyebrow"><span class="rm-spotlight-dot"></span>Just shipped</span><span class="rm-spotlight-title"><span class="rm-cat-icon">${latestCat.icon}</span>${latestCat.title}</span><span class="rm-spotlight-arrow">See what's in it →</span></a>
  <div class="backlog-callout" id="desktop"><h3>Release status</h3><p><b>desktop-v0.14.0 is still the latest tagged release</b> (installers attached, Early Access/prerelease as intended). Everything below is merged to <code>main</code> but not yet cut into a tagged installer - the gap between the two has grown substantially since v0.14.0: AI Agent Platform v2's remaining phases (6a's Evaluation Harness expansion), the <b>UX/UI Modernization epic</b> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/190">#190</a>) in full - Design Tokens &amp; Theme Studio, the Shared Visual Builder Framework, Workflow Studio 2.0, Business Rule Board 2.0, Screen Builder 2.0, Agent Studio 2.0, Admin Control Center Modernization and Runtime UX Modernization, all eight sub-issues now shipped - plus <b>Agent Access Governance</b> (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/245">#245</a>, closing two real Tool-Call Firewall gaps and adding a traced Agent Access Inspector) and the <b>Website Refresh</b>'s full 5-phase information-architecture overhaul, <b>Domain A: Intelligence Foundation</b> (the Lanesra System Graph, a Semantic Metadata Layer and a Unified Test/Evaluation Framework) and a Palantir-style <b>Ontology Layer</b> (epic <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/340">#340</a>: typed Object/Link Types, governed Action Types, AI Agent Ontology Binding, the Ontology Graph and Object 360). Everything below (v0.96.0) reflects the working codebase on <code>main</code>, regardless of installer/tag status. Full desktop feature list → <a href="/download">/download</a>, full release history → <a href="/releases">/releases</a>.</p><p class="muted">Repo hygiene: a real MIT <code>LICENSE</code>, <code>CONTRIBUTING.md</code>, <code>CODE_OF_CONDUCT.md</code>, <code>SECURITY.md</code>, issue/PR templates, and a root README written for someone landing on the repo, not a deploy runbook.</p></div>
  </div></section>
@@ -14681,7 +14681,7 @@ function roadmapPage(){
  </section>
 
  </div></section>
- </main>${publicFooter()}</div>`;
+ </div></div></main>${window.MODERN_FOOTER||''}</div>`;
  bindPublicNav();
  bindRoadmapSearch();
 }
@@ -15885,6 +15885,46 @@ const path=location.pathname.replace(/\/$/,'')||'/';
 
 // Modern marketing site (full-site mockup rebuild). Renders one of the 12
 // mockup pages inside a .modern-site wrapper with shared header/footer.
+// Shared chrome bindings for .modern-site pages.
+function bindModernChrome(root){
+  if(!root) return;
+  try{
+    const saved = localStorage.getItem('modern-theme');
+    if(saved){ root.setAttribute('data-theme', saved); }
+    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches){ root.setAttribute('data-theme', 'dark'); }
+  }catch(e){}
+  const themeBtn = root.querySelector('.theme-toggle');
+  if(themeBtn) themeBtn.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme') || 'light';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try{ localStorage.setItem('modern-theme', next); }catch(e){}
+  });
+  const menuToggle = root.querySelector('.menu-toggle');
+  const mobilePanel = root.querySelector('.mobile-panel');
+  if(menuToggle && mobilePanel) menuToggle.addEventListener('click', () => {
+    const open = mobilePanel.classList.toggle('open');
+    menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+  if(mobilePanel) mobilePanel.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      mobilePanel.classList.remove('open');
+      document.body.style.overflow = '';
+      if(menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+  root.querySelectorAll('.copy-code').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.copy);
+      if(!target || !navigator.clipboard) return;
+      navigator.clipboard.writeText(target.innerText).then(() => {
+        const old = btn.textContent; btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = old; }, 1400);
+      });
+    });
+  });
+}
 function modernSitePage(pageId){
   const pages = window.MODERN_PAGES || {};
   const html = pages[pageId] || pages['home'] || '';
