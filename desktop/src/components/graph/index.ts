@@ -22,3 +22,5 @@ export { PillNode, type PillNodeProps } from "./PillNode";
 export { ClusterBoundary, type ClusterBoundaryProps } from "./ClusterBoundary";
 export { GraphToolbar, type GraphToolbarProps, type ComponentOption } from "./GraphToolbar";
 export { GraphLegend, type GraphLegendProps } from "./GraphLegend";
+export { Object360Graph, type Object360GraphProps, type Object360GraphData, type Object360RecordRef, type Object360InspectTarget, entityTypeToSystemType, entityTypeColor, recordNodeKey } from "./Object360Graph";
+export { GraphInspector, type GraphInspectorProps, type InspectorGroup, type InspectorItem, type InspectorAction } from "./GraphInspector";
