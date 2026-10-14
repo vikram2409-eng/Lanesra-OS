@@ -1,5 +1,6 @@
 @import "./styles/tokens.css";
 @import "./components/ui/ui.css";
+@import "./styles/modern-reskin.css";
 
 /* Desktop UI Foundation (PR 1): the app now defaults to the Light theme
    (user decision). An explicit [data-theme] on <html> always wins;
