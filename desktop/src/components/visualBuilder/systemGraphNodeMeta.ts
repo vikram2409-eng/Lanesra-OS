@@ -11,20 +11,20 @@
 // this graph too instead of a second, untouchable palette.
 import type { SystemNodeType } from "../../lib/types";
 
-export const SYSTEM_NODE_TYPE_META: Record<SystemNodeType, { label: string; colorIndex: number }> = {
-  custom_object: { label: "Object", colorIndex: 1 },
-  custom_field: { label: "Field", colorIndex: 2 },
-  relationship: { label: "Relationship", colorIndex: 3 },
-  business_rule: { label: "Business Rule", colorIndex: 4 },
-  workflow: { label: "Workflow", colorIndex: 5 },
-  screen_layout: { label: "Screen Layout", colorIndex: 6 },
-  page_layout: { label: "Page Layout", colorIndex: 1 },
-  ai_agent: { label: "AI Agent", colorIndex: 2 },
-  execution_graph: { label: "Agent Team", colorIndex: 3 },
-  business_glossary_term: { label: "Glossary Term", colorIndex: 4 },
-  metric_definition: { label: "Metric", colorIndex: 5 },
-  test_case_definition: { label: "Test Case", colorIndex: 6 },
-  action_type_definition: { label: "Action Type", colorIndex: 1 },
+export const SYSTEM_NODE_TYPE_META: Record<SystemNodeType, { label: string; colorIndex: number; color: string }> = {
+  custom_object: { label: "Object", colorIndex: 1, color: "#4F46E5" },
+  custom_field: { label: "Field", colorIndex: 2, color: "#64748B" },
+  relationship: { label: "Relationship", colorIndex: 3, color: "#D97706" },
+  business_rule: { label: "Business Rule", colorIndex: 4, color: "#B45309" },
+  workflow: { label: "Workflow", colorIndex: 5, color: "#0F766E" },
+  screen_layout: { label: "Screen Layout", colorIndex: 6, color: "#475569" },
+  page_layout: { label: "Page Layout", colorIndex: 1, color: "#475569" },
+  ai_agent: { label: "AI Agent", colorIndex: 2, color: "#9333EA" },
+  execution_graph: { label: "Agent Team", colorIndex: 3, color: "#0F766E" },
+  business_glossary_term: { label: "Glossary Term", colorIndex: 4, color: "#E11D48" },
+  metric_definition: { label: "Metric", colorIndex: 5, color: "#0284C7" },
+  test_case_definition: { label: "Test Case", colorIndex: 6, color: "#9333EA" },
+  action_type_definition: { label: "Action Type", colorIndex: 1, color: "#475569" },
 };
 
 export const SYSTEM_NODE_TYPES: SystemNodeType[] = [
