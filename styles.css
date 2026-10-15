@@ -1711,6 +1711,8 @@ html.app-mode{scroll-behavior:auto}
 @media(max-width:900px),(hover:none){[data-tooltip]::after{display:none!important}}
 /* Reports date-range row is an inline 3 x max-content grid; let it wrap on phones instead of widening the page */
 @media(max-width:620px){.content .form-grid[style*="max-content"]{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))!important}}
+/* Phones/tablets: the app area is its own scroll container instead of the whole page. iOS Chrome/Safari resize their toolbars while the page scrolls and can leave the top of the page stuck under them; a fixed, internally scrolling main area never triggers that, and the sticky topbar pins reliably inside it. */
+@media(max-width:900px){html.app-mode,html.app-mode body{height:100%;overflow:hidden}html.app-mode .app-shell{display:block;min-height:0}html.app-mode .main-area{position:fixed;inset:0;display:block;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:none}}
 
 
 
