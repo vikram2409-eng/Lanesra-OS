@@ -2426,3 +2426,12 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 .ontology-legend-item{transition:opacity .2s ease,box-shadow .2s ease,border-color .2s ease;}
 .ontology-legend-item.legend-dim{opacity:.3;}
 .ontology-legend-item.legend-highlight{box-shadow:0 0 0 2px rgba(79,70,229,.35);border-color:#4f46e5;}
+
+/* Mobile topbar overlap fix: ensure content clears the sticky topbar */
+@media(max-width:900px){
+  .main-area{display:flex;flex-direction:column;min-height:100vh}
+  .topbar{position:sticky;top:0;z-index:20;flex-shrink:0;background:var(--card)}
+  .content,.page{flex:1;min-height:0}
+  .page-head,.page-heading{scroll-margin-top:70px}
+  .page-head h1,.page-heading h1{scroll-margin-top:70px}
+}
