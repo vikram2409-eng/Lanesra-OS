@@ -1,0 +1,24 @@
+diff --git a/site-modern.css b/site-modern.css
+index bb16fbb..341a13a 100644
+--- a/site-modern.css
++++ b/site-modern.css
+@@ -202,3 +202,19 @@
+ .modern-site .mobile-group[open] .mobile-plus{transform:rotate(45deg)}
+ .modern-site .mobile-group-links{padding:0 0 6px}
+ .modern-site .mobile-group-links a{display:block;border-bottom:0;padding:10px 4px 10px 18px;font-weight:600}
++
++/* Docs article browser (help center) */
++.modern-site .docs-cat{border:1px solid var(--line);border-radius:14px;margin-bottom:14px;background:var(--surface);overflow:hidden}
++.modern-site .docs-cat summary{list-style:none;display:flex;align-items:center;gap:12px;padding:16px 18px;cursor:pointer;font-weight:700}
++.modern-site .docs-cat summary::-webkit-details-marker{display:none}
++.modern-site .docs-cat summary::marker{content:""}
++.modern-site .docs-cat-icon{font-size:22px}
++.modern-site .docs-cat-label{flex:1;font-size:16px}
++.modern-site .docs-cat-count{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:4px 12px}
++.modern-site .docs-cat-topics{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;padding:0 8px 8px}
++.modern-site .doc-article-link{display:block;padding:12px 14px;border-radius:10px;text-decoration:none;color:var(--text)}
++.modern-site .doc-article-link:hover{background:var(--bg)}
++.modern-site .doc-article-link strong{display:block;font-size:14px;margin-bottom:4px}
++.modern-site .doc-article-link span{font-size:13px;color:var(--muted);display:block;line-height:1.45}
++.modern-site .doc-article-link .arrow{color:var(--brand);font-weight:700;margin-top:6px;font-size:13px}
++@media(max-width:620px){.modern-site .docs-cat-topics{grid-template-columns:1fr}}
