@@ -1895,7 +1895,7 @@ function renderView(){
  // .scrollTop, since `.content`/`.app-main` have no overflow of their
  // own - the sticky sidebar/topbar both rely on the window itself
  // scrolling.
- requestAnimationFrame(()=>{window.scrollTo(0,0);document.body.scrollTop=0;document.documentElement.scrollTop=0;});
+ {const de=document.documentElement,resetScroll=()=>{de.style.scrollBehavior='auto';window.scrollTo(0,0);document.body.scrollTop=0;de.scrollTop=0;de.style.scrollBehavior=''};resetScroll();requestAnimationFrame(resetScroll)}
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
  if(current==='dashboard') return dashboard();
  if(current==='pipeline') return pipeline();
