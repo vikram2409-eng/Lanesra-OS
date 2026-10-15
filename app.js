@@ -1753,7 +1753,7 @@ function appShell(){
  $('#sidebarCollapse').onclick=toggleSidebarCollapse;
  $('#themeToggle').onclick=toggleTheme;
  bindCmdPalette();
- $('#resetDemo').onclick=()=>{data=structuredClone(seed);ensureAdminData();ensureVoiceData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored');refreshNotifBadge();applyWorkspaceTheme();renderView()};const srd=document.getElementById('sideResetDemo');if(srd)srd.onclick=document.getElementById('resetDemo').onclick;
+ const srd=document.getElementById('sideResetDemo');if(srd)srd.onclick=()=>{data=structuredClone(seed);ensureAdminData();ensureVoiceData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored');refreshNotifBadge();applyWorkspaceTheme();renderView()};
  const searchInput=$('#globalSearch'), searchBox=$('#searchResults');
  const searchable=[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['products','Product / Service'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']];
  // Admin Control Center Modernization (issue #197): the same Cmd/Ctrl+K
