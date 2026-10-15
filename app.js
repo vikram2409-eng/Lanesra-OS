@@ -1895,7 +1895,7 @@ function renderView(){
  // .scrollTop, since `.content`/`.app-main` have no overflow of their
  // own - the sticky sidebar/topbar both rely on the window itself
  // scrolling.
- window.scrollTo(0,0);
+ requestAnimationFrame(()=>{window.scrollTo(0,0);document.body.scrollTop=0;document.documentElement.scrollTop=0;});
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
  if(current==='dashboard') return dashboard();
  if(current==='pipeline') return pipeline();
