@@ -1707,6 +1707,8 @@ table.company-table .actions{justify-content:flex-start}
 /* Demo app shell: no page-wide smooth scrolling (iOS mis-positions the page after scrolling back to the top), and no sidebar shadow bleeding in while the drawer is closed */
 html.app-mode{scroll-behavior:auto}
 @media(max-width:900px){.sidebar:not(.open){box-shadow:none}}
+/* Mobile: a non-sticky topbar scrolls away with the page, so it can never sit on top of the page heading (iOS mispositions the sticky bar after scroll direction changes) */
+@media(max-width:900px){.app-shell .topbar{position:relative;top:auto}}
 
 
 
