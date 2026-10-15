@@ -6,6 +6,7 @@ p = os.path.join(REPO, "app.js")
 src = open(p, encoding='utf-8').read()
 n = 0
 
+
 # 1. Fix releasesPage wrapper - remove nested publicNav
 # Find releasesPage function
 idx = src.find('function releasesPage()')
@@ -19,6 +20,7 @@ if m:
     n += 1
     print("1. Fixed releasesPage nested nav")
 
+
 # 2. Fix roadmapPage binding (if still old)
 if 'bindPublicNav();' in src:
     # Find the one in roadmapPage (first occurrence after roadmapPage)
@@ -28,6 +30,18 @@ if 'bindPublicNav();' in src:
         src = src[:pos] + "bindModernChrome(document.getElementById('modernSite'));" + src[pos+len('bindPublicNav();'):]
         n += 1
         print("2. Fixed roadmapPage binding")
+
+
+# 3. Apply docs article browser CSS patch
+import subprocess
+r = subprocess.run(["git", "apply", "scripts/site_css_docs.patch"], capture_output=True, text=True)
+print("3. git apply site_css_docs.patch:", r.returncode)
+if r.stdout:
+    print(r.stdout)
+if r.stderr:
+    print(r.stderr)
+n += 1
+
 
 open(p, 'w', encoding='utf-8').write(src)
 print(f"Done: {n} fixes")
