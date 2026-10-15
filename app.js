@@ -15833,15 +15833,15 @@ function helpTopicPage(slug){
    {'@type':'ListItem',position:3,name:found.title,item:`https://lanesraos.com/help/${slug}`},
   ]},
  });
- $('#app').innerHTML=`<div class="site-dark">${publicNav()}<main class="mkt-page"><section class="mkt-page-hero" style="padding-bottom:0"><div class="container narrow">${docsBreadcrumbHtml([['Docs','/help'],[foundCat.label,'/help#'+foundCat.key],[found.title,null]])}<div class="eyebrow">${foundCat.label}</div><h1 style="font-size:clamp(32px,5vw,48px)">${found.title}</h1><p>${found.summary}</p></div></section><section class="section"><div class="container">`+
+ $('#app').innerHTML=`<div class="modern-site" id="modernSite">${window.MODERN_HEADER||''}<main><div class="mkt-page"><section class="mkt-page-hero" style="padding-bottom:0"><div class="container narrow">${docsBreadcrumbHtml([['Docs','/help'],[foundCat.label,'/help#'+foundCat.key],[found.title,null]])}<div class="eyebrow">${foundCat.label}</div><h1 style="font-size:clamp(32px,5vw,48px)">${found.title}</h1><p>${found.summary}</p></div></section><section class="section"><div class="container">`+
   `<div class="docs-shell with-toc">${docsSidebarHtml(slug)}<div class="docs-main"><div class="docs-main-inner">`+
   `<article class="docs-article">${found.sections.map(s=>`<h4 id="${tocId(s.heading)}">${s.heading}</h4>${s.bodyHtml}`).join('')}</article>`+
   docsPrevNextHtml(slug)+
   docsFeedbackHtml(slug)+
   `</div></div>`+
   `<details class="docs-toc-wrap" open><summary>On this page</summary><nav class="docs-toc"><div class="docs-toc-label">On this page</div>${found.sections.map(s=>`<a href="#${tocId(s.heading)}">${s.heading}</a>`).join('')}</nav></details>`+
-  `</div></section></main>${publicFooter()}${docsSearchModalHtml()}</div>`;
- bindPublicNav();
+  `</div></section></div></main>${window.MODERN_FOOTER||''}${docsSearchModalHtml()}</div>`;
+ bindModernChrome(document.getElementById('modernSite'));
  bindDocsSearch();
  enhanceDocsCode(document.querySelector('.docs-article'));
  bindDocsScrollspy();
