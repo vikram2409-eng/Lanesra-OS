@@ -1707,8 +1707,10 @@ table.company-table .actions{justify-content:flex-start}
 /* Demo app shell: no page-wide smooth scrolling (iOS mis-positions the page after scrolling back to the top), and no sidebar shadow bleeding in while the drawer is closed */
 html.app-mode{scroll-behavior:auto}
 @media(max-width:900px){.sidebar:not(.open){box-shadow:none}}
-/* Mobile: a non-sticky topbar scrolls away with the page, so it can never sit on top of the page heading (iOS mispositions the sticky bar after scroll direction changes) */
-@media(max-width:900px){.app-shell .topbar{position:relative;top:auto}}
+/* Mobile: tooltip bubbles are absolutely positioned pseudo-elements; the theme toggle's sits near the right edge and made the whole page wider than the phone (horizontal overflow), which makes iOS zoom/pan the page and breaks scroll-to-top. Touch screens have no hover anyway. */
+@media(max-width:900px),(hover:none){[data-tooltip]::after{display:none!important}}
+/* Reports date-range row is an inline 3 x max-content grid; let it wrap on phones instead of widening the page */
+@media(max-width:620px){.content .form-grid[style*="max-content"]{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))!important}}
 
 
 
