@@ -1704,6 +1704,11 @@ table.company-table .actions{justify-content:flex-start}
 }
 }
 
+/* Demo app shell: no page-wide smooth scrolling (iOS mis-positions the page after scrolling back to the top), and no sidebar shadow bleeding in while the drawer is closed */
+html.app-mode{scroll-behavior:auto}
+@media(max-width:900px){.sidebar:not(.open){box-shadow:none}}
+
+
 
 
 /* ===== Modern UI PR-D/2 record-detail — artifact fidelity ===== */
