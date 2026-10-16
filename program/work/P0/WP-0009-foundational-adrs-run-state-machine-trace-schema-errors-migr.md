@@ -30,6 +30,8 @@ Phase 1 has ~25 work packages that all touch runs, steps, events and prompts. If
 - ADR: Prompt catalog format - storage, versioning, variables, evaluation on change
 - ADR: Feature flag model (consumed by WP-0010)
 - Each ADR lists the requirement IDs it serves and the work packages it constrains
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Use the spec corrections in RAID I-23 and `program/research/gap-audit.md` (14 node types, `evaluate_result` judge node, sequential branches, existing output validation and publish gate)
 
 ## Acceptance criteria
 

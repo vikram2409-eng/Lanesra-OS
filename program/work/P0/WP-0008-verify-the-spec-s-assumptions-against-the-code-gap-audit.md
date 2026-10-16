@@ -3,7 +3,7 @@ id: WP-0008
 title: Verify the spec's assumptions against the code (gap audit)
 phase: 0
 epic: E0.3 Architecture decisions
-status: in_progress
+status: in_review
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-008]
@@ -32,9 +32,9 @@ The spec says 'most of the plumbing already exists'. Before designing on top of 
 
 ## Acceptance criteria
 
-- [ ] AC-1: Every spec 'existing piece' has a verdict with evidence
-- [ ] AC-2: Discrepancies are logged in `program/RAID.md` with an owner
-- [ ] AC-3: Phase 1 work packages updated where the audit changes their scope
+- [x] AC-1: Every spec 'existing piece' has a verdict with evidence
+- [x] AC-2: Discrepancies are logged in `program/RAID.md` with an owner
+- [x] AC-3: Phase 1 work packages updated where the audit changes their scope
 
 ## Test plan
 
@@ -45,3 +45,10 @@ The spec says 'most of the plumbing already exists'. Before designing on top of 
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-10-16 claude: Audit written to `program/research/gap-audit.md`. Every row of the spec's "Where this fits" table and Code map has a verdict with `path:line` evidence, plus each extra question in Scope (pause paths, MAX_ROUNDS, delegation guard, node types, parallel branches, SSE, desktop/server divergence).
+  - Method: three read-only search passes in parallel (runtime, governance, UI and editions), then the key claims re-read by hand (list in the audit's Method section).
+  - AC-2: 12 issues (RAID I-12 to I-23) and 4 tech-debt items (T-02 to T-05), each routed to a work package. Most serious: runs not resumed after restart (I-12); agent tool calls not checked against the agent's own tool list (I-16, security, to prove with a test in WP-0143); published version not what runs (I-18); air-gap fails open (I-17).
+  - AC-3: scope notes added to WP-0100, 0112, 0121, 0123, 0132, 0141, 0143, 0146, 0150 (Phase 1), plus WP-0009, WP-0013 and WP-0306; new proposed WP-0170 (run the published agent version).
+  - State: in_review on PR #626, documentation only. Next: a second agent or the owner reviews (test plan); then WP-0009 (foundational ADRs) can start with RAID I-23 as input.
+  - Gotcha: the code comment at `graph_runtime_service.rs:33-37` points to a "three legacy paths" note that does not exist; the audit's §2 has the real list.

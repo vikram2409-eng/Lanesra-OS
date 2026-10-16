@@ -29,6 +29,9 @@ Validate each step output against its schema then guardrails; return reasons and
 - on_fail edge in graph runtime
 - `final_output` tool short-circuit only when schema passes
 - Persist outputs, memory updates, audit at step end
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Output-schema validation already exists (`chat_service.rs:1858-1885`, one repair retry, partial JSON Schema): extend it rather than build a second one
+  - Wire DLP `redact()` into output guardrails or remove it (T-02)
 
 ## Acceptance criteria
 

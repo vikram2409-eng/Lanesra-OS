@@ -41,6 +41,8 @@ gaps and stop the loop from assuming one provider's behaviour.
 - The loop uses the catalog: strict JSON tool format when native tool calling is missing (WP-0122), compaction sized to the catalog context window (WP-0125), cost from catalog prices (forecast WP-0319)
 - Cloud credentials (Entra ID, service accounts, IAM) stored encrypted like other secrets; short-lived tokens cached in memory only, never persisted
 - Region / residency recorded per connection so the data-boundary policy can restrict which data reaches which region
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Confirmed by the audit: today only `anthropic`, `openai_compatible` and `google_gemini` exist, all with native tool calling; Ollama needs a dummy key because `resolve_tier` requires a stored key
 
 ## Acceptance criteria
 
