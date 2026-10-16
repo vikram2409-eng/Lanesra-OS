@@ -52,7 +52,7 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 |---|---|---|---|---|
 | I-01 | `npm ci` fails: `desktop/package-lock.json` out of sync with `package.json`; the release workflow runs `npm ci` and would fail | 2026-10-16 | WP-0002 | Open |
 | I-02 | `desktop/Cargo.lock` records lanesra-os 0.14.0 while the crate is 0.15.0 | 2026-10-16 | WP-0002 | Open |
-| I-03 | Test failing on `main`: `auto_service_reference_package::repair_completed_workflow_closes_the_originating_appointment` (appointment stays "Checked In") | 2026-10-16 | WP-0016 | Open |
+| I-03 | 7 tests failing on `main` (of 1,004): six industry reference-package workflows that should update a related record (auto service, field service, property management, real estate ×2, recruitment) and one System Graph hard-delete test. List in `testing/REGRESSION.md` | 2026-10-16 | WP-0016 | Open |
 | I-04 | No pull-request CI | 2026-10-16 | WP-0003 | Open |
 | I-05 | Spec says a THIRD_PARTY_NOTICES file exists; it does not | 2026-10-16 | WP-0012 | Open |
 | I-06 | Migration runner skips any version below the max applied; out-of-order merges lose migrations | 2026-10-16 | ADR-0003; CI check in WP-0003; test in WP-0007 | Open |

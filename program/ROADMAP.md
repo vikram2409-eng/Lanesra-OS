@@ -23,7 +23,7 @@ Live progress per phase is in [`STATUS.md`](STATUS.md).
 |---|---|---|---|
 | No CI on pull requests | Only `desktop-release.yml` (tag-triggered Windows build) and a manual ontology transform workflow exist | Agents can merge regressions; nothing enforces the regression suite | WP-0003 |
 | `npm ci` fails | `package-lock.json` lacks 8 direct deps (e.g. `@testing-library/react`, `jsdom`, `clsx`) | Clean installs and the release workflow are broken | WP-0002 |
-| Failing test on `main` | `auto_service_reference_package::repair_completed_workflow_closes_the_originating_appointment` | CI cannot be a required check while `main` is red | WP-0016 |
+| 7 failing tests on `main` | 996 of 1,004 Rust tests pass; six industry-package workflows fail to update related records, plus one System Graph test | CI cannot be a required check while `main` is red | WP-0016 |
 | Migration order hazard | `migrate.rs` applies only versions above `MAX(version)` | Two agents' migrations merged out of order silently skip one forever | ADR-0003, WP-0003, WP-0007 |
 | No offline model test double | Agent tests need a provider; the spec's behaviours (limits, retries, guardrails, modes) need deterministic scripts | Every Phase 1–4 behaviour test depends on it | WP-0005 |
 | Thin frontend tests | 5 test files / 40 tests across 134 `.tsx` files; no E2E | The Playground is mostly UI | WP-0006, WP-0014 |

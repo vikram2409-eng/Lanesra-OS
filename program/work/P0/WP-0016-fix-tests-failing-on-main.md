@@ -7,7 +7,7 @@ status: ready
 owner: unassigned
 depends_on: []
 requirements: [REQ-PRE-001]
-estimate: S
+estimate: M
 branch: 
 pr: 
 updated: 2026-10-16
@@ -22,7 +22,7 @@ CI cannot become a required check while main is red. The baseline run on 2026-10
 ## Scope
 
 - Every test listed as failing in testing/REGRESSION.md
-- Root cause written in the Progress log for each (e.g. why the Auto Service 'repair completed' workflow no longer closes the originating appointment)
+- Root cause written in the Progress log for each. Six failures are industry-package workflows that no longer update a related record (auto service, field service, property management, real estate x2, recruitment) - investigate one shared cause in workflow_service cross-record actions first; the seventh is system_graph hard-delete
 - No test skipped, ignored or loosened
 
 ## Acceptance criteria

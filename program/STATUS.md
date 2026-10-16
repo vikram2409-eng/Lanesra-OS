@@ -31,7 +31,7 @@ Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
 | [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | 0 | M |
 | [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | 0 | M |
 | [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | 0 | S |
-| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | 0 | S |
+| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | 0 | M |
 
 ## Requirement coverage
 
@@ -58,7 +58,7 @@ Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | ⛔ blocked | M | WP-0008 |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | ⚪ proposed | M | WP-0003 |
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | WP-0005 |
-| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | 🟢 ready | S | - |
+| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | 🟢 ready | M | - |
 
 ## Phase 1 · Foundations
 
