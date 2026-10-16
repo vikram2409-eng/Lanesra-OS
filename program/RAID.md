@@ -19,6 +19,8 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | Q-10 | Budget and API keys for live-model evaluation runs (nightly, non-blocking)? | Template gates (G2) need real-model evidence | Recorded runs only | Answered 2026-10-16: no API keys; local Ollama + recorded runs (WP-0224) |
 | Q-11 | Accept Phase 0 (~3 weeks) before Phase 1, and a re-forecast at G1? | The spec's 28 weeks has no precursor phase | Yes | Answered 2026-10-16: yes; timeline depends on available AI tokens (ROADMAP Forecasting) |
 | Q-13 | Besides OpenAI, Gemini, Claude, Ollama and OpenAI-compatible on-prem servers, must the Playground support enterprise-hosted variants: Azure OpenAI, AWS Bedrock, Google Vertex AI? Which on-prem servers do your customers use? | Each needs its own auth and URL scheme (WP-0146) | — | Answered 2026-10-16: add Azure OpenAI, Google Vertex AI and AWS Bedrock; vLLM is the first-class on-prem server (WP-0146) |
+| Q-14 | Do you need several workspaces on one Team Workspace server (for example one per department or customer), or is one workspace per server enough? | Today a server holds exactly one workspace (A-06). Several would need workspace selection at sign-in and per-workspace keys and backups | One workspace per server; run a second container for a second workspace | Open |
+| Q-15 | Should the desktop app be able to connect to a Team Workspace server as a client, or is the browser the only Team client? | Decides whether desktop needs a "connect to server" mode (sign-in, events over HTTP instead of Tauri) in WP-0105 and WP-0112 | The browser is the Team client; desktop stays a standalone single-user app | Open |
 | Q-12 | Confirm how Muse AI works: can it read the repo and open PRs itself, or do you relay its scripts into `scripts/` by hand? | Decides whether Muse can take work packages alone | — | Answered 2026-10-16: Muse reads the repo and opens issues and PRs itself; WP-0018 rescoped to tracker upkeep and test feedback in CI |
 
 ## Risks
@@ -54,6 +56,7 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | A-03 | The stack stays Rust + TypeScript + SQLite; Python appears only inside the Phase 4 code sandbox | Open |
 | A-04 | Phase durations in the spec are proposals; the real pace depends on AI token budget (ADR-0004) | Confirmed 2026-10-16 |
 | A-05 | CI uses GitHub-hosted Linux runners; Windows is built only on release | Open |
+| A-06 | Team Workspace is one workspace per server: one SQLite file (`/data/lanesra.sqlite3`), one master key, many users. Per-workspace settings (flags, budgets, allow-lists) therefore mean per server today | Open: see Q-14 |
 
 ## Issues (facts found, needing action)
 
@@ -82,6 +85,11 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | I-21 | The SSE stream (`server/src/events_stream.rs`) is API-key only, polls `integration_executions` every second, carries no AI events and has no frontend consumer; desktop has no Tauri event channel (gap audit, `program/research/gap-audit.md`) | 2026-10-16 | WP-0112 (owner: the agent that claims it): event bus, session auth, Tauri channel, first consumer | Open |
 | I-22 | Solution exports include agents and skills but no pipelines or execution graphs (`industry_package_service.rs:402-658`); the spec assumes pipelines in Solutions keep working, and Agent Teams cannot be shipped in a Solution today (gap audit, `program/research/gap-audit.md`) | 2026-10-16 | WP-0306 at refinement (owner: the agent that claims it) | Open |
 | I-23 | Spec corrections for the ADRs: there are 14 node types, not 13 (`run_agent_team`, `evaluate_result`); `evaluate_result` is already an LLM-as-judge node; parallel branches run in sequence; output-schema validation already exists; a narrow publish gate exists (policy_compliance only); the "three legacy pause paths" note referenced in code does not exist (real list in the audit §2) (gap audit, `program/research/gap-audit.md`) | 2026-10-16 | WP-0009 (owner: the agent that claims it) uses these when writing the foundational ADRs | Open |
+| I-24 | **Release blocker.** The Team Workspace Docker image no longer builds: the Dockerfile builds `server/` without the workspace manifest, and since WP-0004 added `[lints] workspace = true` Cargo cannot parse `server/Cargo.toml` (reproduced by simulating the Dockerfile layout). Caused by WP-0004; no CI job builds the image, so it went unnoticed (Team Workspace review, 2026-10-16) | 2026-10-16 | WP-0020 (owner: the agent that claims it; next up) | Open |
+| I-25 | The server image is not reproducible: `Cargo.lock` is not copied (dependencies float), `rust:1-slim` ignores `rust-toolchain.toml` (1.97.0), `node:20-slim` contradicts `.nvmrc` (22), and no release workflow publishes the image (Team Workspace review, 2026-10-16) | 2026-10-16 | WP-0020 | Open |
+| I-26 | **Security.** Anyone who reaches a fresh Team Workspace first can run the first-run wizard and become its Administrator; no setup token protects it (Team Workspace review, 2026-10-16) | 2026-10-16 | WP-0106 (owner: the agent that claims it) | Open |
+| I-27 | Failed sign-ins are audited but not throttled or locked out; the rate limiter covers API clients only (Team Workspace review, 2026-10-16) | 2026-10-16 | WP-0106 | Open |
+| I-28 | Backups (`.lanesra`) do not include `secret.key`, the master key for every stored provider key and connector credential: a restore on new hardware or after losing the volume leaves those secrets unreadable, with no warning beforehand (Team Workspace review, 2026-10-16) | 2026-10-16 | WP-0180 (owner: the agent that claims it) | Open |
 
 ## Tech debt
 

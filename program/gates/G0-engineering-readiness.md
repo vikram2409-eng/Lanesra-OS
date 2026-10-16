@@ -20,7 +20,8 @@ Each check needs evidence: a CI run link, test names, `programctl` output or a d
 | 8 | Threat model reviewed; dependency and secret scanning in CI (WP-0011) | | ☐ |
 | 9 | Clean-room controls in place (WP-0012); demo ADR decided (WP-0013) | | ☐ |
 | 10 | Design tokens inventoried and axe checks running (WP-0014); performance baseline recorded (WP-0015) | | ☐ |
-| 11 | Phase 1 WPs refined and moved to `ready`; re-forecast written below | | ☐ |
+| 11 | Team Workspace server image builds from the lockfile with pinned toolchains, and is smoke-tested in CI on every PR (WP-0020) | | ☐ |
+| 12 | Phase 1 WPs refined and moved to `ready`; re-forecast written below | | ☐ |
 
 ## Open RAID items at the gate
 

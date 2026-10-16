@@ -30,6 +30,14 @@ It ships in **three editions**: the desktop app, the Team Workspace server, and 
 (simulated on sample data). Each work package's `editions:` says where it must ship (most features: all
 three), and it is not done until `delivered:` lists all of them.
 
+**How Team Workspace is built:** it is the same `lanesra-core` and the same React UI as the desktop app, served by the `lanesra-server` axum binary (`desktop/server/`) instead of the Tauri shell:
+- The UI calls `POST /api/invoke/<command>`, which mirrors every Tauri command 1:1 (`server/src/dispatch.rs`); long AI calls use `/api/admin/...` routes.
+- Users sign in with a session cookie.
+- One server holds **one workspace**: one SQLite file plus `secret.key` on the `/data` volume.
+- A background scheduler ticks every 60 seconds.
+- It ships as the Docker image in `desktop/Dockerfile`, put behind a TLS reverse proxy for internet use.
+- Test every server-facing change in both modes: Tauri commands and the HTTP route. WP-0020, WP-0106 and WP-0180 make it buildable, safe to expose and recoverable.
+
 **Every build updates the website help:** each work package's `docs:` names the
 `https://lanesraos.com/help/<slug>` articles it must create or update, and the tracker refuses `done`
 until they exist, name the work package and are in the sitemap (`program/FINISH-CHECKLIST.md`).

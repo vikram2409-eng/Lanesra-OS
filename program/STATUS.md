@@ -6,8 +6,8 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 19 | 8 | 1 | 5 | 0 | 5 | 12 / 34 | `███░░░░░░░` 35% |
-| 1 · Foundations | 36 | 0 | 0 | 0 | 0 | 36 | 0 / 116 | `░░░░░░░░░░` 0% |
+| 0 · Precursors | 20 | 8 | 1 | 6 | 0 | 5 | 12 / 36 | `███░░░░░░░` 33% |
+| 1 · Foundations | 38 | 0 | 0 | 0 | 0 | 38 | 0 / 122 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 19 | 0 | 0 | 0 | 0 | 19 | 0 / 75 | `░░░░░░░░░░` 0% |
@@ -19,8 +19,8 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 103 | 1 | 2 / 366 |
-| Team Workspace | 107 | 1 | 2 / 388 |
+| Desktop | 105 | 1 | 2 / 372 |
+| Team Workspace | 110 | 1 | 2 / 396 |
 | Online demo | 84 | 0 | 0 / 300 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -42,12 +42,13 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | 0 | M |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | 0 | M |
 | [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | 0 | S |
+| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | 0 | M |
 
 ## Requirement coverage
 
-- Spec requirements tracked: **232**
-- Mapped to a work package: **232**
-- Delivered (every mapped work package done): **7**
+- Spec requirements tracked: **235**
+- Mapped to a work package: **235**
+- Delivered (every mapped work package done): **6**
 
 ## Phase 0 · Precursors
 
@@ -72,6 +73,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |
 | [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | 🟢 ready | S | — | WP-0003 |
 | [WP-0019](work/P0/WP-0019-always-current-program-dashboard.md) | Always-current program dashboard | E0.1 Program and engineering readiness | ✅ done | S | — | - |
+| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | E0.1 Program and engineering readiness | 🟢 ready | M | ○Team Workspace | WP-0003 |
 
 ## Phase 1 · Foundations
 
@@ -79,10 +81,11 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 |---|---|---|---|---|---|---|
 | [WP-0100](work/P1/WP-0100-principal-and-agent-identity-foundation.md) | Principal model, Agent Identities and agent credentials | E1.0 Identity foundation | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | ⚪ proposed | M | — | WP-0009, WP-0100 |
-| [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010 |
-| [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010 |
+| [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
+| [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
 | [WP-0105](work/P1/WP-0105-enterprise-sign-in-on-the-desktop-edition.md) | Enterprise sign-in on the desktop edition | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Desktop | WP-0102, WP-0103 |
+| [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0100, WP-0020 |
 | [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0100 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0111 |
@@ -113,6 +116,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0153](work/P1/WP-0153-standing-approvals.md) | Standing approvals | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0152 |
 | [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | E1.7 Agent setup experience | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0120, WP-0014 |
 | [WP-0170](work/P1/WP-0170-run-the-published-agent-version.md) | Run the published agent version | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
+| [WP-0180](work/P1/WP-0180-team-workspace-operations-backups-upgrades-health.md) | Team Workspace operations: backups, key recovery, upgrades and health | E1.9 Team Workspace platform | ⚪ proposed | L | ○Team Workspace ○Desktop | WP-0020, WP-0007 |
 
 ## Phase 2 · Playground
 

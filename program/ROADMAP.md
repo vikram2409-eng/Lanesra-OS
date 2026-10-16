@@ -32,6 +32,7 @@ Live progress per phase is in [`STATUS.md`](STATUS.md).
 | Spec claims not verified | e.g. spec says THIRD_PARTY_NOTICES exists — it does not | Designing on wrong assumptions | WP-0008, WP-0012 |
 | No feature flags | — | Half-built features would ship in releases and the demo | WP-0010 |
 | No threat model | — | Agents with write tools need threats named before building | WP-0011 |
+| Team Workspace image broken and untested (found 2026-10-16) | The Dockerfile cannot parse `server/Cargo.toml` since WP-0004's workspace lints; it ignores `Cargo.lock`, floats Rust and uses Node 20; no CI job builds it and no release publishes it | Every feature must ship in Team Workspace (REQ-PRE-015); a server that cannot be built cannot be tested or released | WP-0020 |
 
 ## Critical path
 
@@ -58,7 +59,9 @@ boundaries to keep merge conflicts low.
 | 0 | Test double | 0005 → 0015 | `core/src/services/ai_*`, tests |
 | 0 | Analysis and design | 0008 → 0009 → 0010; 0013 (owner) | `program/`, `decisions/` |
 | 0 | Clean room | 0012 | root, `program/tools/` |
-| 1 | Identity | 0101 → 0102, 0103 → 0104 | `server/src/session.rs`, auth |
+| 0 | Team Workspace packaging | 0020 (first: it fixes a regression) | `desktop/Dockerfile`, `.github/workflows/` |
+| 1 | Identity | 0100 → 0106 → 0101 → 0102, 0103 → 0104, 0105 | `server/src/session.rs`, auth |
+| 1 | Team Workspace platform | 0180 (after 0020 and 0007) | `server/src/`, `backup_service`, `secret_service` |
 | 1 | Run model and trace | 0110 → 0111 → 0112 → 0113 | `graph_runtime`, `events_stream`, run repos |
 | 1 | Agent loop | 0121 → 0123, 0125, 0126; 0122, 0124, 0127, 0128 | `chat_service.rs`, `ai_service.rs` |
 | 1 | Contracts and guardrails | 0130 → 0120; 0131, 0133 → 0132 | new `ai_tasks`, `ai_guardrails`, prompt catalog |
