@@ -29,7 +29,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/625 |
 
 ## Ready to start (all dependencies done)
 
@@ -55,7 +55,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 |---|---|---|---|---|---|---|
 | [WP-0001](work/P0/WP-0001-program-control-plane-and-multi-ai-working-protocol.md) | Program control plane and multi-AI working protocol | E0.1 Program and engineering readiness | ✅ done | M | — | - |
 | [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | ✅ done | S | — | - |
-| [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | 🔨 in progress | M | — | WP-0002, WP-0004, WP-0016 |
+| [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | 👀 in review | M | — | WP-0002, WP-0004, WP-0016 |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 🟢 ready | M | — | - |
 | [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0003 |

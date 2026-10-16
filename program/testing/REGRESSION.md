@@ -10,7 +10,24 @@ package completes. Linux, Rust 1.97.0, Node 22.22.0.
 | Rust (core, server, cli), `cargo test --locked --no-fail-fast` | 1,009 (122 binaries) | 1,008 | 0 | 1 ignored. Re-run after WP-0004's rustfmt and clippy changes: identical. Clean build + run ≈ 75 min on the agent sandbox |
 | Frontend unit (`npm ci` then `npx vitest run`) | 40 (5 files) | 40 | 0 | `npm ci` works again |
 | TypeScript / production build | — | clean / ok | — | |
-| Program tools (`unittest discover program/tools`) | 28 | 28 | 0 | |
+| Program tools (`unittest discover program/tools`) | 40 | 40 | 0 | +7 migration-order, +5 binary-asset self-tests (WP-0003) |
+
+## CI duration (WP-0003 AC-4)
+
+The full suite runs in CI on every pull request and every push to `main` (`.github/workflows/ci.yml`),
+with the Rust tests split across 4 `cargo nextest` partitions. Wall clock, push to last check:
+
+| Run | Commit | Result | Duration |
+|---|---|---|---|
+| [38905651374](https://github.com/vikram2409-eng/Lanesra-OS/actions/runs/38905651374) | PR #624 head 2196270 | green | 12 min 21 s |
+| [38918126664](https://github.com/vikram2409-eng/Lanesra-OS/actions/runs/38918126664) | `main` 5f27699 (merge of #624) | green | 12 min 12 s |
+| [38918390735](https://github.com/vikram2409-eng/Lanesra-OS/actions/runs/38918390735) | PR #625 b82f577 (deliberate failure, AC-2) | red | 12 min 40 s |
+
+**Median: 12 min 21 s.** The slowest job is a Rust test partition (8.5–11 min; the reference-package
+suites take 65–205 s each); lint takes about 1 min, the Tauri shell about 2.5 min, and the web,
+demo, migrations and program checks under 1 min each. Compare: a clean local build and run on the
+agent sandbox takes about 75 min, which is why the full suite runs in CI and not in the AI's session
+(tiered rule, `TEST-STRATEGY.md`).
 
 ## Original baseline on `main` @ `5cfc96c` (before fixes)
 
