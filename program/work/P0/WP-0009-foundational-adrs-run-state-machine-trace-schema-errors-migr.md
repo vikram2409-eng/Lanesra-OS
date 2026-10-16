@@ -3,14 +3,14 @@ id: WP-0009
 title: Foundational ADRs: run state machine, trace schema, errors, migrations, prompt catalog
 phase: 0
 epic: E0.3 Architecture decisions
-status: proposed
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0008]
 requirements: [REQ-PRE-007]
 estimate: L
 editions: []
 delivered: []
-branch: 
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
 updated: 2026-10-16
 ---
