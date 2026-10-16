@@ -6,7 +6,7 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 18 | 0 | 4 | 8 | 0 | 6 | 0 / 33 | `░░░░░░░░░░` 0% |
+| 0 · Precursors | 18 | 3 | 1 | 8 | 0 | 6 | 5 / 33 | `█░░░░░░░░░` 15% |
 | 1 · Foundations | 35 | 0 | 0 | 0 | 0 | 35 | 0 / 114 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
@@ -19,8 +19,8 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 102 | 0 | 0 / 364 |
-| Team Workspace | 106 | 0 | 0 / 386 |
+| Desktop | 102 | 1 | 2 / 364 |
+| Team Workspace | 106 | 1 | 2 / 386 |
 | Online demo | 83 | 0 | 0 / 298 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -29,9 +29,6 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0001](work/P0/WP-0001-program-control-plane-and-multi-ai-working-protocol.md) | Program control plane and multi-AI working protocol | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/492 |
-| [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/492 |
-| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/492 |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/492 |
 
 ## Ready to start (all dependencies done)
@@ -51,14 +48,14 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 - Spec requirements tracked: **231**
 - Mapped to a work package: **231**
-- Delivered (every mapped work package done): **0**
+- Delivered (every mapped work package done): **3**
 
 ## Phase 0 · Precursors
 
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
-| [WP-0001](work/P0/WP-0001-program-control-plane-and-multi-ai-working-protocol.md) | Program control plane and multi-AI working protocol | E0.1 Program and engineering readiness | 👀 in review | M | — | - |
-| [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | 👀 in review | S | — | - |
+| [WP-0001](work/P0/WP-0001-program-control-plane-and-multi-ai-working-protocol.md) | Program control plane and multi-AI working protocol | E0.1 Program and engineering readiness | ✅ done | M | — | - |
+| [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | 🟢 ready | M | — | WP-0002, WP-0004, WP-0016 |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | E0.1 Program and engineering readiness | 🟢 ready | S | — | - |
 | [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 🟢 ready | M | — | - |
@@ -72,7 +69,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 🟢 ready | M | ○Online demo | - |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | 🟢 ready | M | ○Desktop ○Team Workspace ○Online demo | - |
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0005 |
-| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | 👀 in review | M | ○Desktop ○Team Workspace | - |
+| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | 👀 in review | S | — | WP-0001 |
 | [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | 🟢 ready | S | — | WP-0003 |
 

@@ -1,6 +1,6 @@
 # ADR-0003: Migration numbers are taken at rebase time and must exceed main's maximum
 
-- Status: Proposed (the full migration conventions ADR comes in WP-0009 and builds on this)
+- Status: Accepted (program owner, 2026-10-16, PR #492)
 - Date: 2026-10-16
 - Work package: WP-0001; enforced by WP-0003 and WP-0007
 - Requirements: REQ-PRE-005, REQ-PRE-007

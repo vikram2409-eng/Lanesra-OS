@@ -1,6 +1,6 @@
 # ADR-0002: A pushed `wp/WP-XXXX-*` branch is the claim on a work package
 
-- Status: Proposed
+- Status: Accepted (program owner, 2026-10-16, PR #492)
 - Date: 2026-10-16
 - Work package: WP-0001
 

@@ -1,6 +1,6 @@
 # ADR-0001: Track the build program in the repository
 
-- Status: Proposed (accept when the owner approves WP-0001)
+- Status: Accepted (program owner, 2026-10-16, PR #492)
 - Date: 2026-10-16
 - Work package: WP-0001
 - Requirements: — (program infrastructure)

@@ -37,7 +37,7 @@ Format (parsed by `programctl export`, keep it): `## Group` headings, then `- [ 
 ## Publish it
 
 - [ ] **Tracker regenerated** — `programctl status` and `programctl validate` pass; `STATUS.md` committed
-- [ ] **Pushed** — everything committed and pushed to the work package branch
+- [ ] **Pushed** — everything committed and pushed to the work package branch, after checking its PR is still open (a merged PR's branch never reaches `main`)
 - [ ] **Pull request ready** — PR titled `[WP-XXXX] Title`, template filled (requirements, criteria, clean-room and security checks), marked ready for review
 - [ ] **Review requested** — from the other AI if it has usage left, otherwise the owner
 

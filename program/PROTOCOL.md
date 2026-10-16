@@ -138,6 +138,11 @@ Assume the next session is a different AI that has never seen this conversation.
 
 Before asking for review, run `program/FINISH-CHECKLIST.md` (prove it, record it, publish it).
 
+**Before every push to a PR's branch, check the PR is still open.** Once a PR has merged, anything
+pushed to its branch never reaches `main` and never deploys. Follow-up work goes on a branch restarted
+from the latest `main` (`git fetch origin main && git checkout -B <branch> origin/main`, then carry
+any unmerged commits across) and a new PR. This happened once, on PR #492 (RAID I-10).
+
 
 - Move to `in_review`: CI green, Definition of Done met except review, PR marked ready, `pr:` set.
 - **Cross-review:** an agent other than the author reviews when one has usage left, otherwise the

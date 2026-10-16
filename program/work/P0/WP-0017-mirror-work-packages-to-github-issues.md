@@ -32,7 +32,7 @@ GitHub while the work package files stay the single source of truth for every AI
 
 - [x] AC-1: Dry run lists one create per work package with labels, milestone and state
 - [x] AC-2: Unchanged issues produce no update; changed ones (state, body, labels) do; dependency links resolve to issue numbers
-- [ ] AC-3: First run on main creates all issues and milestones (verify after merge; link the Actions run here)
+- [x] AC-3: First run on main creates all issues and milestones (verify after merge; link the Actions run here)
 - [ ] AC-4: A second run with no changes performs zero updates (idempotent)
 
 ## Test plan
@@ -47,3 +47,6 @@ GitHub while the work package files stay the single source of truth for every AI
 
 ### 2026-10-16 claude
 PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.
+
+### 2026-10-16 claude (after merge)
+First run on main after the merge created 128 issues (#493-#620), one per work package, with phase milestones and labels: AC-3 met. AC-4 (no duplicates on a second run) is checked on the next merge to main; stays in_review until then.
