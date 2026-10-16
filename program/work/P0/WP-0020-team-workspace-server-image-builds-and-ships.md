@@ -3,7 +3,7 @@ id: WP-0020
 title: Team Workspace server image builds, is pinned, and ships
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_progress
+status: in_review
 owner: claude
 depends_on: [WP-0003]
 requirements: [REQ-PRE-018, REQ-PRE-015]
@@ -13,7 +13,7 @@ editions_reason: Packaging of the Team Workspace server only; the desktop app ha
 delivered: []
 docs: [set-up-team-workspace]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/636
 updated: 2026-10-16
 ---
 
@@ -60,9 +60,9 @@ Every Playground feature has to ship in Team Workspace too (REQ-PRE-015), so the
 
 ## Acceptance criteria
 
-- [ ] AC-1: `docker build` succeeds from a clean checkout and uses `Cargo.lock` (the build fails if the lockfile is out of date)
+- [x] AC-1: `docker build` succeeds from a clean checkout and uses `Cargo.lock` (the build fails if the lockfile is out of date)
 - [x] AC-2: The Rust and Node versions in the image match `rust-toolchain.toml` and `.nvmrc`; a CI check fails if they drift
-- [ ] AC-3: The `server image` CI job runs the smoke test above on every pull request, and fails when it fails
+- [x] AC-3: The `server image` CI job runs the smoke test above on every pull request, and fails when it fails
 - [ ] AC-4: A version tag publishes the image to GHCR, and the published image passes the same smoke test
 - [ ] AC-5: The help article `set-up-team-workspace` is live, names this work package, and is in the sitemap
 
@@ -97,3 +97,9 @@ Every Playground feature has to ship in Team Workspace too (REQ-PRE-015), so the
   - Not verifiable here: there is no Docker daemon and only 2.4 GB of disk, so the image build itself is proven by the CI job.
   - Next: the CI run proves AC-1 and AC-3. Prove the job red once (AC-3), then revert. AC-4 is proven on the first release tag. Ask the owner to make `server image` a required check after a week of green runs.
   - Gotcha: `src-tauri/Cargo.lock` is a stray, tracked file that Cargo ignores, because the workspace lockfile wins. It is left alone; noted as RAID T-06.
+
+- 2026-10-16 claude: CI on PR #636:
+  - AC-1: run 38965473554, job `server image (Team Workspace)`, is green in 7 min 16 s. The image built from the lockfile, and the smoke test passed all 8 steps, including that data survives a restart.
+  - AC-3: the temporary commit b26fdff made the smoke test expect a missing record. Run 38967056285 went red with "FAIL: record created before the restart is missing", after every earlier step passed. Reverted. With a warm layer cache the job takes about 1 minute.
+  - State: in_review. AC-4 is proven on the first `desktop-v*` tag, and AC-5 when the help article goes live on merge.
+  - Next: after merge, mark this done once AC-4 and AC-5 hold (or record that AC-4 waits on the next release); close RAID I-24 and I-25; then WP-0010.
