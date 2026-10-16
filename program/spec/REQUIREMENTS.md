@@ -32,6 +32,7 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-PRE-011** [P0] Design tokens and components needed by the mockups are inventoried against the desktop UI kit, and automated accessibility checks run in tests
 - **REQ-PRE-012** [P0] A performance baseline (agent loop overhead, graph runtime step latency, SQLite growth per run) is measured so later phases can be held to budgets
 - **REQ-PRE-013** [P0] Work packages are mirrored one-way to GitHub Issues with phase milestones and status labels; the repo files stay the source of truth (owner decision, ADR-0004)
+- **REQ-PRE-015** [P0] Every capability ships in each edition it applies to - desktop, Team Workspace and the online demo (simulated on sample data, write tools always simulated) - and the tracker records, per work package, the editions it targets and the editions it has been delivered in; a work package is not done until every targeted edition is delivered (owner decision, 2026-10-16)
 - **REQ-PRE-014** [P0] An AI that cannot run a shell or git (Muse AI) can deliver a change through a GitHub Action that applies it to a `wp/` branch and runs the same validation and CI as any other change (owner decision, ADR-0004)
 
 ## CLEAN — Clean-room approach
@@ -215,8 +216,9 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 
 - **REQ-GOV-001** [P1] Enterprise sign-in with OIDC and SAML, built first; users, approvers and identities map to the customer directory
 - **REQ-GOV-028** [P1] Enterprise sign-in is available in the desktop edition as well as Team Workspace, with providers including Okta, Microsoft Entra ID and Google (owner decision, ADR-0004)
-- **REQ-GOV-002** [P3] Interactive runs act as the starting user intersected with the agent's ontology scope; an agent never sees more than its user (phase: plan)
-- **REQ-GOV-003** [P3] Agent Identities: service principals with own Access Role and Record Scope for unattended runs; every step records agent and effective identity
+- **REQ-GOV-002** [P1] Interactive runs act as the starting user intersected with the agent's ontology scope; an agent never sees more than its user (phase: plan; moved from P3 by ADR-0006)
+- **REQ-GOV-003** [P1] Agent Identities: service principals with own Access Role and Record Scope for unattended runs; every step records agent and effective identity (moved from P3 by ADR-0006)
+- **REQ-GOV-029** [P1] Agent credentials: an Agent Identity authenticates with Lanesra-issued, short-lived, scoped credentials (no password, no SSO login), rotatable and revocable by an admin, held by the platform and never placed in a model's context; humans, Agent Identities and API clients share one principal model (owner decision, ADR-0006)
 - **REQ-GOV-004** [P2] Roles Viewer, Builder, Approver and AI Admin with the permissions in the spec (phase: plan)
 - **REQ-GOV-005** [P3] Roles Team Owner and Auditor; evidence export for Auditors (phase: plan)
 - **REQ-GOV-006** [P3] Plan approval required by default for every Manager-led plan; Team Owner can relax it to a cost or risk threshold

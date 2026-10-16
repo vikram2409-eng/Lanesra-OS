@@ -11,6 +11,7 @@ Format (parsed by `programctl export`, keep it): `## Group` headings, then `- [ 
 - [ ] **Acceptance criteria proven** — every criterion ticked in the work package file, each backed by a test; nothing ticked that no test proves
 - [ ] **Tests tagged** — every new test has a `Covers: REQ-… (WP-XXXX AC-n)` comment so `programctl trace` links it to its requirement
 - [ ] **Added to the regression suite** — new test files live where CI runs them (`desktop/core/tests`, `desktop/server/tests`, `desktop/src/**/__tests__`, `desktop/e2e`); none skipped, ignored or weakened
+- [ ] **Every edition delivered** — the work package's `editions:` all work: desktop and Team Workspace (same core and UI; test both modes) and, where listed, the online demo (simulated on sample data, write tools simulated); finished editions go in `delivered:`
 - [ ] **Full regression suite green** — Rust, frontend, demo and program checks pass (CI, or locally for Claude Code); a Muse change says "untested locally - see CI" until CI is green
 - [ ] **Regression totals recorded** — new test counts written in `program/testing/REGRESSION.md`; totals never go down without a written reason
 

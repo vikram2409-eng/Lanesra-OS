@@ -6,8 +6,10 @@ epic: E0.1 Program and engineering readiness
 status: in_progress
 owner: claude
 depends_on: []
-requirements: []
+requirements: [REQ-PRE-015]
 estimate: M
+editions: []
+delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
 pr: 
 updated: 2026-10-16

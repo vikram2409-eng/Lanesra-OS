@@ -5,9 +5,11 @@ phase: 1
 epic: E1.2 Run model and trace
 status: proposed
 owner: unassigned
-depends_on: [WP-0112, WP-0122, WP-0150]
+depends_on: [WP-0112, WP-0122, WP-0150, WP-0100]
 requirements: [REQ-OBS-003, REQ-NFR-003]
 estimate: M
+editions: [desktop, workspace]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: [WP-0304]
 requirements: [REQ-ORCH-020, REQ-ORCH-021, REQ-API-009]
 estimate: L
+editions: [desktop, workspace, demo]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

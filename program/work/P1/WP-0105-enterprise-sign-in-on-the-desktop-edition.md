@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: [WP-0102, WP-0103]
 requirements: [REQ-GOV-028]
 estimate: L
+editions: [desktop]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

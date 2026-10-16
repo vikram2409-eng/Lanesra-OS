@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: [WP-0311, WP-0326]
 requirements: [REQ-SETUP-013, REQ-UI-004]
 estimate: XL
+editions: [desktop, workspace, demo]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

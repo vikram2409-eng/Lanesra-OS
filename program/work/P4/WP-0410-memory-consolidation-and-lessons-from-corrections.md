@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: [WP-0320, WP-0151]
 requirements: [REQ-MEM-008, REQ-MEM-010]
 estimate: L
+editions: [desktop, workspace, demo]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

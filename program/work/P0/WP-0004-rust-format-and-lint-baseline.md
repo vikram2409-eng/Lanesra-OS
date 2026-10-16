@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: []
 requirements: [REQ-PRE-001]
 estimate: S
+editions: []
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

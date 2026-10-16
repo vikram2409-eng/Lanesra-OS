@@ -1,23 +1,25 @@
 ---
 id: WP-0318
-title: Agent Identities and identity-scoped runs
+title: Team-level identity: Team Owner and Auditor roles
 phase: 3
 epic: E3.4 Identity, budget and memory
 status: proposed
 owner: unassigned
-depends_on: [WP-0104, WP-0304]
-requirements: [REQ-GOV-002, REQ-GOV-003, REQ-GOV-005]
-estimate: XL
+depends_on: [WP-0100, WP-0104, WP-0304]
+requirements: [REQ-GOV-005]
+estimate: L
+editions: [desktop, workspace, demo]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16
 ---
 
-# WP-0318 — Agent Identities and identity-scoped runs
+# WP-0318 — Team-level identity: Team Owner and Auditor roles
 
 ## Goal
 
-Service principals for unattended runs; interactive runs never exceed the user; Team Owner and Auditor roles.
+Team Owner and Auditor roles and team-wide identities, on top of the principal model and Agent Identities built in Phase 1 (WP-0100, ADR-0006).
 
 ## Scope
 

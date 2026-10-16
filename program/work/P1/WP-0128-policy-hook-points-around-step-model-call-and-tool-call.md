@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: [WP-0122, WP-0133]
 requirements: [REQ-LOOP-017]
 estimate: L
+editions: [desktop, workspace]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

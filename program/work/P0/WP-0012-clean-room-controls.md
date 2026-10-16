@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: []
 requirements: [REQ-CLEAN-001, REQ-CLEAN-002, REQ-CLEAN-003, REQ-CLEAN-004, REQ-CLEAN-005]
 estimate: S
+editions: []
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

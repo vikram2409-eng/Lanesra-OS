@@ -29,6 +29,7 @@ def wp_text(wid="WP-0001", phase="0", status="ready", deps="", reqs="REQ-AAA-001
         depends_on: [{deps}]
         requirements: [{reqs}]
         estimate: M
+        editions: [desktop, workspace]
         branch:
         pr: {pr}
         updated: 2026-10-16
@@ -50,7 +51,7 @@ def wp_text(wid="WP-0001", phase="0", status="ready", deps="", reqs="REQ-AAA-001
         """) + extra
 
 
-class ProgramctlTest(unittest.TestCase):
+class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.saved = (pc.ROOT, pc.PROGRAM, pc.WORK, pc.REQS, pc.STATUS, pc.LOGS)
@@ -76,6 +77,8 @@ class ProgramctlTest(unittest.TestCase):
         reqs, _ = pc.load_requirements()
         return pc.validate(pc.load_work_packages(), reqs, strict_coverage=strict)
 
+
+class ProgramctlTest(Base):
     def test_valid_package_passes(self):
         self.add(wp_text())
         errors, _ = self.check()
@@ -120,13 +123,14 @@ class ProgramctlTest(unittest.TestCase):
         errors = self.check()[0]
         self.assertTrue(any("needs a pr link" in e for e in errors))
         self.assertTrue(any("unticked acceptance criteria" in e for e in errors))
-        self.add(wp_text(status="done", owner="codex", pr="https://example/pr/1", acs="- [x] AC-1: ok"))
+        self.add(wp_text(status="done", owner="codex", pr="https://example/pr/1", acs="- [x] AC-1: ok")
+                 .replace("branch:", "delivered: [desktop, workspace]\nbranch:"))
         self.assertEqual(self.check()[0], [])
 
     def test_done_requires_dependencies_done(self):
         self.add(wp_text(wid="WP-0001", status="ready", reqs="REQ-AAA-001"), wid="WP-0001")
         self.add(wp_text(wid="WP-0002", status="done", owner="x", pr="p", acs="- [x] AC-1: ok",
-                         deps="WP-0001", reqs="REQ-AAA-002"), wid="WP-0002")
+                         deps="WP-0001", reqs="REQ-AAA-002").replace("branch:", "delivered: [desktop, workspace]\nbranch:"), wid="WP-0002")
         self.assertTrue(any("dependency WP-0001 is ready" in e for e in self.check()[0]))
 
     def test_blocked_needs_blocker_section(self):
@@ -158,7 +162,20 @@ class ProgramctlTest(unittest.TestCase):
         self.assertEqual(pc.main(["status", "--check"]), 1)
 
 
-class ExportTest(ProgramctlTest):
+class EditionTest(Base):
+    def test_done_needs_every_edition_delivered(self):
+        txt = wp_text(status="done", owner="x", pr="p", acs="- [x] AC-1: ok")
+        self.add(txt)
+        self.assertTrue(any("not delivered in ['desktop', 'workspace']" in e for e in self.check()[0]))
+        self.add(txt.replace("branch:", "delivered: [desktop, workspace]\nbranch:"))
+        self.assertEqual(self.check()[0], [])
+
+    def test_bad_edition_rejected(self):
+        self.add(wp_text().replace("editions: [desktop, workspace]", "editions: [mobile]"))
+        self.assertTrue(any("editions" in e for e in self.check()[0]))
+
+
+class ExportTest(Base):
     def test_export_sequences_and_attributes_builders(self):
         self.add(wp_text(wid="WP-0001", reqs="REQ-AAA-001"), wid="WP-0001")
         log = "\n## Progress log\n\n### 2026-10-16 muse\nDid the first half.\n\n### 2026-10-17 claude\nFinished it.\n"
@@ -174,7 +191,7 @@ class ExportTest(ProgramctlTest):
         self.assertEqual({r["id"]: r["state"] for r in data["requirements"]}["REQ-AAA-001"], "planned")
 
 
-class BriefTest(ProgramctlTest):
+class BriefTest(Base):
     def test_brief_is_self_contained(self):
         self.add(wp_text(reqs="REQ-AAA-001, REQ-AAA-002"))
         wps = pc.load_work_packages()

@@ -8,6 +8,8 @@ owner: claude
 depends_on: [WP-0001]
 requirements: [REQ-PRE-013]
 estimate: S
+editions: []
+delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
 pr: 
 updated: 2026-10-16

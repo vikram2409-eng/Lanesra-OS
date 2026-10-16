@@ -67,6 +67,12 @@ section.view { display: grid; gap: 22px; }
 .rq-planned { background: var(--idle-bg); color: var(--idle); }
 .agent { background: var(--surface-2); color: var(--fg); }
 .crit { background: var(--warn-bg); color: var(--warn); }
+.eds { display: inline-flex; gap: 3px; flex-wrap: wrap; }
+.ed { font-family: var(--font-mono); font-size: 0.68rem; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.ed.on { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.edition-rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.edition { background: var(--surface); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
+.edition .nums { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* overview */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -181,9 +187,10 @@ tr.clickable:hover td { background: var(--surface); }
           <input id="pk-q" type="search" placeholder="Search work packages" aria-label="Search work packages">
           <select id="pk-phase" aria-label="Phase"></select>
           <select id="pk-status" aria-label="Status"></select>
+          <select id="pk-edition" aria-label="Edition"></select>
           <span class="count" id="pk-count"></span>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Seq</th><th>WP</th><th>Title</th><th>Status</th><th>Built by</th><th>Est</th><th>Depends on</th></tr></thead><tbody id="pk-rows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Seq</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Built by</th><th>Est</th><th>Depends on</th></tr></thead><tbody id="pk-rows"></tbody></table></div>
       </div>
       <div id="pk-detail" class="detail" hidden></div>
     </section>
@@ -210,6 +217,14 @@ tr.clickable:hover td { background: var(--surface); }
   var STATUS_ORDER = ["in_progress", "in_review", "blocked", "ready", "proposed", "done", "dropped"];
   var STATUS_LABEL = { done: "Done", in_progress: "In progress", in_review: "In review", ready: "Ready", proposed: "Planned", blocked: "Blocked", dropped: "Dropped" };
   var AGENT_LABEL = { claude: "Claude Code", muse: "Muse AI" };
+  var EDITIONS = [["desktop", "Desktop", "D"], ["workspace", "Team Workspace", "W"], ["demo", "Online demo", "O"]];
+  function eds(w) {
+    if (!w.editions.length) return '<span class="muted" title="Program or test infrastructure">infra</span>';
+    return '<span class="eds">' + EDITIONS.filter(function (e) { return w.editions.indexOf(e[0]) >= 0; }).map(function (e) {
+      var on = w.delivered.indexOf(e[0]) >= 0;
+      return '<span class="ed' + (on ? " on" : "") + '" title="' + e[1] + (on ? ": delivered" : ": not delivered yet") + '">' + (on ? "✓ " : "") + e[2] + "</span>";
+    }).join("") + "</span>";
+  }
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function inline(s) {
@@ -295,6 +310,15 @@ tr.clickable:hover td { background: var(--surface); }
     });
     h.push("</div></div>");
 
+    h.push('<div class="block"><h2>Edition coverage</h2><p class="muted" style="font-size:.85rem">Every capability ships in each edition it applies to. On the online demo it is simulated on sample data. A work package is done only when every one of its editions is delivered.</p><div class="edition-rows">');
+    EDITIONS.forEach(function (e) {
+      var tw = wps.filter(function (w) { return w.editions.indexOf(e[0]) >= 0; });
+      var dw = tw.filter(function (w) { return w.delivered.indexOf(e[0]) >= 0; });
+      var tp = tw.reduce(function (a, w) { return a + w.points; }, 0), dp = dw.reduce(function (a, w) { return a + w.points; }, 0);
+      h.push('<div class="edition"><b>' + e[1] + '</b><div class="meter"><i style="width:' + (tp ? Math.round(100 * dp / tp) : 0) + '%"></i></div><div class="nums">' + dw.length + " / " + tw.length + " work packages · " + dp + " / " + tp + " pts</div></div>");
+    });
+    h.push("</div></div>");
+
     h.push('<div class="cols"><div class="col"><h2>Being built now</h2><div class="list">');
     if (!active.length) h.push('<div class="empty">Nothing in progress.</div>');
     active.forEach(function (w) {
@@ -329,21 +353,21 @@ tr.clickable:hover td { background: var(--surface); }
   // ------------------------------------------------------------- sequence
   function renderSequence() {
     var h = ['<div class="block"><h2>Build sequence</h2><p class="muted">Every work package in build order: by phase, then dependency wave (a wave can start once the waves before it are done), then id. A gate closes each phase. Work packages in the same wave can be built in parallel.</p></div>'];
-    h.push('<div class="table-wrap"><table><thead><tr><th>Seq</th><th>Wave</th><th>WP</th><th>Title</th><th>Status</th><th>Built by</th><th>Est</th><th>Depends on</th><th>Unblocks</th></tr></thead><tbody>');
+    h.push('<div class="table-wrap"><table><thead><tr><th>Seq</th><th>Wave</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Built by</th><th>Est</th><th>Depends on</th><th>Unblocks</th></tr></thead><tbody>');
     var lastPhase = null;
     D.work_packages.forEach(function (w) {
       if (w.phase !== lastPhase) {
         if (lastPhase !== null && GATE_FOR[lastPhase]) {
           var g = D.gates.filter(function (x) { return x.id === GATE_FOR[lastPhase]; })[0];
-          if (g) h.push('<tr class="gate-row"><td colspan="9">◆ ' + esc(g.title) + " · " + esc(g.status) + "</td></tr>");
+          if (g) h.push('<tr class="gate-row"><td colspan="10">◆ ' + esc(g.title) + " · " + esc(g.status) + "</td></tr>");
         }
-        h.push('<tr class="phase-head"><td colspan="9"><h3>' + esc(phaseName(w.phase)) + "</h3></td></tr>");
+        h.push('<tr class="phase-head"><td colspan="10"><h3>' + esc(phaseName(w.phase)) + "</h3></td></tr>");
         lastPhase = w.phase;
       }
-      h.push('<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + '</td><td class="num">' + w.wave + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + (w.critical ? ' <span class="pill crit">critical</span>' : "") + "</td><td>" + pill(w.status) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td><td>" + (w.unblocks.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>");
+      h.push('<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + '</td><td class="num">' + w.wave + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + (w.critical ? ' <span class="pill crit">critical</span>' : "") + "</td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td><td>" + (w.unblocks.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>");
     });
     var g4 = D.gates.filter(function (x) { return x.id === "G4"; })[0];
-    if (g4) h.push('<tr class="gate-row"><td colspan="9">◆ ' + esc(g4.title) + " · " + esc(g4.status) + "</td></tr>");
+    if (g4) h.push('<tr class="gate-row"><td colspan="10">◆ ' + esc(g4.title) + " · " + esc(g4.status) + "</td></tr>");
     h.push("</tbody></table></div>");
     document.getElementById("view-sequence").innerHTML = h.join("");
   }
@@ -354,17 +378,18 @@ tr.clickable:hover td { background: var(--surface); }
   }
   function renderPackageList() {
     var q = document.getElementById("pk-q").value.trim().toLowerCase();
-    var ph = document.getElementById("pk-phase").value, st = document.getElementById("pk-status").value;
+    var ph = document.getElementById("pk-phase").value, st = document.getElementById("pk-status").value, ed = document.getElementById("pk-edition").value;
     var rows = D.work_packages.filter(function (w) {
       if (ph && w.phase !== ph) return false;
       if (st && w.status !== st) return false;
+      if (ed && w.editions.indexOf(ed) < 0) return false;
       if (q && (w.id + " " + w.title + " " + w.epic + " " + w.goal).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     document.getElementById("pk-count").textContent = rows.length + " of " + D.work_packages.length;
     document.getElementById("pk-rows").innerHTML = rows.map(function (w) {
-      return '<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + '<div class="muted" style="font-size:.78rem">' + esc(w.epic) + "</div></td><td>" + pill(w.status) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>";
-    }).join("") || '<tr><td colspan="7" class="empty">No work package matches these filters.</td></tr>';
+      return '<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + '<div class="muted" style="font-size:.78rem">' + esc(w.epic) + "</div></td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>";
+    }).join("") || '<tr><td colspan="8" class="empty">No work package matches these filters.</td></tr>';
   }
   function renderDetail(id) {
     var w = WP[id]; if (!w) return;
@@ -381,6 +406,10 @@ tr.clickable:hover td { background: var(--surface); }
       '<div class="fact"><div class="k">Pull request</div><div class="v">' + (w.pr ? '<a href="' + esc(w.pr) + '" target="_blank" rel="noopener">' + esc(w.pr) + "</a>" : '<span class="muted">none yet</span>') + "</div></div>" +
       '<div class="fact"><div class="k">Updated</div><div class="v mono">' + esc(w.updated) + "</div></div>" +
       '<div class="fact"><div class="k">File</div><div class="v"><a href="' + esc(repoUrl(w.file)) + '" target="_blank" rel="noopener">open in GitHub</a></div></div></div>');
+    h.push('<div class="block"><h3>Editions</h3><div class="edition-rows">' + (w.editions.length ? EDITIONS.map(function (e) {
+      var t = w.editions.indexOf(e[0]) >= 0, d = w.delivered.indexOf(e[0]) >= 0;
+      return '<div class="edition"><b>' + e[1] + "</b><span>" + (!t ? '<span class="muted">Not applicable</span>' : d ? '<span class="pill st-done">Delivered</span>' : '<span class="pill st-proposed">Not delivered yet</span>') + "</span></div>";
+    }).join("") : '<div class="muted">Program or test infrastructure; not shipped in a product edition.</div>') + "</div></div>");
     if (w.blocker) h.push('<div class="block"><h3>Blocked by</h3><div class="md">' + md(w.blocker) + "</div></div>");
     h.push('<div class="block"><h3>Goal</h3><div class="md">' + md(w.goal) + "</div></div>");
     h.push('<div class="two"><div class="block"><h3>Scope</h3><div class="md">' + (md(w.scope) || '<p class="muted">—</p>') + "</div>" + (w.out_of_scope ? '<h3>Out of scope</h3><div class="md">' + md(w.out_of_scope) + "</div>" : "") + '</div><div class="block"><h3>Acceptance criteria</h3><ul class="crit-list">' +
@@ -490,7 +519,8 @@ tr.clickable:hover td { background: var(--surface); }
     fillSelect(document.getElementById("rq-area"), "All areas", areas);
     fillSelect(document.getElementById("rq-phase"), "All phases", D.phases.map(function (p) { return p.id; }), function (v) { return v === "v2" ? "v2" : "Phase " + v; });
     fillSelect(document.getElementById("rq-state"), "All states", ["delivered", "in progress", "planned"]);
-    ["pk-q", "pk-phase", "pk-status"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderPackageList); });
+    fillSelect(document.getElementById("pk-edition"), "All editions", EDITIONS.map(function (e) { return e[0]; }), function (v) { return EDITIONS.filter(function (e) { return e[0] === v; })[0][1]; });
+    ["pk-q", "pk-phase", "pk-status", "pk-edition"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderPackageList); });
     ["rq-q", "rq-area", "rq-phase", "rq-state"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderReqs); });
     renderOverview(); renderSequence(); renderPackageList(); renderReqs(); renderFinish(); renderGates();
     document.getElementById("loading").hidden = true;

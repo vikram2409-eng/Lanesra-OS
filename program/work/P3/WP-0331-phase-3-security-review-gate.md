@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: [WP-0307, WP-0308, WP-0309, WP-0318, WP-0324]
 requirements: [REQ-PRE-009]
 estimate: L
+editions: [desktop, workspace]
+delivered: []
 branch: 
 pr: 
 updated: 2026-10-16

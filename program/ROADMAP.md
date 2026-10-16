@@ -9,9 +9,9 @@ size is shown in estimate points and forecast as described under "Forecasting".
 ```mermaid
 flowchart LR
   P0["Phase 0 · Precursors<br/>18 WPs · 34 pts"] --> G0{{"G0 · Engineering ready"}}
-  G0 --> P1["Phase 1 · Foundations<br/>34 WPs · 106 pts"] --> G1{{"G1 · Every run produces a full trace"}}
+  G0 --> P1["Phase 1 · Foundations<br/>35 WPs · 114 pts"] --> G1{{"G1 · Every run produces a full trace"}}
   G1 --> P2["Phase 2 · Playground<br/>24 WPs · 90 pts"] --> G2{{"G2 · Templates pass their eval suites"}}
-  G2 --> P3["Phase 3 · Teams and modes<br/>31 WPs · 124 pts"] --> G3{{"G3 · Security review signed off"}}
+  G2 --> P3["Phase 3 · Teams and modes<br/>31 WPs · 120 pts"] --> G3{{"G3 · Security review signed off"}}
   G3 --> P4["Phase 4 · Enterprise scale<br/>19 WPs · 75 pts"] --> G4{{"G4 · GA"}}
   G4 --> V2["v2 · Open interop"]
 ```
@@ -39,7 +39,7 @@ The longest dependency chain decides the earliest finish. Keep these WPs staffed
 else fills parallel lanes.
 
 ```
-WP-0008 gap audit → WP-0009 ADRs → WP-0110 run/step schema → WP-0111 spans → WP-0112 SSE events
+WP-0008 gap audit → WP-0009 ADRs → WP-0100 identity foundation → WP-0110 run/step schema → WP-0111 spans → WP-0112 SSE events
   → WP-0113 full-trace conformance (G1) → WP-0202 run API → WP-0203 Playground shell
   → WP-0204 trace pane → … → WP-0213 publish gate → WP-0221 templates (G2)
   → WP-0301 teams → WP-0302 playbooks → WP-0303 compiler → WP-0304 run controller
@@ -104,5 +104,5 @@ measured throughput:
 4. Write the forecast in the gate file. If the budget is short, cut or defer scope explicitly
    (an ADR), never quality.
 
-Rough order of magnitude for planning only: about 433 points in total. The spec's own proposal
+Rough order of magnitude for planning only: about 437 points in total. The spec's own proposal
 was 28 weeks for Phases 1–4 with a human team; it is not a commitment here.

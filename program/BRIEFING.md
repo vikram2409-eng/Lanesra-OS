@@ -26,6 +26,14 @@ We are adding the **Agent Playground and Orchestration layer** from the design s
 
 It is enterprise grade: **no shortcuts**. Every acceptance criterion is proven by a test.
 
+It ships in **three editions**: the desktop app, the Team Workspace server, and the online demo
+(simulated on sample data). Each work package's `editions:` says where it must ship, and it is not
+done until `delivered:` lists all of them.
+
+**Identity first:** humans, Agent Identities and API clients are one principal model, built at the
+start of Phase 1 (WP-0100, ADR-0006). Agents get their own identity and Lanesra-issued credentials,
+never a human's login or an Administrator's rights.
+
 ## 2. Where everything is
 
 | You need | Read |
@@ -47,9 +55,9 @@ It is enterprise grade: **no shortcuts**. Every acceptance criterion is proven b
 | Phase | Gate to pass | Size | Contents |
 |---|---|---|---|
 | 0 · Precursors | Engineering ready | 18 WPs · 34 pts | CI on every PR, green `main`, lockfiles, scripted model provider for tests, E2E and migration test harnesses, foundational ADRs, feature flags, threat model, clean-room controls, Issues mirror, Muse relay path |
-| 1 · Foundations | Every run produces a full trace | 34 WPs · 106 pts | SSO (OIDC + SAML, desktop and server), bring-your-own-model provider coverage and model catalog, run/step model, trace spans and SSE events, step limits and partial results, task contracts, guardrails, prompt catalog, approvals unified, minimal prompt-injection defence, agent settings groups |
+| 1 · Foundations | Every run produces a full trace | 35 WPs · 114 pts | Identity foundation (principals, Agent Identities, agent credentials), SSO (OIDC + SAML, desktop and server), bring-your-own-model provider coverage and model catalog, run/step model, trace spans and SSE events, step limits and partial results, task contracts, guardrails, prompt catalog, approvals unified, minimal prompt-injection defence, agent settings groups |
 | 2 · Playground | Templates pass their evaluation suites | 24 WPs · 90 pts | Three-pane Playground, live trace, step-through, simulate writes, fork/replay, compare, save as test case, publish gate, Guided Setup, three industry templates, online demo Playground |
-| 3 · Teams and modes | Security review signed off | 31 WPs · 124 pts | Teams, seats, compiler, run controller, Manager-led / Round Table / Handoff / Debate / Graph modes, Agent Identities, budgets, memory recall, team editor and canvas |
+| 3 · Teams and modes | Security review signed off | 31 WPs · 120 pts | Teams, seats, compiler, run controller, Manager-led / Round Table / Handoff / Debate / Graph modes, team-level roles, budgets, memory recall, team editor and canvas |
 | 4 · Enterprise scale | General availability | 19 WPs · 75 pts | Worker pool, hash-chained audit, retention, kill switch, four-eyes, content labels, Missions, shadow mode, A/B, team endpoints |
 
 Points: S=1, M=2, L=4, XL=8. Pace depends on available AI tokens, not calendar weeks.

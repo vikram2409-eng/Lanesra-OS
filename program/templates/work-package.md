@@ -8,6 +8,8 @@ owner: unassigned
 depends_on: []
 requirements: [REQ-AREA-NNN]
 estimate: M
+editions: [desktop, workspace, demo]   # where it must ship: desktop, workspace (Team Workspace server), demo (online demo); [] for program/test infrastructure
+delivered: []                         # editions where it has shipped (merged); done needs all of them
 branch:
 pr:
 updated: YYYY-MM-DD
