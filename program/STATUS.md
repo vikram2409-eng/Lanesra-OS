@@ -6,7 +6,7 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 18 | 0 | 4 | 8 | 0 | 6 | 0 / 34 | `░░░░░░░░░░` 0% |
+| 0 · Precursors | 18 | 0 | 4 | 8 | 0 | 6 | 0 / 33 | `░░░░░░░░░░` 0% |
 | 1 · Foundations | 35 | 0 | 0 | 0 | 0 | 35 | 0 / 114 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
@@ -74,7 +74,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0005 |
 | [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | 🔨 in progress | M | ○Desktop ○Team Workspace | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | 🔨 in progress | S | — | WP-0001 |
-| [WP-0018](work/P0/WP-0018-apply-changes-from-ais-without-a-shell.md) | Apply changes from AIs without a shell (Muse AI relay path) | E0.1 Program and engineering readiness | 🟢 ready | M | — | WP-0003 |
+| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | 🟢 ready | S | — | WP-0003 |
 
 ## Phase 1 · Foundations
 

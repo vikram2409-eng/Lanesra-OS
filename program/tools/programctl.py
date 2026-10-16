@@ -398,7 +398,8 @@ Already delivered in: {", ".join(EDITION_NAMES[e] for e in (w.get("delivered") o
 
 ## What you must deliver
 
-1. The code and test changes, as a patch (or transform script) against `main`.
+1. The code and test changes, committed on the work package's `wp/` branch with a draft PR (or, if you
+   cannot commit, as one patch for the owner).
 2. These edits to `{path}`, included in the same patch:
    - front matter: `status: in_review` if every acceptance criterion is met, else `in_progress`;
      `owner: <your agent name, e.g. claude or muse>`; `updated: {today}`
@@ -421,7 +422,7 @@ Already delivered in: {", ".join(EDITION_NAMES[e] for e in (w.get("delivered") o
 4. Do not edit `program/STATUS.md` or GitHub Issues - they are regenerated automatically.
 5. Before you call it finished, go through `program/FINISH-CHECKLIST.md` (prove it, record it,
    publish it). The items you cannot do without a shell (running the suite, opening the PR,
-   regenerating STATUS.md) are done by CI, the Agent apply Action or the next Claude Code session.
+   regenerating STATUS.md) are done by CI and the tracker-upkeep workflow (WP-0018).
 """
 
 

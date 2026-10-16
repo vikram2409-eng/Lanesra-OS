@@ -33,7 +33,7 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-PRE-012** [P0] A performance baseline (agent loop overhead, graph runtime step latency, SQLite growth per run) is measured so later phases can be held to budgets
 - **REQ-PRE-013** [P0] Work packages are mirrored one-way to GitHub Issues with phase milestones and status labels; the repo files stay the source of truth (owner decision, ADR-0004)
 - **REQ-PRE-015** [P0] Every capability ships in each edition it applies to - desktop, Team Workspace and the online demo (simulated on sample data, write tools always simulated) - and the tracker records, per work package, the editions it targets and the editions it has been delivered in; a work package is not done until every targeted edition is delivered (owner decision, 2026-10-16)
-- **REQ-PRE-014** [P0] An AI that cannot run a shell or git (Muse AI) can deliver a change through a GitHub Action that applies it to a `wp/` branch and runs the same validation and CI as any other change (owner decision, ADR-0004)
+- **REQ-PRE-014** [P0] An AI that works through GitHub without a shell (Muse AI: reads the repo, commits, opens issues and PRs) gets the same checks and tracker upkeep as one with a shell: CI regenerates the generated tracker files on its PR branch and posts validation, trace and test results on the PR where it can read them (owner decision, ADR-0004; updated 2026-10-16)
 
 ## CLEAN — Clean-room approach
 

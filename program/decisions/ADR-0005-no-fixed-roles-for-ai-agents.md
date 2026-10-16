@@ -19,7 +19,7 @@ Fixed roles would stall half the plan whenever one agent is unavailable.
 3. Switching AI in the middle of a work package is a normal step, done through the Progress log and
    `programctl brief` on the same branch and pull request (AGENT-PROFILES.md, "Switching").
 4. The agents differ only in mechanics (Muse cannot run tests or git), handled by CI (WP-0003) and
-   the Agent apply Action (WP-0018).
+   the tracker-upkeep workflow (WP-0018); Muse reads the repo and opens PRs itself (owner, 2026-10-16).
 5. Review: by an agent other than the author when available, otherwise by the owner.
 
 ## Consequences

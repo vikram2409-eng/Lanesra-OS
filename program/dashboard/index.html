@@ -472,7 +472,7 @@ tr.clickable:hover td { background: var(--surface); }
     });
     h.push("</div>");
     h.push('<div class="two"><div class="block who"><h3>If the AI is Claude Code</h3><p>It runs every step itself: the full test suite, <code>programctl status</code>, the push and the pull request. At its next session it also republishes this page.</p></div>' +
-      '<div class="block who"><h3>If the AI is Muse AI</h3><p>Its patch carries the code, the tests and the work package edits, and it marks unrun criteria "untested locally – see CI". CI runs the suite, and the Agent apply Action (WP-0018) commits the patch and opens the pull request. Until that Action exists, you commit the patch through GitHub.</p></div></div>');
+      '<div class="block who"><h3>If the AI is Muse AI</h3><p>It works through GitHub: it reads the repo, commits on the work package branch and opens the pull request. It cannot run tests or <code>programctl</code>, so it marks criteria "untested locally – see CI". CI runs the suite, regenerates <code>STATUS.md</code> on the branch and posts the results on the pull request (WP-0018).</p></div></div>');
     h.push('<div class="block"><h3>Switching AI part-way</h3><p>Stopping mid-way is normal when a weekly limit runs out. Push everything, leave the status as in progress, and write a Progress log entry precise enough for the other AI to continue on the same branch tomorrow. The other AI starts from that entry, using <code>programctl brief WP-XXXX</code>.</p></div>');
     document.getElementById("view-finish").innerHTML = h.join("");
   }

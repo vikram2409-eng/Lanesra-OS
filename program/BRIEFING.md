@@ -114,12 +114,13 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
 > the full regression suite green, update the Progress log, session log and STATUS.md, push, and
 > open a draft PR titled "[WP-XXXX] …". Stop and ask me if the spec is unclear.
 
-**For Muse AI** (give it this file and the task card from `programctl brief WP-XXXX`):
+**For Muse AI** (it reads the repo itself; name the work package, or let it take the next ready one):
 
-> You are working on the Lanesra OS Agent Playground build; Claude Code may have worked on this task
-> before you, and may continue after you. Read the briefing and
-> the task card I have attached; follow its acceptance criteria and the hard rules in the
+> You are working on the Lanesra OS Agent Playground build in the GitHub repository; Claude Code may
+> have worked on this task before you, and may continue after you. Read AGENTS.md, this briefing and
+> program/work/…/WP-XXXX-*.md (or the next item under "Ready to start" in program/STATUS.md); follow its acceptance criteria and the hard rules in the
 > briefing. You cannot run tests, so make your change as small and reviewable as possible, include
-> the tests the work package asks for, and write a Progress log entry that says what you changed,
-> what is untested locally, and exactly what the next agent (possibly a different AI) should do next. Deliver one patch that contains the code,
-> the tests and the work package file edits listed under "What you must deliver" on the card.
+> the tests the work package asks for, work on its `wp/` branch with a draft PR titled "[WP-XXXX] …",
+> read the CI results and bot comment on the PR, and write a Progress log entry that says what you changed,
+> what is untested locally, and exactly what the next agent (possibly a different AI) should do next. Follow program/FINISH-CHECKLIST.md before
+> asking for review; leave STATUS.md to CI.

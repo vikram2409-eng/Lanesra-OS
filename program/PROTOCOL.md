@@ -60,8 +60,8 @@ A claim must be visible to every other agent immediately, without waiting for a 
    `programctl status`; commit `chore(program): claim WP-XXXX`.
 3. Open a **draft** pull request titled `[WP-XXXX] <title>` using the PR template.
 4. If `git push` of the branch is rejected because it exists, someone else has it. Pick another.
-5. Muse AI (no git): the owner pushes the claim (or the Agent apply Action does, once WP-0018 lands)
-   and hands Muse the task card from `programctl brief WP-XXXX`. See AGENT-PROFILES.md.
+5. Muse AI (works through GitHub, no shell): creates the branch and draft PR itself; it cannot run
+   `programctl`, so CI regenerates `STATUS.md` on its branch and posts results on the PR (WP-0018).
 6. **Switching AI mid-work** (one AI's usage limit is reached): the new AI continues on the same
    branch and PR from the last Progress log entry and sets `owner:` to itself. See AGENT-PROFILES.md
    "Switching from one AI to the other".
