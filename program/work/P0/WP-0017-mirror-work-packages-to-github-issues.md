@@ -3,7 +3,7 @@ id: WP-0017
 title: Mirror work packages to GitHub Issues
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0001]
 requirements: [REQ-PRE-013]
@@ -33,7 +33,7 @@ GitHub while the work package files stay the single source of truth for every AI
 - [x] AC-1: Dry run lists one create per work package with labels, milestone and state
 - [x] AC-2: Unchanged issues produce no update; changed ones (state, body, labels) do; dependency links resolve to issue numbers
 - [x] AC-3: First run on main creates all issues and milestones (verify after merge; link the Actions run here)
-- [ ] AC-4: A second run with no changes performs zero updates (idempotent)
+- [x] AC-4: A second run with no changes performs zero updates (idempotent)
 
 ## Test plan
 
@@ -50,3 +50,6 @@ PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared plannin
 
 ### 2026-10-16 claude (after merge)
 First run on main after the merge created 128 issues (#493-#620), one per work package, with phase milestones and labels: AC-3 met. AC-4 (no duplicates on a second run) is checked on the next merge to main; stays in_review until then.
+
+### 2026-10-16 claude
+Second mirror run (after PR #621 merged, Actions run 38861053823) succeeded and the issue count stayed at 128: no duplicates. AC-4 met; status done.

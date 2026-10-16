@@ -70,6 +70,12 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | I-09 | 25 of 58 live help articles (e.g. /help/access-roles-and-record-scopes, /help/policy-engine-tool-call-firewall, all four voice articles) were missing from `sitemap.xml` | 2026-10-16 | Added on PR #492; `programctl docs --check` now fails CI if it happens again (REQ-PRE-016) | Fixed 2026-10-16 |
 | I-10 | PR #492 merged while work was still being pushed; commit f28e869 (help/sitemap and editions rules) landed on the merged branch and never reached `main` or the live site | 2026-10-16 | Carried onto a branch restarted from `main` and opened as a new PR; PROTOCOL §7 now requires checking the PR is open before every push | Fixed 2026-10-16 |
 
+## Tech debt
+
+| ID | Debt | Where | Plan | Status |
+|---|---|---|---|---|
+| T-01 | Clippy lints allowed workspace-wide: too_many_arguments (16 functions), type_complexity (8), should_implement_trait (6 `from_str` methods) | `desktop/Cargo.toml` `[workspace.lints.clippy]` | Pay down opportunistically when a work package touches the function; never add new allows without a reason | Open |
+
 ## Dependencies (external)
 
 | ID | Dependency | Needed by | Status |
