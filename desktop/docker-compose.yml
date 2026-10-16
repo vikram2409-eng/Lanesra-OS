@@ -1,5 +1,9 @@
 services:
   lanesra:
+    # Build from source, or comment out `build:` and use the image published
+    # with each release: ghcr.io/vikram2409-eng/lanesra-os-server:<version>
+    # Setup, internet exposure, backups and upgrades:
+    # https://lanesraos.com/help/set-up-team-workspace
     build: .
     image: lanesra-os-server
     ports:

@@ -3,8 +3,8 @@ id: WP-0020
 title: Team Workspace server image builds, is pinned, and ships
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0003]
 requirements: [REQ-PRE-018, REQ-PRE-015]
 estimate: M
@@ -12,7 +12,7 @@ editions: [workspace]
 editions_reason: Packaging of the Team Workspace server only; the desktop app has its own release workflow and the online demo is static files
 delivered: []
 docs: [set-up-team-workspace]
-branch: 
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
 updated: 2026-10-16
 ---
@@ -61,7 +61,7 @@ Every Playground feature has to ship in Team Workspace too (REQ-PRE-015), so the
 ## Acceptance criteria
 
 - [ ] AC-1: `docker build` succeeds from a clean checkout and uses `Cargo.lock` (the build fails if the lockfile is out of date)
-- [ ] AC-2: The Rust and Node versions in the image match `rust-toolchain.toml` and `.nvmrc`; a CI check fails if they drift
+- [x] AC-2: The Rust and Node versions in the image match `rust-toolchain.toml` and `.nvmrc`; a CI check fails if they drift
 - [ ] AC-3: The `server image` CI job runs the smoke test above on every pull request, and fails when it fails
 - [ ] AC-4: A version tag publishes the image to GHCR, and the published image passes the same smoke test
 - [ ] AC-5: The help article `set-up-team-workspace` is live, names this work package, and is in the sitemap
@@ -82,3 +82,18 @@ Every Playground feature has to ship in Team Workspace too (REQ-PRE-015), so the
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 
 - 2026-10-16 claude: Created from the Team Workspace review. The broken build (I-24) was caused by WP-0004's workspace lints, so it is a regression to fix first.
+
+- 2026-10-16 claude: Built on the branch after PR #628 merged:
+  - `desktop/Dockerfile` copies the whole Cargo workspace (manifests, `Cargo.lock`, `rust-toolchain.toml`, member sources) and builds `cargo build --release --locked -p lanesra-server`, so workspace lints apply and the lockfile is honoured. The Rust (1.97.0) and Node (22) base images are pinned to the repo's pins. A `HEALTHCHECK` uses `/api/health`.
+  - `program/tools/check_toolchain_pins.py` and 5 self-tests: CI fails if the Dockerfile's versions drift from `rust-toolchain.toml` or `.nvmrc`.
+  - `desktop/scripts/server-image-smoke.sh`: start the image on an empty volume, run first-run setup, sign in, create a record, restart, sign in again and confirm the record is still there.
+  - CI job `server image (Team Workspace)`: checks the pins, builds with buildx and a GitHub Actions layer cache, runs the smoke test, and prints the server log.
+  - `.github/workflows/server-image-release.yml`: on the same `desktop-v*` tag as the desktop release (REQ-PRE-021), builds, smoke-tests, then pushes `ghcr.io/vikram2409-eng/lanesra-os-server:<version>` and `:latest`. Only this workflow has `packages: write`.
+  - Help article `set-up-team-workspace` (wps WP-0020) and its sitemap entry; `llms.txt`, `llms-full.txt`, `desktop/README.md` and `docker-compose.yml` updated; PROTOCOL §13 notes the new check.
+  - Verified here:
+    - Cargo parses the Dockerfile's layout and `--locked` resolves `lanesra-server`. The old layout failed to parse, which reproduces RAID I-24.
+    - Every HTTP step of the smoke test passed against a local `lanesra-server` binary.
+    - Base image tags exist on Docker Hub.
+  - Not verifiable here: there is no Docker daemon and only 2.4 GB of disk, so the image build itself is proven by the CI job.
+  - Next: the CI run proves AC-1 and AC-3. Prove the job red once (AC-3), then revert. AC-4 is proven on the first release tag. Ask the owner to make `server image` a required check after a week of green runs.
+  - Gotcha: `src-tauri/Cargo.lock` is a stray, tracked file that Cargo ignores, because the workspace lockfile wins. It is left alone; noted as RAID T-06.
