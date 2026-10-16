@@ -10,6 +10,7 @@ requirements: [REQ-GOV-002, REQ-GOV-003, REQ-GOV-029]
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [agent-identities, access-roles-and-record-scopes]
 branch: 
 pr: 
 updated: 2026-10-16

@@ -414,6 +414,20 @@ tr.clickable:hover td { background: var(--surface); }
       var t = w.editions.indexOf(e[0]) >= 0, d = w.delivered.indexOf(e[0]) >= 0;
       return '<div class="edition"><b>' + e[1] + "</b><span>" + (!t ? '<span class="muted">Not applicable</span>' : d ? '<span class="pill st-done">Delivered</span>' : '<span class="pill st-proposed">Not delivered yet</span>') + "</span></div>";
     }).join("") : '<div class="muted">Program or test infrastructure; not shipped in a product edition.</div>') + "</div></div>");
+    if (w.editions_reason) h.push('<p class="muted" style="font-size:.88rem">Not in every edition because: ' + inline(w.editions_reason) + "</p>");
+    if (w.editions.length) {
+      h.push('<div class="block"><h3>Website help to create or update</h3>');
+      if (!w.docs.length) h.push('<p class="muted">' + (w.docs_reason ? "No help article: " + inline(w.docs_reason) : "None named yet.") + "</p>");
+      else {
+        h.push('<div class="list">');
+        w.docs.forEach(function (d) {
+          var state = !d.exists ? '<span class="pill st-proposed">new article needed</span>' : d.names_wp ? '<span class="pill st-done">live, updated for this work package</span>' : '<span class="pill st-ready">live, not yet updated for this work package</span>';
+          h.push('<div class="item" style="grid-template-columns:minmax(0,1fr) auto"><a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(d.url.replace("https://", "")) + "</a><span>" + state + (d.in_sitemap ? "" : ' <span class="pill st-blocked">not in sitemap</span>') + "</span></div>");
+        });
+        h.push("</div>");
+      }
+      h.push("</div>");
+    }
     if (w.blocker) h.push('<div class="block"><h3>Blocked by</h3><div class="md">' + md(w.blocker) + "</div></div>");
     h.push('<div class="block"><h3>Goal</h3><div class="md">' + md(w.goal) + "</div></div>");
     h.push('<div class="two"><div class="block"><h3>Scope</h3><div class="md">' + (md(w.scope) || '<p class="muted">—</p>') + "</div>" + (w.out_of_scope ? '<h3>Out of scope</h3><div class="md">' + md(w.out_of_scope) + "</div>" : "") + '</div><div class="block"><h3>Acceptance criteria</h3><ul class="crit-list">' +

@@ -10,6 +10,8 @@ requirements: [REQ-ORCH-025]
 estimate: M
 editions: [desktop, workspace]
 delivered: []
+editions_reason: long background calls only happen with real model providers
+docs: [unified-ai-gateway]
 branch: 
 pr: 
 updated: 2026-10-16

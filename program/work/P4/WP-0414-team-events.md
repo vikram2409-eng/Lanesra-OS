@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0313]
 requirements: [REQ-ORCH-041]
 estimate: M
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [event-playbooks]
 branch: 
 pr: 
 updated: 2026-10-16

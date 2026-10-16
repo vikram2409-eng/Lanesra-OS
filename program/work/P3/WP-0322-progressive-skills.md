@@ -10,6 +10,7 @@ requirements: [REQ-TOOL-010]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [extending-the-foundry]
 branch: 
 pr: 
 updated: 2026-10-16

@@ -10,6 +10,7 @@ requirements: [REQ-GOV-004]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [access-roles-and-record-scopes]
 branch: 
 pr: 
 updated: 2026-10-16

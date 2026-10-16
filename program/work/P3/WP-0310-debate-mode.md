@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-012]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [debate-mode]
 branch: 
 pr: 
 updated: 2026-10-16

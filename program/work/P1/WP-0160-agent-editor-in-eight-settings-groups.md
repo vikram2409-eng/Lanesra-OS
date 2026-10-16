@@ -10,6 +10,7 @@ requirements: [REQ-SETUP-001, REQ-SETUP-002, REQ-SETUP-003, REQ-SETUP-004, REQ-S
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [build-your-first-agent]
 branch: 
 pr: 
 updated: 2026-10-16

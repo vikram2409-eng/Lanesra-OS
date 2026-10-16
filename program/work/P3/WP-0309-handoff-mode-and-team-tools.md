@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-010, REQ-TOOL-002]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [handoff-mode]
 branch: 
 pr: 
 updated: 2026-10-16

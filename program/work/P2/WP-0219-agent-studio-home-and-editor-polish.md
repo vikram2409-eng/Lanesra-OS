@@ -10,6 +10,7 @@ requirements: [REQ-UI-001, REQ-UI-002]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [build-your-first-agent]
 branch: 
 pr: 
 updated: 2026-10-16

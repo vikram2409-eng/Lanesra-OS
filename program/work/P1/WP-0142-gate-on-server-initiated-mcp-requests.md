@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0150]
 requirements: [REQ-TOOL-011]
 estimate: M
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [mcp-client-connect-external-server]
 branch: 
 pr: 
 updated: 2026-10-16

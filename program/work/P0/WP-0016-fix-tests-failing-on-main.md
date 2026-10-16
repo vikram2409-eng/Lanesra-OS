@@ -10,6 +10,8 @@ requirements: [REQ-PRE-001]
 estimate: M
 editions: [desktop, workspace]
 delivered: []
+editions_reason: bug fix in the shared Rust core; whether the online demo's own lookup logic has the same bug is checked in WP-0008
+docs: [custom-relationships]
 branch: claude/enterprise-build-planning-jxy2kq
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492
 updated: 2026-10-16

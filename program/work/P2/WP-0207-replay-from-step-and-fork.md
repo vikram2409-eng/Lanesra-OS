@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-018, REQ-ORCH-019, REQ-PG-009]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [agent-playground]
 branch: 
 pr: 
 updated: 2026-10-16

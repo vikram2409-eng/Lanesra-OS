@@ -10,6 +10,7 @@ requirements: [REQ-PG-010, REQ-EVAL-001, REQ-EVAL-002]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [evaluation-harness]
 branch: 
 pr: 
 updated: 2026-10-16

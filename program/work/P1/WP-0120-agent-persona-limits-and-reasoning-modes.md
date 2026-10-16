@@ -10,6 +10,7 @@ requirements: [REQ-CORE-001, REQ-CORE-002, REQ-LOOP-015]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [build-your-first-agent]
 branch: 
 pr: 
 updated: 2026-10-16

@@ -10,6 +10,8 @@ requirements: [REQ-API-002, REQ-API-006, REQ-API-007]
 estimate: L
 editions: [desktop, workspace]
 delivered: []
+editions_reason: a server API; the online demo has no server
+docs: [api-access-and-webhooks]
 branch: 
 pr: 
 updated: 2026-10-16

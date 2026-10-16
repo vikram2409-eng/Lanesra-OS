@@ -10,6 +10,8 @@ requirements: [REQ-API-010, REQ-API-011, REQ-API-012]
 estimate: L
 editions: [desktop, workspace]
 delivered: []
+editions_reason: protocol endpoints need a running server
+docs: [api-access-and-webhooks]
 branch: 
 pr: 
 updated: 2026-10-16

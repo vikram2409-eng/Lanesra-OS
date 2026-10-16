@@ -10,6 +10,7 @@ requirements: [REQ-MEM-008, REQ-MEM-010]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [memory-architecture-document-rag]
 branch: 
 pr: 
 updated: 2026-10-16

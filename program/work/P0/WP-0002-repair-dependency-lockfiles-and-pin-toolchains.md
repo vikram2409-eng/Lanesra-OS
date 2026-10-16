@@ -8,7 +8,7 @@ owner: claude
 depends_on: []
 requirements: [REQ-PRE-002]
 estimate: S
-editions: [desktop, workspace]
+editions: []
 delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492

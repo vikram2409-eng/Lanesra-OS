@@ -10,6 +10,7 @@ requirements: [REQ-GOV-013, REQ-GOV-014, REQ-NFR-004]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [budgets-and-cost-forecast]
 branch: 
 pr: 
 updated: 2026-10-16

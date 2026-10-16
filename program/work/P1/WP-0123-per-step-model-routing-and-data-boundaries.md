@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0121]
 requirements: [REQ-LOOP-003, REQ-GOV-008]
 estimate: M
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [unified-ai-gateway]
 branch: 
 pr: 
 updated: 2026-10-16

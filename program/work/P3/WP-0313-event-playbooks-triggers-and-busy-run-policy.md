@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-013, REQ-ORCH-034]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [event-playbooks]
 branch: 
 pr: 
 updated: 2026-10-16

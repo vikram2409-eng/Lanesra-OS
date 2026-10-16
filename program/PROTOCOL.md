@@ -89,7 +89,8 @@ dependencies listed; requirement IDs listed; relevant ADRs exist and are Accepte
 **Definition of Done** (a WP may move to `done` only when all hold):
 
 - [ ] Every acceptance criterion ticked, each proven by a test tagged `Covers: REQ-…`
-- [ ] Delivered in every edition in `editions:` (desktop, Team Workspace, online demo) and listed in `delivered:` (REQ-PRE-015)
+- [ ] Delivered in every edition in `editions:` (desktop, Team Workspace, online demo) and listed in `delivered:` (REQ-PRE-015); most features ship in all three, and anything less needs an `editions_reason:`
+- [ ] Website help updated for every slug in `docs:` - article in `app.js`, `sitemap.xml`, `llms.txt`, Releases page (REQ-PRE-016, FINISH-CHECKLIST "Help and docs")
 - [ ] Full regression suite green in CI; test count not lower than before
 - [ ] No new `#[ignore]`, `.skip`, `todo!()`, `unimplemented!()` or commented-out tests
 - [ ] Lint, format and typecheck clean; no new warnings

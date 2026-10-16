@@ -10,6 +10,7 @@ requirements: [REQ-LOOP-022, REQ-LOOP-023]
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [unified-ai-gateway, connect-llm-provider]
 branch: 
 pr: 
 updated: 2026-10-16

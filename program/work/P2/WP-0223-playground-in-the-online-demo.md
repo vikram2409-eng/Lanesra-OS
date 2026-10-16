@@ -10,6 +10,8 @@ requirements: [REQ-PG-016]
 estimate: XL
 editions: [demo]
 delivered: []
+editions_reason: the online demo port of the Playground
+docs: [agent-playground]
 branch: 
 pr: 
 updated: 2026-10-16

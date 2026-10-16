@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0150]
 requirements: [REQ-GOV-021]
 estimate: M
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [approvals-inbox]
 branch: 
 pr: 
 updated: 2026-10-16

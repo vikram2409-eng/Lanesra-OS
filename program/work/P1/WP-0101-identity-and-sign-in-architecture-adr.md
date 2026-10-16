@@ -8,7 +8,7 @@ owner: unassigned
 depends_on: [WP-0009, WP-0100]
 requirements: [REQ-GOV-001]
 estimate: M
-editions: [desktop, workspace]
+editions: []
 delivered: []
 branch: 
 pr: 

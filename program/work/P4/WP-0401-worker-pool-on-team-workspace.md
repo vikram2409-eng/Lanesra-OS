@@ -10,6 +10,8 @@ requirements: [REQ-ORCH-014]
 estimate: XL
 editions: [workspace]
 delivered: []
+editions_reason: the worker pool runs on the Team Workspace server
+docs: [multi-target-architecture]
 branch: 
 pr: 
 updated: 2026-10-16

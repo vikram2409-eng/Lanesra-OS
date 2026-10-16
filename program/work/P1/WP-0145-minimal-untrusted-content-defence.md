@@ -10,6 +10,7 @@ requirements: [REQ-TOOL-015]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [prompt-injection-defence]
 branch: 
 pr: 
 updated: 2026-10-16

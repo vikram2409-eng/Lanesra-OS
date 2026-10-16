@@ -10,6 +10,8 @@ requirements: [REQ-EVAL-012]
 estimate: M
 editions: [desktop, workspace]
 delivered: []
+editions_reason: real model providers exist only in desktop and Team Workspace
+docs: [connect-llm-provider]
 branch: 
 pr: 
 updated: 2026-10-16

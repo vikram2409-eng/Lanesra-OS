@@ -10,6 +10,7 @@ requirements: [REQ-OBS-004, REQ-OBS-005, REQ-GOV-015]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [observability-dashboards]
 branch: 
 pr: 
 updated: 2026-10-16

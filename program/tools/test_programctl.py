@@ -30,6 +30,8 @@ def wp_text(wid="WP-0001", phase="0", status="ready", deps="", reqs="REQ-AAA-001
         requirements: [{reqs}]
         estimate: M
         editions: [desktop, workspace]
+        editions_reason: test fixture
+        docs_reason: test fixture
         branch:
         pr: {pr}
         updated: 2026-10-16
@@ -171,8 +173,54 @@ class EditionTest(Base):
         self.assertEqual(self.check()[0], [])
 
     def test_bad_edition_rejected(self):
-        self.add(wp_text().replace("editions: [desktop, workspace]", "editions: [mobile]"))
+        self.add(wp_text().replace("editions: [desktop, workspace]", "editions: [mobile]"))  # noqa
         self.assertTrue(any("editions" in e for e in self.check()[0]))
+
+
+class DocsAndEditionsRulesTest(Base):
+    def setUp(self):
+        super().setUp()
+        self._saved_site = (pc.SITE_APP, pc.SITEMAP, pc._HELP_CACHE)
+        pc.SITE_APP, pc.SITEMAP, pc._HELP_CACHE = self.tmp / "app.js", self.tmp / "sitemap.xml", None
+
+    def tearDown(self):
+        pc.SITE_APP, pc.SITEMAP, pc._HELP_CACHE = self._saved_site
+        super().tearDown()
+
+    def site(self, article_names_wp=True, in_sitemap=True):
+        marker = "wps:'WP-0001'," if article_names_wp else ""
+        pc.SITE_APP.write_text("const HELP_CATEGORIES=[{key:'x',topics:[{slug:'my-feature',title:'T'," + marker + "sections:[]}]}];")
+        pc.SITEMAP.write_text("<urlset>" + ("<url><loc>https://lanesraos.com/help/my-feature</loc></url>" if in_sitemap else "") + "</urlset>")
+        pc._HELP_CACHE = None
+
+    def done_wp(self, extra):
+        return (wp_text(status="done", owner="x", pr="p", acs="- [x] AC-1: ok")
+                .replace("editions: [desktop, workspace]", "editions: [desktop, workspace, demo]")
+                .replace("branch:", "delivered: [desktop, workspace, demo]\n" + extra + "branch:"))
+
+    def test_product_wp_needs_docs_or_reason(self):
+        self.add(wp_text().replace("docs_reason: test fixture\n", ""))
+        self.assertTrue(any("names no help article" in e for e in self.check()[0]))
+
+    def test_fewer_than_three_editions_needs_reason(self):
+        self.add(wp_text().replace("editions_reason: test fixture\n", ""))
+        self.assertTrue(any("editions_reason" in e for e in self.check()[0]))
+
+    def test_done_needs_article_naming_wp_and_sitemap(self):
+        self.add(self.done_wp("docs: [my-feature]\n"))
+        self.site(article_names_wp=False, in_sitemap=False)
+        errors = self.check()[0]
+        self.assertTrue(any("does not name WP-0001" in e for e in errors))
+        self.assertTrue(any("missing from sitemap.xml" in e for e in errors))
+        self.site()
+        self.assertEqual(self.check()[0], [])
+
+    def test_docs_check_finds_help_articles_missing_from_sitemap(self):
+        self.add(wp_text())
+        self.site(in_sitemap=False)
+        self.assertEqual(pc.main(["docs", "--check"]), 1)
+        self.site()
+        self.assertEqual(pc.main(["docs", "--check"]), 0)
 
 
 class ExportTest(Base):

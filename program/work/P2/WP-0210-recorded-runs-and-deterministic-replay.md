@@ -10,6 +10,8 @@ requirements: [REQ-EVAL-009]
 estimate: L
 editions: [desktop, workspace]
 delivered: []
+editions_reason: recorded runs replay real provider responses; the online demo's runs are simulated anyway
+docs: [evaluation-harness]
 branch: 
 pr: 
 updated: 2026-10-16

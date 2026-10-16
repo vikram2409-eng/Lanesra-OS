@@ -10,6 +10,7 @@ requirements: [REQ-PG-012, REQ-TOOL-003, REQ-MEM-007]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [agent-playground]
 branch: 
 pr: 
 updated: 2026-10-16

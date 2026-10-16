@@ -10,6 +10,9 @@ requirements: [REQ-ORCH-004, REQ-ORCH-015, REQ-ORCH-017, REQ-ORCH-027]
 estimate: XL
 editions: [desktop, workspace]
 delivered: []
+editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
+docs: []
+docs_reason: internal graph runtime
 branch: 
 pr: 
 updated: 2026-10-16

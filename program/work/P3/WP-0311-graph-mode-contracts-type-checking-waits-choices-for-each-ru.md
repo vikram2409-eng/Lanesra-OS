@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-011, REQ-ORCH-028, REQ-ORCH-029, REQ-ORCH-030, REQ-ORCH-
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [graph-mode-and-canvas]
 branch: 
 pr: 
 updated: 2026-10-16

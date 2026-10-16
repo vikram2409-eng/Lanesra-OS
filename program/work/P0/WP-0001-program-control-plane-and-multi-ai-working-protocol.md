@@ -6,7 +6,7 @@ epic: E0.1 Program and engineering readiness
 status: in_review
 owner: claude
 depends_on: []
-requirements: [REQ-PRE-015]
+requirements: [REQ-PRE-015, REQ-PRE-016]
 estimate: M
 editions: []
 delivered: []

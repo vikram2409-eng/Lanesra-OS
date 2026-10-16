@@ -10,6 +10,7 @@ requirements: [REQ-GOV-016, REQ-GOV-018]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [audit-and-evidence]
 branch: 
 pr: 
 updated: 2026-10-16

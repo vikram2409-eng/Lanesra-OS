@@ -10,6 +10,8 @@ requirements: [REQ-PRE-010]
 estimate: M
 editions: [demo]
 delivered: []
+editions_reason: architecture decision for the online demo itself
+docs: [multi-target-architecture]
 branch: 
 pr: 
 updated: 2026-10-16

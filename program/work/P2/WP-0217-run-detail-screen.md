@@ -10,6 +10,7 @@ requirements: [REQ-UI-006]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [run-traces]
 branch: 
 pr: 
 updated: 2026-10-16

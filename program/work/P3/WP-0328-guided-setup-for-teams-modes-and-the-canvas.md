@@ -10,6 +10,7 @@ requirements: [REQ-SETUP-014]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [guided-setup]
 branch: 
 pr: 
 updated: 2026-10-16

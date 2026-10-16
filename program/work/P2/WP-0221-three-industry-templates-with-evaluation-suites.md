@@ -10,6 +10,7 @@ requirements: [REQ-PG-013]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [playground-templates]
 branch: 
 pr: 
 updated: 2026-10-16
