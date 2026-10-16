@@ -37,7 +37,7 @@ Forecast before each run; workspace/team/run/step budgets.
 
 ## Notes
 
-- Default monthly workspace budget: owner has not set an amount (RAID Q-09). Ship a configurable default; the proposed value is recorded in RAID until the owner confirms it.
+- Default monthly workspace budget: **USD 100** per workspace (owner decision 2026-10-16, RAID Q-09). Applies to new and upgraded workspaces; only an AI Admin can raise it. Test that a fresh workspace starts at USD 100 and that a non-admin cannot change it.
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
 
 ## Progress log

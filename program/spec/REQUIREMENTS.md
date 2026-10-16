@@ -229,7 +229,7 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-GOV-011** [P1] All pause-for-human points move onto the durable ai_approvals inbox, retiring the three older mechanisms
 - **REQ-GOV-012** [P3] Approvals carry plan, diff and evidence, SLA timers and escalation to a backup approver (phase: plan)
 - **REQ-GOV-013** [P3] Cost forecast before each run from step count and model token history
-- **REQ-GOV-014** [P3] Budgets at workspace, team, run and step level in USD and tokens; default monthly workspace budget only an AI Admin can raise
+- **REQ-GOV-014** [P3] Budgets at workspace, team, run and step level in USD and tokens; default monthly workspace budget of USD 100 that only an AI Admin can raise (owner decision, 2026-10-16)
 - **REQ-GOV-015** [P4] Monthly cost reports by team, agent, model and business unit (phase: plan)
 - **REQ-GOV-016** [P4] Append-only, hash-chained audit log per run: prompts, outputs, tool inputs and outputs, verdicts, approvals
 - **REQ-GOV-017** [P4] Retention and redaction: tool audit kept 7 years; step outputs 90 days by default
