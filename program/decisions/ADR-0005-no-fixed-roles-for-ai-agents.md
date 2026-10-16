@@ -21,6 +21,9 @@ Fixed roles would stall half the plan whenever one agent is unavailable.
 4. The agents differ only in mechanics (Muse cannot run tests or git), handled by CI (WP-0003) and
    the tracker-upkeep workflow (WP-0018); Muse reads the repo and opens PRs itself (owner, 2026-10-16).
 5. Review: by an agent other than the author when available, otherwise by the owner.
+6. **The two agents work in sequence, never in parallel** (owner, 2026-10-16). Claim branches are
+   therefore optional; the work package file's `owner:` and `branch:` are the claim. Because the
+   dashboard is the hand-over point between them, it must always be current (REQ-PRE-017, WP-0019).
 
 ## Consequences
 

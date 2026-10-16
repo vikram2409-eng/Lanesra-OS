@@ -6,7 +6,7 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 18 | 4 | 1 | 7 | 0 | 6 | 6 / 33 | `█░░░░░░░░░` 18% |
+| 0 · Precursors | 19 | 4 | 1 | 8 | 0 | 6 | 6 / 34 | `█░░░░░░░░░` 18% |
 | 1 · Foundations | 35 | 0 | 0 | 0 | 0 | 35 | 0 / 114 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
@@ -42,11 +42,12 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | 0 | S |
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | 0 | M |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | 0 | M |
+| [WP-0019](work/P0/WP-0019-always-current-program-dashboard.md) | Always-current program dashboard | 0 | S |
 
 ## Requirement coverage
 
-- Spec requirements tracked: **231**
-- Mapped to a work package: **231**
+- Spec requirements tracked: **232**
+- Mapped to a work package: **232**
 - Delivered (every mapped work package done): **4**
 
 ## Phase 0 · Precursors
@@ -71,6 +72,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |
 | [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | 🟢 ready | S | — | WP-0003 |
+| [WP-0019](work/P0/WP-0019-always-current-program-dashboard.md) | Always-current program dashboard | E0.1 Program and engineering readiness | 🟢 ready | S | — | - |
 
 ## Phase 1 · Foundations
 
