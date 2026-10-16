@@ -83,6 +83,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (76, include_str!("migrations/0076_ontology_action_types.sql")),
     (77, include_str!("migrations/0077_ontology_agent_binding.sql")),
     (78, include_str!("migrations/0078_lookup_custom_fields.sql")),
+    (79, include_str!("migrations/0079_resync_lookup_field_caches.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -146,7 +147,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 78);
+        assert_eq!(version, 79);
 
         let table_count: i64 = conn
             .query_row(

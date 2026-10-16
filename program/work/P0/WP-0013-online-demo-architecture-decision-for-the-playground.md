@@ -3,8 +3,8 @@ id: WP-0013
 title: Online demo architecture decision for the Playground
 phase: 0
 epic: E0.3 Architecture decisions
-status: blocked
-owner: human:vikram
+status: ready
+owner: unassigned
 depends_on: [WP-0008]
 requirements: [REQ-PRE-010]
 estimate: M
@@ -17,7 +17,7 @@ updated: 2026-10-16
 
 ## Goal
 
-The spec ships the Playground in the online demo with simulated runs using the same Team format. The demo is a 1.7 MB single-file `app.js` with no build step. Decide how the Team format, simulator and Playground UI are shared without forking the logic.
+The spec ships the Playground in the online demo with simulated runs using the same Team format. The demo is a 1.7 MB single-file `app.js` with no build step. The owner has decided (ADR-0004) that the demo may change as much as needed to host the Playground, including adding a build step. Decide how the Team format, simulator and Playground UI are shared without forking the logic.
 
 ## Scope
 
@@ -36,10 +36,6 @@ The spec ships the Playground in the online demo with simulated runs using the s
 - Not a code change
 - Tag every new test with `Covers: <REQ-ID>` (and this WP id) so `programctl trace` finds it
 - Full regression suite green; test count not lower than before (see testing/REGRESSION.md)
-
-## Blocker
-
-Needs the program owner's decision on how much the online demo may change (see RAID Q-06).
 
 ## Progress log
 

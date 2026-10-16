@@ -244,8 +244,8 @@ def render_status(wps, reqs):
         by_phase.setdefault(str(wp.get("phase")), []).append(wp)
 
     lines += ["## Phase summary", "",
-              "| Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Progress |",
-              "|---|---|---|---|---|---|---|---|"]
+              "| Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |",
+              "|---|---|---|---|---|---|---|---|---|"]
     names = {"0": "0 · Precursors", "1": "1 · Foundations", "2": "2 · Playground",
              "3": "3 · Teams and modes", "4": "4 · Enterprise scale", "v2": "v2 · Open interop"}
     weight = {"S": 1, "M": 2, "L": 4, "XL": 8}
@@ -259,8 +259,10 @@ def render_status(wps, reqs):
         pct = round(100 * done_w / total_w) if total_w else 0
         bar = "█" * (pct // 10) + "░" * (10 - pct // 10)
         lines.append(f"| {names[ph]} | {len(items)} | {c['done']} | {c['in_progress'] + c['in_review']} | "
-                     f"{c['ready']} | {c['blocked']} | {c['proposed']} | `{bar}` {pct}% |")
-    lines += ["", "Progress is weighted by estimate (S=1, M=2, L=4, XL=8).", ""]
+                     f"{c['ready']} | {c['blocked']} | {c['proposed']} | {done_w} / {total_w} | `{bar}` {pct}% |")
+    lines += ["", "Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by "
+              "how many AI sessions and tokens are available, so forecasts use points delivered per session "
+              "(see ROADMAP.md, Forecasting), not calendar weeks.", ""]
 
     active = [w for w in wps.values() if w.get("status") in ("in_progress", "in_review", "blocked")]
     lines += ["## Active now", ""]

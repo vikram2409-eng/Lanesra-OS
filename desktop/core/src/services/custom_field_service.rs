@@ -568,6 +568,18 @@ pub fn set_entity_values(
     }
 
     let mut effective_values = values.clone();
+    // A lookup field the caller left out of `values` keeps its current
+    // value. Its value is a real relationship link, not just a stored
+    // string, so a partial save ("update the description") must never be
+    // read as "clear the lookup" - that silently unlinked records. Passing
+    // the key with an empty value still clears it, as for any field.
+    for def in definitions.iter().filter(|d| d.field_type == "lookup") {
+        if !values.contains_key(&def.key) {
+            if let Some(current) = before_values.get(&def.key) {
+                effective_values.insert(def.key.clone(), current.clone());
+            }
+        }
+    }
     // Addendum Phase 4: a definition's own default_value is the baseline,
     // applied whenever the caller passed nothing (or blank) for this
     // field - filled in before business rules' set_values below so a

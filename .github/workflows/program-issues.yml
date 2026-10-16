@@ -1,0 +1,36 @@
+name: Program issues mirror
+
+# One-way mirror: program/work/ (source of truth) -> GitHub Issues, one issue
+# per work package with phase milestones and status labels (ADR-0004).
+# Runs only on main, so the issues always show merged state.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "program/work/**"
+      - "program/tools/issues_mirror.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: program-issues-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate before mirroring
+        run: python3 program/tools/programctl.py validate
+      - name: Sync issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 program/tools/issues_mirror.py --repo "${{ github.repository }}"

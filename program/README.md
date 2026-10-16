@@ -5,12 +5,14 @@ The control plane for building the Agent Playground and Orchestration layer
 about what to build, in what order, what state it is in, how it is tested and how to hand over
 lives in this folder and is version-controlled with the code.
 
-**Start here:** [`PROTOCOL.md`](PROTOCOL.md) (the rules) → [`STATUS.md`](STATUS.md) (where we are)
+**Start here:** [`BRIEFING.md`](BRIEFING.md) → [`PROTOCOL.md`](PROTOCOL.md) (the rules) → [`STATUS.md`](STATUS.md) (where we are)
 → [`ROADMAP.md`](ROADMAP.md) (sequence and why).
 
 ```
 program/
+├── BRIEFING.md          Self-contained briefing to give any AI at the start of a session
 ├── PROTOCOL.md          How work is claimed, built, tested, reviewed and handed over (binding)
+├── AGENT-PROFILES.md    Claude Code and Muse AI: capabilities, roles, handoff
 ├── STATUS.md            Generated dashboard: phase progress, active, ready, every WP
 ├── ROADMAP.md           Phases, gates, critical path, parallel lanes, sequencing rationale
 ├── RAID.md              Risks, assumptions, issues, dependencies, questions for the owner
@@ -23,7 +25,8 @@ program/
 ├── security/            Threat model (from WP-0011)
 ├── log/YYYY/MM/         One file per working session, any agent
 ├── templates/           Work package, session log, ADR, gate templates
-└── tools/programctl.py  validate · status · next · show · trace · new-log
+└── tools/               programctl.py (validate · status · next · show · trace · new-log)
+                         and issues_mirror.py (one-way mirror to GitHub Issues)
 ```
 
 ## The tool

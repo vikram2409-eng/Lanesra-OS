@@ -5,7 +5,7 @@ phase: 2
 epic: E2.5 Templates and demo
 status: proposed
 owner: unassigned
-depends_on: [WP-0213]
+depends_on: [WP-0213, WP-0224]
 requirements: [REQ-PG-013]
 estimate: L
 branch: 
@@ -35,6 +35,7 @@ Overdue Invoice Recovery, Lead Qualification, Claims First-Notice Intake, each w
 
 ## Notes
 
+- No paid API keys (ADR-0004): real-model evidence comes from a local Ollama model via WP-0224; CI replays the recorded runs.
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
 
 ## Progress log

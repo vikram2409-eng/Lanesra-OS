@@ -2,16 +2,17 @@
 
 Five phases, each closed by a gate. Phases 1–4 and their gates come from the spec's roadmap
 diagram; **Phase 0 (Precursors) is added by this plan** because the repo is not yet ready for a
-multi-month, multi-agent enterprise build (see "Why Phase 0" below). Durations are the spec's
-proposals plus an estimate for Phase 0; they are re-forecast at every gate from measured throughput.
+long, multi-agent enterprise build (see "Why Phase 0" below). The build is done by Claude Code and
+Muse AI (ADR-0004), so **pace is set by the AI token budget available, not by calendar weeks** —
+size is shown in estimate points and forecast as described under "Forecasting".
 
 ```mermaid
 flowchart LR
-  P0["Phase 0 · Precursors<br/>~3 weeks · 16 WPs"] --> G0{{"G0 · Engineering ready"}}
-  G0 --> P1["Phase 1 · Foundations<br/>~6 weeks · 31 WPs"] --> G1{{"G1 · Every run produces a full trace"}}
-  G1 --> P2["Phase 2 · Playground<br/>~6 weeks · 23 WPs"] --> G2{{"G2 · Templates pass their eval suites"}}
-  G2 --> P3["Phase 3 · Teams and modes<br/>~8 weeks · 31 WPs"] --> G3{{"G3 · Security review signed off"}}
-  G3 --> P4["Phase 4 · Enterprise scale<br/>~8 weeks · 19 WPs"] --> G4{{"G4 · GA"}}
+  P0["Phase 0 · Precursors<br/>18 WPs · 34 pts"] --> G0{{"G0 · Engineering ready"}}
+  G0 --> P1["Phase 1 · Foundations<br/>33 WPs · 98 pts"] --> G1{{"G1 · Every run produces a full trace"}}
+  G1 --> P2["Phase 2 · Playground<br/>24 WPs · 90 pts"] --> G2{{"G2 · Templates pass their eval suites"}}
+  G2 --> P3["Phase 3 · Teams and modes<br/>31 WPs · 124 pts"] --> G3{{"G3 · Security review signed off"}}
+  G3 --> P4["Phase 4 · Enterprise scale<br/>19 WPs · 75 pts"] --> G4{{"G4 · GA"}}
   G4 --> V2["v2 · Open interop"]
 ```
 
@@ -90,8 +91,18 @@ spec and stay `proposed`; at each gate review they are refined (precise acceptan
 split into L or smaller) and moved to `ready`. Every spec requirement is already mapped to a work
 package, so nothing can be forgotten — `programctl validate` fails if a requirement loses coverage.
 
-## Re-forecasting
+## Forecasting
 
-At each gate, record in the gate file: WPs completed, estimate points delivered (S=1, M=2, L=4,
-XL=8), calendar days, and the forecast for the remaining phases. The spec's 28 weeks is a proposal;
-Phase 3 holds 31 work packages including six XL, so expect the forecast to move at G1.
+The timeline depends on how many Claude Code and Muse AI sessions the owner's token budget allows
+(ADR-0004), so the plan is sized in estimate points (S=1, M=2, L=4, XL=8) and forecast from
+measured throughput:
+
+1. Every session log records the work package, the points it completed (a WP's points count when it
+   reaches `done`) and, where the tool shows it, the tokens or usage it consumed.
+2. At each gate, compute **points per session** and **tokens per point** for each agent from the logs.
+3. Remaining points ÷ points per session = sessions left; × tokens per point = tokens needed.
+4. Write the forecast in the gate file. If the budget is short, cut or defer scope explicitly
+   (an ADR), never quality.
+
+Rough order of magnitude for planning only: about 425 points in total. The spec's own proposal
+was 28 weeks for Phases 1–4 with a human team; it is not a commitment here.

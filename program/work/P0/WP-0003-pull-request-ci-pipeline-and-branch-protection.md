@@ -17,7 +17,7 @@ updated: 2026-10-16
 
 ## Goal
 
-No automated checks run on pull requests today (only a Windows release build on tags). With several AI agents committing, every PR must prove it does not regress anything before it can merge.
+No automated checks run on pull requests today (only a Windows release build on tags). Muse AI cannot run tests itself (it works through GitHub), so CI is the only place its changes are tested. With several AI agents committing, every PR must prove it does not regress anything before it can merge.
 
 ## Scope
 
@@ -29,7 +29,7 @@ No automated checks run on pull requests today (only a Windows release build on 
   - program: programctl validate, status --check, self-tests
   - migrations: new migration numbers are contiguous and above main's maximum (see ADR on migrations)
 - Rust and npm caching; total wall-clock target under 15 minutes
-- Document the branch protection settings the owner must enable on `main` (required checks, PR review required, no force-push, linear history optional)
+- Turn on branch protection for `main` (owner decision, ADR-0004: Claude Code does it) - required checks, PR required, no force-push, no deletion. Claude Code applies it through the GitHub API or, if its tools cannot, gives the owner the exact settings to click. Record the final settings in PROTOCOL.md
 
 ## Acceptance criteria
 

@@ -35,6 +35,7 @@ Trust and confidentiality labels on every value, enforced in the firewall.
 
 ## Notes
 
+- Extends the Phase 1 minimal defence in WP-0145; do not build a second mechanism.
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
 
 ## Progress log

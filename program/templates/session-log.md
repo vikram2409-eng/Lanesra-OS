@@ -6,6 +6,10 @@
 - Commits / files:
 - Tests added or changed (with totals):
 
+## Effort
+- Points completed this session (WPs reaching done):
+- Tokens / usage consumed (if your tool shows it):
+
 ## State at end
 - Branch green / RED (why):
 - Acceptance criteria now proven:

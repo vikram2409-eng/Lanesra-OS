@@ -36,7 +36,9 @@ python3 program/tools/programctl.py validate
 python3 program/tools/programctl.py next          # ready + dependencies done + not claimed
 ```
 
-1. Read `AGENTS.md`, this file and `STATUS.md`.
+1. Read `AGENTS.md`, this file, `AGENT-PROFILES.md` (what you are best used for) and `STATUS.md`.
+   Muse AI: the owner gives you `BRIEFING.md` and the WP file; you work through GitHub, so treat CI
+   as your test run and say "untested locally — see CI" in your Progress log entries.
 2. **Resuming a work package?** Check out its branch, run `programctl show WP-XXXX`, read its
    **Progress log** (newest last), the latest session log for it in `log/`, and every unresolved
    review comment on its PR. Run the test suite before changing anything, so you know the state you inherited.
@@ -57,6 +59,8 @@ A claim must be visible to every other agent immediately, without waiting for a 
    `programctl status`; commit `chore(program): claim WP-XXXX`.
 3. Open a **draft** pull request titled `[WP-XXXX] <title>` using the PR template.
 4. If `git push` of the branch is rejected because it exists, someone else has it. Pick another.
+5. Muse AI (no git): the owner pushes the branch for you, or you deliver through the Agent apply
+   Action once WP-0018 lands (`program/inbox/WP-XXXX/`).
 
 Abandoning a claim: set `status: ready`, `owner: unassigned`, write why in the Progress log, push,
 close the draft PR and delete the claim branch.
@@ -120,7 +124,8 @@ Assume the next session is a different AI that has never seen this conversation.
    ```
 2. Tick the acceptance criteria that are actually proven. Update `status` and `updated`.
 3. If you found a risk, a spec ambiguity or a needed decision: add it to `RAID.md`.
-4. Run `programctl new-log --agent <you> --wp WP-XXXX` and fill in the session log (short).
+4. Run `programctl new-log --agent <you> --wp WP-XXXX` and fill in the session log (short),
+   including points completed and tokens used if your tool shows them (ROADMAP "Forecasting").
 5. `programctl status`, `programctl validate`, commit, push. Never leave work only on your machine.
 
 ## 7. Review and merge
@@ -190,4 +195,5 @@ do not depend on the answer.
 - Commits: Conventional Commits with the WP id, e.g. `feat(core): step round limit and partial results [WP-0121]`.
 - Branches: `wp/WP-XXXX-short-name`. PR titles: `[WP-XXXX] Title`.
 - Dates: ISO `YYYY-MM-DD`, UTC.
-- Required CI checks (set on `main` by the owner once WP-0003 lands): `rust`, `tauri`, `web`, `demo`, `program`.
+- Required CI checks (enabled on `main` by Claude Code once WP-0003 lands, ADR-0004): `rust`, `tauri`, `web`, `demo`, `program`.
+- GitHub Issues labelled `program` are a read-only mirror of the work package files (WP-0017). Never edit them; edit the file.

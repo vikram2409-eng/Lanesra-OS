@@ -1,0 +1,5 @@
+# Pinned so every developer, AI agent and CI runner builds with the same
+# compiler (WP-0002). Bump deliberately, in its own pull request.
+[toolchain]
+channel = "1.97.0"
+components = ["rustfmt", "clippy"]

@@ -17,14 +17,14 @@ updated: 2026-10-16
 
 ## Goal
 
-Decide how OIDC and SAML fit the two editions: single-user offline desktop and the multi-user Team Workspace server (`server/src/session.rs`), and how directory identities map to users, roles and approvers.
+Decide how OIDC and SAML fit both editions - the owner requires SSO on desktop and on Team Workspace (ADR-0004): the single-user desktop app and the multi-user Team Workspace server (`server/src/session.rs`), and how directory identities map to users, roles and approvers.
 
 ## Scope
 
 - Session model, token storage, logout and session revocation
-- Which IdPs are first-class test targets (owner decision, RAID Q-07)
+- First-class providers: Okta, Microsoft Entra ID and Google (OIDC); Okta and Entra ID (SAML); Keycloak as the local test IdP
 - Account linking for existing local users; break-glass local admin
-- Desktop edition stance (likely: SSO only in server mode)
+- Desktop edition design (system browser + loopback, keychain storage) feeding WP-0105
 
 ## Acceptance criteria
 

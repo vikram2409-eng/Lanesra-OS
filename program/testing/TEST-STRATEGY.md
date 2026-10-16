@@ -11,7 +11,8 @@ suite only grows.
    must explain why (e.g. tests merged into a table-driven one) and the reviewer must agree.
 4. **Never skip to pass.** No new `#[ignore]`, `.skip`, `.only`, `todo!()`, or weakened assertions.
    A flaky test is a bug: fix it or raise a RAID issue; never retry-until-green.
-5. **Deterministic by default.** No live model calls, network or wall-clock sleeps in CI tests.
+5. **Deterministic by default.** No live model calls, network or wall-clock sleeps in CI tests. The
+   program has no paid model API keys (ADR-0004); nothing may depend on one.
    Agent behaviour uses the scripted model provider; time uses a controllable clock.
 6. **Traceable.** Each test that proves a requirement carries a tag comment:
    `// Covers: REQ-LOOP-008 (WP-0121 AC-1)`. `programctl trace` builds the matrix from these tags.
@@ -29,7 +30,7 @@ suite only grows.
 | End to end | Playwright + pre-installed Chromium (WP-0006) | `desktop/e2e/` | PRs touching UI/server/demo; nightly full | User journeys in server mode and the online demo |
 | Security | Negative tests, authz matrix, injection corpus, `cargo deny`, `npm audit`, secret scan | Throughout + CI | Every PR; corpus nightly | Threat model mitigations hold |
 | Performance | Benchmarks / timed tests (WP-0015) | `desktop/core/benches/` | Nightly | Budgets in `PERFORMANCE.md` |
-| Live evaluation | Real models via AI Gateway, recorded for replay | Evaluation suites | Nightly, non-blocking | Template quality (G2 evidence) |
+| Real-model evaluation | Local open-weight model via Ollama (no paid API keys, ADR-0004), recorded for replay | Evaluation suites | On demand on a contributor machine; CI replays the recordings | Template quality (G2 evidence, WP-0224) |
 | Program | `programctl` self-tests, validate, status --check | `program/tools/` | Every PR | Tracker integrity |
 
 ## What a work package must add

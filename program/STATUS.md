@@ -4,39 +4,39 @@
 
 ## Phase summary
 
-| Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Progress |
-|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 16 | 0 | 1 | 7 | 1 | 7 | `░░░░░░░░░░` 0% |
-| 1 · Foundations | 31 | 0 | 0 | 0 | 0 | 31 | `░░░░░░░░░░` 0% |
-| 2 · Playground | 23 | 0 | 0 | 0 | 0 | 23 | `░░░░░░░░░░` 0% |
-| 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | `░░░░░░░░░░` 0% |
-| 4 · Enterprise scale | 19 | 0 | 0 | 0 | 0 | 19 | `░░░░░░░░░░` 0% |
-| v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | `░░░░░░░░░░` 0% |
+| Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
+|---|---|---|---|---|---|---|---|---|
+| 0 · Precursors | 18 | 0 | 4 | 7 | 0 | 7 | 0 / 34 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 33 | 0 | 0 | 0 | 0 | 33 | 0 / 98 | `░░░░░░░░░░` 0% |
+| 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
+| 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 124 | `░░░░░░░░░░` 0% |
+| 4 · Enterprise scale | 19 | 0 | 0 | 0 | 0 | 19 | 0 / 75 | `░░░░░░░░░░` 0% |
+| v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
-Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
+Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
 ## Active now
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0001](work/P0/WP-0001-program-control-plane-and-multi-ai-working-protocol.md) | Program control plane and multi-AI working protocol | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
-| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | blocked | human:vikram | `-` | - |
+| [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 
 ## Ready to start (all dependencies done)
 
 | WP | Title | Phase | Estimate |
 |---|---|---|---|
-| [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | 0 | S |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | 0 | S |
 | [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | 0 | M |
 | [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | 0 | M |
 | [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | 0 | S |
-| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | 0 | M |
 
 ## Requirement coverage
 
-- Spec requirements tracked: **221**
-- Mapped to a work package: **221**
+- Spec requirements tracked: **226**
+- Mapped to a work package: **226**
 - Delivered (every mapped work package done): **0**
 
 ## Phase 0 · Precursors
@@ -44,7 +44,7 @@ Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
 | WP | Title | Epic | Status | Est | Depends on |
 |---|---|---|---|---|---|
 | [WP-0001](work/P0/WP-0001-program-control-plane-and-multi-ai-working-protocol.md) | Program control plane and multi-AI working protocol | E0.1 Program and engineering readiness | 🔨 in progress | M | - |
-| [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | 🟢 ready | S | - |
+| [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | 🔨 in progress | S | - |
 | [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | 🟢 ready | M | WP-0002, WP-0004, WP-0016 |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | E0.1 Program and engineering readiness | 🟢 ready | S | - |
 | [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 🟢 ready | M | - |
@@ -55,10 +55,12 @@ Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
 | [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | ⚪ proposed | M | WP-0009 |
 | [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | E0.4 Security and compliance baseline | ⚪ proposed | M | WP-0003 |
 | [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | 🟢 ready | S | - |
-| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | ⛔ blocked | M | WP-0008 |
+| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 🟢 ready | M | WP-0008 |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | ⚪ proposed | M | WP-0003 |
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | WP-0005 |
-| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | 🟢 ready | M | - |
+| [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | 🔨 in progress | M | - |
+| [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | 🔨 in progress | S | WP-0001 |
+| [WP-0018](work/P0/WP-0018-apply-changes-from-ais-without-a-shell.md) | Apply changes from AIs without a shell (Muse AI relay path) | E0.1 Program and engineering readiness | 🟢 ready | M | WP-0003 |
 
 ## Phase 1 · Foundations
 
@@ -68,6 +70,7 @@ Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
 | [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | WP-0101, WP-0010 |
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | WP-0101, WP-0010 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | WP-0102, WP-0103 |
+| [WP-0105](work/P1/WP-0105-enterprise-sign-in-on-the-desktop-edition.md) | Enterprise sign-in on the desktop edition | E1.1 Enterprise sign-in | ⚪ proposed | L | WP-0102, WP-0103 |
 | [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | WP-0009, WP-0007 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | WP-0111 |
@@ -90,6 +93,7 @@ Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
 | [WP-0142](work/P1/WP-0142-gate-on-server-initiated-mcp-requests.md) | Gate on server-initiated MCP requests | E1.5 Tools and firewall | ⚪ proposed | M | WP-0150 |
 | [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | ⚪ proposed | S | WP-0008 |
 | [WP-0144](work/P1/WP-0144-test-button-on-every-model-tool-connector-agent-and-team.md) | Test button on every model, tool, connector, agent and team | E1.5 Tools and firewall | ⚪ proposed | M | WP-0010 |
+| [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | ⚪ proposed | L | WP-0122, WP-0128, WP-0011, WP-0130 |
 | [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | E1.6 Approvals | ⚪ proposed | L | WP-0110, WP-0007 |
 | [WP-0151](work/P1/WP-0151-four-review-responses.md) | Four review responses | E1.6 Approvals | ⚪ proposed | M | WP-0150 |
 | [WP-0152](work/P1/WP-0152-approvals-bound-to-exact-arguments.md) | Approvals bound to exact arguments | E1.6 Approvals | ⚪ proposed | M | WP-0150 |
@@ -120,9 +124,10 @@ Progress is weighted by estimate (S=1, M=2, L=4, XL=8).
 | [WP-0218](work/P2/WP-0218-approvals-inbox-ui-and-phone-view.md) | Approvals inbox UI and phone view | E2.4 Setup and screens | ⚪ proposed | M | WP-0151, WP-0153 |
 | [WP-0219](work/P2/WP-0219-agent-studio-home-and-editor-polish.md) | Agent Studio home and editor polish | E2.4 Setup and screens | ⚪ proposed | M | WP-0160 |
 | [WP-0220](work/P2/WP-0220-guided-setup-for-agents-and-pipelines.md) | Guided Setup for agents and pipelines | E2.4 Setup and screens | ⚪ proposed | XL | WP-0219, WP-0144 |
-| [WP-0221](work/P2/WP-0221-three-industry-templates-with-evaluation-suites.md) | Three industry templates with evaluation suites | E2.5 Templates and demo | ⚪ proposed | L | WP-0213 |
+| [WP-0221](work/P2/WP-0221-three-industry-templates-with-evaluation-suites.md) | Three industry templates with evaluation suites | E2.5 Templates and demo | ⚪ proposed | L | WP-0213, WP-0224 |
 | [WP-0222](work/P2/WP-0222-accessibility-pass-for-phase-2-screens.md) | Accessibility pass for Phase 2 screens | E2.4 Setup and screens | ⚪ proposed | M | WP-0203, WP-0217, WP-0218 |
 | [WP-0223](work/P2/WP-0223-playground-in-the-online-demo.md) | Playground in the online demo | E2.5 Templates and demo | ⚪ proposed | XL | WP-0013, WP-0203 |
+| [WP-0224](work/P2/WP-0224-real-model-evaluation-without-api-keys.md) | Real-model evaluation without paid API keys | E2.3 Evaluation and publish | ⚪ proposed | M | WP-0210, WP-0211 |
 
 ## Phase 3 · Teams and modes
 
