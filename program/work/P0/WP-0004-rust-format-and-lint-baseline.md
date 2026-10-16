@@ -3,7 +3,7 @@ id: WP-0004
 title: Rust format and lint baseline
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-001]
@@ -57,3 +57,6 @@ Gotchas: the Tauri crate (lanesra-os) needs webkit2gtk to build, so its clippy r
 on commit ce7d38f (after the lint and format commits): 122 binaries, 1,008 passed, 0 failed, 1 ignored -
 identical totals to the baseline, so formatting and the lint fixes changed no behaviour (AC-3). Later
 commits on the branch touch only tracker and workflow files. All criteria met; in review.
+
+### 2026-10-16 claude (after merge)
+Merged in PR #622 (merge commit 8327e44, merge strategy kept the rustfmt SHA 971ba7f in main, so .git-blame-ignore-revs is valid). Status done.

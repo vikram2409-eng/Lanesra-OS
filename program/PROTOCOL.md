@@ -109,8 +109,13 @@ The full rules are in `testing/TEST-STRATEGY.md`. In short:
 
 - **The regression suite is everything CI runs.** It must be green before merge. A red `main` is
   a stop-the-line event: the next agent's first job is to fix it (or revert the cause).
-- Run before every push: the Rust tests for the crates you touched, `tsc`, `vitest` and
-  `programctl validate`. Run the full suite before marking `in_review`.
+- **Tiered testing** (owner decision, 2026-10-16; details in `testing/TEST-STRATEGY.md`):
+  - while building, run only the tests for what you touched: `cargo test -p <crate> --test <file>`,
+    `npx vitest run <path>`, `programctl validate`
+  - **every pull request runs the full regression suite in CI** (sharded, cached) and must be green to
+    merge; you do not wait for it in your session
+  - run the full suite locally only for changes that touch everything (formatting, toolchain, the
+    migration framework, shared test helpers) or when CI is down
 - Tag tests with the requirement and WP they prove: `// Covers: REQ-LOOP-008 (WP-0121 AC-1)`.
   `programctl trace` builds the requirement → test matrix from these tags.
 - Agent and orchestration behaviour is tested with the scripted model provider (WP-0005) — never
@@ -212,5 +217,5 @@ do not depend on the answer.
 - Commits: Conventional Commits with the WP id, e.g. `feat(core): step round limit and partial results [WP-0121]`.
 - Branches: `wp/WP-XXXX-short-name`. PR titles: `[WP-XXXX] Title`.
 - Dates: ISO `YYYY-MM-DD`, UTC.
-- Required CI checks (enabled on `main` by Claude Code once WP-0003 lands, ADR-0004): `rust`, `tauri`, `web`, `demo`, `program`.
+- Required status checks on `main` (WP-0003): `rust (format and lint)`, `rust (tests)`, `tauri (desktop shell)`, `web (frontend)`, `demo (website and online demo)`, `migrations (order and numbering)`, `program`. All run on every pull request; none is path-filtered.
 - GitHub Issues labelled `program` are a read-only mirror of the work package files (WP-0017). Never edit them; edit the file.
