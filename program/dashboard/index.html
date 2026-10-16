@@ -39,6 +39,8 @@ h1 { font-size: 1.7rem; } h2 { font-size: 1.3rem; } h3 { font-size: 1.02rem; }
 p { margin: 0; max-width: 72ch; }
 a { color: var(--accent-fg); text-underline-offset: 3px; }
 code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { overflow-wrap: anywhere; }
+main .inner > *, section.view > *, .block, .check-group, .col, .gate, .edition { min-width: 0; }
 button, input, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .muted { color: var(--muted); }
@@ -130,7 +132,7 @@ tr.clickable:hover td { background: var(--surface); }
 .timeline { display: grid; gap: 0; border-left: 2px solid var(--line); margin-left: 6px; }
 .timeline .t { position: relative; padding: 0 0 16px 18px; display: grid; gap: 4px; }
 .timeline .t::before { content: ""; position: absolute; left: -7px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); }
-.block { display: grid; gap: 8px; }
+.block { display: grid; gap: 8px; align-content: start; }
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .back { background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; width: fit-content; }
 
@@ -140,6 +142,8 @@ tr.clickable:hover td { background: var(--surface); }
 .check-group ol { margin: 0; padding-left: 1.3rem; display: grid; gap: 8px; }
 .check-group li b { display: block; }
 .check-group li span { color: var(--muted); font-size: 0.88rem; }
+.check-group li, .md, .feed .entry p { overflow-wrap: anywhere; }
+.check-groups { min-width: 0; }
 .who { display: grid; gap: 6px; }
 
 .gates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
@@ -149,7 +153,7 @@ tr.clickable:hover td { background: var(--surface); }
 .loading { padding: 40px 0; color: var(--muted); }
 @media (max-width: 760px) {
   .kpis, .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cols, .two, .check-groups, .gates { grid-template-columns: 1fr; }
+  .cols, .two, .check-groups, .gates, .edition-rows { grid-template-columns: minmax(0, 1fr); }
   .phase-row { grid-template-columns: 1fr auto; }
   .phase-row .meter { grid-column: 1 / -1; }
 }
