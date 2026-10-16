@@ -11,7 +11,9 @@ use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::industry_package::ImportPackageInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{custom_object_service, industry_package_service, user_service, workspace_service};
+use lanesra_core::services::{
+    custom_object_service, industry_package_service, user_service, workspace_service,
+};
 use serde_json::json;
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -32,10 +34,22 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
     (conn, workspace.id, admin.id)
 }
 
-fn user_with_role(conn: &rusqlite::Connection, ws: &str, admin: &str, username: &str, role: &str) -> String {
+fn user_with_role(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+    username: &str,
+    role: &str,
+) -> String {
     user_service::create(
-        conn, ws,
-        &NewUser { username: username.into(), display_name: username.into(), password: "anothersecretpw".into(), roles: vec![role.into()] },
+        conn,
+        ws,
+        &NewUser {
+            username: username.into(),
+            display_name: username.into(),
+            password: "anothersecretpw".into(),
+            roles: vec![role.into()],
+        },
         Some(admin),
     )
     .unwrap()
@@ -181,19 +195,26 @@ fn full_manifest_json(package_id: &str, version: &str, min_lanesra_version: &str
 fn importing_a_package_requires_admin() {
     let (conn, ws, admin) = setup_workspace();
     let sales = user_with_role(&conn, &ws, &admin, "sam", "Sales");
-    let input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
-    let err = industry_package_service::import_package(&conn, &ws, &input, Some(&sales)).unwrap_err();
+    let input = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0"),
+    };
+    let err =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&sales)).unwrap_err();
     assert!(err.to_string().contains("Administrator"));
 }
 
 #[test]
 fn import_then_install_creates_every_kind_of_artifact_and_the_installed_app_row() {
     let (conn, ws, admin) = setup_workspace();
-    let input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0"),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
     assert_eq!(package.package_id, "lanesra.field_service");
 
-    let installed = industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap();
+    let installed =
+        industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap();
     assert_eq!(installed.package_id, "lanesra.field_service");
     assert_eq!(installed.status, "active");
     assert_eq!(installed.name, "Field Service");
@@ -202,7 +223,11 @@ fn import_then_install_creates_every_kind_of_artifact_and_the_installed_app_row(
     assert_eq!(installed.recommended_permissions[0].role, "Sales");
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
-    let mut types: Vec<&str> = detail.artifacts.iter().map(|a| a.artifact_type.as_str()).collect();
+    let mut types: Vec<&str> = detail
+        .artifacts
+        .iter()
+        .map(|a| a.artifact_type.as_str())
+        .collect();
     types.sort();
     assert_eq!(
         types,
@@ -227,9 +252,13 @@ fn import_then_install_creates_every_kind_of_artifact_and_the_installed_app_row(
     // Installing the same package_id a second time is a conflict, not a
     // silent second install (update-with-diff is explicitly out of scope
     // for this foundation phase).
-    let second_import = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.1", "0.1.0") };
-    let second_package = industry_package_service::import_package(&conn, &ws, &second_import, Some(&admin)).unwrap();
-    let err = industry_package_service::install(&conn, &ws, &second_package.id, Some(&admin)).unwrap_err();
+    let second_import = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.field_service", "1.0.1", "0.1.0"),
+    };
+    let second_package =
+        industry_package_service::import_package(&conn, &ws, &second_import, Some(&admin)).unwrap();
+    let err = industry_package_service::install(&conn, &ws, &second_package.id, Some(&admin))
+        .unwrap_err();
     assert!(matches!(err, AppError::Conflict(_)));
 
     let runs = industry_package_service::list_runs(&conn, &ws).unwrap();
@@ -261,8 +290,11 @@ fn a_failure_mid_install_rolls_back_everything_the_transaction_touched() {
     })
     .to_string();
 
-    let input = ImportPackageInput { manifest_json: manifest };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: manifest,
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
     let err = industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap_err();
     assert!(err.to_string().contains("already exists"));
 
@@ -270,12 +302,18 @@ fn a_failure_mid_install_rolls_back_everything_the_transaction_touched() {
     // object, which succeeded before the second one's collision.
     let objects = custom_object_service::list(&conn, &ws, false).unwrap();
     assert!(objects.is_empty());
-    assert!(industry_package_service::list_installed(&conn, &ws).unwrap().is_empty());
+    assert!(industry_package_service::list_installed(&conn, &ws)
+        .unwrap()
+        .is_empty());
 
     let runs = industry_package_service::list_runs(&conn, &ws).unwrap();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status, "failed");
-    assert!(runs[0].error_message.as_deref().unwrap().contains("already exists"));
+    assert!(runs[0]
+        .error_message
+        .as_deref()
+        .unwrap()
+        .contains("already exists"));
     assert!(runs[0].backup_snapshot_path.is_none());
 }
 
@@ -294,8 +332,11 @@ fn install_is_blocked_by_an_unmet_required_dependency() {
         ]
     })
     .to_string();
-    let input = ImportPackageInput { manifest_json: manifest };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: manifest,
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
 
     let err = industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap_err();
     assert!(err.to_string().contains("lanesra.core_pack"));
@@ -311,8 +352,11 @@ fn install_is_blocked_by_an_unmet_required_dependency() {
 #[test]
 fn install_is_blocked_by_an_unmet_min_lanesra_version() {
     let (conn, ws, admin) = setup_workspace();
-    let input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.future", "1.0.0", "99.0.0") };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.future", "1.0.0", "99.0.0"),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
     let err = industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap_err();
     assert!(err.to_string().contains("99.0.0"));
 }
@@ -320,11 +364,16 @@ fn install_is_blocked_by_an_unmet_min_lanesra_version() {
 #[test]
 fn deactivate_hides_without_deleting_business_data_and_reactivate_restores_it() {
     let (conn, ws, admin) = setup_workspace();
-    let input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
-    let installed = industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0"),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let installed =
+        industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap();
 
-    let deactivated = industry_package_service::deactivate(&conn, &installed.id, Some(&admin)).unwrap();
+    let deactivated =
+        industry_package_service::deactivate(&conn, &installed.id, Some(&admin)).unwrap();
     assert_eq!(deactivated.status, "deactivated");
     assert!(deactivated.deactivated_at.is_some());
 
@@ -333,7 +382,8 @@ fn deactivate_hides_without_deleting_business_data_and_reactivate_restores_it() 
     assert_eq!(objects.len(), 1);
     assert_eq!(objects[0].key, "svc_ticket");
 
-    let reactivated = industry_package_service::reactivate(&conn, &installed.id, Some(&admin)).unwrap();
+    let reactivated =
+        industry_package_service::reactivate(&conn, &installed.id, Some(&admin)).unwrap();
     assert_eq!(reactivated.status, "active");
     assert!(reactivated.deactivated_at.is_none());
 }
@@ -342,9 +392,13 @@ fn deactivate_hides_without_deleting_business_data_and_reactivate_restores_it() 
 fn deactivate_and_reactivate_require_admin() {
     let (conn, ws, admin) = setup_workspace();
     let sales = user_with_role(&conn, &ws, &admin, "sam", "Sales");
-    let input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
-    let installed = industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0"),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let installed =
+        industry_package_service::install(&conn, &ws, &package.id, Some(&admin)).unwrap();
 
     let err = industry_package_service::deactivate(&conn, &installed.id, Some(&sales)).unwrap_err();
     assert!(err.to_string().contains("Administrator"));
@@ -397,11 +451,22 @@ fn importing_a_manifest_with_dependencies_records_them_in_the_registry() {
         ]
     })
     .to_string();
-    industry_package_service::import_package(&conn, &ws, &ImportPackageInput { manifest_json: manifest }, Some(&admin)).unwrap();
+    industry_package_service::import_package(
+        &conn,
+        &ws,
+        &ImportPackageInput {
+            manifest_json: manifest,
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
     let deps = industry_package_service::list_dependencies_for_workspace(&conn, &ws).unwrap();
     assert_eq!(deps.len(), 2);
-    let required = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.core_pack").unwrap();
+    let required = deps
+        .iter()
+        .find(|d| d.dependency.dependency_package_id == "lanesra.core_pack")
+        .unwrap();
     assert_eq!(required.package_id, "lanesra.depends_on_core");
     assert_eq!(required.package_name, "Depends On Core");
     assert_eq!(required.package_version, "1.0.0");
@@ -409,7 +474,10 @@ fn importing_a_manifest_with_dependencies_records_them_in_the_registry() {
     assert!(required.dependency.is_required);
     // Nothing installed yet - unsatisfied either way.
     assert!(!required.is_satisfied);
-    let optional = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.optional_pack").unwrap();
+    let optional = deps
+        .iter()
+        .find(|d| d.dependency.dependency_package_id == "lanesra.optional_pack")
+        .unwrap();
     assert!(!optional.dependency.is_required);
 }
 
@@ -418,9 +486,13 @@ fn list_dependencies_for_workspace_reports_satisfied_once_the_dependency_is_inst
     let (conn, ws, admin) = setup_workspace();
 
     // Install the core package the dependency will point at.
-    let core_input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
-    let core_package = industry_package_service::import_package(&conn, &ws, &core_input, Some(&admin)).unwrap();
-    let core_installed = industry_package_service::install(&conn, &ws, &core_package.id, Some(&admin)).unwrap();
+    let core_input = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0"),
+    };
+    let core_package =
+        industry_package_service::import_package(&conn, &ws, &core_input, Some(&admin)).unwrap();
+    let core_installed =
+        industry_package_service::install(&conn, &ws, &core_package.id, Some(&admin)).unwrap();
 
     // Import (not install) a package declaring a dependency on it.
     let dependent = json!({
@@ -435,10 +507,21 @@ fn list_dependencies_for_workspace_reports_satisfied_once_the_dependency_is_inst
         ]
     })
     .to_string();
-    industry_package_service::import_package(&conn, &ws, &ImportPackageInput { manifest_json: dependent }, Some(&admin)).unwrap();
+    industry_package_service::import_package(
+        &conn,
+        &ws,
+        &ImportPackageInput {
+            manifest_json: dependent,
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
     let deps = industry_package_service::list_dependencies_for_workspace(&conn, &ws).unwrap();
-    let row = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.field_service").unwrap();
+    let row = deps
+        .iter()
+        .find(|d| d.dependency.dependency_package_id == "lanesra.field_service")
+        .unwrap();
     assert!(row.is_satisfied);
 
     // Deactivating the dependency flips it back to unsatisfied - install()
@@ -446,7 +529,10 @@ fn list_dependencies_for_workspace_reports_satisfied_once_the_dependency_is_inst
     // exactly.
     industry_package_service::deactivate(&conn, &core_installed.id, Some(&admin)).unwrap();
     let deps = industry_package_service::list_dependencies_for_workspace(&conn, &ws).unwrap();
-    let row = deps.iter().find(|d| d.dependency.dependency_package_id == "lanesra.field_service").unwrap();
+    let row = deps
+        .iter()
+        .find(|d| d.dependency.dependency_package_id == "lanesra.field_service")
+        .unwrap();
     assert!(!row.is_satisfied);
 }
 
@@ -454,22 +540,43 @@ fn list_dependencies_for_workspace_reports_satisfied_once_the_dependency_is_inst
 fn list_artifacts_for_workspace_spans_every_installed_app() {
     let (conn, ws, admin) = setup_workspace();
 
-    let first_input = ImportPackageInput { manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0") };
-    let first_package = industry_package_service::import_package(&conn, &ws, &first_input, Some(&admin)).unwrap();
-    let first_installed = industry_package_service::install(&conn, &ws, &first_package.id, Some(&admin)).unwrap();
+    let first_input = ImportPackageInput {
+        manifest_json: full_manifest_json("lanesra.field_service", "1.0.0", "0.1.0"),
+    };
+    let first_package =
+        industry_package_service::import_package(&conn, &ws, &first_input, Some(&admin)).unwrap();
+    let first_installed =
+        industry_package_service::install(&conn, &ws, &first_package.id, Some(&admin)).unwrap();
 
-    let second_input = ImportPackageInput { manifest_json: second_manifest_json("lanesra.second_pack", "1.0.0") };
-    let second_package = industry_package_service::import_package(&conn, &ws, &second_input, Some(&admin)).unwrap();
-    let second_installed = industry_package_service::install(&conn, &ws, &second_package.id, Some(&admin)).unwrap();
+    let second_input = ImportPackageInput {
+        manifest_json: second_manifest_json("lanesra.second_pack", "1.0.0"),
+    };
+    let second_package =
+        industry_package_service::import_package(&conn, &ws, &second_input, Some(&admin)).unwrap();
+    let second_installed =
+        industry_package_service::install(&conn, &ws, &second_package.id, Some(&admin)).unwrap();
 
-    let first_detail = industry_package_service::get_installed_detail(&conn, &first_installed.id).unwrap();
-    let second_detail = industry_package_service::get_installed_detail(&conn, &second_installed.id).unwrap();
+    let first_detail =
+        industry_package_service::get_installed_detail(&conn, &first_installed.id).unwrap();
+    let second_detail =
+        industry_package_service::get_installed_detail(&conn, &second_installed.id).unwrap();
 
     let all = industry_package_service::list_artifacts_for_workspace(&conn, &ws).unwrap();
-    assert_eq!(all.len(), first_detail.artifacts.len() + second_detail.artifacts.len());
-    assert!(all.iter().all(|a| a.installed_app_name == "Field Service" || a.installed_app_name == "Second App"));
-    assert!(all.iter().any(|a| a.package_id == "lanesra.field_service" && a.artifact.artifact_type == "custom_object"));
-    assert!(all.iter().any(|a| a.package_id == "lanesra.second_pack" && a.artifact.artifact_type == "custom_object"));
+    assert_eq!(
+        all.len(),
+        first_detail.artifacts.len() + second_detail.artifacts.len()
+    );
+    assert!(all
+        .iter()
+        .all(|a| a.installed_app_name == "Field Service" || a.installed_app_name == "Second App"));
+    assert!(all
+        .iter()
+        .any(|a| a.package_id == "lanesra.field_service"
+            && a.artifact.artifact_type == "custom_object"));
+    assert!(all
+        .iter()
+        .any(|a| a.package_id == "lanesra.second_pack"
+            && a.artifact.artifact_type == "custom_object"));
 }
 
 #[test]
@@ -491,7 +598,9 @@ fn explicit_object_keys_are_never_silently_renamed_on_collision() {
         Some(&admin),
     )
     .unwrap();
-    let existing_key = custom_object_service::list(&conn, &ws, false).unwrap()[0].key.clone();
+    let existing_key = custom_object_service::list(&conn, &ws, false).unwrap()[0]
+        .key
+        .clone();
 
     let err = custom_object_service::create_with_key(
         &conn,

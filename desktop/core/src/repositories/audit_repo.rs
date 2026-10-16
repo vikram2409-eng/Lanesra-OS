@@ -62,8 +62,14 @@ pub fn list_for_entity(
 /// panel's own feed - every admin-domain change across the whole
 /// workspace, newest first, not scoped to one entity like
 /// `list_for_entity` above.
-pub fn list_recent(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<AuditEvent>> {
-    let mut stmt = conn.prepare("SELECT * FROM audit_events WHERE workspace_id = ?1 ORDER BY occurred_at DESC LIMIT ?2")?;
+pub fn list_recent(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<AuditEvent>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM audit_events WHERE workspace_id = ?1 ORDER BY occurred_at DESC LIMIT ?2",
+    )?;
     let rows = stmt.query_map(rusqlite::params![workspace_id, limit], map_row)?;
     rows.collect()
 }

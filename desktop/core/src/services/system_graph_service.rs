@@ -44,17 +44,36 @@ pub fn sync_node(
     metadata_json: &str,
     edges: &[SystemEdgeTarget],
 ) -> AppResult<()> {
-    let from_id = system_graph_repo::upsert_node(conn, workspace_id, node_type, component_id, label, metadata_json)?;
+    let from_id = system_graph_repo::upsert_node(
+        conn,
+        workspace_id,
+        node_type,
+        component_id,
+        label,
+        metadata_json,
+    )?;
 
     let mut resolved: Vec<(&str, String)> = Vec::with_capacity(edges.len());
     for edge in edges {
-        let to_id = match system_graph_repo::get_node_by_component(conn, workspace_id, &edge.to_node_type, &edge.to_component_id)? {
+        let to_id = match system_graph_repo::get_node_by_component(
+            conn,
+            workspace_id,
+            &edge.to_node_type,
+            &edge.to_component_id,
+        )? {
             Some(node) => node.id,
             // Stub: same component_id, a placeholder label - the owning
             // service's own next sync (create/update of that component)
             // overwrites the label via the same upsert_node ON CONFLICT
             // path, never a second code path.
-            None => system_graph_repo::upsert_node(conn, workspace_id, &edge.to_node_type, &edge.to_component_id, &edge.to_component_id, "{}")?,
+            None => system_graph_repo::upsert_node(
+                conn,
+                workspace_id,
+                &edge.to_node_type,
+                &edge.to_component_id,
+                &edge.to_component_id,
+                "{}",
+            )?,
         };
         resolved.push((edge.edge_type.as_str(), to_id));
     }
@@ -68,27 +87,63 @@ pub fn sync_node(
 /// soft-deactivate must leave the node in place, so "what used to depend
 /// on this" stays answerable from the graph even after the component
 /// itself is inactive.
-pub fn remove_node(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> AppResult<()> {
+pub fn remove_node(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> AppResult<()> {
     system_graph_repo::remove_node(conn, workspace_id, node_type, component_id)?;
     Ok(())
 }
 
-fn resolve_root(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> AppResult<Option<String>> {
-    Ok(system_graph_repo::get_node_by_component(conn, workspace_id, node_type, component_id)?.map(|n| n.id))
+fn resolve_root(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> AppResult<Option<String>> {
+    Ok(
+        system_graph_repo::get_node_by_component(conn, workspace_id, node_type, component_id)?
+            .map(|n| n.id),
+    )
 }
 
 /// This component's own node, if it has synced at least once.
-pub fn get_node(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> AppResult<Option<SystemNode>> {
-    Ok(system_graph_repo::get_node_by_component(conn, workspace_id, node_type, component_id)?)
+pub fn get_node(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> AppResult<Option<SystemNode>> {
+    Ok(system_graph_repo::get_node_by_component(
+        conn,
+        workspace_id,
+        node_type,
+        component_id,
+    )?)
 }
 
-pub fn list_nodes_by_type(conn: &Connection, workspace_id: &str, node_type: &str) -> AppResult<Vec<SystemNode>> {
-    Ok(system_graph_repo::list_nodes_by_type(conn, workspace_id, node_type)?)
+pub fn list_nodes_by_type(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+) -> AppResult<Vec<SystemNode>> {
+    Ok(system_graph_repo::list_nodes_by_type(
+        conn,
+        workspace_id,
+        node_type,
+    )?)
 }
 
 /// Direct (depth-1) downstream neighbors - "what does this depend on /
 /// invoke / delegate to".
-pub fn get_dependencies(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_dependencies(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> AppResult<Vec<SystemGraphHit>> {
     match resolve_root(conn, workspace_id, node_type, component_id)? {
         Some(id) => Ok(system_graph_repo::traverse(conn, &id, true, 1)?),
         None => Ok(Vec::new()),
@@ -97,7 +152,12 @@ pub fn get_dependencies(conn: &Connection, workspace_id: &str, node_type: &str, 
 
 /// Direct (depth-1) upstream neighbors - "what depends on / invokes /
 /// delegates to this".
-pub fn get_dependents(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_dependents(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> AppResult<Vec<SystemGraphHit>> {
     match resolve_root(conn, workspace_id, node_type, component_id)? {
         Some(id) => Ok(system_graph_repo::traverse(conn, &id, false, 1)?),
         None => Ok(Vec::new()),
@@ -106,9 +166,19 @@ pub fn get_dependents(conn: &Connection, workspace_id: &str, node_type: &str, co
 
 /// Transitive downstream closure, bounded by `MAX_TRAVERSAL_DEPTH` - "if
 /// I change this, what's the full blast radius of things it feeds into".
-pub fn get_lineage(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_lineage(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> AppResult<Vec<SystemGraphHit>> {
     match resolve_root(conn, workspace_id, node_type, component_id)? {
-        Some(id) => Ok(system_graph_repo::traverse(conn, &id, true, MAX_TRAVERSAL_DEPTH)?),
+        Some(id) => Ok(system_graph_repo::traverse(
+            conn,
+            &id,
+            true,
+            MAX_TRAVERSAL_DEPTH,
+        )?),
         None => Ok(Vec::new()),
     }
 }
@@ -120,9 +190,19 @@ pub fn get_lineage(conn: &Connection, workspace_id: &str, node_type: &str, compo
 /// to a real transitive answer. Minimum acceptance criterion for FND-01:
 /// this must return every transitive dependent with no false missing
 /// references, for the 9 node types this v1 slice syncs.
-pub fn get_impact(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_impact(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> AppResult<Vec<SystemGraphHit>> {
     match resolve_root(conn, workspace_id, node_type, component_id)? {
-        Some(id) => Ok(system_graph_repo::traverse(conn, &id, false, MAX_TRAVERSAL_DEPTH)?),
+        Some(id) => Ok(system_graph_repo::traverse(
+            conn,
+            &id,
+            false,
+            MAX_TRAVERSAL_DEPTH,
+        )?),
         None => Ok(Vec::new()),
     }
 }

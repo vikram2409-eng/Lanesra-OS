@@ -39,7 +39,11 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 /// agent-specific policy if one exists, else the workspace-wide default,
 /// else `None` (no policy configured anywhere in this workspace - every
 /// call Allowed, today's exact behavior, unchanged).
-pub fn resolve_policy(conn: &Connection, workspace_id: &str, agent_id: Option<&str>) -> AppResult<Option<AiAgentPolicy>> {
+pub fn resolve_policy(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+) -> AppResult<Option<AiAgentPolicy>> {
     if let Some(agent_id) = agent_id {
         if let Some(policy) = ai_agent_policy_repo::get(conn, workspace_id, Some(agent_id))? {
             return Ok(Some(policy));
@@ -54,19 +58,27 @@ pub fn resolve_policy(conn: &Connection, workspace_id: &str, agent_id: Option<&s
 /// a policy). `source` is `chat_service::tool_source`'s own
 /// classification, passed straight through to
 /// `tool_registry_service::effective_risk`.
-pub fn evaluate(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, tool_name: &str, source: Option<&str>) -> AppResult<PolicyDecision> {
+pub fn evaluate(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    tool_name: &str,
+    source: Option<&str>,
+) -> AppResult<PolicyDecision> {
     let policy = resolve_policy(conn, workspace_id, agent_id)?;
     let Some(policy) = policy else {
         return Ok(PolicyDecision::Allow);
     };
     if policy.blocked_tool_names.iter().any(|n| n == tool_name) {
-        let risk_level = super::tool_registry_service::effective_risk(conn, workspace_id, tool_name, source)?;
+        let risk_level =
+            super::tool_registry_service::effective_risk(conn, workspace_id, tool_name, source)?;
         return Ok(PolicyDecision::Deny { risk_level });
     }
     let Some(threshold) = policy.require_approval_at_or_above else {
         return Ok(PolicyDecision::Allow);
     };
-    let risk_level = super::tool_registry_service::effective_risk(conn, workspace_id, tool_name, source)?;
+    let risk_level =
+        super::tool_registry_service::effective_risk(conn, workspace_id, tool_name, source)?;
     if risk_level >= threshold {
         Ok(PolicyDecision::RequireApproval { risk_level })
     } else {
@@ -87,7 +99,12 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, t
 /// `ai_memory_repo::create`, never in place of it - the same "governance
 /// layer, not a second enforcement path" principle this module's own top
 /// doc comment states.
-pub fn evaluate_memory_write(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, classification: &str) -> AppResult<bool> {
+pub fn evaluate_memory_write(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    classification: &str,
+) -> AppResult<bool> {
     if classification != "restricted" {
         return Ok(true);
     }
@@ -117,17 +134,38 @@ pub fn record_pending_tool_call(
     Ok(())
 }
 
-pub fn get_policy(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, actor_user_id: Option<&str>) -> AppResult<Option<AiAgentPolicy>> {
+pub fn get_policy(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<Option<AiAgentPolicy>> {
     require_admin(conn, actor_user_id)?;
     Ok(ai_agent_policy_repo::get(conn, workspace_id, agent_id)?)
 }
 
-pub fn list_policies(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<AiAgentPolicy>> {
+pub fn list_policies(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AiAgentPolicy>> {
     require_admin(conn, actor_user_id)?;
     Ok(ai_agent_policy_repo::list(conn, workspace_id)?)
 }
 
-pub fn upsert_policy(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, input: &AiAgentPolicyInput, actor_user_id: Option<&str>) -> AppResult<AiAgentPolicy> {
+pub fn upsert_policy(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    input: &AiAgentPolicyInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentPolicy> {
     require_admin(conn, actor_user_id)?;
-    Ok(ai_agent_policy_repo::upsert(conn, workspace_id, agent_id, input, actor_user_id)?)
+    Ok(ai_agent_policy_repo::upsert(
+        conn,
+        workspace_id,
+        agent_id,
+        input,
+        actor_user_id,
+    )?)
 }

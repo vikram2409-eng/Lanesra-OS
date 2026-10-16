@@ -26,9 +26,13 @@ use serde::Deserialize;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::AppResult;
-use crate::models::integration::{IntegrationExecution, IntegrationOverview, IntegrationSettings, IntegrationSettingsUpdate};
+use crate::models::integration::{
+    IntegrationExecution, IntegrationOverview, IntegrationSettings, IntegrationSettingsUpdate,
+};
 use crate::repositories::integration_execution_repo::{self, ExecutionFilter};
-use crate::repositories::{integration_connection_repo, integration_settings_repo, integration_webhook_repo};
+use crate::repositories::{
+    integration_connection_repo, integration_settings_repo, integration_webhook_repo,
+};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -36,9 +40,26 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 
 /// Opens a new execution log row and returns its id - pass that id to
 /// `finish` once the operation completes (success or failure).
-pub fn start(conn: &Connection, workspace_id: &str, execution_type: &str, correlation_id: Option<&str>, ref_id: Option<&str>, direction: &str, actor_user_id: Option<&str>) -> String {
+pub fn start(
+    conn: &Connection,
+    workspace_id: &str,
+    execution_type: &str,
+    correlation_id: Option<&str>,
+    ref_id: Option<&str>,
+    direction: &str,
+    actor_user_id: Option<&str>,
+) -> String {
     let id = new_uuid();
-    let _ = integration_execution_repo::start(conn, &id, workspace_id, execution_type, correlation_id, ref_id, direction, actor_user_id);
+    let _ = integration_execution_repo::start(
+        conn,
+        &id,
+        workspace_id,
+        execution_type,
+        correlation_id,
+        ref_id,
+        direction,
+        actor_user_id,
+    );
     id
 }
 
@@ -79,9 +100,22 @@ pub struct ExecutionQuery {
     pub limit: Option<i64>,
 }
 
-pub fn list_executions(conn: &Connection, workspace_id: &str, query: &ExecutionQuery) -> AppResult<Vec<IntegrationExecution>> {
-    let filter = ExecutionFilter { execution_type: query.execution_type.clone(), status: query.status.clone(), correlation_id: query.correlation_id.clone() };
-    Ok(integration_execution_repo::list_for_workspace(conn, workspace_id, &filter, query.limit.unwrap_or(200).clamp(1, 1000))?)
+pub fn list_executions(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &ExecutionQuery,
+) -> AppResult<Vec<IntegrationExecution>> {
+    let filter = ExecutionFilter {
+        execution_type: query.execution_type.clone(),
+        status: query.status.clone(),
+        correlation_id: query.correlation_id.clone(),
+    };
+    Ok(integration_execution_repo::list_for_workspace(
+        conn,
+        workspace_id,
+        &filter,
+        query.limit.unwrap_or(200).clamp(1, 1000),
+    )?)
 }
 
 fn today_start_iso() -> String {
@@ -97,10 +131,19 @@ fn today_start_iso() -> String {
 /// columns are safe to query before `integration_job_service` exists.
 pub fn overview(conn: &Connection, workspace_id: &str) -> AppResult<IntegrationOverview> {
     let since = today_start_iso();
-    let active_connections = integration_connection_repo::count_by_status(conn, workspace_id, "connected")?;
-    let failed_connections = integration_connection_repo::count_by_status(conn, workspace_id, "failed")?;
-    let api_calls_today = integration_execution_repo::count_since(conn, workspace_id, Some("api_call"), None, &since)?;
-    let failed_webhooks_today = integration_webhook_repo::count_failed_deliveries_since(conn, workspace_id, &since)?;
+    let active_connections =
+        integration_connection_repo::count_by_status(conn, workspace_id, "connected")?;
+    let failed_connections =
+        integration_connection_repo::count_by_status(conn, workspace_id, "failed")?;
+    let api_calls_today = integration_execution_repo::count_since(
+        conn,
+        workspace_id,
+        Some("api_call"),
+        None,
+        &since,
+    )?;
+    let failed_webhooks_today =
+        integration_webhook_repo::count_failed_deliveries_since(conn, workspace_id, &since)?;
     let jobs_running: i64 = conn.query_row(
         "SELECT COUNT(*) FROM integration_job_runs r JOIN integration_jobs j ON j.id = r.job_id WHERE j.workspace_id = ?1 AND r.status = 'running'",
         [workspace_id],
@@ -111,14 +154,29 @@ pub fn overview(conn: &Connection, workspace_id: &str) -> AppResult<IntegrationO
         rusqlite::params![workspace_id, since],
         |r| r.get(0),
     )?;
-    Ok(IntegrationOverview { active_connections, failed_connections, api_calls_today, failed_webhooks_today, jobs_running, jobs_failed_today })
+    Ok(IntegrationOverview {
+        active_connections,
+        failed_connections,
+        api_calls_today,
+        failed_webhooks_today,
+        jobs_running,
+        jobs_failed_today,
+    })
 }
 
 pub fn get_settings(conn: &Connection, workspace_id: &str) -> AppResult<IntegrationSettings> {
-    Ok(integration_settings_repo::ensure_default(conn, workspace_id)?)
+    Ok(integration_settings_repo::ensure_default(
+        conn,
+        workspace_id,
+    )?)
 }
 
-pub fn update_settings(conn: &Connection, workspace_id: &str, input: &IntegrationSettingsUpdate, actor_user_id: Option<&str>) -> AppResult<IntegrationSettings> {
+pub fn update_settings(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &IntegrationSettingsUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<IntegrationSettings> {
     require_admin(conn, actor_user_id)?;
     integration_settings_repo::ensure_default(conn, workspace_id)?;
     Ok(integration_settings_repo::update(
@@ -143,7 +201,15 @@ pub fn purge_expired(conn: &Connection, workspace_id: &str) -> AppResult<usize> 
         let now = crate::domain::ids::now_iso();
         // Cheap day-subtraction via SQLite's own date math rather than
         // pulling in a date-arithmetic crate for one KPI-adjacent helper.
-        conn.query_row("SELECT datetime(?1, ?2)", rusqlite::params![now, format!("-{} days", settings.log_retention_days)], |r| r.get::<_, String>(0))?
+        conn.query_row(
+            "SELECT datetime(?1, ?2)",
+            rusqlite::params![now, format!("-{} days", settings.log_retention_days)],
+            |r| r.get::<_, String>(0),
+        )?
     };
-    Ok(integration_execution_repo::purge_older_than(conn, workspace_id, &cutoff)?)
+    Ok(integration_execution_repo::purge_older_than(
+        conn,
+        workspace_id,
+        &cutoff,
+    )?)
 }

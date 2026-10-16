@@ -15,14 +15,24 @@ use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{ai_service, custom_object_service, custom_record_service, user_service, vector_search_service, workspace_service};
+use lanesra_core::services::{
+    ai_service, custom_object_service, custom_record_service, user_service, vector_search_service,
+    workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = lanesra_core::db::open_in_memory_db().unwrap();
     let setup = WorkspaceSetup {
-        business_name: "Vector Search Test Co".into(), legal_name: None, currency_code: "USD".into(), locale: "en-US".into(),
-        timezone: "UTC".into(), default_tax_rate_bp: 0, admin_username: "admin".into(), admin_display_name: "Admin".into(),
-        admin_password: "supersecretpassword".into(), load_sample_data: false,
+        business_name: "Vector Search Test Co".into(),
+        legal_name: None,
+        currency_code: "USD".into(),
+        locale: "en-US".into(),
+        timezone: "UTC".into(),
+        default_tax_rate_bp: 0,
+        admin_username: "admin".into(),
+        admin_display_name: "Admin".into(),
+        admin_password: "supersecretpassword".into(),
+        load_sample_data: false,
     };
     let (workspace, admin) = workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
@@ -34,40 +44,89 @@ fn master_key() -> [u8; 32] {
 
 fn non_admin_user(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
     user_service::create(
-        conn, ws,
-        &NewUser { username: "rep".into(), display_name: "Sales Rep".into(), password: "supersecretpassword".into(), roles: vec!["Sales".into()] },
+        conn,
+        ws,
+        &NewUser {
+            username: "rep".into(),
+            display_name: "Sales Rep".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(admin),
     )
     .unwrap()
     .id
 }
 
-fn configure_anthropic_key(conn: &rusqlite::Connection, workspace_id: &str, admin: &str, port: u16) {
+fn configure_anthropic_key(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    admin: &str,
+    port: u16,
+) {
     ai_service::save_settings(
-        conn, workspace_id, &master_key(),
-        &AiSettingsInput { provider: "anthropic".into(), base_url: Some(format!("http://127.0.0.1:{port}")), model: "claude-haiku-4-5-20251001".into(), api_key: Some("sk-ant-test".into()) },
+        conn,
+        workspace_id,
+        &master_key(),
+        &AiSettingsInput {
+            provider: "anthropic".into(),
+            base_url: Some(format!("http://127.0.0.1:{port}")),
+            model: "claude-haiku-4-5-20251001".into(),
+            api_key: Some("sk-ant-test".into()),
+        },
         Some(admin),
     )
     .unwrap();
 }
 
-fn configure_openai_compatible_key(conn: &rusqlite::Connection, workspace_id: &str, admin: &str, port: u16) {
+fn configure_openai_compatible_key(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    admin: &str,
+    port: u16,
+) {
     ai_service::save_settings(
-        conn, workspace_id, &master_key(),
-        &AiSettingsInput { provider: "openai_compatible".into(), base_url: Some(format!("http://127.0.0.1:{port}")), model: "gpt-4".into(), api_key: Some("sk-test".into()) },
+        conn,
+        workspace_id,
+        &master_key(),
+        &AiSettingsInput {
+            provider: "openai_compatible".into(),
+            base_url: Some(format!("http://127.0.0.1:{port}")),
+            model: "gpt-4".into(),
+            api_key: Some("sk-test".into()),
+        },
         Some(admin),
     )
     .unwrap();
 }
 
 fn asset_object_input() -> CustomObjectDefinitionInput {
-    CustomObjectDefinitionInput { singular_label: "Asset".into(), plural_label: "Assets".into(), icon: "🔧".into(), prefix: "AST".into(), digits: 4 }
+    CustomObjectDefinitionInput {
+        singular_label: "Asset".into(),
+        plural_label: "Assets".into(),
+        icon: "🔧".into(),
+        prefix: "AST".into(),
+        digits: 4,
+    }
 }
 
-fn create_asset(conn: &rusqlite::Connection, ws: &str, admin: &str, object_key: &str, primary_name: &str) -> lanesra_core::models::custom_record::CustomRecord {
+fn create_asset(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+    object_key: &str,
+    primary_name: &str,
+) -> lanesra_core::models::custom_record::CustomRecord {
     custom_record_service::create(
-        conn, ws,
-        &CustomRecordInput { object_key: object_key.into(), primary_name: primary_name.into(), status: "Active".into(), owner_user_id: None, notes: None },
+        conn,
+        ws,
+        &CustomRecordInput {
+            object_key: object_key.into(),
+            primary_name: primary_name.into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(admin),
     )
     .unwrap()
@@ -135,33 +194,50 @@ fn spawn_embedding_stub() -> u16 {
 async fn reindex_workspace_requires_admin() {
     let (conn, ws, admin) = setup_workspace();
     let rep = non_admin_user(&conn, &ws, &admin);
-    let err = vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&rep)).await.unwrap_err();
+    let err = vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&rep))
+        .await
+        .unwrap_err();
     assert!(err.to_string().contains("Administrator"), "{err}");
 }
 
 #[tokio::test]
 async fn anthropic_has_no_embeddings_api_and_says_so_plainly() {
     let (conn, ws, admin) = setup_workspace();
-    let asset_def = custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
+    let asset_def =
+        custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
     create_asset(&conn, &ws, &admin, &asset_def.key, "Anything");
 
     configure_anthropic_key(&conn, &ws, &admin, 0);
-    let err = vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin)).await.unwrap_err();
-    assert!(err.to_string().contains("Anthropic has no embeddings API"), "{err}");
+    let err = vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin))
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("Anthropic has no embeddings API"),
+        "{err}"
+    );
 }
 
 #[tokio::test]
-async fn creating_a_record_enqueues_it_and_reindexing_stores_a_real_embedding_and_clears_the_queue() {
+async fn creating_a_record_enqueues_it_and_reindexing_stores_a_real_embedding_and_clears_the_queue()
+{
     let (conn, ws, admin) = setup_workspace();
-    let asset_def = custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
+    let asset_def =
+        custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
     create_asset(&conn, &ws, &admin, &asset_def.key, "ShipRecord Atlas");
 
     let before = vector_search_service::status(&conn, &ws).unwrap();
-    assert_eq!((before.embedded_count, before.pending_count), (0, 1), "a brand-new record is enqueued, not yet embedded");
+    assert_eq!(
+        (before.embedded_count, before.pending_count),
+        (0, 1),
+        "a brand-new record is enqueued, not yet embedded"
+    );
 
     let port = spawn_embedding_stub();
     configure_openai_compatible_key(&conn, &ws, &admin, port);
-    let reindexed = vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin)).await.unwrap();
+    let reindexed =
+        vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin))
+            .await
+            .unwrap();
     assert_eq!(reindexed, 1);
 
     let after = vector_search_service::status(&conn, &ws).unwrap();
@@ -171,44 +247,85 @@ async fn creating_a_record_enqueues_it_and_reindexing_stores_a_real_embedding_an
 #[tokio::test]
 async fn archiving_a_record_deletes_its_embedding() {
     let (conn, ws, admin) = setup_workspace();
-    let asset_def = custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
+    let asset_def =
+        custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
     let asset = create_asset(&conn, &ws, &admin, &asset_def.key, "TruckRecord Bravo");
 
     let port = spawn_embedding_stub();
     configure_openai_compatible_key(&conn, &ws, &admin, port);
-    vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin)).await.unwrap();
-    assert_eq!(vector_search_service::status(&conn, &ws).unwrap().embedded_count, 1);
+    vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin))
+        .await
+        .unwrap();
+    assert_eq!(
+        vector_search_service::status(&conn, &ws)
+            .unwrap()
+            .embedded_count,
+        1
+    );
 
     custom_record_service::archive(&conn, &asset.id, Some(&admin)).unwrap();
     let status = vector_search_service::status(&conn, &ws).unwrap();
-    assert_eq!((status.embedded_count, status.pending_count), (0, 0), "archiving should drop the embedding immediately, not just enqueue a re-embed");
+    assert_eq!(
+        (status.embedded_count, status.pending_count),
+        (0, 0),
+        "archiving should drop the embedding immediately, not just enqueue a re-embed"
+    );
 }
 
 #[tokio::test]
 async fn semantic_search_ranks_by_cosine_similarity_not_keyword_overlap() {
     let (conn, ws, admin) = setup_workspace();
-    let asset_def = custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
+    let asset_def =
+        custom_object_service::create(&conn, &ws, &asset_object_input(), Some(&admin)).unwrap();
     let ship = create_asset(&conn, &ws, &admin, &asset_def.key, "ShipRecord Atlas");
     create_asset(&conn, &ws, &admin, &asset_def.key, "TruckRecord Bravo");
     create_asset(&conn, &ws, &admin, &asset_def.key, "OrangeRecord Charlie");
 
     let port = spawn_embedding_stub();
     configure_openai_compatible_key(&conn, &ws, &admin, port);
-    let reindexed = vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin)).await.unwrap();
+    let reindexed =
+        vector_search_service::reindex_workspace(&conn, &ws, &master_key(), Some(&admin))
+            .await
+            .unwrap();
     assert_eq!(reindexed, 3);
 
     // The query shares not one literal word with any record's name - a
     // keyword search would find nothing - but the stub maps it to a
     // vector close to ShipRecord's own, proving this is genuinely
     // similarity-ranked, not a disguised substring match.
-    let hits = vector_search_service::semantic_search_records(&conn, &ws, &master_key(), "vessel at sea", None, 10).await.unwrap();
+    let hits = vector_search_service::semantic_search_records(
+        &conn,
+        &ws,
+        &master_key(),
+        "vessel at sea",
+        None,
+        10,
+    )
+    .await
+    .unwrap();
     assert_eq!(hits.len(), 3, "{hits:?}");
-    assert_eq!(hits[0].record_id, ship.id, "the ship should rank first: {hits:?}");
-    assert!(hits[0].similarity > hits[1].similarity && hits[1].similarity > hits[2].similarity, "{hits:?}");
+    assert_eq!(
+        hits[0].record_id, ship.id,
+        "the ship should rank first: {hits:?}"
+    );
+    assert!(
+        hits[0].similarity > hits[1].similarity && hits[1].similarity > hits[2].similarity,
+        "{hits:?}"
+    );
 
     // Scoped to a different object_key - no results even though the
     // embedded record exists workspace-wide.
-    assert!(vector_search_service::semantic_search_records(&conn, &ws, &master_key(), "vessel at sea", Some("nonexistent_object"), 10).await.unwrap().is_empty());
+    assert!(vector_search_service::semantic_search_records(
+        &conn,
+        &ws,
+        &master_key(),
+        "vessel at sea",
+        Some("nonexistent_object"),
+        10
+    )
+    .await
+    .unwrap()
+    .is_empty());
 }
 
 #[tokio::test]
@@ -216,6 +333,15 @@ async fn semantic_search_with_no_embedded_records_yet_returns_no_hits_not_an_err
     let (conn, ws, admin) = setup_workspace();
     let port = spawn_embedding_stub();
     configure_openai_compatible_key(&conn, &ws, &admin, port);
-    let hits = vector_search_service::semantic_search_records(&conn, &ws, &master_key(), "anything", None, 10).await.unwrap();
+    let hits = vector_search_service::semantic_search_records(
+        &conn,
+        &ws,
+        &master_key(),
+        "anything",
+        None,
+        10,
+    )
+    .await
+    .unwrap();
     assert!(hits.is_empty());
 }

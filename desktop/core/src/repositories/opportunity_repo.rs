@@ -161,8 +161,7 @@ pub fn list_products(
     conn: &Connection,
     opportunity_id: &str,
 ) -> rusqlite::Result<Vec<OpportunityProduct>> {
-    let mut stmt =
-        conn.prepare("SELECT * FROM opportunity_products WHERE opportunity_id = ?1")?;
+    let mut stmt = conn.prepare("SELECT * FROM opportunity_products WHERE opportunity_id = ?1")?;
     let rows = stmt.query_map([opportunity_id], map_product_row)?;
     rows.collect()
 }

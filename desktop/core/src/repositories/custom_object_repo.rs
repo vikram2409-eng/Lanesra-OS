@@ -1,7 +1,9 @@
 use rusqlite::Connection;
 
 use crate::domain::ids::now_iso;
-use crate::models::custom_object::{CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate};
+use crate::models::custom_object::{
+    CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate,
+};
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomObjectDefinition> {
     Ok(CustomObjectDefinition {
@@ -42,31 +44,61 @@ pub fn create(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<CustomObjectDefinition>> {
-    conn.query_row("SELECT * FROM custom_object_definitions WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM custom_object_definitions WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn get_by_key(conn: &Connection, workspace_id: &str, key: &str) -> rusqlite::Result<Option<CustomObjectDefinition>> {
+pub fn get_by_key(
+    conn: &Connection,
+    workspace_id: &str,
+    key: &str,
+) -> rusqlite::Result<Option<CustomObjectDefinition>> {
     conn.query_row(
         "SELECT * FROM custom_object_definitions WHERE workspace_id = ?1 AND key = ?2",
         (workspace_id, key),
         map_row,
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// All definitions for the workspace, active and inactive - the service
 /// layer decides which to expose to which caller (nav/creation only wants
 /// active ones; the admin screen wants everything).
-pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<CustomObjectDefinition>> {
-    let mut stmt = conn.prepare("SELECT * FROM custom_object_definitions WHERE workspace_id = ?1 ORDER BY plural_label")?;
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<CustomObjectDefinition>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM custom_object_definitions WHERE workspace_id = ?1 ORDER BY plural_label",
+    )?;
     let rows = stmt.query_map([workspace_id], map_row)?.collect();
     rows
 }
 
-pub fn update(conn: &Connection, id: &str, input: &CustomObjectDefinitionUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<CustomObjectDefinition> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &CustomObjectDefinitionUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<CustomObjectDefinition> {
     conn.execute(
         "UPDATE custom_object_definitions
          SET singular_label = ?1, plural_label = ?2, icon = ?3, prefix = ?4, digits = ?5, is_active = ?6, updated_at = ?7, updated_by = ?8
@@ -84,7 +116,12 @@ pub fn update(conn: &Connection, id: &str, input: &CustomObjectDefinitionUpdate,
 /// rather than added to `CustomObjectDefinitionUpdate` so the existing
 /// admin object-edit flow (label/icon/prefix/digits/active) stays
 /// untouched by this migration.
-pub fn set_ownership_mode(conn: &Connection, id: &str, ownership_mode: &str, actor_user_id: Option<&str>) -> rusqlite::Result<CustomObjectDefinition> {
+pub fn set_ownership_mode(
+    conn: &Connection,
+    id: &str,
+    ownership_mode: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<CustomObjectDefinition> {
     conn.execute(
         "UPDATE custom_object_definitions SET ownership_mode = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
         (ownership_mode, now_iso(), actor_user_id, id),

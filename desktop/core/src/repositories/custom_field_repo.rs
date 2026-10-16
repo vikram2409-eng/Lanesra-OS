@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 
 use crate::domain::ids::now_iso;
-use crate::models::custom_field::{CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate};
+use crate::models::custom_field::{
+    CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate,
+};
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<CustomFieldDefinition> {
     let options_json: Option<String> = row.get("options_json")?;
@@ -120,7 +122,9 @@ pub fn find_by_lookup_relationship(
     let mut stmt = conn.prepare(
         "SELECT * FROM custom_field_definitions WHERE lookup_relationship_definition_id = ?1",
     )?;
-    let rows = stmt.query_map([relationship_definition_id], map_row)?.collect();
+    let rows = stmt
+        .query_map([relationship_definition_id], map_row)?
+        .collect();
     rows
 }
 
@@ -132,7 +136,10 @@ pub fn find_by_lookup_relationship(
 /// deactivating those same fields, never on its own - see
 /// `custom_field_service::deactivate_lookup_fields_for_relationship`'s
 /// caller in `relationship_service::delete`.
-pub fn clear_lookup_relationship_reference(conn: &Connection, relationship_definition_id: &str) -> rusqlite::Result<()> {
+pub fn clear_lookup_relationship_reference(
+    conn: &Connection,
+    relationship_definition_id: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE custom_field_definitions SET lookup_relationship_definition_id = NULL WHERE lookup_relationship_definition_id = ?1",
         [relationship_definition_id],
@@ -140,24 +147,48 @@ pub fn clear_lookup_relationship_reference(conn: &Connection, relationship_defin
     Ok(())
 }
 
-pub fn get_definition(conn: &Connection, id: &str) -> rusqlite::Result<Option<CustomFieldDefinition>> {
-    conn.query_row("SELECT * FROM custom_field_definitions WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+pub fn get_definition(
+    conn: &Connection,
+    id: &str,
+) -> rusqlite::Result<Option<CustomFieldDefinition>> {
+    conn.query_row(
+        "SELECT * FROM custom_field_definitions WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// All definitions for the entity type, active and inactive - the service
 /// layer decides which to expose to which caller (forms only want active
 /// ones; the admin screen wants everything, ordered by sort_order).
-pub fn list_definitions(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<CustomFieldDefinition>> {
+pub fn list_definitions(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<Vec<CustomFieldDefinition>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM custom_field_definitions WHERE workspace_id = ?1 AND entity_type = ?2 ORDER BY sort_order, label",
     )?;
-    let rows = stmt.query_map((workspace_id, entity_type), map_row)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, entity_type), map_row)?
+        .collect();
     rows
 }
 
-pub fn update_definition(conn: &Connection, id: &str, input: &CustomFieldDefinitionUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<CustomFieldDefinition> {
+pub fn update_definition(
+    conn: &Connection,
+    id: &str,
+    input: &CustomFieldDefinitionUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<CustomFieldDefinition> {
     let options_json = serde_json::to_string(&input.options).unwrap_or_else(|_| "[]".into());
     conn.execute(
         "UPDATE custom_field_definitions
@@ -183,7 +214,12 @@ pub fn update_definition(conn: &Connection, id: &str, input: &CustomFieldDefinit
 /// stored as an empty string, keeping "no value" and "empty string"
 /// indistinguishable the same way every other optional field in this
 /// schema treats them.
-pub fn set_value(conn: &Connection, definition_id: &str, entity_id: &str, value: &str) -> rusqlite::Result<()> {
+pub fn set_value(
+    conn: &Connection,
+    definition_id: &str,
+    entity_id: &str,
+    value: &str,
+) -> rusqlite::Result<()> {
     if value.trim().is_empty() {
         conn.execute(
             "DELETE FROM custom_field_values WHERE definition_id = ?1 AND entity_id = ?2",
@@ -204,7 +240,12 @@ pub fn set_value(conn: &Connection, definition_id: &str, entity_id: &str, value:
 /// Addendum Phase 4: whether `value` is already stored for this
 /// definition on some entity other than `entity_id` - the check
 /// `is_unique` enforcement needs before writing.
-pub fn value_exists_elsewhere(conn: &Connection, definition_id: &str, entity_id: &str, value: &str) -> rusqlite::Result<bool> {
+pub fn value_exists_elsewhere(
+    conn: &Connection,
+    definition_id: &str,
+    entity_id: &str,
+    value: &str,
+) -> rusqlite::Result<bool> {
     conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM custom_field_values WHERE definition_id = ?1 AND value_text = ?2 AND entity_id != ?3)",
         (definition_id, value, entity_id),
@@ -221,7 +262,9 @@ pub fn get_values(conn: &Connection, entity_id: &str) -> rusqlite::Result<HashMa
          WHERE v.entity_id = ?1",
     )?;
     let rows = stmt
-        .query_map([entity_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .query_map([entity_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows.into_iter().collect())
 }
@@ -244,7 +287,11 @@ pub fn get_filterable_values(
     )?;
     let rows = stmt
         .query_map(rusqlite::params![workspace_id, entity_type], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut out: HashMap<String, HashMap<String, String>> = HashMap::new();

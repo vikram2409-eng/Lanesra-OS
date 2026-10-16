@@ -20,8 +20,11 @@ use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::industry_package::ImportPackageInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{custom_field_service, custom_record_service, industry_package_service, relationship_service, user_service, workspace_service};
 use lanesra_core::services::reference_packages::field_service_manifest_json;
+use lanesra_core::services::{
+    custom_field_service, custom_record_service, industry_package_service, relationship_service,
+    user_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -41,8 +44,14 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
     (conn, workspace.id, admin.id)
 }
 
-fn install_field_service(conn: &rusqlite::Connection, ws: &str, admin: &str) -> lanesra_core::models::industry_package::InstalledApp {
-    let input = ImportPackageInput { manifest_json: field_service_manifest_json() };
+fn install_field_service(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+) -> lanesra_core::models::industry_package::InstalledApp {
+    let input = ImportPackageInput {
+        manifest_json: field_service_manifest_json(),
+    };
     let package = industry_package_service::import_package(conn, ws, &input, Some(admin)).unwrap();
     industry_package_service::install(conn, ws, &package.id, Some(admin)).unwrap()
 }
@@ -53,7 +62,8 @@ fn the_manifest_itself_parses_and_is_internally_consistent() {
     // fails, every other test in this file will fail for the same
     // reason, so it's worth pinning down on its own.
     let json_text = field_service_manifest_json();
-    let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
+    let value: serde_json::Value =
+        serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.field_service");
     assert_eq!(value["objects"].as_array().unwrap().len(), 14);
 }
@@ -70,7 +80,13 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
     assert_eq!(installed.recommended_permissions.len(), 5);
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
-    let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
+    let count_of = |t: &str| {
+        detail
+            .artifacts
+            .iter()
+            .filter(|a| a.artifact_type == t)
+            .count()
+    };
     assert_eq!(count_of("custom_object"), 14);
     assert_eq!(count_of("relationship_definition"), 23);
     assert_eq!(count_of("business_rule"), 8);
@@ -90,7 +106,13 @@ fn completion_validation_rule_blocks_an_incomplete_work_order_and_allows_a_compl
     let wo = custom_record_service::create(
         &conn,
         &ws,
-        &CustomRecordInput { object_key: "work_order".into(), primary_name: "AC not cooling".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &CustomRecordInput {
+            object_key: "work_order".into(),
+            primary_name: "AC not cooling".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
     )
     .unwrap();
@@ -100,20 +122,35 @@ fn completion_validation_rule_blocks_an_incomplete_work_order_and_allows_a_compl
     // later calls that only mean to change stage don't spuriously fail
     // on a field that already had a value.
     let mut values = HashMap::new();
-    values.insert("description".to_string(), "Customer reports no cold air".to_string());
-    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &values, Some(&admin)).unwrap();
+    values.insert(
+        "description".to_string(),
+        "Customer reports no cold air".to_string(),
+    );
+    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &values, Some(&admin))
+        .unwrap();
 
     // Marking it Completed without resolution/completion_date is blocked.
     let mut incomplete = custom_field_service::get_entity_values(&conn, &wo.id).unwrap();
     incomplete.insert("stage".to_string(), "Completed".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &incomplete, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "work_order",
+        &wo.id,
+        &incomplete,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Completion Date") || err.to_string().contains("Resolution"));
 
     // Providing both lets it through.
     let mut complete = incomplete;
     complete.insert("completion_date".to_string(), "2026-01-15".to_string());
-    complete.insert("resolution".to_string(), "Replaced the capacitor".to_string());
-    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &complete, Some(&admin)).unwrap();
+    complete.insert(
+        "resolution".to_string(),
+        "Replaced the capacitor".to_string(),
+    );
+    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &complete, Some(&admin))
+        .unwrap();
 
     let stored = custom_field_service::get_entity_values(&conn, &wo.id).unwrap();
     assert_eq!(stored.get("stage").map(String::as_str), Some("Completed"));
@@ -125,15 +162,31 @@ fn work_completed_workflow_propagates_completion_date_onto_the_linked_asset() {
     install_field_service(&conn, &ws, &admin);
 
     let asset = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "asset".into(), primary_name: "Rooftop Unit 3".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "asset".into(),
+            primary_name: "Rooftop Unit 3".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let wo = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "work_order".into(), primary_name: "AC not cooling".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "work_order".into(),
+            primary_name: "AC not cooling".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Link the work order to its asset - the same "Asset" related-list
     // link a dispatcher would use, exercising the exact relationship the
@@ -143,20 +196,41 @@ fn work_completed_workflow_propagates_completion_date_onto_the_linked_asset() {
         .iter()
         .find(|r| r.source_entity_type == "work_order" && r.target_entity_type == "asset")
         .expect("the manifest defines a work_order -> asset relationship");
-    relationship_service::link(&conn, &ws, &wo_to_asset.id, "work_order", &wo.id, "asset", &asset.id, Some(&admin)).unwrap();
+    relationship_service::link(
+        &conn,
+        &ws,
+        &wo_to_asset.id,
+        "work_order",
+        &wo.id,
+        "asset",
+        &asset.id,
+        Some(&admin),
+    )
+    .unwrap();
 
     let mut values = HashMap::new();
-    values.insert("description".to_string(), "Customer reports no cold air".to_string());
-    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &values, Some(&admin)).unwrap();
+    values.insert(
+        "description".to_string(),
+        "Customer reports no cold air".to_string(),
+    );
+    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &values, Some(&admin))
+        .unwrap();
 
     let mut complete = custom_field_service::get_entity_values(&conn, &wo.id).unwrap();
     complete.insert("stage".to_string(), "Completed".to_string());
     complete.insert("completion_date".to_string(), "2026-01-15".to_string());
-    complete.insert("resolution".to_string(), "Replaced the capacitor".to_string());
-    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &complete, Some(&admin)).unwrap();
+    complete.insert(
+        "resolution".to_string(),
+        "Replaced the capacitor".to_string(),
+    );
+    custom_field_service::set_entity_values(&conn, "work_order", &wo.id, &complete, Some(&admin))
+        .unwrap();
 
     let asset_values = custom_field_service::get_entity_values(&conn, &asset.id).unwrap();
-    assert_eq!(asset_values.get("last_service_date").map(String::as_str), Some("2026-01-15"));
+    assert_eq!(
+        asset_values.get("last_service_date").map(String::as_str),
+        Some("2026-01-15")
+    );
 }
 
 #[test]
@@ -164,17 +238,37 @@ fn new_work_order_workflow_creates_a_dispatcher_task_and_a_notification() {
     let (conn, ws, admin) = setup_workspace();
     install_field_service(&conn, &ws, &admin);
 
-    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
     custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "work_order".into(), primary_name: "AC not cooling".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "work_order".into(),
+            primary_name: "AC not cooling".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
-    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    assert_eq!(after, before + 1, "the 'New work order created' workflow should have created a dispatcher task");
+    )
+    .unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    assert_eq!(
+        after,
+        before + 1,
+        "the 'New work order created' workflow should have created a dispatcher task"
+    );
 
-    let notifications = lanesra_core::repositories::notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap();
-    assert!(notifications.iter().any(|n| n.message.contains("New work order created")));
+    let notifications =
+        lanesra_core::repositories::notification_repo::list_for_user(&conn, &ws, &admin, false)
+            .unwrap();
+    assert!(notifications
+        .iter()
+        .any(|n| n.message.contains("New work order created")));
 }
 
 #[test]
@@ -183,28 +277,58 @@ fn appointment_completion_rule_requires_actual_times_and_outcome() {
     install_field_service(&conn, &ws, &admin);
 
     let wo = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "work_order".into(), primary_name: "AC not cooling".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "work_order".into(),
+            primary_name: "AC not cooling".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let _ = wo; // the appointment doesn't need to be linked for this rule - it's a same-record check
 
     let appt = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "service_appointment".into(), primary_name: "Visit 1".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "service_appointment".into(),
+            primary_name: "Visit 1".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut incomplete = HashMap::new();
     incomplete.insert("appt_stage".to_string(), "Completed".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "service_appointment", &appt.id, &incomplete, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "service_appointment",
+        &appt.id,
+        &incomplete,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Actual") || err.to_string().contains("Outcome"));
 
     let mut complete = incomplete;
     complete.insert("actual_start".to_string(), "2026-01-15".to_string());
     complete.insert("actual_end".to_string(), "2026-01-15".to_string());
     complete.insert("outcome".to_string(), "Repaired".to_string());
-    custom_field_service::set_entity_values(&conn, "service_appointment", &appt.id, &complete, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "service_appointment",
+        &appt.id,
+        &complete,
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -213,34 +337,76 @@ fn warranty_claim_resolution_rules_block_an_unresolved_claim_and_allow_a_resolve
     install_field_service(&conn, &ws, &admin);
 
     let claim = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "warranty_claim".into(), primary_name: "Compressor failure".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "warranty_claim".into(),
+            primary_name: "Compressor failure".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Denying a claim with no resolution notes is blocked by "Claim
     // resolution notes" - the only one of the two rules that applies to
     // a non-Reimbursed resolution.
     let mut values = HashMap::new();
     values.insert("claim_status".to_string(), "Denied".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "warranty_claim",
+        &claim.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Resolution Notes"));
 
     // Providing notes lets the denial through.
-    values.insert("resolution_notes".to_string(), "Out of warranty period".to_string());
-    custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap();
+    values.insert(
+        "resolution_notes".to_string(),
+        "Out of warranty period".to_string(),
+    );
+    custom_field_service::set_entity_values(
+        &conn,
+        "warranty_claim",
+        &claim.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 
     // Moving to Reimbursed (notes already on file) is blocked by "Claim
     // reimbursement amount" until an approved amount is recorded too.
     values.insert("claim_status".to_string(), "Reimbursed".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "warranty_claim",
+        &claim.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Amount Approved"));
 
     values.insert("amount_approved".to_string(), "450".to_string());
-    custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "warranty_claim",
+        &claim.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 
     let stored = custom_field_service::get_entity_values(&conn, &claim.id).unwrap();
-    assert_eq!(stored.get("claim_status").map(String::as_str), Some("Reimbursed"));
+    assert_eq!(
+        stored.get("claim_status").map(String::as_str),
+        Some("Reimbursed")
+    );
 }
 
 #[test]
@@ -249,20 +415,47 @@ fn warranty_claim_submitted_workflow_creates_a_review_task_and_a_notification() 
     install_field_service(&conn, &ws, &admin);
 
     let claim = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "warranty_claim".into(), primary_name: "Compressor failure".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "warranty_claim".into(),
+            primary_name: "Compressor failure".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
-    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
     let mut values = custom_field_service::get_entity_values(&conn, &claim.id).unwrap();
     values.insert("claim_status".to_string(), "Submitted".to_string());
-    custom_field_service::set_entity_values(&conn, "warranty_claim", &claim.id, &values, Some(&admin)).unwrap();
-    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    assert_eq!(after, before + 1, "the 'Warranty claim submitted' workflow should have created a review task");
+    custom_field_service::set_entity_values(
+        &conn,
+        "warranty_claim",
+        &claim.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    assert_eq!(
+        after,
+        before + 1,
+        "the 'Warranty claim submitted' workflow should have created a review task"
+    );
 
-    let notifications = lanesra_core::repositories::notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap();
-    assert!(notifications.iter().any(|n| n.message.contains("warranty claim was submitted")));
+    let notifications =
+        lanesra_core::repositories::notification_repo::list_for_user(&conn, &ws, &admin, false)
+            .unwrap();
+    assert!(notifications
+        .iter()
+        .any(|n| n.message.contains("warranty claim was submitted")));
 }
 
 #[test]
@@ -271,34 +464,81 @@ fn estimate_approval_and_decline_rules_require_the_right_fields() {
     install_field_service(&conn, &ws, &admin);
 
     let estimate = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "service_estimate".into(), primary_name: "AC replacement estimate".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "service_estimate".into(),
+            primary_name: "AC replacement estimate".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Approving with no total/approved date is blocked by "Estimate approval requires totals".
     let mut values = HashMap::new();
     values.insert("estimate_status".to_string(), "Approved".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "service_estimate", &estimate.id, &values, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "service_estimate",
+        &estimate.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Total") || err.to_string().contains("Approved Date"));
 
     values.insert("total_amount".to_string(), "4200".to_string());
     values.insert("approved_date".to_string(), "2026-02-01".to_string());
-    custom_field_service::set_entity_values(&conn, "service_estimate", &estimate.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "service_estimate",
+        &estimate.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 
     // A second estimate declined with no reason is blocked by "Estimate decline requires reason".
     let declined = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "service_estimate".into(), primary_name: "Furnace replacement estimate".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "service_estimate".into(),
+            primary_name: "Furnace replacement estimate".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let mut decline_values = HashMap::new();
     decline_values.insert("estimate_status".to_string(), "Declined".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "service_estimate", &declined.id, &decline_values, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "service_estimate",
+        &declined.id,
+        &decline_values,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Decline Reason"));
 
-    decline_values.insert("decline_reason".to_string(), "Customer chose a competitor".to_string());
-    custom_field_service::set_entity_values(&conn, "service_estimate", &declined.id, &decline_values, Some(&admin)).unwrap();
+    decline_values.insert(
+        "decline_reason".to_string(),
+        "Customer chose a competitor".to_string(),
+    );
+    custom_field_service::set_entity_values(
+        &conn,
+        "service_estimate",
+        &declined.id,
+        &decline_values,
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -307,20 +547,42 @@ fn maintenance_plan_non_renewing_rule_requires_an_end_date() {
     install_field_service(&conn, &ws, &admin);
 
     let plan = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "maintenance_plan".into(), primary_name: "Annual HVAC tune-up".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "maintenance_plan".into(),
+            primary_name: "Annual HVAC tune-up".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut values = HashMap::new();
     values.insert("plan_status".to_string(), "Active".to_string());
     values.insert("start_date".to_string(), "2026-01-01".to_string());
     values.insert("auto_renew".to_string(), "false".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "maintenance_plan", &plan.id, &values, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "maintenance_plan",
+        &plan.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("End Date"));
 
     values.insert("end_date".to_string(), "2027-01-01".to_string());
-    custom_field_service::set_entity_values(&conn, "maintenance_plan", &plan.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "maintenance_plan",
+        &plan.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -329,20 +591,45 @@ fn overtime_time_entry_rule_requires_justification_notes() {
     install_field_service(&conn, &ws, &admin);
 
     let entry = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "field_time_entry".into(), primary_name: "Jan 15 labor".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "field_time_entry".into(),
+            primary_name: "Jan 15 labor".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let mut values = HashMap::new();
     values.insert("entry_date".to_string(), "2026-01-15".to_string());
     values.insert("hours".to_string(), "10".to_string());
     values.insert("labor_type".to_string(), "Overtime".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "field_time_entry", &entry.id, &values, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "field_time_entry",
+        &entry.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Notes"));
 
-    values.insert("notes".to_string(), "Emergency after-hours call for a burst pipe".to_string());
-    custom_field_service::set_entity_values(&conn, "field_time_entry", &entry.id, &values, Some(&admin)).unwrap();
+    values.insert(
+        "notes".to_string(),
+        "Emergency after-hours call for a burst pipe".to_string(),
+    );
+    custom_field_service::set_entity_values(
+        &conn,
+        "field_time_entry",
+        &entry.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -351,27 +638,67 @@ fn estimate_workflows_create_tasks_and_the_approval_notifies_admins() {
     install_field_service(&conn, &ws, &admin);
 
     let estimate = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "service_estimate".into(), primary_name: "AC replacement estimate".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "service_estimate".into(),
+            primary_name: "AC replacement estimate".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
-    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
     let mut values = custom_field_service::get_entity_values(&conn, &estimate.id).unwrap();
     values.insert("estimate_status".to_string(), "Presented".to_string());
-    custom_field_service::set_entity_values(&conn, "service_estimate", &estimate.id, &values, Some(&admin)).unwrap();
-    let after_presented = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    assert_eq!(after_presented, before + 1, "'Estimate presented' should have created a follow-up task");
+    custom_field_service::set_entity_values(
+        &conn,
+        "service_estimate",
+        &estimate.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
+    let after_presented = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    assert_eq!(
+        after_presented,
+        before + 1,
+        "'Estimate presented' should have created a follow-up task"
+    );
 
     values.insert("estimate_status".to_string(), "Approved".to_string());
     values.insert("total_amount".to_string(), "4200".to_string());
     values.insert("approved_date".to_string(), "2026-02-01".to_string());
-    custom_field_service::set_entity_values(&conn, "service_estimate", &estimate.id, &values, Some(&admin)).unwrap();
-    let after_approved = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    assert_eq!(after_approved, after_presented + 1, "'Estimate approved' should have created a scheduling task");
+    custom_field_service::set_entity_values(
+        &conn,
+        "service_estimate",
+        &estimate.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
+    let after_approved = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    assert_eq!(
+        after_approved,
+        after_presented + 1,
+        "'Estimate approved' should have created a scheduling task"
+    );
 
-    let notifications = lanesra_core::repositories::notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap();
-    assert!(notifications.iter().any(|n| n.message.contains("estimate was approved")));
+    let notifications =
+        lanesra_core::repositories::notification_repo::list_for_user(&conn, &ws, &admin, false)
+            .unwrap();
+    assert!(notifications
+        .iter()
+        .any(|n| n.message.contains("estimate was approved")));
 }
 
 #[test]
@@ -380,35 +707,74 @@ fn maintenance_plan_cancelled_workflow_creates_a_task() {
     install_field_service(&conn, &ws, &admin);
 
     let plan = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "maintenance_plan".into(), primary_name: "Annual HVAC tune-up".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "maintenance_plan".into(),
+            primary_name: "Annual HVAC tune-up".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let mut values = HashMap::new();
     values.insert("plan_status".to_string(), "Active".to_string());
     values.insert("start_date".to_string(), "2026-01-01".to_string());
-    custom_field_service::set_entity_values(&conn, "maintenance_plan", &plan.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "maintenance_plan",
+        &plan.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 
-    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
     values.insert("plan_status".to_string(), "Cancelled".to_string());
-    custom_field_service::set_entity_values(&conn, "maintenance_plan", &plan.id, &values, Some(&admin)).unwrap();
-    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    assert_eq!(after, before + 1, "'Plan cancelled' should have created a billing follow-up task");
+    custom_field_service::set_entity_values(
+        &conn,
+        "maintenance_plan",
+        &plan.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    assert_eq!(
+        after,
+        before + 1,
+        "'Plan cancelled' should have created a billing follow-up task"
+    );
 }
 
 #[test]
 fn a_non_administrator_cannot_install_the_reference_package() {
     let (conn, ws, admin) = setup_workspace();
     let sales = user_service::create(
-        &conn, &ws,
-        &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] },
+        &conn,
+        &ws,
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(&admin),
     )
     .unwrap()
     .id;
 
-    let input = ImportPackageInput { manifest_json: field_service_manifest_json() };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: field_service_manifest_json(),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
     let err = industry_package_service::install(&conn, &ws, &package.id, Some(&sales)).unwrap_err();
     assert!(err.to_string().contains("Administrator"));
 }

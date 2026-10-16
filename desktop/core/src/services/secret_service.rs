@@ -58,9 +58,11 @@ const NONCE_LEN: usize = 12;
 /// (and only ever written to) when `LANESRA_SECRET_MASTER_KEY` isn't set.
 pub fn resolve_master_key(key_file_path: &Path) -> AppResult<[u8; KEY_LEN]> {
     if let Ok(b64) = std::env::var("LANESRA_SECRET_MASTER_KEY") {
-        let bytes = BASE64
-            .decode(b64.trim())
-            .map_err(|e| AppError::Validation(format!("LANESRA_SECRET_MASTER_KEY is not valid base64: {e}")))?;
+        let bytes = BASE64.decode(b64.trim()).map_err(|e| {
+            AppError::Validation(format!(
+                "LANESRA_SECRET_MASTER_KEY is not valid base64: {e}"
+            ))
+        })?;
         return to_key_array(&bytes);
     }
     if let Ok(existing) = std::fs::read(key_file_path) {
@@ -69,9 +71,12 @@ pub fn resolve_master_key(key_file_path: &Path) -> AppResult<[u8; KEY_LEN]> {
     let mut key = [0u8; KEY_LEN];
     OsRng.fill_bytes(&mut key);
     if let Some(parent) = key_file_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| AppError::Validation(format!("could not create secret key directory: {e}")))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AppError::Validation(format!("could not create secret key directory: {e}"))
+        })?;
     }
-    std::fs::write(key_file_path, key).map_err(|e| AppError::Validation(format!("could not write secret key file: {e}")))?;
+    std::fs::write(key_file_path, key)
+        .map_err(|e| AppError::Validation(format!("could not write secret key file: {e}")))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -85,9 +90,12 @@ pub fn resolve_master_key(key_file_path: &Path) -> AppResult<[u8; KEY_LEN]> {
 }
 
 fn to_key_array(bytes: &[u8]) -> AppResult<[u8; KEY_LEN]> {
-    bytes
-        .try_into()
-        .map_err(|_| AppError::Validation(format!("secret master key must be exactly {KEY_LEN} bytes, got {}", bytes.len())))
+    bytes.try_into().map_err(|_| {
+        AppError::Validation(format!(
+            "secret master key must be exactly {KEY_LEN} bytes, got {}",
+            bytes.len()
+        ))
+    })
 }
 
 /// Encrypts `plaintext`, returning `(ciphertext_b64, nonce_b64)` -
@@ -106,15 +114,24 @@ pub fn encrypt(master_key: &[u8; KEY_LEN], plaintext: &str) -> AppResult<(String
 /// Reverses `encrypt` - the one place a stored secret's real value is ever
 /// reconstructed, and only ever held in memory for the moment an outbound
 /// call or signature needs it.
-pub fn decrypt(master_key: &[u8; KEY_LEN], ciphertext_b64: &str, nonce_b64: &str) -> AppResult<String> {
+pub fn decrypt(
+    master_key: &[u8; KEY_LEN],
+    ciphertext_b64: &str,
+    nonce_b64: &str,
+) -> AppResult<String> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(master_key));
-    let ciphertext = BASE64.decode(ciphertext_b64).map_err(|e| AppError::Validation(format!("invalid stored secret: {e}")))?;
-    let nonce_bytes = BASE64.decode(nonce_b64).map_err(|e| AppError::Validation(format!("invalid stored secret nonce: {e}")))?;
+    let ciphertext = BASE64
+        .decode(ciphertext_b64)
+        .map_err(|e| AppError::Validation(format!("invalid stored secret: {e}")))?;
+    let nonce_bytes = BASE64
+        .decode(nonce_b64)
+        .map_err(|e| AppError::Validation(format!("invalid stored secret nonce: {e}")))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext.as_ref())
-        .map_err(|_| AppError::Validation("could not decrypt secret - wrong master key or corrupted data".into()))?;
-    String::from_utf8(plaintext).map_err(|e| AppError::Validation(format!("decrypted secret was not valid UTF-8: {e}")))
+    let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).map_err(|_| {
+        AppError::Validation("could not decrypt secret - wrong master key or corrupted data".into())
+    })?;
+    String::from_utf8(plaintext)
+        .map_err(|e| AppError::Validation(format!("decrypted secret was not valid UTF-8: {e}")))
 }
 
 /// One-way hash for an inbound API client's issued secret - see this
@@ -174,11 +191,17 @@ mod tests {
     #[test]
     fn resolve_master_key_creates_and_reuses_a_key_file() {
         std::env::remove_var("LANESRA_SECRET_MASTER_KEY");
-        let dir = std::env::temp_dir().join(format!("lanesra-secret-test-{}", crate::domain::ids::new_uuid()));
+        let dir = std::env::temp_dir().join(format!(
+            "lanesra-secret-test-{}",
+            crate::domain::ids::new_uuid()
+        ));
         let path = dir.join("secret.key");
         let first = resolve_master_key(&path).unwrap();
         let second = resolve_master_key(&path).unwrap();
-        assert_eq!(first, second, "a second resolution must reuse the same on-disk key, not generate a new one");
+        assert_eq!(
+            first, second,
+            "a second resolution must reuse the same on-disk key, not generate a new one"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -34,10 +34,14 @@ fn validate_input(input: &SavedViewInput) -> AppResult<()> {
         return Err(AppError::Validation("An object is required".into()));
     }
     if input.visibility != "private" && input.visibility != "shared" {
-        return Err(AppError::Validation("Visibility must be 'private' or 'shared'".into()));
+        return Err(AppError::Validation(
+            "Visibility must be 'private' or 'shared'".into(),
+        ));
     }
     if input.sort_direction != "asc" && input.sort_direction != "desc" {
-        return Err(AppError::Validation("Sort direction must be 'asc' or 'desc'".into()));
+        return Err(AppError::Validation(
+            "Sort direction must be 'asc' or 'desc'".into(),
+        ));
     }
     Ok(())
 }
@@ -47,14 +51,23 @@ fn validate_input(input: &SavedViewInput) -> AppResult<()> {
 /// everyone, the same "anyone can read, one owner (or an admin) can
 /// write" line every other admin-authored resource in this codebase
 /// draws (Business Rules, Workflow Automation, Dashboards, ...).
-fn require_owner_or_admin(conn: &Connection, view: &SavedView, actor_user_id: Option<&str>) -> AppResult<()> {
+fn require_owner_or_admin(
+    conn: &Connection,
+    view: &SavedView,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     if Some(view.owner_user_id.as_str()) == actor_user_id {
         return Ok(());
     }
     require_admin(conn, actor_user_id)
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &SavedViewInput, actor_user_id: Option<&str>) -> AppResult<SavedView> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &SavedViewInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<SavedView> {
     validate_input(input)?;
     let owner = require_actor(actor_user_id)?;
     Ok(saved_view_repo::insert(
@@ -77,9 +90,19 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &SavedViewInput, act
 /// private views plus every shared view in the workspace, with the
 /// workspace's current default (if any) listed first regardless of who
 /// owns it, matching `saved_view_repo::list_usable`'s own ordering.
-pub fn list_for_object(conn: &Connection, workspace_id: &str, object_key: &str, actor_user_id: Option<&str>) -> AppResult<Vec<SavedView>> {
+pub fn list_for_object(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<SavedView>> {
     let user = require_actor(actor_user_id)?;
-    Ok(saved_view_repo::list_usable(conn, workspace_id, object_key, user)?)
+    Ok(saved_view_repo::list_usable(
+        conn,
+        workspace_id,
+        object_key,
+        user,
+    )?)
 }
 
 fn get_owned(conn: &Connection, id: &str) -> AppResult<SavedView> {
@@ -96,7 +119,12 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Option<SavedView>> {
     Ok(saved_view_repo::get_by_id(conn, id)?)
 }
 
-pub fn update(conn: &Connection, id: &str, input: &SavedViewInput, actor_user_id: Option<&str>) -> AppResult<SavedView> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &SavedViewInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<SavedView> {
     validate_input(input)?;
     let existing = get_owned(conn, id)?;
     require_owner_or_admin(conn, &existing, actor_user_id)?;
@@ -127,7 +155,11 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
 ///   `is_object_default = 1` per (workspace_id, object_key) - the
 ///   invariant migration 0034's own comment documents as enforced here
 ///   rather than by a schema constraint.
-pub fn set_default(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<SavedView> {
+pub fn set_default(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<SavedView> {
     require_admin(conn, actor_user_id)?;
     let view = get_owned(conn, id)?;
     saved_view_repo::clear_default_for_object(conn, &view.workspace_id, &view.object_key)?;
@@ -135,11 +167,28 @@ pub fn set_default(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> 
     get_owned(conn, id)
 }
 
-pub fn clear_default(conn: &Connection, workspace_id: &str, object_key: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn clear_default(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
-    Ok(saved_view_repo::clear_default_for_object(conn, workspace_id, object_key)?)
+    Ok(saved_view_repo::clear_default_for_object(
+        conn,
+        workspace_id,
+        object_key,
+    )?)
 }
 
-pub fn get_default(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<Option<SavedView>> {
-    Ok(saved_view_repo::find_default(conn, workspace_id, object_key)?)
+pub fn get_default(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> AppResult<Option<SavedView>> {
+    Ok(saved_view_repo::find_default(
+        conn,
+        workspace_id,
+        object_key,
+    )?)
 }

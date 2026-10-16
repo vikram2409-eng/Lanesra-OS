@@ -1,10 +1,10 @@
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
+use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::services::dashboard_widget_service::{self, RecordListRow};
 use lanesra_core::services::saved_view_service;
-use crate::state::AppState;
 
 /// Backs a record-list dashboard widget (Dashboard customization Phase 3) -
 /// see `dashboard_widget_service::run`'s own doc comment for what "recent"
@@ -22,8 +22,18 @@ pub fn run_dashboard_record_list(
 ) -> AppResult<Vec<RecordListRow>> {
     let conn = state.conn.lock().unwrap();
     let filters = match &saved_view_id {
-        Some(id) => saved_view_service::get(&conn, id)?.map(|v| v.filters).unwrap_or_default(),
+        Some(id) => saved_view_service::get(&conn, id)?
+            .map(|v| v.filters)
+            .unwrap_or_default(),
         None => Default::default(),
     };
-    dashboard_widget_service::run(&conn, &require_workspace_id(&conn)?, &entity_type, &mode, current_actor(&state).as_deref(), limit, &filters)
+    dashboard_widget_service::run(
+        &conn,
+        &require_workspace_id(&conn)?,
+        &entity_type,
+        &mode,
+        current_actor(&state).as_deref(),
+        limit,
+        &filters,
+    )
 }

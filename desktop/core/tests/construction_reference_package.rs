@@ -17,7 +17,10 @@ use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::repositories::notification_repo;
 use lanesra_core::services::reference_packages::construction_manifest_json;
-use lanesra_core::services::{company_service, custom_field_service, custom_record_service, industry_package_service, opportunity_service, relationship_service, user_service, workspace_service};
+use lanesra_core::services::{
+    company_service, custom_field_service, custom_record_service, industry_package_service,
+    opportunity_service, relationship_service, user_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -37,20 +40,33 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
     (conn, workspace.id, admin.id)
 }
 
-fn install_construction(conn: &rusqlite::Connection, ws: &str, admin: &str) -> lanesra_core::models::industry_package::InstalledApp {
-    let input = ImportPackageInput { manifest_json: construction_manifest_json() };
+fn install_construction(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+) -> lanesra_core::models::industry_package::InstalledApp {
+    let input = ImportPackageInput {
+        manifest_json: construction_manifest_json(),
+    };
     let package = industry_package_service::import_package(conn, ws, &input, Some(admin)).unwrap();
     industry_package_service::install(conn, ws, &package.id, Some(admin)).unwrap()
 }
 
 fn record(object_key: &str, name: &str) -> CustomRecordInput {
-    CustomRecordInput { object_key: object_key.into(), primary_name: name.into(), status: "Active".into(), owner_user_id: None, notes: None }
+    CustomRecordInput {
+        object_key: object_key.into(),
+        primary_name: name.into(),
+        status: "Active".into(),
+        owner_user_id: None,
+        notes: None,
+    }
 }
 
 #[test]
 fn the_manifest_itself_parses_and_is_internally_consistent() {
     let json_text = construction_manifest_json();
-    let value: serde_json::Value = serde_json::from_str(&json_text).expect("manifest is valid JSON");
+    let value: serde_json::Value =
+        serde_json::from_str(&json_text).expect("manifest is valid JSON");
     assert_eq!(value["package_id"], "lanesra.construction");
     assert_eq!(value["objects"].as_array().unwrap().len(), 6);
 }
@@ -67,7 +83,13 @@ fn installs_cleanly_and_creates_every_kind_of_artifact() {
     assert_eq!(installed.recommended_permissions.len(), 5);
 
     let detail = industry_package_service::get_installed_detail(&conn, &installed.id).unwrap();
-    let count_of = |t: &str| detail.artifacts.iter().filter(|a| a.artifact_type == t).count();
+    let count_of = |t: &str| {
+        detail
+            .artifacts
+            .iter()
+            .filter(|a| a.artifact_type == t)
+            .count()
+    };
     assert_eq!(count_of("custom_object"), 6);
     assert_eq!(count_of("custom_field"), 33);
     assert_eq!(count_of("relationship_definition"), 11);
@@ -84,15 +106,29 @@ fn close_project_rule_requires_an_actual_end_date() {
     let (conn, ws, admin) = setup_workspace();
     install_construction(&conn, &ws, &admin);
 
-    let project = custom_record_service::create(&conn, &ws, &record("project", "Downtown Office Fitout"), Some(&admin)).unwrap();
+    let project = custom_record_service::create(
+        &conn,
+        &ws,
+        &record("project", "Downtown Office Fitout"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let mut closing = HashMap::new();
     closing.insert("stage".to_string(), "Closed".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "project", &project.id, &closing, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "project",
+        &project.id,
+        &closing,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Actual End Date"));
 
     closing.insert("actual_end_date".to_string(), "2026-08-01".to_string());
-    custom_field_service::set_entity_values(&conn, "project", &project.id, &closing, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "project", &project.id, &closing, Some(&admin))
+        .unwrap();
 }
 
 #[test]
@@ -100,20 +136,46 @@ fn change_approval_rule_requires_approved_amount_and_date() {
     let (conn, ws, admin) = setup_workspace();
     install_construction(&conn, &ws, &admin);
 
-    let co = custom_record_service::create(&conn, &ws, &record("change_order", "Add skylight"), Some(&admin)).unwrap();
+    let co = custom_record_service::create(
+        &conn,
+        &ws,
+        &record("change_order", "Add skylight"),
+        Some(&admin),
+    )
+    .unwrap();
     let mut values = HashMap::new();
-    values.insert("reason".to_string(), "Client requested skylight".to_string());
+    values.insert(
+        "reason".to_string(),
+        "Client requested skylight".to_string(),
+    );
     values.insert("amount".to_string(), "4200".to_string());
-    custom_field_service::set_entity_values(&conn, "change_order", &co.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "change_order", &co.id, &values, Some(&admin))
+        .unwrap();
 
     let mut approving = custom_field_service::get_entity_values(&conn, &co.id).unwrap();
     approving.insert("stage".to_string(), "Approved".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "change_order", &co.id, &approving, Some(&admin)).unwrap_err();
-    assert!(err.to_string().contains("Approved Amount") || err.to_string().contains("Approved Date"));
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "change_order",
+        &co.id,
+        &approving,
+        Some(&admin),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("Approved Amount") || err.to_string().contains("Approved Date")
+    );
 
     approving.insert("approved_amount".to_string(), "4200".to_string());
     approving.insert("approved_date".to_string(), "2026-08-05".to_string());
-    custom_field_service::set_entity_values(&conn, "change_order", &co.id, &approving, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "change_order",
+        &co.id,
+        &approving,
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -121,26 +183,55 @@ fn work_package_complete_rule_requires_a_completion_date() {
     let (conn, ws, admin) = setup_workspace();
     install_construction(&conn, &ws, &admin);
 
-    let wp = custom_record_service::create(&conn, &ws, &record("work_package", "Framing"), Some(&admin)).unwrap();
+    let wp =
+        custom_record_service::create(&conn, &ws, &record("work_package", "Framing"), Some(&admin))
+            .unwrap();
     let mut values = HashMap::new();
     values.insert("trade_scope".to_string(), "Framing".to_string());
-    custom_field_service::set_entity_values(&conn, "work_package", &wp.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "work_package", &wp.id, &values, Some(&admin))
+        .unwrap();
 
     let mut completing = custom_field_service::get_entity_values(&conn, &wp.id).unwrap();
     completing.insert("stage".to_string(), "Complete".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "work_package", &wp.id, &completing, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "work_package",
+        &wp.id,
+        &completing,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Completion Date"));
 
     completing.insert("completion_date".to_string(), "2026-08-10".to_string());
-    custom_field_service::set_entity_values(&conn, "work_package", &wp.id, &completing, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "work_package",
+        &wp.id,
+        &completing,
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 fn opportunity_input(company_id: &str, stage: &str) -> OpportunityInput {
     OpportunityInput {
-        company_id: company_id.into(), primary_contact_id: None, name: "Retail Renovation".into(),
-        stage: stage.into(), status: if stage == "Won" { "Won".into() } else { "Open".into() },
-        value_cents: 300_000_00, currency_code: "USD".into(), probability_bp: 5000,
-        expected_close_date: None, owner_user_id: None, lost_reason: None, next_step: None,
+        company_id: company_id.into(),
+        primary_contact_id: None,
+        name: "Retail Renovation".into(),
+        stage: stage.into(),
+        status: if stage == "Won" {
+            "Won".into()
+        } else {
+            "Open".into()
+        },
+        value_cents: 300_000_00,
+        currency_code: "USD".into(),
+        probability_bp: 5000,
+        expected_close_date: None,
+        owner_user_id: None,
+        lost_reason: None,
+        next_step: None,
     }
 }
 
@@ -150,33 +241,79 @@ fn opportunity_won_creates_a_linked_project_only_when_the_flag_is_enabled() {
     install_construction(&conn, &ws, &admin);
 
     let company = company_service::create(
-        &conn, &ws,
-        &CompanyInput { name: "Riverbend Developers".into(), status: "Prospect".into(), ..Default::default() },
+        &conn,
+        &ws,
+        &CompanyInput {
+            name: "Riverbend Developers".into(),
+            status: "Prospect".into(),
+            ..Default::default()
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Flag left off (the default) - winning it must not create a project.
-    let opp_off = opportunity_service::create(&conn, &opportunity_input(&company.id, "Discovery"), Some(&admin)).unwrap();
-    let before = custom_record_service::list(&conn, &ws, "project").unwrap().len();
-    opportunity_service::update(&conn, &opp_off.id, &opportunity_input(&company.id, "Won"), Some(&admin)).unwrap();
-    let after = custom_record_service::list(&conn, &ws, "project").unwrap().len();
-    assert_eq!(after, before, "no project should be created when 'Create Project on Won' is off");
+    let opp_off = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "Discovery"),
+        Some(&admin),
+    )
+    .unwrap();
+    let before = custom_record_service::list(&conn, &ws, "project")
+        .unwrap()
+        .len();
+    opportunity_service::update(
+        &conn,
+        &opp_off.id,
+        &opportunity_input(&company.id, "Won"),
+        Some(&admin),
+    )
+    .unwrap();
+    let after = custom_record_service::list(&conn, &ws, "project")
+        .unwrap()
+        .len();
+    assert_eq!(
+        after, before,
+        "no project should be created when 'Create Project on Won' is off"
+    );
 
     // Flag on - winning it must create a linked project.
-    let opp_on = opportunity_service::create(&conn, &opportunity_input(&company.id, "Discovery"), Some(&admin)).unwrap();
+    let opp_on = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "Discovery"),
+        Some(&admin),
+    )
+    .unwrap();
     let mut flag = HashMap::new();
     flag.insert("create_project_enabled".to_string(), "true".to_string());
-    custom_field_service::set_entity_values(&conn, "Opportunity", &opp_on.id, &flag, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Opportunity", &opp_on.id, &flag, Some(&admin))
+        .unwrap();
 
-    let before = custom_record_service::list(&conn, &ws, "project").unwrap().len();
-    opportunity_service::update(&conn, &opp_on.id, &opportunity_input(&company.id, "Won"), Some(&admin)).unwrap();
+    let before = custom_record_service::list(&conn, &ws, "project")
+        .unwrap()
+        .len();
+    opportunity_service::update(
+        &conn,
+        &opp_on.id,
+        &opportunity_input(&company.id, "Won"),
+        Some(&admin),
+    )
+    .unwrap();
     let after_records = custom_record_service::list(&conn, &ws, "project").unwrap();
-    assert_eq!(after_records.len(), before + 1, "a project should be created when the flag is on and the opportunity is won");
+    assert_eq!(
+        after_records.len(),
+        before + 1,
+        "a project should be created when the flag is on and the opportunity is won"
+    );
 
     let project = after_records.into_iter().next().unwrap();
     let relationships = relationship_service::list(&conn, &ws, true).unwrap();
-    let project_to_opp = relationships.iter().find(|r| r.source_entity_type == "project" && r.target_entity_type == "Opportunity").expect("the manifest defines a project -> Opportunity relationship");
-    let linked = relationship_service::related_records_for(&conn, &ws, "project", &project.id).unwrap();
+    let project_to_opp = relationships
+        .iter()
+        .find(|r| r.source_entity_type == "project" && r.target_entity_type == "Opportunity")
+        .expect("the manifest defines a project -> Opportunity relationship");
+    let linked =
+        relationship_service::related_records_for(&conn, &ws, "project", &project.id).unwrap();
     assert!(
         linked.iter().any(|r| r.entity_type == "Opportunity" && r.entity_id == opp_on.id),
         "the newly created project should be linked back to the winning opportunity via relationship {}",
@@ -189,18 +326,47 @@ fn inspection_failed_workflow_creates_a_corrective_task_and_notifies_admins() {
     let (conn, ws, admin) = setup_workspace();
     install_construction(&conn, &ws, &admin);
 
-    let inspection = custom_record_service::create(&conn, &ws, &record("inspection", "Rough-in Electrical"), Some(&admin)).unwrap();
-    let tasks_before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    let notifications_before = notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap().len();
+    let inspection = custom_record_service::create(
+        &conn,
+        &ws,
+        &record("inspection", "Rough-in Electrical"),
+        Some(&admin),
+    )
+    .unwrap();
+    let tasks_before = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    let notifications_before = notification_repo::list_for_user(&conn, &ws, &admin, false)
+        .unwrap()
+        .len();
 
     let mut values = HashMap::new();
     values.insert("stage".to_string(), "Failed".to_string());
-    custom_field_service::set_entity_values(&conn, "inspection", &inspection.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "inspection",
+        &inspection.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 
-    let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    let notifications_after = notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap().len();
-    assert_eq!(tasks_after, tasks_before + 1, "a failed inspection should create a corrective task");
-    assert_eq!(notifications_after, notifications_before + 1, "a failed inspection should notify admins");
+    let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    let notifications_after = notification_repo::list_for_user(&conn, &ws, &admin, false)
+        .unwrap()
+        .len();
+    assert_eq!(
+        tasks_after,
+        tasks_before + 1,
+        "a failed inspection should create a corrective task"
+    );
+    assert_eq!(
+        notifications_after,
+        notifications_before + 1,
+        "a failed inspection should notify admins"
+    );
 }
 
 #[test]
@@ -208,16 +374,31 @@ fn project_close_workflow_creates_a_final_billing_review_task() {
     let (conn, ws, admin) = setup_workspace();
     install_construction(&conn, &ws, &admin);
 
-    let project = custom_record_service::create(&conn, &ws, &record("project", "Riverside Renovation"), Some(&admin)).unwrap();
-    let tasks_before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
+    let project = custom_record_service::create(
+        &conn,
+        &ws,
+        &record("project", "Riverside Renovation"),
+        Some(&admin),
+    )
+    .unwrap();
+    let tasks_before = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
 
     let mut values = HashMap::new();
     values.insert("stage".to_string(), "Closed".to_string());
     values.insert("actual_end_date".to_string(), "2026-08-15".to_string());
-    custom_field_service::set_entity_values(&conn, "project", &project.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "project", &project.id, &values, Some(&admin))
+        .unwrap();
 
-    let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    assert_eq!(tasks_after, tasks_before + 1, "closing a project should create a final billing review task");
+    let tasks_after = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    assert_eq!(
+        tasks_after,
+        tasks_before + 1,
+        "closing a project should create a final billing review task"
+    );
 }
 
 #[test]
@@ -225,22 +406,59 @@ fn punch_item_resolution_rule_requires_a_resolved_date_when_resolved_or_verified
     let (conn, ws, admin) = setup_workspace();
     install_construction(&conn, &ws, &admin);
 
-    let item = custom_record_service::create(&conn, &ws, &record("punch_list_item", "Touch up hallway paint"), Some(&admin)).unwrap();
+    let item = custom_record_service::create(
+        &conn,
+        &ws,
+        &record("punch_list_item", "Touch up hallway paint"),
+        Some(&admin),
+    )
+    .unwrap();
     let mut values = HashMap::new();
-    values.insert("description".to_string(), "Touch up hallway paint".to_string());
-    custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap();
+    values.insert(
+        "description".to_string(),
+        "Touch up hallway paint".to_string(),
+    );
+    custom_field_service::set_entity_values(
+        &conn,
+        "punch_list_item",
+        &item.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 
     values.insert("stage".to_string(), "Resolved".to_string());
-    let err = custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "punch_list_item",
+        &item.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(err.to_string().contains("Resolved Date"));
 
     values.insert("resolved_date".to_string(), "2026-08-12".to_string());
-    custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "punch_list_item",
+        &item.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 
     // Verified also requires it - already on file here, so this just proves
     // the rule doesn't spuriously block a record that already satisfies it.
     values.insert("stage".to_string(), "Verified".to_string());
-    custom_field_service::set_entity_values(&conn, "punch_list_item", &item.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "punch_list_item",
+        &item.id,
+        &values,
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -248,25 +466,48 @@ fn punch_item_created_workflow_creates_an_address_task() {
     let (conn, ws, admin) = setup_workspace();
     install_construction(&conn, &ws, &admin);
 
-    let before = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    custom_record_service::create(&conn, &ws, &record("punch_list_item", "Touch up hallway paint"), Some(&admin)).unwrap();
-    let after = lanesra_core::repositories::task_repo::list(&conn, &ws).unwrap().len();
-    assert_eq!(after, before + 1, "the 'Punch item created' workflow should have created a task");
+    let before = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    custom_record_service::create(
+        &conn,
+        &ws,
+        &record("punch_list_item", "Touch up hallway paint"),
+        Some(&admin),
+    )
+    .unwrap();
+    let after = lanesra_core::repositories::task_repo::list(&conn, &ws)
+        .unwrap()
+        .len();
+    assert_eq!(
+        after,
+        before + 1,
+        "the 'Punch item created' workflow should have created a task"
+    );
 }
 
 #[test]
 fn a_non_administrator_cannot_install_the_reference_package() {
     let (conn, ws, admin) = setup_workspace();
     let sales = user_service::create(
-        &conn, &ws,
-        &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] },
+        &conn,
+        &ws,
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(&admin),
     )
     .unwrap()
     .id;
 
-    let input = ImportPackageInput { manifest_json: construction_manifest_json() };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: construction_manifest_json(),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
     let err = industry_package_service::install(&conn, &ws, &package.id, Some(&sales)).unwrap_err();
     assert!(err.to_string().contains("Administrator"));
 }

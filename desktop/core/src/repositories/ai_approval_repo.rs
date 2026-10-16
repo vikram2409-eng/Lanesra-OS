@@ -25,7 +25,12 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiApproval> {
     })
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &AiApprovalInput, requested_by: Option<&str>) -> rusqlite::Result<AiApproval> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiApprovalInput,
+    requested_by: Option<&str>,
+) -> rusqlite::Result<AiApproval> {
     let id = new_uuid();
     let now = now_iso();
     let proposal_json = input.proposal.to_string();
@@ -38,27 +43,40 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiApprovalInput, re
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<AiApproval>> {
-    conn.query_row("SELECT * FROM ai_approvals WHERE id = ?1", [id], map_row).optional()
+    conn.query_row("SELECT * FROM ai_approvals WHERE id = ?1", [id], map_row)
+        .optional()
 }
 
 /// Most recent first. `status` narrows to one of `pending`/`approved`/
 /// `rejected` when given - the admin approvals inbox always wants
 /// `Some("pending")`, a full audit view wants `None`.
-pub fn list(conn: &Connection, workspace_id: &str, status: Option<&str>) -> rusqlite::Result<Vec<AiApproval>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    status: Option<&str>,
+) -> rusqlite::Result<Vec<AiApproval>> {
     let mut stmt = if status.is_some() {
         conn.prepare("SELECT * FROM ai_approvals WHERE workspace_id = ?1 AND status = ?2 ORDER BY created_at DESC")?
     } else {
         conn.prepare("SELECT * FROM ai_approvals WHERE workspace_id = ?1 ORDER BY created_at DESC")?
     };
     let rows = if let Some(status) = status {
-        stmt.query_map(rusqlite::params![workspace_id, status], map_row)?.collect()
+        stmt.query_map(rusqlite::params![workspace_id, status], map_row)?
+            .collect()
     } else {
-        stmt.query_map(rusqlite::params![workspace_id], map_row)?.collect()
+        stmt.query_map(rusqlite::params![workspace_id], map_row)?
+            .collect()
     };
     rows
 }
 
-pub fn resolve(conn: &Connection, id: &str, status: &str, resolved_by: Option<&str>, resolution_notes: Option<&str>) -> rusqlite::Result<AiApproval> {
+pub fn resolve(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    resolved_by: Option<&str>,
+    resolution_notes: Option<&str>,
+) -> rusqlite::Result<AiApproval> {
     let now = now_iso();
     conn.execute(
         "UPDATE ai_approvals SET status = ?1, resolved_by = ?2, resolution_notes = ?3, resolved_at = ?4 WHERE id = ?5",

@@ -13,7 +13,9 @@ use rusqlite::Connection;
 
 use crate::domain::builtin_fields;
 use crate::domain::{AppError, AppResult};
-use crate::models::status_transition::{StatusTransition, StatusTransitionInput, TRANSITION_ENTITY_TYPES};
+use crate::models::status_transition::{
+    StatusTransition, StatusTransitionInput, TRANSITION_ENTITY_TYPES,
+};
 use crate::repositories::status_transition_repo;
 use crate::services::access_service;
 
@@ -21,13 +23,22 @@ use crate::services::access_service;
 /// passes with an explicit Access Role grant on "StatusTransition" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "StatusTransition", "Only an Administrator can manage status transitions")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "StatusTransition",
+        "Only an Administrator can manage status transitions",
+    )
 }
 
 /// The field this entity type transitions on - `stage` for Opportunity,
 /// `status` for everything else - matching `workflow::transition_field_for`.
 fn transition_field_key(entity_type: &str) -> &'static str {
-    if entity_type == "Opportunity" { "stage" } else { "status" }
+    if entity_type == "Opportunity" {
+        "stage"
+    } else {
+        "status"
+    }
 }
 
 /// The real allowed values for `entity_type`'s transition field (its
@@ -48,36 +59,75 @@ fn validate_input(entity_type: &str, input: &StatusTransitionInput) -> AppResult
     let valid = valid_values_for(entity_type);
     if let Some(from) = &input.from_status {
         if !valid.contains(&from.as_str()) {
-            return Err(AppError::Validation(format!("'{from}' is not a valid {} for {entity_type}", transition_field_key(entity_type))));
+            return Err(AppError::Validation(format!(
+                "'{from}' is not a valid {} for {entity_type}",
+                transition_field_key(entity_type)
+            )));
         }
     }
     if !valid.contains(&input.to_status.as_str()) {
-        return Err(AppError::Validation(format!("'{}' is not a valid {} for {entity_type}", input.to_status, transition_field_key(entity_type))));
+        return Err(AppError::Validation(format!(
+            "'{}' is not a valid {} for {entity_type}",
+            input.to_status,
+            transition_field_key(entity_type)
+        )));
     }
     Ok(())
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, entity_type: &str, actor_user_id: Option<&str>) -> AppResult<Vec<StatusTransition>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<StatusTransition>> {
     require_admin(conn, actor_user_id)?;
-    Ok(status_transition_repo::list(conn, workspace_id, entity_type)?)
+    Ok(status_transition_repo::list(
+        conn,
+        workspace_id,
+        entity_type,
+    )?)
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &StatusTransitionInput, actor_user_id: Option<&str>) -> AppResult<StatusTransition> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &StatusTransitionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<StatusTransition> {
     require_admin(conn, actor_user_id)?;
     validate_input(&input.entity_type, input)?;
     let id = crate::domain::ids::new_uuid();
-    Ok(status_transition_repo::create(conn, &id, workspace_id, input, actor_user_id)?)
+    Ok(status_transition_repo::create(
+        conn,
+        &id,
+        workspace_id,
+        input,
+        actor_user_id,
+    )?)
 }
 
-pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn set_active(
+    conn: &Connection,
+    id: &str,
+    is_active: bool,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
-    status_transition_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Status transition rule".into()))?;
-    Ok(status_transition_repo::set_active(conn, id, is_active, actor_user_id)?)
+    status_transition_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Status transition rule".into()))?;
+    Ok(status_transition_repo::set_active(
+        conn,
+        id,
+        is_active,
+        actor_user_id,
+    )?)
 }
 
 pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
-    status_transition_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Status transition rule".into()))?;
+    status_transition_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Status transition rule".into()))?;
     Ok(status_transition_repo::delete(conn, id)?)
 }
 
@@ -104,7 +154,10 @@ pub fn validate_transition(
         return Ok(());
     }
     let allowed = rules.iter().any(|r| {
-        r.to_status == new_status && r.from_status.as_deref().is_none_or(|from| from == old_status)
+        r.to_status == new_status
+            && r.from_status
+                .as_deref()
+                .is_none_or(|from| from == old_status)
     });
     if allowed {
         Ok(())

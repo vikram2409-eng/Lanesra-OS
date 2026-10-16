@@ -37,7 +37,11 @@ fn recording_a_visit_then_pinning_it_moves_it_from_recent_to_pinned() {
     admin_nav_service::set_pinned(&conn, &ws, "objects", true, Some(&admin)).unwrap();
 
     let recent_after = admin_nav_service::list_recent(&conn, &ws, 10, Some(&admin)).unwrap();
-    assert_eq!(recent_after.len(), 1, "pinned items drop out of the Recent list");
+    assert_eq!(
+        recent_after.len(),
+        1,
+        "pinned items drop out of the Recent list"
+    );
     assert_eq!(recent_after[0].admin_tab, "rules");
 
     let pinned = admin_nav_service::list_pinned(&conn, &ws, Some(&admin)).unwrap();

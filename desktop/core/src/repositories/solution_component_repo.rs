@@ -48,7 +48,12 @@ pub fn upsert(
     get(conn, workspace_id, artifact_type, metadata_id).map(|c| c.expect("just upserted"))
 }
 
-pub fn get(conn: &Connection, workspace_id: &str, artifact_type: &str, metadata_id: &str) -> rusqlite::Result<Option<SolutionComponent>> {
+pub fn get(
+    conn: &Connection,
+    workspace_id: &str,
+    artifact_type: &str,
+    metadata_id: &str,
+) -> rusqlite::Result<Option<SolutionComponent>> {
     conn.query_row(
         "SELECT * FROM solution_components WHERE workspace_id = ?1 AND artifact_type = ?2 AND metadata_id = ?3",
         (workspace_id, artifact_type, metadata_id),
@@ -61,7 +66,11 @@ pub fn get(conn: &Connection, workspace_id: &str, artifact_type: &str, metadata_
 /// Every component tagged to `publisher_id` in this workspace - what the
 /// "Local Workspace" grouping filters by (`is_local` publisher's id) and
 /// what a package export reads back from.
-pub fn list_for_publisher(conn: &Connection, workspace_id: &str, publisher_id: &str) -> rusqlite::Result<Vec<SolutionComponent>> {
+pub fn list_for_publisher(
+    conn: &Connection,
+    workspace_id: &str,
+    publisher_id: &str,
+) -> rusqlite::Result<Vec<SolutionComponent>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM solution_components WHERE workspace_id = ?1 AND publisher_id = ?2 ORDER BY artifact_type, created_at",
     )?;
@@ -73,7 +82,10 @@ pub fn list_for_publisher(conn: &Connection, workspace_id: &str, publisher_id: &
 /// key/name/is_local and (when installed) the installed app's name - the
 /// single query the "Components" tab needs, across both hand-built and
 /// package-installed components.
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(SolutionComponent, String, String, bool, Option<String>)>> {
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<(SolutionComponent, String, String, bool, Option<String>)>> {
     let mut stmt = conn.prepare(
         "SELECT c.*, p.key AS publisher_key, p.name AS publisher_name, p.is_local AS publisher_is_local, i.name AS installed_app_name
          FROM solution_components c

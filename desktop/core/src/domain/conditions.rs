@@ -18,9 +18,20 @@
 use std::collections::HashMap;
 
 pub const CONDITION_OPERATORS: &[&str] = &[
-    "equals", "not_equals", "contains", "not_contains", "starts_with", "ends_with",
-    "in_list", "not_in_list", "is_empty", "is_not_empty",
-    "greater_than", "less_than", "on_or_after", "on_or_before",
+    "equals",
+    "not_equals",
+    "contains",
+    "not_contains",
+    "starts_with",
+    "ends_with",
+    "in_list",
+    "not_in_list",
+    "is_empty",
+    "is_not_empty",
+    "greater_than",
+    "less_than",
+    "on_or_after",
+    "on_or_before",
 ];
 pub const TRIGGER_SOURCES: &[&str] = &["builtin", "custom"];
 pub const MATCH_TYPES: &[&str] = &["all", "any"];
@@ -33,7 +44,12 @@ pub const VALUELESS_OPERATORS: &[&str] = &["is_empty", "is_not_empty"];
 /// the same "Option A|Option B|Option C" editor pattern applies here too.
 pub const LIST_SEPARATOR: char = '|';
 
-pub fn condition_matches(field_key: &str, operator: &str, value: &str, ctx: &HashMap<String, String>) -> bool {
+pub fn condition_matches(
+    field_key: &str,
+    operator: &str,
+    value: &str,
+    ctx: &HashMap<String, String>,
+) -> bool {
     let actual = ctx.get(field_key).map(|s| s.as_str()).unwrap_or("");
     match operator {
         "equals" => actual == value,
@@ -46,8 +62,12 @@ pub fn condition_matches(field_key: &str, operator: &str, value: &str, ctx: &Has
         "not_in_list" => !value.split(LIST_SEPARATOR).any(|v| v == actual),
         "is_empty" => actual.is_empty(),
         "is_not_empty" => !actual.is_empty(),
-        "greater_than" => matches!((actual.parse::<f64>(), value.parse::<f64>()), (Ok(a), Ok(b)) if a > b),
-        "less_than" => matches!((actual.parse::<f64>(), value.parse::<f64>()), (Ok(a), Ok(b)) if a < b),
+        "greater_than" => {
+            matches!((actual.parse::<f64>(), value.parse::<f64>()), (Ok(a), Ok(b)) if a > b)
+        }
+        "less_than" => {
+            matches!((actual.parse::<f64>(), value.parse::<f64>()), (Ok(a), Ok(b)) if a < b)
+        }
         "on_or_after" => !actual.is_empty() && actual >= value,
         "on_or_before" => !actual.is_empty() && actual <= value,
         _ => false,
@@ -59,7 +79,12 @@ pub fn condition_matches(field_key: &str, operator: &str, value: &str, ctx: &Has
 /// field keys. Shared by business_rule_service and workflow_service to
 /// validate both a condition's primary field and (Phase 1) its optional
 /// compare-to field identically.
-pub fn field_ref_is_valid<'a>(entity_type: &str, source: &str, key: &str, active_custom_keys: impl Iterator<Item = &'a str>) -> bool {
+pub fn field_ref_is_valid<'a>(
+    entity_type: &str,
+    source: &str,
+    key: &str,
+    active_custom_keys: impl Iterator<Item = &'a str>,
+) -> bool {
     if source == "builtin" {
         crate::domain::builtin_fields::find_builtin_field(entity_type, key).is_some()
     } else {
@@ -94,10 +119,13 @@ pub fn conditions_match<'a>(
         let matched = condition_matches(field_key, operator, value, ctx);
         match group_id {
             Some(g) => {
-                groups.entry(g).and_modify(|m| *m |= matched).or_insert_with(|| {
-                    group_order.push(g);
-                    matched
-                });
+                groups
+                    .entry(g)
+                    .and_modify(|m| *m |= matched)
+                    .or_insert_with(|| {
+                        group_order.push(g);
+                        matched
+                    });
             }
             None => units.push(matched),
         }
@@ -120,7 +148,10 @@ mod tests {
     use super::*;
 
     fn ctx(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     #[test]
@@ -139,19 +170,54 @@ mod tests {
     #[test]
     fn in_list_and_not_in_list_split_on_the_pipe_separator() {
         let c = ctx(&[("status", "Prospect")]);
-        assert!(condition_matches("status", "in_list", "Lead|Prospect|Customer", &c));
+        assert!(condition_matches(
+            "status",
+            "in_list",
+            "Lead|Prospect|Customer",
+            &c
+        ));
         assert!(!condition_matches("status", "in_list", "Lead|Customer", &c));
-        assert!(!condition_matches("status", "not_in_list", "Lead|Prospect|Customer", &c));
-        assert!(condition_matches("status", "not_in_list", "Lead|Customer", &c));
+        assert!(!condition_matches(
+            "status",
+            "not_in_list",
+            "Lead|Prospect|Customer",
+            &c
+        ));
+        assert!(condition_matches(
+            "status",
+            "not_in_list",
+            "Lead|Customer",
+            &c
+        ));
     }
 
     #[test]
     fn field_ref_is_valid_checks_builtin_and_custom_fields_correctly() {
         // "status" is a real built-in field on Company; "not_a_field" isn't.
-        assert!(field_ref_is_valid("Company", "builtin", "status", std::iter::empty()));
-        assert!(!field_ref_is_valid("Company", "builtin", "not_a_field", std::iter::empty()));
+        assert!(field_ref_is_valid(
+            "Company",
+            "builtin",
+            "status",
+            std::iter::empty()
+        ));
+        assert!(!field_ref_is_valid(
+            "Company",
+            "builtin",
+            "not_a_field",
+            std::iter::empty()
+        ));
         let active = ["lead_source", "priority"];
-        assert!(field_ref_is_valid("Company", "custom", "lead_source", active.iter().copied()));
-        assert!(!field_ref_is_valid("Company", "custom", "unknown_key", active.iter().copied()));
+        assert!(field_ref_is_valid(
+            "Company",
+            "custom",
+            "lead_source",
+            active.iter().copied()
+        ));
+        assert!(!field_ref_is_valid(
+            "Company",
+            "custom",
+            "unknown_key",
+            active.iter().copied()
+        ));
     }
 }

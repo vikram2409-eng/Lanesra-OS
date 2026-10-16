@@ -5,11 +5,15 @@ use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::voice::{
-    ConfirmVoicePlanInput, SetVoicePinInput, VoiceActivityEntry, VoiceExecutionResult, VoiceLlmSettings, VoiceLlmSettingsInput,
-    VoicePolicyBinding, VoicePolicyBindingInput, VoicePreferencesInput, VoiceProviderProfile, VoiceSession, VoiceUserSettings,
+    ConfirmVoicePlanInput, SetVoicePinInput, VoiceActivityEntry, VoiceExecutionResult,
+    VoiceLlmSettings, VoiceLlmSettingsInput, VoicePolicyBinding, VoicePolicyBindingInput,
+    VoicePreferencesInput, VoiceProviderProfile, VoiceSession, VoiceUserSettings,
 };
 use lanesra_core::services::voice_execution_service::VoiceCommandOutcome;
-use lanesra_core::services::{voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service, voice_session_service};
+use lanesra_core::services::{
+    voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service,
+    voice_provider_service, voice_session_service,
+};
 
 fn require_actor(state: &State<AppState>) -> AppResult<String> {
     current_actor(state).ok_or_else(|| AppError::Validation("Not authenticated".into()))
@@ -22,13 +26,19 @@ pub fn get_voice_settings(state: State<AppState>) -> AppResult<VoiceUserSettings
 }
 
 #[tauri::command]
-pub fn set_voice_pin(state: State<AppState>, input: SetVoicePinInput) -> AppResult<VoiceUserSettings> {
+pub fn set_voice_pin(
+    state: State<AppState>,
+    input: SetVoicePinInput,
+) -> AppResult<VoiceUserSettings> {
     let conn = state.conn.lock().unwrap();
     voice_session_service::set_pin(&conn, &require_actor(&state)?, &input)
 }
 
 #[tauri::command]
-pub fn update_voice_preferences(state: State<AppState>, input: VoicePreferencesInput) -> AppResult<VoiceUserSettings> {
+pub fn update_voice_preferences(
+    state: State<AppState>,
+    input: VoicePreferencesInput,
+) -> AppResult<VoiceUserSettings> {
     let conn = state.conn.lock().unwrap();
     voice_session_service::update_preferences(&conn, &require_actor(&state)?, &input)
 }
@@ -58,13 +68,27 @@ pub fn expire_voice_session(state: State<AppState>, session_id: String) -> AppRe
 }
 
 #[tauri::command]
-pub fn set_voice_session_context(state: State<AppState>, session_id: String, object_key: Option<String>, record_id: Option<String>) -> AppResult<VoiceSession> {
+pub fn set_voice_session_context(
+    state: State<AppState>,
+    session_id: String,
+    object_key: Option<String>,
+    record_id: Option<String>,
+) -> AppResult<VoiceSession> {
     let conn = state.conn.lock().unwrap();
-    voice_session_service::set_context(&conn, &session_id, &require_actor(&state)?, object_key.as_deref(), record_id.as_deref())
+    voice_session_service::set_context(
+        &conn,
+        &session_id,
+        &require_actor(&state)?,
+        object_key.as_deref(),
+        record_id.as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn reset_voice_conversation(state: State<AppState>, session_id: String) -> AppResult<VoiceSession> {
+pub fn reset_voice_conversation(
+    state: State<AppState>,
+    session_id: String,
+) -> AppResult<VoiceSession> {
     let conn = state.conn.lock().unwrap();
     voice_session_service::reset_conversation(&conn, &session_id, &require_actor(&state)?)
 }
@@ -77,23 +101,43 @@ pub fn reset_voice_conversation(state: State<AppState>, session_id: String) -> A
 // other voice command (unlock, context, activity, policy, ...) stays
 // plain sync above.
 #[tauri::command]
-pub async fn submit_voice_command(state: State<'_, AppState>, session_id: String, transcript: String, language: String, speech_confidence: Option<f64>) -> AppResult<VoiceCommandOutcome> {
+pub async fn submit_voice_command(
+    state: State<'_, AppState>,
+    session_id: String,
+    transcript: String,
+    language: String,
+    speech_confidence: Option<f64>,
+) -> AppResult<VoiceCommandOutcome> {
     let master_key = crate::commands::resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
     let user_id = require_actor(&state)?;
     run_with_own_connection(db_path, move |conn| async move {
-        voice_execution_service::submit_command(&conn, &session_id, &user_id, &transcript, &language, speech_confidence, &master_key).await
+        voice_execution_service::submit_command(
+            &conn,
+            &session_id,
+            &user_id,
+            &transcript,
+            &language,
+            speech_confidence,
+            &master_key,
+        )
+        .await
     })
     .await
 }
 
 #[tauri::command]
-pub async fn confirm_voice_plan(state: State<'_, AppState>, session_id: String, input: ConfirmVoicePlanInput) -> AppResult<VoiceExecutionResult> {
+pub async fn confirm_voice_plan(
+    state: State<'_, AppState>,
+    session_id: String,
+    input: ConfirmVoicePlanInput,
+) -> AppResult<VoiceExecutionResult> {
     let master_key = crate::commands::resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
     let user_id = require_actor(&state)?;
     run_with_own_connection(db_path, move |conn| async move {
-        voice_execution_service::confirm_plan(&conn, &session_id, &user_id, &input, &master_key).await
+        voice_execution_service::confirm_plan(&conn, &session_id, &user_id, &input, &master_key)
+            .await
     })
     .await
 }
@@ -105,15 +149,26 @@ pub fn undo_voice_execution(state: State<AppState>, execution_id: String) -> App
 }
 
 #[tauri::command]
-pub fn list_my_voice_activity(state: State<AppState>, limit: i64) -> AppResult<Vec<VoiceActivityEntry>> {
+pub fn list_my_voice_activity(
+    state: State<AppState>,
+    limit: i64,
+) -> AppResult<Vec<VoiceActivityEntry>> {
     let conn = state.conn.lock().unwrap();
     voice_audit_service::list_my_voice_activity(&conn, &require_actor(&state)?, limit)
 }
 
 #[tauri::command]
-pub fn search_voice_activity(state: State<AppState>, limit: i64) -> AppResult<Vec<VoiceActivityEntry>> {
+pub fn search_voice_activity(
+    state: State<AppState>,
+    limit: i64,
+) -> AppResult<Vec<VoiceActivityEntry>> {
     let conn = state.conn.lock().unwrap();
-    voice_audit_service::search_voice_activity(&conn, &require_workspace_id(&conn)?, current_actor(&state).as_deref(), limit)
+    voice_audit_service::search_voice_activity(
+        &conn,
+        &require_workspace_id(&conn)?,
+        current_actor(&state).as_deref(),
+        limit,
+    )
 }
 
 #[tauri::command]
@@ -123,10 +178,18 @@ pub fn list_voice_policy_bindings(state: State<AppState>) -> AppResult<Vec<Voice
 }
 
 #[tauri::command]
-pub fn upsert_voice_policy_binding(state: State<AppState>, input: VoicePolicyBindingInput) -> AppResult<VoicePolicyBinding> {
+pub fn upsert_voice_policy_binding(
+    state: State<AppState>,
+    input: VoicePolicyBindingInput,
+) -> AppResult<VoicePolicyBinding> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    voice_policy_service::upsert_policy_binding(&conn, &workspace_id, current_actor(&state).as_deref(), &input)
+    voice_policy_service::upsert_policy_binding(
+        &conn,
+        &workspace_id,
+        current_actor(&state).as_deref(),
+        &input,
+    )
 }
 
 #[tauri::command]
@@ -137,10 +200,18 @@ pub fn get_voice_llm_settings(state: State<AppState>) -> AppResult<VoiceLlmSetti
 }
 
 #[tauri::command]
-pub fn upsert_voice_llm_settings(state: State<AppState>, input: VoiceLlmSettingsInput) -> AppResult<VoiceLlmSettings> {
+pub fn upsert_voice_llm_settings(
+    state: State<AppState>,
+    input: VoiceLlmSettingsInput,
+) -> AppResult<VoiceLlmSettings> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    voice_llm_service::upsert_settings(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    voice_llm_service::upsert_settings(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -150,7 +221,10 @@ pub fn list_voice_providers(state: State<AppState>) -> AppResult<Vec<VoiceProvid
 }
 
 #[tauri::command]
-pub fn voice_provider_health_check(state: State<AppState>, provider_id: String) -> AppResult<VoiceProviderProfile> {
+pub fn voice_provider_health_check(
+    state: State<AppState>,
+    provider_id: String,
+) -> AppResult<VoiceProviderProfile> {
     let conn = state.conn.lock().unwrap();
     voice_provider_service::health_check(&conn, &require_workspace_id(&conn)?, &provider_id)
 }

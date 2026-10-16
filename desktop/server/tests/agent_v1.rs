@@ -41,11 +41,22 @@ async fn spawn_file_backed_server() -> (SocketAddr, SharedState, tempfile::TempD
 }
 
 fn client_with_cookies() -> reqwest::Client {
-    reqwest::Client::builder().cookie_store(true).build().unwrap()
+    reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap()
 }
 
 async fn invoke(client: &reqwest::Client, addr: SocketAddr, command: &str, args: Value) -> Value {
-    client.post(format!("http://{addr}/api/invoke/{command}")).json(&args).send().await.unwrap().json().await.unwrap()
+    client
+        .post(format!("http://{addr}/api/invoke/{command}"))
+        .json(&args)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
 }
 
 async fn first_run(client: &reqwest::Client, addr: SocketAddr) -> Value {
@@ -64,12 +75,22 @@ async fn first_run(client: &reqwest::Client, addr: SocketAddr) -> Value {
     .await
 }
 
-fn issue_api_key(state: &SharedState, workspace_id: &str, admin_user_id: &str, scopes: &[&str]) -> String {
+fn issue_api_key(
+    state: &SharedState,
+    workspace_id: &str,
+    admin_user_id: &str,
+    scopes: &[&str],
+) -> String {
     let conn = state.conn.lock().unwrap();
     let issued = api_client_service::create(
         &conn,
         workspace_id,
-        &ApiClientInput { name: "Agent Trigger Client".into(), scopes: scopes.iter().map(|s| s.to_string()).collect(), allowed_cidr: None, owner_user_id: Some(admin_user_id.to_string()) },
+        &ApiClientInput {
+            name: "Agent Trigger Client".into(),
+            scopes: scopes.iter().map(|s| s.to_string()).collect(),
+            allowed_cidr: None,
+            owner_user_id: Some(admin_user_id.to_string()),
+        },
         Some(admin_user_id),
     )
     .unwrap();
@@ -146,7 +167,10 @@ async fn a_webhook_trigger_call_runs_the_agent_inline_and_returns_its_answer() {
     let body: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(body["ok"], true, "{body:?}");
     assert_eq!(body["data"]["status"], "succeeded", "{body:?}");
-    assert_eq!(body["data"]["steps"][0]["output_text"], "Handled via webhook.");
+    assert_eq!(
+        body["data"]["steps"][0]["output_text"],
+        "Handled via webhook."
+    );
     assert_eq!(body["data"]["triggered_by"], "webhook");
 }
 

@@ -25,41 +25,70 @@ use sha2::Sha256;
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::integration::{IntegrationEvent, Webhook, WebhookDelivery, WebhookInput};
-use crate::repositories::{integration_pending_event_repo, integration_secret_repo, integration_webhook_repo};
+use crate::repositories::{
+    integration_pending_event_repo, integration_secret_repo, integration_webhook_repo,
+};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-pub const EVENT_TYPES: &[&str] = &["record.created", "record.updated", "record.archived", "field.changed", "workflow.completed", "workflow.failed"];
+pub const EVENT_TYPES: &[&str] = &[
+    "record.created",
+    "record.updated",
+    "record.archived",
+    "field.changed",
+    "workflow.completed",
+    "workflow.failed",
+];
 
 fn get_owned(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<Webhook> {
-    let webhook = integration_webhook_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Webhook".into()))?;
+    let webhook = integration_webhook_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Webhook".into()))?;
     if webhook.workspace_id != workspace_id {
         return Err(AppError::NotFound("Webhook".into()));
     }
     Ok(webhook)
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], input: &WebhookInput, actor_user_id: Option<&str>) -> AppResult<Webhook> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    input: &WebhookInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<Webhook> {
     require_admin(conn, actor_user_id)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Webhook name is required".into()));
     }
     for event_type in &input.event_types {
         if !EVENT_TYPES.contains(&event_type.as_str()) {
-            return Err(AppError::Validation(format!("Unknown event type '{event_type}'")));
+            return Err(AppError::Validation(format!(
+                "Unknown event type '{event_type}'"
+            )));
         }
     }
     let connection = super::connection_service::get(conn, workspace_id, &input.connection_id)?;
     if connection.connection_type != "webhook" {
-        return Err(AppError::Validation("A webhook subscription must use a 'webhook' connection (its endpoint URL)".into()));
+        return Err(AppError::Validation(
+            "A webhook subscription must use a 'webhook' connection (its endpoint URL)".into(),
+        ));
     }
     let secret_value = super::secret_service::generate_random_secret(32);
     let (ciphertext, nonce) = super::secret_service::encrypt(master_key, &secret_value)?;
     let secret_id = new_uuid();
-    integration_secret_repo::insert(conn, &secret_id, workspace_id, &format!("{} HMAC signing secret", input.name), &ciphertext, &nonce, actor_user_id)?;
-    let event_types_json = serde_json::to_string(&input.event_types).unwrap_or_else(|_| "[]".into());
+    integration_secret_repo::insert(
+        conn,
+        &secret_id,
+        workspace_id,
+        &format!("{} HMAC signing secret", input.name),
+        &ciphertext,
+        &nonce,
+        actor_user_id,
+    )?;
+    let event_types_json =
+        serde_json::to_string(&input.event_types).unwrap_or_else(|_| "[]".into());
     integration_webhook_repo::insert(
         conn,
         &new_uuid(),
@@ -78,34 +107,59 @@ pub fn create(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], inpu
 }
 
 pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Webhook>> {
-    Ok(integration_webhook_repo::list_for_workspace(conn, workspace_id)?)
+    Ok(integration_webhook_repo::list_for_workspace(
+        conn,
+        workspace_id,
+    )?)
 }
 
-pub fn list_deliveries(conn: &Connection, workspace_id: &str, webhook_id: &str) -> AppResult<Vec<WebhookDelivery>> {
+pub fn list_deliveries(
+    conn: &Connection,
+    workspace_id: &str,
+    webhook_id: &str,
+) -> AppResult<Vec<WebhookDelivery>> {
     get_owned(conn, workspace_id, webhook_id)?;
-    Ok(integration_webhook_repo::list_deliveries(conn, webhook_id, 50)?)
+    Ok(integration_webhook_repo::list_deliveries(
+        conn, webhook_id, 50,
+    )?)
 }
 
-pub fn pause(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn pause(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, workspace_id, id)?;
     Ok(integration_webhook_repo::set_status(conn, id, "paused")?)
 }
 
-pub fn reactivate(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn reactivate(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, workspace_id, id)?;
     Ok(integration_webhook_repo::set_status(conn, id, "active")?)
 }
 
-pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn delete(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, workspace_id, id)?;
     Ok(integration_webhook_repo::delete(conn, id)?)
 }
 
 fn sign(secret: &str, body: &str) -> String {
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
     mac.update(body.as_bytes());
     format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
 }
@@ -120,9 +174,16 @@ fn is_retryable_status(status: u16) -> bool {
     !(400..500).contains(&status) || matches!(status, 408 | 409 | 429)
 }
 
-async fn attempt_delivery(endpoint_url: &str, secret: &str, payload_json: &str) -> (bool, Option<u16>, u64, String) {
+async fn attempt_delivery(
+    endpoint_url: &str,
+    secret: &str,
+    payload_json: &str,
+) -> (bool, Option<u16>, u64, String) {
     let started = Instant::now();
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(15)).build().expect("HTTP client always builds");
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .expect("HTTP client always builds");
     let signature = sign(secret, payload_json);
     let result = client
         .post(endpoint_url)
@@ -136,10 +197,21 @@ async fn attempt_delivery(endpoint_url: &str, secret: &str, payload_json: &str) 
         Ok(response) => {
             let status = response.status();
             let ok = status.is_success();
-            let snippet: String = response.text().await.unwrap_or_default().chars().take(200).collect();
+            let snippet: String = response
+                .text()
+                .await
+                .unwrap_or_default()
+                .chars()
+                .take(200)
+                .collect();
             (ok, Some(status.as_u16()), elapsed, snippet)
         }
-        Err(e) => (false, None, elapsed, e.to_string().chars().take(200).collect()),
+        Err(e) => (
+            false,
+            None,
+            elapsed,
+            e.to_string().chars().take(200).collect(),
+        ),
     }
 }
 
@@ -149,15 +221,25 @@ async fn attempt_delivery(endpoint_url: &str, secret: &str, payload_json: &str) 
 /// retry on a transient failure; a permanent 4xx or exhausted retries
 /// marks the delivery failed and, after repeated failure, the
 /// subscription itself Degraded (spec §10.3).
-pub async fn fire_event(conn: &Connection, master_key: &[u8; 32], event: &IntegrationEvent) -> AppResult<()> {
-    let webhooks = integration_webhook_repo::list_active_for_event(conn, &event.workspace_id, &event.event_type)?;
+pub async fn fire_event(
+    conn: &Connection,
+    master_key: &[u8; 32],
+    event: &IntegrationEvent,
+) -> AppResult<()> {
+    let webhooks = integration_webhook_repo::list_active_for_event(
+        conn,
+        &event.workspace_id,
+        &event.event_type,
+    )?;
     for webhook in webhooks {
         if let Some(scope) = &webhook.object_scope {
             if scope != &event.object_key {
                 continue;
             }
         }
-        let Some(endpoint_url) = &webhook.endpoint_url else { continue };
+        let Some(endpoint_url) = &webhook.endpoint_url else {
+            continue;
+        };
         let secret = resolve_webhook_secret(conn, master_key, &webhook.id)?.unwrap_or_default();
         let payload = json!({
             "event_id": event.event_id,
@@ -174,7 +256,8 @@ pub async fn fire_event(conn: &Connection, master_key: &[u8; 32], event: &Integr
         const MAX_ATTEMPTS: u32 = 3;
         let mut attempt = 1;
         loop {
-            let (ok, status_code, duration_ms, snippet) = attempt_delivery(endpoint_url, &secret, &payload_json).await;
+            let (ok, status_code, duration_ms, snippet) =
+                attempt_delivery(endpoint_url, &secret, &payload_json).await;
             integration_webhook_repo::insert_delivery(
                 conn,
                 &new_uuid(),
@@ -193,7 +276,8 @@ pub async fn fire_event(conn: &Connection, master_key: &[u8; 32], event: &Integr
             }
             let retryable = status_code.map(is_retryable_status).unwrap_or(true);
             if !retryable || attempt >= MAX_ATTEMPTS {
-                let consecutive = integration_webhook_repo::consecutive_failures(conn, &webhook.id)?;
+                let consecutive =
+                    integration_webhook_repo::consecutive_failures(conn, &webhook.id)?;
                 if consecutive >= 5 {
                     integration_webhook_repo::set_status(conn, &webhook.id, "degraded")?;
                 }
@@ -206,20 +290,34 @@ pub async fn fire_event(conn: &Connection, master_key: &[u8; 32], event: &Integr
     Ok(())
 }
 
-fn resolve_webhook_secret(conn: &Connection, master_key: &[u8; 32], webhook_id: &str) -> AppResult<Option<String>> {
-    let webhook = integration_webhook_repo::get(conn, webhook_id)?.ok_or_else(|| AppError::NotFound("Webhook".into()))?;
+fn resolve_webhook_secret(
+    conn: &Connection,
+    master_key: &[u8; 32],
+    webhook_id: &str,
+) -> AppResult<Option<String>> {
+    let webhook = integration_webhook_repo::get(conn, webhook_id)?
+        .ok_or_else(|| AppError::NotFound("Webhook".into()))?;
     if !webhook.has_secret {
         return Ok(None);
     }
     // secret_id isn't exposed on the model (has_secret is the public
     // signal) - re-read it directly for the one place that legitimately
     // needs the real value.
-    let secret_id: Option<String> = conn.query_row("SELECT secret_id FROM integration_webhooks WHERE id = ?1", [webhook_id], |r| r.get(0))?;
+    let secret_id: Option<String> = conn.query_row(
+        "SELECT secret_id FROM integration_webhooks WHERE id = ?1",
+        [webhook_id],
+        |r| r.get(0),
+    )?;
     match secret_id {
         None => Ok(None),
         Some(id) => {
-            let stored = integration_secret_repo::get(conn, &id)?.ok_or_else(|| AppError::NotFound("Webhook secret".into()))?;
-            Ok(Some(super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?))
+            let stored = integration_secret_repo::get(conn, &id)?
+                .ok_or_else(|| AppError::NotFound("Webhook secret".into()))?;
+            Ok(Some(super::secret_service::decrypt(
+                master_key,
+                &stored.ciphertext,
+                &stored.nonce,
+            )?))
         }
     }
 }
@@ -236,7 +334,8 @@ pub async fn drain_pending_events(conn: &Connection, master_key: &[u8; 32]) -> A
     let batch = integration_pending_event_repo::list_batch(conn, 100)?;
     let count = batch.len();
     for pending in batch {
-        let payload: serde_json::Value = serde_json::from_str(&pending.payload_json).unwrap_or(json!({}));
+        let payload: serde_json::Value =
+            serde_json::from_str(&pending.payload_json).unwrap_or(json!({}));
         let event = IntegrationEvent {
             event_id: pending.id.clone(),
             event_type: pending.event_type,
@@ -255,12 +354,22 @@ pub async fn drain_pending_events(conn: &Connection, master_key: &[u8; 32]) -> A
 
 /// Spec §10.2's "Test delivery button" - a synthetic event, delivered
 /// through the exact same signing/HTTP path `fire_event` uses.
-pub async fn test_delivery(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], webhook_id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub async fn test_delivery(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    webhook_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     let webhook = get_owned(conn, workspace_id, webhook_id)?;
     let event = IntegrationEvent {
         event_id: new_uuid(),
-        event_type: webhook.event_types.first().cloned().unwrap_or_else(|| "record.created".to_string()),
+        event_type: webhook
+            .event_types
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "record.created".to_string()),
         workspace_id: workspace_id.to_string(),
         object_key: "Test".to_string(),
         record_id: "test-record".to_string(),

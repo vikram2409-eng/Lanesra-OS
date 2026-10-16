@@ -1,4 +1,6 @@
-use argon2::password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::{
+    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+};
 use argon2::Argon2;
 use rusqlite::Connection;
 
@@ -90,10 +92,13 @@ pub fn change_own_password(
 ) -> AppResult<()> {
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
     if input.new_password.len() < 8 {
-        return Err(AppError::Validation("New password must be at least 8 characters".into()));
+        return Err(AppError::Validation(
+            "New password must be at least 8 characters".into(),
+        ));
     }
 
-    let record = user_repo::find_by_id(conn, actor_id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
+    let record =
+        user_repo::find_by_id(conn, actor_id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
     if !verify_password(&input.current_password, &record.password_hash) {
         return Err(AppError::Validation("Current password is incorrect".into()));
     }

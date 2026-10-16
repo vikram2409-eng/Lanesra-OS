@@ -13,8 +13,9 @@ use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::workspace_theme::{
-    ThemeChartTokens, ThemeColorTokens, ThemeContrastIssue, ThemeShapeTokens, ThemeTokens, ThemeTypographyTokens, WorkspaceTheme,
-    WorkspaceThemeInput, DENSITY_SCALES, RADIUS_SCALES, THEME_PRESET_KEYS,
+    ThemeChartTokens, ThemeColorTokens, ThemeContrastIssue, ThemeShapeTokens, ThemeTokens,
+    ThemeTypographyTokens, WorkspaceTheme, WorkspaceThemeInput, DENSITY_SCALES, RADIUS_SCALES,
+    THEME_PRESET_KEYS,
 };
 use crate::repositories::{audit_repo, workspace_theme_repo};
 
@@ -47,11 +48,21 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                     status_danger: "#EF4444".into(),
                     status_info: "#3B82F6".into(),
                 },
-                typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
-                shape: ThemeShapeTokens { radius_scale: "rounded".into() },
+                typography: ThemeTypographyTokens {
+                    font_family: system_font_stack(),
+                    base_size_px: 16,
+                },
+                shape: ThemeShapeTokens {
+                    radius_scale: "rounded".into(),
+                },
                 density: "comfortable".into(),
                 chart: ThemeChartTokens {
-                    palette: ["#635BFF", "#0F9D76", "#F59E0B", "#EF4444", "#3B82F6", "#8B5CF6"].iter().map(|s| s.to_string()).collect(),
+                    palette: [
+                        "#635BFF", "#0F9D76", "#F59E0B", "#EF4444", "#3B82F6", "#8B5CF6",
+                    ]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 },
             },
         ),
@@ -74,11 +85,21 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                     status_danger: "#EF4444".into(),
                     status_info: "#3B82F6".into(),
                 },
-                typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
-                shape: ThemeShapeTokens { radius_scale: "soft".into() },
+                typography: ThemeTypographyTokens {
+                    font_family: system_font_stack(),
+                    base_size_px: 16,
+                },
+                shape: ThemeShapeTokens {
+                    radius_scale: "soft".into(),
+                },
                 density: "comfortable".into(),
                 chart: ThemeChartTokens {
-                    palette: ["#2563EB", "#14B8A6", "#F59E0B", "#EF4444", "#8B5CF6", "#16A34A"].iter().map(|s| s.to_string()).collect(),
+                    palette: [
+                        "#2563EB", "#14B8A6", "#F59E0B", "#EF4444", "#8B5CF6", "#16A34A",
+                    ]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 },
             },
         ),
@@ -101,11 +122,21 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                     status_danger: "#EF4444".into(),
                     status_info: "#3B82F6".into(),
                 },
-                typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
-                shape: ThemeShapeTokens { radius_scale: "soft".into() },
+                typography: ThemeTypographyTokens {
+                    font_family: system_font_stack(),
+                    base_size_px: 16,
+                },
+                shape: ThemeShapeTokens {
+                    radius_scale: "soft".into(),
+                },
                 density: "comfortable".into(),
                 chart: ThemeChartTokens {
-                    palette: ["#C2410C", "#EAB308", "#0F766E", "#3B82F6", "#8B5CF6", "#EF4444"].iter().map(|s| s.to_string()).collect(),
+                    palette: [
+                        "#C2410C", "#EAB308", "#0F766E", "#3B82F6", "#8B5CF6", "#EF4444",
+                    ]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 },
             },
         ),
@@ -128,11 +159,21 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
                     status_danger: "#EF4444".into(),
                     status_info: "#3B82F6".into(),
                 },
-                typography: ThemeTypographyTokens { font_family: system_font_stack(), base_size_px: 16 },
-                shape: ThemeShapeTokens { radius_scale: "rounded".into() },
+                typography: ThemeTypographyTokens {
+                    font_family: system_font_stack(),
+                    base_size_px: 16,
+                },
+                shape: ThemeShapeTokens {
+                    radius_scale: "rounded".into(),
+                },
                 density: "comfortable".into(),
                 chart: ThemeChartTokens {
-                    palette: ["#0F766E", "#7C3AED", "#F59E0B", "#EF4444", "#3B82F6", "#16A34A"].iter().map(|s| s.to_string()).collect(),
+                    palette: [
+                        "#0F766E", "#7C3AED", "#F59E0B", "#EF4444", "#3B82F6", "#16A34A",
+                    ]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 },
             },
         ),
@@ -140,7 +181,10 @@ pub fn built_in_presets() -> Vec<(&'static str, &'static str, &'static str, Them
 }
 
 pub fn get_preset(key: &str) -> Option<ThemeTokens> {
-    built_in_presets().into_iter().find(|(k, _, _, _)| *k == key).map(|(_, _, _, tokens)| tokens)
+    built_in_presets()
+        .into_iter()
+        .find(|(k, _, _, _)| *k == key)
+        .map(|(_, _, _, tokens)| tokens)
 }
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -154,9 +198,17 @@ fn hex_to_linear_rgb(hex: &str) -> Option<(f64, f64, f64)> {
     }
     let channel = |s: &str| -> Option<f64> {
         let v = u8::from_str_radix(s, 16).ok()? as f64 / 255.0;
-        Some(if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) })
+        Some(if v <= 0.03928 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        })
     };
-    Some((channel(&hex[0..2])?, channel(&hex[2..4])?, channel(&hex[4..6])?))
+    Some((
+        channel(&hex[0..2])?,
+        channel(&hex[2..4])?,
+        channel(&hex[4..6])?,
+    ))
 }
 
 fn relative_luminance(hex: &str) -> Option<f64> {
@@ -181,15 +233,31 @@ fn contrast_ratio(hex_a: &str, hex_b: &str) -> Option<f64> {
 /// pass silently claims to cover.
 pub fn validate_tokens(tokens: &ThemeTokens) -> Vec<ThemeContrastIssue> {
     let pairs: [(&str, &str, &str); 3] = [
-        ("Primary text on app background", &tokens.color.text_primary, &tokens.color.surface_app),
-        ("Primary text on card surface", &tokens.color.text_primary, &tokens.color.surface_card),
-        ("Primary button text (white) on brand primary", "#FFFFFF", &tokens.color.brand_primary),
+        (
+            "Primary text on app background",
+            &tokens.color.text_primary,
+            &tokens.color.surface_app,
+        ),
+        (
+            "Primary text on card surface",
+            &tokens.color.text_primary,
+            &tokens.color.surface_card,
+        ),
+        (
+            "Primary button text (white) on brand primary",
+            "#FFFFFF",
+            &tokens.color.brand_primary,
+        ),
     ];
     let mut issues = Vec::new();
     for (label, a, b) in pairs {
         let ratio = contrast_ratio(a, b).unwrap_or(0.0);
         if ratio < MIN_CONTRAST_RATIO {
-            issues.push(ThemeContrastIssue { pair_label: label.to_string(), ratio, required_ratio: MIN_CONTRAST_RATIO });
+            issues.push(ThemeContrastIssue {
+                pair_label: label.to_string(),
+                ratio,
+                required_ratio: MIN_CONTRAST_RATIO,
+            });
         }
     }
     issues
@@ -201,17 +269,27 @@ fn validate_shape(input: &WorkspaceThemeInput) -> AppResult<()> {
     }
     if let Some(preset_key) = &input.preset_key {
         if !THEME_PRESET_KEYS.contains(&preset_key.as_str()) {
-            return Err(AppError::Validation(format!("Unknown preset '{preset_key}'")));
+            return Err(AppError::Validation(format!(
+                "Unknown preset '{preset_key}'"
+            )));
         }
     }
     if !RADIUS_SCALES.contains(&input.tokens.shape.radius_scale.as_str()) {
-        return Err(AppError::Validation(format!("Unknown radius scale '{}'", input.tokens.shape.radius_scale)));
+        return Err(AppError::Validation(format!(
+            "Unknown radius scale '{}'",
+            input.tokens.shape.radius_scale
+        )));
     }
     if !DENSITY_SCALES.contains(&input.tokens.density.as_str()) {
-        return Err(AppError::Validation(format!("Unknown density '{}'", input.tokens.density)));
+        return Err(AppError::Validation(format!(
+            "Unknown density '{}'",
+            input.tokens.density
+        )));
     }
     if input.tokens.chart.palette.len() < 3 {
-        return Err(AppError::Validation("Chart palette needs at least 3 colors to stay usefully categorical".into()));
+        return Err(AppError::Validation(
+            "Chart palette needs at least 3 colors to stay usefully categorical".into(),
+        ));
     }
     Ok(())
 }
@@ -225,7 +303,8 @@ pub fn get_published(conn: &Connection, workspace_id: &str) -> AppResult<Option<
 }
 
 pub fn get(conn: &Connection, id: &str, workspace_id: &str) -> AppResult<WorkspaceTheme> {
-    let theme = workspace_theme_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Theme".into()))?;
+    let theme =
+        workspace_theme_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Theme".into()))?;
     if theme.workspace_id != workspace_id {
         return Err(AppError::NotFound("Theme".into()));
     }
@@ -247,11 +326,29 @@ pub fn save_draft(
             return Err(AppError::Validation("Only a Draft theme can be edited - publish a new draft instead of editing a Published or Archived one".into()));
         }
         workspace_theme_repo::update_draft(conn, id, input)?;
-        audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("theme"), Some(id), &format!("Updated theme draft '{}'", input.name), None)?;
+        audit_repo::record(
+            conn,
+            workspace_id,
+            actor_user_id,
+            "update",
+            Some("theme"),
+            Some(id),
+            &format!("Updated theme draft '{}'", input.name),
+            None,
+        )?;
         get(conn, id, workspace_id)
     } else {
         let created = workspace_theme_repo::create_draft(conn, workspace_id, input, actor_user_id)?;
-        audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("theme"), Some(&created.id), &format!("Created theme draft '{}'", input.name), None)?;
+        audit_repo::record(
+            conn,
+            workspace_id,
+            actor_user_id,
+            "update",
+            Some("theme"),
+            Some(&created.id),
+            &format!("Created theme draft '{}'", input.name),
+            None,
+        )?;
         Ok(created)
     }
 }
@@ -260,23 +357,46 @@ pub fn save_draft(
 /// blocks Publish outright on a critical contrast failure rather than a
 /// privileged override, matching the spec's own "prefer no override in
 /// early versions" instruction.
-pub fn publish(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<WorkspaceTheme> {
+pub fn publish(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkspaceTheme> {
     require_admin(conn, actor_user_id)?;
     let theme = get(conn, id, workspace_id)?;
     if theme.status != "draft" {
-        return Err(AppError::Validation("Only a Draft theme can be published".into()));
+        return Err(AppError::Validation(
+            "Only a Draft theme can be published".into(),
+        ));
     }
     let issues = validate_tokens(&theme.tokens);
     if !issues.is_empty() {
         let detail = issues
             .iter()
-            .map(|i| format!("{} ({:.2}:1, needs {:.1}:1)", i.pair_label, i.ratio, i.required_ratio))
+            .map(|i| {
+                format!(
+                    "{} ({:.2}:1, needs {:.1}:1)",
+                    i.pair_label, i.ratio, i.required_ratio
+                )
+            })
             .collect::<Vec<_>>()
             .join("; ");
-        return Err(AppError::Validation(format!("Can't publish: critical contrast failure - {detail}")));
+        return Err(AppError::Validation(format!(
+            "Can't publish: critical contrast failure - {detail}"
+        )));
     }
     let published = workspace_theme_repo::publish(conn, id, actor_user_id)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "publish", Some("theme"), Some(id), &format!("Published theme '{}'", theme.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "publish",
+        Some("theme"),
+        Some(id),
+        &format!("Published theme '{}'", theme.name),
+        None,
+    )?;
     Ok(published)
 }
 
@@ -285,7 +405,12 @@ pub fn publish(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: O
 /// other publish, and publishes that new version. The old Published
 /// version an admin is rolling back from is left exactly as it was,
 /// now Archived.
-pub fn rollback_to_version(conn: &Connection, workspace_id: &str, from_version: i64, actor_user_id: Option<&str>) -> AppResult<WorkspaceTheme> {
+pub fn rollback_to_version(
+    conn: &Connection,
+    workspace_id: &str,
+    from_version: i64,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkspaceTheme> {
     require_admin(conn, actor_user_id)?;
     let source = workspace_theme_repo::list_versions(conn, workspace_id)?
         .into_iter()
@@ -298,17 +423,45 @@ pub fn rollback_to_version(conn: &Connection, workspace_id: &str, from_version: 
     };
     let draft = workspace_theme_repo::create_draft(conn, workspace_id, &input, actor_user_id)?;
     let published = publish(conn, &draft.id, workspace_id, actor_user_id)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("theme"), Some(&draft.id), &format!("Rolled back theme to version {from_version} (now '{}')", input.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "update",
+        Some("theme"),
+        Some(&draft.id),
+        &format!(
+            "Rolled back theme to version {from_version} (now '{}')",
+            input.name
+        ),
+        None,
+    )?;
     Ok(published)
 }
 
-pub fn delete_draft(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn delete_draft(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     let theme = get(conn, id, workspace_id)?;
     if theme.status != "draft" {
-        return Err(AppError::Validation("Only a Draft theme can be deleted".into()));
+        return Err(AppError::Validation(
+            "Only a Draft theme can be deleted".into(),
+        ));
     }
     workspace_theme_repo::delete_draft(conn, id)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "delete", Some("theme"), Some(id), &format!("Deleted theme draft '{}'", theme.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "delete",
+        Some("theme"),
+        Some(id),
+        &format!("Deleted theme draft '{}'", theme.name),
+        None,
+    )?;
     Ok(())
 }

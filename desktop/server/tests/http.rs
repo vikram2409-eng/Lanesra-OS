@@ -17,7 +17,11 @@ async fn spawn_server_with_security(security: SecurityConfig) -> SocketAddr {
     // db_path is unused by every test below - none of them exercise
     // restore_backup, the only command that touches it - so an in-memory
     // connection with a placeholder path is fine here.
-    let state = ServerState::new(conn, std::env::temp_dir().join("lanesra-http-test-unused.sqlite3"), security);
+    let state = ServerState::new(
+        conn,
+        std::env::temp_dir().join("lanesra-http-test-unused.sqlite3"),
+        security,
+    );
     let frontend_dir = std::env::temp_dir().join("lanesra-server-test-frontend");
     std::fs::create_dir_all(&frontend_dir).unwrap();
     let app = build_router(state, frontend_dir);
@@ -53,7 +57,10 @@ async fn spawn_file_backed_server() -> (SocketAddr, PathBuf) {
 }
 
 fn client_with_cookies() -> reqwest::Client {
-    reqwest::Client::builder().cookie_store(true).build().unwrap()
+    reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap()
 }
 
 async fn invoke(client: &reqwest::Client, addr: SocketAddr, command: &str, args: Value) -> Value {
@@ -68,7 +75,12 @@ async fn invoke(client: &reqwest::Client, addr: SocketAddr, command: &str, args:
         .unwrap()
 }
 
-async fn first_run(client: &reqwest::Client, addr: SocketAddr, username: &str, password: &str) -> Value {
+async fn first_run(
+    client: &reqwest::Client,
+    addr: SocketAddr,
+    username: &str,
+    password: &str,
+) -> Value {
     invoke(
         client,
         addr,
@@ -94,7 +106,9 @@ async fn first_run(client: &reqwest::Client, addr: SocketAddr, username: &str, p
 #[tokio::test]
 async fn health_check_responds() {
     let addr = spawn_server().await;
-    let response = reqwest::get(format!("http://{addr}/api/health")).await.unwrap();
+    let response = reqwest::get(format!("http://{addr}/api/health"))
+        .await
+        .unwrap();
     assert!(response.status().is_success());
 }
 
@@ -235,19 +249,34 @@ async fn backup_then_restore_reverts_data_over_http() {
     let (addr, db_path) = spawn_file_backed_server().await;
     let admin = client_with_cookies();
     first_run(&admin, addr, "admin", "supersecretpw").await;
-    invoke(&admin, addr, "login", json!({"credentials": {"username": "admin", "password": "supersecretpw"}})).await;
+    invoke(
+        &admin,
+        addr,
+        "login",
+        json!({"credentials": {"username": "admin", "password": "supersecretpw"}}),
+    )
+    .await;
 
     invoke(&admin, addr, "create_company", company_args("Acme Ltd")).await;
 
     let backup = invoke(&admin, addr, "create_backup", json!({})).await;
     assert_eq!(backup["ok"], true);
-    let package_base64 = backup["data"]["package_base64"].as_str().unwrap().to_string();
+    let package_base64 = backup["data"]["package_base64"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     invoke(&admin, addr, "create_company", company_args("Widgets Inc")).await;
     let before_restore = invoke(&admin, addr, "list_companies", json!({})).await;
     assert_eq!(before_restore["data"].as_array().unwrap().len(), 2);
 
-    let restore = invoke(&admin, addr, "restore_backup", json!({"packageBase64": package_base64})).await;
+    let restore = invoke(
+        &admin,
+        addr,
+        "restore_backup",
+        json!({"packageBase64": package_base64}),
+    )
+    .await;
     assert_eq!(restore["ok"], true, "restore failed: {restore:?}");
 
     let after_restore = invoke(&admin, addr, "list_companies", json!({})).await;
@@ -268,7 +297,13 @@ async fn only_an_administrator_can_restore_a_backup() {
     let (addr, db_path) = spawn_file_backed_server().await;
     let admin = client_with_cookies();
     first_run(&admin, addr, "admin", "supersecretpw").await;
-    invoke(&admin, addr, "login", json!({"credentials": {"username": "admin", "password": "supersecretpw"}})).await;
+    invoke(
+        &admin,
+        addr,
+        "login",
+        json!({"credentials": {"username": "admin", "password": "supersecretpw"}}),
+    )
+    .await;
 
     invoke(
         &admin,
@@ -278,12 +313,30 @@ async fn only_an_administrator_can_restore_a_backup() {
     )
     .await;
     let backup = invoke(&admin, addr, "create_backup", json!({})).await;
-    let package_base64 = backup["data"]["package_base64"].as_str().unwrap().to_string();
+    let package_base64 = backup["data"]["package_base64"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let sam = client_with_cookies();
-    invoke(&sam, addr, "login", json!({"credentials": {"username": "sam", "password": "anothersecretpw"}})).await;
-    let restore = invoke(&sam, addr, "restore_backup", json!({"packageBase64": package_base64})).await;
-    assert_eq!(restore["ok"], false, "a non-administrator must not be able to restore a backup");
+    invoke(
+        &sam,
+        addr,
+        "login",
+        json!({"credentials": {"username": "sam", "password": "anothersecretpw"}}),
+    )
+    .await;
+    let restore = invoke(
+        &sam,
+        addr,
+        "restore_backup",
+        json!({"packageBase64": package_base64}),
+    )
+    .await;
+    assert_eq!(
+        restore["ok"], false,
+        "a non-administrator must not be able to restore a backup"
+    );
 
     let _ = std::fs::remove_file(&db_path);
 }
@@ -293,7 +346,13 @@ async fn self_service_password_change_over_http() {
     let addr = spawn_server().await;
     let admin = client_with_cookies();
     first_run(&admin, addr, "admin", "supersecretpw").await;
-    invoke(&admin, addr, "login", json!({"credentials": {"username": "admin", "password": "supersecretpw"}})).await;
+    invoke(
+        &admin,
+        addr,
+        "login",
+        json!({"credentials": {"username": "admin", "password": "supersecretpw"}}),
+    )
+    .await;
 
     let wrong_current = invoke(
         &admin,
@@ -358,37 +417,81 @@ async fn first_run_raw(client: &reqwest::Client, addr: SocketAddr) -> reqwest::R
 async fn session_cookie_is_not_secure_by_default() {
     let addr = spawn_server().await;
     let response = first_run_raw(&raw_client(), addr).await;
-    let set_cookie = response.headers().get("set-cookie").unwrap().to_str().unwrap().to_ascii_lowercase();
+    let set_cookie = response
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_ascii_lowercase();
     assert!(set_cookie.contains("lanesra_session="));
-    assert!(!set_cookie.contains("secure"), "the LAN-only default must never mark the cookie Secure: {set_cookie}");
+    assert!(
+        !set_cookie.contains("secure"),
+        "the LAN-only default must never mark the cookie Secure: {set_cookie}"
+    );
 }
 
 #[tokio::test]
 async fn session_cookie_is_secure_when_trusting_a_proxy_for_https() {
-    let addr = spawn_server_with_security(SecurityConfig { trust_proxy_https: true, allowed_origins: vec![] }).await;
+    let addr = spawn_server_with_security(SecurityConfig {
+        trust_proxy_https: true,
+        allowed_origins: vec![],
+    })
+    .await;
     let response = first_run_raw(&raw_client(), addr).await;
-    let set_cookie = response.headers().get("set-cookie").unwrap().to_str().unwrap().to_ascii_lowercase();
-    assert!(set_cookie.contains("secure"), "LANESRA_TRUST_PROXY_HTTPS=1 must mark the cookie Secure: {set_cookie}");
+    let set_cookie = response
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_ascii_lowercase();
+    assert!(
+        set_cookie.contains("secure"),
+        "LANESRA_TRUST_PROXY_HTTPS=1 must mark the cookie Secure: {set_cookie}"
+    );
 }
 
 #[tokio::test]
 async fn strict_transport_security_is_only_sent_when_trusting_a_proxy_for_https() {
     let addr_default = spawn_server().await;
-    let default_response = reqwest::get(format!("http://{addr_default}/api/health")).await.unwrap();
-    assert!(default_response.headers().get("strict-transport-security").is_none());
+    let default_response = reqwest::get(format!("http://{addr_default}/api/health"))
+        .await
+        .unwrap();
+    assert!(default_response
+        .headers()
+        .get("strict-transport-security")
+        .is_none());
 
-    let addr_https = spawn_server_with_security(SecurityConfig { trust_proxy_https: true, allowed_origins: vec![] }).await;
-    let https_response = reqwest::get(format!("http://{addr_https}/api/health")).await.unwrap();
-    assert!(https_response.headers().get("strict-transport-security").is_some());
+    let addr_https = spawn_server_with_security(SecurityConfig {
+        trust_proxy_https: true,
+        allowed_origins: vec![],
+    })
+    .await;
+    let https_response = reqwest::get(format!("http://{addr_https}/api/health"))
+        .await
+        .unwrap();
+    assert!(https_response
+        .headers()
+        .get("strict-transport-security")
+        .is_some());
 }
 
 #[tokio::test]
 async fn always_on_security_headers_are_present_regardless_of_config() {
     let addr = spawn_server().await;
-    let response = reqwest::get(format!("http://{addr}/api/health")).await.unwrap();
-    assert_eq!(response.headers().get("x-content-type-options").unwrap(), "nosniff");
+    let response = reqwest::get(format!("http://{addr}/api/health"))
+        .await
+        .unwrap();
+    assert_eq!(
+        response.headers().get("x-content-type-options").unwrap(),
+        "nosniff"
+    );
     assert_eq!(response.headers().get("x-frame-options").unwrap(), "DENY");
-    assert_eq!(response.headers().get("referrer-policy").unwrap(), "strict-origin-when-cross-origin");
+    assert_eq!(
+        response.headers().get("referrer-policy").unwrap(),
+        "strict-origin-when-cross-origin"
+    );
 }
 
 #[tokio::test]
@@ -403,7 +506,10 @@ async fn cors_header_is_absent_by_default_and_present_for_an_allowed_origin() {
         .await
         .unwrap();
     assert!(
-        default_response.headers().get("access-control-allow-origin").is_none(),
+        default_response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none(),
         "no LANESRA_ALLOWED_ORIGINS must mean no CORS layer at all - same-origin only"
     );
 
@@ -418,7 +524,13 @@ async fn cors_header_is_absent_by_default_and_present_for_an_allowed_origin() {
         .send()
         .await
         .unwrap();
-    assert_eq!(cors_response.headers().get("access-control-allow-origin").unwrap(), "https://example.com");
+    assert_eq!(
+        cors_response
+            .headers()
+            .get("access-control-allow-origin")
+            .unwrap(),
+        "https://example.com"
+    );
 
     // A different, non-allowlisted origin must not be reflected back.
     let other_origin_response = client
@@ -427,5 +539,8 @@ async fn cors_header_is_absent_by_default_and_present_for_an_allowed_origin() {
         .send()
         .await
         .unwrap();
-    assert!(other_origin_response.headers().get("access-control-allow-origin").is_none());
+    assert!(other_origin_response
+        .headers()
+        .get("access-control-allow-origin")
+        .is_none());
 }

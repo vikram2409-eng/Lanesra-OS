@@ -25,9 +25,16 @@ use lanesra_core::services::{ai_knowledge_service, ai_service, user_service, wor
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = lanesra_core::db::open_in_memory_db().unwrap();
     let setup = WorkspaceSetup {
-        business_name: "Document RAG Test Co".into(), legal_name: None, currency_code: "USD".into(), locale: "en-US".into(),
-        timezone: "UTC".into(), default_tax_rate_bp: 0, admin_username: "admin".into(), admin_display_name: "Admin".into(),
-        admin_password: "supersecretpassword".into(), load_sample_data: false,
+        business_name: "Document RAG Test Co".into(),
+        legal_name: None,
+        currency_code: "USD".into(),
+        locale: "en-US".into(),
+        timezone: "UTC".into(),
+        default_tax_rate_bp: 0,
+        admin_username: "admin".into(),
+        admin_display_name: "Admin".into(),
+        admin_password: "supersecretpassword".into(),
+        load_sample_data: false,
     };
     let (workspace, admin) = workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
@@ -39,18 +46,36 @@ fn master_key() -> [u8; 32] {
 
 fn non_admin_user(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
     user_service::create(
-        conn, ws,
-        &NewUser { username: "rep".into(), display_name: "Sales Rep".into(), password: "supersecretpassword".into(), roles: vec!["Sales".into()] },
+        conn,
+        ws,
+        &NewUser {
+            username: "rep".into(),
+            display_name: "Sales Rep".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(admin),
     )
     .unwrap()
     .id
 }
 
-fn configure_openai_compatible_key(conn: &rusqlite::Connection, workspace_id: &str, admin: &str, port: u16) {
+fn configure_openai_compatible_key(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    admin: &str,
+    port: u16,
+) {
     ai_service::save_settings(
-        conn, workspace_id, &master_key(),
-        &AiSettingsInput { provider: "openai_compatible".into(), base_url: Some(format!("http://127.0.0.1:{port}")), model: "gpt-4".into(), api_key: Some("sk-test".into()) },
+        conn,
+        workspace_id,
+        &master_key(),
+        &AiSettingsInput {
+            provider: "openai_compatible".into(),
+            base_url: Some(format!("http://127.0.0.1:{port}")),
+            model: "gpt-4".into(),
+            api_key: Some("sk-test".into()),
+        },
         Some(admin),
     )
     .unwrap();
@@ -92,8 +117,17 @@ fn spawn_embedding_stub() -> u16 {
             let body = String::from_utf8_lossy(&body_buf).to_string();
             // `input` is a JSON array of every chunk in the one batched
             // request; embed_texts sends all chunks for one call together.
-            let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or(serde_json::json!({}));
-            let inputs: Vec<String> = parsed.get("input").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            let parsed: serde_json::Value =
+                serde_json::from_str(&body).unwrap_or(serde_json::json!({}));
+            let inputs: Vec<String> = parsed
+                .get("input")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
             let embed_one = |text: &str| -> [f32; 3] {
                 if text.contains("refund window is thirty days") {
                     [1.0, 0.0, 0.0]
@@ -110,7 +144,10 @@ fn spawn_embedding_stub() -> u16 {
             let data: Vec<serde_json::Value> = if inputs.is_empty() {
                 vec![serde_json::json!({"embedding": embed_one(&body)})]
             } else {
-                inputs.iter().map(|t| serde_json::json!({"embedding": embed_one(t)})).collect()
+                inputs
+                    .iter()
+                    .map(|t| serde_json::json!({"embedding": embed_one(t)}))
+                    .collect()
             };
             let response_body = serde_json::json!({"data": data}).to_string();
             let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", response_body.len(), response_body);
@@ -135,8 +172,14 @@ async fn create_source_chunks_and_embeds_and_is_findable_with_a_citation() {
     configure_openai_compatible_key(&conn, &ws, &admin, port);
 
     let source = ai_knowledge_service::create_source(
-        &conn, &ws, &master_key(),
-        &KnowledgeSourceInput { name: "Refund Policy".into(), content: refund_policy_content(), collection_id: None },
+        &conn,
+        &ws,
+        &master_key(),
+        &KnowledgeSourceInput {
+            name: "Refund Policy".into(),
+            content: refund_policy_content(),
+            collection_id: None,
+        },
         Some(&admin),
     )
     .await
@@ -144,7 +187,16 @@ async fn create_source_chunks_and_embeds_and_is_findable_with_a_citation() {
     assert_eq!(source.chunk_count, 1, "{source:?}");
     assert_eq!(source.status, "indexed");
 
-    let hits = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "refund window is thirty days", None, 5).await.unwrap();
+    let hits = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "refund window is thirty days",
+        None,
+        5,
+    )
+    .await
+    .unwrap();
     assert!(!hits.is_empty(), "expected at least one hit");
     let top = &hits[0];
     assert_eq!(top.source_id, source.id);
@@ -159,31 +211,86 @@ async fn update_source_reindexes_replacing_old_chunks() {
     configure_openai_compatible_key(&conn, &ws, &admin, port);
 
     let source = ai_knowledge_service::create_source(
-        &conn, &ws, &master_key(),
-        &KnowledgeSourceInput { name: "Policy Doc".into(), content: refund_policy_content(), collection_id: None },
+        &conn,
+        &ws,
+        &master_key(),
+        &KnowledgeSourceInput {
+            name: "Policy Doc".into(),
+            content: refund_policy_content(),
+            collection_id: None,
+        },
         Some(&admin),
     )
     .await
     .unwrap();
 
-    let before = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "refund window is thirty days", None, 5).await.unwrap();
-    assert!(before.iter().any(|h| h.source_id == source.id && h.similarity > 0.9), "{before:?}");
+    let before = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "refund window is thirty days",
+        None,
+        5,
+    )
+    .await
+    .unwrap();
+    assert!(
+        before
+            .iter()
+            .any(|h| h.source_id == source.id && h.similarity > 0.9),
+        "{before:?}"
+    );
 
     ai_knowledge_service::update_source(
-        &conn, &ws, &master_key(), &source.id,
-        &KnowledgeSourceInput { name: "Policy Doc".into(), content: warranty_content(), collection_id: None },
+        &conn,
+        &ws,
+        &master_key(),
+        &source.id,
+        &KnowledgeSourceInput {
+            name: "Policy Doc".into(),
+            content: warranty_content(),
+            collection_id: None,
+        },
         Some(&admin),
     )
     .await
     .unwrap();
 
     // The old keyword's chunk is gone - the new content no longer contains it.
-    let after_old = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "refund window is thirty days", None, 5).await.unwrap();
-    assert!(!after_old.iter().any(|h| h.source_id == source.id && h.similarity > 0.9), "{after_old:?}");
+    let after_old = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "refund window is thirty days",
+        None,
+        5,
+    )
+    .await
+    .unwrap();
+    assert!(
+        !after_old
+            .iter()
+            .any(|h| h.source_id == source.id && h.similarity > 0.9),
+        "{after_old:?}"
+    );
 
     // The new keyword is now findable in the same source.
-    let after_new = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "standard warranty covers manufacturing defects", None, 5).await.unwrap();
-    assert!(after_new.iter().any(|h| h.source_id == source.id && h.similarity > 0.9), "{after_new:?}");
+    let after_new = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "standard warranty covers manufacturing defects",
+        None,
+        5,
+    )
+    .await
+    .unwrap();
+    assert!(
+        after_new
+            .iter()
+            .any(|h| h.source_id == source.id && h.similarity > 0.9),
+        "{after_new:?}"
+    );
 }
 
 #[tokio::test]
@@ -192,31 +299,85 @@ async fn collection_scoped_search_only_returns_sources_in_that_collection() {
     let port = spawn_embedding_stub();
     configure_openai_compatible_key(&conn, &ws, &admin, port);
 
-    let support_collection = ai_knowledge_service::create_collection(&conn, &ws, &KnowledgeCollectionInput { name: "Support Docs".into(), description: None }, Some(&admin)).unwrap();
-    let other_collection = ai_knowledge_service::create_collection(&conn, &ws, &KnowledgeCollectionInput { name: "Internal Docs".into(), description: None }, Some(&admin)).unwrap();
+    let support_collection = ai_knowledge_service::create_collection(
+        &conn,
+        &ws,
+        &KnowledgeCollectionInput {
+            name: "Support Docs".into(),
+            description: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    let other_collection = ai_knowledge_service::create_collection(
+        &conn,
+        &ws,
+        &KnowledgeCollectionInput {
+            name: "Internal Docs".into(),
+            description: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
     let in_scope = ai_knowledge_service::create_source(
-        &conn, &ws, &master_key(),
-        &KnowledgeSourceInput { name: "Refund Policy".into(), content: refund_policy_content(), collection_id: Some(support_collection.id.clone()) },
+        &conn,
+        &ws,
+        &master_key(),
+        &KnowledgeSourceInput {
+            name: "Refund Policy".into(),
+            content: refund_policy_content(),
+            collection_id: Some(support_collection.id.clone()),
+        },
         Some(&admin),
     )
     .await
     .unwrap();
     ai_knowledge_service::create_source(
-        &conn, &ws, &master_key(),
-        &KnowledgeSourceInput { name: "Warranty Policy".into(), content: warranty_content(), collection_id: Some(other_collection.id.clone()) },
+        &conn,
+        &ws,
+        &master_key(),
+        &KnowledgeSourceInput {
+            name: "Warranty Policy".into(),
+            content: warranty_content(),
+            collection_id: Some(other_collection.id.clone()),
+        },
         Some(&admin),
     )
     .await
     .unwrap();
 
-    let scoped = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "refund window is thirty days", Some(&support_collection.id), 5).await.unwrap();
-    assert!(scoped.iter().all(|h| h.source_id == in_scope.id), "{scoped:?}");
+    let scoped = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "refund window is thirty days",
+        Some(&support_collection.id),
+        5,
+    )
+    .await
+    .unwrap();
+    assert!(
+        scoped.iter().all(|h| h.source_id == in_scope.id),
+        "{scoped:?}"
+    );
     assert!(!scoped.is_empty());
 
     // The warranty source's own content is not in the Support Docs collection at all.
-    let cross_scope = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "standard warranty covers manufacturing defects", Some(&support_collection.id), 5).await.unwrap();
-    assert!(cross_scope.iter().all(|h| h.similarity < 0.9), "{cross_scope:?}");
+    let cross_scope = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "standard warranty covers manufacturing defects",
+        Some(&support_collection.id),
+        5,
+    )
+    .await
+    .unwrap();
+    assert!(
+        cross_scope.iter().all(|h| h.similarity < 0.9),
+        "{cross_scope:?}"
+    );
 }
 
 #[tokio::test]
@@ -226,19 +387,43 @@ async fn delete_source_removes_it_from_search_results() {
     configure_openai_compatible_key(&conn, &ws, &admin, port);
 
     let source = ai_knowledge_service::create_source(
-        &conn, &ws, &master_key(),
-        &KnowledgeSourceInput { name: "Refund Policy".into(), content: refund_policy_content(), collection_id: None },
+        &conn,
+        &ws,
+        &master_key(),
+        &KnowledgeSourceInput {
+            name: "Refund Policy".into(),
+            content: refund_policy_content(),
+            collection_id: None,
+        },
         Some(&admin),
     )
     .await
     .unwrap();
 
-    let before = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "refund window is thirty days", None, 5).await.unwrap();
+    let before = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "refund window is thirty days",
+        None,
+        5,
+    )
+    .await
+    .unwrap();
     assert!(before.iter().any(|h| h.source_id == source.id));
 
     ai_knowledge_service::delete_source(&conn, &ws, &source.id, Some(&admin)).unwrap();
 
-    let after = ai_knowledge_service::search_knowledge(&conn, &ws, &master_key(), "refund window is thirty days", None, 5).await.unwrap();
+    let after = ai_knowledge_service::search_knowledge(
+        &conn,
+        &ws,
+        &master_key(),
+        "refund window is thirty days",
+        None,
+        5,
+    )
+    .await
+    .unwrap();
     assert!(after.iter().all(|h| h.source_id != source.id), "{after:?}");
 }
 
@@ -247,16 +432,44 @@ fn knowledge_source_management_requires_an_administrator() {
     let (conn, ws, admin) = setup_workspace();
     let rep = non_admin_user(&conn, &ws, &admin);
 
-    let collection = ai_knowledge_service::create_collection(&conn, &ws, &KnowledgeCollectionInput { name: "Docs".into(), description: None }, Some(&admin)).unwrap();
+    let collection = ai_knowledge_service::create_collection(
+        &conn,
+        &ws,
+        &KnowledgeCollectionInput {
+            name: "Docs".into(),
+            description: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
-    let err = ai_knowledge_service::create_collection(&conn, &ws, &KnowledgeCollectionInput { name: "Nope".into(), description: None }, Some(&rep)).unwrap_err();
-    assert!(err.to_string().to_lowercase().contains("administrator"), "{err}");
+    let err = ai_knowledge_service::create_collection(
+        &conn,
+        &ws,
+        &KnowledgeCollectionInput {
+            name: "Nope".into(),
+            description: None,
+        },
+        Some(&rep),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().to_lowercase().contains("administrator"),
+        "{err}"
+    );
 
     let err = ai_knowledge_service::list_sources(&conn, &ws, None, Some(&rep)).unwrap_err();
-    assert!(err.to_string().to_lowercase().contains("administrator"), "{err}");
+    assert!(
+        err.to_string().to_lowercase().contains("administrator"),
+        "{err}"
+    );
 
-    let err = ai_knowledge_service::delete_collection(&conn, &ws, &collection.id, Some(&rep)).unwrap_err();
-    assert!(err.to_string().to_lowercase().contains("administrator"), "{err}");
+    let err = ai_knowledge_service::delete_collection(&conn, &ws, &collection.id, Some(&rep))
+        .unwrap_err();
+    assert!(
+        err.to_string().to_lowercase().contains("administrator"),
+        "{err}"
+    );
 
     // No actor at all - rejected before any role check even runs.
     assert!(ai_knowledge_service::list_collections(&conn, &ws, None).is_err());

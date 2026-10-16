@@ -20,18 +20,30 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<(PageTemplate, String)> {
     Ok((template, definition_json))
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<(PageTemplate, String)>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<Vec<(PageTemplate, String)>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM page_templates WHERE workspace_id = ?1 AND entity_type = ?2 ORDER BY name",
     )?;
-    let rows = stmt.query_map((workspace_id, entity_type), map_row)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, entity_type), map_row)?
+        .collect();
     rows
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<(PageTemplate, String)>> {
     conn.query_row("SELECT * FROM page_templates WHERE id = ?1", [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 #[allow(clippy::too_many_arguments)]

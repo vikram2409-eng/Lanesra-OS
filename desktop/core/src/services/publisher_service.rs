@@ -30,12 +30,16 @@ const RESERVED_KEYS: &[&str] = &["lanesra", "local"];
 pub fn validate_key(key: &str) -> AppResult<()> {
     let key = key.trim();
     if key.len() < 2 || key.len() > 32 {
-        return Err(AppError::Validation("Publisher key must be 2-32 characters".into()));
+        return Err(AppError::Validation(
+            "Publisher key must be 2-32 characters".into(),
+        ));
     }
     let mut chars = key.chars();
     let first = chars.next().unwrap();
     if !first.is_ascii_lowercase() {
-        return Err(AppError::Validation("Publisher key must start with a lowercase letter".into()));
+        return Err(AppError::Validation(
+            "Publisher key must start with a lowercase letter".into(),
+        ));
     }
     if !chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
         return Err(AppError::Validation(
@@ -55,7 +59,17 @@ fn seed_if_missing(
     is_local: bool,
 ) -> AppResult<()> {
     if publisher_repo::get_by_key(conn, workspace_id, key)?.is_none() {
-        publisher_repo::insert(conn, &new_uuid(), workspace_id, key, name, Some(description), is_official, is_local, None)?;
+        publisher_repo::insert(
+            conn,
+            &new_uuid(),
+            workspace_id,
+            key,
+            name,
+            Some(description),
+            is_official,
+            is_local,
+            None,
+        )?;
     }
     Ok(())
 }
@@ -86,19 +100,28 @@ pub fn ensure_defaults(conn: &Connection, workspace_id: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &PublisherInput, actor_user_id: Option<&str>) -> AppResult<Publisher> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &PublisherInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<Publisher> {
     require_admin(conn, actor_user_id)?;
     ensure_defaults(conn, workspace_id)?;
     let key = input.key.trim().to_lowercase();
     validate_key(&key)?;
     if RESERVED_KEYS.contains(&key.as_str()) {
-        return Err(AppError::Validation(format!("'{key}' is a reserved publisher key")));
+        return Err(AppError::Validation(format!(
+            "'{key}' is a reserved publisher key"
+        )));
     }
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Publisher name is required".into()));
     }
     if publisher_repo::get_by_key(conn, workspace_id, &key)?.is_some() {
-        return Err(AppError::Conflict(format!("A publisher with key '{key}' already exists in this workspace")));
+        return Err(AppError::Conflict(format!(
+            "A publisher with key '{key}' already exists in this workspace"
+        )));
     }
     Ok(publisher_repo::insert(
         conn,
@@ -123,7 +146,11 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Publisher>> 
 /// point `industry_package_service::import_package` calls so every
 /// import is actually backed by a real, registered publisher instead of
 /// an unvalidated string convention.
-pub fn resolve_for_package_id(conn: &Connection, workspace_id: &str, package_id: &str) -> AppResult<Publisher> {
+pub fn resolve_for_package_id(
+    conn: &Connection,
+    workspace_id: &str,
+    package_id: &str,
+) -> AppResult<Publisher> {
     let key = package_id.split('.').next().filter(|k| !k.is_empty()).ok_or_else(|| {
         AppError::Validation(format!("Package id '{package_id}' must be namespaced as '<publisher-key>.<name>' (e.g. 'acme.inspection')"))
     })?;

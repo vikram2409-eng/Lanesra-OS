@@ -39,11 +39,22 @@ async fn spawn_file_backed_server() -> (SocketAddr, SharedState, tempfile::TempD
 }
 
 fn client_with_cookies() -> reqwest::Client {
-    reqwest::Client::builder().cookie_store(true).build().unwrap()
+    reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap()
 }
 
 async fn invoke(client: &reqwest::Client, addr: SocketAddr, command: &str, args: Value) -> Value {
-    client.post(format!("http://{addr}/api/invoke/{command}")).json(&args).send().await.unwrap().json().await.unwrap()
+    client
+        .post(format!("http://{addr}/api/invoke/{command}"))
+        .json(&args)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
 }
 
 /// A minimal raw-socket HTTP/1.1 server that always answers 200 - real
@@ -81,7 +92,13 @@ async fn test_connection_route_requires_a_session_and_reaches_the_real_endpoint(
     let client = client_with_cookies();
 
     // No session yet - rejected before ever touching the connection.
-    let unauthenticated = client.post(format!("http://{addr}/api/admin/connections/does-not-matter/test")).send().await.unwrap();
+    let unauthenticated = client
+        .post(format!(
+            "http://{addr}/api/admin/connections/does-not-matter/test"
+        ))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(unauthenticated.status(), reqwest::StatusCode::UNAUTHORIZED);
 
     let setup = invoke(
@@ -103,8 +120,18 @@ async fn test_connection_route_requires_a_session_and_reaches_the_real_endpoint(
     let connection_id = {
         let conn = state.conn.lock().unwrap();
         connection_service::create(
-            &conn, &workspace_id, &[7u8; 32],
-            &ConnectionInput { name: "Local test API".into(), connection_type: "rest".into(), base_url: Some(format!("http://127.0.0.1:{port}")), auth_mode: "none".into(), secret_value: None, config_json: "{}".into(), owner_user_id: None },
+            &conn,
+            &workspace_id,
+            &[7u8; 32],
+            &ConnectionInput {
+                name: "Local test API".into(),
+                connection_type: "rest".into(),
+                base_url: Some(format!("http://127.0.0.1:{port}")),
+                auth_mode: "none".into(),
+                secret_value: None,
+                config_json: "{}".into(),
+                owner_user_id: None,
+            },
             Some(&admin_id),
         )
         .unwrap()
@@ -113,11 +140,20 @@ async fn test_connection_route_requires_a_session_and_reaches_the_real_endpoint(
 
     // The `first_run_setup` call above already left a session cookie on
     // `client` (mirroring how the admin UI stays logged in after setup).
-    let response = client.post(format!("http://{addr}/api/admin/connections/{connection_id}/test")).send().await.unwrap();
+    let response = client
+        .post(format!(
+            "http://{addr}/api/admin/connections/{connection_id}/test"
+        ))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
     let body: Value = response.json().await.unwrap();
     assert_eq!(body["ok"], true, "{body:?}");
-    assert_eq!(body["data"]["ok"], true, "the real echo server's 200 should read back as a successful test: {body:?}");
+    assert_eq!(
+        body["data"]["ok"], true,
+        "the real echo server's 200 should read back as a successful test: {body:?}"
+    );
     assert_eq!(body["data"]["status_code"], 200);
 }
 
@@ -125,6 +161,10 @@ async fn test_connection_route_requires_a_session_and_reaches_the_real_endpoint(
 async fn run_integration_job_route_requires_a_session() {
     let (addr, _state, _dir) = spawn_file_backed_server().await;
     let client = client_with_cookies();
-    let response = client.post(format!("http://{addr}/api/admin/jobs/does-not-matter/run")).send().await.unwrap();
+    let response = client
+        .post(format!("http://{addr}/api/admin/jobs/does-not-matter/run"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
 }

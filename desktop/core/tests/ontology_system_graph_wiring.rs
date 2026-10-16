@@ -29,7 +29,8 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
         admin_password: "supersecretpassword".into(),
         load_sample_data: false,
     };
-    let (workspace, admin) = lanesra_core::services::workspace_service::first_run_setup(&conn, &setup).unwrap();
+    let (workspace, admin) =
+        lanesra_core::services::workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
 }
 
@@ -45,7 +46,10 @@ fn action_type_input() -> ActionTypeDefinitionInput {
     }
 }
 
-fn agent_input(object_type_scopes: Vec<ObjectTypeScope>, action_type_ids: Vec<String>) -> AiAgentInput {
+fn agent_input(
+    object_type_scopes: Vec<ObjectTypeScope>,
+    action_type_ids: Vec<String>,
+) -> AiAgentInput {
     AiAgentInput {
         name: "Scoped Agent".into(),
         description: None,
@@ -66,10 +70,15 @@ fn creating_an_action_type_syncs_a_node_that_depends_on_its_target_object() {
 
     let action = action_type_service::create(&conn, &ws, &action_type_input(), admin).unwrap();
 
-    let node = system_graph_service::get_node(&conn, &ws, "action_type_definition", &action.id).unwrap();
-    assert!(node.is_some(), "an Action Type must sync its own System Graph node");
+    let node =
+        system_graph_service::get_node(&conn, &ws, "action_type_definition", &action.id).unwrap();
+    assert!(
+        node.is_some(),
+        "an Action Type must sync its own System Graph node"
+    );
 
-    let dependents = system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
+    let dependents =
+        system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
     assert!(
         dependents.iter().any(|h| h.node.node_type == "action_type_definition" && h.node.component_id == action.id),
         "the Action Type must show up as a dependent of its target object in the Dependency Explorer"
@@ -83,21 +92,35 @@ fn an_agent_scoped_to_an_object_type_and_action_type_syncs_both_edges() {
 
     let action = action_type_service::create(&conn, &ws, &action_type_input(), admin).unwrap();
     let agent = ai_agent_service::create(
-        &conn, &ws,
-        &agent_input(vec![ObjectTypeScope { object_type: "Company".into(), capabilities: vec!["read".into()] }], vec![action.id.clone()]),
+        &conn,
+        &ws,
+        &agent_input(
+            vec![ObjectTypeScope {
+                object_type: "Company".into(),
+                capabilities: vec!["read".into()],
+            }],
+            vec![action.id.clone()],
+        ),
         admin,
     )
     .unwrap();
 
-    let object_dependents = system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
+    let object_dependents =
+        system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
     assert!(
-        object_dependents.iter().any(|h| h.node.node_type == "ai_agent" && h.node.component_id == agent.id),
+        object_dependents
+            .iter()
+            .any(|h| h.node.node_type == "ai_agent" && h.node.component_id == agent.id),
         "an agent scoped to Company must show up as a dependent of the Company object type"
     );
 
-    let action_dependents = system_graph_service::get_dependents(&conn, &ws, "action_type_definition", &action.id).unwrap();
+    let action_dependents =
+        system_graph_service::get_dependents(&conn, &ws, "action_type_definition", &action.id)
+            .unwrap();
     assert!(
-        action_dependents.iter().any(|h| h.node.node_type == "ai_agent" && h.node.component_id == agent.id),
+        action_dependents
+            .iter()
+            .any(|h| h.node.node_type == "ai_agent" && h.node.component_id == agent.id),
         "an agent granted an Action Type must show up as a dependent of that Action Type"
     );
 }
@@ -109,7 +132,8 @@ fn an_unscoped_agent_adds_no_object_type_or_action_type_edges() {
 
     let agent = ai_agent_service::create(&conn, &ws, &agent_input(vec![], vec![]), admin).unwrap();
 
-    let dependents = system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
+    let dependents =
+        system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
     assert!(
         !dependents.iter().any(|h| h.node.component_id == agent.id),
         "an unscoped agent (applies to every object type) must not add a single misleading edge to just one of them"
@@ -122,16 +146,25 @@ fn removing_an_agents_scope_resyncs_its_edges_rather_than_leaking_the_old_one() 
     let admin = Some(admin.as_str());
 
     let agent = ai_agent_service::create(
-        &conn, &ws,
-        &agent_input(vec![ObjectTypeScope { object_type: "Company".into(), capabilities: vec!["read".into()] }], vec![]),
+        &conn,
+        &ws,
+        &agent_input(
+            vec![ObjectTypeScope {
+                object_type: "Company".into(),
+                capabilities: vec!["read".into()],
+            }],
+            vec![],
+        ),
         admin,
     )
     .unwrap();
-    let before = system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
+    let before =
+        system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
     assert!(before.iter().any(|h| h.node.component_id == agent.id));
 
     ai_agent_service::update(&conn, &agent.id, &ws, &agent_input(vec![], vec![]), admin).unwrap();
-    let after = system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
+    let after =
+        system_graph_service::get_dependents(&conn, &ws, "custom_object", "Company").unwrap();
     assert!(
         !after.iter().any(|h| h.node.component_id == agent.id),
         "clearing the agent's scope must remove the now-stale edge, not leave it behind"

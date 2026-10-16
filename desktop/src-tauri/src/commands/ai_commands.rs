@@ -11,7 +11,10 @@ use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id, resolve_master_key};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::ai::{AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary, VectorSearchStatus};
+use lanesra_core::models::ai::{
+    AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings,
+    AiSettingsInput, AiTestResult, AiTokenUsageSummary, VectorSearchStatus,
+};
 use lanesra_core::services::{ai_service, vector_search_service};
 
 #[tauri::command]
@@ -25,7 +28,13 @@ pub fn save_ai_settings(state: State<AppState>, input: AiSettingsInput) -> AppRe
     let master_key = resolve_master_key(&state)?;
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    ai_service::save_settings(&conn, &workspace_id, &master_key, &input, current_actor(&state).as_deref())
+    ai_service::save_settings(
+        &conn,
+        &workspace_id,
+        &master_key,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -37,15 +46,26 @@ pub async fn test_ai_key(state: State<'_, AppState>) -> AppResult<AiTestResult> 
         require_workspace_id(&conn)?
     };
     let actor = current_actor(&state);
-    run_with_own_connection(db_path, move |conn| async move { ai_service::test_key(&conn, &workspace_id, &master_key, actor.as_deref()).await }).await
+    run_with_own_connection(db_path, move |conn| async move {
+        ai_service::test_key(&conn, &workspace_id, &master_key, actor.as_deref()).await
+    })
+    .await
 }
 
 /// Phase 7a: the "System" tier of the Gateway's budget hierarchy.
 #[tauri::command]
-pub fn set_ai_daily_token_budget(state: State<AppState>, input: AiDailyTokenBudgetInput) -> AppResult<AiSettings> {
+pub fn set_ai_daily_token_budget(
+    state: State<AppState>,
+    input: AiDailyTokenBudgetInput,
+) -> AppResult<AiSettings> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    ai_service::set_daily_token_budget(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    ai_service::set_daily_token_budget(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -58,10 +78,18 @@ pub fn get_ai_token_usage_summary(state: State<AppState>) -> AppResult<AiTokenUs
 /// otlp` (a real outbound call) is its own async command, alongside
 /// `ai_agent_pipeline_commands`'s other genuinely-async operations.
 #[tauri::command]
-pub fn set_ai_otlp_endpoint(state: State<AppState>, input: AiObservabilitySettingsInput) -> AppResult<AiSettings> {
+pub fn set_ai_otlp_endpoint(
+    state: State<AppState>,
+    input: AiObservabilitySettingsInput,
+) -> AppResult<AiSettings> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    ai_service::set_otlp_endpoint(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    ai_service::set_otlp_endpoint(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 /// Phase 7g: same shape as `set_ai_otlp_endpoint` above -
@@ -69,10 +97,18 @@ pub fn set_ai_otlp_endpoint(state: State<AppState>, input: AiObservabilitySettin
 /// async command, alongside `ai_agent_pipeline_commands`'s other
 /// genuinely-async operations.
 #[tauri::command]
-pub fn set_ai_embedding_model(state: State<AppState>, input: AiEmbeddingSettingsInput) -> AppResult<AiSettings> {
+pub fn set_ai_embedding_model(
+    state: State<AppState>,
+    input: AiEmbeddingSettingsInput,
+) -> AppResult<AiSettings> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    ai_service::set_embedding_model(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    ai_service::set_embedding_model(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]

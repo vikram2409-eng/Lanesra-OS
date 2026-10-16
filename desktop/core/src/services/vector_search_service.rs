@@ -81,18 +81,34 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
 /// never written because no provider key is configured) simply can't be
 /// found this way yet - `search_custom_records`'s lexical FTS5 pass is
 /// unaffected and keeps working regardless.
-pub async fn semantic_search_records(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], query: &str, object_key: Option<&str>, limit: i64) -> AppResult<Vec<SemanticSearchHit>> {
+pub async fn semantic_search_records(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    query: &str,
+    object_key: Option<&str>,
+    limit: i64,
+) -> AppResult<Vec<SemanticSearchHit>> {
     let query = query.trim();
     if query.is_empty() {
         return Ok(Vec::new());
     }
     let limit = limit.clamp(1, MAX_SEMANTIC_RESULTS) as usize;
 
-    let query_embedding = super::ai_service::embed_texts(conn, workspace_id, master_key, std::slice::from_ref(&query.to_string())).await?;
+    let query_embedding = super::ai_service::embed_texts(
+        conn,
+        workspace_id,
+        master_key,
+        std::slice::from_ref(&query.to_string()),
+    )
+    .await?;
     let query_vec = query_embedding.into_iter().next().unwrap_or_default();
 
     let candidates = record_embedding_repo::list_for_workspace(conn, workspace_id, object_key)?;
-    let mut scored: Vec<(f64, record_embedding_repo::StoredEmbedding)> = candidates.into_iter().map(|c| (cosine_similarity(&query_vec, &c.embedding), c)).collect();
+    let mut scored: Vec<(f64, record_embedding_repo::StoredEmbedding)> = candidates
+        .into_iter()
+        .map(|c| (cosine_similarity(&query_vec, &c.embedding), c))
+        .collect();
     scored.sort_by(|a, b| b.0.total_cmp(&a.0));
 
     let mut hits = Vec::with_capacity(limit.min(scored.len()));
@@ -102,8 +118,15 @@ pub async fn semantic_search_records(conn: &Connection, workspace_id: &str, mast
         // per hit, cheap at `limit`'s scale (<=25) and always current,
         // rather than a title snapshot that could go stale the moment a
         // record is renamed without a field value actually changing.
-        if let Some((_, _, title, _)) = record_embedding_repo::searchable_text(conn, &candidate.record_id)? {
-            hits.push(SemanticSearchHit { object_key: candidate.object_key, record_id: candidate.record_id, title, similarity });
+        if let Some((_, _, title, _)) =
+            record_embedding_repo::searchable_text(conn, &candidate.record_id)?
+        {
+            hits.push(SemanticSearchHit {
+                object_key: candidate.object_key,
+                record_id: candidate.record_id,
+                title,
+                similarity,
+            });
         }
     }
     Ok(hits)
@@ -114,17 +137,35 @@ pub async fn semantic_search_records(conn: &Connection, workspace_id: &str, mast
 /// call per record. `Ok(false)` (not an error) when the record has
 /// nothing to embed (deleted, or archived since being enqueued) - the
 /// caller still clears its own pending-queue row either way.
-async fn reindex_one(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], record_id: &str) -> AppResult<bool> {
-    let Some((record_workspace_id, object_key, _title, text)) = record_embedding_repo::searchable_text(conn, record_id)? else {
+async fn reindex_one(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    record_id: &str,
+) -> AppResult<bool> {
+    let Some((record_workspace_id, object_key, _title, text)) =
+        record_embedding_repo::searchable_text(conn, record_id)?
+    else {
         record_embedding_repo::delete(conn, record_id)?;
         return Ok(false);
     };
-    let embeddings = super::ai_service::embed_texts(conn, workspace_id, master_key, std::slice::from_ref(&text)).await?;
+    let embeddings =
+        super::ai_service::embed_texts(conn, workspace_id, master_key, std::slice::from_ref(&text))
+            .await?;
     let Some(embedding) = embeddings.into_iter().next() else {
         return Ok(false);
     };
-    let model = super::ai_service::get_settings(conn, workspace_id)?.embedding_model.unwrap_or_default();
-    record_embedding_repo::upsert(conn, &record_workspace_id, &object_key, record_id, &embedding, &model)?;
+    let model = super::ai_service::get_settings(conn, workspace_id)?
+        .embedding_model
+        .unwrap_or_default();
+    record_embedding_repo::upsert(
+        conn,
+        &record_workspace_id,
+        &object_key,
+        record_id,
+        &embedding,
+        &model,
+    )?;
     Ok(true)
 }
 
@@ -136,7 +177,12 @@ async fn reindex_one(conn: &Connection, workspace_id: &str, master_key: &[u8; 32
 /// its queue row - an admin should see the real error (surfaced by
 /// whichever caller checks this function's `Err`), not have records
 /// quietly fall out of semantic search with no explanation.
-pub async fn drain_pending_embeddings(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], limit: i64) -> AppResult<usize> {
+pub async fn drain_pending_embeddings(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    limit: i64,
+) -> AppResult<usize> {
     let batch = record_embedding_repo::list_pending_batch(conn, workspace_id, limit)?;
     let mut drained = 0;
     for item in &batch {
@@ -153,11 +199,17 @@ pub async fn drain_pending_embeddings(conn: &Connection, workspace_id: &str, mas
 /// through an unbounded number of provider requests. Same admin gate
 /// `ai_orchestration_service::run_manual` uses - this makes real outbound
 /// calls to an admin-configured provider, same reasoning.
-pub async fn reindex_workspace(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor_user_id: Option<&str>) -> AppResult<usize> {
+pub async fn reindex_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor_user_id: Option<&str>,
+) -> AppResult<usize> {
     super::user_service::require_admin(conn, actor_user_id)?;
     let mut total = 0;
     loop {
-        let drained = drain_pending_embeddings(conn, workspace_id, master_key, REINDEX_BATCH_SIZE).await?;
+        let drained =
+            drain_pending_embeddings(conn, workspace_id, master_key, REINDEX_BATCH_SIZE).await?;
         total += drained;
         if drained < REINDEX_BATCH_SIZE as usize {
             break;
@@ -170,7 +222,13 @@ pub async fn reindex_workspace(conn: &Connection, workspace_id: &str, master_key
 /// reindexing actually happened (or that it hasn't, and why: a nonzero
 /// `pending_count` with a stuck `embedded_count` usually means no
 /// provider key is configured yet) rather than a silent black box.
-pub fn status(conn: &Connection, workspace_id: &str) -> AppResult<crate::models::ai::VectorSearchStatus> {
+pub fn status(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<crate::models::ai::VectorSearchStatus> {
     let (embedded_count, pending_count) = record_embedding_repo::counts(conn, workspace_id)?;
-    Ok(crate::models::ai::VectorSearchStatus { embedded_count, pending_count })
+    Ok(crate::models::ai::VectorSearchStatus {
+        embedded_count,
+        pending_count,
+    })
 }

@@ -45,18 +45,26 @@ fn color_index_for(key: &str) -> i64 {
 /// `object_type` (a `semantic_mapping` with `field_key: NULL` and a
 /// `glossary_term_id` set) - `None` when no such mapping exists, never
 /// a placeholder string.
-fn description_for(conn: &Connection, workspace_id: &str, object_type: &str) -> AppResult<Option<String>> {
-    let whole_object_term_id = semantic_mapping_repo::list_for_entity(conn, workspace_id, object_type)?
-        .into_iter()
-        .find(|m| m.field_key.is_none() && m.glossary_term_id.is_some())
-        .and_then(|m| m.glossary_term_id);
+fn description_for(
+    conn: &Connection,
+    workspace_id: &str,
+    object_type: &str,
+) -> AppResult<Option<String>> {
+    let whole_object_term_id =
+        semantic_mapping_repo::list_for_entity(conn, workspace_id, object_type)?
+            .into_iter()
+            .find(|m| m.field_key.is_none() && m.glossary_term_id.is_some())
+            .and_then(|m| m.glossary_term_id);
     match whole_object_term_id {
         Some(term_id) => Ok(glossary_repo::get(conn, &term_id)?.map(|t| t.definition)),
         None => Ok(None),
     }
 }
 
-pub fn list_object_types(conn: &Connection, workspace_id: &str) -> AppResult<Vec<ObjectTypeSummary>> {
+pub fn list_object_types(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<Vec<ObjectTypeSummary>> {
     let mut out = Vec::new();
     for (key, singular, plural, icon) in BUILTIN_OBJECT_TYPES {
         out.push(ObjectTypeSummary {
@@ -86,7 +94,11 @@ pub fn list_object_types(conn: &Connection, workspace_id: &str) -> AppResult<Vec
 /// Every Link Type `object_type` participates in, as source or target,
 /// oriented so `name`/`inverse_name` read naturally from `object_type`'s
 /// own side - see `models::ontology::LinkTypeSummary`'s own doc comment.
-fn link_types_for(conn: &Connection, workspace_id: &str, object_type: &str) -> AppResult<Vec<LinkTypeSummary>> {
+fn link_types_for(
+    conn: &Connection,
+    workspace_id: &str,
+    object_type: &str,
+) -> AppResult<Vec<LinkTypeSummary>> {
     let mut out = Vec::new();
     for r in relationship_service::list(conn, workspace_id, true)? {
         if r.source_entity_type == object_type {
@@ -95,11 +107,18 @@ fn link_types_for(conn: &Connection, workspace_id: &str, object_type: &str) -> A
                 name: r.forward_label.clone(),
                 inverse_name: r.reverse_label.clone(),
                 from_object_type: object_type.to_string(),
-                to_object_type: if r.target_is_polymorphic { None } else { Some(r.target_entity_type.clone()) },
+                to_object_type: if r.target_is_polymorphic {
+                    None
+                } else {
+                    Some(r.target_entity_type.clone())
+                },
                 relationship_type: r.relationship_type.clone(),
             });
         }
-        if !r.target_is_polymorphic && r.target_entity_type == object_type && r.source_entity_type != object_type {
+        if !r.target_is_polymorphic
+            && r.target_entity_type == object_type
+            && r.source_entity_type != object_type
+        {
             out.push(LinkTypeSummary {
                 relationship_id: r.id.clone(),
                 name: r.reverse_label.clone(),
@@ -113,13 +132,20 @@ fn link_types_for(conn: &Connection, workspace_id: &str, object_type: &str) -> A
     Ok(out)
 }
 
-pub fn get_object_type_detail(conn: &Connection, workspace_id: &str, object_type: &str) -> AppResult<ObjectTypeDetail> {
+pub fn get_object_type_detail(
+    conn: &Connection,
+    workspace_id: &str,
+    object_type: &str,
+) -> AppResult<ObjectTypeDetail> {
     let summary = list_object_types(conn, workspace_id)?
         .into_iter()
         .find(|o| o.key == object_type)
         .ok_or_else(|| AppError::NotFound("Object type".into()))?;
     let link_types = link_types_for(conn, workspace_id, object_type)?;
-    Ok(ObjectTypeDetail { object_type: summary, link_types })
+    Ok(ObjectTypeDetail {
+        object_type: summary,
+        link_types,
+    })
 }
 
 #[cfg(test)]
@@ -143,7 +169,11 @@ mod tests {
         for (key, ..) in BUILTIN_OBJECT_TYPES {
             let i = color_index_for(key);
             assert!((1..=6).contains(&i));
-            assert_eq!(i, color_index_for(key), "must be stable across repeated calls");
+            assert_eq!(
+                i,
+                color_index_for(key),
+                "must be stable across repeated calls"
+            );
         }
     }
 }

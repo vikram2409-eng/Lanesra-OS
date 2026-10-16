@@ -54,7 +54,11 @@ pub fn create(
     })
 }
 
-pub fn list_for_entity(conn: &Connection, entity_type: &str, entity_id: &str) -> rusqlite::Result<Vec<Activity>> {
+pub fn list_for_entity(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> rusqlite::Result<Vec<Activity>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM activities WHERE entity_type = ?1 AND entity_id = ?2 ORDER BY occurred_at DESC",
     )?;

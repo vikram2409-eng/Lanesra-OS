@@ -11,12 +11,15 @@ use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::invoice::{InvoiceInput, InvoiceLineInput};
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
-use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowConditionInput, WorkflowDefinitionInput, WorkflowDefinitionUpdate};
+use lanesra_core::models::workflow::{
+    WorkflowActionInput, WorkflowConditionInput, WorkflowDefinitionInput, WorkflowDefinitionUpdate,
+};
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::repositories::notification_repo;
 use lanesra_core::services::{
-    company_service, custom_field_service, custom_object_service, custom_record_service, invoice_service, opportunity_service,
-    task_service, user_service, workflow_service, workspace_service,
+    company_service, custom_field_service, custom_object_service, custom_record_service,
+    invoice_service, opportunity_service, task_service, user_service, workflow_service,
+    workspace_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -39,36 +42,73 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
 
 fn company_input(name: &str, owner_user_id: Option<&str>) -> CompanyInput {
     CompanyInput {
-        name: name.into(), status: "Active Customer".into(), owner_user_id: owner_user_id.map(String::from),
-        tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None,
+        name: name.into(),
+        status: "Active Customer".into(),
+        owner_user_id: owner_user_id.map(String::from),
+        tax_number: None,
+        billing_address: None,
+        shipping_address: None,
+        tags: None,
+        notes: None,
         ..Default::default()
     }
 }
 
-fn opportunity_input(company_id: &str, stage: &str, owner_user_id: Option<&str>) -> OpportunityInput {
+fn opportunity_input(
+    company_id: &str,
+    stage: &str,
+    owner_user_id: Option<&str>,
+) -> OpportunityInput {
     OpportunityInput {
-        company_id: company_id.into(), primary_contact_id: None, name: "Big Deal".into(), stage: stage.into(),
-        status: if stage == "Won" { "Won" } else { "Open" }.into(), value_cents: 500000, currency_code: "USD".into(),
-        probability_bp: 0, expected_close_date: None, owner_user_id: owner_user_id.map(String::from), lost_reason: None, next_step: None,
+        company_id: company_id.into(),
+        primary_contact_id: None,
+        name: "Big Deal".into(),
+        stage: stage.into(),
+        status: if stage == "Won" { "Won" } else { "Open" }.into(),
+        value_cents: 500000,
+        currency_code: "USD".into(),
+        probability_bp: 0,
+        expected_close_date: None,
+        owner_user_id: owner_user_id.map(String::from),
+        lost_reason: None,
+        next_step: None,
     }
 }
 
-fn create_task_action(title: &str, due_in_days: i64, assignee_user_id: Option<&str>) -> WorkflowActionInput {
+fn create_task_action(
+    title: &str,
+    due_in_days: i64,
+    assignee_user_id: Option<&str>,
+) -> WorkflowActionInput {
     WorkflowActionInput {
         action_type: "create_task".into(),
         params_json: serde_json::json!({
             "title": title, "description": "Kick off the new customer's onboarding",
             "due_in_days": due_in_days, "assignee_user_id": assignee_user_id,
-        }).to_string(),
+        })
+        .to_string(),
     }
 }
 
-fn status_changed_workflow(entity_type: &str, trigger_status: &str, action: WorkflowActionInput) -> WorkflowDefinitionInput {
+fn status_changed_workflow(
+    entity_type: &str,
+    trigger_status: &str,
+    action: WorkflowActionInput,
+) -> WorkflowDefinitionInput {
     WorkflowDefinitionInput {
         app_id: None,
-        entity_type: entity_type.into(), name: format!("{entity_type} -> {trigger_status}"), description: None,
-        trigger_type: "status_changed".into(), trigger_status: Some(trigger_status.into()), trigger_field_key: None, trigger_field_source: "custom".into(),
-        trigger_offset_days: 0, match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![action],
+        entity_type: entity_type.into(),
+        name: format!("{entity_type} -> {trigger_status}"),
+        description: None,
+        trigger_type: "status_changed".into(),
+        trigger_status: Some(trigger_status.into()),
+        trigger_field_key: None,
+        trigger_field_source: "custom".into(),
+        trigger_offset_days: 0,
+        match_type: "all".into(),
+        priority: 0,
+        conditions: vec![],
+        actions: vec![action],
     }
 }
 
@@ -79,60 +119,109 @@ fn status_changed_workflow(entity_type: &str, trigger_status: &str, action: Work
 fn date_reached_workflow_fires_for_a_custom_objects_own_date_field() {
     let (conn, ws, admin) = setup_workspace();
     let lease = custom_object_service::create(
-        &conn, &ws,
-        &CustomObjectDefinitionInput { singular_label: "Lease".into(), plural_label: "Leases".into(), icon: "📄".into(), prefix: "LSE".into(), digits: 4 },
+        &conn,
+        &ws,
+        &CustomObjectDefinitionInput {
+            singular_label: "Lease".into(),
+            plural_label: "Leases".into(),
+            icon: "📄".into(),
+            prefix: "LSE".into(),
+            digits: 4,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let renewal_date = custom_field_service::create_definition(
-        &conn, &ws,
+        &conn,
+        &ws,
         &CustomFieldDefinitionInput {
-            entity_type: lease.key.clone(), label: "Renewal Date".into(), field_type: "date".into(),
-            options: vec![], required: false, show_in_list: false, sort_order: 0,
-            min_value: None, max_value: None, max_length: None, regex_pattern: None,
-            is_searchable: false, is_filterable: false, is_reportable: true,
-            default_value: None, is_unique: false, help_text: None, placeholder: None,
+            entity_type: lease.key.clone(),
+            label: "Renewal Date".into(),
+            field_type: "date".into(),
+            options: vec![],
+            required: false,
+            show_in_list: false,
+            sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
             is_hidden_by_default: false,
         },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // A workflow can now be defined against a custom object's own date
     // field - `validate_shape` used to reject this outright since
     // `date_fields_for` only ever recognized a fixed set of built-ins.
     let wf = workflow_service::create_rule(
-        &conn, &ws,
+        &conn,
+        &ws,
         &WorkflowDefinitionInput {
             app_id: None,
-            entity_type: lease.key.clone(), name: "Lease renewal reminder".into(), description: None,
-            trigger_type: "date_reached".into(), trigger_status: None, trigger_field_key: Some(renewal_date.key.clone()),
-            trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
+            entity_type: lease.key.clone(),
+            name: "Lease renewal reminder".into(),
+            description: None,
+            trigger_type: "date_reached".into(),
+            trigger_status: None,
+            trigger_field_key: Some(renewal_date.key.clone()),
+            trigger_field_source: "custom".into(),
+            trigger_offset_days: 0,
+            match_type: "all".into(),
+            priority: 0,
             conditions: vec![],
             actions: vec![WorkflowActionInput {
                 action_type: "add_notification".into(),
-                params_json: serde_json::json!({"message": "Lease renewal is due", "audience": "all_admins"}).to_string(),
+                params_json:
+                    serde_json::json!({"message": "Lease renewal is due", "audience": "all_admins"})
+                        .to_string(),
             }],
         },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let lease_1 = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Lease One".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: lease.key.clone(),
+            primary_name: "Lease One".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     // Past due - matches on_or_before(today + 0).
-    let yesterday = (chrono::Utc::now() - chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+    let yesterday = (chrono::Utc::now() - chrono::Duration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
     custom_field_service::set_entity_values(
-        &conn, &lease.key, &lease_1.id,
+        &conn,
+        &lease.key,
+        &lease_1.id,
         &std::collections::HashMap::from([(renewal_date.key.clone(), yesterday)]),
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let fired = workflow_service::run_scheduled(&conn, &ws, Some(&admin)).unwrap();
     assert_eq!(fired, 1);
 
     let notifications = notification_repo::list_for_user(&conn, &ws, &admin, false).unwrap();
-    assert!(notifications.iter().any(|n| n.message.contains("Lease renewal is due")));
+    assert!(notifications
+        .iter()
+        .any(|n| n.message.contains("Lease renewal is due")));
 
     // Re-running doesn't refire for the same record/workflow pair.
     let fired_again = workflow_service::run_scheduled(&conn, &ws, Some(&admin)).unwrap();
@@ -143,17 +232,47 @@ fn date_reached_workflow_fires_for_a_custom_objects_own_date_field() {
 #[test]
 fn workflow_creates_a_follow_up_task_when_opportunity_stage_matches() {
     let (conn, ws, admin) = setup_workspace();
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)), Some(&admin)).unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Send onboarding kit", 3, None),
+        ),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "New", None),
+        Some(&admin),
+    )
+    .unwrap();
 
     // Moving through an intermediate stage must not fire the "Won" workflow.
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Proposal", None), Some(&admin)).unwrap();
-    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().is_empty());
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Proposal", None),
+        Some(&admin),
+    )
+    .unwrap();
+    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id)
+        .unwrap()
+        .is_empty());
 
     // Reaching Won fires it exactly once.
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Won", None),
+        Some(&admin),
+    )
+    .unwrap();
     let tasks = task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].title, "Send onboarding kit");
@@ -164,27 +283,86 @@ fn workflow_creates_a_follow_up_task_when_opportunity_stage_matches() {
 #[test]
 fn re_saving_without_changing_stage_does_not_refire_the_workflow() {
     let (conn, ws, admin) = setup_workspace();
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)), Some(&admin)).unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Send onboarding kit", 3, None),
+        ),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
     // create() fires record_created, not status_changed - no task yet.
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
-    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().is_empty());
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "Won", None),
+        Some(&admin),
+    )
+    .unwrap();
+    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id)
+        .unwrap()
+        .is_empty());
 
     // Saving again with the same stage must not create a second task.
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
-    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().is_empty());
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Won", None),
+        Some(&admin),
+    )
+    .unwrap();
+    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id)
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
 fn task_is_assigned_to_the_opportunity_owner_when_the_action_has_no_explicit_assignee() {
     let (conn, ws, admin) = setup_workspace();
-    let rep = user_service::create(&conn, &ws, &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)), Some(&admin)).unwrap();
+    let rep = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Send onboarding kit", 3, None),
+        ),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", Some(&rep.id)), Some(&admin)).unwrap();
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", Some(&rep.id)), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "New", Some(&rep.id)),
+        Some(&admin),
+    )
+    .unwrap();
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Won", Some(&rep.id)),
+        Some(&admin),
+    )
+    .unwrap();
 
     let tasks = task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap();
     assert_eq!(tasks[0].owner_user_id.as_deref(), Some(rep.id.as_str()));
@@ -193,9 +371,26 @@ fn task_is_assigned_to_the_opportunity_owner_when_the_action_has_no_explicit_ass
 #[test]
 fn non_administrator_cannot_define_a_workflow() {
     let (conn, ws, admin) = setup_workspace();
-    let sales_user = user_service::create(&conn, &ws, &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
+    let sales_user = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
-    let err = workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", create_task_action("X", 0, None)), Some(&sales_user.id)).unwrap_err();
+    let err = workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow("Opportunity", "Won", create_task_action("X", 0, None)),
+        Some(&sales_user.id),
+    )
+    .unwrap_err();
     assert!(format!("{err:?}").contains("Only an Administrator"));
 }
 
@@ -211,33 +406,109 @@ fn invalid_trigger_status_for_the_entity_type_is_rejected() {
 #[test]
 fn multiple_matching_workflows_are_additive_not_conflict_resolved() {
     let (conn, ws, admin) = setup_workspace();
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)), Some(&admin)).unwrap();
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", create_task_action("Notify finance", 0, None)), Some(&admin)).unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Send onboarding kit", 3, None),
+        ),
+        Some(&admin),
+    )
+    .unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Notify finance", 0, None),
+        ),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "New", None),
+        Some(&admin),
+    )
+    .unwrap();
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Won", None),
+        Some(&admin),
+    )
+    .unwrap();
 
     let tasks = task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap();
-    assert_eq!(tasks.len(), 2, "both active matching workflows should each create their own task");
+    assert_eq!(
+        tasks.len(),
+        2,
+        "both active matching workflows should each create their own task"
+    );
 }
 
 #[test]
 fn invoice_overdue_transition_fires_a_workflow_assigned_via_the_company_owner() {
     let (conn, ws, admin) = setup_workspace();
-    let rep = user_service::create(&conn, &ws, &NewUser { username: "fin".into(), display_name: "Fin".into(), password: "anothersecretpw".into(), roles: vec!["Finance".into()] }, Some(&admin)).unwrap();
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Invoice", "Overdue", create_task_action("Follow up on payment", 0, None)), Some(&admin)).unwrap();
+    let rep = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "fin".into(),
+            display_name: "Fin".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Finance".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Invoice",
+            "Overdue",
+            create_task_action("Follow up on payment", 0, None),
+        ),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", Some(&rep.id)), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Acme", Some(&rep.id)),
+        Some(&admin),
+    )
+    .unwrap();
     let invoice = invoice_service::create(
         &conn,
         &InvoiceInput {
-            company_id: company.id.clone(), contact_id: None, currency_code: "USD".into(),
-            issue_date: Some("2020-01-01".into()), due_date: Some("2020-01-15".into()), payment_terms: None, notes: None,
-            lines: vec![InvoiceLineInput { product_id: None, description: "Consulting".into(), quantity_milli: 1000, unit_price_cents: 100000, discount_bp: 0, tax_rate_bp: 0 }],
+            company_id: company.id.clone(),
+            contact_id: None,
+            currency_code: "USD".into(),
+            issue_date: Some("2020-01-01".into()),
+            due_date: Some("2020-01-15".into()),
+            payment_terms: None,
+            notes: None,
+            lines: vec![InvoiceLineInput {
+                product_id: None,
+                description: "Consulting".into(),
+                quantity_milli: 1000,
+                unit_price_cents: 100000,
+                discount_bp: 0,
+                tax_rate_bp: 0,
+            }],
         },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     invoice_service::issue(&conn, &invoice.invoice.id, Some(&admin)).unwrap();
 
     let updated_count = invoice_service::refresh_overdue(&conn, &ws).unwrap();
@@ -254,32 +525,77 @@ fn record_created_trigger_fires_on_creation_but_not_on_update() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
         app_id: None,
-        entity_type: "Company".into(), name: "Welcome new company".into(), description: None,
-        trigger_type: "record_created".into(), trigger_status: None, trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
-        match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![create_task_action("Send welcome email", 0, None)],
+        entity_type: "Company".into(),
+        name: "Welcome new company".into(),
+        description: None,
+        trigger_type: "record_created".into(),
+        trigger_status: None,
+        trigger_field_key: None,
+        trigger_field_source: "custom".into(),
+        trigger_offset_days: 0,
+        match_type: "all".into(),
+        priority: 0,
+        conditions: vec![],
+        actions: vec![create_task_action("Send welcome email", 0, None)],
     };
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
     let tasks = task_service::list_by_related(&conn, "Company", &company.id).unwrap();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].title, "Send welcome email");
 
     // Updating the same company again must not re-fire record_created.
-    company_service::update(&conn, &company.id, &company_input("Acme Renamed", None), Some(&admin)).unwrap();
-    assert_eq!(task_service::list_by_related(&conn, "Company", &company.id).unwrap().len(), 1);
+    company_service::update(
+        &conn,
+        &company.id,
+        &company_input("Acme Renamed", None),
+        Some(&admin),
+    )
+    .unwrap();
+    assert_eq!(
+        task_service::list_by_related(&conn, "Company", &company.id)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
 fn add_notification_action_notifies_the_records_owner() {
     let (conn, ws, admin) = setup_workspace();
-    let rep = user_service::create(&conn, &ws, &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
+    let rep = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
     let wf = WorkflowDefinitionInput {
         app_id: None,
-        entity_type: "Company".into(), name: "Notify owner on Prospect".into(), description: None,
-        trigger_type: "status_changed".into(), trigger_status: Some("Prospect".into()), trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
-        match_type: "all".into(), priority: 0, conditions: vec![],
-        actions: vec![WorkflowActionInput { action_type: "add_notification".into(), params_json: serde_json::json!({"message": "New prospect assigned", "audience": "owner"}).to_string() }],
+        entity_type: "Company".into(),
+        name: "Notify owner on Prospect".into(),
+        description: None,
+        trigger_type: "status_changed".into(),
+        trigger_status: Some("Prospect".into()),
+        trigger_field_key: None,
+        trigger_field_source: "custom".into(),
+        trigger_offset_days: 0,
+        match_type: "all".into(),
+        priority: 0,
+        conditions: vec![],
+        actions: vec![WorkflowActionInput {
+            action_type: "add_notification".into(),
+            params_json:
+                serde_json::json!({"message": "New prospect assigned", "audience": "owner"})
+                    .to_string(),
+        }],
     };
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
@@ -303,22 +619,56 @@ fn test_business_rules_style_recursion_guard_bounds_a_self_referential_workflow_
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
         app_id: None,
-        entity_type: "Task".into(), name: "On task update, log a follow-up".into(), description: None,
-        trigger_type: "record_updated".into(), trigger_status: None, trigger_field_key: None, trigger_field_source: "custom".into(), trigger_offset_days: 0,
-        match_type: "all".into(), priority: 0, conditions: vec![], actions: vec![create_task_action("Follow-up", 0, None)],
+        entity_type: "Task".into(),
+        name: "On task update, log a follow-up".into(),
+        description: None,
+        trigger_type: "record_updated".into(),
+        trigger_status: None,
+        trigger_field_key: None,
+        trigger_field_source: "custom".into(),
+        trigger_offset_days: 0,
+        match_type: "all".into(),
+        priority: 0,
+        conditions: vec![],
+        actions: vec![create_task_action("Follow-up", 0, None)],
     };
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
     let task = task_service::create(
-        &conn, &ws,
-        &lanesra_core::models::task::TaskInput { title: "Original".into(), description: None, owner_user_id: None, priority: "Normal".into(), status: "Not Started".into(), due_date: None, reminder_at: None, related_type: None, related_id: None },
+        &conn,
+        &ws,
+        &lanesra_core::models::task::TaskInput {
+            title: "Original".into(),
+            description: None,
+            owner_user_id: None,
+            priority: "Normal".into(),
+            status: "Not Started".into(),
+            due_date: None,
+            reminder_at: None,
+            related_type: None,
+            related_id: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     task_service::update(
-        &conn, &task.id, &ws,
-        &lanesra_core::models::task::TaskInput { title: "Original".into(), description: None, owner_user_id: None, priority: "Normal".into(), status: "In Progress".into(), due_date: None, reminder_at: None, related_type: None, related_id: None },
+        &conn,
+        &task.id,
+        &ws,
+        &lanesra_core::models::task::TaskInput {
+            title: "Original".into(),
+            description: None,
+            owner_user_id: None,
+            priority: "Normal".into(),
+            status: "In Progress".into(),
+            due_date: None,
+            reminder_at: None,
+            related_type: None,
+            related_id: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Exactly one follow-up task was created by the workflow (the new
     // task's own creation is record_created, which this workflow doesn't
@@ -334,28 +684,54 @@ fn field_changed_trigger_fires_when_a_builtin_field_changes() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
         app_id: None,
-        entity_type: "Opportunity".into(), name: "Next step set".into(), description: None,
-        trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("next_step".into()),
-        trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
-        conditions: vec![], actions: vec![create_task_action("Chase next step", 1, None)],
+        entity_type: "Opportunity".into(),
+        name: "Next step set".into(),
+        description: None,
+        trigger_type: "field_changed".into(),
+        trigger_status: None,
+        trigger_field_key: Some("next_step".into()),
+        trigger_field_source: "builtin".into(),
+        trigger_offset_days: 0,
+        match_type: "all".into(),
+        priority: 0,
+        conditions: vec![],
+        actions: vec![create_task_action("Chase next step", 1, None)],
     };
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
-    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().is_empty());
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "New", None),
+        Some(&admin),
+    )
+    .unwrap();
+    assert!(task_service::list_by_related(&conn, "Opportunity", &opp.id)
+        .unwrap()
+        .is_empty());
 
     let mut input = opportunity_input(&company.id, "New", None);
     input.next_step = Some("Send proposal".into());
     opportunity_service::update(&conn, &opp.id, &input, Some(&admin)).unwrap();
-    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+    assert_eq!(
+        task_service::list_by_related(&conn, "Opportunity", &opp.id)
+            .unwrap()
+            .len(),
+        1
+    );
 
     // Re-saving with the same next_step must not refire the workflow -
     // same "no-op unless the value actually changed" guarantee the
     // status_changed trigger already has, now for field_changed on a
     // built-in field too.
     opportunity_service::update(&conn, &opp.id, &input, Some(&admin)).unwrap();
-    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+    assert_eq!(
+        task_service::list_by_related(&conn, "Opportunity", &opp.id)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -365,13 +741,32 @@ fn update_field_action_can_set_a_builtin_money_field() {
         action_type: "update_field".into(),
         params_json: serde_json::json!({
             "target_field_key": "value", "target_field_source": "builtin", "value": "999.99",
-        }).to_string(),
+        })
+        .to_string(),
     };
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow("Opportunity", "Won", action),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "New", None),
+        Some(&admin),
+    )
+    .unwrap();
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Won", None),
+        Some(&admin),
+    )
+    .unwrap();
 
     let reloaded = opportunity_service::get(&conn, &opp.id).unwrap();
     assert_eq!(reloaded.value_cents, 99_999);
@@ -384,13 +779,32 @@ fn set_default_field_action_only_fills_the_target_when_it_is_currently_empty() {
         action_type: "set_default_field".into(),
         params_json: serde_json::json!({
             "target_field_key": "next_step", "target_field_source": "builtin", "value": "Follow up",
-        }).to_string(),
+        })
+        .to_string(),
     };
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow("Opportunity", "Won", action),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", None), Some(&admin)).unwrap();
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "New", None),
+        Some(&admin),
+    )
+    .unwrap();
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Won", None),
+        Some(&admin),
+    )
+    .unwrap();
 
     let reloaded = opportunity_service::get(&conn, &opp.id).unwrap();
     assert_eq!(reloaded.next_step.as_deref(), Some("Follow up"));
@@ -403,11 +817,19 @@ fn set_default_field_action_leaves_an_existing_value_untouched() {
         action_type: "set_default_field".into(),
         params_json: serde_json::json!({
             "target_field_key": "next_step", "target_field_source": "builtin", "value": "Follow up",
-        }).to_string(),
+        })
+        .to_string(),
     };
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow("Opportunity", "Won", action),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
     let mut input = opportunity_input(&company.id, "New", None);
     input.next_step = Some("Already set".into());
     let opp = opportunity_service::create(&conn, &input, Some(&admin)).unwrap();
@@ -426,11 +848,19 @@ fn clear_field_action_always_writes_empty_even_when_a_value_exists() {
         action_type: "clear_field".into(),
         params_json: serde_json::json!({
             "target_field_key": "next_step", "target_field_source": "builtin",
-        }).to_string(),
+        })
+        .to_string(),
     };
-    workflow_service::create_rule(&conn, &ws, &status_changed_workflow("Opportunity", "Won", action), Some(&admin)).unwrap();
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &status_changed_workflow("Opportunity", "Won", action),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
     let mut input = opportunity_input(&company.id, "New", None);
     input.next_step = Some("Old note".into());
     let opp = opportunity_service::create(&conn, &input, Some(&admin)).unwrap();
@@ -447,10 +877,18 @@ fn field_changed_trigger_rejects_a_non_active_builtin_field() {
     let (conn, ws, admin) = setup_workspace();
     let wf = WorkflowDefinitionInput {
         app_id: None,
-        entity_type: "Opportunity".into(), name: "Bogus field".into(), description: None,
-        trigger_type: "field_changed".into(), trigger_status: None, trigger_field_key: Some("not_a_real_field".into()),
-        trigger_field_source: "builtin".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 0,
-        conditions: vec![], actions: vec![create_task_action("Chase", 1, None)],
+        entity_type: "Opportunity".into(),
+        name: "Bogus field".into(),
+        description: None,
+        trigger_type: "field_changed".into(),
+        trigger_status: None,
+        trigger_field_key: Some("not_a_real_field".into()),
+        trigger_field_source: "builtin".into(),
+        trigger_offset_days: 0,
+        match_type: "all".into(),
+        priority: 0,
+        conditions: vec![],
+        actions: vec![create_task_action("Chase", 1, None)],
     };
     let err = workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").contains("not a built-in field"));
@@ -462,14 +900,25 @@ fn field_changed_trigger_rejects_a_non_active_builtin_field() {
 #[test]
 fn workflow_extra_condition_supports_the_starts_with_operator() {
     let (conn, ws, admin) = setup_workspace();
-    let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Follow up", 0, None));
+    let mut wf = status_changed_workflow(
+        "Opportunity",
+        "Won",
+        create_task_action("Follow up", 0, None),
+    );
     wf.conditions = vec![WorkflowConditionInput {
-        field_source: "builtin".into(), field_key: "next_step".into(), operator: "starts_with".into(), value: "Send".into(),
-        compare_field_source: None, compare_field_key: None, group_id: None, relationship_definition_id: None,
+        field_source: "builtin".into(),
+        field_key: "next_step".into(),
+        operator: "starts_with".into(),
+        value: "Send".into(),
+        compare_field_source: None,
+        compare_field_key: None,
+        group_id: None,
+        relationship_definition_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
 
     let mut matching = opportunity_input(&company.id, "New", None);
     matching.next_step = Some("Send proposal".into());
@@ -477,7 +926,12 @@ fn workflow_extra_condition_supports_the_starts_with_operator() {
     matching.stage = "Won".into();
     matching.status = "Won".into();
     opportunity_service::update(&conn, &opp.id, &matching, Some(&admin)).unwrap();
-    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+    assert_eq!(
+        task_service::list_by_related(&conn, "Opportunity", &opp.id)
+            .unwrap()
+            .len(),
+        1
+    );
 
     let mut non_matching = opportunity_input(&company.id, "New", None);
     non_matching.next_step = Some("Call client".into());
@@ -485,20 +939,32 @@ fn workflow_extra_condition_supports_the_starts_with_operator() {
     non_matching.stage = "Won".into();
     non_matching.status = "Won".into();
     opportunity_service::update(&conn, &opp2.id, &non_matching, Some(&admin)).unwrap();
-    assert!(task_service::list_by_related(&conn, "Opportunity", &opp2.id).unwrap().is_empty());
+    assert!(
+        task_service::list_by_related(&conn, "Opportunity", &opp2.id)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
 fn workflow_extra_condition_supports_field_to_field_comparison() {
     let (conn, ws, admin) = setup_workspace();
-    let mut wf = status_changed_workflow("Opportunity", "Won", create_task_action("Review", 0, None));
+    let mut wf =
+        status_changed_workflow("Opportunity", "Won", create_task_action("Review", 0, None));
     wf.conditions = vec![WorkflowConditionInput {
-        field_source: "builtin".into(), field_key: "next_step".into(), operator: "equals".into(), value: String::new(),
-        compare_field_source: Some("builtin".into()), compare_field_key: Some("lost_reason".into()), group_id: None, relationship_definition_id: None,
+        field_source: "builtin".into(),
+        field_key: "next_step".into(),
+        operator: "equals".into(),
+        value: String::new(),
+        compare_field_source: Some("builtin".into()),
+        compare_field_key: Some("lost_reason".into()),
+        group_id: None,
+        relationship_definition_id: None,
     }];
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme", None), Some(&admin)).unwrap();
 
     // Both empty (equal) - condition matches, task fires.
     let mut matching = opportunity_input(&company.id, "New", None);
@@ -508,7 +974,12 @@ fn workflow_extra_condition_supports_field_to_field_comparison() {
     matching.stage = "Won".into();
     matching.status = "Won".into();
     opportunity_service::update(&conn, &opp.id, &matching, Some(&admin)).unwrap();
-    assert_eq!(task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap().len(), 1);
+    assert_eq!(
+        task_service::list_by_related(&conn, "Opportunity", &opp.id)
+            .unwrap()
+            .len(),
+        1
+    );
 
     // Different values - condition doesn't match, no task.
     let mut differing = opportunity_input(&company.id, "New", None);
@@ -518,7 +989,11 @@ fn workflow_extra_condition_supports_field_to_field_comparison() {
     differing.stage = "Won".into();
     differing.status = "Won".into();
     opportunity_service::update(&conn, &opp2.id, &differing, Some(&admin)).unwrap();
-    assert!(task_service::list_by_related(&conn, "Opportunity", &opp2.id).unwrap().is_empty());
+    assert!(
+        task_service::list_by_related(&conn, "Opportunity", &opp2.id)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 // --- Admin UX polish (spec §10) ------------------------------------------
@@ -527,10 +1002,16 @@ fn workflow_extra_condition_supports_field_to_field_comparison() {
 fn duplicate_workflow_rule_copies_trigger_and_actions_as_an_inactive_named_draft() {
     let (conn, ws, admin) = setup_workspace();
     let original = workflow_service::create_rule(
-        &conn, &ws,
-        &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)),
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Send onboarding kit", 3, None),
+        ),
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     assert!(original.is_active);
 
     let copy = workflow_service::duplicate_rule(&conn, &original.id, Some(&admin)).unwrap();
@@ -550,19 +1031,35 @@ fn duplicate_workflow_rule_copies_trigger_and_actions_as_an_inactive_named_draft
 fn updating_a_workflow_snapshots_its_prior_state_and_a_version_can_be_restored() {
     let (conn, ws, admin) = setup_workspace();
     let wf = workflow_service::create_rule(
-        &conn, &ws,
-        &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)),
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Send onboarding kit", 3, None),
+        ),
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Nothing's been edited yet - no history to show.
-    assert!(workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap().is_empty());
+    assert!(workflow_service::list_versions(&conn, &wf.id, Some(&admin))
+        .unwrap()
+        .is_empty());
 
     let update = WorkflowDefinitionUpdate {
         app_id: None,
-        name: "Renamed workflow".into(), description: None, trigger_status: Some("Lost".into()), trigger_field_key: None,
-        trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: 1, is_active: true,
-        conditions: vec![], actions: vec![create_task_action("Send onboarding kit", 3, None)],
+        name: "Renamed workflow".into(),
+        description: None,
+        trigger_status: Some("Lost".into()),
+        trigger_field_key: None,
+        trigger_field_source: "custom".into(),
+        trigger_offset_days: 0,
+        match_type: "all".into(),
+        priority: 1,
+        is_active: true,
+        conditions: vec![],
+        actions: vec![create_task_action("Send onboarding kit", 3, None)],
     };
     workflow_service::update_rule(&conn, &wf.id, &update, Some(&admin)).unwrap();
 
@@ -570,41 +1067,75 @@ fn updating_a_workflow_snapshots_its_prior_state_and_a_version_can_be_restored()
     assert_eq!(versions.len(), 1);
     assert_eq!(versions[0].snapshot.trigger_status.as_deref(), Some("Won")); // the pre-edit trigger
 
-    let restored = workflow_service::restore_version(&conn, &wf.id, &versions[0].id, Some(&admin)).unwrap();
+    let restored =
+        workflow_service::restore_version(&conn, &wf.id, &versions[0].id, Some(&admin)).unwrap();
     assert_eq!(restored.trigger_status.as_deref(), Some("Won"));
 
     // Restoring itself snapshots the state it just replaced - a restore is
     // never a dead end.
-    assert_eq!(workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap().len(), 2);
+    assert_eq!(
+        workflow_service::list_versions(&conn, &wf.id, Some(&admin))
+            .unwrap()
+            .len(),
+        2
+    );
 }
 
 #[test]
 fn workflow_version_history_is_pruned_to_the_most_recent_ten() {
     let (conn, ws, admin) = setup_workspace();
     let wf = workflow_service::create_rule(
-        &conn, &ws,
-        &status_changed_workflow("Opportunity", "Won", create_task_action("Send onboarding kit", 3, None)),
+        &conn,
+        &ws,
+        &status_changed_workflow(
+            "Opportunity",
+            "Won",
+            create_task_action("Send onboarding kit", 3, None),
+        ),
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     for i in 0..12 {
         let update = WorkflowDefinitionUpdate {
             app_id: None,
-            name: format!("Workflow v{i}"), description: None, trigger_status: Some("Won".into()), trigger_field_key: None,
-            trigger_field_source: "custom".into(), trigger_offset_days: 0, match_type: "all".into(), priority: i, is_active: true,
-            conditions: vec![], actions: vec![create_task_action("Send onboarding kit", 3, None)],
+            name: format!("Workflow v{i}"),
+            description: None,
+            trigger_status: Some("Won".into()),
+            trigger_field_key: None,
+            trigger_field_source: "custom".into(),
+            trigger_offset_days: 0,
+            match_type: "all".into(),
+            priority: i,
+            is_active: true,
+            conditions: vec![],
+            actions: vec![create_task_action("Send onboarding kit", 3, None)],
         };
         workflow_service::update_rule(&conn, &wf.id, &update, Some(&admin)).unwrap();
     }
 
-    assert_eq!(workflow_service::list_versions(&conn, &wf.id, Some(&admin)).unwrap().len(), 10);
+    assert_eq!(
+        workflow_service::list_versions(&conn, &wf.id, Some(&admin))
+            .unwrap()
+            .len(),
+        10
+    );
 }
 
 #[test]
 fn describe_active_workflows_referencing_field_finds_trigger_and_action_references() {
     let (conn, ws, admin) = setup_workspace();
 
-    assert!(workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "next_step").unwrap().is_empty());
+    assert!(
+        workflow_service::describe_active_workflows_referencing_field(
+            &conn,
+            &ws,
+            "Opportunity",
+            "next_step"
+        )
+        .unwrap()
+        .is_empty()
+    );
 
     let wf = WorkflowDefinitionInput {
         app_id: None,
@@ -619,13 +1150,34 @@ fn describe_active_workflows_referencing_field_finds_trigger_and_action_referenc
     };
     workflow_service::create_rule(&conn, &ws, &wf, Some(&admin)).unwrap();
 
-    let via_trigger = workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "next_step").unwrap();
+    let via_trigger = workflow_service::describe_active_workflows_referencing_field(
+        &conn,
+        &ws,
+        "Opportunity",
+        "next_step",
+    )
+    .unwrap();
     assert_eq!(via_trigger.len(), 1);
     assert!(via_trigger[0].contains("Workflow"));
 
-    let via_action = workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "value").unwrap();
+    let via_action = workflow_service::describe_active_workflows_referencing_field(
+        &conn,
+        &ws,
+        "Opportunity",
+        "value",
+    )
+    .unwrap();
     assert_eq!(via_action.len(), 1);
 
     // An unrelated field has no dependents.
-    assert!(workflow_service::describe_active_workflows_referencing_field(&conn, &ws, "Opportunity", "stage").unwrap().is_empty());
+    assert!(
+        workflow_service::describe_active_workflows_referencing_field(
+            &conn,
+            &ws,
+            "Opportunity",
+            "stage"
+        )
+        .unwrap()
+        .is_empty()
+    );
 }

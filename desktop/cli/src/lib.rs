@@ -24,10 +24,18 @@ pub fn run(cli: Cli) -> i32 {
         Command::Limits => client.get("/api/v1/limits"),
         Command::Objects { command } => match command {
             ObjectsCommand::List => client.get("/api/v1/objects"),
-            ObjectsCommand::Metadata { object_key } => client.get(&format!("/api/v1/objects/{object_key}/metadata")),
+            ObjectsCommand::Metadata { object_key } => {
+                client.get(&format!("/api/v1/objects/{object_key}/metadata"))
+            }
         },
         Command::Records { command } => match command {
-            RecordsCommand::List { object_key, filter, sort, page, page_size } => {
+            RecordsCommand::List {
+                object_key,
+                filter,
+                sort,
+                page,
+                page_size,
+            } => {
                 let mut query: Vec<(&str, String)> = Vec::new();
                 if let Some(f) = filter {
                     query.push(("filter", f));
@@ -43,16 +51,26 @@ pub fn run(cli: Cli) -> i32 {
                 }
                 client.get_with_query(&format!("/api/v1/objects/{object_key}/records"), &query)
             }
-            RecordsCommand::Get { object_key, id } => client.get(&format!("/api/v1/objects/{object_key}/records/{id}")),
+            RecordsCommand::Get { object_key, id } => {
+                client.get(&format!("/api/v1/objects/{object_key}/records/{id}"))
+            }
             RecordsCommand::Create { object_key, data } => match parse_data(&data) {
                 Ok(body) => client.post(&format!("/api/v1/objects/{object_key}/records"), &body),
                 Err(code) => return code,
             },
-            RecordsCommand::Update { object_key, id, data } => match parse_data(&data) {
-                Ok(body) => client.patch(&format!("/api/v1/objects/{object_key}/records/{id}"), &body),
+            RecordsCommand::Update {
+                object_key,
+                id,
+                data,
+            } => match parse_data(&data) {
+                Ok(body) => {
+                    client.patch(&format!("/api/v1/objects/{object_key}/records/{id}"), &body)
+                }
                 Err(code) => return code,
             },
-            RecordsCommand::Archive { object_key, id } => client.delete(&format!("/api/v1/objects/{object_key}/records/{id}")),
+            RecordsCommand::Archive { object_key, id } => {
+                client.delete(&format!("/api/v1/objects/{object_key}/records/{id}"))
+            }
         },
     };
 
@@ -69,7 +87,8 @@ fn parse_data(data: &str) -> Result<Value, i32> {
 fn print_result(result: Result<ApiResponse, String>) -> i32 {
     match result {
         Ok(response) => {
-            let pretty = serde_json::to_string_pretty(&response.body).unwrap_or_else(|_| response.body.to_string());
+            let pretty = serde_json::to_string_pretty(&response.body)
+                .unwrap_or_else(|_| response.body.to_string());
             if response.status.is_success() {
                 println!("{pretty}");
                 0

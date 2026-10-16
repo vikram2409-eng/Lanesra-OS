@@ -1,10 +1,10 @@
 use tauri::State;
 
 use crate::commands::require_workspace_id;
+use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::dashboard::DashboardSummary;
 use lanesra_core::services::dashboard_service;
-use crate::state::AppState;
 
 #[tauri::command]
 pub fn dashboard_summary(state: State<AppState>) -> AppResult<DashboardSummary> {

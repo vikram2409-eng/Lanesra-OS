@@ -15,8 +15,15 @@ use serde::{Deserialize, Serialize};
 ///   meaningful multi-state transition concept (same reason it's already
 ///   excluded from `workflow::CORE_WORKFLOW_ENTITY_TYPES`).
 /// - Custom objects, deferred to a later phase.
-pub const TRANSITION_ENTITY_TYPES: &[&str] =
-    &["Company", "Contact", "Opportunity", "Quote", "Order", "Contract", "Task"];
+pub const TRANSITION_ENTITY_TYPES: &[&str] = &[
+    "Company",
+    "Contact",
+    "Opportunity",
+    "Quote",
+    "Order",
+    "Contract",
+    "Task",
+];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct StatusTransition {

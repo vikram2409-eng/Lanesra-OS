@@ -6,7 +6,9 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::domain::ids::{new_uuid, now_iso};
-use crate::models::test_eval::{TestCaseDefinition, TestCaseDefinitionInput, TestRun, TestRunCaseResult};
+use crate::models::test_eval::{
+    TestCaseDefinition, TestCaseDefinitionInput, TestRun, TestRunCaseResult,
+};
 
 fn map_case_row(row: &rusqlite::Row) -> rusqlite::Result<TestCaseDefinition> {
     Ok(TestCaseDefinition {
@@ -27,7 +29,13 @@ fn map_case_row(row: &rusqlite::Row) -> rusqlite::Result<TestCaseDefinition> {
     })
 }
 
-pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &TestCaseDefinitionInput, actor_user_id: Option<&str>) -> rusqlite::Result<TestCaseDefinition> {
+pub fn create(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &TestCaseDefinitionInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<TestCaseDefinition> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO test_case_definitions (id, workspace_id, name, description, test_type, target_id, dataset_json, cost_threshold_usd, latency_threshold_ms, is_active, created_at, created_by, updated_at, updated_by)
@@ -40,7 +48,12 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &TestCaseD
     get(conn, id).map(|c| c.expect("just inserted"))
 }
 
-pub fn update(conn: &Connection, id: &str, input: &TestCaseDefinitionInput, actor_user_id: Option<&str>) -> rusqlite::Result<TestCaseDefinition> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &TestCaseDefinitionInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<TestCaseDefinition> {
     let now = now_iso();
     conn.execute(
         "UPDATE test_case_definitions SET name = ?1, description = ?2, test_type = ?3, target_id = ?4, dataset_json = ?5,
@@ -51,7 +64,12 @@ pub fn update(conn: &Connection, id: &str, input: &TestCaseDefinitionInput, acto
     get(conn, id).map(|c| c.expect("just updated"))
 }
 
-pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn set_active(
+    conn: &Connection,
+    id: &str,
+    is_active: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute("UPDATE test_case_definitions SET is_active = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4", params![is_active, now_iso(), actor_user_id, id])?;
     Ok(())
 }
@@ -62,28 +80,50 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<TestCaseDefinition>> {
-    conn.query_row("SELECT * FROM test_case_definitions WHERE id = ?1", [id], map_case_row).optional()
+    conn.query_row(
+        "SELECT * FROM test_case_definitions WHERE id = ?1",
+        [id],
+        map_case_row,
+    )
+    .optional()
 }
 
 pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<TestCaseDefinition>> {
-    let mut stmt = conn.prepare("SELECT * FROM test_case_definitions WHERE workspace_id = ?1 ORDER BY name")?;
-    let rows: rusqlite::Result<Vec<TestCaseDefinition>> = stmt.query_map([workspace_id], map_case_row)?.collect();
+    let mut stmt =
+        conn.prepare("SELECT * FROM test_case_definitions WHERE workspace_id = ?1 ORDER BY name")?;
+    let rows: rusqlite::Result<Vec<TestCaseDefinition>> =
+        stmt.query_map([workspace_id], map_case_row)?.collect();
     rows
 }
 
-pub fn get_by_name(conn: &Connection, workspace_id: &str, name: &str) -> rusqlite::Result<Option<TestCaseDefinition>> {
-    conn.query_row("SELECT * FROM test_case_definitions WHERE workspace_id = ?1 AND name = ?2", params![workspace_id, name], map_case_row).optional()
+pub fn get_by_name(
+    conn: &Connection,
+    workspace_id: &str,
+    name: &str,
+) -> rusqlite::Result<Option<TestCaseDefinition>> {
+    conn.query_row(
+        "SELECT * FROM test_case_definitions WHERE workspace_id = ?1 AND name = ?2",
+        params![workspace_id, name],
+        map_case_row,
+    )
+    .optional()
 }
 
 pub fn list_by_ids(conn: &Connection, ids: &[String]) -> rusqlite::Result<Vec<TestCaseDefinition>> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let placeholders = ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect::<Vec<_>>().join(",");
+    let placeholders = ids
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(",");
     let sql = format!("SELECT * FROM test_case_definitions WHERE id IN ({placeholders})");
     let mut stmt = conn.prepare(&sql)?;
     let params: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-    let rows: rusqlite::Result<Vec<TestCaseDefinition>> = stmt.query_map(params.as_slice(), map_case_row)?.collect();
+    let rows: rusqlite::Result<Vec<TestCaseDefinition>> =
+        stmt.query_map(params.as_slice(), map_case_row)?.collect();
     rows
 }
 
@@ -123,8 +163,12 @@ fn map_run_row(row: &rusqlite::Row) -> rusqlite::Result<TestRun> {
     })
 }
 
-pub fn list_case_results(conn: &Connection, run_id: &str) -> rusqlite::Result<Vec<TestRunCaseResult>> {
-    let mut stmt = conn.prepare("SELECT * FROM test_run_case_results WHERE run_id = ?1 ORDER BY rowid")?;
+pub fn list_case_results(
+    conn: &Connection,
+    run_id: &str,
+) -> rusqlite::Result<Vec<TestRunCaseResult>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM test_run_case_results WHERE run_id = ?1 ORDER BY rowid")?;
     let rows = stmt.query_map([run_id], map_result_row)?.collect();
     rows
 }
@@ -137,7 +181,13 @@ fn hydrate_run(conn: &Connection, mut run: TestRun) -> rusqlite::Result<TestRun>
 /// Starts a run row up front (mirrors `ai_eval_repo::start_run`'s own
 /// "insert now, finish later" shape) so a run interrupted mid-way still
 /// leaves a record rather than silently vanishing.
-pub fn start_run(conn: &Connection, id: &str, workspace_id: &str, solution_id: Option<&str>, triggered_by: &str) -> rusqlite::Result<()> {
+pub fn start_run(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    solution_id: Option<&str>,
+    triggered_by: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO test_runs (id, workspace_id, solution_id, status, triggered_by, started_at) VALUES (?1, ?2, ?3, 'running', ?4, ?5)",
         params![id, workspace_id, solution_id, triggered_by, now_iso()],
@@ -167,7 +217,12 @@ pub fn append_case_result(
     Ok(())
 }
 
-pub fn finish_run(conn: &Connection, id: &str, passed_count: i64, failed_count: i64) -> rusqlite::Result<()> {
+pub fn finish_run(
+    conn: &Connection,
+    id: &str,
+    passed_count: i64,
+    failed_count: i64,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE test_runs SET status = 'completed', passed_count = ?1, failed_count = ?2, finished_at = ?3 WHERE id = ?4",
         params![passed_count, failed_count, now_iso(), id],
@@ -176,18 +231,36 @@ pub fn finish_run(conn: &Connection, id: &str, passed_count: i64, failed_count: 
 }
 
 pub fn get_run(conn: &Connection, id: &str) -> rusqlite::Result<Option<TestRun>> {
-    let row = conn.query_row("SELECT * FROM test_runs WHERE id = ?1", [id], map_run_row).optional()?;
+    let row = conn
+        .query_row("SELECT * FROM test_runs WHERE id = ?1", [id], map_run_row)
+        .optional()?;
     row.map(|r| hydrate_run(conn, r)).transpose()
 }
 
-pub fn list_runs_for_workspace(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<TestRun>> {
-    let mut stmt = conn.prepare("SELECT * FROM test_runs WHERE workspace_id = ?1 ORDER BY started_at DESC LIMIT ?2")?;
-    let rows: Vec<TestRun> = stmt.query_map(params![workspace_id, limit], map_run_row)?.collect::<rusqlite::Result<_>>()?;
+pub fn list_runs_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<TestRun>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM test_runs WHERE workspace_id = ?1 ORDER BY started_at DESC LIMIT ?2",
+    )?;
+    let rows: Vec<TestRun> = stmt
+        .query_map(params![workspace_id, limit], map_run_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate_run(conn, r)).collect()
 }
 
-pub fn list_runs_for_solution(conn: &Connection, solution_id: &str, limit: i64) -> rusqlite::Result<Vec<TestRun>> {
-    let mut stmt = conn.prepare("SELECT * FROM test_runs WHERE solution_id = ?1 ORDER BY started_at DESC LIMIT ?2")?;
-    let rows: Vec<TestRun> = stmt.query_map(params![solution_id, limit], map_run_row)?.collect::<rusqlite::Result<_>>()?;
+pub fn list_runs_for_solution(
+    conn: &Connection,
+    solution_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<TestRun>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM test_runs WHERE solution_id = ?1 ORDER BY started_at DESC LIMIT ?2",
+    )?;
+    let rows: Vec<TestRun> = stmt
+        .query_map(params![solution_id, limit], map_run_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate_run(conn, r)).collect()
 }

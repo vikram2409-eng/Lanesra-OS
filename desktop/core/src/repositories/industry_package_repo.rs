@@ -6,7 +6,9 @@
 use rusqlite::Connection;
 
 use crate::domain::ids::now_iso;
-use crate::models::industry_package::{AppDependency, AppInstallRun, AppPackage, InstalledApp, PackageArtifact, RecommendedPermission};
+use crate::models::industry_package::{
+    AppDependency, AppInstallRun, AppPackage, InstalledApp, PackageArtifact, RecommendedPermission,
+};
 
 // --- app_packages ----------------------------------------------------------
 
@@ -60,25 +62,47 @@ pub fn insert_package(
 }
 
 pub fn get_package(conn: &Connection, id: &str) -> rusqlite::Result<Option<AppPackage>> {
-    conn.query_row("SELECT * FROM app_packages WHERE id = ?1", [id], map_package)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM app_packages WHERE id = ?1",
+        [id],
+        map_package,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn get_package_by_version(conn: &Connection, workspace_id: &str, package_id: &str, version: &str) -> rusqlite::Result<Option<AppPackage>> {
+pub fn get_package_by_version(
+    conn: &Connection,
+    workspace_id: &str,
+    package_id: &str,
+    version: &str,
+) -> rusqlite::Result<Option<AppPackage>> {
     conn.query_row(
         "SELECT * FROM app_packages WHERE workspace_id = ?1 AND package_id = ?2 AND version = ?3",
         (workspace_id, package_id, version),
         map_package,
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// Every imported version of every package, newest import first - the
 /// Admin -> App Catalog list.
 pub fn list_packages(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AppPackage>> {
-    let mut stmt = conn.prepare("SELECT * FROM app_packages WHERE workspace_id = ?1 ORDER BY imported_at DESC")?;
+    let mut stmt = conn
+        .prepare("SELECT * FROM app_packages WHERE workspace_id = ?1 ORDER BY imported_at DESC")?;
     let rows = stmt.query_map([workspace_id], map_package)?.collect();
     rows
 }
@@ -88,9 +112,15 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> rusqlite::Result<
 /// `manifest_json`, never mutated once imported), so this alone *is* the
 /// Deployment Management "Releases" view for a package: no separate
 /// `solution_releases` table needed, the data was already being kept.
-pub fn list_versions_for_package(conn: &Connection, workspace_id: &str, package_id: &str) -> rusqlite::Result<Vec<AppPackage>> {
+pub fn list_versions_for_package(
+    conn: &Connection,
+    workspace_id: &str,
+    package_id: &str,
+) -> rusqlite::Result<Vec<AppPackage>> {
     let mut stmt = conn.prepare("SELECT * FROM app_packages WHERE workspace_id = ?1 AND package_id = ?2 ORDER BY imported_at ASC")?;
-    let rows = stmt.query_map((workspace_id, package_id), map_package)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, package_id), map_package)?
+        .collect();
     rows
 }
 
@@ -137,7 +167,10 @@ pub fn insert_dependency(
 /// row. Whether each dependency is currently *satisfied* is a
 /// cross-referencing question `industry_package_service` answers, not
 /// this raw join.
-pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(AppDependency, String, String, String)>> {
+pub fn list_dependencies_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<(AppDependency, String, String, String)>> {
     let mut stmt = conn.prepare(
         "SELECT d.id, d.app_package_id, d.dependency_package_id, d.version_constraint, d.is_required,
                 p.package_id AS owner_package_id, p.name AS package_name, p.version AS package_version
@@ -163,7 +196,8 @@ pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) ->
 
 fn map_installed_app(row: &rusqlite::Row) -> rusqlite::Result<InstalledApp> {
     let recommended_json: String = row.get("recommended_permissions_json")?;
-    let recommended_permissions: Vec<RecommendedPermission> = serde_json::from_str(&recommended_json).unwrap_or_default();
+    let recommended_permissions: Vec<RecommendedPermission> =
+        serde_json::from_str(&recommended_json).unwrap_or_default();
     Ok(InstalledApp {
         id: row.get("id")?,
         workspace_id: row.get("workspace_id")?,
@@ -212,23 +246,48 @@ pub fn create_installed_app(
 }
 
 pub fn get_installed_app(conn: &Connection, id: &str) -> rusqlite::Result<Option<InstalledApp>> {
-    conn.query_row("SELECT * FROM installed_apps WHERE id = ?1", [id], map_installed_app)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM installed_apps WHERE id = ?1",
+        [id],
+        map_installed_app,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn get_installed_app_by_package(conn: &Connection, workspace_id: &str, package_id: &str) -> rusqlite::Result<Option<InstalledApp>> {
+pub fn get_installed_app_by_package(
+    conn: &Connection,
+    workspace_id: &str,
+    package_id: &str,
+) -> rusqlite::Result<Option<InstalledApp>> {
     conn.query_row(
         "SELECT * FROM installed_apps WHERE workspace_id = ?1 AND package_id = ?2",
         (workspace_id, package_id),
         map_installed_app,
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_installed_apps(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<InstalledApp>> {
-    let mut stmt = conn.prepare("SELECT * FROM installed_apps WHERE workspace_id = ?1 ORDER BY installed_at DESC")?;
+pub fn list_installed_apps(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<InstalledApp>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM installed_apps WHERE workspace_id = ?1 ORDER BY installed_at DESC",
+    )?;
     let rows = stmt.query_map([workspace_id], map_installed_app)?.collect();
     rows
 }
@@ -237,7 +296,12 @@ pub fn list_installed_apps(conn: &Connection, workspace_id: &str) -> rusqlite::R
 /// reactivate (status='active', clears deactivated_at/by) - the spec's
 /// "default removal behavior is Deactivate App", non-destructive either
 /// direction.
-pub fn set_status(conn: &Connection, id: &str, active: bool, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn set_status(
+    conn: &Connection,
+    id: &str,
+    active: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     let now = now_iso();
     if active {
         conn.execute(
@@ -257,7 +321,12 @@ pub fn set_status(conn: &Connection, id: &str, active: bool, actor_user_id: Opti
 /// successfully applies a newer package version - the one field
 /// `set_status` above doesn't touch, since a deactivate/reactivate never
 /// changes which version is installed.
-pub fn update_installed_version(conn: &Connection, id: &str, version: &str, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn update_installed_version(
+    conn: &Connection,
+    id: &str,
+    version: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     let now = now_iso();
     conn.execute(
         "UPDATE installed_apps SET installed_version = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
@@ -296,8 +365,13 @@ pub fn insert_artifact(
     Ok(())
 }
 
-pub fn list_artifacts(conn: &Connection, installed_app_id: &str) -> rusqlite::Result<Vec<PackageArtifact>> {
-    let mut stmt = conn.prepare("SELECT * FROM package_artifacts WHERE installed_app_id = ?1 ORDER BY created_at")?;
+pub fn list_artifacts(
+    conn: &Connection,
+    installed_app_id: &str,
+) -> rusqlite::Result<Vec<PackageArtifact>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM package_artifacts WHERE installed_app_id = ?1 ORDER BY created_at",
+    )?;
     let rows = stmt.query_map([installed_app_id], map_artifact)?.collect();
     rows
 }
@@ -311,7 +385,10 @@ pub fn list_artifacts(conn: &Connection, installed_app_id: &str) -> rusqlite::Re
 /// `artifact_type` and eyeballing `is_locally_customized` here answers it
 /// directly, where before only `get_installed_detail`'s per-app view
 /// existed.
-pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(PackageArtifact, String, String)>> {
+pub fn list_artifacts_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<(PackageArtifact, String, String)>> {
     let mut stmt = conn.prepare(
         "SELECT a.id, a.installed_app_id, a.artifact_type, a.metadata_id, a.origin_version, a.is_locally_customized, a.created_at,
                 i.name AS installed_app_name, i.package_id AS package_id
@@ -322,7 +399,11 @@ pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> ru
     )?;
     let rows = stmt
         .query_map([workspace_id], |row| {
-            Ok((map_artifact(row)?, row.get::<_, String>("installed_app_name")?, row.get::<_, String>("package_id")?))
+            Ok((
+                map_artifact(row)?,
+                row.get::<_, String>("installed_app_name")?,
+                row.get::<_, String>("package_id")?,
+            ))
         })?
         .collect();
     rows
@@ -367,7 +448,13 @@ pub fn start_run(
 /// transaction (whether that transaction committed or rolled back), so a
 /// failed install still leaves a readable "why it failed" record instead
 /// of the failure itself wiping the evidence.
-pub fn complete_run(conn: &Connection, id: &str, status: &str, error_message: Option<&str>, backup_snapshot_path: Option<&str>) -> rusqlite::Result<()> {
+pub fn complete_run(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    error_message: Option<&str>,
+    backup_snapshot_path: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE app_install_runs SET status = ?1, completed_at = ?2, error_message = ?3, backup_snapshot_path = COALESCE(?4, backup_snapshot_path) WHERE id = ?5",
         rusqlite::params![status, now_iso(), error_message, backup_snapshot_path, id],
@@ -376,7 +463,9 @@ pub fn complete_run(conn: &Connection, id: &str, status: &str, error_message: Op
 }
 
 pub fn list_runs(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AppInstallRun>> {
-    let mut stmt = conn.prepare("SELECT * FROM app_install_runs WHERE workspace_id = ?1 ORDER BY started_at DESC")?;
+    let mut stmt = conn.prepare(
+        "SELECT * FROM app_install_runs WHERE workspace_id = ?1 ORDER BY started_at DESC",
+    )?;
     let rows = stmt.query_map([workspace_id], map_run)?.collect();
     rows
 }

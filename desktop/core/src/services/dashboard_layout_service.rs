@@ -17,7 +17,9 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 use crate::domain::{AppError, AppResult};
-use crate::models::dashboard_layout::{DashboardLayout, DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets};
+use crate::models::dashboard_layout::{
+    DashboardLayout, DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets,
+};
 use crate::repositories::{audit_repo, dashboard_layout_repo, user_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -26,9 +28,14 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 
 /// Per-app scoped automation - see
 /// `business_rule_service::require_valid_app_id`'s identical doc comment.
-fn require_valid_app_id(conn: &Connection, workspace_id: &str, app_id: Option<&str>) -> AppResult<()> {
+fn require_valid_app_id(
+    conn: &Connection,
+    workspace_id: &str,
+    app_id: Option<&str>,
+) -> AppResult<()> {
     let Some(app_id) = app_id else { return Ok(()) };
-    let app = super::app_service::get(conn, app_id).map_err(|_| AppError::Validation("App not found".into()))?;
+    let app = super::app_service::get(conn, app_id)
+        .map_err(|_| AppError::Validation("App not found".into()))?;
     if app.workspace_id != workspace_id {
         return Err(AppError::Validation("App not found".into()));
     }
@@ -70,18 +77,38 @@ fn hydrate(row: (DashboardLayout, String, String, Option<String>)) -> AppResult<
 pub fn list_layouts(conn: &Connection, workspace_id: &str) -> AppResult<Vec<DashboardLayout>> {
     if dashboard_layout_repo::count_for_workspace(conn, workspace_id)? == 0 {
         let id = dashboard_layout_repo::new_id();
-        let draft_json = serde_json::to_string(&empty_widgets()).expect("DashboardWidgets always serializes");
-        dashboard_layout_repo::create(conn, &id, workspace_id, "Default", true, "[]", &draft_json, None, None)?;
+        let draft_json =
+            serde_json::to_string(&empty_widgets()).expect("DashboardWidgets always serializes");
+        dashboard_layout_repo::create(
+            conn,
+            &id,
+            workspace_id,
+            "Default",
+            true,
+            "[]",
+            &draft_json,
+            None,
+            None,
+        )?;
     }
-    dashboard_layout_repo::list(conn, workspace_id)?.into_iter().map(hydrate).collect()
+    dashboard_layout_repo::list(conn, workspace_id)?
+        .into_iter()
+        .map(hydrate)
+        .collect()
 }
 
 pub fn get_layout(conn: &Connection, id: &str) -> AppResult<DashboardLayout> {
-    let row = dashboard_layout_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Dashboard layout".into()))?;
+    let row = dashboard_layout_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Dashboard layout".into()))?;
     hydrate(row)
 }
 
-pub fn create_layout(conn: &Connection, workspace_id: &str, input: &DashboardLayoutInput, actor_user_id: Option<&str>) -> AppResult<DashboardLayout> {
+pub fn create_layout(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &DashboardLayoutInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<DashboardLayout> {
     require_admin(conn, actor_user_id)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Layout name is required".into()));
@@ -89,14 +116,45 @@ pub fn create_layout(conn: &Connection, workspace_id: &str, input: &DashboardLay
     require_valid_app_id(conn, workspace_id, input.app_id.as_deref())?;
     let is_default = dashboard_layout_repo::count_for_workspace(conn, workspace_id)? == 0;
     let id = dashboard_layout_repo::new_id();
-    let draft_json = serde_json::to_string(&seeded_widgets(&input.initial_kpi_keys)).expect("DashboardWidgets always serializes");
-    dashboard_layout_repo::create(conn, &id, workspace_id, input.name.trim(), is_default, "[]", &draft_json, input.app_id.as_deref(), actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "dashboard_layout", &id, actor_user_id)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("dashboard_layout"), Some(&id), &format!("Created dashboard layout '{}'", input.name.trim()), None)?;
+    let draft_json = serde_json::to_string(&seeded_widgets(&input.initial_kpi_keys))
+        .expect("DashboardWidgets always serializes");
+    dashboard_layout_repo::create(
+        conn,
+        &id,
+        workspace_id,
+        input.name.trim(),
+        is_default,
+        "[]",
+        &draft_json,
+        input.app_id.as_deref(),
+        actor_user_id,
+    )?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "dashboard_layout",
+        &id,
+        actor_user_id,
+    )?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("dashboard_layout"),
+        Some(&id),
+        &format!("Created dashboard layout '{}'", input.name.trim()),
+        None,
+    )?;
     get_layout(conn, &id)
 }
 
-pub fn update_layout(conn: &Connection, id: &str, update: &DashboardLayoutUpdate, actor_user_id: Option<&str>) -> AppResult<DashboardLayout> {
+pub fn update_layout(
+    conn: &Connection,
+    id: &str,
+    update: &DashboardLayoutUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<DashboardLayout> {
     require_admin(conn, actor_user_id)?;
     if update.name.trim().is_empty() {
         return Err(AppError::Validation("Layout name is required".into()));
@@ -104,27 +162,66 @@ pub fn update_layout(conn: &Connection, id: &str, update: &DashboardLayoutUpdate
     let existing = get_layout(conn, id)?;
     require_valid_app_id(conn, &existing.workspace_id, update.app_id.as_deref())?;
     let roles_json = serde_json::to_string(&update.roles).expect("Vec<String> always serializes");
-    let draft_json = serde_json::to_string(&update.draft).expect("DashboardWidgets always serializes");
-    dashboard_layout_repo::update_meta_and_draft(conn, id, update.name.trim(), &roles_json, &draft_json, update.app_id.as_deref(), actor_user_id)?;
-    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("dashboard_layout"), Some(id), &format!("Updated dashboard layout '{}'", update.name.trim()), None)?;
+    let draft_json =
+        serde_json::to_string(&update.draft).expect("DashboardWidgets always serializes");
+    dashboard_layout_repo::update_meta_and_draft(
+        conn,
+        id,
+        update.name.trim(),
+        &roles_json,
+        &draft_json,
+        update.app_id.as_deref(),
+        actor_user_id,
+    )?;
+    audit_repo::record(
+        conn,
+        &existing.workspace_id,
+        actor_user_id,
+        "update",
+        Some("dashboard_layout"),
+        Some(id),
+        &format!("Updated dashboard layout '{}'", update.name.trim()),
+        None,
+    )?;
     get_layout(conn, id)
 }
 
-pub fn publish_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<DashboardLayout> {
+pub fn publish_layout(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<DashboardLayout> {
     require_admin(conn, actor_user_id)?;
     let before = get_layout(conn, id)?;
     dashboard_layout_repo::publish(conn, id, actor_user_id)?;
-    audit_repo::record(conn, &before.workspace_id, actor_user_id, "publish", Some("dashboard_layout"), Some(id), &format!("Published dashboard layout '{}'", before.name), None)?;
+    audit_repo::record(
+        conn,
+        &before.workspace_id,
+        actor_user_id,
+        "publish",
+        Some("dashboard_layout"),
+        Some(id),
+        &format!("Published dashboard layout '{}'", before.name),
+        None,
+    )?;
     get_layout(conn, id)
 }
 
-pub fn unpublish_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<DashboardLayout> {
+pub fn unpublish_layout(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<DashboardLayout> {
     require_admin(conn, actor_user_id)?;
     dashboard_layout_repo::unpublish(conn, id, actor_user_id)?;
     get_layout(conn, id)
 }
 
-pub fn revert_layout_draft(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<DashboardLayout> {
+pub fn revert_layout_draft(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<DashboardLayout> {
     require_admin(conn, actor_user_id)?;
     dashboard_layout_repo::revert_draft_to_published(conn, id, actor_user_id)?;
     get_layout(conn, id)
@@ -133,7 +230,11 @@ pub fn revert_layout_draft(conn: &Connection, id: &str, actor_user_id: Option<&s
 /// Moves the Default flag onto `id` - see
 /// `dashboard_layout_repo::clear_default`'s own comment on why this is
 /// two sequential updates.
-pub fn make_default(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<DashboardLayout> {
+pub fn make_default(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<DashboardLayout> {
     require_admin(conn, actor_user_id)?;
     let layout = get_layout(conn, id)?;
     dashboard_layout_repo::clear_default(conn, &layout.workspace_id, id)?;
@@ -153,14 +254,28 @@ pub fn delete_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -
     require_admin(conn, actor_user_id)?;
     let layout = get_layout(conn, id)?;
     if layout.is_default {
-        return Err(AppError::Validation("The default layout can't be deleted - make a different layout the default first".into()));
+        return Err(AppError::Validation(
+            "The default layout can't be deleted - make a different layout the default first"
+                .into(),
+        ));
     }
     let remaining = dashboard_layout_repo::count_for_workspace(conn, &layout.workspace_id)?;
     if remaining <= 1 {
-        return Err(AppError::Validation("The last dashboard layout can't be deleted".into()));
+        return Err(AppError::Validation(
+            "The last dashboard layout can't be deleted".into(),
+        ));
     }
     dashboard_layout_repo::delete(conn, id)?;
-    audit_repo::record(conn, &layout.workspace_id, actor_user_id, "delete", Some("dashboard_layout"), Some(id), &format!("Deleted dashboard layout '{}'", layout.name), None)?;
+    audit_repo::record(
+        conn,
+        &layout.workspace_id,
+        actor_user_id,
+        "delete",
+        Some("dashboard_layout"),
+        Some(id),
+        &format!("Deleted dashboard layout '{}'", layout.name),
+        None,
+    )?;
     Ok(())
 }
 
@@ -175,19 +290,26 @@ pub fn delete_layout(conn: &Connection, id: &str, actor_user_id: Option<&str>) -
 /// same one reasonable tie-break `resolve_effective_layout` picks. No
 /// match (or no roles - an unauthenticated caller) falls back to the
 /// workspace's Default layout's published widgets.
-pub fn resolve_effective_dashboard(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Option<DashboardWidgets>> {
+pub fn resolve_effective_dashboard(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Option<DashboardWidgets>> {
     let actor_roles: Vec<String> = match actor_user_id {
         Some(uid) => user_repo::roles_for_user(conn, uid)?,
         None => Vec::new(),
     };
     let layouts = list_layouts(conn, workspace_id)?;
-    let claimed = layouts
-        .iter()
-        .find(|l| !l.is_default && l.published.is_some() && l.roles.iter().any(|r| actor_roles.contains(r)));
+    let claimed = layouts.iter().find(|l| {
+        !l.is_default && l.published.is_some() && l.roles.iter().any(|r| actor_roles.contains(r))
+    });
     if let Some(l) = claimed {
         return Ok(l.published.clone());
     }
-    Ok(layouts.into_iter().find(|l| l.is_default).and_then(|l| l.published))
+    Ok(layouts
+        .into_iter()
+        .find(|l| l.is_default)
+        .and_then(|l| l.published))
 }
 
 /// Serialized alongside the resolved widgets for a Tauri/HTTP round trip -

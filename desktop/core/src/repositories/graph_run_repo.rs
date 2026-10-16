@@ -49,7 +49,8 @@ fn map_run_node_row(row: &rusqlite::Row) -> rusqlite::Result<RunNode> {
 }
 
 pub fn list_run_nodes(conn: &Connection, run_id: &str) -> rusqlite::Result<Vec<RunNode>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_run_nodes WHERE run_id = ?1 ORDER BY started_at")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_run_nodes WHERE run_id = ?1 ORDER BY started_at")?;
     let rows = stmt.query_map([run_id], map_run_node_row)?.collect();
     rows
 }
@@ -79,13 +80,22 @@ pub fn start_run(
 }
 
 pub fn get_run(conn: &Connection, id: &str) -> rusqlite::Result<Option<GraphRun>> {
-    let row = conn.query_row("SELECT * FROM ai_runs WHERE id = ?1", [id], map_run_row).optional()?;
+    let row = conn
+        .query_row("SELECT * FROM ai_runs WHERE id = ?1", [id], map_run_row)
+        .optional()?;
     row.map(|r| hydrate(conn, r)).transpose()
 }
 
-pub fn list_runs_for_graph(conn: &Connection, graph_id: &str, limit: i64) -> rusqlite::Result<Vec<GraphRun>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_runs WHERE graph_id = ?1 ORDER BY started_at DESC LIMIT ?2")?;
-    let rows: Vec<GraphRun> = stmt.query_map(rusqlite::params![graph_id, limit], map_run_row)?.collect::<rusqlite::Result<_>>()?;
+pub fn list_runs_for_graph(
+    conn: &Connection,
+    graph_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<GraphRun>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM ai_runs WHERE graph_id = ?1 ORDER BY started_at DESC LIMIT ?2")?;
+    let rows: Vec<GraphRun> = stmt
+        .query_map(rusqlite::params![graph_id, limit], map_run_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
 }
 
@@ -93,10 +103,15 @@ pub fn list_runs_for_graph(conn: &Connection, graph_id: &str, limit: i64) -> rus
 /// has passed - what `graph_runtime_service::resume_due_delays`'s sweep
 /// (mirroring `workflow_service::run_scheduled`'s own pattern for the
 /// Workflow engine's `scheduled` trigger type) queries every tick.
-pub fn list_due_delayed_runs(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<GraphRun>> {
+pub fn list_due_delayed_runs(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<GraphRun>> {
     let mut stmt =
         conn.prepare("SELECT * FROM ai_runs WHERE workspace_id = ?1 AND status = 'waiting_scheduled' AND resume_at IS NOT NULL AND resume_at <= ?2")?;
-    let rows: Vec<GraphRun> = stmt.query_map(rusqlite::params![workspace_id, now_iso()], map_run_row)?.collect::<rusqlite::Result<_>>()?;
+    let rows: Vec<GraphRun> = stmt
+        .query_map(rusqlite::params![workspace_id, now_iso()], map_run_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
 }
 
@@ -105,11 +120,16 @@ pub fn list_due_delayed_runs(conn: &Connection, workspace_id: &str) -> rusqlite:
 /// startup sweep) calls once to pick back up anything interrupted by the
 /// last process's exit, the same durability property `ai_agent_runs`
 /// already gives a paused Pipeline run.
-pub fn list_resumable_runs(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<GraphRun>> {
+pub fn list_resumable_runs(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<GraphRun>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM ai_runs WHERE workspace_id = ?1 AND status IN ('running', 'planning', 'waiting_tool', 'waiting_agent') ORDER BY started_at",
     )?;
-    let rows: Vec<GraphRun> = stmt.query_map([workspace_id], map_run_row)?.collect::<rusqlite::Result<_>>()?;
+    let rows: Vec<GraphRun> = stmt
+        .query_map([workspace_id], map_run_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
 }
 
@@ -134,7 +154,13 @@ pub fn checkpoint(
     Ok(())
 }
 
-pub fn set_waiting_approval(conn: &Connection, id: &str, context_json: &str, current_node_id: &str, approval_id: &str) -> rusqlite::Result<()> {
+pub fn set_waiting_approval(
+    conn: &Connection,
+    id: &str,
+    context_json: &str,
+    current_node_id: &str,
+    approval_id: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_runs SET status = 'waiting_approval', context_json = ?1, current_node_id = ?2, pending_approval_id = ?3 WHERE id = ?4",
         (context_json, current_node_id, approval_id, id),
@@ -142,7 +168,13 @@ pub fn set_waiting_approval(conn: &Connection, id: &str, context_json: &str, cur
     Ok(())
 }
 
-pub fn set_waiting_scheduled(conn: &Connection, id: &str, context_json: &str, current_node_id: &str, resume_at: &str) -> rusqlite::Result<()> {
+pub fn set_waiting_scheduled(
+    conn: &Connection,
+    id: &str,
+    context_json: &str,
+    current_node_id: &str,
+    resume_at: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_runs SET status = 'waiting_scheduled', context_json = ?1, current_node_id = ?2, resume_at = ?3 WHERE id = ?4",
         (context_json, current_node_id, resume_at, id),
@@ -151,11 +183,19 @@ pub fn set_waiting_scheduled(conn: &Connection, id: &str, context_json: &str, cu
 }
 
 pub fn clear_wait_markers(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_runs SET pending_approval_id = NULL, resume_at = NULL WHERE id = ?1", [id])?;
+    conn.execute(
+        "UPDATE ai_runs SET pending_approval_id = NULL, resume_at = NULL WHERE id = ?1",
+        [id],
+    )?;
     Ok(())
 }
 
-pub fn finish_run(conn: &Connection, id: &str, status: &str, error_message: Option<&str>) -> rusqlite::Result<()> {
+pub fn finish_run(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    error_message: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_runs SET status = ?1, error_message = ?2, finished_at = ?3, pending_approval_id = NULL, resume_at = NULL WHERE id = ?4",
         (status, error_message, now_iso(), id),

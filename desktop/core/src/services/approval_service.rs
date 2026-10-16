@@ -34,14 +34,30 @@ fn validate_input(input: &AiApprovalInput) -> AppResult<()> {
 /// it (an Administrator) that's gated, not who can ask for one, the same
 /// "requesting isn't the sensitive part, granting is" reasoning
 /// `voice_execution_service`'s own risk-gated actions already follow.
-pub fn create(conn: &Connection, workspace_id: &str, input: &AiApprovalInput, requested_by: Option<&str>) -> AppResult<AiApproval> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiApprovalInput,
+    requested_by: Option<&str>,
+) -> AppResult<AiApproval> {
     validate_input(input)?;
-    Ok(ai_approval_repo::create(conn, workspace_id, input, requested_by)?)
+    Ok(ai_approval_repo::create(
+        conn,
+        workspace_id,
+        input,
+        requested_by,
+    )?)
 }
 
-pub fn get(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<AiApproval> {
+pub fn get(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiApproval> {
     require_admin(conn, actor_user_id)?;
-    let approval = ai_approval_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Approval".into()))?;
+    let approval =
+        ai_approval_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Approval".into()))?;
     if approval.workspace_id != workspace_id {
         return Err(AppError::NotFound("Approval".into()));
     }
@@ -50,7 +66,12 @@ pub fn get(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Optio
 
 /// `status` narrows to `pending`/`approved`/`rejected`; `None` lists every
 /// approval regardless of outcome (a full audit view).
-pub fn list(conn: &Connection, workspace_id: &str, status: Option<&str>, actor_user_id: Option<&str>) -> AppResult<Vec<AiApproval>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    status: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AiApproval>> {
     require_admin(conn, actor_user_id)?;
     Ok(ai_approval_repo::list(conn, workspace_id, status)?)
 }
@@ -58,15 +79,35 @@ pub fn list(conn: &Connection, workspace_id: &str, status: Option<&str>, actor_u
 /// Approve or reject a pending approval - resolving one that's already
 /// been resolved is rejected outright (no re-resolving), so `resolved_by`/
 /// `resolved_at` always describe the one decision that actually stuck.
-pub fn resolve(conn: &Connection, id: &str, workspace_id: &str, resolution: &AiApprovalResolution, actor_user_id: Option<&str>) -> AppResult<AiApproval> {
+pub fn resolve(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    resolution: &AiApprovalResolution,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiApproval> {
     require_admin(conn, actor_user_id)?;
-    let approval = ai_approval_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Approval".into()))?;
+    let approval =
+        ai_approval_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Approval".into()))?;
     if approval.workspace_id != workspace_id {
         return Err(AppError::NotFound("Approval".into()));
     }
     if approval.status != "pending" {
-        return Err(AppError::Validation(format!("This approval was already {}", approval.status)));
+        return Err(AppError::Validation(format!(
+            "This approval was already {}",
+            approval.status
+        )));
     }
-    let new_status = if resolution.approve { "approved" } else { "rejected" };
-    Ok(ai_approval_repo::resolve(conn, id, new_status, actor_user_id, resolution.resolution_notes.as_deref())?)
+    let new_status = if resolution.approve {
+        "approved"
+    } else {
+        "rejected"
+    };
+    Ok(ai_approval_repo::resolve(
+        conn,
+        id,
+        new_status,
+        actor_user_id,
+        resolution.resolution_notes.as_deref(),
+    )?)
 }

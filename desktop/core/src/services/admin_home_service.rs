@@ -20,7 +20,9 @@
 use rusqlite::Connection;
 
 use crate::domain::AppResult;
-use crate::models::admin_home::{AdminHomeSummary, NeedsAttentionItem, PlatformHealth, SetupProgress};
+use crate::models::admin_home::{
+    AdminHomeSummary, NeedsAttentionItem, PlatformHealth, SetupProgress,
+};
 use crate::repositories::integration_connection_repo;
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -46,18 +48,50 @@ fn count_one(conn: &Connection, sql: &str, workspace_id: &str) -> AppResult<i64>
     Ok(conn.query_row(sql, [workspace_id], |r| r.get(0))?)
 }
 
-pub fn get_summary(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<AdminHomeSummary> {
+pub fn get_summary(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AdminHomeSummary> {
     require_admin(conn, actor_user_id)?;
     let since = today_start_iso();
 
     // --- Setup Progress ---------------------------------------------------
-    let active_users = count_one(conn, "SELECT COUNT(*) FROM users WHERE workspace_id = ?1 AND is_active = 1", workspace_id)?;
-    let custom_roles = count_one(conn, "SELECT COUNT(*) FROM access_roles WHERE workspace_id = ?1 AND is_system = 0", workspace_id)?;
-    let custom_objects = count_one(conn, "SELECT COUNT(*) FROM custom_object_definitions WHERE workspace_id = ?1 AND is_active = 1", workspace_id)?;
-    let published_apps = count_one(conn, "SELECT COUNT(*) FROM app_definitions WHERE workspace_id = ?1 AND is_published = 1", workspace_id)?;
-    let workflows = count_one(conn, "SELECT COUNT(*) FROM workflow_definitions WHERE workspace_id = ?1 AND is_active = 1", workspace_id)?;
-    let business_rules = count_one(conn, "SELECT COUNT(*) FROM business_rules WHERE workspace_id = ?1 AND is_active = 1", workspace_id)?;
-    let connections_total = count_one(conn, "SELECT COUNT(*) FROM integration_connections WHERE workspace_id = ?1", workspace_id)?;
+    let active_users = count_one(
+        conn,
+        "SELECT COUNT(*) FROM users WHERE workspace_id = ?1 AND is_active = 1",
+        workspace_id,
+    )?;
+    let custom_roles = count_one(
+        conn,
+        "SELECT COUNT(*) FROM access_roles WHERE workspace_id = ?1 AND is_system = 0",
+        workspace_id,
+    )?;
+    let custom_objects = count_one(
+        conn,
+        "SELECT COUNT(*) FROM custom_object_definitions WHERE workspace_id = ?1 AND is_active = 1",
+        workspace_id,
+    )?;
+    let published_apps = count_one(
+        conn,
+        "SELECT COUNT(*) FROM app_definitions WHERE workspace_id = ?1 AND is_published = 1",
+        workspace_id,
+    )?;
+    let workflows = count_one(
+        conn,
+        "SELECT COUNT(*) FROM workflow_definitions WHERE workspace_id = ?1 AND is_active = 1",
+        workspace_id,
+    )?;
+    let business_rules = count_one(
+        conn,
+        "SELECT COUNT(*) FROM business_rules WHERE workspace_id = ?1 AND is_active = 1",
+        workspace_id,
+    )?;
+    let connections_total = count_one(
+        conn,
+        "SELECT COUNT(*) FROM integration_connections WHERE workspace_id = ?1",
+        workspace_id,
+    )?;
     let backup_events = count_one(conn, "SELECT COUNT(*) FROM audit_events WHERE workspace_id = ?1 AND event_type IN ('backup','restore')", workspace_id)?;
 
     let setup_progress = SetupProgress {
@@ -71,7 +105,8 @@ pub fn get_summary(conn: &Connection, workspace_id: &str, actor_user_id: Option<
     };
 
     // --- Platform Health ----------------------------------------------------
-    let connections_failed = integration_connection_repo::count_by_status(conn, workspace_id, "failed")?;
+    let connections_failed =
+        integration_connection_repo::count_by_status(conn, workspace_id, "failed")?;
     let jobs_running: i64 = conn.query_row(
         "SELECT COUNT(*) FROM integration_job_runs r JOIN integration_jobs j ON j.id = r.job_id WHERE j.workspace_id = ?1 AND r.status = 'running'",
         [workspace_id],
@@ -114,9 +149,18 @@ pub fn get_summary(conn: &Connection, workspace_id: &str, actor_user_id: Option<
         [workspace_id],
         |r| r.get(0),
     )?;
-    let draft_themes = count_one(conn, "SELECT COUNT(*) FROM workspace_themes WHERE workspace_id = ?1 AND status = 'draft'", workspace_id)?;
-    let draft_graphs = count_one(conn, "SELECT COUNT(*) FROM ai_execution_graphs WHERE workspace_id = ?1 AND status = 'draft'", workspace_id)?;
-    let unpublished_items = draft_screens + draft_pages + draft_dashboards + draft_themes + draft_graphs;
+    let draft_themes = count_one(
+        conn,
+        "SELECT COUNT(*) FROM workspace_themes WHERE workspace_id = ?1 AND status = 'draft'",
+        workspace_id,
+    )?;
+    let draft_graphs = count_one(
+        conn,
+        "SELECT COUNT(*) FROM ai_execution_graphs WHERE workspace_id = ?1 AND status = 'draft'",
+        workspace_id,
+    )?;
+    let unpublished_items =
+        draft_screens + draft_pages + draft_dashboards + draft_themes + draft_graphs;
 
     let last_backup_at: Option<String> = conn
         .query_row(
@@ -135,25 +179,53 @@ pub fn get_summary(conn: &Connection, workspace_id: &str, actor_user_id: Option<
     // --- Needs Attention (only surfaces non-zero items) ---------------------
     let mut needs_attention = Vec::new();
     if connections_failed > 0 {
-        needs_attention.push(NeedsAttentionItem { key: "failed_integrations".into(), label: "Integration connection(s) failing".into(), count: connections_failed });
+        needs_attention.push(NeedsAttentionItem {
+            key: "failed_integrations".into(),
+            label: "Integration connection(s) failing".into(),
+            count: connections_failed,
+        });
     }
     if jobs_failed_today > 0 {
-        needs_attention.push(NeedsAttentionItem { key: "failed_jobs".into(), label: "Integration job(s) failed today".into(), count: jobs_failed_today });
+        needs_attention.push(NeedsAttentionItem {
+            key: "failed_jobs".into(),
+            label: "Integration job(s) failed today".into(),
+            count: jobs_failed_today,
+        });
     }
     if expiring_credentials > 0 {
-        needs_attention.push(NeedsAttentionItem { key: "expiring_credentials".into(), label: "Connection credential(s) expiring within 14 days".into(), count: expiring_credentials });
+        needs_attention.push(NeedsAttentionItem {
+            key: "expiring_credentials".into(),
+            label: "Connection credential(s) expiring within 14 days".into(),
+            count: expiring_credentials,
+        });
     }
     if unpublished_items > 0 {
-        needs_attention.push(NeedsAttentionItem { key: "unpublished_changes".into(), label: "Item(s) with unpublished changes".into(), count: unpublished_items });
+        needs_attention.push(NeedsAttentionItem {
+            key: "unpublished_changes".into(),
+            label: "Item(s) with unpublished changes".into(),
+            count: unpublished_items,
+        });
     }
     if workflow_runs_failed_today > 0 {
-        needs_attention.push(NeedsAttentionItem { key: "failed_workflows".into(), label: "Workflow run(s) failed today".into(), count: workflow_runs_failed_today });
+        needs_attention.push(NeedsAttentionItem {
+            key: "failed_workflows".into(),
+            label: "Workflow run(s) failed today".into(),
+            count: workflow_runs_failed_today,
+        });
     }
     if agent_runs_failed_today > 0 {
-        needs_attention.push(NeedsAttentionItem { key: "failed_agents".into(), label: "Agent/team run(s) failed today".into(), count: agent_runs_failed_today });
+        needs_attention.push(NeedsAttentionItem {
+            key: "failed_agents".into(),
+            label: "Agent/team run(s) failed today".into(),
+            count: agent_runs_failed_today,
+        });
     }
     if !setup_progress.has_backup {
-        needs_attention.push(NeedsAttentionItem { key: "no_backup".into(), label: "No backup has ever been taken".into(), count: 1 });
+        needs_attention.push(NeedsAttentionItem {
+            key: "no_backup".into(),
+            label: "No backup has ever been taken".into(),
+            count: 1,
+        });
     }
 
     let platform_health = PlatformHealth {
@@ -166,5 +238,9 @@ pub fn get_summary(conn: &Connection, workspace_id: &str, actor_user_id: Option<
         last_backup_at,
     };
 
-    Ok(AdminHomeSummary { setup_progress, needs_attention, platform_health })
+    Ok(AdminHomeSummary {
+        setup_progress,
+        needs_attention,
+        platform_health,
+    })
 }

@@ -73,26 +73,55 @@ fn select_field(entity_type: &str, label: &str, is_filterable: bool) -> CustomFi
 #[test]
 fn returns_values_only_for_is_filterable_fields() {
     let (conn, ws, admin) = setup_workspace();
-    let tier = custom_field_service::create_definition(&conn, &ws, &select_field("Company", "Tier", true), Some(&admin)).unwrap();
-    let internal_code = custom_field_service::create_definition(&conn, &ws, &select_field("Company", "Internal Code", false), Some(&admin)).unwrap();
-    let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
+    let tier = custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &select_field("Company", "Tier", true),
+        Some(&admin),
+    )
+    .unwrap();
+    let internal_code = custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &select_field("Company", "Internal Code", false),
+        Some(&admin),
+    )
+    .unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
 
     let mut values = HashMap::new();
     values.insert(tier.key.clone(), "Gold".into());
     values.insert(internal_code.key.clone(), "Silver".into());
-    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin))
+        .unwrap();
 
     let filterable = custom_field_service::get_filterable_values(&conn, &ws, "Company").unwrap();
-    let company_values = filterable.get(&company.id).expect("company has at least one filterable value");
-    assert_eq!(company_values.get(&tier.key).map(String::as_str), Some("Gold"));
-    assert!(!company_values.contains_key(&internal_code.key), "a non-filterable field's value must never be returned");
+    let company_values = filterable
+        .get(&company.id)
+        .expect("company has at least one filterable value");
+    assert_eq!(
+        company_values.get(&tier.key).map(String::as_str),
+        Some("Gold")
+    );
+    assert!(
+        !company_values.contains_key(&internal_code.key),
+        "a non-filterable field's value must never be returned"
+    );
 }
 
 #[test]
 fn a_record_with_no_filterable_values_is_absent_from_the_map() {
     let (conn, ws, admin) = setup_workspace();
-    custom_field_service::create_definition(&conn, &ws, &select_field("Company", "Tier", true), Some(&admin)).unwrap();
-    let company = company_service::create(&conn, &ws, &company_input("Untagged Co"), Some(&admin)).unwrap();
+    custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &select_field("Company", "Tier", true),
+        Some(&admin),
+    )
+    .unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Untagged Co"), Some(&admin)).unwrap();
 
     let filterable = custom_field_service::get_filterable_values(&conn, &ws, "Company").unwrap();
     assert!(!filterable.contains_key(&company.id));
@@ -101,12 +130,24 @@ fn a_record_with_no_filterable_values_is_absent_from_the_map() {
 #[test]
 fn is_scoped_to_the_requested_entity_type() {
     let (conn, ws, admin) = setup_workspace();
-    let tier = custom_field_service::create_definition(&conn, &ws, &select_field("Company", "Tier", true), Some(&admin)).unwrap();
-    let company = company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
+    let tier = custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &select_field("Company", "Tier", true),
+        Some(&admin),
+    )
+    .unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Acme"), Some(&admin)).unwrap();
     let mut values = HashMap::new();
     values.insert(tier.key.clone(), "Gold".into());
-    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin))
+        .unwrap();
 
-    let contact_filterable = custom_field_service::get_filterable_values(&conn, &ws, "Contact").unwrap();
-    assert!(contact_filterable.is_empty(), "a Company's filterable values must never leak into a Contact query");
+    let contact_filterable =
+        custom_field_service::get_filterable_values(&conn, &ws, "Contact").unwrap();
+    assert!(
+        contact_filterable.is_empty(),
+        "a Company's filterable values must never leak into a Contact query"
+    );
 }

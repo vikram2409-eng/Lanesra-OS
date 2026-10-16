@@ -44,15 +44,19 @@ use crate::domain::{builtin_fields, AppError, AppResult};
 use crate::models::business_rule::builtin_trigger_field_for;
 use crate::models::task::TaskInput;
 use crate::models::workflow::{
-    transition_field_for, WorkflowActionInput, WorkflowConditionInput, WorkflowDefinition, WorkflowDefinitionInput,
-    WorkflowDefinitionUpdate, WorkflowRuleVersion, ACTION_TYPES, CORE_WORKFLOW_ENTITY_TYPES, NOTIFICATION_AUDIENCES,
-    TRIGGER_TYPES,
+    transition_field_for, WorkflowActionInput, WorkflowConditionInput, WorkflowDefinition,
+    WorkflowDefinitionInput, WorkflowDefinitionUpdate, WorkflowRuleVersion, ACTION_TYPES,
+    CORE_WORKFLOW_ENTITY_TYPES, NOTIFICATION_AUDIENCES, TRIGGER_TYPES,
 };
 use crate::repositories::{
-    ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, audit_repo, company_repo, contract_repo, custom_field_repo, custom_record_repo,
-    integration_connection_ref_repo, notification_repo, opportunity_repo, relationship_repo, task_repo, user_repo, workflow_repo,
+    ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, audit_repo, company_repo,
+    contract_repo, custom_field_repo, custom_record_repo, integration_connection_ref_repo,
+    notification_repo, opportunity_repo, relationship_repo, task_repo, user_repo, workflow_repo,
 };
-use crate::services::{access_service, builtin_field_service, company_service, custom_object_service, custom_record_service, entity_registry, task_service};
+use crate::services::{
+    access_service, builtin_field_service, company_service, custom_object_service,
+    custom_record_service, entity_registry, task_service,
+};
 
 thread_local! {
     static WORKFLOW_DEPTH: Cell<u8> = const { Cell::new(0) };
@@ -83,7 +87,12 @@ impl Drop for DepthGuard {
 /// passes with an explicit Access Role grant on "Workflow" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "Workflow", "Only an Administrator can manage workflow automation")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "Workflow",
+        "Only an Administrator can manage workflow automation",
+    )
 }
 
 /// The valid values for `transition_field_for(entity_type)` - status for
@@ -94,8 +103,10 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 /// checked for non-emptiness.
 fn valid_transition_values_for(entity_type: &str) -> &'static [&'static str] {
     use crate::models::{
-        company::COMPANY_STATUSES, contact::CONTACT_STATUSES, contract::CONTRACT_STATUSES, custom_object::CUSTOM_RECORD_STATUSES,
-        invoice::INVOICE_STATUSES, opportunity::OPPORTUNITY_STAGES, order::ORDER_STATUSES, quote::QUOTE_STATUSES, task::TASK_STATUSES,
+        company::COMPANY_STATUSES, contact::CONTACT_STATUSES, contract::CONTRACT_STATUSES,
+        custom_object::CUSTOM_RECORD_STATUSES, invoice::INVOICE_STATUSES,
+        opportunity::OPPORTUNITY_STAGES, order::ORDER_STATUSES, quote::QUOTE_STATUSES,
+        task::TASK_STATUSES,
     };
     match entity_type {
         "Company" => COMPANY_STATUSES,
@@ -110,14 +121,20 @@ fn valid_transition_values_for(entity_type: &str) -> &'static [&'static str] {
     }
 }
 
-fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<()> {
+fn require_valid_entity_type(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<()> {
     if CORE_WORKFLOW_ENTITY_TYPES.contains(&entity_type) {
         return Ok(());
     }
     if custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, entity_type)? {
         return Ok(());
     }
-    Err(AppError::Validation(format!("'{entity_type}' is not a recognized object type")))
+    Err(AppError::Validation(format!(
+        "'{entity_type}' is not a recognized object type"
+    )))
 }
 
 // --- Validation -------------------------------------------------------
@@ -126,10 +143,16 @@ fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type:
 /// identical eligibility check, kept as a separate copy since it's typed
 /// against a different condition input and this module doesn't depend on
 /// business_rule_service.
-fn related_field_owner_type(conn: &Connection, entity_type: &str, relationship_definition_id: &str) -> AppResult<String> {
+fn related_field_owner_type(
+    conn: &Connection,
+    entity_type: &str,
+    relationship_definition_id: &str,
+) -> AppResult<String> {
     let def = relationship_repo::get_definition(conn, relationship_definition_id)?
         .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
-    if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
+    if def.source_entity_type == entity_type
+        && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one")
+    {
         Ok(def.target_entity_type)
     } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
         Ok(def.source_entity_type)
@@ -140,85 +163,166 @@ fn related_field_owner_type(conn: &Connection, entity_type: &str, relationship_d
     }
 }
 
-fn validate_conditions(conn: &Connection, workspace_id: &str, entity_type: &str, conditions: &[crate::models::workflow::WorkflowConditionInput]) -> AppResult<()> {
+fn validate_conditions(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    conditions: &[crate::models::workflow::WorkflowConditionInput],
+) -> AppResult<()> {
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-    let active_keys: Vec<&str> = defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
+    let active_keys: Vec<&str> = defs
+        .iter()
+        .filter(|d| d.is_active)
+        .map(|d| d.key.as_str())
+        .collect();
     for c in conditions {
         if !crate::domain::conditions::TRIGGER_SOURCES.contains(&c.field_source.as_str()) {
-            return Err(AppError::Validation(format!("Invalid condition source '{}'", c.field_source)));
+            return Err(AppError::Validation(format!(
+                "Invalid condition source '{}'",
+                c.field_source
+            )));
         }
         if !crate::domain::conditions::CONDITION_OPERATORS.contains(&c.operator.as_str()) {
-            return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
+            return Err(AppError::Validation(format!(
+                "Invalid condition operator '{}'",
+                c.operator
+            )));
         }
         if let Some(rel_id) = &c.relationship_definition_id {
             let related_type = related_field_owner_type(conn, entity_type, rel_id)?;
-            let related_defs = custom_field_repo::list_definitions(conn, workspace_id, &related_type)?;
-            let related_active_keys: Vec<&str> = related_defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
-            if !crate::domain::conditions::field_ref_is_valid(&related_type, &c.field_source, &c.field_key, related_active_keys.iter().copied()) {
-                return Err(AppError::Validation(format!("'{}' is not a valid field on the related {related_type} record", c.field_key)));
+            let related_defs =
+                custom_field_repo::list_definitions(conn, workspace_id, &related_type)?;
+            let related_active_keys: Vec<&str> = related_defs
+                .iter()
+                .filter(|d| d.is_active)
+                .map(|d| d.key.as_str())
+                .collect();
+            if !crate::domain::conditions::field_ref_is_valid(
+                &related_type,
+                &c.field_source,
+                &c.field_key,
+                related_active_keys.iter().copied(),
+            ) {
+                return Err(AppError::Validation(format!(
+                    "'{}' is not a valid field on the related {related_type} record",
+                    c.field_key
+                )));
             }
-        } else if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
-            return Err(AppError::Validation(format!("'{}' is not a valid field to trigger on", c.field_key)));
+        } else if !crate::domain::conditions::field_ref_is_valid(
+            entity_type,
+            &c.field_source,
+            &c.field_key,
+            active_keys.iter().copied(),
+        ) {
+            return Err(AppError::Validation(format!(
+                "'{}' is not a valid field to trigger on",
+                c.field_key
+            )));
         }
         // Addendum §3.2: field-to-field comparison, same rule as business
         // rules' identical check - see BusinessRuleCondition's doc comment.
         match (&c.compare_field_source, &c.compare_field_key) {
             (Some(src), Some(key)) => {
                 if !crate::domain::conditions::TRIGGER_SOURCES.contains(&src.as_str()) {
-                    return Err(AppError::Validation(format!("Invalid comparison field source '{src}'")));
+                    return Err(AppError::Validation(format!(
+                        "Invalid comparison field source '{src}'"
+                    )));
                 }
-                if !crate::domain::conditions::field_ref_is_valid(entity_type, src, key, active_keys.iter().copied()) {
-                    return Err(AppError::Validation(format!("'{key}' is not a valid field to compare against")));
+                if !crate::domain::conditions::field_ref_is_valid(
+                    entity_type,
+                    src,
+                    key,
+                    active_keys.iter().copied(),
+                ) {
+                    return Err(AppError::Validation(format!(
+                        "'{key}' is not a valid field to compare against"
+                    )));
                 }
             }
             (None, None) => {}
-            _ => return Err(AppError::Validation("A comparison field needs both a source and a key".into())),
+            _ => {
+                return Err(AppError::Validation(
+                    "A comparison field needs both a source and a key".into(),
+                ))
+            }
         }
     }
     Ok(())
 }
 
-fn validate_actions(conn: &Connection, workspace_id: &str, entity_type: &str, actions: &[crate::models::workflow::WorkflowActionInput]) -> AppResult<()> {
+fn validate_actions(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    actions: &[crate::models::workflow::WorkflowActionInput],
+) -> AppResult<()> {
     if actions.is_empty() {
-        return Err(AppError::Validation("A workflow needs at least one action".into()));
+        return Err(AppError::Validation(
+            "A workflow needs at least one action".into(),
+        ));
     }
     for a in actions {
         if !ACTION_TYPES.contains(&a.action_type.as_str()) {
-            return Err(AppError::Validation(format!("Invalid action type '{}'", a.action_type)));
+            return Err(AppError::Validation(format!(
+                "Invalid action type '{}'",
+                a.action_type
+            )));
         }
-        parse_and_validate_params(conn, workspace_id, entity_type, &a.action_type, &a.params_json)?;
+        parse_and_validate_params(
+            conn,
+            workspace_id,
+            entity_type,
+            &a.action_type,
+            &a.params_json,
+        )?;
     }
     Ok(())
 }
 
 /// Per-app scoped automation - see
 /// `business_rule_service::require_valid_app_id`'s identical doc comment.
-fn require_valid_app_id(conn: &Connection, workspace_id: &str, app_id: Option<&str>) -> AppResult<()> {
+fn require_valid_app_id(
+    conn: &Connection,
+    workspace_id: &str,
+    app_id: Option<&str>,
+) -> AppResult<()> {
     let Some(app_id) = app_id else { return Ok(()) };
-    let app = super::app_service::get(conn, app_id).map_err(|_| AppError::Validation("App not found".into()))?;
+    let app = super::app_service::get(conn, app_id)
+        .map_err(|_| AppError::Validation("App not found".into()))?;
     if app.workspace_id != workspace_id {
         return Err(AppError::Validation("App not found".into()));
     }
     Ok(())
 }
 
-fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, input: &WorkflowDefinitionInput) -> AppResult<()> {
+fn validate_shape(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    input: &WorkflowDefinitionInput,
+) -> AppResult<()> {
     require_valid_entity_type(conn, workspace_id, entity_type)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Workflow name is required".into()));
     }
     if !TRIGGER_TYPES.contains(&input.trigger_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid trigger type '{}'", input.trigger_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid trigger type '{}'",
+            input.trigger_type
+        )));
     }
     match input.trigger_type.as_str() {
         "status_changed" => {
             let target = input.trigger_status.as_deref().unwrap_or("");
             if target.is_empty() {
-                return Err(AppError::Validation("A target status/stage is required for this trigger".into()));
+                return Err(AppError::Validation(
+                    "A target status/stage is required for this trigger".into(),
+                ));
             }
             if !valid_transition_values_for(entity_type).contains(&target) {
                 return Err(AppError::Validation(format!(
-                    "'{target}' is not a valid {entity_type} {}", transition_field_for(entity_type)
+                    "'{target}' is not a valid {entity_type} {}",
+                    transition_field_for(entity_type)
                 )));
             }
         }
@@ -230,36 +334,49 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
             // fields, matching `custom_object_matching_date_records`'s own
             // runtime eligibility check (see workflow_service.rs's
             // `matching_date_records`).
-            let is_builtin_date_field = crate::models::workflow::date_fields_for(entity_type).contains(&field);
-            let is_custom_object_date_field = super::custom_object_service::get_by_key(conn, workspace_id, entity_type)?.is_some_and(|d| d.is_active)
-                && custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
-                    .iter()
-                    .any(|d| d.key == field && d.is_active && d.field_type == "date");
+            let is_builtin_date_field =
+                crate::models::workflow::date_fields_for(entity_type).contains(&field);
+            let is_custom_object_date_field =
+                super::custom_object_service::get_by_key(conn, workspace_id, entity_type)?
+                    .is_some_and(|d| d.is_active)
+                    && custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+                        .iter()
+                        .any(|d| d.key == field && d.is_active && d.field_type == "date");
             if !is_builtin_date_field && !is_custom_object_date_field {
-                return Err(AppError::Validation(format!("'{field}' is not a date field this trigger can watch on {entity_type}")));
+                return Err(AppError::Validation(format!(
+                    "'{field}' is not a date field this trigger can watch on {entity_type}"
+                )));
             }
         }
         "field_changed" => {
             let field = input.trigger_field_key.as_deref().unwrap_or("");
             if input.trigger_field_source == "builtin" {
                 if builtin_fields::find_builtin_field(entity_type, field).is_none() {
-                    return Err(AppError::Validation(format!("'{field}' is not a built-in field on {entity_type}")));
+                    return Err(AppError::Validation(format!(
+                        "'{field}' is not a built-in field on {entity_type}"
+                    )));
                 }
             } else {
                 let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
                 if !defs.iter().any(|d| d.key == field && d.is_active) {
-                    return Err(AppError::Validation(format!("'{field}' is not an active custom field to watch")));
+                    return Err(AppError::Validation(format!(
+                        "'{field}' is not an active custom field to watch"
+                    )));
                 }
             }
         }
-        "scheduled"
-            if input.trigger_offset_days <= 0 => {
-                return Err(AppError::Validation("Scheduled workflows need a recurrence interval of at least 1 day".into()));
-            }
+        "scheduled" if input.trigger_offset_days <= 0 => {
+            return Err(AppError::Validation(
+                "Scheduled workflows need a recurrence interval of at least 1 day".into(),
+            ));
+        }
         _ => {}
     }
     if !crate::domain::conditions::MATCH_TYPES.contains(&input.match_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid match type '{}'", input.match_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid match type '{}'",
+            input.match_type
+        )));
     }
     validate_conditions(conn, workspace_id, entity_type, &input.conditions)?;
     validate_actions(conn, workspace_id, entity_type, &input.actions)?;
@@ -277,7 +394,11 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
 /// Studio 2.0). A malformed `params_json` on some other action type is
 /// never this function's problem to raise - it only reads the one shape
 /// it already knows, and ignores anything it can't parse.
-fn sync_graph_node(conn: &Connection, workspace_id: &str, wf: &WorkflowDefinition) -> AppResult<()> {
+fn sync_graph_node(
+    conn: &Connection,
+    workspace_id: &str,
+    wf: &WorkflowDefinition,
+) -> AppResult<()> {
     let mut edges = vec![crate::models::system_graph::SystemEdgeTarget {
         edge_type: "depends_on".into(),
         to_node_type: "custom_object".into(),
@@ -285,34 +406,77 @@ fn sync_graph_node(conn: &Connection, workspace_id: &str, wf: &WorkflowDefinitio
     }];
     for action in &wf.actions {
         if action.action_type == "run_ai_agent" {
-            if let Ok(p) = parse_params::<RunAiAgentParams>(&action.action_type, &action.params_json) {
+            if let Ok(p) =
+                parse_params::<RunAiAgentParams>(&action.action_type, &action.params_json)
+            {
                 if p.target_type == "agent" {
-                    edges.push(crate::models::system_graph::SystemEdgeTarget { edge_type: "invokes".into(), to_node_type: "ai_agent".into(), to_component_id: p.target_id });
+                    edges.push(crate::models::system_graph::SystemEdgeTarget {
+                        edge_type: "invokes".into(),
+                        to_node_type: "ai_agent".into(),
+                        to_component_id: p.target_id,
+                    });
                 }
             }
         }
     }
     if let Some(graph_id) = &wf.graph_id {
-        edges.push(crate::models::system_graph::SystemEdgeTarget { edge_type: "invokes".into(), to_node_type: "execution_graph".into(), to_component_id: graph_id.clone() });
+        edges.push(crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "invokes".into(),
+            to_node_type: "execution_graph".into(),
+            to_component_id: graph_id.clone(),
+        });
     }
-    super::system_graph_service::sync_node(conn, workspace_id, "workflow", &wf.id, &wf.name, "{}", &edges)
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "workflow",
+        &wf.id,
+        &wf.name,
+        "{}",
+        &edges,
+    )
 }
 
-pub fn create_rule(conn: &Connection, workspace_id: &str, input: &WorkflowDefinitionInput, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+pub fn create_rule(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &WorkflowDefinitionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkflowDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, &input.entity_type, input)?;
     let id = new_uuid();
     let created = workflow_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "workflow_definition", &created.id, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "workflow_definition",
+        &created.id,
+        actor_user_id,
+    )?;
     sync_graph_node(conn, workspace_id, &created)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("workflow"), Some(&created.id), &format!("Created workflow '{}'", created.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("workflow"),
+        Some(&created.id),
+        &format!("Created workflow '{}'", created.name),
+        None,
+    )?;
     Ok(created)
 }
 
 /// Only an Administrator can see (and manage) workflows - nothing
 /// client-side evaluates these live, since they only take effect
 /// server-side at the moment of a trigger.
-pub fn list_rules(conn: &Connection, workspace_id: &str, entity_type: &str, actor_user_id: Option<&str>) -> AppResult<Vec<WorkflowDefinition>> {
+pub fn list_rules(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<WorkflowDefinition>> {
     require_admin(conn, actor_user_id)?;
     Ok(workflow_repo::list(conn, workspace_id, entity_type)?)
 }
@@ -322,56 +486,103 @@ pub fn get_rule(conn: &Connection, id: &str) -> AppResult<Option<WorkflowDefinit
     Ok(workflow_repo::get(conn, id)?)
 }
 
-pub fn update_rule(conn: &Connection, id: &str, input: &WorkflowDefinitionUpdate, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+pub fn update_rule(
+    conn: &Connection,
+    id: &str,
+    input: &WorkflowDefinitionUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkflowDefinition> {
     require_admin(conn, actor_user_id)?;
-    let existing = workflow_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
+    let existing =
+        workflow_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
     if existing.is_protected {
-        return Err(AppError::Validation("This workflow is protected by the system and cannot be modified".into()));
+        return Err(AppError::Validation(
+            "This workflow is protected by the system and cannot be modified".into(),
+        ));
     }
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Workflow name is required".into()));
     }
     if !crate::domain::conditions::MATCH_TYPES.contains(&input.match_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid match type '{}'", input.match_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid match type '{}'",
+            input.match_type
+        )));
     }
-    validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions)?;
-    validate_actions(conn, &existing.workspace_id, &existing.entity_type, &input.actions)?;
+    validate_conditions(
+        conn,
+        &existing.workspace_id,
+        &existing.entity_type,
+        &input.conditions,
+    )?;
+    validate_actions(
+        conn,
+        &existing.workspace_id,
+        &existing.entity_type,
+        &input.actions,
+    )?;
     require_valid_app_id(conn, &existing.workspace_id, input.app_id.as_deref())?;
     // Admin UX polish (spec §10) - see business_rule_service::update_rule's
     // identical snapshot-before-overwrite step for the full rationale.
-    let snapshot_json = serde_json::to_string(&existing).expect("WorkflowDefinition is always serializable");
+    let snapshot_json =
+        serde_json::to_string(&existing).expect("WorkflowDefinition is always serializable");
     workflow_repo::insert_version(conn, id, &snapshot_json)?;
     let updated = workflow_repo::update(conn, id, input, actor_user_id)?;
     sync_graph_node(conn, &existing.workspace_id, &updated)?;
-    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("workflow"), Some(id), &format!("Updated workflow '{}'", updated.name), None)?;
+    audit_repo::record(
+        conn,
+        &existing.workspace_id,
+        actor_user_id,
+        "update",
+        Some("workflow"),
+        Some(id),
+        &format!("Updated workflow '{}'", updated.name),
+        None,
+    )?;
     Ok(updated)
 }
 
 /// Admin UX polish (spec §10) - see business_rule_service::list_versions's
 /// identical doc comment.
-pub fn list_versions(conn: &Connection, workflow_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<WorkflowRuleVersion>> {
+pub fn list_versions(
+    conn: &Connection,
+    workflow_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<WorkflowRuleVersion>> {
     require_admin(conn, actor_user_id)?;
     workflow_repo::get(conn, workflow_id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
     workflow_repo::list_version_rows(conn, workflow_id)?
         .into_iter()
         .map(|(version_id, snapshot_json, saved_at)| {
             let snapshot: WorkflowDefinition =
-                serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt workflow version snapshot: {e}")))?;
-            Ok(WorkflowRuleVersion { id: version_id, workflow_id: workflow_id.to_string(), snapshot, saved_at })
+                serde_json::from_str(&snapshot_json).map_err(|e| {
+                    AppError::Validation(format!("Corrupt workflow version snapshot: {e}"))
+                })?;
+            Ok(WorkflowRuleVersion {
+                id: version_id,
+                workflow_id: workflow_id.to_string(),
+                snapshot,
+                saved_at,
+            })
         })
         .collect()
 }
 
 /// Admin UX polish (spec §10) - see business_rule_service::restore_version's
 /// identical doc comment.
-pub fn restore_version(conn: &Connection, workflow_id: &str, version_id: &str, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+pub fn restore_version(
+    conn: &Connection,
+    workflow_id: &str,
+    version_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkflowDefinition> {
     require_admin(conn, actor_user_id)?;
     let (_, snapshot_json, _) = workflow_repo::list_version_rows(conn, workflow_id)?
         .into_iter()
         .find(|(vid, _, _)| vid == version_id)
         .ok_or_else(|| AppError::NotFound("Workflow version".into()))?;
-    let snapshot: WorkflowDefinition =
-        serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt workflow version snapshot: {e}")))?;
+    let snapshot: WorkflowDefinition = serde_json::from_str(&snapshot_json)
+        .map_err(|e| AppError::Validation(format!("Corrupt workflow version snapshot: {e}")))?;
     let update = WorkflowDefinitionUpdate {
         name: snapshot.name,
         description: snapshot.description,
@@ -397,7 +608,14 @@ pub fn restore_version(conn: &Connection, workflow_id: &str, version_id: &str, a
                 relationship_definition_id: c.relationship_definition_id,
             })
             .collect(),
-        actions: snapshot.actions.into_iter().map(|a| WorkflowActionInput { action_type: a.action_type, params_json: a.params_json }).collect(),
+        actions: snapshot
+            .actions
+            .into_iter()
+            .map(|a| WorkflowActionInput {
+                action_type: a.action_type,
+                params_json: a.params_json,
+            })
+            .collect(),
     };
     update_rule(conn, workflow_id, &update, actor_user_id)
 }
@@ -405,9 +623,14 @@ pub fn restore_version(conn: &Connection, workflow_id: &str, version_id: &str, a
 /// Admin UX polish (spec §10) - see business_rule_service::duplicate_rule's
 /// identical doc comment; the trigger fields carry over unchanged since a
 /// copy should fire on the same event as its source until an admin edits it.
-pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+pub fn duplicate_rule(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkflowDefinition> {
     require_admin(conn, actor_user_id)?;
-    let existing = workflow_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
+    let existing =
+        workflow_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
     let input = WorkflowDefinitionInput {
         entity_type: existing.entity_type.clone(),
         name: format!("{} (Copy)", existing.name),
@@ -434,10 +657,18 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
                 relationship_definition_id: c.relationship_definition_id.clone(),
             })
             .collect(),
-        actions: existing.actions.iter().map(|a| WorkflowActionInput { action_type: a.action_type.clone(), params_json: a.params_json.clone() }).collect(),
+        actions: existing
+            .actions
+            .iter()
+            .map(|a| WorkflowActionInput {
+                action_type: a.action_type.clone(),
+                params_json: a.params_json.clone(),
+            })
+            .collect(),
     };
     let new_id = new_uuid();
-    let created = workflow_repo::create(conn, &new_id, &existing.workspace_id, &input, actor_user_id)?;
+    let created =
+        workflow_repo::create(conn, &new_id, &existing.workspace_id, &input, actor_user_id)?;
     let deactivate = WorkflowDefinitionUpdate {
         name: created.name.clone(),
         description: created.description.clone(),
@@ -452,7 +683,12 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
         conditions: input.conditions,
         actions: input.actions,
     };
-    Ok(workflow_repo::update(conn, &created.id, &deactivate, actor_user_id)?)
+    Ok(workflow_repo::update(
+        conn,
+        &created.id,
+        &deactivate,
+        actor_user_id,
+    )?)
 }
 
 /// Workflow Studio 2.0 (issue #193): the one-way, one-time "upgrade this
@@ -475,15 +711,31 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
 /// `execution_graph_service::update`/`publish`) - this struct's own
 /// `conditions`/`actions` fields are never read again for this workflow
 /// (see `run_workflow`'s own doc comment).
-pub fn upgrade_to_graph(conn: &Connection, workspace_id: &str, workflow_id: &str, actor_user_id: Option<&str>) -> AppResult<WorkflowDefinition> {
+pub fn upgrade_to_graph(
+    conn: &Connection,
+    workspace_id: &str,
+    workflow_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkflowDefinition> {
     require_admin(conn, actor_user_id)?;
-    let wf = workflow_repo::get(conn, workflow_id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))?;
+    let wf = workflow_repo::get(conn, workflow_id)?
+        .ok_or_else(|| AppError::NotFound("Workflow".into()))?;
     if wf.graph_id.is_some() {
-        return Err(AppError::Validation("This workflow has already been upgraded to a graph".into()));
+        return Err(AppError::Validation(
+            "This workflow has already been upgraded to a graph".into(),
+        ));
     }
     let input = crate::services::execution_graph_service::graph_from_workflow(&wf);
     let graph_id = new_uuid();
-    let graph = crate::repositories::execution_graph_repo::create_with_source(conn, &graph_id, workspace_id, &input, "workflow", workflow_id, actor_user_id)?;
+    let graph = crate::repositories::execution_graph_repo::create_with_source(
+        conn,
+        &graph_id,
+        workspace_id,
+        &input,
+        "workflow",
+        workflow_id,
+        actor_user_id,
+    )?;
     workflow_repo::set_graph_id(conn, workflow_id, &graph.id)?;
     workflow_repo::get(conn, workflow_id)?.ok_or_else(|| AppError::NotFound("Workflow".into()))
 }
@@ -494,7 +746,12 @@ pub fn upgrade_to_graph(conn: &Connection, workspace_id: &str, workflow_id: &str
 /// target_field_key, parsed generically out of `params_json`) `field_key` -
 /// see business_rule_service::describe_active_rules_referencing_field's
 /// doc comment for the full rationale; same caller, same use.
-pub fn describe_active_workflows_referencing_field(conn: &Connection, workspace_id: &str, entity_type: &str, field_key: &str) -> AppResult<Vec<String>> {
+pub fn describe_active_workflows_referencing_field(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    field_key: &str,
+) -> AppResult<Vec<String>> {
     let workflows = workflow_repo::list(conn, workspace_id, entity_type)?;
     Ok(workflows
         .iter()
@@ -518,22 +775,40 @@ fn workflow_references_field(wf: &WorkflowDefinition, field_key: &str) -> bool {
     if wf.trigger_field_key.as_deref() == Some(field_key) {
         return true;
     }
-    if wf.conditions.iter().any(|c| c.field_key == field_key || c.compare_field_key.as_deref() == Some(field_key)) {
+    if wf
+        .conditions
+        .iter()
+        .any(|c| c.field_key == field_key || c.compare_field_key.as_deref() == Some(field_key))
+    {
         return true;
     }
-    wf.actions
-        .iter()
-        .any(|a| serde_json::from_str::<TargetFieldOnly>(&a.params_json).ok().and_then(|p| p.target_field_key).as_deref() == Some(field_key))
+    wf.actions.iter().any(|a| {
+        serde_json::from_str::<TargetFieldOnly>(&a.params_json)
+            .ok()
+            .and_then(|p| p.target_field_key)
+            .as_deref()
+            == Some(field_key)
+    })
 }
 
-pub fn list_runs(conn: &Connection, workspace_id: &str, workflow_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<crate::models::workflow::WorkflowRun>> {
+pub fn list_runs(
+    conn: &Connection,
+    workspace_id: &str,
+    workflow_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<crate::models::workflow::WorkflowRun>> {
     require_admin(conn, actor_user_id)?;
     Ok(workflow_repo::list_runs(conn, workspace_id, workflow_id)?)
 }
 
 // --- Trigger context / condition matching -------------------------------
 
-fn build_trigger_context(conn: &Connection, entity_type: &str, entity_id: &str, override_status: Option<&str>) -> AppResult<HashMap<String, String>> {
+fn build_trigger_context(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    override_status: Option<&str>,
+) -> AppResult<HashMap<String, String>> {
     // ADM-WF "any field" targeting: every built-in field (not just the
     // transition field), merged with custom field values, so a condition
     // can target either kind identically - same shape business rules'
@@ -545,14 +820,17 @@ fn build_trigger_context(conn: &Connection, entity_type: &str, entity_id: &str, 
     let builtin_key = transition_field_for(entity_type);
     let status = match override_status {
         Some(s) => s.to_string(),
-        None => entity_registry::resolve(conn, entity_type, entity_id)?.map(|r| r.status).unwrap_or_default(),
+        None => entity_registry::resolve(conn, entity_type, entity_id)?
+            .map(|r| r.status)
+            .unwrap_or_default(),
     };
     ctx.insert(builtin_key.to_string(), status.clone());
     // Business rules' one built-in trigger field is always literally
     // "status"/"is_active" (never "stage") - mirrored here too so a
     // condition written against the generic built-in key still resolves
     // for entities where transition_field_for differs (Opportunity).
-    ctx.entry(builtin_trigger_field_for(entity_type).to_string()).or_insert(status);
+    ctx.entry(builtin_trigger_field_for(entity_type).to_string())
+        .or_insert(status);
     Ok(ctx)
 }
 
@@ -560,7 +838,10 @@ fn build_trigger_context(conn: &Connection, entity_type: &str, entity_id: &str, 
 /// identical `resolve_condition_value` for the full explanation. Kept as a
 /// separate copy (not shared) since it's typed against
 /// `WorkflowCondition`, not `BusinessRuleCondition`.
-fn resolve_condition_value<'a>(c: &'a crate::models::workflow::WorkflowCondition, ctx: &'a HashMap<String, String>) -> &'a str {
+fn resolve_condition_value<'a>(
+    c: &'a crate::models::workflow::WorkflowCondition,
+    ctx: &'a HashMap<String, String>,
+) -> &'a str {
     match &c.compare_field_key {
         Some(key) => ctx.get(key).map(|s| s.as_str()).unwrap_or(""),
         None => c.value.as_str(),
@@ -582,14 +863,30 @@ fn resolve_related_field(
     let Some(def) = relationship_repo::get_definition(conn, relationship_definition_id)? else {
         return Ok(None);
     };
-    let (related_id, other_type) = if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
-        (relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.target_id), def.target_entity_type)
+    let (related_id, other_type) = if def.source_entity_type == entity_type
+        && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one")
+    {
+        (
+            relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?
+                .into_iter()
+                .next()
+                .map(|i| i.target_id),
+            def.target_entity_type,
+        )
     } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
-        (relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.source_id), def.source_entity_type)
+        (
+            relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?
+                .into_iter()
+                .next()
+                .map(|i| i.source_id),
+            def.source_entity_type,
+        )
     } else {
         (None, String::new())
     };
-    let Some(related_id) = related_id else { return Ok(None) };
+    let Some(related_id) = related_id else {
+        return Ok(None);
+    };
     let values = if field_source == "builtin" {
         builtin_field_service::field_values(conn, &other_type, &related_id)?
     } else {
@@ -598,14 +895,31 @@ fn resolve_related_field(
     Ok(values.get(field_key).cloned())
 }
 
-fn workflow_matches(conn: &Connection, entity_type: &str, entity_id: &str, wf: &WorkflowDefinition, ctx: &HashMap<String, String>) -> AppResult<bool> {
+fn workflow_matches(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    wf: &WorkflowDefinition,
+    ctx: &HashMap<String, String>,
+) -> AppResult<bool> {
     if wf.conditions.is_empty() {
         return Ok(true); // a workflow with no extra conditions always fires on its trigger
     }
-    if !wf.conditions.iter().any(|c| c.relationship_definition_id.is_some()) {
+    if !wf
+        .conditions
+        .iter()
+        .any(|c| c.relationship_definition_id.is_some())
+    {
         return Ok(conditions_match(
             &wf.match_type,
-            wf.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
+            wf.conditions.iter().map(|c| {
+                (
+                    c.group_id.as_deref(),
+                    c.field_key.as_str(),
+                    c.operator.as_str(),
+                    resolve_condition_value(c, ctx),
+                )
+            }),
             ctx,
         ));
     }
@@ -614,13 +928,28 @@ fn workflow_matches(conn: &Connection, entity_type: &str, entity_id: &str, wf: &
     let mut scratch = ctx.clone();
     for c in &wf.conditions {
         if let Some(rel_id) = &c.relationship_definition_id {
-            let value = resolve_related_field(conn, entity_type, entity_id, rel_id, &c.field_source, &c.field_key)?.unwrap_or_default();
+            let value = resolve_related_field(
+                conn,
+                entity_type,
+                entity_id,
+                rel_id,
+                &c.field_source,
+                &c.field_key,
+            )?
+            .unwrap_or_default();
             scratch.insert(c.field_key.clone(), value);
         }
     }
     Ok(conditions_match(
         &wf.match_type,
-        wf.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, &scratch))),
+        wf.conditions.iter().map(|c| {
+            (
+                c.group_id.as_deref(),
+                c.field_key.as_str(),
+                c.operator.as_str(),
+                resolve_condition_value(c, &scratch),
+            )
+        }),
         &scratch,
     ))
 }
@@ -640,7 +969,9 @@ pub fn fire_event(
     fallback_owner_user_id: Option<&str>,
     actor_user_id: Option<&str>,
 ) -> AppResult<usize> {
-    let Some(_guard) = DepthGuard::enter() else { return Ok(0) };
+    let Some(_guard) = DepthGuard::enter() else {
+        return Ok(0);
+    };
     let workflows = workflow_repo::list(conn, workspace_id, entity_type)?;
     let ctx = build_trigger_context(conn, entity_type, entity_id, Some(new_status))?;
     let mut fired = 0;
@@ -649,13 +980,25 @@ pub fn fire_event(
         let trigger_matches = match wf.trigger_type.as_str() {
             "record_created" => old_status.is_none(),
             "record_updated" => old_status.is_some(),
-            "status_changed" => old_status.is_some_and(|old| old != new_status) && wf.trigger_status.as_deref() == Some(new_status),
+            "status_changed" => {
+                old_status.is_some_and(|old| old != new_status)
+                    && wf.trigger_status.as_deref() == Some(new_status)
+            }
             _ => false,
         };
         if !trigger_matches || !workflow_matches(conn, entity_type, entity_id, wf, &ctx)? {
             continue;
         }
-        run_workflow(conn, workspace_id, wf, entity_type, entity_id, &ctx, fallback_owner_user_id, actor_user_id)?;
+        run_workflow(
+            conn,
+            workspace_id,
+            wf,
+            entity_type,
+            entity_id,
+            &ctx,
+            fallback_owner_user_id,
+            actor_user_id,
+        )?;
         fired += 1;
     }
     Ok(fired)
@@ -684,17 +1027,32 @@ pub fn fire_field_changed(
     if changed_field_keys.is_empty() {
         return Ok(0);
     }
-    let Some(_guard) = DepthGuard::enter() else { return Ok(0) };
+    let Some(_guard) = DepthGuard::enter() else {
+        return Ok(0);
+    };
     let workflows = workflow_repo::list(conn, workspace_id, entity_type)?;
     let ctx = build_trigger_context(conn, entity_type, entity_id, None)?;
     let mut fired = 0;
 
-    for wf in workflows.iter().filter(|w| w.is_active && w.trigger_type == "field_changed" && w.trigger_field_source == field_source) {
+    for wf in workflows.iter().filter(|w| {
+        w.is_active && w.trigger_type == "field_changed" && w.trigger_field_source == field_source
+    }) {
         let watched = wf.trigger_field_key.as_deref().unwrap_or("");
-        if !changed_field_keys.iter().any(|k| k == watched) || !workflow_matches(conn, entity_type, entity_id, wf, &ctx)? {
+        if !changed_field_keys.iter().any(|k| k == watched)
+            || !workflow_matches(conn, entity_type, entity_id, wf, &ctx)?
+        {
             continue;
         }
-        run_workflow(conn, workspace_id, wf, entity_type, entity_id, &ctx, fallback_owner_user_id, actor_user_id)?;
+        run_workflow(
+            conn,
+            workspace_id,
+            wf,
+            entity_type,
+            entity_id,
+            &ctx,
+            fallback_owner_user_id,
+            actor_user_id,
+        )?;
         fired += 1;
     }
     Ok(fired)
@@ -706,8 +1064,15 @@ pub fn fire_field_changed(
 /// check every entity's `update()` needs before calling `fire_field_changed`
 /// with `field_source: "builtin"`, so a save that touches nothing observable
 /// doesn't spuriously fire a workflow.
-pub fn changed_builtin_keys(before: &HashMap<String, String>, after: &HashMap<String, String>) -> Vec<String> {
-    after.iter().filter(|(k, v)| before.get(k.as_str()) != Some(v)).map(|(k, _)| k.clone()).collect()
+pub fn changed_builtin_keys(
+    before: &HashMap<String, String>,
+    after: &HashMap<String, String>,
+) -> Vec<String> {
+    after
+        .iter()
+        .filter(|(k, v)| before.get(k.as_str()) != Some(v))
+        .map(|(k, _)| k.clone())
+        .collect()
 }
 
 // --- date_reached / due_overdue / scheduled -----------------------------
@@ -721,14 +1086,33 @@ pub fn changed_builtin_keys(before: &HashMap<String, String>, after: &HashMap<St
 ///   ADM-WF-12 without any code difference - the server dispatch layer just
 ///   needs a caller to invoke it on a timer, which is a deployment/ops
 ///   concern rather than an engine one.
-pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<usize> {
-    let Some(_guard) = DepthGuard::enter() else { return Ok(0) };
+pub fn run_scheduled(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<usize> {
+    let Some(_guard) = DepthGuard::enter() else {
+        return Ok(0);
+    };
     let today = Utc::now().format("%Y-%m-%d").to_string();
     let mut fired = 0;
 
-    for wf in workflow_repo::list_active_by_trigger_types(conn, workspace_id, &["date_reached", "due_overdue"])? {
-        let Some(field) = &wf.trigger_field_key else { continue };
-        for entity_id in matching_date_records(conn, workspace_id, &wf.entity_type, field, &today, wf.trigger_offset_days)? {
+    for wf in workflow_repo::list_active_by_trigger_types(
+        conn,
+        workspace_id,
+        &["date_reached", "due_overdue"],
+    )? {
+        let Some(field) = &wf.trigger_field_key else {
+            continue;
+        };
+        for entity_id in matching_date_records(
+            conn,
+            workspace_id,
+            &wf.entity_type,
+            field,
+            &today,
+            wf.trigger_offset_days,
+        )? {
             if workflow_repo::has_run_for_entity(conn, &wf.id, &entity_id)? {
                 continue;
             }
@@ -736,7 +1120,16 @@ pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Optio
             if !workflow_matches(conn, &wf.entity_type, &entity_id, &wf, &ctx)? {
                 continue;
             }
-            run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, &ctx, None, actor_user_id)?;
+            run_workflow(
+                conn,
+                workspace_id,
+                &wf,
+                &wf.entity_type,
+                &entity_id,
+                &ctx,
+                None,
+                actor_user_id,
+            )?;
             fired += 1;
         }
     }
@@ -754,7 +1147,16 @@ pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Optio
             if !workflow_matches(conn, &wf.entity_type, &entity_id, &wf, &ctx)? {
                 continue;
             }
-            run_workflow(conn, workspace_id, &wf, &wf.entity_type, &entity_id, &ctx, None, actor_user_id)?;
+            run_workflow(
+                conn,
+                workspace_id,
+                &wf,
+                &wf.entity_type,
+                &entity_id,
+                &ctx,
+                None,
+                actor_user_id,
+            )?;
             fired += 1;
         }
         workflow_repo::set_last_scheduled_run(conn, &wf.id, &today)?;
@@ -765,7 +1167,10 @@ pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Optio
 
 fn days_between(from_iso_date: &str, to_iso_date: &str) -> i64 {
     match (
-        chrono::NaiveDate::parse_from_str(&from_iso_date[..10.min(from_iso_date.len())], "%Y-%m-%d"),
+        chrono::NaiveDate::parse_from_str(
+            &from_iso_date[..10.min(from_iso_date.len())],
+            "%Y-%m-%d",
+        ),
         chrono::NaiveDate::parse_from_str(&to_iso_date[..10.min(to_iso_date.len())], "%Y-%m-%d"),
     ) {
         (Ok(from), Ok(to)) => (to - from).num_days(),
@@ -783,36 +1188,78 @@ fn days_between(from_iso_date: &str, to_iso_date: &str) -> i64 {
 /// reusing the same non-archived + string-compare-to-threshold shape the
 /// built-in arms already use, just sourced from `custom_record_repo`/
 /// `custom_field_repo` instead of a dedicated repo per entity.
-fn matching_date_records(conn: &Connection, workspace_id: &str, entity_type: &str, date_field: &str, today: &str, offset_days: i64) -> AppResult<Vec<String>> {
-    let threshold = (Utc::now() - Duration::days(-offset_days)).format("%Y-%m-%d").to_string();
+fn matching_date_records(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    date_field: &str,
+    today: &str,
+    offset_days: i64,
+) -> AppResult<Vec<String>> {
+    let threshold = (Utc::now() - Duration::days(-offset_days))
+        .format("%Y-%m-%d")
+        .to_string();
     let _ = today;
     let ids = match (entity_type, date_field) {
         ("Task", "due_date") => task_repo::list(conn, workspace_id)?
             .into_iter()
-            .filter(|t| t.archived_at.is_none() && t.due_date.as_deref().is_some_and(|d| d <= threshold.as_str()))
+            .filter(|t| {
+                t.archived_at.is_none()
+                    && t.due_date
+                        .as_deref()
+                        .is_some_and(|d| d <= threshold.as_str())
+            })
             .map(|t| t.id)
             .collect(),
         ("Quote", "expiry_date") => crate::repositories::quote_repo::list(conn, workspace_id)?
             .into_iter()
-            .filter(|q| q.archived_at.is_none() && q.expiry_date.as_deref().is_some_and(|d| d <= threshold.as_str()))
+            .filter(|q| {
+                q.archived_at.is_none()
+                    && q.expiry_date
+                        .as_deref()
+                        .is_some_and(|d| d <= threshold.as_str())
+            })
             .map(|q| q.id)
             .collect(),
         ("Contract", "end_date") => crate::repositories::contract_repo::list(conn, workspace_id)?
             .into_iter()
-            .filter(|c| c.archived_at.is_none() && c.end_date.as_deref().is_some_and(|d| d <= threshold.as_str()))
+            .filter(|c| {
+                c.archived_at.is_none()
+                    && c.end_date
+                        .as_deref()
+                        .is_some_and(|d| d <= threshold.as_str())
+            })
             .map(|c| c.id)
             .collect(),
-        ("Contract", "renewal_date") => crate::repositories::contract_repo::list(conn, workspace_id)?
-            .into_iter()
-            .filter(|c| c.archived_at.is_none() && c.renewal_date.as_deref().is_some_and(|d| d <= threshold.as_str()))
-            .map(|c| c.id)
-            .collect(),
+        ("Contract", "renewal_date") => {
+            crate::repositories::contract_repo::list(conn, workspace_id)?
+                .into_iter()
+                .filter(|c| {
+                    c.archived_at.is_none()
+                        && c.renewal_date
+                            .as_deref()
+                            .is_some_and(|d| d <= threshold.as_str())
+                })
+                .map(|c| c.id)
+                .collect()
+        }
         ("Invoice", "due_date") => crate::repositories::invoice_repo::list(conn, workspace_id)?
             .into_iter()
-            .filter(|i| i.archived_at.is_none() && i.due_date.as_deref().is_some_and(|d| d <= threshold.as_str()))
+            .filter(|i| {
+                i.archived_at.is_none()
+                    && i.due_date
+                        .as_deref()
+                        .is_some_and(|d| d <= threshold.as_str())
+            })
             .map(|i| i.id)
             .collect(),
-        _ => custom_object_matching_date_records(conn, workspace_id, entity_type, date_field, &threshold)?,
+        _ => custom_object_matching_date_records(
+            conn,
+            workspace_id,
+            entity_type,
+            date_field,
+            &threshold,
+        )?,
     };
     Ok(ids)
 }
@@ -827,8 +1274,15 @@ fn matching_date_records(conn: &Connection, workspace_id: &str, entity_type: &st
 /// entity type carrying custom fields) - `custom_record_repo::list` below
 /// only ever holds genuine custom-object records, never Company/Contact/
 /// etc., which store their custom field values against their own tables.
-fn custom_object_matching_date_records(conn: &Connection, workspace_id: &str, entity_type: &str, date_field: &str, threshold: &str) -> AppResult<Vec<String>> {
-    let is_custom_object = custom_object_service::get_by_key(conn, workspace_id, entity_type)?.is_some_and(|d| d.is_active);
+fn custom_object_matching_date_records(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    date_field: &str,
+    threshold: &str,
+) -> AppResult<Vec<String>> {
+    let is_custom_object = custom_object_service::get_by_key(conn, workspace_id, entity_type)?
+        .is_some_and(|d| d.is_active);
     if !is_custom_object {
         return Ok(Vec::new());
     }
@@ -844,19 +1298,38 @@ fn custom_object_matching_date_records(conn: &Connection, workspace_id: &str, en
             continue;
         }
         let values = custom_field_repo::get_values(conn, &record.id)?;
-        if values.get(date_field).is_some_and(|d| d.as_str() <= threshold) {
+        if values
+            .get(date_field)
+            .is_some_and(|d| d.as_str() <= threshold)
+        {
             ids.push(record.id);
         }
     }
     Ok(ids)
 }
 
-fn all_active_records(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<Vec<String>> {
+fn all_active_records(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<Vec<String>> {
     let ids = match entity_type {
-        "Company" => company_repo::list(conn, workspace_id)?.into_iter().map(|r| r.id).collect(),
-        "Opportunity" => opportunity_repo::list(conn, workspace_id)?.into_iter().map(|r| r.id).collect(),
-        "Contract" => contract_repo::list(conn, workspace_id)?.into_iter().map(|r| r.id).collect(),
-        "Task" => task_repo::list(conn, workspace_id)?.into_iter().map(|r| r.id).collect(),
+        "Company" => company_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| r.id)
+            .collect(),
+        "Opportunity" => opportunity_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| r.id)
+            .collect(),
+        "Contract" => contract_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| r.id)
+            .collect(),
+        "Task" => task_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| r.id)
+            .collect(),
         _ => custom_record_repo::list_all(conn, workspace_id, entity_type)?
             .into_iter()
             .filter(|r| r.archived_at.is_none())
@@ -896,30 +1369,55 @@ struct UpdateFieldParams {
 /// A target field's display label, for describe_action's test-mode
 /// preview - falls back to the raw key if the field can't be resolved
 /// (e.g. a stale key left behind by a deactivated custom field).
-fn describe_field_label(conn: &Connection, workspace_id: &str, entity_type: &str, target_field_source: &str, target_field_key: &str) -> AppResult<String> {
+fn describe_field_label(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    target_field_source: &str,
+    target_field_key: &str,
+) -> AppResult<String> {
     if target_field_source == "builtin" {
-        Ok(builtin_fields::find_builtin_field(entity_type, target_field_key).map(|f| f.label.to_string()).unwrap_or_else(|| target_field_key.to_string()))
+        Ok(
+            builtin_fields::find_builtin_field(entity_type, target_field_key)
+                .map(|f| f.label.to_string())
+                .unwrap_or_else(|| target_field_key.to_string()),
+        )
     } else {
-        Ok(custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
-            .into_iter()
-            .find(|d| d.key == target_field_key)
-            .map(|d| d.label)
-            .unwrap_or_else(|| target_field_key.to_string()))
+        Ok(
+            custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+                .into_iter()
+                .find(|d| d.key == target_field_key)
+                .map(|d| d.label)
+                .unwrap_or_else(|| target_field_key.to_string()),
+        )
     }
 }
 
 /// Shared by update_field/set_default_field/clear_field - all three target
 /// a field on the trigger's own record the same way, differing only in
 /// when/what they write at execution time.
-fn validate_update_field_target(conn: &Connection, workspace_id: &str, entity_type: &str, target_field_source: &str, target_field_key: &str) -> AppResult<()> {
+fn validate_update_field_target(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    target_field_source: &str,
+    target_field_key: &str,
+) -> AppResult<()> {
     if target_field_source == "builtin" {
         if !builtin_fields::is_actionable_builtin_field(entity_type, target_field_key) {
-            return Err(AppError::Validation(format!("'{target_field_key}' is not an actionable built-in field on {entity_type}")));
+            return Err(AppError::Validation(format!(
+                "'{target_field_key}' is not an actionable built-in field on {entity_type}"
+            )));
         }
     } else {
         let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-        if !defs.iter().any(|d| d.key == target_field_key && d.is_active) {
-            return Err(AppError::Validation(format!("'{target_field_key}' is not an active custom field to update")));
+        if !defs
+            .iter()
+            .any(|d| d.key == target_field_key && d.is_active)
+        {
+            return Err(AppError::Validation(format!(
+                "'{target_field_key}' is not an active custom field to update"
+            )));
         }
     }
     Ok(())
@@ -1003,12 +1501,17 @@ struct RunAiAgentParams {
     input_template: String,
 }
 
-fn parse_params<T: for<'de> Deserialize<'de>>(action_type: &str, params_json: &str) -> AppResult<T> {
-    serde_json::from_str(params_json).map_err(|e| AppError::Validation(format!("Invalid parameters for '{action_type}': {e}")))
+fn parse_params<T: for<'de> Deserialize<'de>>(
+    action_type: &str,
+    params_json: &str,
+) -> AppResult<T> {
+    serde_json::from_str(params_json)
+        .map_err(|e| AppError::Validation(format!("Invalid parameters for '{action_type}': {e}")))
 }
 
 fn entity_supports_owner(entity_type: &str) -> bool {
-    matches!(entity_type, "Company" | "Opportunity" | "Contract" | "Task") || !CORE_WORKFLOW_ENTITY_TYPES.contains(&entity_type)
+    matches!(entity_type, "Company" | "Opportunity" | "Contract" | "Task")
+        || !CORE_WORKFLOW_ENTITY_TYPES.contains(&entity_type)
 }
 
 /// Which entity types `create_record` can construct with nothing but a
@@ -1020,18 +1523,28 @@ fn entity_supports_owner(entity_type: &str) -> bool {
 /// have dedicated actions for the common "auto-create a task" case. Any
 /// active custom object qualifies unconditionally, same as the original
 /// `create_related_record` action.
-fn is_creatable_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<bool> {
+fn is_creatable_entity_type(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<bool> {
     if entity_type == "Company" {
         return Ok(true);
     }
-    Ok(custom_object_service::get_by_key(conn, workspace_id, entity_type)?.is_some_and(|d| d.is_active))
+    Ok(
+        custom_object_service::get_by_key(conn, workspace_id, entity_type)?
+            .is_some_and(|d| d.is_active),
+    )
 }
 
 /// The other side of `relationship_definition_id` from `entity_type` -
 /// shared by `create_record`'s optional link target and
 /// `update_related_record`'s required one. Errors rather than guessing
 /// when `entity_type` isn't actually one of the definition's two sides.
-fn other_side_of_relationship(def: &crate::models::relationship::RelationshipDefinition, entity_type: &str) -> AppResult<String> {
+fn other_side_of_relationship(
+    def: &crate::models::relationship::RelationshipDefinition,
+    entity_type: &str,
+) -> AppResult<String> {
     if def.source_entity_type == entity_type {
         if def.target_is_polymorphic {
             // The target varies per link (a Document Record can attach to
@@ -1047,14 +1560,22 @@ fn other_side_of_relationship(def: &crate::models::relationship::RelationshipDef
     } else if def.target_entity_type == entity_type {
         Ok(def.source_entity_type.clone())
     } else {
-        Err(AppError::Validation("Selected relationship does not connect to this record type".into()))
+        Err(AppError::Validation(
+            "Selected relationship does not connect to this record type".into(),
+        ))
     }
 }
 
 /// Validates an action's params without executing anything - used both by
 /// `validate_actions` at save time and indirectly documents each action's
 /// expected `params_json` shape.
-fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type: &str, action_type: &str, params_json: &str) -> AppResult<()> {
+fn parse_and_validate_params(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    action_type: &str,
+    params_json: &str,
+) -> AppResult<()> {
     match action_type {
         "create_task" => {
             let p: CreateTaskParams = parse_params(action_type, params_json)?;
@@ -1070,9 +1591,17 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
         }
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            validate_update_field_target(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            validate_update_field_target(
+                conn,
+                workspace_id,
+                entity_type,
+                &p.target_field_source,
+                &p.target_field_key,
+            )?;
             if p.value.is_none() && p.copy_from_field_key.is_none() {
-                return Err(AppError::Validation("Provide a value or a field to copy from".into()));
+                return Err(AppError::Validation(
+                    "Provide a value or a field to copy from".into(),
+                ));
             }
         }
         // Second addendum round: the trigger-time counterparts to
@@ -1082,19 +1611,35 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
         // meaningless for clear_field, so that check is skipped there.
         "set_default_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            validate_update_field_target(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            validate_update_field_target(
+                conn,
+                workspace_id,
+                entity_type,
+                &p.target_field_source,
+                &p.target_field_key,
+            )?;
             if p.value.is_none() && p.copy_from_field_key.is_none() {
-                return Err(AppError::Validation("Provide a value or a field to copy from".into()));
+                return Err(AppError::Validation(
+                    "Provide a value or a field to copy from".into(),
+                ));
             }
         }
         "clear_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            validate_update_field_target(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            validate_update_field_target(
+                conn,
+                workspace_id,
+                entity_type,
+                &p.target_field_source,
+                &p.target_field_key,
+            )?;
         }
         "assign_owner" => {
             let _p: AssignOwnerParams = parse_params(action_type, params_json)?;
             if !entity_supports_owner(entity_type) {
-                return Err(AppError::Validation(format!("{entity_type} has no owner field to assign")));
+                return Err(AppError::Validation(format!(
+                    "{entity_type} has no owner field to assign"
+                )));
             }
         }
         "create_record" => {
@@ -1105,70 +1650,125 @@ fn parse_and_validate_params(conn: &Connection, workspace_id: &str, entity_type:
                 )));
             }
             if let Some(rel_id) = &p.relationship_definition_id {
-                let def = relationship_repo::get_definition(conn, rel_id)?.ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
+                let def = relationship_repo::get_definition(conn, rel_id)?.ok_or_else(|| {
+                    AppError::Validation("Selected relationship does not exist".into())
+                })?;
                 let other = other_side_of_relationship(&def, entity_type)?;
                 if other != p.entity_type {
-                    return Err(AppError::Validation("Selected relationship does not connect these two record types".into()));
+                    return Err(AppError::Validation(
+                        "Selected relationship does not connect these two record types".into(),
+                    ));
                 }
             }
         }
         "update_related_record" => {
             let p: UpdateRelatedRecordParams = parse_params(action_type, params_json)?;
-            let def = relationship_repo::get_definition(conn, &p.relationship_definition_id)?.ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
+            let def = relationship_repo::get_definition(conn, &p.relationship_definition_id)?
+                .ok_or_else(|| {
+                    AppError::Validation("Selected relationship does not exist".into())
+                })?;
             let other_type = other_side_of_relationship(&def, entity_type)?;
             if p.target_field_source == "builtin" {
                 if !builtin_fields::is_actionable_builtin_field(&other_type, &p.target_field_key) {
-                    return Err(AppError::Validation(format!("'{}' is not an actionable built-in field on {other_type}", p.target_field_key)));
+                    return Err(AppError::Validation(format!(
+                        "'{}' is not an actionable built-in field on {other_type}",
+                        p.target_field_key
+                    )));
                 }
             } else {
                 let defs = custom_field_repo::list_definitions(conn, workspace_id, &other_type)?;
-                if !defs.iter().any(|d| d.key == p.target_field_key && d.is_active) {
-                    return Err(AppError::Validation(format!("'{}' is not an active custom field on {other_type}", p.target_field_key)));
+                if !defs
+                    .iter()
+                    .any(|d| d.key == p.target_field_key && d.is_active)
+                {
+                    return Err(AppError::Validation(format!(
+                        "'{}' is not an active custom field on {other_type}",
+                        p.target_field_key
+                    )));
                 }
             }
             if p.value.is_none() && p.copy_from_field_key.is_none() {
-                return Err(AppError::Validation("Provide a value or a field to copy from".into()));
+                return Err(AppError::Validation(
+                    "Provide a value or a field to copy from".into(),
+                ));
             }
         }
         "call_connector_action" => {
             let p: CallConnectorActionParams = parse_params(action_type, params_json)?;
             let connector = super::connector_service::get(conn, workspace_id, &p.connector_id)?;
-            if !connector.actions.iter().any(|a| a.action_key == p.action_key) {
-                return Err(AppError::Validation(format!("'{}' has no action '{}'", connector.name, p.action_key)));
+            if !connector
+                .actions
+                .iter()
+                .any(|a| a.action_key == p.action_key)
+            {
+                return Err(AppError::Validation(format!(
+                    "'{}' has no action '{}'",
+                    connector.name, p.action_key
+                )));
             }
-            if integration_connection_ref_repo::get_by_key(conn, workspace_id, &p.reference_key)?.is_none() {
-                return Err(AppError::Validation(format!("Unknown connection reference '{}'", p.reference_key)));
+            if integration_connection_ref_repo::get_by_key(conn, workspace_id, &p.reference_key)?
+                .is_none()
+            {
+                return Err(AppError::Validation(format!(
+                    "Unknown connection reference '{}'",
+                    p.reference_key
+                )));
             }
         }
         "run_ai_agent" => {
             let p: RunAiAgentParams = parse_params(action_type, params_json)?;
-            if !crate::models::ai_agent_pipeline::TRIGGER_TARGET_TYPES.contains(&p.target_type.as_str()) {
-                return Err(AppError::Validation(format!("Invalid target type '{}'", p.target_type)));
+            if !crate::models::ai_agent_pipeline::TRIGGER_TARGET_TYPES
+                .contains(&p.target_type.as_str())
+            {
+                return Err(AppError::Validation(format!(
+                    "Invalid target type '{}'",
+                    p.target_type
+                )));
             }
             let exists = match p.target_type.as_str() {
-                "agent" => ai_agent_repo::get(conn, &p.target_id)?.map(|a| a.workspace_id == workspace_id && a.is_active).unwrap_or(false),
-                "pipeline" => ai_agent_pipeline_repo::get(conn, &p.target_id)?.map(|pl| pl.workspace_id == workspace_id && pl.is_active).unwrap_or(false),
+                "agent" => ai_agent_repo::get(conn, &p.target_id)?
+                    .map(|a| a.workspace_id == workspace_id && a.is_active)
+                    .unwrap_or(false),
+                "pipeline" => ai_agent_pipeline_repo::get(conn, &p.target_id)?
+                    .map(|pl| pl.workspace_id == workspace_id && pl.is_active)
+                    .unwrap_or(false),
                 _ => false,
             };
             if !exists {
-                return Err(AppError::Validation(format!("The selected {} does not exist", p.target_type)));
+                return Err(AppError::Validation(format!(
+                    "The selected {} does not exist",
+                    p.target_type
+                )));
             }
         }
         "add_notification" => {
             let p: AddNotificationParams = parse_params(action_type, params_json)?;
             if p.message.trim().is_empty() {
-                return Err(AppError::Validation("Notification message is required".into()));
+                return Err(AppError::Validation(
+                    "Notification message is required".into(),
+                ));
             }
             if !NOTIFICATION_AUDIENCES.contains(&p.audience.as_str()) {
-                return Err(AppError::Validation(format!("Invalid notification audience '{}'", p.audience)));
+                return Err(AppError::Validation(format!(
+                    "Invalid notification audience '{}'",
+                    p.audience
+                )));
             }
         }
-        _ => return Err(AppError::Validation(format!("Unknown action type '{action_type}'"))),
+        _ => {
+            return Err(AppError::Validation(format!(
+                "Unknown action type '{action_type}'"
+            )))
+        }
     }
     Ok(())
 }
 
-fn resolve_owner_fallback(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<Option<String>> {
+fn resolve_owner_fallback(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> AppResult<Option<String>> {
     let owner = match entity_type {
         "Company" => company_repo::get(conn, entity_id)?.and_then(|r| r.owner_user_id),
         "Contact" => None,
@@ -1187,7 +1787,9 @@ fn resolve_owner_fallback(conn: &Connection, entity_type: &str, entity_id: &str)
             Some(i) => company_repo::get(conn, &i.company_id)?.and_then(|c| c.owner_user_id),
             None => None,
         },
-        _ => custom_record_repo::get(conn, entity_id)?.filter(|r| r.object_key == entity_type).and_then(|r| r.owner_user_id),
+        _ => custom_record_repo::get(conn, entity_id)?
+            .filter(|r| r.object_key == entity_type)
+            .and_then(|r| r.owner_user_id),
     };
     Ok(owner)
 }
@@ -1206,7 +1808,12 @@ fn admin_user_ids(conn: &Connection, workspace_id: &str) -> AppResult<Vec<String
 /// *from* isn't source-tagged (no second field_source param, to keep the
 /// action shape simple) - read both custom values and every built-in
 /// field's current value and take whichever has that key.
-fn resolve_update_field_value(conn: &Connection, entity_type: &str, entity_id: &str, p: &UpdateFieldParams) -> AppResult<String> {
+fn resolve_update_field_value(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    p: &UpdateFieldParams,
+) -> AppResult<String> {
     if let Some(src) = &p.copy_from_field_key {
         let mut ctx = builtin_field_service::field_values(conn, entity_type, entity_id)?;
         for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
@@ -1223,18 +1830,36 @@ fn resolve_update_field_value(conn: &Connection, entity_type: &str, entity_id: &
 /// set_default_field/clear_field - they differ only in whether/when they
 /// call this, not in how the write itself happens.
 fn write_update_field_value(
-    conn: &Connection, workspace_id: &str, entity_type: &str, entity_id: &str,
-    target_field_source: &str, target_field_key: &str, value: &str, actor_user_id: Option<&str>,
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+    target_field_source: &str,
+    target_field_key: &str,
+    value: &str,
+    actor_user_id: Option<&str>,
 ) -> AppResult<String> {
     if target_field_source == "builtin" {
-        builtin_field_service::set_field(conn, workspace_id, entity_type, entity_id, target_field_key, value, actor_user_id)?;
+        builtin_field_service::set_field(
+            conn,
+            workspace_id,
+            entity_type,
+            entity_id,
+            target_field_key,
+            value,
+            actor_user_id,
+        )?;
         Ok(target_field_key.to_string())
     } else {
         let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
         let def = defs
             .iter()
             .find(|d| d.key == target_field_key && d.is_active)
-            .ok_or_else(|| AppError::Validation(format!("'{target_field_key}' is not an active custom field")))?;
+            .ok_or_else(|| {
+                AppError::Validation(format!(
+                    "'{target_field_key}' is not an active custom field"
+                ))
+            })?;
         custom_field_repo::set_value(conn, &def.id, entity_id, value)?;
         Ok(def.label.clone())
     }
@@ -1260,14 +1885,26 @@ pub(crate) fn apply_action(
     match action_type {
         "create_task" => {
             let p: CreateTaskParams = parse_params(action_type, params_json)?;
-            let assignee = p.assignee_user_id.clone().or_else(|| fallback_owner_user_id.map(String::from));
-            let due_date = (Utc::now() + Duration::days(p.due_in_days)).format("%Y-%m-%d").to_string();
+            let assignee = p
+                .assignee_user_id
+                .clone()
+                .or_else(|| fallback_owner_user_id.map(String::from));
+            let due_date = (Utc::now() + Duration::days(p.due_in_days))
+                .format("%Y-%m-%d")
+                .to_string();
             let task = task_service::create(
-                conn, workspace_id,
+                conn,
+                workspace_id,
                 &TaskInput {
-                    title: p.title.clone(), description: p.description, owner_user_id: assignee, priority: "Normal".into(),
-                    status: "Not Started".into(), due_date: Some(due_date), reminder_at: None,
-                    related_type: Some(entity_type.to_string()), related_id: Some(entity_id.to_string()),
+                    title: p.title.clone(),
+                    description: p.description,
+                    owner_user_id: assignee,
+                    priority: "Normal".into(),
+                    status: "Not Started".into(),
+                    due_date: Some(due_date),
+                    reminder_at: None,
+                    related_type: Some(entity_type.to_string()),
+                    related_id: Some(entity_id.to_string()),
                 },
                 actor_user_id,
             )?;
@@ -1275,14 +1912,24 @@ pub(crate) fn apply_action(
         }
         "create_reminder" => {
             let p: CreateReminderParams = parse_params(action_type, params_json)?;
-            let assignee = p.assignee_user_id.clone().or_else(|| fallback_owner_user_id.map(String::from));
+            let assignee = p
+                .assignee_user_id
+                .clone()
+                .or_else(|| fallback_owner_user_id.map(String::from));
             let remind_at = (Utc::now() + Duration::days(p.remind_in_days)).to_rfc3339();
             let task = task_service::create(
-                conn, workspace_id,
+                conn,
+                workspace_id,
                 &TaskInput {
-                    title: p.title.clone(), description: p.description, owner_user_id: assignee, priority: "Normal".into(),
-                    status: "Not Started".into(), due_date: None, reminder_at: Some(remind_at),
-                    related_type: Some(entity_type.to_string()), related_id: Some(entity_id.to_string()),
+                    title: p.title.clone(),
+                    description: p.description,
+                    owner_user_id: assignee,
+                    priority: "Normal".into(),
+                    status: "Not Started".into(),
+                    due_date: None,
+                    reminder_at: Some(remind_at),
+                    related_type: Some(entity_type.to_string()),
+                    related_id: Some(entity_id.to_string()),
                 },
                 actor_user_id,
             )?;
@@ -1291,7 +1938,16 @@ pub(crate) fn apply_action(
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
             let value = resolve_update_field_value(conn, entity_type, entity_id, &p)?;
-            let label = write_update_field_value(conn, workspace_id, entity_type, entity_id, &p.target_field_source, &p.target_field_key, &value, actor_user_id)?;
+            let label = write_update_field_value(
+                conn,
+                workspace_id,
+                entity_type,
+                entity_id,
+                &p.target_field_source,
+                &p.target_field_key,
+                &value,
+                actor_user_id,
+            )?;
             Ok(format!("set {label} = \"{value}\""))
         }
         // Second addendum round: "only if currently empty" - mirrors
@@ -1303,26 +1959,52 @@ pub(crate) fn apply_action(
             for (k, v) in custom_field_repo::get_values(conn, entity_id)? {
                 ctx.insert(k, v);
             }
-            let currently_empty = ctx.get(&p.target_field_key).map(|s| s.trim().is_empty()).unwrap_or(true);
+            let currently_empty = ctx
+                .get(&p.target_field_key)
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(true);
             if !currently_empty {
-                return Ok(format!("{} already has a value - left unchanged", p.target_field_key));
+                return Ok(format!(
+                    "{} already has a value - left unchanged",
+                    p.target_field_key
+                ));
             }
             let value = resolve_update_field_value(conn, entity_type, entity_id, &p)?;
-            let label = write_update_field_value(conn, workspace_id, entity_type, entity_id, &p.target_field_source, &p.target_field_key, &value, actor_user_id)?;
+            let label = write_update_field_value(
+                conn,
+                workspace_id,
+                entity_type,
+                entity_id,
+                &p.target_field_source,
+                &p.target_field_key,
+                &value,
+                actor_user_id,
+            )?;
             Ok(format!("set default {label} = \"{value}\""))
         }
         // Always writes empty, unconditionally - the trigger-time
         // counterpart to business rules' clear_value action.
         "clear_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let label = write_update_field_value(conn, workspace_id, entity_type, entity_id, &p.target_field_source, &p.target_field_key, "", actor_user_id)?;
+            let label = write_update_field_value(
+                conn,
+                workspace_id,
+                entity_type,
+                entity_id,
+                &p.target_field_source,
+                &p.target_field_key,
+                "",
+                actor_user_id,
+            )?;
             Ok(format!("cleared {label}"))
         }
         "assign_owner" => {
             let p: AssignOwnerParams = parse_params(action_type, params_json)?;
             match entity_type {
                 "Company" => company_repo::set_owner(conn, entity_id, p.user_id.as_deref())?,
-                "Opportunity" => opportunity_repo::set_owner(conn, entity_id, p.user_id.as_deref())?,
+                "Opportunity" => {
+                    opportunity_repo::set_owner(conn, entity_id, p.user_id.as_deref())?
+                }
                 "Contract" => contract_repo::set_owner(conn, entity_id, p.user_id.as_deref())?,
                 "Task" => task_repo::set_owner(conn, entity_id, p.user_id.as_deref())?,
                 _ => custom_record_repo::set_owner(conn, entity_id, p.user_id.as_deref())?,
@@ -1333,48 +2015,108 @@ pub(crate) fn apply_action(
             let p: CreateRecordParams = parse_params(action_type, params_json)?;
             let source = entity_registry::resolve(conn, entity_type, entity_id)?
                 .ok_or_else(|| AppError::Validation("Triggering record no longer exists".into()))?;
-            let name = p.name_template.clone().unwrap_or_else(|| format!("Related to {}", source.display_name));
-            let is_custom_object = custom_object_service::get_by_key(conn, workspace_id, &p.entity_type)?.is_some_and(|d| d.is_active);
+            let name = p
+                .name_template
+                .clone()
+                .unwrap_or_else(|| format!("Related to {}", source.display_name));
+            let is_custom_object =
+                custom_object_service::get_by_key(conn, workspace_id, &p.entity_type)?
+                    .is_some_and(|d| d.is_active);
             let new_id = if is_custom_object {
                 custom_record_service::create(
-                    conn, workspace_id,
-                    &crate::models::custom_record::CustomRecordInput { object_key: p.entity_type.clone(), primary_name: name.clone(), status: "Active".into(), owner_user_id: None, notes: None },
+                    conn,
+                    workspace_id,
+                    &crate::models::custom_record::CustomRecordInput {
+                        object_key: p.entity_type.clone(),
+                        primary_name: name.clone(),
+                        status: "Active".into(),
+                        owner_user_id: None,
+                        notes: None,
+                    },
                     actor_user_id,
-                )?.id
+                )?
+                .id
             } else if p.entity_type == "Company" {
                 company_service::create(
-                    conn, workspace_id,
+                    conn,
+                    workspace_id,
                     &crate::models::company::CompanyInput {
-                        name: name.clone(), status: "Prospect".into(), owner_user_id: None, tax_number: None,
-                        billing_address: None, shipping_address: None, tags: None, notes: None,
+                        name: name.clone(),
+                        status: "Prospect".into(),
+                        owner_user_id: None,
+                        tax_number: None,
+                        billing_address: None,
+                        shipping_address: None,
+                        tags: None,
+                        notes: None,
                         ..Default::default()
                     },
                     actor_user_id,
-                )?.id
+                )?
+                .id
             } else {
-                return Err(AppError::Validation(format!("'{}' cannot be created by a workflow action", p.entity_type)));
+                return Err(AppError::Validation(format!(
+                    "'{}' cannot be created by a workflow action",
+                    p.entity_type
+                )));
             };
             if let Some(rel_id) = &p.relationship_definition_id {
-                let def = relationship_repo::get_definition(conn, rel_id)?
-                    .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
-                let (source_type, source_id, target_type, target_id) = if def.source_entity_type == entity_type {
-                    (entity_type, entity_id.to_string(), p.entity_type.as_str(), new_id.clone())
-                } else {
-                    (p.entity_type.as_str(), new_id.clone(), entity_type, entity_id.to_string())
-                };
-                crate::services::relationship_service::link(conn, workspace_id, &def.id, source_type, &source_id, target_type, &target_id, actor_user_id)?;
+                let def = relationship_repo::get_definition(conn, rel_id)?.ok_or_else(|| {
+                    AppError::Validation("Selected relationship does not exist".into())
+                })?;
+                let (source_type, source_id, target_type, target_id) =
+                    if def.source_entity_type == entity_type {
+                        (
+                            entity_type,
+                            entity_id.to_string(),
+                            p.entity_type.as_str(),
+                            new_id.clone(),
+                        )
+                    } else {
+                        (
+                            p.entity_type.as_str(),
+                            new_id.clone(),
+                            entity_type,
+                            entity_id.to_string(),
+                        )
+                    };
+                crate::services::relationship_service::link(
+                    conn,
+                    workspace_id,
+                    &def.id,
+                    source_type,
+                    &source_id,
+                    target_type,
+                    &target_id,
+                    actor_user_id,
+                )?;
             }
             Ok(format!("created {} '{}'", p.entity_type, name))
         }
         "update_related_record" => {
             let p: UpdateRelatedRecordParams = parse_params(action_type, params_json)?;
             let def = relationship_repo::get_definition(conn, &p.relationship_definition_id)?
-                .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
-            let (other_type, related_ids): (String, Vec<String>) = if def.source_entity_type == entity_type {
-                (def.target_entity_type.clone(), relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?.into_iter().map(|i| i.target_id).collect())
-            } else {
-                (def.source_entity_type.clone(), relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?.into_iter().map(|i| i.source_id).collect())
-            };
+                .ok_or_else(|| {
+                    AppError::Validation("Selected relationship does not exist".into())
+                })?;
+            let (other_type, related_ids): (String, Vec<String>) =
+                if def.source_entity_type == entity_type {
+                    (
+                        def.target_entity_type.clone(),
+                        relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?
+                            .into_iter()
+                            .map(|i| i.target_id)
+                            .collect(),
+                    )
+                } else {
+                    (
+                        def.source_entity_type.clone(),
+                        relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?
+                            .into_iter()
+                            .map(|i| i.source_id)
+                            .collect(),
+                    )
+                };
             if related_ids.is_empty() {
                 return Ok(format!("no linked {other_type} record to update"));
             }
@@ -1392,26 +2134,61 @@ pub(crate) fn apply_action(
             };
             for related_id in &related_ids {
                 if p.target_field_source == "builtin" {
-                    builtin_field_service::set_field(conn, workspace_id, &other_type, related_id, &p.target_field_key, &value, actor_user_id)?;
+                    builtin_field_service::set_field(
+                        conn,
+                        workspace_id,
+                        &other_type,
+                        related_id,
+                        &p.target_field_key,
+                        &value,
+                        actor_user_id,
+                    )?;
                 } else {
-                    let defs = custom_field_repo::list_definitions(conn, workspace_id, &other_type)?;
-                    let def2 = defs.iter().find(|d| d.key == p.target_field_key && d.is_active)
-                        .ok_or_else(|| AppError::Validation(format!("'{}' is not an active custom field on {other_type}", p.target_field_key)))?;
+                    let defs =
+                        custom_field_repo::list_definitions(conn, workspace_id, &other_type)?;
+                    let def2 = defs
+                        .iter()
+                        .find(|d| d.key == p.target_field_key && d.is_active)
+                        .ok_or_else(|| {
+                            AppError::Validation(format!(
+                                "'{}' is not an active custom field on {other_type}",
+                                p.target_field_key
+                            ))
+                        })?;
                     custom_field_repo::set_value(conn, &def2.id, related_id, &value)?;
                 }
             }
-            Ok(format!("set {} on {} linked {other_type} record(s)", p.target_field_key, related_ids.len()))
+            Ok(format!(
+                "set {} on {} linked {other_type} record(s)",
+                p.target_field_key,
+                related_ids.len()
+            ))
         }
         "add_notification" => {
             let p: AddNotificationParams = parse_params(action_type, params_json)?;
             if p.audience == "all_admins" {
                 for admin_id in admin_user_ids(conn, workspace_id)? {
-                    notification_repo::create(conn, workspace_id, Some(&admin_id), &p.message, Some(entity_type), Some(entity_id))?;
+                    notification_repo::create(
+                        conn,
+                        workspace_id,
+                        Some(&admin_id),
+                        &p.message,
+                        Some(entity_type),
+                        Some(entity_id),
+                    )?;
                 }
             } else {
-                let owner = resolve_owner_fallback(conn, entity_type, entity_id)?.or_else(|| fallback_owner_user_id.map(String::from));
+                let owner = resolve_owner_fallback(conn, entity_type, entity_id)?
+                    .or_else(|| fallback_owner_user_id.map(String::from));
                 if let Some(user_id) = owner {
-                    notification_repo::create(conn, workspace_id, Some(&user_id), &p.message, Some(entity_type), Some(entity_id))?;
+                    notification_repo::create(
+                        conn,
+                        workspace_id,
+                        Some(&user_id),
+                        &p.message,
+                        Some(entity_type),
+                        Some(entity_id),
+                    )?;
                 }
             }
             Ok("sent notification".into())
@@ -1477,7 +2254,9 @@ pub(crate) fn apply_action(
             )?;
             Ok(format!("queued {} run", p.target_type))
         }
-        other => Err(AppError::Validation(format!("Unknown action type '{other}'"))),
+        other => Err(AppError::Validation(format!(
+            "Unknown action type '{other}'"
+        ))),
     }
 }
 
@@ -1505,24 +2284,65 @@ fn run_workflow(
     if let Some(graph_id) = &wf.graph_id {
         let trigger_input = serde_json::to_string(ctx).unwrap_or_else(|_| "{}".to_string());
         crate::repositories::graph_pending_run_repo::enqueue(
-            conn, &new_uuid(), workspace_id, graph_id, &trigger_input, Some("workflow"), Some(entity_type), Some(entity_id),
+            conn,
+            &new_uuid(),
+            workspace_id,
+            graph_id,
+            &trigger_input,
+            Some("workflow"),
+            Some(entity_type),
+            Some(entity_id),
         )?;
-        workflow_repo::record_run(conn, workspace_id, &wf.id, entity_type, Some(entity_id), &wf.trigger_type, "success", Some("queued graph run"), None)?;
+        workflow_repo::record_run(
+            conn,
+            workspace_id,
+            &wf.id,
+            entity_type,
+            Some(entity_id),
+            &wf.trigger_type,
+            "success",
+            Some("queued graph run"),
+            None,
+        )?;
         return Ok(());
     }
     let mut summaries = Vec::new();
     let mut errors = Vec::new();
     for action in &wf.actions {
-        match apply_action(conn, workspace_id, &action.action_type, &action.params_json, entity_type, entity_id, fallback_owner_user_id, actor_user_id) {
+        match apply_action(
+            conn,
+            workspace_id,
+            &action.action_type,
+            &action.params_json,
+            entity_type,
+            entity_id,
+            fallback_owner_user_id,
+            actor_user_id,
+        ) {
             Ok(summary) => summaries.push(summary),
             Err(e) => errors.push(e.to_string()),
         }
     }
-    let outcome = if errors.is_empty() { "success" } else { "error" };
-    let error_message = if errors.is_empty() { None } else { Some(errors.join("; ")) };
+    let outcome = if errors.is_empty() {
+        "success"
+    } else {
+        "error"
+    };
+    let error_message = if errors.is_empty() {
+        None
+    } else {
+        Some(errors.join("; "))
+    };
     workflow_repo::record_run(
-        conn, workspace_id, &wf.id, entity_type, Some(entity_id), &wf.trigger_type, outcome,
-        Some(&summaries.join("; ")), error_message.as_deref(),
+        conn,
+        workspace_id,
+        &wf.id,
+        entity_type,
+        Some(entity_id),
+        &wf.trigger_type,
+        outcome,
+        Some(&summaries.join("; ")),
+        error_message.as_deref(),
     )?;
     Ok(())
 }
@@ -1552,7 +2372,13 @@ pub struct WorkflowTestResult {
 /// language via `describe_action` rather than run through `apply_action`,
 /// so nothing is written - no task created, no field changed, no
 /// notification sent.
-pub fn test_workflows(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &HashMap<String, String>, actor_user_id: Option<&str>) -> AppResult<WorkflowTestResult> {
+pub fn test_workflows(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    ctx: &HashMap<String, String>,
+    actor_user_id: Option<&str>,
+) -> AppResult<WorkflowTestResult> {
     require_admin(conn, actor_user_id)?;
     let workflows = workflow_repo::list(conn, workspace_id, entity_type)?;
     let mut matches = Vec::new();
@@ -1565,9 +2391,20 @@ pub fn test_workflows(conn: &Connection, workspace_id: &str, entity_type: &str, 
         }
         let mut action_descriptions = Vec::new();
         for action in &wf.actions {
-            action_descriptions.push(describe_action(conn, workspace_id, entity_type, &action.action_type, &action.params_json)?);
+            action_descriptions.push(describe_action(
+                conn,
+                workspace_id,
+                entity_type,
+                &action.action_type,
+                &action.params_json,
+            )?);
         }
-        matches.push(WorkflowTestMatch { workflow_id: wf.id.clone(), workflow_name: wf.name.clone(), trigger_type: wf.trigger_type.clone(), action_descriptions });
+        matches.push(WorkflowTestMatch {
+            workflow_id: wf.id.clone(),
+            workflow_name: wf.name.clone(),
+            trigger_type: wf.trigger_type.clone(),
+            action_descriptions,
+        });
     }
     Ok(WorkflowTestResult { matches })
 }
@@ -1576,7 +2413,13 @@ pub fn test_workflows(conn: &Connection, workspace_id: &str, entity_type: &str, 
 /// same params and resolves the same labels, but never writes anything
 /// (no task/record creation, no field writes, no notifications sent, no
 /// relationship links).
-fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, action_type: &str, params_json: &str) -> AppResult<String> {
+fn describe_action(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    action_type: &str,
+    params_json: &str,
+) -> AppResult<String> {
     match action_type {
         "create_task" => {
             let p: CreateTaskParams = parse_params(action_type, params_json)?;
@@ -1588,7 +2431,13 @@ fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, act
         }
         "update_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let label = describe_field_label(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            let label = describe_field_label(
+                conn,
+                workspace_id,
+                entity_type,
+                &p.target_field_source,
+                &p.target_field_key,
+            )?;
             match (&p.value, &p.copy_from_field_key) {
                 (Some(v), _) => Ok(format!("would set {label} = \"{v}\"")),
                 (None, Some(src)) => Ok(format!("would set {label} = value copied from '{src}'")),
@@ -1597,19 +2446,35 @@ fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, act
         }
         "set_default_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let label = describe_field_label(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
-            Ok(format!("would set default {label} (only if currently empty)"))
+            let label = describe_field_label(
+                conn,
+                workspace_id,
+                entity_type,
+                &p.target_field_source,
+                &p.target_field_key,
+            )?;
+            Ok(format!(
+                "would set default {label} (only if currently empty)"
+            ))
         }
         "clear_field" => {
             let p: UpdateFieldParams = parse_params(action_type, params_json)?;
-            let label = describe_field_label(conn, workspace_id, entity_type, &p.target_field_source, &p.target_field_key)?;
+            let label = describe_field_label(
+                conn,
+                workspace_id,
+                entity_type,
+                &p.target_field_source,
+                &p.target_field_key,
+            )?;
             Ok(format!("would clear {label}"))
         }
         "assign_owner" => {
             let p: AssignOwnerParams = parse_params(action_type, params_json)?;
             match &p.user_id {
                 Some(uid) => {
-                    let name = user_repo::find_by_id(conn, uid)?.map(|u| u.display_name).unwrap_or_else(|| "that user".into());
+                    let name = user_repo::find_by_id(conn, uid)?
+                        .map(|u| u.display_name)
+                        .unwrap_or_else(|| "that user".into());
                     Ok(format!("would assign owner to {name}"))
                 }
                 None => Ok("would clear the owner".into()),
@@ -1624,27 +2489,47 @@ fn describe_action(conn: &Connection, workspace_id: &str, entity_type: &str, act
             let rel_label = relationship_repo::get_definition(conn, &p.relationship_definition_id)?
                 .map(|d| d.forward_label)
                 .unwrap_or_else(|| "related".into());
-            Ok(format!("would set {} on linked {rel_label} record(s)", p.target_field_key))
+            Ok(format!(
+                "would set {} on linked {rel_label} record(s)",
+                p.target_field_key
+            ))
         }
         "add_notification" => {
             let p: AddNotificationParams = parse_params(action_type, params_json)?;
-            let audience = if p.audience == "all_admins" { "all admins" } else { "the owner" };
+            let audience = if p.audience == "all_admins" {
+                "all admins"
+            } else {
+                "the owner"
+            };
             Ok(format!("would notify {audience}: \"{}\"", p.message))
         }
         "call_connector_action" => {
             let p: CallConnectorActionParams = parse_params(action_type, params_json)?;
-            let connector_name = super::connector_service::get(conn, workspace_id, &p.connector_id).map(|c| c.name).unwrap_or_else(|_| "an unknown connector".into());
-            Ok(format!("would queue '{}' on {connector_name} (not actually called in test mode)", p.action_key))
+            let connector_name = super::connector_service::get(conn, workspace_id, &p.connector_id)
+                .map(|c| c.name)
+                .unwrap_or_else(|_| "an unknown connector".into());
+            Ok(format!(
+                "would queue '{}' on {connector_name} (not actually called in test mode)",
+                p.action_key
+            ))
         }
         "run_ai_agent" => {
             let p: RunAiAgentParams = parse_params(action_type, params_json)?;
             let name = match p.target_type.as_str() {
-                "agent" => ai_agent_repo::get(conn, &p.target_id)?.map(|a| a.name).unwrap_or_else(|| "an unknown agent".into()),
-                "pipeline" => ai_agent_pipeline_repo::get(conn, &p.target_id)?.map(|pl| pl.name).unwrap_or_else(|| "an unknown pipeline".into()),
+                "agent" => ai_agent_repo::get(conn, &p.target_id)?
+                    .map(|a| a.name)
+                    .unwrap_or_else(|| "an unknown agent".into()),
+                "pipeline" => ai_agent_pipeline_repo::get(conn, &p.target_id)?
+                    .map(|pl| pl.name)
+                    .unwrap_or_else(|| "an unknown pipeline".into()),
                 other => other.to_string(),
             };
-            Ok(format!("would queue '{name}' to run (not actually run in test mode)"))
+            Ok(format!(
+                "would queue '{name}' to run (not actually run in test mode)"
+            ))
         }
-        other => Err(AppError::Validation(format!("Unknown action type '{other}'"))),
+        other => Err(AppError::Validation(format!(
+            "Unknown action type '{other}'"
+        ))),
     }
 }

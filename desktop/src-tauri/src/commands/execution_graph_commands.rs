@@ -33,17 +33,35 @@ pub fn get_execution_graph(state: State<AppState>, id: String) -> AppResult<Exec
 }
 
 #[tauri::command]
-pub fn create_execution_graph(state: State<AppState>, input: ExecutionGraphInput) -> AppResult<ExecutionGraph> {
+pub fn create_execution_graph(
+    state: State<AppState>,
+    input: ExecutionGraphInput,
+) -> AppResult<ExecutionGraph> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    execution_graph_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    execution_graph_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_execution_graph(state: State<AppState>, id: String, input: ExecutionGraphInput) -> AppResult<ExecutionGraph> {
+pub fn update_execution_graph(
+    state: State<AppState>,
+    id: String,
+    input: ExecutionGraphInput,
+) -> AppResult<ExecutionGraph> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    execution_graph_service::update(&conn, &id, &workspace_id, &input, current_actor(&state).as_deref())
+    execution_graph_service::update(
+        &conn,
+        &id,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -54,17 +72,37 @@ pub fn publish_execution_graph(state: State<AppState>, id: String) -> AppResult<
 }
 
 #[tauri::command]
-pub fn promote_embedded_agent_node(state: State<AppState>, graph_id: String, node_key: String) -> AppResult<AiAgentDefinition> {
+pub fn promote_embedded_agent_node(
+    state: State<AppState>,
+    graph_id: String,
+    node_key: String,
+) -> AppResult<AiAgentDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    execution_graph_service::promote_embedded_agent_node(&conn, &graph_id, &workspace_id, &node_key, current_actor(&state).as_deref())
+    execution_graph_service::promote_embedded_agent_node(
+        &conn,
+        &graph_id,
+        &workspace_id,
+        &node_key,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn set_execution_graph_disabled(state: State<AppState>, id: String, disabled: bool) -> AppResult<ExecutionGraph> {
+pub fn set_execution_graph_disabled(
+    state: State<AppState>,
+    id: String,
+    disabled: bool,
+) -> AppResult<ExecutionGraph> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    execution_graph_service::set_disabled(&conn, &id, &workspace_id, disabled, current_actor(&state).as_deref())
+    execution_graph_service::set_disabled(
+        &conn,
+        &id,
+        &workspace_id,
+        disabled,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -78,11 +116,20 @@ pub fn get_graph_run(state: State<AppState>, id: String) -> AppResult<GraphRun> 
 pub fn list_graph_runs(state: State<AppState>, graph_id: String) -> AppResult<Vec<GraphRun>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    graph_runtime_service::list_runs_for_graph(&conn, &graph_id, &workspace_id, current_actor(&state).as_deref())
+    graph_runtime_service::list_runs_for_graph(
+        &conn,
+        &graph_id,
+        &workspace_id,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub async fn start_graph_run(state: State<'_, AppState>, graph_id: String, trigger_input: String) -> AppResult<GraphRun> {
+pub async fn start_graph_run(
+    state: State<'_, AppState>,
+    graph_id: String,
+    trigger_input: String,
+) -> AppResult<GraphRun> {
     let master_key = crate::commands::resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
     let (workspace_id, actor) = {
@@ -90,7 +137,18 @@ pub async fn start_graph_run(state: State<'_, AppState>, graph_id: String, trigg
         (require_workspace_id(&conn)?, current_actor(&state))
     };
     run_with_own_connection(db_path, move |conn| async move {
-        graph_runtime_service::start_run(&conn, &workspace_id, &master_key, &graph_id, &trigger_input, actor.as_deref(), None, None, None).await
+        graph_runtime_service::start_run(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &graph_id,
+            &trigger_input,
+            actor.as_deref(),
+            None,
+            None,
+            None,
+        )
+        .await
     })
     .await
 }
@@ -103,11 +161,20 @@ pub async fn resume_graph_run(state: State<'_, AppState>, id: String) -> AppResu
         let conn = state.conn.lock().unwrap();
         (require_workspace_id(&conn)?, current_actor(&state))
     };
-    run_with_own_connection(db_path, move |conn| async move { graph_runtime_service::resume_run(&conn, &workspace_id, &master_key, &id, actor.as_deref()).await }).await
+    run_with_own_connection(db_path, move |conn| async move {
+        graph_runtime_service::resume_run(&conn, &workspace_id, &master_key, &id, actor.as_deref())
+            .await
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn resolve_graph_run_approval(state: State<'_, AppState>, id: String, approve: bool, notes: Option<String>) -> AppResult<GraphRun> {
+pub async fn resolve_graph_run_approval(
+    state: State<'_, AppState>,
+    id: String,
+    approve: bool,
+    notes: Option<String>,
+) -> AppResult<GraphRun> {
     let master_key = crate::commands::resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
     let (workspace_id, actor) = {
@@ -115,7 +182,16 @@ pub async fn resolve_graph_run_approval(state: State<'_, AppState>, id: String, 
         (require_workspace_id(&conn)?, current_actor(&state))
     };
     run_with_own_connection(db_path, move |conn| async move {
-        graph_runtime_service::resolve_approval(&conn, &workspace_id, &master_key, &id, approve, notes.as_deref(), actor.as_deref()).await
+        graph_runtime_service::resolve_approval(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            approve,
+            notes.as_deref(),
+            actor.as_deref(),
+        )
+        .await
     })
     .await
 }
@@ -127,5 +203,8 @@ pub async fn cancel_graph_run(state: State<'_, AppState>, id: String) -> AppResu
         let conn = state.conn.lock().unwrap();
         (require_workspace_id(&conn)?, current_actor(&state))
     };
-    run_with_own_connection(db_path, move |conn| async move { graph_runtime_service::cancel_run(&conn, &workspace_id, &id, actor.as_deref()).await }).await
+    run_with_own_connection(db_path, move |conn| async move {
+        graph_runtime_service::cancel_run(&conn, &workspace_id, &id, actor.as_deref()).await
+    })
+    .await
 }

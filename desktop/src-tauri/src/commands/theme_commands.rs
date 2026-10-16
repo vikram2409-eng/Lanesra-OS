@@ -5,14 +5,18 @@ use tauri::State;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::workspace_theme::{ThemeContrastIssue, ThemeTokens, WorkspaceTheme, WorkspaceThemeInput};
+use lanesra_core::models::workspace_theme::{
+    ThemeContrastIssue, ThemeTokens, WorkspaceTheme, WorkspaceThemeInput,
+};
 use lanesra_core::services::theme_service;
 
 #[tauri::command]
 pub fn list_theme_presets(_state: State<AppState>) -> Vec<(String, String, String, ThemeTokens)> {
     theme_service::built_in_presets()
         .into_iter()
-        .map(|(key, name, blurb, tokens)| (key.to_string(), name.to_string(), blurb.to_string(), tokens))
+        .map(|(key, name, blurb, tokens)| {
+            (key.to_string(), name.to_string(), blurb.to_string(), tokens)
+        })
         .collect()
 }
 
@@ -29,15 +33,28 @@ pub fn list_theme_versions(state: State<AppState>) -> AppResult<Vec<WorkspaceThe
 }
 
 #[tauri::command]
-pub fn validate_theme_tokens(_state: State<AppState>, tokens: ThemeTokens) -> Vec<ThemeContrastIssue> {
+pub fn validate_theme_tokens(
+    _state: State<AppState>,
+    tokens: ThemeTokens,
+) -> Vec<ThemeContrastIssue> {
     theme_service::validate_tokens(&tokens)
 }
 
 #[tauri::command]
-pub fn save_theme_draft(state: State<AppState>, existing_id: Option<String>, input: WorkspaceThemeInput) -> AppResult<WorkspaceTheme> {
+pub fn save_theme_draft(
+    state: State<AppState>,
+    existing_id: Option<String>,
+    input: WorkspaceThemeInput,
+) -> AppResult<WorkspaceTheme> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    theme_service::save_draft(&conn, &workspace_id, existing_id.as_deref(), &input, current_actor(&state).as_deref())
+    theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        existing_id.as_deref(),
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -51,7 +68,12 @@ pub fn publish_theme(state: State<AppState>, id: String) -> AppResult<WorkspaceT
 pub fn rollback_theme(state: State<AppState>, from_version: i64) -> AppResult<WorkspaceTheme> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    theme_service::rollback_to_version(&conn, &workspace_id, from_version, current_actor(&state).as_deref())
+    theme_service::rollback_to_version(
+        &conn,
+        &workspace_id,
+        from_version,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]

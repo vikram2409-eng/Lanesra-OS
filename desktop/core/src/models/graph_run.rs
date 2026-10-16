@@ -5,21 +5,40 @@
 //! queued -> ... -> completed/failed/cancelled state machine.
 
 pub const RUN_STATUSES: &[&str] = &[
-    "queued", "planning", "running", "waiting_tool", "waiting_agent", "waiting_approval", "waiting_scheduled", "paused", "completed", "failed", "cancelled",
+    "queued",
+    "planning",
+    "running",
+    "waiting_tool",
+    "waiting_agent",
+    "waiting_approval",
+    "waiting_scheduled",
+    "paused",
+    "completed",
+    "failed",
+    "cancelled",
 ];
 
 /// A status a run can durably sit in across a process restart -
 /// `resume_run`/`resume_due_delays`/`resolve_approval` are the only ways
 /// out of one of these.
 pub fn is_waiting_status(status: &str) -> bool {
-    matches!(status, "waiting_tool" | "waiting_agent" | "waiting_approval" | "waiting_scheduled" | "paused")
+    matches!(
+        status,
+        "waiting_tool" | "waiting_agent" | "waiting_approval" | "waiting_scheduled" | "paused"
+    )
 }
 
 pub fn is_terminal_status(status: &str) -> bool {
     matches!(status, "completed" | "failed" | "cancelled")
 }
 
-pub const RUN_NODE_STATUSES: &[&str] = &["running", "waiting_approval", "completed", "failed", "skipped"];
+pub const RUN_NODE_STATUSES: &[&str] = &[
+    "running",
+    "waiting_approval",
+    "completed",
+    "failed",
+    "skipped",
+];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RunNode {

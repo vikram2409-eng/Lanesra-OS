@@ -9,7 +9,9 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::AppResult;
-use crate::models::solution_component::{LocalWorkspaceSummary, SolutionComponent, WorkspaceComponent};
+use crate::models::solution_component::{
+    LocalWorkspaceSummary, SolutionComponent, WorkspaceComponent,
+};
 use crate::repositories::solution_component_repo;
 
 /// Tags a just-created component with this workspace's `local` publisher.
@@ -20,11 +22,29 @@ use crate::repositories::solution_component_repo;
 /// Idempotent and cheap: `ensure_defaults` is a single indexed SELECT
 /// once the workspace's publishers already exist (the overwhelmingly
 /// common case).
-pub fn tag_local(conn: &Connection, workspace_id: &str, artifact_type: &str, metadata_id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn tag_local(
+    conn: &Connection,
+    workspace_id: &str,
+    artifact_type: &str,
+    metadata_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     super::publisher_service::ensure_defaults(conn, workspace_id)?;
     let publishers = super::publisher_service::list(conn, workspace_id)?;
-    let local = publishers.into_iter().find(|p| p.is_local).expect("ensure_defaults just seeded 'local'");
-    solution_component_repo::upsert(conn, &new_uuid(), workspace_id, artifact_type, metadata_id, &local.id, None, actor_user_id)?;
+    let local = publishers
+        .into_iter()
+        .find(|p| p.is_local)
+        .expect("ensure_defaults just seeded 'local'");
+    solution_component_repo::upsert(
+        conn,
+        &new_uuid(),
+        workspace_id,
+        artifact_type,
+        metadata_id,
+        &local.id,
+        None,
+        actor_user_id,
+    )?;
     Ok(())
 }
 
@@ -42,7 +62,16 @@ pub fn retag(
     installed_app_id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    solution_component_repo::upsert(conn, &new_uuid(), workspace_id, artifact_type, metadata_id, publisher_id, Some(installed_app_id), actor_user_id)?;
+    solution_component_repo::upsert(
+        conn,
+        &new_uuid(),
+        workspace_id,
+        artifact_type,
+        metadata_id,
+        publisher_id,
+        Some(installed_app_id),
+        actor_user_id,
+    )?;
     Ok(())
 }
 
@@ -51,17 +80,24 @@ pub fn retag(
 /// `industry_package_service::list_artifacts_for_workspace` (which only
 /// ever saw package-installed artifacts) now that hand-built components
 /// are tagged too.
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<WorkspaceComponent>> {
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<Vec<WorkspaceComponent>> {
     let rows = solution_component_repo::list_for_workspace(conn, workspace_id)?;
     Ok(rows
         .into_iter()
-        .map(|(component, publisher_key, publisher_name, is_local, installed_app_name)| WorkspaceComponent {
-            component,
-            publisher_key,
-            publisher_name,
-            is_local,
-            installed_app_name,
-        })
+        .map(
+            |(component, publisher_key, publisher_name, is_local, installed_app_name)| {
+                WorkspaceComponent {
+                    component,
+                    publisher_key,
+                    publisher_name,
+                    is_local,
+                    installed_app_name,
+                }
+            },
+        )
         .collect())
 }
 
@@ -72,8 +108,15 @@ pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Ve
 pub fn list_local(conn: &Connection, workspace_id: &str) -> AppResult<Vec<SolutionComponent>> {
     super::publisher_service::ensure_defaults(conn, workspace_id)?;
     let publishers = super::publisher_service::list(conn, workspace_id)?;
-    let local = publishers.into_iter().find(|p| p.is_local).expect("ensure_defaults just seeded 'local'");
-    Ok(solution_component_repo::list_for_publisher(conn, workspace_id, &local.id)?)
+    let local = publishers
+        .into_iter()
+        .find(|p| p.is_local)
+        .expect("ensure_defaults just seeded 'local'");
+    Ok(solution_component_repo::list_for_publisher(
+        conn,
+        workspace_id,
+        &local.id,
+    )?)
 }
 
 /// The Packaged/Custom distinction's Custom half, made visible
@@ -83,18 +126,31 @@ pub fn list_local(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Soluti
 /// real installed (Packaged) packages. An empty summary (a workspace that
 /// has only ever installed reference packages, never built anything by
 /// hand) is a legitimate, common result, not an error.
-pub fn local_workspace_summary(conn: &Connection, workspace_id: &str) -> AppResult<LocalWorkspaceSummary> {
+pub fn local_workspace_summary(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<LocalWorkspaceSummary> {
     super::publisher_service::ensure_defaults(conn, workspace_id)?;
     let publishers = super::publisher_service::list(conn, workspace_id)?;
-    let local = publishers.into_iter().find(|p| p.is_local).expect("ensure_defaults just seeded 'local'");
+    let local = publishers
+        .into_iter()
+        .find(|p| p.is_local)
+        .expect("ensure_defaults just seeded 'local'");
     let components = solution_component_repo::list_for_publisher(conn, workspace_id, &local.id)?;
     let mut by_type: Vec<(String, i64)> = Vec::new();
     for component in &components {
-        match by_type.iter_mut().find(|(t, _)| *t == component.artifact_type) {
+        match by_type
+            .iter_mut()
+            .find(|(t, _)| *t == component.artifact_type)
+        {
             Some((_, count)) => *count += 1,
             None => by_type.push((component.artifact_type.clone(), 1)),
         }
     }
     by_type.sort_by(|a, b| a.0.cmp(&b.0));
-    Ok(LocalWorkspaceSummary { publisher_id: local.id, component_count: components.len() as i64, components_by_type: by_type })
+    Ok(LocalWorkspaceSummary {
+        publisher_id: local.id,
+        component_count: components.len() as i64,
+        components_by_type: by_type,
+    })
 }

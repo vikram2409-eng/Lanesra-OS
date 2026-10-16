@@ -3,20 +3,25 @@ use rusqlite::Connection;
 use crate::domain::ids::new_uuid;
 use crate::domain::numbering::{self, OPPORTUNITY};
 use crate::domain::{AppError, AppResult};
-use crate::models::opportunity::{
-    Opportunity, OpportunityInput, OpportunityProduct, OpportunityProductInput,
-    OPPORTUNITY_STAGES, OPPORTUNITY_STATUSES,
-};
 use crate::models::access_role::Capability;
+use crate::models::opportunity::{
+    Opportunity, OpportunityInput, OpportunityProduct, OpportunityProductInput, OPPORTUNITY_STAGES,
+    OPPORTUNITY_STATUSES,
+};
 use crate::repositories::{audit_repo, company_repo, contact_repo, opportunity_repo};
-use crate::services::{access_service, app_service, builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{
+    access_service, app_service, builtin_field_service, status_transition_service, workflow_service,
+};
 
 fn validate(conn: &Connection, input: &OpportunityInput) -> AppResult<String> {
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Opportunity name is required".into()));
     }
     if !OPPORTUNITY_STAGES.contains(&input.stage.as_str()) {
-        return Err(AppError::Validation(format!("Invalid stage '{}'", input.stage)));
+        return Err(AppError::Validation(format!(
+            "Invalid stage '{}'",
+            input.stage
+        )));
     }
     if !OPPORTUNITY_STATUSES.contains(&input.status.as_str()) {
         return Err(AppError::Validation(format!(
@@ -47,7 +52,13 @@ pub fn create(
 ) -> AppResult<Opportunity> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Opportunity", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Create, None)?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Opportunity",
+        Capability::Create,
+        None,
+    )?;
     let id = new_uuid();
     let opportunity_number = numbering::allocate_number(conn, &workspace_id, &OPPORTUNITY)?;
     let opportunity = opportunity_repo::create(
@@ -58,7 +69,14 @@ pub fn create(
         input,
         actor_user_id,
     )?;
-    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Opportunity", &opportunity.id, actor_user_id, input.owner_user_id.as_deref())?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        &workspace_id,
+        "Opportunity",
+        &opportunity.id,
+        actor_user_id,
+        input.owner_user_id.as_deref(),
+    )?;
     audit_repo::record(
         conn,
         &workspace_id,
@@ -69,7 +87,16 @@ pub fn create(
         &format!("Created opportunity {}", opportunity.opportunity_number),
         None,
     )?;
-    workflow_service::fire_event(conn, &workspace_id, "Opportunity", &opportunity.id, None, &opportunity.stage, opportunity.owner_user_id.as_deref(), actor_user_id)?;
+    workflow_service::fire_event(
+        conn,
+        &workspace_id,
+        "Opportunity",
+        &opportunity.id,
+        None,
+        &opportunity.stage,
+        opportunity.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
     Ok(opportunity)
 }
 
@@ -93,10 +120,22 @@ pub fn update(
 ) -> AppResult<Opportunity> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Opportunity", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Update, Some(id))?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Opportunity",
+        Capability::Update,
+        Some(id),
+    )?;
     let before = get(conn, id)?;
     if before.stage != input.stage {
-        status_transition_service::validate_transition(conn, &workspace_id, "Opportunity", &before.stage, &input.stage)?;
+        status_transition_service::validate_transition(
+            conn,
+            &workspace_id,
+            "Opportunity",
+            &before.stage,
+            &input.stage,
+        )?;
     }
     let before_fields = builtin_field_service::field_values(conn, "Opportunity", id)?;
     let opportunity = opportunity_repo::update(conn, id, input, actor_user_id)?;
@@ -134,7 +173,16 @@ pub fn update(
     )?;
     let after_fields = builtin_field_service::field_values(conn, "Opportunity", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
-    workflow_service::fire_field_changed(conn, &workspace_id, "Opportunity", id, "builtin", &changed, opportunity.owner_user_id.as_deref(), actor_user_id)?;
+    workflow_service::fire_field_changed(
+        conn,
+        &workspace_id,
+        "Opportunity",
+        id,
+        "builtin",
+        &changed,
+        opportunity.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
 
     Ok(opportunity)
 }
@@ -146,19 +194,48 @@ pub fn set_products(
     actor_user_id: Option<&str>,
 ) -> AppResult<Vec<OpportunityProduct>> {
     let existing = get(conn, opportunity_id)?;
-    app_service::require_object_write_access(conn, &existing.workspace_id, "Opportunity", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Update, Some(opportunity_id))?;
-    Ok(opportunity_repo::set_products(conn, opportunity_id, products)?)
+    app_service::require_object_write_access(
+        conn,
+        &existing.workspace_id,
+        "Opportunity",
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Opportunity",
+        Capability::Update,
+        Some(opportunity_id),
+    )?;
+    Ok(opportunity_repo::set_products(
+        conn,
+        opportunity_id,
+        products,
+    )?)
 }
 
-pub fn list_products(conn: &Connection, opportunity_id: &str) -> AppResult<Vec<OpportunityProduct>> {
+pub fn list_products(
+    conn: &Connection,
+    opportunity_id: &str,
+) -> AppResult<Vec<OpportunityProduct>> {
     Ok(opportunity_repo::list_products(conn, opportunity_id)?)
 }
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
-    app_service::require_object_write_access(conn, &existing.workspace_id, "Opportunity", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Opportunity", Capability::Delete, Some(id))?;
+    app_service::require_object_write_access(
+        conn,
+        &existing.workspace_id,
+        "Opportunity",
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Opportunity",
+        Capability::Delete,
+        Some(id),
+    )?;
     opportunity_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

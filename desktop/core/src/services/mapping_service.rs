@@ -22,24 +22,40 @@ fn validate(input: &MappingInput) -> AppResult<()> {
         return Err(AppError::Validation("Mapping name is required".into()));
     }
     if !OPERATIONS.contains(&input.operation.as_str()) {
-        return Err(AppError::Validation(format!("Invalid operation '{}'", input.operation)));
+        return Err(AppError::Validation(format!(
+            "Invalid operation '{}'",
+            input.operation
+        )));
     }
     if !DUPLICATE_POLICIES.contains(&input.duplicate_policy.as_str()) {
-        return Err(AppError::Validation(format!("Invalid duplicate policy '{}'", input.duplicate_policy)));
+        return Err(AppError::Validation(format!(
+            "Invalid duplicate policy '{}'",
+            input.duplicate_policy
+        )));
     }
     if input.operation != "insert" && input.match_key.is_none() {
-        return Err(AppError::Validation("An update/upsert mapping needs a match key".into()));
+        return Err(AppError::Validation(
+            "An update/upsert mapping needs a match key".into(),
+        ));
     }
     if input.field_map.is_empty() {
-        return Err(AppError::Validation("At least one field mapping is required".into()));
+        return Err(AppError::Validation(
+            "At least one field mapping is required".into(),
+        ));
     }
     Ok(())
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &MappingInput, actor_user_id: Option<&str>) -> AppResult<Mapping> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &MappingInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<Mapping> {
     require_admin(conn, actor_user_id)?;
     validate(input)?;
-    let field_map_json = serde_json::to_string(&input.field_map).unwrap_or_else(|_| "[]".to_string());
+    let field_map_json =
+        serde_json::to_string(&input.field_map).unwrap_or_else(|_| "[]".to_string());
     Ok(integration_mapping_repo::insert(
         conn,
         &new_uuid(),
@@ -55,7 +71,8 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &MappingInput, actor
 }
 
 fn get_owned(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<Mapping> {
-    let mapping = integration_mapping_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Mapping".into()))?;
+    let mapping = integration_mapping_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Mapping".into()))?;
     if mapping.workspace_id != workspace_id {
         return Err(AppError::NotFound("Mapping".into()));
     }
@@ -67,10 +84,18 @@ pub fn get(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<Mapping
 }
 
 pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Mapping>> {
-    Ok(integration_mapping_repo::list_for_workspace(conn, workspace_id)?)
+    Ok(integration_mapping_repo::list_for_workspace(
+        conn,
+        workspace_id,
+    )?)
 }
 
-pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn delete(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, workspace_id, id)?;
     Ok(integration_mapping_repo::delete(conn, id)?)
@@ -87,7 +112,10 @@ pub fn apply_transform(transform: Option<&str>, raw: &str) -> String {
         Some("trim") => raw.trim().to_string(),
         Some("uppercase") => raw.trim().to_uppercase(),
         Some("lowercase") => raw.trim().to_lowercase(),
-        Some("numeric") => raw.chars().filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-').collect(),
+        Some("numeric") => raw
+            .chars()
+            .filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+            .collect(),
         _ => raw.to_string(),
     }
 }

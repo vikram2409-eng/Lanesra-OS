@@ -27,22 +27,38 @@ use serde::Deserialize;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::integration::{Connection as ConnectionModel, ConnectionInput, ConnectionTestResult, ConnectionUpdate};
+use crate::models::integration::{
+    Connection as ConnectionModel, ConnectionInput, ConnectionTestResult, ConnectionUpdate,
+};
 use crate::repositories::{audit_repo, integration_connection_repo, integration_secret_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-pub const CONNECTION_TYPES: &[&str] = &["rest", "webhook", "sftp", "postgres", "odata", "smtp", "mcp"];
-const AUTH_MODES: &[&str] = &["none", "api_key", "basic", "bearer", "custom_header", "oauth2_client_credentials", "oauth2_authorization_code"];
+pub const CONNECTION_TYPES: &[&str] = &[
+    "rest", "webhook", "sftp", "postgres", "odata", "smtp", "mcp",
+];
+const AUTH_MODES: &[&str] = &[
+    "none",
+    "api_key",
+    "basic",
+    "bearer",
+    "custom_header",
+    "oauth2_client_credentials",
+    "oauth2_authorization_code",
+];
 
 fn validate_types(connection_type: &str, auth_mode: &str) -> AppResult<()> {
     if !CONNECTION_TYPES.contains(&connection_type) {
-        return Err(AppError::Validation(format!("Unknown connection type '{connection_type}'")));
+        return Err(AppError::Validation(format!(
+            "Unknown connection type '{connection_type}'"
+        )));
     }
     if !AUTH_MODES.contains(&auth_mode) {
-        return Err(AppError::Validation(format!("Unknown auth mode '{auth_mode}'")));
+        return Err(AppError::Validation(format!(
+            "Unknown auth mode '{auth_mode}'"
+        )));
     }
     Ok(())
 }
@@ -50,26 +66,54 @@ fn validate_types(connection_type: &str, auth_mode: &str) -> AppResult<()> {
 /// Encrypts `secret_value` (if any) into a fresh `integration_secrets` row
 /// and returns its id - `None` in, `None` out, matching `auth_mode ==
 /// "none"`.
-fn store_secret(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], label: &str, secret_value: Option<&str>, actor_user_id: Option<&str>) -> AppResult<Option<String>> {
+fn store_secret(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    label: &str,
+    secret_value: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<Option<String>> {
     match secret_value {
         Some(value) if !value.is_empty() => {
             let (ciphertext, nonce) = super::secret_service::encrypt(master_key, value)?;
             let id = new_uuid();
-            integration_secret_repo::insert(conn, &id, workspace_id, label, &ciphertext, &nonce, actor_user_id)?;
+            integration_secret_repo::insert(
+                conn,
+                &id,
+                workspace_id,
+                label,
+                &ciphertext,
+                &nonce,
+                actor_user_id,
+            )?;
             Ok(Some(id))
         }
         _ => Ok(None),
     }
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], input: &ConnectionInput, actor_user_id: Option<&str>) -> AppResult<ConnectionModel> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    input: &ConnectionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<ConnectionModel> {
     require_admin(conn, actor_user_id)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Connection name is required".into()));
     }
     validate_types(&input.connection_type, &input.auth_mode)?;
     let id = new_uuid();
-    let secret_id = store_secret(conn, workspace_id, master_key, &format!("{} auth secret", input.name), input.secret_value.as_deref(), actor_user_id)?;
+    let secret_id = store_secret(
+        conn,
+        workspace_id,
+        master_key,
+        &format!("{} auth secret", input.name),
+        input.secret_value.as_deref(),
+        actor_user_id,
+    )?;
     let created = integration_connection_repo::insert(
         conn,
         &id,
@@ -83,12 +127,22 @@ pub fn create(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], inpu
         input.owner_user_id.as_deref(),
         actor_user_id,
     )?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("integration_connection"), Some(&created.id), &format!("Created integration connection '{}'", created.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("integration_connection"),
+        Some(&created.id),
+        &format!("Created integration connection '{}'", created.name),
+        None,
+    )?;
     Ok(created)
 }
 
 fn get_owned(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<ConnectionModel> {
-    let connection = integration_connection_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Connection".into()))?;
+    let connection = integration_connection_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Connection".into()))?;
     if connection.workspace_id != workspace_id {
         return Err(AppError::NotFound("Connection".into()));
     }
@@ -99,11 +153,24 @@ pub fn get(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<Connect
     get_owned(conn, workspace_id, id)
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<ConnectionModel>> {
-    Ok(integration_connection_repo::list_for_workspace(conn, workspace_id)?)
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<Vec<ConnectionModel>> {
+    Ok(integration_connection_repo::list_for_workspace(
+        conn,
+        workspace_id,
+    )?)
 }
 
-pub fn update(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], id: &str, input: &ConnectionUpdate, actor_user_id: Option<&str>) -> AppResult<ConnectionModel> {
+pub fn update(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    id: &str,
+    input: &ConnectionUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<ConnectionModel> {
     require_admin(conn, actor_user_id)?;
     let existing = get_owned(conn, workspace_id, id)?;
     if input.name.trim().is_empty() {
@@ -117,12 +184,20 @@ pub fn update(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], id: 
     // (if any) untouched.
     let secret_id = match (&input.secret_value, &existing.has_secret) {
         (Some(value), true) if !value.is_empty() => {
-            let existing_secret_id = integration_connection_repo::secret_id_for(conn, id)?.expect("has_secret implies a secret_id");
+            let existing_secret_id = integration_connection_repo::secret_id_for(conn, id)?
+                .expect("has_secret implies a secret_id");
             let (ciphertext, nonce) = super::secret_service::encrypt(master_key, value)?;
             integration_secret_repo::rotate(conn, &existing_secret_id, &ciphertext, &nonce)?;
             Some(existing_secret_id)
         }
-        (Some(value), false) if !value.is_empty() => store_secret(conn, workspace_id, master_key, &format!("{} auth secret", input.name), Some(value), actor_user_id)?,
+        (Some(value), false) if !value.is_empty() => store_secret(
+            conn,
+            workspace_id,
+            master_key,
+            &format!("{} auth secret", input.name),
+            Some(value),
+            actor_user_id,
+        )?,
         _ => integration_connection_repo::secret_id_for(conn, id)?,
     };
     let updated = integration_connection_repo::update(
@@ -137,11 +212,25 @@ pub fn update(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], id: 
         &input.status,
         actor_user_id,
     )?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("integration_connection"), Some(id), &format!("Updated integration connection '{}'", updated.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "update",
+        Some("integration_connection"),
+        Some(id),
+        &format!("Updated integration connection '{}'", updated.name),
+        None,
+    )?;
     Ok(updated)
 }
 
-pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn delete(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     let existing = get_owned(conn, workspace_id, id)?;
     let deps = integration_connection_repo::dependency_count(conn, id)?;
@@ -151,7 +240,16 @@ pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Op
         )));
     }
     integration_connection_repo::delete(conn, id)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "delete", Some("integration_connection"), Some(id), &format!("Deleted integration connection '{}'", existing.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "delete",
+        Some("integration_connection"),
+        Some(id),
+        &format!("Deleted integration connection '{}'", existing.name),
+        None,
+    )?;
     Ok(())
 }
 
@@ -159,12 +257,21 @@ pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Op
 /// only ever called at the moment an outbound call needs it (test,
 /// connector execution, webhook signing uses a *different* secret - see
 /// `webhook_service`). Never returned to any frontend-facing command.
-pub(crate) fn resolve_secret(conn: &Connection, master_key: &[u8; 32], connection_id: &str) -> AppResult<Option<String>> {
+pub(crate) fn resolve_secret(
+    conn: &Connection,
+    master_key: &[u8; 32],
+    connection_id: &str,
+) -> AppResult<Option<String>> {
     match integration_connection_repo::secret_id_for(conn, connection_id)? {
         None => Ok(None),
         Some(secret_id) => {
-            let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::NotFound("Connection secret".into()))?;
-            Ok(Some(super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?))
+            let stored = integration_secret_repo::get(conn, &secret_id)?
+                .ok_or_else(|| AppError::NotFound("Connection secret".into()))?;
+            Ok(Some(super::secret_service::decrypt(
+                master_key,
+                &stored.ciphertext,
+                &stored.nonce,
+            )?))
         }
     }
 }
@@ -187,7 +294,11 @@ fn default_true() -> bool {
     true
 }
 
-pub(crate) fn apply_auth(builder: reqwest::RequestBuilder, auth_mode: &str, secret: Option<&str>) -> reqwest::RequestBuilder {
+pub(crate) fn apply_auth(
+    builder: reqwest::RequestBuilder,
+    auth_mode: &str,
+    secret: Option<&str>,
+) -> reqwest::RequestBuilder {
     match auth_mode {
         "api_key" => match secret {
             Some(s) => builder.header("X-Api-Key", s),
@@ -213,7 +324,13 @@ pub(crate) fn apply_auth(builder: reqwest::RequestBuilder, auth_mode: &str, secr
 /// connection is - reachability + auth + one safe operation, reporting
 /// latency and a remediation message without ever exposing the secret
 /// itself.
-pub async fn test_connection(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], id: &str, actor_user_id: Option<&str>) -> AppResult<ConnectionTestResult> {
+pub async fn test_connection(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<ConnectionTestResult> {
     require_admin(conn, actor_user_id)?;
     let connection = get_owned(conn, workspace_id, id)?;
     let secret = resolve_secret(conn, master_key, id)?;
@@ -222,9 +339,13 @@ pub async fn test_connection(conn: &Connection, workspace_id: &str, master_key: 
     let result = match connection.connection_type.as_str() {
         "rest" | "webhook" | "odata" => test_http(&connection, secret.as_deref()).await,
         "sftp" => super::sftp_service::test_connection(&connection, secret.as_deref()).await,
-        "postgres" => super::postgres_service::test_connection(&connection, secret.as_deref()).await,
+        "postgres" => {
+            super::postgres_service::test_connection(&connection, secret.as_deref()).await
+        }
         "smtp" => super::smtp_service::test_connection(&connection, secret.as_deref()).await,
-        other => Err(AppError::Validation(format!("No test implemented for connection type '{other}'"))),
+        other => Err(AppError::Validation(format!(
+            "No test implemented for connection type '{other}'"
+        ))),
     };
 
     let latency_ms = started.elapsed().as_millis() as u64;
@@ -236,24 +357,46 @@ pub async fn test_connection(conn: &Connection, workspace_id: &str, master_key: 
         // The other branches (postgres/sftp/smtp) never set one and only
         // ever return `Ok` on genuine success, so `None` defaults to ok.
         Ok((status_code, message)) => {
-            let ok = status_code.map(|code| (200..400).contains(&code)).unwrap_or(true);
-            ConnectionTestResult { ok, latency_ms, status_code, message }
+            let ok = status_code
+                .map(|code| (200..400).contains(&code))
+                .unwrap_or(true);
+            ConnectionTestResult {
+                ok,
+                latency_ms,
+                status_code,
+                message,
+            }
         }
-        Err(e) => ConnectionTestResult { ok: false, latency_ms, status_code: None, message: e.to_string() },
+        Err(e) => ConnectionTestResult {
+            ok: false,
+            latency_ms,
+            status_code: None,
+            message: e.to_string(),
+        },
     };
     integration_connection_repo::set_test_result(
         conn,
         id,
-        if test_result.ok { "connected" } else { "failed" },
+        if test_result.ok {
+            "connected"
+        } else {
+            "failed"
+        },
         &test_result.message,
         !test_result.ok,
     )?;
     Ok(test_result)
 }
 
-async fn test_http(connection: &ConnectionModel, secret: Option<&str>) -> AppResult<(Option<u16>, String)> {
+async fn test_http(
+    connection: &ConnectionModel,
+    secret: Option<&str>,
+) -> AppResult<(Option<u16>, String)> {
     let config: RestConfig = serde_json::from_str(&connection.config_json).unwrap_or_default();
-    let base_url = connection.base_url.as_deref().ok_or_else(|| AppError::Validation("This connection has no base URL configured".into()))?;
+    let base_url = connection
+        .base_url
+        .as_deref()
+        .ok_or_else(|| AppError::Validation("This connection has no base URL configured".into()))?;
     let url = match &config.test_path {
         Some(path) => format!("{}{}", base_url.trim_end_matches('/'), path),
         None => base_url.to_string(),
@@ -268,13 +411,20 @@ async fn test_http(connection: &ConnectionModel, secret: Option<&str>) -> AppRes
         builder = builder.header(name, value);
     }
     builder = apply_auth(builder, &connection.auth_mode, secret);
-    let response = builder.send().await.map_err(|e| AppError::Validation(format!("Could not reach {url}: {e}")))?;
+    let response = builder
+        .send()
+        .await
+        .map_err(|e| AppError::Validation(format!("Could not reach {url}: {e}")))?;
     let status = response.status();
     // A response - any response - means the endpoint is reachable; a
     // 4xx/5xx is a real, structured "failed" result (real status code
     // preserved for the UI), not the same kind of failure as a genuine
     // network-level error (DNS/refused/timeout), which stays an `Err`
     // above and carries no status code at all.
-    let message = if status.is_success() || status.is_redirection() { format!("Reachable - HTTP {status}") } else { format!("Endpoint responded with HTTP {status}") };
+    let message = if status.is_success() || status.is_redirection() {
+        format!("Reachable - HTTP {status}")
+    } else {
+        format!("Endpoint responded with HTTP {status}")
+    };
     Ok((Some(status.as_u16()), message))
 }

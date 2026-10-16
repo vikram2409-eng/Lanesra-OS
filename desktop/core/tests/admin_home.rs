@@ -67,7 +67,9 @@ fn non_admin_cannot_read_the_admin_home_summary() {
         password: "supersecretpassword".into(),
         roles: vec!["Sales".into()],
     };
-    let non_admin = lanesra_core::services::user_service::create(&conn, &ws, &non_admin_input, Some(&admin)).unwrap();
+    let non_admin =
+        lanesra_core::services::user_service::create(&conn, &ws, &non_admin_input, Some(&admin))
+            .unwrap();
     let err = admin_home_service::get_summary(&conn, &ws, Some(&non_admin.id)).unwrap_err();
     assert!(err.to_string().to_lowercase().contains("admin"), "{err}");
 }

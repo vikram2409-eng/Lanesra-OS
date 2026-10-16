@@ -33,7 +33,10 @@ use serde_json::json;
 use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput};
 use crate::models::ai_agent_pipeline::AiAgentPipeline;
-use crate::models::execution_graph::{is_single_unconditional_outgoing, ExecutionGraph, ExecutionGraphInput, GraphEdgeInput, GraphNodeInput, NODE_TYPES};
+use crate::models::execution_graph::{
+    is_single_unconditional_outgoing, ExecutionGraph, ExecutionGraphInput, GraphEdgeInput,
+    GraphNodeInput, NODE_TYPES,
+};
 use crate::models::workflow::WorkflowDefinition;
 use crate::repositories::{audit_repo, execution_graph_repo};
 use crate::services::ai_agent_service;
@@ -47,28 +50,48 @@ fn validate_input(input: &ExecutionGraphInput) -> AppResult<()> {
         return Err(AppError::Validation("name is required".into()));
     }
     if input.nodes.is_empty() {
-        return Err(AppError::Validation("a graph needs at least one node".into()));
+        return Err(AppError::Validation(
+            "a graph needs at least one node".into(),
+        ));
     }
     let mut seen_keys = HashSet::new();
     for node in &input.nodes {
         if node.node_key.trim().is_empty() {
-            return Err(AppError::Validation("every node needs a non-empty node_key".into()));
+            return Err(AppError::Validation(
+                "every node needs a non-empty node_key".into(),
+            ));
         }
         if !seen_keys.insert(node.node_key.as_str()) {
-            return Err(AppError::Validation(format!("duplicate node_key '{}'", node.node_key)));
+            return Err(AppError::Validation(format!(
+                "duplicate node_key '{}'",
+                node.node_key
+            )));
         }
         if !NODE_TYPES.contains(&node.node_type.as_str()) {
-            return Err(AppError::Validation(format!("'{}' is not a valid node_type", node.node_type)));
+            return Err(AppError::Validation(format!(
+                "'{}' is not a valid node_type",
+                node.node_type
+            )));
         }
-        serde_json::from_str::<serde_json::Value>(&node.config_json)
-            .map_err(|e| AppError::Validation(format!("node '{}' has invalid config_json: {e}", node.node_key)))?;
+        serde_json::from_str::<serde_json::Value>(&node.config_json).map_err(|e| {
+            AppError::Validation(format!(
+                "node '{}' has invalid config_json: {e}",
+                node.node_key
+            ))
+        })?;
     }
     for edge in &input.edges {
         if !seen_keys.contains(edge.from_node_key.as_str()) {
-            return Err(AppError::Validation(format!("edge references unknown node_key '{}'", edge.from_node_key)));
+            return Err(AppError::Validation(format!(
+                "edge references unknown node_key '{}'",
+                edge.from_node_key
+            )));
         }
         if !seen_keys.contains(edge.to_node_key.as_str()) {
-            return Err(AppError::Validation(format!("edge references unknown node_key '{}'", edge.to_node_key)));
+            return Err(AppError::Validation(format!(
+                "edge references unknown node_key '{}'",
+                edge.to_node_key
+            )));
         }
     }
     Ok(())
@@ -87,38 +110,80 @@ fn sync_graph_node(conn: &Connection, workspace_id: &str, graph: &ExecutionGraph
             if let Ok(config) = serde_json::from_str::<serde_json::Value>(&node.config_json) {
                 if let Some(agent_id) = config.get("agent_id").and_then(|v| v.as_str()) {
                     if !agent_id.is_empty() {
-                        edges.push(crate::models::system_graph::SystemEdgeTarget { edge_type: "invokes".into(), to_node_type: "ai_agent".into(), to_component_id: agent_id.to_string() });
+                        edges.push(crate::models::system_graph::SystemEdgeTarget {
+                            edge_type: "invokes".into(),
+                            to_node_type: "ai_agent".into(),
+                            to_component_id: agent_id.to_string(),
+                        });
                     }
                 }
             }
         }
     }
-    super::system_graph_service::sync_node(conn, workspace_id, "execution_graph", &graph.id, &graph.name, "{}", &edges)
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "execution_graph",
+        &graph.id,
+        &graph.name,
+        "{}",
+        &edges,
+    )
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &ExecutionGraphInput, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &ExecutionGraphInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<ExecutionGraph> {
     require_admin(conn, actor_user_id)?;
     validate_input(input)?;
-    let created = execution_graph_repo::create(conn, &crate::domain::ids::new_uuid(), workspace_id, input, actor_user_id)?;
+    let created = execution_graph_repo::create(
+        conn,
+        &crate::domain::ids::new_uuid(),
+        workspace_id,
+        input,
+        actor_user_id,
+    )?;
     sync_graph_node(conn, workspace_id, &created)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("execution_graph"), Some(&created.id), &format!("Created execution graph '{}'", created.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("execution_graph"),
+        Some(&created.id),
+        &format!("Created execution graph '{}'", created.name),
+        None,
+    )?;
     Ok(created)
 }
 
 fn get_owned(conn: &Connection, id: &str, workspace_id: &str) -> AppResult<ExecutionGraph> {
-    let graph = execution_graph_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let graph = execution_graph_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
     if graph.workspace_id != workspace_id {
         return Err(AppError::NotFound("Execution graph".into()));
     }
     Ok(graph)
 }
 
-pub fn get(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
+pub fn get(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<ExecutionGraph> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, id, workspace_id)
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<ExecutionGraph>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<ExecutionGraph>> {
     require_admin(conn, actor_user_id)?;
     Ok(execution_graph_repo::list(conn, workspace_id)?)
 }
@@ -127,16 +192,33 @@ pub fn list(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) 
 /// immutable-once-published rule `agent_version_service` enforces for a
 /// Published agent version, so a `ai_runs` row's `graph_id` always points
 /// at the exact shape that produced it.
-pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &ExecutionGraphInput, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &ExecutionGraphInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<ExecutionGraph> {
     require_admin(conn, actor_user_id)?;
     let graph = get_owned(conn, id, workspace_id)?;
     if graph.status != "draft" {
-        return Err(AppError::Validation("only a draft graph can be edited - disable it and create a new version instead".into()));
+        return Err(AppError::Validation(
+            "only a draft graph can be edited - disable it and create a new version instead".into(),
+        ));
     }
     validate_input(input)?;
     let updated = execution_graph_repo::update(conn, id, input, actor_user_id)?;
     sync_graph_node(conn, workspace_id, &updated)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("execution_graph"), Some(id), &format!("Updated execution graph '{}'", updated.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "update",
+        Some("execution_graph"),
+        Some(id),
+        &format!("Updated execution graph '{}'", updated.name),
+        None,
+    )?;
     Ok(updated)
 }
 
@@ -161,19 +243,35 @@ pub fn promote_embedded_agent_node(
     if graph.status != "draft" {
         return Err(AppError::Validation("only a draft graph's node can be promoted - disable it and create a new version instead".into()));
     }
-    let node = graph.nodes.iter().find(|n| n.node_key == node_key).ok_or_else(|| AppError::NotFound("Node".into()))?;
+    let node = graph
+        .nodes
+        .iter()
+        .find(|n| n.node_key == node_key)
+        .ok_or_else(|| AppError::NotFound("Node".into()))?;
     if node.node_type != "agent" {
-        return Err(AppError::Validation("only an agent node can be promoted".into()));
+        return Err(AppError::Validation(
+            "only an agent node can be promoted".into(),
+        ));
     }
     let config: serde_json::Value = serde_json::from_str(&node.config_json).unwrap_or_default();
-    let persona = config.get("embedded_persona").and_then(|v| v.as_str()).unwrap_or_default();
+    let persona = config
+        .get("embedded_persona")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
     if persona.is_empty() {
-        return Err(AppError::Validation("node has no embedded_persona to promote - it may already reference a reusable agent".into()));
+        return Err(AppError::Validation(
+            "node has no embedded_persona to promote - it may already reference a reusable agent"
+                .into(),
+        ));
     }
     let action_names: Vec<String> = config
         .get("embedded_action_names")
         .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
         .unwrap_or_default();
     let agent_input = AiAgentInput {
         name: node_key.to_string(),
@@ -188,8 +286,16 @@ pub fn promote_embedded_agent_node(
     };
     let agent = ai_agent_service::create(conn, workspace_id, &agent_input, actor_user_id)?;
 
-    let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-    let node_id_to_key: HashMap<&str, &str> = graph.nodes.iter().map(|n| (n.id.as_str(), n.node_key.as_str())).collect();
+    let input_template = config
+        .get("input_template")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let node_id_to_key: HashMap<&str, &str> = graph
+        .nodes
+        .iter()
+        .map(|n| (n.id.as_str(), n.node_key.as_str()))
+        .collect();
     let nodes: Vec<GraphNodeInput> = graph
         .nodes
         .iter()
@@ -213,33 +319,72 @@ pub fn promote_embedded_agent_node(
         .edges
         .iter()
         .map(|e| GraphEdgeInput {
-            from_node_key: node_id_to_key.get(e.from_node_id.as_str()).copied().unwrap_or_default().to_string(),
-            to_node_key: node_id_to_key.get(e.to_node_id.as_str()).copied().unwrap_or_default().to_string(),
+            from_node_key: node_id_to_key
+                .get(e.from_node_id.as_str())
+                .copied()
+                .unwrap_or_default()
+                .to_string(),
+            to_node_key: node_id_to_key
+                .get(e.to_node_id.as_str())
+                .copied()
+                .unwrap_or_default()
+                .to_string(),
             branch_label: e.branch_label.clone(),
             sort_order: e.sort_order,
         })
         .collect();
-    let rebuilt = ExecutionGraphInput { name: graph.name.clone(), description: graph.description.clone(), nodes, edges };
+    let rebuilt = ExecutionGraphInput {
+        name: graph.name.clone(),
+        description: graph.description.clone(),
+        nodes,
+        edges,
+    };
     update(conn, graph_id, workspace_id, &rebuilt, actor_user_id)?;
     Ok(agent)
 }
 
-pub fn set_disabled(conn: &Connection, id: &str, workspace_id: &str, disabled: bool, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
+pub fn set_disabled(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    disabled: bool,
+    actor_user_id: Option<&str>,
+) -> AppResult<ExecutionGraph> {
     require_admin(conn, actor_user_id)?;
     let graph = get_owned(conn, id, workspace_id)?;
-    let new_status = if disabled { "disabled".to_string() } else if graph.status == "disabled" { "published".to_string() } else { graph.status.clone() };
+    let new_status = if disabled {
+        "disabled".to_string()
+    } else if graph.status == "disabled" {
+        "published".to_string()
+    } else {
+        graph.status.clone()
+    };
     execution_graph_repo::set_status(conn, id, &new_status, actor_user_id)?;
     get_owned(conn, id, workspace_id)
 }
 
 /// Validates the graph's shape and, if it passes, flips `status` to
 /// `published` (immutable from then on - see `update`'s own doc comment).
-pub fn publish(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
+pub fn publish(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<ExecutionGraph> {
     require_admin(conn, actor_user_id)?;
     let graph = get_owned(conn, id, workspace_id)?;
     validate_for_publish(&graph)?;
     execution_graph_repo::set_status(conn, id, "published", actor_user_id)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "publish", Some("execution_graph"), Some(id), &format!("Published execution graph '{}'", graph.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "publish",
+        Some("execution_graph"),
+        Some(id),
+        &format!("Published execution graph '{}'", graph.name),
+        None,
+    )?;
     get_owned(conn, id, workspace_id)
 }
 
@@ -250,34 +395,57 @@ pub fn publish(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: O
 /// codebase already uses (a Business Rule, a Screen Layout).
 pub fn validate_for_publish(graph: &ExecutionGraph) -> AppResult<()> {
     if graph.nodes.is_empty() {
-        return Err(AppError::Validation("a graph needs at least one node".into()));
+        return Err(AppError::Validation(
+            "a graph needs at least one node".into(),
+        ));
     }
-    let triggers: Vec<&str> = graph.nodes.iter().filter(|n| n.node_type == "trigger").map(|n| n.id.as_str()).collect();
+    let triggers: Vec<&str> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == "trigger")
+        .map(|n| n.id.as_str())
+        .collect();
     if triggers.len() != 1 {
-        return Err(AppError::Validation(format!("a graph must have exactly one trigger node (found {})", triggers.len())));
+        return Err(AppError::Validation(format!(
+            "a graph must have exactly one trigger node (found {})",
+            triggers.len()
+        )));
     }
     let trigger_id = triggers[0];
 
     let mut outgoing: HashMap<&str, Vec<(&str, Option<&str>)>> = HashMap::new();
     let mut incoming_count: HashMap<&str, usize> = HashMap::new();
     for edge in &graph.edges {
-        outgoing.entry(edge.from_node_id.as_str()).or_default().push((edge.to_node_id.as_str(), edge.branch_label.as_deref()));
+        outgoing
+            .entry(edge.from_node_id.as_str())
+            .or_default()
+            .push((edge.to_node_id.as_str(), edge.branch_label.as_deref()));
         *incoming_count.entry(edge.to_node_id.as_str()).or_insert(0) += 1;
     }
 
-    let node_type_of: HashMap<&str, &str> = graph.nodes.iter().map(|n| (n.id.as_str(), n.node_type.as_str())).collect();
+    let node_type_of: HashMap<&str, &str> = graph
+        .nodes
+        .iter()
+        .map(|n| (n.id.as_str(), n.node_type.as_str()))
+        .collect();
 
     for node in &graph.nodes {
         let outs = outgoing.get(node.id.as_str()).cloned().unwrap_or_default();
         match node.node_type.as_str() {
             "end" => {
                 if !outs.is_empty() {
-                    return Err(AppError::Validation(format!("End node '{}' must have no outgoing edges", node.node_key)));
+                    return Err(AppError::Validation(format!(
+                        "End node '{}' must have no outgoing edges",
+                        node.node_key
+                    )));
                 }
             }
             t if is_single_unconditional_outgoing(t) => {
                 if outs.len() != 1 || outs[0].1.is_some() {
-                    return Err(AppError::Validation(format!("'{}' node '{}' must have exactly one unconditional outgoing edge", t, node.node_key)));
+                    return Err(AppError::Validation(format!(
+                        "'{}' node '{}' must have exactly one unconditional outgoing edge",
+                        t, node.node_key
+                    )));
                 }
             }
             "condition" => {
@@ -301,28 +469,43 @@ pub fn validate_for_publish(graph: &ExecutionGraph) -> AppResult<()> {
             "loop" => {
                 let labels: HashSet<&str> = outs.iter().filter_map(|(_, l)| *l).collect();
                 if outs.len() != 2 || !labels.contains("body") || !labels.contains("exit") {
-                    return Err(AppError::Validation(format!("Loop node '{}' must have exactly a 'body' and an 'exit' outgoing edge", node.node_key)));
+                    return Err(AppError::Validation(format!(
+                        "Loop node '{}' must have exactly a 'body' and an 'exit' outgoing edge",
+                        node.node_key
+                    )));
                 }
-                let config: serde_json::Value = serde_json::from_str(&node.config_json).unwrap_or(json!({}));
+                let config: serde_json::Value =
+                    serde_json::from_str(&node.config_json).unwrap_or(json!({}));
                 let max_iterations = config.get("max_iterations").and_then(|v| v.as_i64());
                 if !matches!(max_iterations, Some(n) if n > 0) {
-                    return Err(AppError::Validation(format!("Loop node '{}' needs a positive integer max_iterations in its config", node.node_key)));
+                    return Err(AppError::Validation(format!(
+                        "Loop node '{}' needs a positive integer max_iterations in its config",
+                        node.node_key
+                    )));
                 }
             }
             "router" => {
                 if outs.is_empty() || outs.iter().any(|(_, l)| l.is_none()) {
-                    return Err(AppError::Validation(format!("Router node '{}' needs one or more branch-labeled outgoing edges", node.node_key)));
+                    return Err(AppError::Validation(format!(
+                        "Router node '{}' needs one or more branch-labeled outgoing edges",
+                        node.node_key
+                    )));
                 }
             }
             "parallel_split" => {
                 if outs.len() < 2 {
-                    return Err(AppError::Validation(format!("Parallel Split node '{}' needs at least two outgoing edges", node.node_key)));
+                    return Err(AppError::Validation(format!(
+                        "Parallel Split node '{}' needs at least two outgoing edges",
+                        node.node_key
+                    )));
                 }
             }
-            "join"
-                if incoming_count.get(node.id.as_str()).copied().unwrap_or(0) < 2 => {
-                    return Err(AppError::Validation(format!("Join node '{}' needs at least two incoming edges", node.node_key)));
-                }
+            "join" if incoming_count.get(node.id.as_str()).copied().unwrap_or(0) < 2 => {
+                return Err(AppError::Validation(format!(
+                    "Join node '{}' needs at least two incoming edges",
+                    node.node_key
+                )));
+            }
             _ => {}
         }
     }
@@ -341,16 +524,43 @@ pub fn validate_for_publish(graph: &ExecutionGraph) -> AppResult<()> {
             }
         }
     }
-    let unreachable: Vec<&str> = graph.nodes.iter().map(|n| n.node_key.as_str()).zip(graph.nodes.iter().map(|n| n.id.as_str())).filter(|(_, id)| !reachable.contains(id)).map(|(key, _)| key).collect();
+    let unreachable: Vec<&str> = graph
+        .nodes
+        .iter()
+        .map(|n| n.node_key.as_str())
+        .zip(graph.nodes.iter().map(|n| n.id.as_str()))
+        .filter(|(_, id)| !reachable.contains(id))
+        .map(|(key, _)| key)
+        .collect();
     if !unreachable.is_empty() {
-        return Err(AppError::Validation(format!("unreachable node(s) from the trigger: {}", unreachable.join(", "))));
+        return Err(AppError::Validation(format!(
+            "unreachable node(s) from the trigger: {}",
+            unreachable.join(", ")
+        )));
     }
-    if !graph.nodes.iter().any(|n| n.node_type == "end" && reachable.contains(n.id.as_str())) {
-        return Err(AppError::Validation("a graph must have at least one reachable End node".into()));
+    if !graph
+        .nodes
+        .iter()
+        .any(|n| n.node_type == "end" && reachable.contains(n.id.as_str()))
+    {
+        return Err(AppError::Validation(
+            "a graph must have at least one reachable End node".into(),
+        ));
     }
 
-    if let Some(cycle) = find_unbounded_cycle(&graph.nodes.iter().map(|n| n.id.as_str()).collect::<Vec<_>>(), &outgoing, &node_type_of) {
-        return Err(AppError::Validation(format!("unbounded cycle detected (not passing through a Loop node's own re-entry): {}", cycle.join(" -> "))));
+    if let Some(cycle) = find_unbounded_cycle(
+        &graph
+            .nodes
+            .iter()
+            .map(|n| n.id.as_str())
+            .collect::<Vec<_>>(),
+        &outgoing,
+        &node_type_of,
+    ) {
+        return Err(AppError::Validation(format!(
+            "unbounded cycle detected (not passing through a Loop node's own re-entry): {}",
+            cycle.join(" -> ")
+        )));
     }
 
     Ok(())
@@ -436,7 +646,14 @@ fn find_unbounded_cycle<'a>(
 /// the two agree on the same input, not so production traffic switches
 /// over to it.
 pub fn graph_from_workflow(wf: &WorkflowDefinition) -> ExecutionGraphInput {
-    let mut nodes = vec![GraphNodeInput { node_key: "trigger".into(), node_type: "trigger".into(), config_json: "{}".into(), position_x: None, position_y: None, sort_order: 0 }];
+    let mut nodes = vec![GraphNodeInput {
+        node_key: "trigger".into(),
+        node_type: "trigger".into(),
+        config_json: "{}".into(),
+        position_x: None,
+        position_y: None,
+        sort_order: 0,
+    }];
     let mut edges = Vec::new();
     let mut sort_order = 1i64;
 
@@ -448,10 +665,27 @@ pub fn graph_from_workflow(wf: &WorkflowDefinition) -> ExecutionGraphInput {
                 "group_id": c.group_id, "field_key": c.field_key, "operator": c.operator, "value": c.value,
             })).collect::<Vec<_>>(),
         });
-        nodes.push(GraphNodeInput { node_key: "conditions".into(), node_type: "condition".into(), config_json: cfg.to_string(), position_x: None, position_y: None, sort_order });
-        edges.push(GraphEdgeInput { from_node_key: prev_key.clone(), to_node_key: "conditions".into(), branch_label: None, sort_order });
+        nodes.push(GraphNodeInput {
+            node_key: "conditions".into(),
+            node_type: "condition".into(),
+            config_json: cfg.to_string(),
+            position_x: None,
+            position_y: None,
+            sort_order,
+        });
+        edges.push(GraphEdgeInput {
+            from_node_key: prev_key.clone(),
+            to_node_key: "conditions".into(),
+            branch_label: None,
+            sort_order,
+        });
         sort_order += 1;
-        edges.push(GraphEdgeInput { from_node_key: "conditions".into(), to_node_key: "end".into(), branch_label: Some("false".into()), sort_order });
+        edges.push(GraphEdgeInput {
+            from_node_key: "conditions".into(),
+            to_node_key: "end".into(),
+            branch_label: Some("false".into()),
+            sort_order,
+        });
         sort_order += 1;
         prev_key = "conditions".to_string();
     }
@@ -460,22 +694,60 @@ pub fn graph_from_workflow(wf: &WorkflowDefinition) -> ExecutionGraphInput {
     for (i, action) in wf.actions.iter().enumerate() {
         let key = format!("action_{i}");
         let cfg = json!({"action_type": action.action_type, "params_json": action.params_json});
-        nodes.push(GraphNodeInput { node_key: key.clone(), node_type: "action".into(), config_json: cfg.to_string(), position_x: None, position_y: None, sort_order });
-        let label = if i == 0 && branch_from_conditions { Some("true".to_string()) } else { None };
-        edges.push(GraphEdgeInput { from_node_key: prev_key.clone(), to_node_key: key.clone(), branch_label: label, sort_order });
+        nodes.push(GraphNodeInput {
+            node_key: key.clone(),
+            node_type: "action".into(),
+            config_json: cfg.to_string(),
+            position_x: None,
+            position_y: None,
+            sort_order,
+        });
+        let label = if i == 0 && branch_from_conditions {
+            Some("true".to_string())
+        } else {
+            None
+        };
+        edges.push(GraphEdgeInput {
+            from_node_key: prev_key.clone(),
+            to_node_key: key.clone(),
+            branch_label: label,
+            sort_order,
+        });
         sort_order += 1;
         prev_key = key;
     }
     if wf.actions.is_empty() && branch_from_conditions {
-        edges.push(GraphEdgeInput { from_node_key: prev_key.clone(), to_node_key: "end".into(), branch_label: Some("true".into()), sort_order });
+        edges.push(GraphEdgeInput {
+            from_node_key: prev_key.clone(),
+            to_node_key: "end".into(),
+            branch_label: Some("true".into()),
+            sort_order,
+        });
         sort_order += 1;
     } else {
-        edges.push(GraphEdgeInput { from_node_key: prev_key, to_node_key: "end".into(), branch_label: None, sort_order });
+        edges.push(GraphEdgeInput {
+            from_node_key: prev_key,
+            to_node_key: "end".into(),
+            branch_label: None,
+            sort_order,
+        });
         sort_order += 1;
     }
 
-    nodes.push(GraphNodeInput { node_key: "end".into(), node_type: "end".into(), config_json: "{}".into(), position_x: None, position_y: None, sort_order });
-    ExecutionGraphInput { name: format!("{} (graph shape)", wf.name), description: wf.description.clone(), nodes, edges }
+    nodes.push(GraphNodeInput {
+        node_key: "end".into(),
+        node_type: "end".into(),
+        config_json: "{}".into(),
+        position_x: None,
+        position_y: None,
+        sort_order,
+    });
+    ExecutionGraphInput {
+        name: format!("{} (graph shape)", wf.name),
+        description: wf.description.clone(),
+        nodes,
+        edges,
+    }
 }
 
 // --- compatibility-shape mapping: existing Pipeline -> graph shape ------
@@ -522,7 +794,14 @@ fn agent_node(key: &str, agent_id: &str, input_template: &str, sort_order: i64) 
 /// body/exit shape maps onto `ai_orchestration_service::run_peer_review_
 /// from`'s drafter/reviewer/APPROVED-marker loop).
 pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput> {
-    let mut nodes = vec![GraphNodeInput { node_key: "trigger".into(), node_type: "trigger".into(), config_json: "{}".into(), position_x: None, position_y: None, sort_order: 0 }];
+    let mut nodes = vec![GraphNodeInput {
+        node_key: "trigger".into(),
+        node_type: "trigger".into(),
+        config_json: "{}".into(),
+        position_x: None,
+        position_y: None,
+        sort_order: 0,
+    }];
     let mut edges = Vec::new();
     let mut sort_order = 1i64;
 
@@ -532,25 +811,57 @@ pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput
             let mut prev_agent_key: Option<String> = None;
             for (i, step) in p.steps.iter().enumerate() {
                 let key = format!("agent_{i}");
-                let template = resolve_previous_output_token(&step.input_template, prev_agent_key.as_deref());
+                let template =
+                    resolve_previous_output_token(&step.input_template, prev_agent_key.as_deref());
                 nodes.push(agent_node(&key, &step.agent_id, &template, sort_order));
-                edges.push(GraphEdgeInput { from_node_key: prev_key.clone(), to_node_key: key.clone(), branch_label: None, sort_order });
+                edges.push(GraphEdgeInput {
+                    from_node_key: prev_key.clone(),
+                    to_node_key: key.clone(),
+                    branch_label: None,
+                    sort_order,
+                });
                 sort_order += 1;
                 prev_agent_key = Some(key.clone());
                 if step.requires_approval {
                     let approval_key = format!("approval_{i}");
-                    nodes.push(GraphNodeInput { node_key: approval_key.clone(), node_type: "approval".into(), config_json: json!({"subject_type": "pipeline_step"}).to_string(), position_x: None, position_y: None, sort_order });
-                    edges.push(GraphEdgeInput { from_node_key: key.clone(), to_node_key: approval_key.clone(), branch_label: None, sort_order });
+                    nodes.push(GraphNodeInput {
+                        node_key: approval_key.clone(),
+                        node_type: "approval".into(),
+                        config_json: json!({"subject_type": "pipeline_step"}).to_string(),
+                        position_x: None,
+                        position_y: None,
+                        sort_order,
+                    });
+                    edges.push(GraphEdgeInput {
+                        from_node_key: key.clone(),
+                        to_node_key: approval_key.clone(),
+                        branch_label: None,
+                        sort_order,
+                    });
                     sort_order += 1;
-                    edges.push(GraphEdgeInput { from_node_key: approval_key.clone(), to_node_key: "end".into(), branch_label: Some("rejected".into()), sort_order });
+                    edges.push(GraphEdgeInput {
+                        from_node_key: approval_key.clone(),
+                        to_node_key: "end".into(),
+                        branch_label: Some("rejected".into()),
+                        sort_order,
+                    });
                     sort_order += 1;
                     prev_key = approval_key;
                 } else {
                     prev_key = key;
                 }
             }
-            let last_label = if p.steps.last().is_some_and(|s| s.requires_approval) { Some("approved".to_string()) } else { None };
-            edges.push(GraphEdgeInput { from_node_key: prev_key, to_node_key: "end".into(), branch_label: last_label, sort_order });
+            let last_label = if p.steps.last().is_some_and(|s| s.requires_approval) {
+                Some("approved".to_string())
+            } else {
+                None
+            };
+            edges.push(GraphEdgeInput {
+                from_node_key: prev_key,
+                to_node_key: "end".into(),
+                branch_label: last_label,
+                sort_order,
+            });
         }
         // A real consensus synthesizer step's `input_template` commonly
         // uses `{{candidate_outputs}}` - `ai_orchestration_service`'s own
@@ -569,39 +880,114 @@ pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput
         // would resolve correctly on this engine today.
         "consensus" => {
             if p.steps.len() < 2 {
-                return Err(AppError::Validation("a consensus Pipeline needs at least a candidate and a synthesizer step".into()));
+                return Err(AppError::Validation(
+                    "a consensus Pipeline needs at least a candidate and a synthesizer step".into(),
+                ));
             }
             let (candidates, synth) = p.steps.split_at(p.steps.len() - 1);
             let synth = &synth[0];
-            nodes.push(GraphNodeInput { node_key: "split".into(), node_type: "parallel_split".into(), config_json: "{}".into(), position_x: None, position_y: None, sort_order });
-            edges.push(GraphEdgeInput { from_node_key: "trigger".into(), to_node_key: "split".into(), branch_label: None, sort_order });
+            nodes.push(GraphNodeInput {
+                node_key: "split".into(),
+                node_type: "parallel_split".into(),
+                config_json: "{}".into(),
+                position_x: None,
+                position_y: None,
+                sort_order,
+            });
+            edges.push(GraphEdgeInput {
+                from_node_key: "trigger".into(),
+                to_node_key: "split".into(),
+                branch_label: None,
+                sort_order,
+            });
             sort_order += 1;
-            nodes.push(GraphNodeInput { node_key: "join".into(), node_type: "join".into(), config_json: json!({"mode": "all"}).to_string(), position_x: None, position_y: None, sort_order });
+            nodes.push(GraphNodeInput {
+                node_key: "join".into(),
+                node_type: "join".into(),
+                config_json: json!({"mode": "all"}).to_string(),
+                position_x: None,
+                position_y: None,
+                sort_order,
+            });
             for (i, step) in candidates.iter().enumerate() {
                 let key = format!("candidate_{i}");
-                nodes.push(agent_node(&key, &step.agent_id, &step.input_template, sort_order));
-                edges.push(GraphEdgeInput { from_node_key: "split".into(), to_node_key: key.clone(), branch_label: None, sort_order });
+                nodes.push(agent_node(
+                    &key,
+                    &step.agent_id,
+                    &step.input_template,
+                    sort_order,
+                ));
+                edges.push(GraphEdgeInput {
+                    from_node_key: "split".into(),
+                    to_node_key: key.clone(),
+                    branch_label: None,
+                    sort_order,
+                });
                 sort_order += 1;
-                edges.push(GraphEdgeInput { from_node_key: key, to_node_key: "join".into(), branch_label: None, sort_order });
+                edges.push(GraphEdgeInput {
+                    from_node_key: key,
+                    to_node_key: "join".into(),
+                    branch_label: None,
+                    sort_order,
+                });
                 sort_order += 1;
             }
-            nodes.push(agent_node("synthesizer", &synth.agent_id, &synth.input_template, sort_order));
-            edges.push(GraphEdgeInput { from_node_key: "join".into(), to_node_key: "synthesizer".into(), branch_label: None, sort_order });
+            nodes.push(agent_node(
+                "synthesizer",
+                &synth.agent_id,
+                &synth.input_template,
+                sort_order,
+            ));
+            edges.push(GraphEdgeInput {
+                from_node_key: "join".into(),
+                to_node_key: "synthesizer".into(),
+                branch_label: None,
+                sort_order,
+            });
             sort_order += 1;
             if synth.requires_approval {
-                nodes.push(GraphNodeInput { node_key: "approval".into(), node_type: "approval".into(), config_json: json!({"subject_type": "pipeline_step"}).to_string(), position_x: None, position_y: None, sort_order });
-                edges.push(GraphEdgeInput { from_node_key: "synthesizer".into(), to_node_key: "approval".into(), branch_label: None, sort_order });
+                nodes.push(GraphNodeInput {
+                    node_key: "approval".into(),
+                    node_type: "approval".into(),
+                    config_json: json!({"subject_type": "pipeline_step"}).to_string(),
+                    position_x: None,
+                    position_y: None,
+                    sort_order,
+                });
+                edges.push(GraphEdgeInput {
+                    from_node_key: "synthesizer".into(),
+                    to_node_key: "approval".into(),
+                    branch_label: None,
+                    sort_order,
+                });
                 sort_order += 1;
-                edges.push(GraphEdgeInput { from_node_key: "approval".into(), to_node_key: "end".into(), branch_label: Some("approved".into()), sort_order });
+                edges.push(GraphEdgeInput {
+                    from_node_key: "approval".into(),
+                    to_node_key: "end".into(),
+                    branch_label: Some("approved".into()),
+                    sort_order,
+                });
                 sort_order += 1;
-                edges.push(GraphEdgeInput { from_node_key: "approval".into(), to_node_key: "end".into(), branch_label: Some("rejected".into()), sort_order });
+                edges.push(GraphEdgeInput {
+                    from_node_key: "approval".into(),
+                    to_node_key: "end".into(),
+                    branch_label: Some("rejected".into()),
+                    sort_order,
+                });
             } else {
-                edges.push(GraphEdgeInput { from_node_key: "synthesizer".into(), to_node_key: "end".into(), branch_label: None, sort_order });
+                edges.push(GraphEdgeInput {
+                    from_node_key: "synthesizer".into(),
+                    to_node_key: "end".into(),
+                    branch_label: None,
+                    sort_order,
+                });
             }
         }
         "peer_review" => {
             if p.steps.len() != 2 {
-                return Err(AppError::Validation("a peer_review Pipeline needs exactly a drafter and a reviewer step".into()));
+                return Err(AppError::Validation(
+                    "a peer_review Pipeline needs exactly a drafter and a reviewer step".into(),
+                ));
             }
             let drafter = &p.steps[0];
             let reviewer = &p.steps[1];
@@ -614,7 +1000,12 @@ pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput
                 position_y: None,
                 sort_order,
             });
-            edges.push(GraphEdgeInput { from_node_key: "trigger".into(), to_node_key: "loop".into(), branch_label: None, sort_order });
+            edges.push(GraphEdgeInput {
+                from_node_key: "trigger".into(),
+                to_node_key: "loop".into(),
+                branch_label: None,
+                sort_order,
+            });
             sort_order += 1;
             // `{{previous_output}}` in the drafter's template is the prior
             // round's reviewer feedback (`ai_orchestration_service::
@@ -626,13 +1017,35 @@ pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput
             // latest drafter output - a fixed node_key since this is a
             // static graph re-entering the same `drafter`/`reviewer` nodes
             // each round, not a per-round distinct node.
-            let drafter_template = resolve_previous_output_token(&drafter.input_template, Some("reviewer"));
-            nodes.push(agent_node("drafter", &drafter.agent_id, &drafter_template, sort_order));
-            edges.push(GraphEdgeInput { from_node_key: "loop".into(), to_node_key: "drafter".into(), branch_label: Some("body".into()), sort_order });
+            let drafter_template =
+                resolve_previous_output_token(&drafter.input_template, Some("reviewer"));
+            nodes.push(agent_node(
+                "drafter",
+                &drafter.agent_id,
+                &drafter_template,
+                sort_order,
+            ));
+            edges.push(GraphEdgeInput {
+                from_node_key: "loop".into(),
+                to_node_key: "drafter".into(),
+                branch_label: Some("body".into()),
+                sort_order,
+            });
             sort_order += 1;
-            let reviewer_template = resolve_previous_output_token(&reviewer.input_template, Some("drafter"));
-            nodes.push(agent_node("reviewer", &reviewer.agent_id, &reviewer_template, sort_order));
-            edges.push(GraphEdgeInput { from_node_key: "drafter".into(), to_node_key: "reviewer".into(), branch_label: None, sort_order });
+            let reviewer_template =
+                resolve_previous_output_token(&reviewer.input_template, Some("drafter"));
+            nodes.push(agent_node(
+                "reviewer",
+                &reviewer.agent_id,
+                &reviewer_template,
+                sort_order,
+            ));
+            edges.push(GraphEdgeInput {
+                from_node_key: "drafter".into(),
+                to_node_key: "reviewer".into(),
+                branch_label: None,
+                sort_order,
+            });
             sort_order += 1;
             // An Agent node's recorded output is always `{"output": <raw
             // text>}` (see `graph_runtime_service`'s own doc comment) -
@@ -654,11 +1067,26 @@ pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput
                 position_y: None,
                 sort_order,
             });
-            edges.push(GraphEdgeInput { from_node_key: "reviewer".into(), to_node_key: "review_check".into(), branch_label: None, sort_order });
+            edges.push(GraphEdgeInput {
+                from_node_key: "reviewer".into(),
+                to_node_key: "review_check".into(),
+                branch_label: None,
+                sort_order,
+            });
             sort_order += 1;
-            edges.push(GraphEdgeInput { from_node_key: "review_check".into(), to_node_key: "end".into(), branch_label: Some("true".into()), sort_order });
+            edges.push(GraphEdgeInput {
+                from_node_key: "review_check".into(),
+                to_node_key: "end".into(),
+                branch_label: Some("true".into()),
+                sort_order,
+            });
             sort_order += 1;
-            edges.push(GraphEdgeInput { from_node_key: "review_check".into(), to_node_key: "loop".into(), branch_label: Some("false".into()), sort_order });
+            edges.push(GraphEdgeInput {
+                from_node_key: "review_check".into(),
+                to_node_key: "loop".into(),
+                branch_label: Some("false".into()),
+                sort_order,
+            });
             sort_order += 1;
             if reviewer.requires_approval {
                 // A pausing reviewer step is not modeled further in this
@@ -667,13 +1095,34 @@ pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput
                 // unattended. Real Pipelines using this combination
                 // continue to run on `ai_orchestration_service` unchanged.
             }
-            edges.push(GraphEdgeInput { from_node_key: "loop".into(), to_node_key: "end".into(), branch_label: Some("exit".into()), sort_order });
+            edges.push(GraphEdgeInput {
+                from_node_key: "loop".into(),
+                to_node_key: "end".into(),
+                branch_label: Some("exit".into()),
+                sort_order,
+            });
         }
-        other => return Err(AppError::Validation(format!("unknown pipeline topology '{other}'"))),
+        other => {
+            return Err(AppError::Validation(format!(
+                "unknown pipeline topology '{other}'"
+            )))
+        }
     }
 
-    nodes.push(GraphNodeInput { node_key: "end".into(), node_type: "end".into(), config_json: "{}".into(), position_x: None, position_y: None, sort_order: sort_order + 1 });
-    Ok(ExecutionGraphInput { name: format!("{} (graph shape)", p.name), description: p.description.clone(), nodes, edges })
+    nodes.push(GraphNodeInput {
+        node_key: "end".into(),
+        node_type: "end".into(),
+        config_json: "{}".into(),
+        position_x: None,
+        position_y: None,
+        sort_order: sort_order + 1,
+    });
+    Ok(ExecutionGraphInput {
+        name: format!("{} (graph shape)", p.name),
+        description: p.description.clone(),
+        nodes,
+        edges,
+    })
 }
 
 /// Persists the result of `graph_from_workflow`/`graph_from_pipeline` as a
@@ -683,9 +1132,24 @@ pub fn graph_from_pipeline(p: &AiAgentPipeline) -> AppResult<ExecutionGraphInput
 /// gets) with `source_kind`/`source_id` set, for the parity tests
 /// (and, later, an explicit "run this Workflow/Pipeline on the new engine
 /// instead" opt-in) to run against.
-pub fn create_from_source(conn: &Connection, workspace_id: &str, input: ExecutionGraphInput, source_kind: &str, source_id: &str, actor_user_id: Option<&str>) -> AppResult<ExecutionGraph> {
+pub fn create_from_source(
+    conn: &Connection,
+    workspace_id: &str,
+    input: ExecutionGraphInput,
+    source_kind: &str,
+    source_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<ExecutionGraph> {
     let id = crate::domain::ids::new_uuid();
-    let graph = execution_graph_repo::create_with_source(conn, &id, workspace_id, &input, source_kind, source_id, actor_user_id)?;
+    let graph = execution_graph_repo::create_with_source(
+        conn,
+        &id,
+        workspace_id,
+        &input,
+        source_kind,
+        source_id,
+        actor_user_id,
+    )?;
     validate_for_publish(&graph)?;
     execution_graph_repo::set_status(conn, &id, "published", actor_user_id)?;
     Ok(execution_graph_repo::get(conn, &id)?.expect("just published"))

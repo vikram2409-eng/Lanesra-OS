@@ -25,47 +25,74 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-fn get_agent_in_workspace(conn: &Connection, agent_id: &str, workspace_id: &str) -> AppResult<crate::models::ai_agent::AiAgentDefinition> {
-    let agent = ai_agent_repo::get(conn, agent_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+fn get_agent_in_workspace(
+    conn: &Connection,
+    agent_id: &str,
+    workspace_id: &str,
+) -> AppResult<crate::models::ai_agent::AiAgentDefinition> {
+    let agent =
+        ai_agent_repo::get(conn, agent_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     if agent.workspace_id != workspace_id {
         return Err(AppError::NotFound("Agent".into()));
     }
     Ok(agent)
 }
 
-fn get_version_for_agent(conn: &Connection, agent_id: &str, version_id: &str) -> AppResult<AiAgentVersion> {
-    let version = ai_agent_version_repo::get(conn, version_id)?.ok_or_else(|| AppError::NotFound("Agent version".into()))?;
+fn get_version_for_agent(
+    conn: &Connection,
+    agent_id: &str,
+    version_id: &str,
+) -> AppResult<AiAgentVersion> {
+    let version = ai_agent_version_repo::get(conn, version_id)?
+        .ok_or_else(|| AppError::NotFound("Agent version".into()))?;
     if version.agent_id != agent_id {
         return Err(AppError::NotFound("Agent version".into()));
     }
     Ok(version)
 }
 
-fn validate_input(conn: &Connection, workspace_id: &str, input: &AiAgentVersionInput) -> AppResult<()> {
+fn validate_input(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiAgentVersionInput,
+) -> AppResult<()> {
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Agent name is required".into()));
     }
     if input.system_prompt.trim().is_empty() {
-        return Err(AppError::Validation("Agent instructions are required".into()));
+        return Err(AppError::Validation(
+            "Agent instructions are required".into(),
+        ));
     }
     let mut connector_names: Option<Vec<String>> = None;
     for name in &input.action_names {
         match super::chat_service::tool_source(name) {
             Some("connector_read" | "connector_write") => {
                 if connector_names.is_none() {
-                    connector_names = Some(super::connector_tool_service::agent_tool_names(conn, workspace_id)?);
+                    connector_names = Some(super::connector_tool_service::agent_tool_names(
+                        conn,
+                        workspace_id,
+                    )?);
                 }
                 if !connector_names.as_ref().unwrap().contains(name) {
-                    return Err(AppError::Validation(format!("'{name}' isn't currently available as an agent tool")));
+                    return Err(AppError::Validation(format!(
+                        "'{name}' isn't currently available as an agent tool"
+                    )));
                 }
             }
             Some(_) => {}
-            None => return Err(AppError::Validation(format!("'{name}' isn't a known action"))),
+            None => {
+                return Err(AppError::Validation(format!(
+                    "'{name}' isn't a known action"
+                )))
+            }
         }
     }
     if let Some(schema) = &input.output_schema {
         if !schema.is_object() {
-            return Err(AppError::Validation("Output schema must be a JSON Schema object".into()));
+            return Err(AppError::Validation(
+                "Output schema must be a JSON Schema object".into(),
+            ));
         }
     }
     Ok(())
@@ -75,21 +102,44 @@ fn validate_input(conn: &Connection, workspace_id: &str, input: &AiAgentVersionI
 /// the current Published version's content, edited) - version numbers are
 /// monotonically increasing per agent and never reused, even across a
 /// Draft that's later disabled without ever publishing.
-pub fn create_draft(conn: &Connection, agent_id: &str, workspace_id: &str, input: &AiAgentVersionInput, actor_user_id: Option<&str>) -> AppResult<AiAgentVersion> {
+pub fn create_draft(
+    conn: &Connection,
+    agent_id: &str,
+    workspace_id: &str,
+    input: &AiAgentVersionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentVersion> {
     require_admin(conn, actor_user_id)?;
     get_agent_in_workspace(conn, agent_id, workspace_id)?;
     validate_input(conn, workspace_id, input)?;
     let version_number = ai_agent_version_repo::next_version_number(conn, agent_id)?;
-    Ok(ai_agent_version_repo::create_draft(conn, agent_id, version_number, input, actor_user_id)?)
+    Ok(ai_agent_version_repo::create_draft(
+        conn,
+        agent_id,
+        version_number,
+        input,
+        actor_user_id,
+    )?)
 }
 
-pub fn list_versions(conn: &Connection, agent_id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<AiAgentVersion>> {
+pub fn list_versions(
+    conn: &Connection,
+    agent_id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AiAgentVersion>> {
     require_admin(conn, actor_user_id)?;
     get_agent_in_workspace(conn, agent_id, workspace_id)?;
     Ok(ai_agent_version_repo::list_by_agent(conn, agent_id)?)
 }
 
-pub fn get_version(conn: &Connection, agent_id: &str, workspace_id: &str, version_id: &str, actor_user_id: Option<&str>) -> AppResult<AiAgentVersion> {
+pub fn get_version(
+    conn: &Connection,
+    agent_id: &str,
+    workspace_id: &str,
+    version_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentVersion> {
     require_admin(conn, actor_user_id)?;
     get_agent_in_workspace(conn, agent_id, workspace_id)?;
     get_version_for_agent(conn, agent_id, version_id)
@@ -98,7 +148,14 @@ pub fn get_version(conn: &Connection, agent_id: &str, workspace_id: &str, versio
 /// A full content overwrite of a Draft/Test version - rejected once the
 /// version has ever been Published (immutability - see this module's own
 /// doc comment).
-pub fn update_draft(conn: &Connection, agent_id: &str, workspace_id: &str, version_id: &str, input: &AiAgentVersionInput, actor_user_id: Option<&str>) -> AppResult<AiAgentVersion> {
+pub fn update_draft(
+    conn: &Connection,
+    agent_id: &str,
+    workspace_id: &str,
+    version_id: &str,
+    input: &AiAgentVersionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentVersion> {
     require_admin(conn, actor_user_id)?;
     get_agent_in_workspace(conn, agent_id, workspace_id)?;
     let version = get_version_for_agent(conn, agent_id, version_id)?;
@@ -106,7 +163,9 @@ pub fn update_draft(conn: &Connection, agent_id: &str, workspace_id: &str, versi
         return Err(AppError::Validation(format!("Version {} is '{}' and can no longer be edited - it's an immutable historical snapshot once Published", version.version_number, version.status)));
     }
     validate_input(conn, workspace_id, input)?;
-    Ok(ai_agent_version_repo::update_content(conn, version_id, input)?)
+    Ok(ai_agent_version_repo::update_content(
+        conn, version_id, input,
+    )?)
 }
 
 /// Every legal `(from, to)` status transition - anything not listed here
@@ -128,13 +187,23 @@ const ALLOWED_TRANSITIONS: &[(&str, &str)] = &[
 /// previously Published for this agent and repoints `ai_agents.
 /// current_version_id` - so "the current Published version" is always
 /// exactly one row, never two.
-pub fn transition_status(conn: &Connection, agent_id: &str, workspace_id: &str, version_id: &str, new_status: &str, actor_user_id: Option<&str>) -> AppResult<AiAgentVersion> {
+pub fn transition_status(
+    conn: &Connection,
+    agent_id: &str,
+    workspace_id: &str,
+    version_id: &str,
+    new_status: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentVersion> {
     require_admin(conn, actor_user_id)?;
     let agent = get_agent_in_workspace(conn, agent_id, workspace_id)?;
     let version = get_version_for_agent(conn, agent_id, version_id)?;
 
     if !ALLOWED_TRANSITIONS.contains(&(version.status.as_str(), new_status)) {
-        return Err(AppError::Validation(format!("Can't move version {} from '{}' to '{new_status}'", version.version_number, version.status)));
+        return Err(AppError::Validation(format!(
+            "Can't move version {} from '{}' to '{new_status}'",
+            version.version_number, version.status
+        )));
     }
 
     if new_status == "published" {
@@ -146,10 +215,16 @@ pub fn transition_status(conn: &Connection, agent_id: &str, workspace_id: &str, 
         // opt-in governance, the same shape Phase 2's Policy Engine
         // itself uses (no policy configured, no gating).
         for suite in ai_eval_repo::list_suites(conn, workspace_id)? {
-            if suite.target_type != "agent" || suite.target_id != agent_id || suite.evaluator_type != "policy_compliance" {
+            if suite.target_type != "agent"
+                || suite.target_id != agent_id
+                || suite.evaluator_type != "policy_compliance"
+            {
                 continue;
             }
-            if let Some(last_run) = ai_eval_repo::list_runs_for_suite(conn, &suite.id, 1)?.into_iter().next() {
+            if let Some(last_run) = ai_eval_repo::list_runs_for_suite(conn, &suite.id, 1)?
+                .into_iter()
+                .next()
+            {
                 if last_run.failed_count > 0 {
                     return Err(AppError::Validation(format!(
                         "Can't publish: Eval Suite '{}' (policy_compliance) has a failing run - resolve the policy violation and re-run before publishing.",
@@ -168,8 +243,15 @@ pub fn transition_status(conn: &Connection, agent_id: &str, workspace_id: &str, 
             }
         }
         ai_agent_version_repo::set_current_version(conn, agent_id, version_id)?;
-        return Ok(ai_agent_version_repo::set_status(conn, version_id, "published", Some(&now_iso()))?);
+        return Ok(ai_agent_version_repo::set_status(
+            conn,
+            version_id,
+            "published",
+            Some(&now_iso()),
+        )?);
     }
 
-    Ok(ai_agent_version_repo::set_status(conn, version_id, new_status, None)?)
+    Ok(ai_agent_version_repo::set_status(
+        conn, version_id, new_status, None,
+    )?)
 }

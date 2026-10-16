@@ -6,7 +6,9 @@ use crate::domain::{AppError, AppResult};
 use crate::models::access_role::Capability;
 use crate::models::contact::{Contact, ContactInput, CONTACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo};
-use crate::services::{access_service, app_service, builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{
+    access_service, app_service, builtin_field_service, status_transition_service, workflow_service,
+};
 
 fn validate(conn: &Connection, input: &ContactInput) -> AppResult<String> {
     if input.first_name.trim().is_empty() || input.last_name.trim().is_empty() {
@@ -49,8 +51,22 @@ pub fn create(
     access_service::require_capability(conn, actor_user_id, "Contact", Capability::Create, None)?;
     let id = new_uuid();
     let contact_number = numbering::allocate_number(conn, &workspace_id, &CONTACT)?;
-    let contact = contact_repo::create(conn, &id, &workspace_id, &contact_number, input, actor_user_id)?;
-    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Contact", &contact.id, actor_user_id, None)?;
+    let contact = contact_repo::create(
+        conn,
+        &id,
+        &workspace_id,
+        &contact_number,
+        input,
+        actor_user_id,
+    )?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        &workspace_id,
+        "Contact",
+        &contact.id,
+        actor_user_id,
+        None,
+    )?;
     audit_repo::record(
         conn,
         &workspace_id,
@@ -61,9 +77,27 @@ pub fn create(
         &format!("Created contact {}", contact.contact_number),
         None,
     )?;
-    workflow_service::fire_event(conn, &workspace_id, "Contact", &contact.id, None, &contact.status, None, actor_user_id)?;
-    let display_name = format!("{} {}", contact.first_name, contact.last_name).trim().to_string();
-    super::event_hooks::record_created(conn, &workspace_id, "Contact", &contact.id, &display_name, &contact.status);
+    workflow_service::fire_event(
+        conn,
+        &workspace_id,
+        "Contact",
+        &contact.id,
+        None,
+        &contact.status,
+        None,
+        actor_user_id,
+    )?;
+    let display_name = format!("{} {}", contact.first_name, contact.last_name)
+        .trim()
+        .to_string();
+    super::event_hooks::record_created(
+        conn,
+        &workspace_id,
+        "Contact",
+        &contact.id,
+        &display_name,
+        &contact.status,
+    );
     Ok(contact)
 }
 
@@ -87,10 +121,22 @@ pub fn update(
 ) -> AppResult<Contact> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Contact", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Contact", Capability::Update, Some(id))?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Contact",
+        Capability::Update,
+        Some(id),
+    )?;
     let before = get(conn, id)?;
     if before.status != input.status {
-        status_transition_service::validate_transition(conn, &workspace_id, "Contact", &before.status, &input.status)?;
+        status_transition_service::validate_transition(
+            conn,
+            &workspace_id,
+            "Contact",
+            &before.status,
+            &input.status,
+        )?;
     }
     let before_fields = builtin_field_service::field_values(conn, "Contact", id)?;
     let contact = contact_repo::update(conn, id, input, actor_user_id)?;
@@ -105,20 +151,56 @@ pub fn update(
         None,
     )?;
     workflow_service::fire_event(
-        conn, &workspace_id, "Contact", id, Some(&before.status), &contact.status, None, actor_user_id,
+        conn,
+        &workspace_id,
+        "Contact",
+        id,
+        Some(&before.status),
+        &contact.status,
+        None,
+        actor_user_id,
     )?;
     let after_fields = builtin_field_service::field_values(conn, "Contact", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
-    workflow_service::fire_field_changed(conn, &workspace_id, "Contact", id, "builtin", &changed, None, actor_user_id)?;
-    let display_name = format!("{} {}", contact.first_name, contact.last_name).trim().to_string();
-    super::event_hooks::record_updated(conn, &workspace_id, "Contact", id, &display_name, &contact.status);
+    workflow_service::fire_field_changed(
+        conn,
+        &workspace_id,
+        "Contact",
+        id,
+        "builtin",
+        &changed,
+        None,
+        actor_user_id,
+    )?;
+    let display_name = format!("{} {}", contact.first_name, contact.last_name)
+        .trim()
+        .to_string();
+    super::event_hooks::record_updated(
+        conn,
+        &workspace_id,
+        "Contact",
+        id,
+        &display_name,
+        &contact.status,
+    );
     Ok(contact)
 }
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
-    app_service::require_object_write_access(conn, &existing.workspace_id, "Contact", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Contact", Capability::Delete, Some(id))?;
+    app_service::require_object_write_access(
+        conn,
+        &existing.workspace_id,
+        "Contact",
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Contact",
+        Capability::Delete,
+        Some(id),
+    )?;
     contact_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -130,7 +212,9 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
         &format!("Archived contact {}", existing.contact_number),
         None,
     )?;
-    let display_name = format!("{} {}", existing.first_name, existing.last_name).trim().to_string();
+    let display_name = format!("{} {}", existing.first_name, existing.last_name)
+        .trim()
+        .to_string();
     super::event_hooks::record_archived(conn, &existing.workspace_id, "Contact", id, &display_name);
     Ok(())
 }

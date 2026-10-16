@@ -9,7 +9,9 @@
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
-use crate::models::org_unit::{OrgUnit, OrgUnitInput, OrgUnitMoveImpact, OrgUnitUpdate, ORG_UNIT_TYPES};
+use crate::models::org_unit::{
+    OrgUnit, OrgUnitInput, OrgUnitMoveImpact, OrgUnitUpdate, ORG_UNIT_TYPES,
+};
 use crate::repositories::org_unit_repo;
 use crate::services::{access_service, custom_object_service, ownership_service};
 
@@ -17,7 +19,12 @@ use crate::services::{access_service, custom_object_service, ownership_service};
 /// passes with an explicit Access Role grant on "OrgUnit" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "OrgUnit", "Only an Administrator can manage Organization Units")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "OrgUnit",
+        "Only an Administrator can manage Organization Units",
+    )
 }
 
 fn validate_shape(input_name: &str, unit_type: &str) -> AppResult<()> {
@@ -25,24 +32,44 @@ fn validate_shape(input_name: &str, unit_type: &str) -> AppResult<()> {
         return Err(AppError::Validation("Name is required".into()));
     }
     if !ORG_UNIT_TYPES.contains(&unit_type) {
-        return Err(AppError::Validation(format!("Unit type must be one of: {}", ORG_UNIT_TYPES.join(", "))));
+        return Err(AppError::Validation(format!(
+            "Unit type must be one of: {}",
+            ORG_UNIT_TYPES.join(", ")
+        )));
     }
     Ok(())
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &OrgUnitInput, actor_user_id: Option<&str>) -> AppResult<OrgUnit> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &OrgUnitInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<OrgUnit> {
     require_admin(conn, actor_user_id)?;
     validate_shape(&input.name, &input.unit_type)?;
     let parent_id = input.parent_org_unit_id.as_deref().ok_or_else(|| {
         AppError::Validation("A new Organization Unit must have a parent - every workspace has exactly one root unit already".into())
     })?;
-    let parent = org_unit_repo::get(conn, parent_id)?.ok_or_else(|| AppError::NotFound("Parent Organization Unit".into()))?;
+    let parent = org_unit_repo::get(conn, parent_id)?
+        .ok_or_else(|| AppError::NotFound("Parent Organization Unit".into()))?;
     if parent.workspace_id != workspace_id {
-        return Err(AppError::Validation("Parent Organization Unit belongs to a different workspace".into()));
+        return Err(AppError::Validation(
+            "Parent Organization Unit belongs to a different workspace".into(),
+        ));
     }
     let id = crate::domain::ids::new_uuid();
     let path = format!("{}{id}/", parent.path);
-    org_unit_repo::create(conn, &id, workspace_id, input, &path, parent.depth + 1, actor_user_id).map_err(AppError::from)
+    org_unit_repo::create(
+        conn,
+        &id,
+        workspace_id,
+        input,
+        &path,
+        parent.depth + 1,
+        actor_user_id,
+    )
+    .map_err(AppError::from)
 }
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<Option<OrgUnit>> {
@@ -63,12 +90,19 @@ pub fn list_tree(conn: &Connection, workspace_id: &str) -> AppResult<Vec<OrgUnit
     Ok(org_unit_repo::list(conn, workspace_id)?)
 }
 
-pub fn update(conn: &Connection, id: &str, input: &OrgUnitUpdate, actor_user_id: Option<&str>) -> AppResult<OrgUnit> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &OrgUnitUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<OrgUnit> {
     require_admin(conn, actor_user_id)?;
     validate_shape(&input.name, &input.unit_type)?;
     org_unit_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Organization Unit".into()))?;
     if !["Active", "Inactive"].contains(&input.status.as_str()) {
-        return Err(AppError::Validation("Status must be Active or Inactive".into()));
+        return Err(AppError::Validation(
+            "Status must be Active or Inactive".into(),
+        ));
     }
     Ok(org_unit_repo::update(conn, id, input, actor_user_id)?)
 }
@@ -78,7 +112,10 @@ pub fn update(conn: &Connection, id: &str, input: &OrgUnitUpdate, actor_user_id:
 /// scan. Not cached: an admin previewing/committing a move is a rare,
 /// deliberate action, not a hot path.
 fn all_owned_object_keys(conn: &Connection, workspace_id: &str) -> AppResult<Vec<String>> {
-    let mut keys: Vec<String> = ownership_service::BUILTIN_OWNED_OBJECT_KEYS.iter().map(|s| s.to_string()).collect();
+    let mut keys: Vec<String> = ownership_service::BUILTIN_OWNED_OBJECT_KEYS
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     for def in custom_object_service::list(conn, workspace_id, true)? {
         keys.push(def.key);
     }
@@ -92,17 +129,30 @@ fn is_self_or_descendant(unit: &OrgUnit, candidate: &OrgUnit) -> bool {
     candidate.id == unit.id || candidate.path.starts_with(&unit.path)
 }
 
-fn validate_move(conn: &Connection, workspace_id: &str, id: &str, new_parent_id: &str) -> AppResult<(OrgUnit, OrgUnit)> {
-    let unit = org_unit_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Organization Unit".into()))?;
+fn validate_move(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    new_parent_id: &str,
+) -> AppResult<(OrgUnit, OrgUnit)> {
+    let unit = org_unit_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Organization Unit".into()))?;
     if unit.parent_org_unit_id.is_none() {
-        return Err(AppError::Validation("The root Organization Unit can't be moved".into()));
+        return Err(AppError::Validation(
+            "The root Organization Unit can't be moved".into(),
+        ));
     }
-    let new_parent = org_unit_repo::get(conn, new_parent_id)?.ok_or_else(|| AppError::NotFound("New parent Organization Unit".into()))?;
+    let new_parent = org_unit_repo::get(conn, new_parent_id)?
+        .ok_or_else(|| AppError::NotFound("New parent Organization Unit".into()))?;
     if new_parent.workspace_id != workspace_id {
-        return Err(AppError::Validation("New parent Organization Unit belongs to a different workspace".into()));
+        return Err(AppError::Validation(
+            "New parent Organization Unit belongs to a different workspace".into(),
+        ));
     }
     if is_self_or_descendant(&unit, &new_parent) {
-        return Err(AppError::Validation("Can't move an Organization Unit under itself or one of its own descendants".into()));
+        return Err(AppError::Validation(
+            "Can't move an Organization Unit under itself or one of its own descendants".into(),
+        ));
     }
     if new_parent.id == unit.parent_org_unit_id.clone().unwrap_or_default() {
         return Err(AppError::Validation("This is already the parent".into()));
@@ -110,7 +160,13 @@ fn validate_move(conn: &Connection, workspace_id: &str, id: &str, new_parent_id:
     Ok((unit, new_parent))
 }
 
-pub fn preview_move(conn: &Connection, workspace_id: &str, id: &str, new_parent_id: &str, actor_user_id: Option<&str>) -> AppResult<OrgUnitMoveImpact> {
+pub fn preview_move(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    new_parent_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<OrgUnitMoveImpact> {
     require_admin(conn, actor_user_id)?;
     let (unit, _new_parent) = validate_move(conn, workspace_id, id, new_parent_id)?;
     let subtree = org_unit_repo::list_descendants_by_path(conn, workspace_id, &unit.path)?;
@@ -126,20 +182,42 @@ pub fn preview_move(conn: &Connection, workspace_id: &str, id: &str, new_parent_
             owned_record_counts.push((object_key.clone(), total));
         }
     }
-    Ok(OrgUnitMoveImpact { descendant_unit_count, owned_record_counts })
+    Ok(OrgUnitMoveImpact {
+        descendant_unit_count,
+        owned_record_counts,
+    })
 }
 
 /// Re-validates (never trusts a stale preview) then commits: rewrites
 /// path/depth for the whole moved subtree in one bounded UPDATE, then
 /// points the moved unit's own parent_org_unit_id at its new parent.
-pub fn move_unit(conn: &Connection, workspace_id: &str, id: &str, new_parent_id: &str, actor_user_id: Option<&str>) -> AppResult<OrgUnit> {
+pub fn move_unit(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    new_parent_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<OrgUnit> {
     require_admin(conn, actor_user_id)?;
     let (unit, new_parent) = validate_move(conn, workspace_id, id, new_parent_id)?;
     let old_prefix = unit.path.clone();
     let new_prefix = format!("{}{id}/", new_parent.path);
     let depth_delta = (new_parent.depth + 1) - unit.depth;
-    org_unit_repo::update_path_for_subtree(conn, &old_prefix, &new_prefix, depth_delta, actor_user_id)?;
-    org_unit_repo::set_parent_and_path(conn, id, Some(new_parent_id), &new_prefix, new_parent.depth + 1, actor_user_id)?;
+    org_unit_repo::update_path_for_subtree(
+        conn,
+        &old_prefix,
+        &new_prefix,
+        depth_delta,
+        actor_user_id,
+    )?;
+    org_unit_repo::set_parent_and_path(
+        conn,
+        id,
+        Some(new_parent_id),
+        &new_prefix,
+        new_parent.depth + 1,
+        actor_user_id,
+    )?;
     crate::repositories::audit_repo::record(
         conn,
         workspace_id,
@@ -158,9 +236,12 @@ pub fn move_unit(conn: &Connection, workspace_id: &str, id: &str, new_parent_id:
 /// dependents exist" rule every other entity in this product follows.
 pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
-    let unit = org_unit_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Organization Unit".into()))?;
+    let unit = org_unit_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Organization Unit".into()))?;
     if unit.parent_org_unit_id.is_none() {
-        return Err(AppError::Validation("The root Organization Unit can't be deleted".into()));
+        return Err(AppError::Validation(
+            "The root Organization Unit can't be deleted".into(),
+        ));
     }
     let children = org_unit_repo::list_children(conn, id)?;
     if !children.is_empty() {

@@ -28,7 +28,11 @@ fn step_risk(action: &str) -> VoiceRisk {
 /// A plan's overall risk is the highest risk among its steps (spec §13:
 /// a multi-action command is only as safe as its riskiest step).
 pub fn classify(plan: &VoiceActionPlanBody) -> VoiceRisk {
-    plan.steps.iter().map(|s| step_risk(&s.action)).max().unwrap_or(VoiceRisk::None)
+    plan.steps
+        .iter()
+        .map(|s| step_risk(&s.action))
+        .max()
+        .unwrap_or(VoiceRisk::None)
 }
 
 /// Which of the 8 Voice capability toggles (Voice Governance) a given step
@@ -101,7 +105,12 @@ pub fn decide(plan: &VoiceActionPlanBody, policy: &EffectivePolicy) -> RiskDecis
     let risk = classify(plan);
 
     if risk == VoiceRisk::Blocked {
-        return RiskDecision { risk, confirmation_required: false, requires_approval: false, blocked_reason: Some("This action is disabled for Voice Mode.".into()) };
+        return RiskDecision {
+            risk,
+            confirmation_required: false,
+            requires_approval: false,
+            blocked_reason: Some("This action is disabled for Voice Mode.".into()),
+        };
     }
 
     for step in &plan.steps {
@@ -144,5 +153,10 @@ pub fn decide(plan: &VoiceActionPlanBody, policy: &EffectivePolicy) -> RiskDecis
         VoiceRisk::Low => policy.max_action_level != MaxActionLevel::Act,
         _ => true,
     };
-    RiskDecision { risk, confirmation_required, requires_approval, blocked_reason: None }
+    RiskDecision {
+        risk,
+        confirmation_required,
+        requires_approval,
+        blocked_reason: None,
+    }
 }

@@ -13,12 +13,15 @@ use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
-use lanesra_core::models::voice::{ConfirmVoicePlanInput, SetVoicePinInput, VoicePolicyBindingInput};
+use lanesra_core::models::voice::{
+    ConfirmVoicePlanInput, SetVoicePinInput, VoicePolicyBindingInput,
+};
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::voice_planner_service::PlanOutcome;
 use lanesra_core::services::{
-    access_role_service, company_service, custom_field_service, opportunity_service, user_service, voice_execution_service, voice_planner_service,
-    voice_policy_service, voice_session_service, workspace_service,
+    access_role_service, company_service, custom_field_service, opportunity_service, user_service,
+    voice_execution_service, voice_planner_service, voice_policy_service, voice_session_service,
+    workspace_service,
 };
 
 fn master_key() -> [u8; 32] {
@@ -96,30 +99,73 @@ fn full_voice_access() -> VoicePolicyBindingInput {
     }
 }
 
-fn unlocked_session(conn: &rusqlite::Connection, ws: &str, admin: &str, username: &str) -> (String, String) {
+fn unlocked_session(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+    username: &str,
+) -> (String, String) {
     let user = user_service::create(
         conn,
         ws,
-        &NewUser { username: username.into(), display_name: username.into(), password: "anothersecretpw".into(), roles: vec!["Sales".to_string()] },
+        &NewUser {
+            username: username.into(),
+            display_name: username.into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".to_string()],
+        },
         Some(admin),
     )
     .unwrap();
-    let role = access_role_service::create(conn, ws, &AccessRoleInput { name: format!("{username}-role"), description: "".into() }, Some(admin)).unwrap();
+    let role = access_role_service::create(
+        conn,
+        ws,
+        &AccessRoleInput {
+            name: format!("{username}-role"),
+            description: "".into(),
+        },
+        Some(admin),
+    )
+    .unwrap();
     access_role_service::upsert_grant(
         conn,
         &role.id,
-        &AccessRoleGrantInput { object_key: "*".into(), can_create: true, can_read: true, can_update: true, can_delete: true, can_assign: true, record_scope: "ORGANIZATION".into() },
+        &AccessRoleGrantInput {
+            object_key: "*".into(),
+            can_create: true,
+            can_read: true,
+            can_update: true,
+            can_delete: true,
+            can_assign: true,
+            record_scope: "ORGANIZATION".into(),
+        },
         Some(admin),
     )
     .unwrap();
     access_role_service::assign_to_user(conn, &user.id, &role.id, Some(admin)).unwrap();
-    voice_policy_service::upsert_policy_binding(conn, ws, Some(admin), &VoicePolicyBindingInput { access_role_id: Some(role.id), ..full_voice_access() }).unwrap();
-    voice_session_service::set_pin(conn, &user.id, &SetVoicePinInput { pin: "1234".into() }).unwrap();
+    voice_policy_service::upsert_policy_binding(
+        conn,
+        ws,
+        Some(admin),
+        &VoicePolicyBindingInput {
+            access_role_id: Some(role.id),
+            ..full_voice_access()
+        },
+    )
+    .unwrap();
+    voice_session_service::set_pin(conn, &user.id, &SetVoicePinInput { pin: "1234".into() })
+        .unwrap();
     let session = voice_session_service::unlock(conn, &user.id, "1234").unwrap();
     (user.id, session.id)
 }
 
-fn select_field_def(entity_type: &str, label: &str, options: Vec<String>, required: bool, sort_order: i64) -> CustomFieldDefinitionInput {
+fn select_field_def(
+    entity_type: &str,
+    label: &str,
+    options: Vec<String>,
+    required: bool,
+    sort_order: i64,
+) -> CustomFieldDefinitionInput {
     CustomFieldDefinitionInput {
         entity_type: entity_type.into(),
         label: label.into(),
@@ -146,16 +192,43 @@ fn select_field_def(entity_type: &str, label: &str, options: Vec<String>, requir
 #[test]
 fn update_status_short_tier_is_terser_and_detailed_tier_names_the_specific_field() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
-    opportunity_service::create(&conn, &opportunity_input(&company.id, "CRM Modernization"), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Northern Star"), Some(&admin)).unwrap();
+    opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "CRM Modernization"),
+        Some(&admin),
+    )
+    .unwrap();
 
-    match voice_planner_service::plan(&conn, &ws, "mark CRM Modernization opportunity as Won", None, None, None, None).unwrap() {
+    match voice_planner_service::plan(
+        &conn,
+        &ws,
+        "mark CRM Modernization opportunity as Won",
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap()
+    {
         PlanOutcome::Ready { plan, .. } => {
             let step = &plan.steps[0];
-            assert_eq!(step.description, "Set Opportunity status to Won", "normal tier must stay exactly what it always was");
-            assert_eq!(step.brief_description, "Status: Won", "short tier must drop the object-key preamble the normal tier states in full");
-            let note = step.detail_note.as_deref().expect("update_status must always have something concrete to add at the detailed tier");
-            assert!(note.contains("status") && note.contains("Opportunity"), "detailed tier must name the specific field and record type changed, got: {note}");
+            assert_eq!(
+                step.description, "Set Opportunity status to Won",
+                "normal tier must stay exactly what it always was"
+            );
+            assert_eq!(
+                step.brief_description, "Status: Won",
+                "short tier must drop the object-key preamble the normal tier states in full"
+            );
+            let note = step.detail_note.as_deref().expect(
+                "update_status must always have something concrete to add at the detailed tier",
+            );
+            assert!(
+                note.contains("status") && note.contains("Opportunity"),
+                "detailed tier must name the specific field and record type changed, got: {note}"
+            );
         }
         other => panic!("expected Ready, got {other:?}"),
     }
@@ -164,14 +237,41 @@ fn update_status_short_tier_is_terser_and_detailed_tier_names_the_specific_field
 #[test]
 fn create_task_short_tier_omits_the_due_date_the_detailed_tier_states() {
     let (conn, ws, _admin) = setup_workspace();
-    match voice_planner_service::plan(&conn, &ws, "create a task to follow up with Acme tomorrow", None, None, None, None).unwrap() {
+    match voice_planner_service::plan(
+        &conn,
+        &ws,
+        "create a task to follow up with Acme tomorrow",
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap()
+    {
         PlanOutcome::Ready { plan, .. } => {
             let step = &plan.steps[0];
-            assert!(step.description.to_lowercase().contains("due"), "normal tier already states the due date");
-            assert!(!step.brief_description.to_lowercase().contains("due"), "short tier must drop the due date, got: {}", step.brief_description);
-            assert!(step.brief_description.contains("follow up with Acme"), "short tier must still say what the task is, got: {}", step.brief_description);
-            let note = step.detail_note.as_deref().expect("a task with a due date must have a detail_note stating it");
-            assert!(note.to_lowercase().contains("due"), "detailed tier must state the due date, got: {note}");
+            assert!(
+                step.description.to_lowercase().contains("due"),
+                "normal tier already states the due date"
+            );
+            assert!(
+                !step.brief_description.to_lowercase().contains("due"),
+                "short tier must drop the due date, got: {}",
+                step.brief_description
+            );
+            assert!(
+                step.brief_description.contains("follow up with Acme"),
+                "short tier must still say what the task is, got: {}",
+                step.brief_description
+            );
+            let note = step
+                .detail_note
+                .as_deref()
+                .expect("a task with a due date must have a detail_note stating it");
+            assert!(
+                note.to_lowercase().contains("due"),
+                "detailed tier must state the due date, got: {note}"
+            );
         }
         other => panic!("expected Ready, got {other:?}"),
     }
@@ -180,21 +280,82 @@ fn create_task_short_tier_omits_the_due_date_the_detailed_tier_states() {
 #[tokio::test]
 async fn create_record_detail_note_lists_the_extra_field_the_brief_and_normal_tiers_omit() {
     let (conn, ws, admin) = setup_workspace();
-    custom_field_service::create_definition(&conn, &ws, &select_field_def("Company", "Industry", vec!["Manufacturing".into(), "Retail".into()], true, 0), Some(&admin)).unwrap();
+    custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &select_field_def(
+            "Company",
+            "Industry",
+            vec!["Manufacturing".into(), "Retail".into()],
+            true,
+            0,
+        ),
+        Some(&admin),
+    )
+    .unwrap();
     let (user, session_id) = unlocked_session(&conn, &ws, &admin, "detail-note-creator");
 
-    let first = voice_execution_service::submit_command(&conn, &session_id, &user, "create a company Acme Corp", "en-US", None, &master_key()).await.unwrap();
-    assert!(first.plan.is_none(), "the required Industry field is still unanswered");
-    let second = voice_execution_service::submit_command(&conn, &session_id, &user, "Manufacturing", "en-US", None, &master_key()).await.unwrap();
-    let plan = second.plan.expect("both the name and the required custom field are now answered");
+    let first = voice_execution_service::submit_command(
+        &conn,
+        &session_id,
+        &user,
+        "create a company Acme Corp",
+        "en-US",
+        None,
+        &master_key(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        first.plan.is_none(),
+        "the required Industry field is still unanswered"
+    );
+    let second = voice_execution_service::submit_command(
+        &conn,
+        &session_id,
+        &user,
+        "Manufacturing",
+        "en-US",
+        None,
+        &master_key(),
+    )
+    .await
+    .unwrap();
+    let plan = second
+        .plan
+        .expect("both the name and the required custom field are now answered");
 
     let step = &plan.plan.steps[0];
     assert_eq!(step.description, "Create Company \"Acme Corp\"");
-    assert_eq!(step.brief_description, "New Company: Acme Corp", "short tier must not mention the Industry field");
-    assert!(!step.description.to_lowercase().contains("industry"), "normal tier never mentioned Industry either - it only ever named the record");
-    let note = step.detail_note.as_deref().expect("a create with an extra field set must have a detail_note listing it");
-    assert!(note.to_lowercase().contains("industry") && note.contains("Manufacturing"), "detailed tier must list the extra field and its value, got: {note}");
+    assert_eq!(
+        step.brief_description, "New Company: Acme Corp",
+        "short tier must not mention the Industry field"
+    );
+    assert!(
+        !step.description.to_lowercase().contains("industry"),
+        "normal tier never mentioned Industry either - it only ever named the record"
+    );
+    let note = step
+        .detail_note
+        .as_deref()
+        .expect("a create with an extra field set must have a detail_note listing it");
+    assert!(
+        note.to_lowercase().contains("industry") && note.contains("Manufacturing"),
+        "detailed tier must list the extra field and its value, got: {note}"
+    );
 
-    let result = voice_execution_service::confirm_plan(&conn, &session_id, &user, &ConfirmVoicePlanInput { plan_id: plan.id, method: "tap".into(), edited_plan: None }, &master_key()).await.unwrap();
+    let result = voice_execution_service::confirm_plan(
+        &conn,
+        &session_id,
+        &user,
+        &ConfirmVoicePlanInput {
+            plan_id: plan.id,
+            method: "tap".into(),
+            edited_plan: None,
+        },
+        &master_key(),
+    )
+    .await
+    .unwrap();
     assert_eq!(result.status, "succeeded");
 }

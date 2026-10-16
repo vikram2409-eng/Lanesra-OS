@@ -17,9 +17,16 @@ use lanesra_core::services::{ai_service, secret_service, workspace_service};
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
     let setup = WorkspaceSetup {
-        business_name: "AI Co".into(), legal_name: None, currency_code: "USD".into(), locale: "en-US".into(),
-        timezone: "UTC".into(), default_tax_rate_bp: 0, admin_username: "admin".into(), admin_display_name: "Admin".into(),
-        admin_password: "supersecretpassword".into(), load_sample_data: false,
+        business_name: "AI Co".into(),
+        legal_name: None,
+        currency_code: "USD".into(),
+        locale: "en-US".into(),
+        timezone: "UTC".into(),
+        default_tax_rate_bp: 0,
+        admin_username: "admin".into(),
+        admin_display_name: "Admin".into(),
+        admin_password: "supersecretpassword".into(),
+        load_sample_data: false,
     };
     let (workspace, admin) = workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
@@ -34,10 +41,21 @@ fn master_key() -> [u8; 32] {
 /// test proving rotation actually changed the plaintext has to go through
 /// the same secret_id -> integration_secrets -> decrypt path
 /// `ai_service::test_key` itself uses, via only public API.
-fn read_stored_key(conn: &rusqlite::Connection, master_key: &[u8; 32], workspace_id: &str) -> Option<String> {
-    let secret_id: Option<String> = conn.query_row("SELECT secret_id FROM ai_settings WHERE workspace_id = ?1", [workspace_id], |r| r.get(0)).unwrap();
+fn read_stored_key(
+    conn: &rusqlite::Connection,
+    master_key: &[u8; 32],
+    workspace_id: &str,
+) -> Option<String> {
+    let secret_id: Option<String> = conn
+        .query_row(
+            "SELECT secret_id FROM ai_settings WHERE workspace_id = ?1",
+            [workspace_id],
+            |r| r.get(0),
+        )
+        .unwrap();
     let secret_id = secret_id?;
-    let stored = lanesra_core::repositories::integration_secret_repo::get(conn, &secret_id).unwrap()?;
+    let stored =
+        lanesra_core::repositories::integration_secret_repo::get(conn, &secret_id).unwrap()?;
     Some(secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce).unwrap())
 }
 
@@ -88,106 +106,256 @@ fn default_settings_are_unconfigured_with_no_key() {
 #[test]
 fn save_settings_requires_an_admin_actor() {
     let (conn, workspace_id, _admin_id) = setup_workspace();
-    let input = AiSettingsInput { provider: "anthropic".into(), base_url: None, model: "".into(), api_key: Some("sk-test".into()) };
+    let input = AiSettingsInput {
+        provider: "anthropic".into(),
+        base_url: None,
+        model: "".into(),
+        api_key: Some("sk-test".into()),
+    };
     assert!(ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, None).is_err());
 }
 
 #[test]
 fn save_settings_rejects_an_unknown_provider() {
     let (conn, workspace_id, admin_id) = setup_workspace();
-    let input = AiSettingsInput { provider: "made_up_provider".into(), base_url: None, model: "".into(), api_key: None };
-    assert!(ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).is_err());
+    let input = AiSettingsInput {
+        provider: "made_up_provider".into(),
+        base_url: None,
+        model: "".into(),
+        api_key: None,
+    };
+    assert!(ai_service::save_settings(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &input,
+        Some(&admin_id)
+    )
+    .is_err());
 }
 
 #[test]
 fn openai_compatible_requires_a_base_url() {
     let (conn, workspace_id, admin_id) = setup_workspace();
-    let input = AiSettingsInput { provider: "openai_compatible".into(), base_url: None, model: "".into(), api_key: Some("sk-test".into()) };
-    assert!(ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).is_err());
+    let input = AiSettingsInput {
+        provider: "openai_compatible".into(),
+        base_url: None,
+        model: "".into(),
+        api_key: Some("sk-test".into()),
+    };
+    assert!(ai_service::save_settings(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &input,
+        Some(&admin_id)
+    )
+    .is_err());
 }
 
 #[test]
 fn saving_a_key_never_returns_it_but_it_round_trips_and_rotates() {
     let (conn, workspace_id, admin_id) = setup_workspace();
-    let input = AiSettingsInput { provider: "anthropic".into(), base_url: None, model: "claude-haiku-4-5-20251001".into(), api_key: Some("sk-ant-original".into()) };
-    let saved = ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).unwrap();
+    let input = AiSettingsInput {
+        provider: "anthropic".into(),
+        base_url: None,
+        model: "claude-haiku-4-5-20251001".into(),
+        api_key: Some("sk-ant-original".into()),
+    };
+    let saved =
+        ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id))
+            .unwrap();
     assert!(saved.has_key);
     // Never exposed on the model itself.
-    assert_eq!(read_stored_key(&conn, &master_key(), &workspace_id).as_deref(), Some("sk-ant-original"));
+    assert_eq!(
+        read_stored_key(&conn, &master_key(), &workspace_id).as_deref(),
+        Some("sk-ant-original")
+    );
 
     // Omitting api_key on a later save keeps the existing key untouched.
-    let keep_input = AiSettingsInput { provider: "anthropic".into(), base_url: None, model: "claude-haiku-4-5-20251001".into(), api_key: None };
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &keep_input, Some(&admin_id)).unwrap();
-    assert_eq!(read_stored_key(&conn, &master_key(), &workspace_id).as_deref(), Some("sk-ant-original"));
+    let keep_input = AiSettingsInput {
+        provider: "anthropic".into(),
+        base_url: None,
+        model: "claude-haiku-4-5-20251001".into(),
+        api_key: None,
+    };
+    ai_service::save_settings(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &keep_input,
+        Some(&admin_id),
+    )
+    .unwrap();
+    assert_eq!(
+        read_stored_key(&conn, &master_key(), &workspace_id).as_deref(),
+        Some("sk-ant-original")
+    );
 
     // A new key rotates the same secret row in place, not a new one.
-    let secret_id_before: Option<String> = conn.query_row("SELECT secret_id FROM ai_settings WHERE workspace_id = ?1", [&workspace_id], |r| r.get(0)).unwrap();
-    let rotate_input = AiSettingsInput { provider: "anthropic".into(), base_url: None, model: "".into(), api_key: Some("sk-ant-rotated".into()) };
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &rotate_input, Some(&admin_id)).unwrap();
-    let secret_id_after: Option<String> = conn.query_row("SELECT secret_id FROM ai_settings WHERE workspace_id = ?1", [&workspace_id], |r| r.get(0)).unwrap();
-    assert_eq!(secret_id_before, secret_id_after, "rotation should reuse the same secret row");
-    assert_eq!(read_stored_key(&conn, &master_key(), &workspace_id).as_deref(), Some("sk-ant-rotated"));
+    let secret_id_before: Option<String> = conn
+        .query_row(
+            "SELECT secret_id FROM ai_settings WHERE workspace_id = ?1",
+            [&workspace_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let rotate_input = AiSettingsInput {
+        provider: "anthropic".into(),
+        base_url: None,
+        model: "".into(),
+        api_key: Some("sk-ant-rotated".into()),
+    };
+    ai_service::save_settings(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &rotate_input,
+        Some(&admin_id),
+    )
+    .unwrap();
+    let secret_id_after: Option<String> = conn
+        .query_row(
+            "SELECT secret_id FROM ai_settings WHERE workspace_id = ?1",
+            [&workspace_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        secret_id_before, secret_id_after,
+        "rotation should reuse the same secret row"
+    );
+    assert_eq!(
+        read_stored_key(&conn, &master_key(), &workspace_id).as_deref(),
+        Some("sk-ant-rotated")
+    );
 }
 
 #[test]
 fn changing_settings_resets_a_prior_test_result() {
     let (conn, workspace_id, admin_id) = setup_workspace();
-    let input = AiSettingsInput { provider: "anthropic".into(), base_url: None, model: "".into(), api_key: Some("sk-test".into()) };
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).unwrap();
+    let input = AiSettingsInput {
+        provider: "anthropic".into(),
+        base_url: None,
+        model: "".into(),
+        api_key: Some("sk-test".into()),
+    };
+    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id))
+        .unwrap();
     // Directly stamp a prior "connected" result, then prove any settings
     // save clears it back to unconfigured rather than carrying it forward
     // against a configuration it never actually tested.
-    conn.execute("UPDATE ai_settings SET status = 'connected' WHERE workspace_id = ?1", [&workspace_id]).unwrap();
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).unwrap();
-    assert_eq!(ai_service::get_settings(&conn, &workspace_id).unwrap().status, "unconfigured");
+    conn.execute(
+        "UPDATE ai_settings SET status = 'connected' WHERE workspace_id = ?1",
+        [&workspace_id],
+    )
+    .unwrap();
+    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id))
+        .unwrap();
+    assert_eq!(
+        ai_service::get_settings(&conn, &workspace_id)
+            .unwrap()
+            .status,
+        "unconfigured"
+    );
 }
 
 #[tokio::test]
 async fn test_key_fails_cleanly_when_nothing_is_configured_yet() {
     let (conn, workspace_id, admin_id) = setup_workspace();
-    assert!(ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id)).await.is_err());
+    assert!(
+        ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
 async fn anthropic_test_key_reports_real_success_and_real_failure() {
     let (conn, workspace_id, admin_id) = setup_workspace();
-    let ok_port = spawn_http_stub(200, r#"{"id":"msg_1","content":[{"type":"text","text":"hi"}]}"#);
+    let ok_port = spawn_http_stub(
+        200,
+        r#"{"id":"msg_1","content":[{"type":"text","text":"hi"}]}"#,
+    );
     let input = AiSettingsInput {
         provider: "anthropic".into(),
         base_url: Some(format!("http://127.0.0.1:{ok_port}")),
         model: "claude-haiku-4-5-20251001".into(),
         api_key: Some("sk-ant-valid".into()),
     };
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).unwrap();
-    let result = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id)).await.unwrap();
+    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id))
+        .unwrap();
+    let result = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id))
+        .await
+        .unwrap();
     assert!(result.ok, "{result:?}");
-    assert_eq!(ai_service::get_settings(&conn, &workspace_id).unwrap().status, "connected");
+    assert_eq!(
+        ai_service::get_settings(&conn, &workspace_id)
+            .unwrap()
+            .status,
+        "connected"
+    );
 
     // A rejected key against a real (stubbed) endpoint is a real, not
     // simulated, failure - persisted as such, not just returned.
     let unauthorized_port = spawn_http_stub(401, r#"{"error":{"message":"invalid x-api-key"}}"#);
-    let bad_input = AiSettingsInput { provider: "anthropic".into(), base_url: Some(format!("http://127.0.0.1:{unauthorized_port}")), model: "".into(), api_key: Some("sk-ant-bad".into()) };
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &bad_input, Some(&admin_id)).unwrap();
-    let failed = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id)).await.unwrap();
+    let bad_input = AiSettingsInput {
+        provider: "anthropic".into(),
+        base_url: Some(format!("http://127.0.0.1:{unauthorized_port}")),
+        model: "".into(),
+        api_key: Some("sk-ant-bad".into()),
+    };
+    ai_service::save_settings(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &bad_input,
+        Some(&admin_id),
+    )
+    .unwrap();
+    let failed = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id))
+        .await
+        .unwrap();
     assert!(!failed.ok);
-    assert_eq!(ai_service::get_settings(&conn, &workspace_id).unwrap().status, "failed");
+    assert_eq!(
+        ai_service::get_settings(&conn, &workspace_id)
+            .unwrap()
+            .status,
+        "failed"
+    );
 }
 
 #[tokio::test]
 async fn openai_compatible_test_key_hits_the_models_endpoint() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let port = spawn_http_stub(200, r#"{"data":[{"id":"gpt-4"}]}"#);
-    let input = AiSettingsInput { provider: "openai_compatible".into(), base_url: Some(format!("http://127.0.0.1:{port}")), model: "gpt-4".into(), api_key: Some("sk-oai-valid".into()) };
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).unwrap();
-    let result = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id)).await.unwrap();
+    let input = AiSettingsInput {
+        provider: "openai_compatible".into(),
+        base_url: Some(format!("http://127.0.0.1:{port}")),
+        model: "gpt-4".into(),
+        api_key: Some("sk-oai-valid".into()),
+    };
+    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id))
+        .unwrap();
+    let result = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id))
+        .await
+        .unwrap();
     assert!(result.ok, "{result:?}");
 }
 
 #[tokio::test]
 async fn an_unreachable_endpoint_is_a_real_failure() {
     let (conn, workspace_id, admin_id) = setup_workspace();
-    let input = AiSettingsInput { provider: "openai_compatible".into(), base_url: Some("http://127.0.0.1:1".into()), model: "".into(), api_key: Some("sk-oai".into()) };
-    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id)).unwrap();
-    let result = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id)).await.unwrap();
+    let input = AiSettingsInput {
+        provider: "openai_compatible".into(),
+        base_url: Some("http://127.0.0.1:1".into()),
+        model: "".into(),
+        api_key: Some("sk-oai".into()),
+    };
+    ai_service::save_settings(&conn, &workspace_id, &master_key(), &input, Some(&admin_id))
+        .unwrap();
+    let result = ai_service::test_key(&conn, &workspace_id, &master_key(), Some(&admin_id))
+        .await
+        .unwrap();
     assert!(!result.ok);
 }

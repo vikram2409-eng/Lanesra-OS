@@ -49,24 +49,56 @@ pub fn insert(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<ExternalObject>> {
-    conn.query_row("SELECT * FROM integration_external_objects WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM integration_external_objects WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn get_by_object_key(conn: &Connection, workspace_id: &str, object_key: &str) -> rusqlite::Result<Option<ExternalObject>> {
-    conn.query_row("SELECT * FROM integration_external_objects WHERE workspace_id = ?1 AND object_key = ?2", rusqlite::params![workspace_id, object_key], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+pub fn get_by_object_key(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> rusqlite::Result<Option<ExternalObject>> {
+    conn.query_row(
+        "SELECT * FROM integration_external_objects WHERE workspace_id = ?1 AND object_key = ?2",
+        rusqlite::params![workspace_id, object_key],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<ExternalObject>> {
-    let mut stmt = conn.prepare("SELECT * FROM integration_external_objects WHERE workspace_id = ?1 ORDER BY display_name")?;
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<ExternalObject>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM integration_external_objects WHERE workspace_id = ?1 ORDER BY display_name",
+    )?;
     let rows = stmt.query_map([workspace_id], map_row)?;
     rows.collect()
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM integration_external_objects WHERE id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM integration_external_objects WHERE id = ?1",
+        [id],
+    )?;
     Ok(())
 }

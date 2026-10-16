@@ -13,7 +13,18 @@
 pub const GRAPH_STATUSES: &[&str] = &["draft", "published", "disabled"];
 
 pub const NODE_TYPES: &[&str] = &[
-    "trigger", "condition", "action", "agent", "router", "parallel_split", "join", "approval", "delay", "transform", "loop", "end",
+    "trigger",
+    "condition",
+    "action",
+    "agent",
+    "router",
+    "parallel_split",
+    "join",
+    "approval",
+    "delay",
+    "transform",
+    "loop",
+    "end",
     // Workflow Studio 2.0 (issue #193): two additions beyond Phase 3's
     // original 12. `run_agent_team` is a single-unconditional-outgoing
     // node (see below) - a synchronous call to an existing Orchestration
@@ -24,7 +35,8 @@ pub const NODE_TYPES: &[&str] = &[
     // (`pass`/`fail`) node, like `condition`/`router` - grades an
     // upstream node's output against a success criteria with the same
     // LLM-as-judge call `ai_eval_service::run_suite` already uses.
-    "run_agent_team", "evaluate_result",
+    "run_agent_team",
+    "evaluate_result",
 ];
 
 /// A node type whose config must declare exactly one outgoing edge with no
@@ -35,7 +47,10 @@ pub const NODE_TYPES: &[&str] = &[
 /// (`end`, which has none). Used by
 /// `execution_graph_service::validate_for_publish`.
 pub fn is_single_unconditional_outgoing(node_type: &str) -> bool {
-    matches!(node_type, "trigger" | "action" | "agent" | "delay" | "transform" | "run_agent_team")
+    matches!(
+        node_type,
+        "trigger" | "action" | "agent" | "delay" | "transform" | "run_agent_team"
+    )
 }
 
 pub const JOIN_MODES: &[&str] = &["all", "first_successful", "n_of_m", "timeout_partial"];

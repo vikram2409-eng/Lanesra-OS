@@ -33,7 +33,10 @@ pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
         .merge(crate::admin_actions::router())
         .merge(crate::mcp::router())
         .fallback_service(static_service)
-        .layer(axum::middleware::from_fn_with_state(state.security.clone(), security_headers));
+        .layer(axum::middleware::from_fn_with_state(
+            state.security.clone(),
+            security_headers,
+        ));
 
     if let Some(cors) = cors {
         router = router.layer(cors);
@@ -65,25 +68,48 @@ async fn invoke(
         Err(err) => return (jar, Json(json!({"ok": false, "error": err.to_string()}))),
     };
     let conn = state.conn.lock().unwrap();
-    match handle(&command, &args, &conn, jar.clone(), state.security.trust_proxy_https, &master_key) {
+    match handle(
+        &command,
+        &args,
+        &conn,
+        jar.clone(),
+        state.security.trust_proxy_https,
+        &master_key,
+    ) {
         Ok((jar, value)) => (jar, Json(json!({"ok": true, "data": value}))),
         Err(err) => (jar, Json(json!({"ok": false, "error": err}))),
     }
 }
 
-fn handle_restore(state: &SharedState, args: &Value, jar: CookieJar) -> AppResult<(CookieJar, Value)> {
+fn handle_restore(
+    state: &SharedState,
+    args: &Value,
+    jar: CookieJar,
+) -> AppResult<(CookieJar, Value)> {
     let mut conn = state.conn.lock().unwrap();
     let actor = current_actor(&conn, &jar)
         .ok_or_else(|| AppError::Validation("Not authenticated - please log in".into()))?;
     let package_base64: String = arg(args, "packageBase64")?;
-    let manifest = backup_service::restore_from_package(&mut conn, &state.db_path, &package_base64, Some(&actor))?;
+    let manifest = backup_service::restore_from_package(
+        &mut conn,
+        &state.db_path,
+        &package_base64,
+        Some(&actor),
+    )?;
     Ok((jar, to_value(manifest)?))
 }
 
 /// Handles the commands that mutate the session cookie itself; everything
 /// else is delegated to `dispatch`, which only needs read access to the
 /// already-resolved actor. `secure_cookies` is `SecurityConfig::trust_proxy_https`.
-fn handle(command: &str, args: &Value, conn: &Connection, jar: CookieJar, secure_cookies: bool, master_key: &[u8; 32]) -> AppResult<(CookieJar, Value)> {
+fn handle(
+    command: &str,
+    args: &Value,
+    conn: &Connection,
+    jar: CookieJar,
+    secure_cookies: bool,
+    master_key: &[u8; 32],
+) -> AppResult<(CookieJar, Value)> {
     match command {
         "workspace_status" => {
             let workspace = lanesra_core::repositories::workspace_repo::get_current(conn)?;

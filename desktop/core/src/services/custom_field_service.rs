@@ -12,13 +12,16 @@ use serde::Serialize;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::{
-    CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate, CustomFieldValues, CUSTOM_FIELD_TYPES,
+    CustomFieldDefinition, CustomFieldDefinitionInput, CustomFieldDefinitionUpdate,
+    CustomFieldValues, CUSTOM_FIELD_TYPES,
 };
 use crate::repositories::{
-    audit_repo, company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo, opportunity_repo, order_repo,
-    product_repo, quote_repo, task_repo,
+    audit_repo, company_repo, contact_repo, contract_repo, custom_field_repo, invoice_repo,
+    opportunity_repo, order_repo, product_repo, quote_repo, task_repo,
 };
-use crate::services::{access_service, builtin_field_service, business_rule_service, workflow_service};
+use crate::services::{
+    access_service, builtin_field_service, business_rule_service, workflow_service,
+};
 
 /// Non-blocking notices from `set_entity_values` - a rule's blocking
 /// effects (`require`/`block_save`) are always an `Err`; these are the two
@@ -46,7 +49,12 @@ fn field_is_hidden(def: &CustomFieldDefinition, effect: Option<&str>) -> bool {
 /// passes with an explicit Access Role grant on "CustomField" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "CustomField", "Only an Administrator can manage custom fields")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "CustomField",
+        "Only an Administrator can manage custom fields",
+    )
 }
 
 /// FND-01 System Graph: a field always depends on the object it's
@@ -55,7 +63,11 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 /// "company" with no real `custom_objects` row gets a stub node here,
 /// which is the correct, honest answer - there's no fuller record to
 /// resolve it to).
-fn sync_graph_node(conn: &Connection, workspace_id: &str, def: &CustomFieldDefinition) -> AppResult<()> {
+fn sync_graph_node(
+    conn: &Connection,
+    workspace_id: &str,
+    def: &CustomFieldDefinition,
+) -> AppResult<()> {
     super::system_graph_service::sync_node(
         conn,
         workspace_id,
@@ -63,7 +75,11 @@ fn sync_graph_node(conn: &Connection, workspace_id: &str, def: &CustomFieldDefin
         &def.id,
         &def.label,
         "{}",
-        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: def.entity_type.clone() }],
+        &[crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "depends_on".into(),
+            to_node_type: "custom_object".into(),
+            to_component_id: def.entity_type.clone(),
+        }],
     )
 }
 
@@ -73,7 +89,12 @@ fn sync_graph_node(conn: &Connection, workspace_id: &str, def: &CustomFieldDefin
 /// "_3", etc., rather than rejecting the save outright - a duplicate
 /// label ("Industry" twice) is a plausible admin mistake, not something
 /// that should block them from finishing the form.
-fn slugify(conn: &Connection, workspace_id: &str, entity_type: &str, label: &str) -> AppResult<String> {
+fn slugify(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    label: &str,
+) -> AppResult<String> {
     let mut key = String::new();
     let mut last_was_sep = true; // avoids a leading underscore
     for ch in label.trim().to_lowercase().chars() {
@@ -87,7 +108,9 @@ fn slugify(conn: &Connection, workspace_id: &str, entity_type: &str, label: &str
     }
     let key = key.trim_end_matches('_').to_string();
     if key.is_empty() {
-        return Err(AppError::Validation("Field label must contain at least one letter or number".into()));
+        return Err(AppError::Validation(
+            "Field label must contain at least one letter or number".into(),
+        ));
     }
 
     let existing = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
@@ -119,11 +142,19 @@ fn validate_definition_shape(
     // Accepts the nine built-in entity types plus any active admin-defined
     // custom object for this workspace - see custom_object_service for why
     // a custom object's records need no special-casing here at all.
-    if !super::custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, input_entity_type)? {
-        return Err(AppError::Validation(format!("Invalid entity type '{input_entity_type}'")));
+    if !super::custom_object_service::is_valid_dynamic_entity_type(
+        conn,
+        workspace_id,
+        input_entity_type,
+    )? {
+        return Err(AppError::Validation(format!(
+            "Invalid entity type '{input_entity_type}'"
+        )));
     }
     if !CUSTOM_FIELD_TYPES.contains(&field_type) {
-        return Err(AppError::Validation(format!("Invalid field type '{field_type}'")));
+        return Err(AppError::Validation(format!(
+            "Invalid field type '{field_type}'"
+        )));
     }
     // Lookup fields only ever come from relationship_service's
     // auto-creation (see create_lookup_field below), which writes directly
@@ -136,7 +167,9 @@ fn validate_definition_shape(
         ));
     }
     if field_type == "select" && options.is_empty() {
-        return Err(AppError::Validation("A select field needs at least one option".into()));
+        return Err(AppError::Validation(
+            "A select field needs at least one option".into(),
+        ));
     }
     Ok(())
 }
@@ -164,36 +197,65 @@ fn validate_definition_extras(
     if let (Some(min), Some(max)) = (min_value, max_value) {
         if field_type == "number" {
             match (min.parse::<f64>(), max.parse::<f64>()) {
-                (Ok(a), Ok(b)) if a > b => return Err(AppError::Validation("Minimum cannot be greater than maximum".into())),
-                (Err(_), _) | (_, Err(_)) => return Err(AppError::Validation("Minimum/maximum must be numbers".into())),
+                (Ok(a), Ok(b)) if a > b => {
+                    return Err(AppError::Validation(
+                        "Minimum cannot be greater than maximum".into(),
+                    ))
+                }
+                (Err(_), _) | (_, Err(_)) => {
+                    return Err(AppError::Validation(
+                        "Minimum/maximum must be numbers".into(),
+                    ))
+                }
                 _ => {}
             }
         }
     }
     if (min_value.is_some() || max_value.is_some()) && field_type != "number" {
-        return Err(AppError::Validation("Minimum/maximum only apply to number fields".into()));
+        return Err(AppError::Validation(
+            "Minimum/maximum only apply to number fields".into(),
+        ));
     }
     if let Some(len) = max_length {
         if field_type != "text" {
-            return Err(AppError::Validation("Maximum length only applies to text fields".into()));
+            return Err(AppError::Validation(
+                "Maximum length only applies to text fields".into(),
+            ));
         }
         if len <= 0 {
-            return Err(AppError::Validation("Maximum length must be positive".into()));
+            return Err(AppError::Validation(
+                "Maximum length must be positive".into(),
+            ));
         }
     }
     if let Some(pattern) = regex_pattern {
         if field_type != "text" {
-            return Err(AppError::Validation("A pattern only applies to text fields".into()));
+            return Err(AppError::Validation(
+                "A pattern only applies to text fields".into(),
+            ));
         }
         if !pattern.is_empty() && regex::Regex::new(pattern).is_err() {
-            return Err(AppError::Validation("That pattern is not a valid regular expression".into()));
+            return Err(AppError::Validation(
+                "That pattern is not a valid regular expression".into(),
+            ));
         }
     }
     if is_unique && field_type == "boolean" {
-        return Err(AppError::Validation("Uniqueness doesn't apply to a yes/no field".into()));
+        return Err(AppError::Validation(
+            "Uniqueness doesn't apply to a yes/no field".into(),
+        ));
     }
     if let Some(default) = default_value.filter(|d| !d.is_empty()) {
-        validate_typed_value(field_type, options, min_value, max_value, max_length, regex_pattern, label, default)?;
+        validate_typed_value(
+            field_type,
+            options,
+            min_value,
+            max_value,
+            max_length,
+            regex_pattern,
+            label,
+            default,
+        )?;
     }
     Ok(())
 }
@@ -219,12 +281,16 @@ fn validate_typed_value(
             Ok(n) => {
                 if let Some(min) = min_value.and_then(|m| m.parse::<f64>().ok()) {
                     if n < min {
-                        return Err(AppError::Validation(format!("{label} must be at least {min}")));
+                        return Err(AppError::Validation(format!(
+                            "{label} must be at least {min}"
+                        )));
                     }
                 }
                 if let Some(max) = max_value.and_then(|m| m.parse::<f64>().ok()) {
                     if n > max {
-                        return Err(AppError::Validation(format!("{label} must be at most {max}")));
+                        return Err(AppError::Validation(format!(
+                            "{label} must be at most {max}"
+                        )));
                     }
                 }
             }
@@ -232,18 +298,26 @@ fn validate_typed_value(
         "text" => {
             if let Some(max_len) = max_length {
                 if value.chars().count() as i64 > max_len {
-                    return Err(AppError::Validation(format!("{label} must be {max_len} characters or fewer")));
+                    return Err(AppError::Validation(format!(
+                        "{label} must be {max_len} characters or fewer"
+                    )));
                 }
             }
             if let Some(pattern) = regex_pattern.filter(|p| !p.is_empty()) {
-                let matches = regex::Regex::new(pattern).map(|re| re.is_match(value)).unwrap_or(true);
+                let matches = regex::Regex::new(pattern)
+                    .map(|re| re.is_match(value))
+                    .unwrap_or(true);
                 if !matches {
-                    return Err(AppError::Validation(format!("{label} does not match the required format")));
+                    return Err(AppError::Validation(format!(
+                        "{label} does not match the required format"
+                    )));
                 }
             }
         }
         "select" if !options.iter().any(|o| o == value) => {
-            return Err(AppError::Validation(format!("'{value}' is not a valid option for {label}")));
+            return Err(AppError::Validation(format!(
+                "'{value}' is not a valid option for {label}"
+            )));
         }
         _ => {}
     }
@@ -257,17 +331,47 @@ pub fn create_definition(
     actor_user_id: Option<&str>,
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
-    validate_definition_shape(conn, workspace_id, &input.entity_type, &input.field_type, &input.options, &input.label)?;
+    validate_definition_shape(
+        conn,
+        workspace_id,
+        &input.entity_type,
+        &input.field_type,
+        &input.options,
+        &input.label,
+    )?;
     validate_definition_extras(
-        &input.field_type, &input.options, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length,
-        input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
+        &input.field_type,
+        &input.options,
+        input.min_value.as_deref(),
+        input.max_value.as_deref(),
+        input.max_length,
+        input.regex_pattern.as_deref(),
+        input.is_unique,
+        input.default_value.as_deref(),
+        &input.label,
     )?;
     let key = slugify(conn, workspace_id, &input.entity_type, &input.label)?;
     let id = crate::domain::ids::new_uuid();
-    let created = custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    let created =
+        custom_field_repo::create_definition(conn, &id, workspace_id, &key, input, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "custom_field",
+        &created.id,
+        actor_user_id,
+    )?;
     sync_graph_node(conn, workspace_id, &created)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created custom field '{}'", created.label), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("custom_field"),
+        Some(&created.id),
+        &format!("Created custom field '{}'", created.label),
+        None,
+    )?;
     Ok(created)
 }
 
@@ -285,10 +389,24 @@ pub fn create_definition_with_key(
     actor_user_id: Option<&str>,
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
-    validate_definition_shape(conn, workspace_id, &input.entity_type, &input.field_type, &input.options, &input.label)?;
+    validate_definition_shape(
+        conn,
+        workspace_id,
+        &input.entity_type,
+        &input.field_type,
+        &input.options,
+        &input.label,
+    )?;
     validate_definition_extras(
-        &input.field_type, &input.options, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length,
-        input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
+        &input.field_type,
+        &input.options,
+        input.min_value.as_deref(),
+        input.max_value.as_deref(),
+        input.max_length,
+        input.regex_pattern.as_deref(),
+        input.is_unique,
+        input.default_value.as_deref(),
+        &input.label,
     )?;
     if key.trim().is_empty() {
         return Err(AppError::Validation("Field key is required".into()));
@@ -301,10 +419,26 @@ pub fn create_definition_with_key(
         )));
     }
     let id = crate::domain::ids::new_uuid();
-    let created = custom_field_repo::create_definition(conn, &id, workspace_id, key, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    let created =
+        custom_field_repo::create_definition(conn, &id, workspace_id, key, input, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "custom_field",
+        &created.id,
+        actor_user_id,
+    )?;
     sync_graph_node(conn, workspace_id, &created)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created custom field '{}'", created.label), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("custom_field"),
+        Some(&created.id),
+        &format!("Created custom field '{}'", created.label),
+        None,
+    )?;
     Ok(created)
 }
 
@@ -316,9 +450,18 @@ pub fn get_definition(conn: &Connection, id: &str) -> AppResult<Option<CustomFie
 /// Any authenticated user can list active definitions (needed to render
 /// the Company/Contact form); only an Administrator sees inactive ones
 /// too, via the admin screen.
-pub fn list_definitions(conn: &Connection, workspace_id: &str, entity_type: &str, active_only: bool) -> AppResult<Vec<CustomFieldDefinition>> {
+pub fn list_definitions(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    active_only: bool,
+) -> AppResult<Vec<CustomFieldDefinition>> {
     let all = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-    Ok(if active_only { all.into_iter().filter(|d| d.is_active).collect() } else { all })
+    Ok(if active_only {
+        all.into_iter().filter(|d| d.is_active).collect()
+    } else {
+        all
+    })
 }
 
 pub fn update_definition(
@@ -328,24 +471,55 @@ pub fn update_definition(
     actor_user_id: Option<&str>,
 ) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
-    let existing = custom_field_repo::get_definition(conn, id)?.ok_or_else(|| AppError::NotFound("Custom field".into()))?;
-    validate_definition_shape(conn, &existing.workspace_id, &existing.entity_type, &existing.field_type, &input.options, &input.label)?;
+    let existing = custom_field_repo::get_definition(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Custom field".into()))?;
+    validate_definition_shape(
+        conn,
+        &existing.workspace_id,
+        &existing.entity_type,
+        &existing.field_type,
+        &input.options,
+        &input.label,
+    )?;
     if existing.field_type == "select" && input.options.is_empty() {
-        return Err(AppError::Validation("A select field needs at least one option".into()));
+        return Err(AppError::Validation(
+            "A select field needs at least one option".into(),
+        ));
     }
     validate_definition_extras(
-        &existing.field_type, &input.options, input.min_value.as_deref(), input.max_value.as_deref(), input.max_length,
-        input.regex_pattern.as_deref(), input.is_unique, input.default_value.as_deref(), &input.label,
+        &existing.field_type,
+        &input.options,
+        input.min_value.as_deref(),
+        input.max_value.as_deref(),
+        input.max_length,
+        input.regex_pattern.as_deref(),
+        input.is_unique,
+        input.default_value.as_deref(),
+        &input.label,
     )?;
     let updated = custom_field_repo::update_definition(conn, id, input, actor_user_id)?;
     sync_graph_node(conn, &existing.workspace_id, &updated)?;
-    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("custom_field"), Some(id), &format!("Updated custom field '{}'", input.label), None)?;
+    audit_repo::record(
+        conn,
+        &existing.workspace_id,
+        actor_user_id,
+        "update",
+        Some("custom_field"),
+        Some(id),
+        &format!("Updated custom field '{}'", input.label),
+        None,
+    )?;
     Ok(updated)
 }
 
-pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomFieldDefinition> {
+pub fn deactivate_definition(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomFieldDefinition> {
     require_admin(conn, actor_user_id)?;
-    let existing = custom_field_repo::get_definition(conn, id)?.ok_or_else(|| AppError::NotFound("Custom field".into()))?;
+    let existing = custom_field_repo::get_definition(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Custom field".into()))?;
     let label = existing.label.clone();
     let workspace_id = existing.workspace_id.clone();
     let update = CustomFieldDefinitionUpdate {
@@ -369,7 +543,16 @@ pub fn deactivate_definition(conn: &Connection, id: &str, actor_user_id: Option<
         is_hidden_by_default: existing.is_hidden_by_default,
     };
     let updated = custom_field_repo::update_definition(conn, id, &update, actor_user_id)?;
-    audit_repo::record(conn, &workspace_id, actor_user_id, "deactivate", Some("custom_field"), Some(id), &format!("Deactivated custom field '{label}'"), None)?;
+    audit_repo::record(
+        conn,
+        &workspace_id,
+        actor_user_id,
+        "deactivate",
+        Some("custom_field"),
+        Some(id),
+        &format!("Deactivated custom field '{label}'"),
+        None,
+    )?;
     Ok(updated)
 }
 
@@ -400,11 +583,38 @@ pub fn create_lookup_field(
         .unwrap_or(0);
     let id = crate::domain::ids::new_uuid();
     let created = custom_field_repo::create_lookup_definition(
-        conn, &id, workspace_id, entity_type, &key, label, lookup_target_entity_type, lookup_relationship_definition_id, sort_order, actor_user_id,
+        conn,
+        &id,
+        workspace_id,
+        entity_type,
+        &key,
+        label,
+        lookup_target_entity_type,
+        lookup_relationship_definition_id,
+        sort_order,
+        actor_user_id,
     )?;
-    super::solution_component_service::tag_local(conn, workspace_id, "custom_field", &created.id, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "custom_field",
+        &created.id,
+        actor_user_id,
+    )?;
     sync_graph_node(conn, workspace_id, &created)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_field"), Some(&created.id), &format!("Created lookup field '{}' from a relationship", created.label), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("custom_field"),
+        Some(&created.id),
+        &format!(
+            "Created lookup field '{}' from a relationship",
+            created.label
+        ),
+        None,
+    )?;
     Ok(created)
 }
 
@@ -439,7 +649,10 @@ pub fn detach_lookup_fields_for_deleted_relationship(
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
     deactivate_lookup_fields_for_relationship(conn, relationship_definition_id, actor_user_id)?;
-    Ok(custom_field_repo::clear_lookup_relationship_reference(conn, relationship_definition_id)?)
+    Ok(custom_field_repo::clear_lookup_relationship_reference(
+        conn,
+        relationship_definition_id,
+    )?)
 }
 
 /// Admin UX polish (spec §10): the query half of the dependency-warning
@@ -451,14 +664,28 @@ pub fn detach_lookup_fields_for_deleted_relationship(
 /// deactivated field doesn't error, it just silently stops finding it, so
 /// this is the one place that surfaces that before it happens, without
 /// taking away an admin's ability to still go through with it.
-pub fn describe_active_dependents(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<String>> {
+pub fn describe_active_dependents(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<String>> {
     require_admin(conn, actor_user_id)?;
-    let existing = custom_field_repo::get_definition(conn, id)?.ok_or_else(|| AppError::NotFound("Custom field".into()))?;
-    let mut dependents =
-        business_rule_service::describe_active_rules_referencing_field(conn, &existing.workspace_id, &existing.entity_type, &existing.key)?;
-    dependents.extend(workflow_service::describe_active_workflows_referencing_field(
-        conn, &existing.workspace_id, &existing.entity_type, &existing.key,
-    )?);
+    let existing = custom_field_repo::get_definition(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Custom field".into()))?;
+    let mut dependents = business_rule_service::describe_active_rules_referencing_field(
+        conn,
+        &existing.workspace_id,
+        &existing.entity_type,
+        &existing.key,
+    )?;
+    dependents.extend(
+        workflow_service::describe_active_workflows_referencing_field(
+            conn,
+            &existing.workspace_id,
+            &existing.entity_type,
+            &existing.key,
+        )?,
+    );
     Ok(dependents)
 }
 
@@ -467,7 +694,11 @@ pub fn describe_active_dependents(conn: &Connection, id: &str, actor_user_id: Op
 /// entity ("status" for most, "is_active" as "true"/"false" for Product),
 /// which field_rule_service needs as trigger context even though
 /// custom_field_service otherwise has no reason to know it.
-fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<(String, String)> {
+fn resolve_entity_workspace(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> AppResult<(String, String)> {
     let missing = |what: &str| AppError::Validation(format!("{what} does not exist"));
     match entity_type {
         "Company" => {
@@ -476,11 +707,13 @@ fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &st
         }
         "Contact" => {
             let contact = contact_repo::get(conn, entity_id)?.ok_or_else(|| missing("Contact"))?;
-            let company = company_repo::get(conn, &contact.company_id)?.ok_or_else(|| missing("Contact's company"))?;
+            let company = company_repo::get(conn, &contact.company_id)?
+                .ok_or_else(|| missing("Contact's company"))?;
             Ok((company.workspace_id, contact.status))
         }
         "Opportunity" => {
-            let r = opportunity_repo::get(conn, entity_id)?.ok_or_else(|| missing("Opportunity"))?;
+            let r =
+                opportunity_repo::get(conn, entity_id)?.ok_or_else(|| missing("Opportunity"))?;
             Ok((r.workspace_id, r.status))
         }
         "Quote" => {
@@ -505,7 +738,14 @@ fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &st
         }
         "Product" => {
             let r = product_repo::get(conn, entity_id)?.ok_or_else(|| missing("Product"))?;
-            Ok((r.workspace_id, if r.is_active { "true".into() } else { "false".into() }))
+            Ok((
+                r.workspace_id,
+                if r.is_active {
+                    "true".into()
+                } else {
+                    "false".into()
+                },
+            ))
         }
         other => {
             // Not a built-in type - try it as a custom object record.
@@ -516,7 +756,9 @@ fn resolve_entity_workspace(conn: &Connection, entity_type: &str, entity_id: &st
             // custom_record_service::create/update already gate).
             match crate::repositories::custom_record_repo::get(conn, entity_id)? {
                 Some(r) if r.object_key == other => Ok((r.workspace_id, r.status)),
-                _ => Err(AppError::Validation(format!("Unsupported custom field entity type '{other}'"))),
+                _ => Err(AppError::Validation(format!(
+                    "Unsupported custom field entity type '{other}'"
+                ))),
             }
         }
     }
@@ -557,11 +799,18 @@ pub fn set_entity_values(
     // the one status/stage field the original engine knew about - merged
     // with the custom field values actually being saved, so a condition can
     // target either kind of field identically (see `domain::conditions`).
-    let mut trigger_context: CustomFieldValues = builtin_field_service::field_values(conn, entity_type, entity_id)?;
+    let mut trigger_context: CustomFieldValues =
+        builtin_field_service::field_values(conn, entity_type, entity_id)?;
     for (k, v) in values {
         trigger_context.insert(k.clone(), v.clone());
     }
-    let evaluation = business_rule_service::evaluate(conn, &workspace_id, entity_type, entity_id, &trigger_context)?;
+    let evaluation = business_rule_service::evaluate(
+        conn,
+        &workspace_id,
+        entity_type,
+        entity_id,
+        &trigger_context,
+    )?;
 
     if let Some(reason) = &evaluation.blocked {
         return Err(AppError::Validation(reason.clone()));
@@ -586,7 +835,10 @@ pub fn set_entity_values(
     // rule's own set_default/set_value (which check/overwrite the same
     // "currently empty" condition) still has the final say if both apply.
     for def in &definitions {
-        let currently_empty = effective_values.get(&def.key).map(|s| s.trim().is_empty()).unwrap_or(true);
+        let currently_empty = effective_values
+            .get(&def.key)
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true);
         if currently_empty {
             if let Some(default) = def.default_value.as_deref().filter(|d| !d.is_empty()) {
                 effective_values.insert(def.key.clone(), default.to_string());
@@ -603,7 +855,10 @@ pub fn set_entity_values(
         if field_is_hidden(def, effect) {
             continue;
         }
-        let value = effective_values.get(&def.key).map(|s| s.trim()).unwrap_or("");
+        let value = effective_values
+            .get(&def.key)
+            .map(|s| s.trim())
+            .unwrap_or("");
         let required_by_rule = effect == Some("require");
         if (def.required || required_by_rule) && value.is_empty() {
             return Err(AppError::Validation(format!("{} is required", def.label)));
@@ -616,16 +871,38 @@ pub fn set_entity_values(
                 // relies on, rather than trusting an arbitrary id string.
                 let target_type = def.lookup_target_entity_type.as_deref().unwrap_or("");
                 if !super::entity_registry::exists(conn, target_type, value)? {
-                    return Err(AppError::Validation(format!("{} does not point to an existing {target_type} record", def.label)));
+                    return Err(AppError::Validation(format!(
+                        "{} does not point to an existing {target_type} record",
+                        def.label
+                    )));
                 }
             } else {
-                validate_typed_value(&def.field_type, &def.options, def.min_value.as_deref(), def.max_value.as_deref(), def.max_length, def.regex_pattern.as_deref(), &def.label, value)?;
-                if def.is_unique && custom_field_repo::value_exists_elsewhere(conn, &def.id, entity_id, value)? {
-                    return Err(AppError::Validation(format!("{} must be unique - '{value}' is already used", def.label)));
+                validate_typed_value(
+                    &def.field_type,
+                    &def.options,
+                    def.min_value.as_deref(),
+                    def.max_value.as_deref(),
+                    def.max_length,
+                    def.regex_pattern.as_deref(),
+                    &def.label,
+                    value,
+                )?;
+                if def.is_unique
+                    && custom_field_repo::value_exists_elsewhere(conn, &def.id, entity_id, value)?
+                {
+                    return Err(AppError::Validation(format!(
+                        "{} must be unique - '{value}' is already used",
+                        def.label
+                    )));
                 }
             }
         }
-        if before_values.get(&def.key).map(|s| s.as_str()).unwrap_or("") != value {
+        if before_values
+            .get(&def.key)
+            .map(|s| s.as_str())
+            .unwrap_or("")
+            != value
+        {
             changed_keys.push(def.key.clone());
         }
         custom_field_repo::set_value(conn, &def.id, entity_id, value)?;
@@ -635,9 +912,19 @@ pub fn set_entity_values(
         // from what the lookup field itself shows (see
         // relationship_service::set_lookup_value's own doc comment).
         if def.field_type == "lookup" {
-            if let Some(relationship_definition_id) = def.lookup_relationship_definition_id.as_deref() {
+            if let Some(relationship_definition_id) =
+                def.lookup_relationship_definition_id.as_deref()
+            {
                 let new_value = if value.is_empty() { None } else { Some(value) };
-                super::relationship_service::set_lookup_value(conn, &workspace_id, relationship_definition_id, entity_type, entity_id, new_value, actor_user_id)?;
+                super::relationship_service::set_lookup_value(
+                    conn,
+                    &workspace_id,
+                    relationship_definition_id,
+                    entity_type,
+                    entity_id,
+                    new_value,
+                    actor_user_id,
+                )?;
             }
         }
     }
@@ -645,7 +932,16 @@ pub fn set_entity_values(
     // ADM-WF: field_changed workflows fire from the same seam ADM-BR uses -
     // the one call site every entity's save flow already goes through
     // unconditionally, so no per-entity wiring is needed here either.
-    workflow_service::fire_field_changed(conn, &workspace_id, entity_type, entity_id, "custom", &changed_keys, None, actor_user_id)?;
+    workflow_service::fire_field_changed(
+        conn,
+        &workspace_id,
+        entity_type,
+        entity_id,
+        "custom",
+        &changed_keys,
+        None,
+        actor_user_id,
+    )?;
 
     // A business rule's set_default/set_value targeting a built-in field
     // has no in-flight built-in save to merge into the way a custom-field
@@ -654,11 +950,22 @@ pub fn set_entity_values(
     // own service, after everything above has confirmed nothing blocks
     // the save.
     for (field_key, value) in &evaluation.builtin_set_values {
-        builtin_field_service::set_field(conn, &workspace_id, entity_type, entity_id, field_key, value, actor_user_id)?;
+        builtin_field_service::set_field(
+            conn,
+            &workspace_id,
+            entity_type,
+            entity_id,
+            field_key,
+            value,
+            actor_user_id,
+        )?;
     }
 
     let _ = actor_user_id; // no audit entry per value write - the parent record's own create/update audit entry covers this edit
-    Ok(SaveNotices { errors: evaluation.errors, warnings: evaluation.warnings })
+    Ok(SaveNotices {
+        errors: evaluation.errors,
+        warnings: evaluation.warnings,
+    })
 }
 
 pub fn get_entity_values(conn: &Connection, entity_id: &str) -> AppResult<CustomFieldValues> {
@@ -671,6 +978,14 @@ pub fn get_entity_values(conn: &Connection, entity_id: &str) -> AppResult<Custom
 /// once alongside its normal list fetch rather than per-row, then filters
 /// client-side - the same "no dedicated filter engine, just enough to be
 /// useful" scope as global search itself.
-pub fn get_filterable_values(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<HashMap<String, CustomFieldValues>> {
-    Ok(custom_field_repo::get_filterable_values(conn, workspace_id, entity_type)?)
+pub fn get_filterable_values(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<HashMap<String, CustomFieldValues>> {
+    Ok(custom_field_repo::get_filterable_values(
+        conn,
+        workspace_id,
+        entity_type,
+    )?)
 }

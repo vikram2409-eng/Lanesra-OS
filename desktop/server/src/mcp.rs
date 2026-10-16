@@ -71,13 +71,22 @@ struct RpcRequest {
 /// instead - see this module's own doc comment.
 type RpcError = (i64, String);
 
-async fn handle(State(state): State<SharedState>, headers: HeaderMap, Json(body): Json<Value>) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+async fn handle(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     // Every method needs at least a valid, active API client - `tools/call`
     // additionally checks the specific tool's own scope below, the same
     // two-tier check `api_v1.rs`'s routes already do per-route.
     let (client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
 
-    let req: RpcRequest = serde_json::from_value(body).map_err(|e| err_json(StatusCode::BAD_REQUEST, &format!("Malformed JSON-RPC request: {e}")))?;
+    let req: RpcRequest = serde_json::from_value(body).map_err(|e| {
+        err_json(
+            StatusCode::BAD_REQUEST,
+            &format!("Malformed JSON-RPC request: {e}"),
+        )
+    })?;
 
     if req.method == "notifications/initialized" {
         // A notification - no id, no response body expected.
@@ -98,7 +107,9 @@ async fn handle(State(state): State<SharedState>, headers: HeaderMap, Json(body)
 
     let body = match outcome {
         Ok(result) => json!({"jsonrpc": "2.0", "id": req.id, "result": result}),
-        Err((code, message)) => json!({"jsonrpc": "2.0", "id": req.id, "error": {"code": code, "message": message}}),
+        Err((code, message)) => {
+            json!({"jsonrpc": "2.0", "id": req.id, "error": {"code": code, "message": message}})
+        }
     };
     Ok((StatusCode::OK, Json(body)))
 }
@@ -164,17 +175,33 @@ fn tool_err(message: &str) -> Value {
 }
 
 fn required_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, RpcError> {
-    args.get(key).and_then(Value::as_str).ok_or_else(|| (-32602, format!("Missing required argument '{key}'")))
+    args.get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| (-32602, format!("Missing required argument '{key}'")))
 }
 
 fn required_object<'a>(args: &'a Value, key: &str) -> Result<&'a Value, RpcError> {
-    let v = args.get(key).ok_or_else(|| (-32602, format!("Missing required argument '{key}'")))?;
-    if v.is_object() { Ok(v) } else { Err((-32602, format!("'{key}' must be an object"))) }
+    let v = args
+        .get(key)
+        .ok_or_else(|| (-32602, format!("Missing required argument '{key}'")))?;
+    if v.is_object() {
+        Ok(v)
+    } else {
+        Err((-32602, format!("'{key}' must be an object")))
+    }
 }
 
-fn handle_tools_call(state: &SharedState, client: &ApiClient, workspace_id: &str, params: &Value) -> Result<Value, RpcError> {
+fn handle_tools_call(
+    state: &SharedState,
+    client: &ApiClient,
+    workspace_id: &str,
+    params: &Value,
+) -> Result<Value, RpcError> {
     let name = required_str(params, "name")?;
-    let arguments = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    let arguments = params
+        .get("arguments")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
 
     let needed_scope = match name {
         "list_objects" | "get_object_metadata" => "metadata.read",
@@ -183,41 +210,76 @@ fn handle_tools_call(state: &SharedState, client: &ApiClient, workspace_id: &str
         other => return Err((-32602, format!("Unknown tool '{other}'"))),
     };
     if !api_client_service::has_scope(client, needed_scope) {
-        return Err((-32000, format!("This API client lacks the '{needed_scope}' scope required by tool '{name}'")));
+        return Err((
+            -32000,
+            format!("This API client lacks the '{needed_scope}' scope required by tool '{name}'"),
+        ));
     }
 
     let conn = state.conn.lock().unwrap();
     Ok(match name {
-        "list_objects" => call(&conn, workspace_id, api_object_service::list_object_keys(&conn, workspace_id).map(|v| serde_json::to_value(v).unwrap_or(Value::Null))),
+        "list_objects" => call(
+            &conn,
+            workspace_id,
+            api_object_service::list_object_keys(&conn, workspace_id)
+                .map(|v| serde_json::to_value(v).unwrap_or(Value::Null)),
+        ),
         "get_object_metadata" => {
             let key = required_str(&arguments, "object_key")?;
-            call(&conn, workspace_id, api_object_service::get_metadata(&conn, workspace_id, key).map(|v| serde_json::to_value(v).unwrap_or(Value::Null)))
+            call(
+                &conn,
+                workspace_id,
+                api_object_service::get_metadata(&conn, workspace_id, key)
+                    .map(|v| serde_json::to_value(v).unwrap_or(Value::Null)),
+            )
         }
         "list_records" => {
             let key = required_str(&arguments, "object_key")?;
             let query: ApiListQuery = serde_json::from_value(arguments.clone()).unwrap_or_default();
-            call(&conn, workspace_id, api_object_service::list_records(&conn, workspace_id, key, &query).map(|v| serde_json::to_value(v).unwrap_or(Value::Null)))
+            call(
+                &conn,
+                workspace_id,
+                api_object_service::list_records(&conn, workspace_id, key, &query)
+                    .map(|v| serde_json::to_value(v).unwrap_or(Value::Null)),
+            )
         }
         "get_record" => {
             let key = required_str(&arguments, "object_key")?;
             let id = required_str(&arguments, "id")?;
-            call(&conn, workspace_id, api_object_service::get_record(&conn, workspace_id, key, id))
+            call(
+                &conn,
+                workspace_id,
+                api_object_service::get_record(&conn, workspace_id, key, id),
+            )
         }
         "create_record" => {
             let key = required_str(&arguments, "object_key")?;
             let data = required_object(&arguments, "data")?;
-            call(&conn, workspace_id, api_object_service::create_record(&conn, workspace_id, key, data, None))
+            call(
+                &conn,
+                workspace_id,
+                api_object_service::create_record(&conn, workspace_id, key, data, None),
+            )
         }
         "update_record" => {
             let key = required_str(&arguments, "object_key")?;
             let id = required_str(&arguments, "id")?;
             let data = required_object(&arguments, "data")?;
-            call(&conn, workspace_id, api_object_service::update_record(&conn, workspace_id, key, id, data, None))
+            call(
+                &conn,
+                workspace_id,
+                api_object_service::update_record(&conn, workspace_id, key, id, data, None),
+            )
         }
         "archive_record" => {
             let key = required_str(&arguments, "object_key")?;
             let id = required_str(&arguments, "id")?;
-            call(&conn, workspace_id, api_object_service::archive_record(&conn, workspace_id, key, id, None).map(|_| json!({"archived": true})))
+            call(
+                &conn,
+                workspace_id,
+                api_object_service::archive_record(&conn, workspace_id, key, id, None)
+                    .map(|_| json!({"archived": true})),
+            )
         }
         _ => unreachable!("scope match above already rejects any other name"),
     })
@@ -227,7 +289,11 @@ fn handle_tools_call(state: &SharedState, client: &ApiClient, workspace_id: &str
 /// route already writes to (`api_v1::logged`), then maps the outcome
 /// into the tool-level `content`/`isError` shape - never a JSON-RPC
 /// protocol error, per this module's own doc comment.
-fn call(conn: &Connection, workspace_id: &str, result: lanesra_core::domain::AppResult<Value>) -> Value {
+fn call(
+    conn: &Connection,
+    workspace_id: &str,
+    result: lanesra_core::domain::AppResult<Value>,
+) -> Value {
     match logged(conn, workspace_id, result) {
         Ok(value) => tool_ok(&value),
         Err(e) => tool_err(&e.to_string()),

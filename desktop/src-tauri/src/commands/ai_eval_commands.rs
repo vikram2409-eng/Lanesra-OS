@@ -19,17 +19,35 @@ pub fn list_ai_eval_suites(state: State<AppState>) -> AppResult<Vec<AiEvalSuite>
 }
 
 #[tauri::command]
-pub fn create_ai_eval_suite(state: State<AppState>, input: AiEvalSuiteInput) -> AppResult<AiEvalSuite> {
+pub fn create_ai_eval_suite(
+    state: State<AppState>,
+    input: AiEvalSuiteInput,
+) -> AppResult<AiEvalSuite> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    ai_eval_service::create_suite(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    ai_eval_service::create_suite(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_ai_eval_suite(state: State<AppState>, id: String, input: AiEvalSuiteInput) -> AppResult<AiEvalSuite> {
+pub fn update_ai_eval_suite(
+    state: State<AppState>,
+    id: String,
+    input: AiEvalSuiteInput,
+) -> AppResult<AiEvalSuite> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    ai_eval_service::update_suite(&conn, &id, &workspace_id, &input, current_actor(&state).as_deref())
+    ai_eval_service::update_suite(
+        &conn,
+        &id,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -39,7 +57,11 @@ pub fn delete_ai_eval_suite(state: State<AppState>, id: String) -> AppResult<()>
 }
 
 #[tauri::command]
-pub fn list_ai_eval_runs(state: State<AppState>, suite_id: String, limit: i64) -> AppResult<Vec<AiEvalRun>> {
+pub fn list_ai_eval_runs(
+    state: State<AppState>,
+    suite_id: String,
+    limit: i64,
+) -> AppResult<Vec<AiEvalRun>> {
     let conn = state.conn.lock().unwrap();
     ai_eval_service::list_runs(&conn, &suite_id, limit)
 }
@@ -52,5 +74,8 @@ pub async fn run_ai_eval_suite(state: State<'_, AppState>, id: String) -> AppRes
         let conn = state.conn.lock().unwrap();
         (require_workspace_id(&conn)?, current_actor(&state))
     };
-    run_with_own_connection(db_path, move |conn| async move { ai_eval_service::run_suite(&conn, &workspace_id, &master_key, &id, actor.as_deref()).await }).await
+    run_with_own_connection(db_path, move |conn| async move {
+        ai_eval_service::run_suite(&conn, &workspace_id, &master_key, &id, actor.as_deref()).await
+    })
+    .await
 }

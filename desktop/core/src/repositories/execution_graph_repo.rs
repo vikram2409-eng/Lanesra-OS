@@ -54,13 +54,15 @@ fn map_edge_row(row: &rusqlite::Row) -> rusqlite::Result<GraphEdge> {
 }
 
 pub fn list_nodes(conn: &Connection, graph_id: &str) -> rusqlite::Result<Vec<GraphNode>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_graph_nodes WHERE graph_id = ?1 ORDER BY sort_order")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_graph_nodes WHERE graph_id = ?1 ORDER BY sort_order")?;
     let rows = stmt.query_map([graph_id], map_node_row)?.collect();
     rows
 }
 
 pub fn list_edges(conn: &Connection, graph_id: &str) -> rusqlite::Result<Vec<GraphEdge>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_graph_edges WHERE graph_id = ?1 ORDER BY sort_order")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_graph_edges WHERE graph_id = ?1 ORDER BY sort_order")?;
     let rows = stmt.query_map([graph_id], map_edge_row)?.collect();
     rows
 }
@@ -78,7 +80,11 @@ fn hydrate(conn: &Connection, mut graph: ExecutionGraph) -> rusqlite::Result<Exe
 /// `ai_agent_pipeline_repo::replace_steps` already uses for a Pipeline's
 /// steps, just for two child tables sharing one key resolution pass
 /// instead of one.
-pub fn replace_nodes_and_edges(conn: &Connection, graph_id: &str, input: &ExecutionGraphInput) -> rusqlite::Result<HashMap<String, String>> {
+pub fn replace_nodes_and_edges(
+    conn: &Connection,
+    graph_id: &str,
+    input: &ExecutionGraphInput,
+) -> rusqlite::Result<HashMap<String, String>> {
     conn.execute("DELETE FROM ai_graph_edges WHERE graph_id = ?1", [graph_id])?;
     conn.execute("DELETE FROM ai_graph_nodes WHERE graph_id = ?1", [graph_id])?;
 
@@ -108,7 +114,13 @@ pub fn replace_nodes_and_edges(conn: &Connection, graph_id: &str, input: &Execut
     Ok(key_to_id)
 }
 
-pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &ExecutionGraphInput, actor_user_id: Option<&str>) -> rusqlite::Result<ExecutionGraph> {
+pub fn create(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &ExecutionGraphInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<ExecutionGraph> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO ai_execution_graphs (id, workspace_id, name, description, status, version, created_at, created_by, updated_at, updated_by)
@@ -143,7 +155,12 @@ pub fn create_with_source(
     get(conn, id).map(|g| g.expect("just inserted"))
 }
 
-pub fn update(conn: &Connection, id: &str, input: &ExecutionGraphInput, actor_user_id: Option<&str>) -> rusqlite::Result<ExecutionGraph> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &ExecutionGraphInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<ExecutionGraph> {
     let now = now_iso();
     conn.execute(
         "UPDATE ai_execution_graphs SET name = ?1, description = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?5",
@@ -153,7 +170,12 @@ pub fn update(conn: &Connection, id: &str, input: &ExecutionGraphInput, actor_us
     get(conn, id).map(|g| g.expect("just updated"))
 }
 
-pub fn set_status(conn: &Connection, id: &str, status: &str, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn set_status(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_execution_graphs SET status = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
         (status, now_iso(), actor_user_id, id),
@@ -162,12 +184,22 @@ pub fn set_status(conn: &Connection, id: &str, status: &str, actor_user_id: Opti
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<ExecutionGraph>> {
-    let row = conn.query_row("SELECT * FROM ai_execution_graphs WHERE id = ?1", [id], map_graph_row).optional()?;
+    let row = conn
+        .query_row(
+            "SELECT * FROM ai_execution_graphs WHERE id = ?1",
+            [id],
+            map_graph_row,
+        )
+        .optional()?;
     row.map(|g| hydrate(conn, g)).transpose()
 }
 
 pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<ExecutionGraph>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_execution_graphs WHERE workspace_id = ?1 ORDER BY updated_at DESC")?;
-    let rows: Vec<ExecutionGraph> = stmt.query_map([workspace_id], map_graph_row)?.collect::<rusqlite::Result<_>>()?;
+    let mut stmt = conn.prepare(
+        "SELECT * FROM ai_execution_graphs WHERE workspace_id = ?1 ORDER BY updated_at DESC",
+    )?;
+    let rows: Vec<ExecutionGraph> = stmt
+        .query_map([workspace_id], map_graph_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|g| hydrate(conn, g)).collect()
 }

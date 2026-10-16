@@ -6,7 +6,9 @@ use crate::domain::{AppError, AppResult};
 use crate::models::access_role::Capability;
 use crate::models::contract::{Contract, ContractInput, CONTRACT_STATUSES};
 use crate::repositories::{audit_repo, company_repo, contact_repo, contract_repo, quote_repo};
-use crate::services::{access_service, app_service, builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{
+    access_service, app_service, builtin_field_service, status_transition_service, workflow_service,
+};
 
 fn validate(conn: &Connection, input: &ContractInput) -> AppResult<String> {
     if input.title.trim().is_empty() {
@@ -54,8 +56,22 @@ pub fn create(
     access_service::require_capability(conn, actor_user_id, "Contract", Capability::Create, None)?;
     let id = new_uuid();
     let contract_number = numbering::allocate_number(conn, &workspace_id, &CONTRACT)?;
-    let contract = contract_repo::create(conn, &id, &workspace_id, &contract_number, input, actor_user_id)?;
-    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Contract", &contract.id, actor_user_id, input.owner_user_id.as_deref())?;
+    let contract = contract_repo::create(
+        conn,
+        &id,
+        &workspace_id,
+        &contract_number,
+        input,
+        actor_user_id,
+    )?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        &workspace_id,
+        "Contract",
+        &contract.id,
+        actor_user_id,
+        input.owner_user_id.as_deref(),
+    )?;
     audit_repo::record(
         conn,
         &workspace_id,
@@ -66,7 +82,16 @@ pub fn create(
         &format!("Created contract {}", contract.contract_number),
         None,
     )?;
-    workflow_service::fire_event(conn, &workspace_id, "Contract", &contract.id, None, &contract.status, contract.owner_user_id.as_deref(), actor_user_id)?;
+    workflow_service::fire_event(
+        conn,
+        &workspace_id,
+        "Contract",
+        &contract.id,
+        None,
+        &contract.status,
+        contract.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
     Ok(contract)
 }
 
@@ -90,14 +115,30 @@ pub fn update(
 ) -> AppResult<Contract> {
     let workspace_id = validate(conn, input)?;
     app_service::require_object_write_access(conn, &workspace_id, "Contract", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Contract", Capability::Update, Some(id))?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Contract",
+        Capability::Update,
+        Some(id),
+    )?;
     let before = get(conn, id)?;
     if before.status != input.status {
-        status_transition_service::validate_transition(conn, &workspace_id, "Contract", &before.status, &input.status)?;
+        status_transition_service::validate_transition(
+            conn,
+            &workspace_id,
+            "Contract",
+            &before.status,
+            &input.status,
+        )?;
     }
     let before_fields = builtin_field_service::field_values(conn, "Contract", id)?;
     let contract = contract_repo::update(conn, id, input, actor_user_id)?;
-    let event_type = if before.status != contract.status { "status_change" } else { "update" };
+    let event_type = if before.status != contract.status {
+        "status_change"
+    } else {
+        "update"
+    };
     audit_repo::record(
         conn,
         &workspace_id,
@@ -112,18 +153,45 @@ pub fn update(
         None,
     )?;
     workflow_service::fire_event(
-        conn, &workspace_id, "Contract", id, Some(&before.status), &contract.status, contract.owner_user_id.as_deref(), actor_user_id,
+        conn,
+        &workspace_id,
+        "Contract",
+        id,
+        Some(&before.status),
+        &contract.status,
+        contract.owner_user_id.as_deref(),
+        actor_user_id,
     )?;
     let after_fields = builtin_field_service::field_values(conn, "Contract", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
-    workflow_service::fire_field_changed(conn, &workspace_id, "Contract", id, "builtin", &changed, contract.owner_user_id.as_deref(), actor_user_id)?;
+    workflow_service::fire_field_changed(
+        conn,
+        &workspace_id,
+        "Contract",
+        id,
+        "builtin",
+        &changed,
+        contract.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
     Ok(contract)
 }
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
-    app_service::require_object_write_access(conn, &existing.workspace_id, "Contract", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Contract", Capability::Delete, Some(id))?;
+    app_service::require_object_write_access(
+        conn,
+        &existing.workspace_id,
+        "Contract",
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Contract",
+        Capability::Delete,
+        Some(id),
+    )?;
     contract_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,

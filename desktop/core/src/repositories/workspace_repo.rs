@@ -43,7 +43,13 @@ pub fn get_current(conn: &Connection) -> rusqlite::Result<Option<Workspace>> {
 pub fn get_by_id(conn: &Connection, id: &str) -> rusqlite::Result<Option<Workspace>> {
     conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 pub fn create(conn: &Connection, setup: &WorkspaceSetup) -> rusqlite::Result<Workspace> {
@@ -87,7 +93,11 @@ pub fn update(conn: &Connection, id: &str, input: &WorkspaceUpdate) -> rusqlite:
     conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
 }
 
-pub fn set_dashboard_kpi_prefs(conn: &Connection, id: &str, prefs_json: Option<&str>) -> rusqlite::Result<Workspace> {
+pub fn set_dashboard_kpi_prefs(
+    conn: &Connection,
+    id: &str,
+    prefs_json: Option<&str>,
+) -> rusqlite::Result<Workspace> {
     conn.execute(
         "UPDATE workspaces SET dashboard_kpi_prefs = ?1, updated_at = ?2 WHERE id = ?3",
         (prefs_json, now_iso(), id),
@@ -95,7 +105,12 @@ pub fn set_dashboard_kpi_prefs(conn: &Connection, id: &str, prefs_json: Option<&
     conn.query_row("SELECT * FROM workspaces WHERE id = ?1", [id], map_row)
 }
 
-pub fn set_logo(conn: &Connection, id: &str, logo_base64: &str, logo_mime: &str) -> rusqlite::Result<Workspace> {
+pub fn set_logo(
+    conn: &Connection,
+    id: &str,
+    logo_base64: &str,
+    logo_mime: &str,
+) -> rusqlite::Result<Workspace> {
     conn.execute(
         "UPDATE workspaces SET logo_base64 = ?1, logo_mime = ?2, updated_at = ?3 WHERE id = ?4",
         (logo_base64, logo_mime, now_iso(), id),

@@ -48,10 +48,16 @@ pub struct OwnerRef {
 
 impl OwnerRef {
     pub fn user(user_id: impl Into<String>) -> Self {
-        Self { owner_type: OWNER_TYPE_USER.to_string(), owner_id: user_id.into() }
+        Self {
+            owner_type: OWNER_TYPE_USER.to_string(),
+            owner_id: user_id.into(),
+        }
     }
     pub fn team(team_id: impl Into<String>) -> Self {
-        Self { owner_type: OWNER_TYPE_TEAM.to_string(), owner_id: team_id.into() }
+        Self {
+            owner_type: OWNER_TYPE_TEAM.to_string(),
+            owner_id: team_id.into(),
+        }
     }
 }
 

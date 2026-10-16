@@ -25,8 +25,12 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<(AppDefinition, String)> {
     Ok((app, object_keys_json))
 }
 
-pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(AppDefinition, String)>> {
-    let mut stmt = conn.prepare("SELECT * FROM app_definitions WHERE workspace_id = ?1 ORDER BY name")?;
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<(AppDefinition, String)>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM app_definitions WHERE workspace_id = ?1 ORDER BY name")?;
     let rows = stmt.query_map([workspace_id], map_row)?.collect();
     rows
 }
@@ -34,7 +38,13 @@ pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(AppD
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<(AppDefinition, String)>> {
     conn.query_row("SELECT * FROM app_definitions WHERE id = ?1", [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -74,7 +84,12 @@ pub fn update(
     Ok(())
 }
 
-pub fn set_published(conn: &Connection, id: &str, published: bool, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn set_published(
+    conn: &Connection,
+    id: &str,
+    published: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE app_definitions SET is_published = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
         rusqlite::params![published, now_iso(), actor_user_id, id],
@@ -106,7 +121,9 @@ fn map_permission_row(row: &rusqlite::Row) -> rusqlite::Result<AppPermission> {
 }
 
 pub fn list_permissions(conn: &Connection, app_id: &str) -> rusqlite::Result<Vec<AppPermission>> {
-    let mut stmt = conn.prepare("SELECT * FROM app_permissions WHERE app_id = ?1 ORDER BY principal_type, principal_id")?;
+    let mut stmt = conn.prepare(
+        "SELECT * FROM app_permissions WHERE app_id = ?1 ORDER BY principal_type, principal_id",
+    )?;
     let rows = stmt.query_map([app_id], map_permission_row)?.collect();
     rows
 }
@@ -114,13 +131,18 @@ pub fn list_permissions(conn: &Connection, app_id: &str) -> rusqlite::Result<Vec
 /// Every permission grant across every app in the workspace, in one query -
 /// `app_service::list_accessible` needs this shape (grouped by app_id
 /// after the fact) rather than N+1 `list_permissions` calls per app.
-pub fn list_all_permissions_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AppPermission>> {
+pub fn list_all_permissions_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<AppPermission>> {
     let mut stmt = conn.prepare(
         "SELECT ap.* FROM app_permissions ap
          JOIN app_definitions ad ON ad.id = ap.app_id
          WHERE ad.workspace_id = ?1",
     )?;
-    let rows = stmt.query_map([workspace_id], map_permission_row)?.collect();
+    let rows = stmt
+        .query_map([workspace_id], map_permission_row)?
+        .collect();
     rows
 }
 

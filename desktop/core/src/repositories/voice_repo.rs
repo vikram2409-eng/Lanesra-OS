@@ -47,7 +47,10 @@ pub fn to_safe_settings(r: VoiceUserSettingsRecord) -> VoiceUserSettings {
 /// Every user starts with an implicit, all-defaults settings row (no PIN
 /// set, Voice disabled) rather than requiring one be seeded per-user at
 /// account creation - this inserts it lazily on first touch.
-pub fn ensure_settings_row(conn: &Connection, user_id: &str) -> rusqlite::Result<VoiceUserSettingsRecord> {
+pub fn ensure_settings_row(
+    conn: &Connection,
+    user_id: &str,
+) -> rusqlite::Result<VoiceUserSettingsRecord> {
     if let Some(existing) = get_settings_record(conn, user_id)? {
         return Ok(existing);
     }
@@ -60,8 +63,16 @@ pub fn ensure_settings_row(conn: &Connection, user_id: &str) -> rusqlite::Result
     Ok(get_settings_record(conn, user_id)?.expect("just inserted"))
 }
 
-pub fn get_settings_record(conn: &Connection, user_id: &str) -> rusqlite::Result<Option<VoiceUserSettingsRecord>> {
-    conn.query_row("SELECT * FROM voice_user_settings WHERE user_id = ?1", [user_id], map_settings_record).optional()
+pub fn get_settings_record(
+    conn: &Connection,
+    user_id: &str,
+) -> rusqlite::Result<Option<VoiceUserSettingsRecord>> {
+    conn.query_row(
+        "SELECT * FROM voice_user_settings WHERE user_id = ?1",
+        [user_id],
+        map_settings_record,
+    )
+    .optional()
 }
 
 pub fn set_pin_hash(conn: &Connection, user_id: &str, pin_hash: &str) -> rusqlite::Result<()> {
@@ -73,7 +84,12 @@ pub fn set_pin_hash(conn: &Connection, user_id: &str, pin_hash: &str) -> rusqlit
     Ok(())
 }
 
-pub fn record_failed_pin_attempt(conn: &Connection, user_id: &str, attempts: i64, locked_until: Option<&str>) -> rusqlite::Result<()> {
+pub fn record_failed_pin_attempt(
+    conn: &Connection,
+    user_id: &str,
+    attempts: i64,
+    locked_until: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE voice_user_settings SET failed_attempts = ?1, locked_until = ?2, updated_at = ?3 WHERE user_id = ?4",
         (attempts, locked_until, now_iso(), user_id),
@@ -89,7 +105,11 @@ pub fn reset_pin_attempts(conn: &Connection, user_id: &str) -> rusqlite::Result<
     Ok(())
 }
 
-pub fn update_preferences(conn: &Connection, user_id: &str, input: &VoicePreferencesInput) -> rusqlite::Result<()> {
+pub fn update_preferences(
+    conn: &Connection,
+    user_id: &str,
+    input: &VoicePreferencesInput,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE voice_user_settings SET response_channel = ?1, spoken_detail = ?2, auto_speak_confirmations = ?3, quiet_mode = ?4, unlock_duration_minutes = ?5, updated_at = ?6 WHERE user_id = ?7",
         rusqlite::params![input.response_channel, input.spoken_detail, input.auto_speak_confirmations, input.quiet_mode, input.unlock_duration_minutes, now_iso(), user_id],
@@ -122,7 +142,10 @@ fn map_policy(row: &rusqlite::Row) -> rusqlite::Result<VoicePolicyBinding> {
     })
 }
 
-pub fn list_policy_bindings(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<VoicePolicyBinding>> {
+pub fn list_policy_bindings(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<VoicePolicyBinding>> {
     let mut stmt = conn.prepare("SELECT * FROM voice_policy_bindings WHERE workspace_id = ?1 ORDER BY (access_role_id IS NULL) DESC")?;
     let rows = stmt.query_map([workspace_id], map_policy)?.collect();
     rows
@@ -133,7 +156,10 @@ pub fn list_policy_bindings(conn: &Connection, workspace_id: &str) -> rusqlite::
 /// insert), and for every workspace created afterwards via
 /// `ensure_default_policy_binding` below, called from
 /// `workspace_service::first_run_setup`.
-pub fn get_default_policy_binding(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<VoicePolicyBinding>> {
+pub fn get_default_policy_binding(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Option<VoicePolicyBinding>> {
     conn.query_row(
         "SELECT * FROM voice_policy_bindings WHERE workspace_id = ?1 AND access_role_id IS NULL",
         [workspace_id],
@@ -149,7 +175,10 @@ pub fn get_default_policy_binding(conn: &Connection, workspace_id: &str) -> rusq
 /// (migrations apply once to the schema; `first_run_setup` runs afterwards).
 /// Same values as the migration's own default row: Voice off by default,
 /// an Administrator must opt each Access Role in.
-pub fn ensure_default_policy_binding(conn: &Connection, workspace_id: &str) -> rusqlite::Result<()> {
+pub fn ensure_default_policy_binding(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
     if get_default_policy_binding(conn, workspace_id)?.is_some() {
         return Ok(());
     }
@@ -162,7 +191,11 @@ pub fn ensure_default_policy_binding(conn: &Connection, workspace_id: &str) -> r
     Ok(())
 }
 
-pub fn get_policy_binding_for_role(conn: &Connection, workspace_id: &str, access_role_id: &str) -> rusqlite::Result<Option<VoicePolicyBinding>> {
+pub fn get_policy_binding_for_role(
+    conn: &Connection,
+    workspace_id: &str,
+    access_role_id: &str,
+) -> rusqlite::Result<Option<VoicePolicyBinding>> {
     conn.query_row(
         "SELECT * FROM voice_policy_bindings WHERE workspace_id = ?1 AND access_role_id = ?2",
         (workspace_id, access_role_id),
@@ -172,7 +205,12 @@ pub fn get_policy_binding_for_role(conn: &Connection, workspace_id: &str, access
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn upsert_policy_binding(conn: &Connection, id: &str, workspace_id: &str, input: &VoicePolicyBindingInput) -> rusqlite::Result<VoicePolicyBinding> {
+pub fn upsert_policy_binding(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &VoicePolicyBindingInput,
+) -> rusqlite::Result<VoicePolicyBinding> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO voice_policy_bindings (id, workspace_id, access_role_id, can_use_voice, can_search, can_create, can_update, can_act, can_bulk_act, can_external_act, can_use_agents, max_action_level, processing_boundary, confidence_thresholds_json, max_unlock_minutes, created_at, updated_at)
@@ -213,7 +251,13 @@ fn map_session(row: &rusqlite::Row) -> rusqlite::Result<VoiceSession> {
     })
 }
 
-pub fn create_session(conn: &Connection, id: &str, workspace_id: &str, user_id: &str, expires_at: &str) -> rusqlite::Result<VoiceSession> {
+pub fn create_session(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    user_id: &str,
+    expires_at: &str,
+) -> rusqlite::Result<VoiceSession> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO voice_sessions (id, workspace_id, user_id, state, unlocked_at, expires_at, conversation_json, created_at, updated_at)
@@ -224,13 +268,21 @@ pub fn create_session(conn: &Connection, id: &str, workspace_id: &str, user_id: 
 }
 
 pub fn get_session(conn: &Connection, id: &str) -> rusqlite::Result<Option<VoiceSession>> {
-    conn.query_row("SELECT * FROM voice_sessions WHERE id = ?1", [id], map_session).optional()
+    conn.query_row(
+        "SELECT * FROM voice_sessions WHERE id = ?1",
+        [id],
+        map_session,
+    )
+    .optional()
 }
 
 /// The user's most recently created session, regardless of whether it has
 /// since expired - callers check `expires_at`/`state` themselves
 /// (`voice_session_service::current_session` is the one place that does).
-pub fn get_latest_session_for_user(conn: &Connection, user_id: &str) -> rusqlite::Result<Option<VoiceSession>> {
+pub fn get_latest_session_for_user(
+    conn: &Connection,
+    user_id: &str,
+) -> rusqlite::Result<Option<VoiceSession>> {
     conn.query_row(
         "SELECT * FROM voice_sessions WHERE user_id = ?1 ORDER BY created_at DESC LIMIT 1",
         [user_id],
@@ -240,11 +292,19 @@ pub fn get_latest_session_for_user(conn: &Connection, user_id: &str) -> rusqlite
 }
 
 pub fn set_session_state(conn: &Connection, id: &str, state: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_sessions SET state = ?1, updated_at = ?2 WHERE id = ?3", (state, now_iso(), id))?;
+    conn.execute(
+        "UPDATE voice_sessions SET state = ?1, updated_at = ?2 WHERE id = ?3",
+        (state, now_iso(), id),
+    )?;
     Ok(())
 }
 
-pub fn set_session_context(conn: &Connection, id: &str, object_key: Option<&str>, record_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn set_session_context(
+    conn: &Connection,
+    id: &str,
+    object_key: Option<&str>,
+    record_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE voice_sessions SET context_object_key = ?1, context_record_id = ?2, updated_at = ?3 WHERE id = ?4",
         (object_key, record_id, now_iso(), id),
@@ -282,21 +342,38 @@ pub fn is_pin_locked(conn: &Connection, user_id: &str) -> rusqlite::Result<bool>
 }
 
 pub fn extend_session(conn: &Connection, id: &str, expires_at: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_sessions SET expires_at = ?1, state = 'idle', updated_at = ?2 WHERE id = ?3", (expires_at, now_iso(), id))?;
+    conn.execute(
+        "UPDATE voice_sessions SET expires_at = ?1, state = 'idle', updated_at = ?2 WHERE id = ?3",
+        (expires_at, now_iso(), id),
+    )?;
     Ok(())
 }
 
 pub fn reset_session_conversation(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_sessions SET conversation_json = '[]', updated_at = ?1 WHERE id = ?2", (now_iso(), id))?;
+    conn.execute(
+        "UPDATE voice_sessions SET conversation_json = '[]', updated_at = ?1 WHERE id = ?2",
+        (now_iso(), id),
+    )?;
     Ok(())
 }
 
 pub fn get_session_conversation(conn: &Connection, id: &str) -> rusqlite::Result<String> {
-    conn.query_row("SELECT conversation_json FROM voice_sessions WHERE id = ?1", [id], |r| r.get(0))
+    conn.query_row(
+        "SELECT conversation_json FROM voice_sessions WHERE id = ?1",
+        [id],
+        |r| r.get(0),
+    )
 }
 
-pub fn set_session_conversation(conn: &Connection, id: &str, conversation_json: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_sessions SET conversation_json = ?1, updated_at = ?2 WHERE id = ?3", (conversation_json, now_iso(), id))?;
+pub fn set_session_conversation(
+    conn: &Connection,
+    id: &str,
+    conversation_json: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE voice_sessions SET conversation_json = ?1, updated_at = ?2 WHERE id = ?3",
+        (conversation_json, now_iso(), id),
+    )?;
     Ok(())
 }
 
@@ -304,11 +381,22 @@ pub fn set_session_conversation(conn: &Connection, id: &str, conversation_json: 
 /// CREATE, if one exists - `NULL` (mapped to `None`) is the normal "no
 /// create in progress" state, not an error.
 pub fn get_session_pending_create(conn: &Connection, id: &str) -> rusqlite::Result<Option<String>> {
-    conn.query_row("SELECT pending_create_json FROM voice_sessions WHERE id = ?1", [id], |r| r.get(0))
+    conn.query_row(
+        "SELECT pending_create_json FROM voice_sessions WHERE id = ?1",
+        [id],
+        |r| r.get(0),
+    )
 }
 
-pub fn set_session_pending_create(conn: &Connection, id: &str, pending_create_json: Option<&str>) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_sessions SET pending_create_json = ?1, updated_at = ?2 WHERE id = ?3", (pending_create_json, now_iso(), id))?;
+pub fn set_session_pending_create(
+    conn: &Connection,
+    id: &str,
+    pending_create_json: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE voice_sessions SET pending_create_json = ?1, updated_at = ?2 WHERE id = ?3",
+        (pending_create_json, now_iso(), id),
+    )?;
     Ok(())
 }
 
@@ -350,23 +438,45 @@ pub fn create_command(
 }
 
 pub fn get_command(conn: &Connection, id: &str) -> rusqlite::Result<Option<VoiceCommand>> {
-    conn.query_row("SELECT * FROM voice_commands WHERE id = ?1", [id], map_command).optional()
+    conn.query_row(
+        "SELECT * FROM voice_commands WHERE id = ?1",
+        [id],
+        map_command,
+    )
+    .optional()
 }
 
 pub fn set_command_status(conn: &Connection, id: &str, status: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_commands SET status = ?1 WHERE id = ?2", (status, id))?;
+    conn.execute(
+        "UPDATE voice_commands SET status = ?1 WHERE id = ?2",
+        (status, id),
+    )?;
     Ok(())
 }
 
-pub fn list_commands_for_user(conn: &Connection, user_id: &str, limit: i64) -> rusqlite::Result<Vec<VoiceCommand>> {
-    let mut stmt = conn.prepare("SELECT * FROM voice_commands WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2")?;
+pub fn list_commands_for_user(
+    conn: &Connection,
+    user_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<VoiceCommand>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM voice_commands WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+    )?;
     let rows = stmt.query_map((user_id, limit), map_command)?.collect();
     rows
 }
 
-pub fn list_commands_for_workspace(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<VoiceCommand>> {
-    let mut stmt = conn.prepare("SELECT * FROM voice_commands WHERE workspace_id = ?1 ORDER BY created_at DESC LIMIT ?2")?;
-    let rows = stmt.query_map((workspace_id, limit), map_command)?.collect();
+pub fn list_commands_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<VoiceCommand>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM voice_commands WHERE workspace_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+    )?;
+    let rows = stmt
+        .query_map((workspace_id, limit), map_command)?
+        .collect();
     rows
 }
 
@@ -410,7 +520,10 @@ pub fn create_resolution(
     Ok(get_resolution_for_command(conn, command_id)?.expect("just inserted"))
 }
 
-pub fn get_resolution_for_command(conn: &Connection, command_id: &str) -> rusqlite::Result<Option<VoiceResolution>> {
+pub fn get_resolution_for_command(
+    conn: &Connection,
+    command_id: &str,
+) -> rusqlite::Result<Option<VoiceResolution>> {
     conn.query_row(
         "SELECT * FROM voice_resolutions WHERE command_id = ?1 ORDER BY created_at DESC LIMIT 1",
         [command_id],
@@ -436,7 +549,15 @@ fn map_plan(row: &rusqlite::Row) -> rusqlite::Result<VoiceActionPlan> {
     })
 }
 
-pub fn create_plan(conn: &Connection, id: &str, command_id: &str, plan: &VoiceActionPlanBody, risk: VoiceRisk, confirmation_required: bool, status: &str) -> rusqlite::Result<VoiceActionPlan> {
+pub fn create_plan(
+    conn: &Connection,
+    id: &str,
+    command_id: &str,
+    plan: &VoiceActionPlanBody,
+    risk: VoiceRisk,
+    confirmation_required: bool,
+    status: &str,
+) -> rusqlite::Result<VoiceActionPlan> {
     let plan_json = serde_json::to_string(plan).unwrap_or_else(|_| "{\"steps\":[]}".to_string());
     let now = now_iso();
     conn.execute(
@@ -448,22 +569,44 @@ pub fn create_plan(conn: &Connection, id: &str, command_id: &str, plan: &VoiceAc
 }
 
 pub fn get_plan(conn: &Connection, id: &str) -> rusqlite::Result<Option<VoiceActionPlan>> {
-    conn.query_row("SELECT * FROM voice_action_plans WHERE id = ?1", [id], map_plan).optional()
+    conn.query_row(
+        "SELECT * FROM voice_action_plans WHERE id = ?1",
+        [id],
+        map_plan,
+    )
+    .optional()
 }
 
 pub fn set_plan_status(conn: &Connection, id: &str, status: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_action_plans SET status = ?1, updated_at = ?2 WHERE id = ?3", (status, now_iso(), id))?;
+    conn.execute(
+        "UPDATE voice_action_plans SET status = ?1, updated_at = ?2 WHERE id = ?3",
+        (status, now_iso(), id),
+    )?;
     Ok(())
 }
 
 // ---- voice_confirmations -----------------------------------------------------
 
-pub fn create_confirmation(conn: &Connection, id: &str, plan_id: &str, method: &str, outcome: &str, user_id: &str) -> rusqlite::Result<VoiceConfirmation> {
+pub fn create_confirmation(
+    conn: &Connection,
+    id: &str,
+    plan_id: &str,
+    method: &str,
+    outcome: &str,
+    user_id: &str,
+) -> rusqlite::Result<VoiceConfirmation> {
     conn.execute(
         "INSERT INTO voice_confirmations (id, plan_id, method, outcome, user_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         (id, plan_id, method, outcome, user_id, now_iso()),
     )?;
-    Ok(VoiceConfirmation { id: id.to_string(), plan_id: plan_id.to_string(), method: method.to_string(), outcome: outcome.to_string(), user_id: user_id.to_string(), created_at: now_iso() })
+    Ok(VoiceConfirmation {
+        id: id.to_string(),
+        plan_id: plan_id.to_string(),
+        method: method.to_string(),
+        outcome: outcome.to_string(),
+        user_id: user_id.to_string(),
+        created_at: now_iso(),
+    })
 }
 
 // ---- voice_executions -----------------------------------------------------
@@ -508,21 +651,41 @@ pub fn create_execution(
 }
 
 pub fn get_execution(conn: &Connection, id: &str) -> rusqlite::Result<Option<VoiceExecution>> {
-    conn.query_row("SELECT * FROM voice_executions WHERE id = ?1", [id], map_execution).optional()
+    conn.query_row(
+        "SELECT * FROM voice_executions WHERE id = ?1",
+        [id],
+        map_execution,
+    )
+    .optional()
 }
 
-pub fn list_executions_for_plan(conn: &Connection, plan_id: &str) -> rusqlite::Result<Vec<VoiceExecution>> {
-    let mut stmt = conn.prepare("SELECT * FROM voice_executions WHERE plan_id = ?1 ORDER BY step_index")?;
+pub fn list_executions_for_plan(
+    conn: &Connection,
+    plan_id: &str,
+) -> rusqlite::Result<Vec<VoiceExecution>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM voice_executions WHERE plan_id = ?1 ORDER BY step_index")?;
     let rows = stmt.query_map([plan_id], map_execution)?.collect();
     rows
 }
 
-pub fn get_execution_by_undo_token(conn: &Connection, undo_token: &str) -> rusqlite::Result<Option<VoiceExecution>> {
-    conn.query_row("SELECT * FROM voice_executions WHERE undo_token = ?1", [undo_token], map_execution).optional()
+pub fn get_execution_by_undo_token(
+    conn: &Connection,
+    undo_token: &str,
+) -> rusqlite::Result<Option<VoiceExecution>> {
+    conn.query_row(
+        "SELECT * FROM voice_executions WHERE undo_token = ?1",
+        [undo_token],
+        map_execution,
+    )
+    .optional()
 }
 
 pub fn mark_execution_undone(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE voice_executions SET undone_at = ?1 WHERE id = ?2", (now_iso(), id))?;
+    conn.execute(
+        "UPDATE voice_executions SET undone_at = ?1 WHERE id = ?2",
+        (now_iso(), id),
+    )?;
     Ok(())
 }
 
@@ -543,7 +706,10 @@ fn map_provider(row: &rusqlite::Row) -> rusqlite::Result<VoiceProviderProfile> {
     })
 }
 
-pub fn list_provider_profiles(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<VoiceProviderProfile>> {
+pub fn list_provider_profiles(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<VoiceProviderProfile>> {
     let mut stmt = conn.prepare("SELECT * FROM voice_provider_profiles WHERE workspace_id = ?1 ORDER BY is_default DESC, name")?;
     let rows = stmt.query_map([workspace_id], map_provider)?.collect();
     rows
@@ -560,7 +726,10 @@ pub fn set_provider_health(conn: &Connection, id: &str, status: &str) -> rusqlit
 /// Idempotently seeds the one real PR-1 adapter (browser Web Speech API)
 /// for a workspace created after migration 0057's own bootstrap insert
 /// already ran - same reasoning as `ensure_default_policy_binding` above.
-pub fn ensure_default_provider_profile(conn: &Connection, workspace_id: &str) -> rusqlite::Result<()> {
+pub fn ensure_default_provider_profile(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
     let exists: bool = conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM voice_provider_profiles WHERE workspace_id = ?1)",
         [workspace_id],
@@ -599,17 +768,28 @@ const ACTIVITY_SELECT: &str = "SELECT c.id AS command_id, c.transcript, r.intent
      LEFT JOIN voice_resolutions r ON r.command_id = c.id
      LEFT JOIN voice_action_plans p ON p.command_id = c.id";
 
-pub fn list_activity_for_user(conn: &Connection, user_id: &str, limit: i64) -> rusqlite::Result<Vec<VoiceActivityEntry>> {
+pub fn list_activity_for_user(
+    conn: &Connection,
+    user_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<VoiceActivityEntry>> {
     let sql = format!("{ACTIVITY_SELECT} WHERE c.user_id = ?1 ORDER BY c.created_at DESC LIMIT ?2");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map((user_id, limit), map_activity)?.collect();
     rows
 }
 
-pub fn search_activity_for_workspace(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<VoiceActivityEntry>> {
-    let sql = format!("{ACTIVITY_SELECT} WHERE c.workspace_id = ?1 ORDER BY c.created_at DESC LIMIT ?2");
+pub fn search_activity_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<VoiceActivityEntry>> {
+    let sql =
+        format!("{ACTIVITY_SELECT} WHERE c.workspace_id = ?1 ORDER BY c.created_at DESC LIMIT ?2");
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map((workspace_id, limit), map_activity)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, limit), map_activity)?
+        .collect();
     rows
 }
 
@@ -629,11 +809,24 @@ fn map_llm_settings(row: &rusqlite::Row) -> rusqlite::Result<VoiceLlmSettings> {
 /// (`voice_llm_service::get_settings`) is the one that turns that into an
 /// honest "disabled, no provider" default rather than this repo layer
 /// silently fabricating a row that was never actually saved.
-pub fn get_llm_settings(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<VoiceLlmSettings>> {
-    conn.query_row("SELECT * FROM voice_llm_settings WHERE workspace_id = ?1", [workspace_id], map_llm_settings).optional()
+pub fn get_llm_settings(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Option<VoiceLlmSettings>> {
+    conn.query_row(
+        "SELECT * FROM voice_llm_settings WHERE workspace_id = ?1",
+        [workspace_id],
+        map_llm_settings,
+    )
+    .optional()
 }
 
-pub fn upsert_llm_settings(conn: &Connection, workspace_id: &str, input: &VoiceLlmSettingsInput, actor_user_id: Option<&str>) -> rusqlite::Result<VoiceLlmSettings> {
+pub fn upsert_llm_settings(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &VoiceLlmSettingsInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<VoiceLlmSettings> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO voice_llm_settings (workspace_id, enabled, provider_id, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4, ?5)

@@ -20,8 +20,15 @@ fn hydrate(row: (PageTemplate, String)) -> AppResult<PageTemplate> {
     Ok(template)
 }
 
-pub fn list_templates(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<Vec<PageTemplate>> {
-    page_template_repo::list(conn, workspace_id, entity_type)?.into_iter().map(hydrate).collect()
+pub fn list_templates(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<Vec<PageTemplate>> {
+    page_template_repo::list(conn, workspace_id, entity_type)?
+        .into_iter()
+        .map(hydrate)
+        .collect()
 }
 
 /// Snapshots `page_id`'s *current draft* (not its published tree, if any -
@@ -43,7 +50,8 @@ pub fn create_template_from_page(
         return Err(AppError::NotFound("Page layout".into()));
     }
     let id = page_template_repo::new_id();
-    let definition_json = serde_json::to_string(&page.draft).expect("PageDefinition always serializes");
+    let definition_json =
+        serde_json::to_string(&page.draft).expect("PageDefinition always serializes");
     page_template_repo::create(
         conn,
         &id,
@@ -54,12 +62,21 @@ pub fn create_template_from_page(
         &definition_json,
         actor_user_id,
     )?;
-    hydrate(page_template_repo::get(conn, &id)?.ok_or_else(|| AppError::NotFound("Page template".into()))?)
+    hydrate(
+        page_template_repo::get(conn, &id)?
+            .ok_or_else(|| AppError::NotFound("Page template".into()))?,
+    )
 }
 
-pub fn delete_template(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn delete_template(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
-    let (template, _) = page_template_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Page template".into()))?;
+    let (template, _) = page_template_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Page template".into()))?;
     if template.workspace_id != workspace_id {
         return Err(AppError::NotFound("Page template".into()));
     }

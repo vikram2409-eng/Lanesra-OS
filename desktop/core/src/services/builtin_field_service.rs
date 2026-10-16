@@ -29,10 +29,13 @@ use crate::models::opportunity::OpportunityInput;
 use crate::models::product::ProductInput;
 use crate::models::task::TaskInput;
 use crate::repositories::{
-    company_repo, contact_repo, contract_repo, custom_record_repo, invoice_repo, opportunity_repo, order_repo,
-    product_repo, quote_repo, task_repo,
+    company_repo, contact_repo, contract_repo, custom_record_repo, invoice_repo, opportunity_repo,
+    order_repo, product_repo, quote_repo, task_repo,
 };
-use crate::services::{company_service, contact_service, contract_service, custom_record_service, opportunity_service, product_service, task_service};
+use crate::services::{
+    company_service, contact_service, contract_service, custom_record_service, opportunity_service,
+    product_service, task_service,
+};
 
 fn opt(s: String) -> Option<String> {
     if s.trim().is_empty() {
@@ -46,7 +49,11 @@ fn opt(s: String) -> Option<String> {
 /// `domain::builtin_fields::builtin_fields_for` names them - the "read"
 /// half of this module. Entities the registry doesn't cover fall through
 /// to `custom_record_repo` (any admin-defined custom object).
-pub fn field_values(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<HashMap<String, String>> {
+pub fn field_values(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> AppResult<HashMap<String, String>> {
     let mut ctx = HashMap::new();
     match entity_type {
         "Company" => {
@@ -54,8 +61,14 @@ pub fn field_values(conn: &Connection, entity_type: &str, entity_id: &str) -> Ap
                 ctx.insert("name".into(), r.name);
                 ctx.insert("status".into(), r.status);
                 ctx.insert("tax_number".into(), r.tax_number.unwrap_or_default());
-                ctx.insert("billing_address".into(), r.billing_address.unwrap_or_default());
-                ctx.insert("shipping_address".into(), r.shipping_address.unwrap_or_default());
+                ctx.insert(
+                    "billing_address".into(),
+                    r.billing_address.unwrap_or_default(),
+                );
+                ctx.insert(
+                    "shipping_address".into(),
+                    r.shipping_address.unwrap_or_default(),
+                );
                 ctx.insert("tags".into(), r.tags.unwrap_or_default());
                 ctx.insert("notes".into(), r.notes.unwrap_or_default());
             }
@@ -81,7 +94,10 @@ pub fn field_values(conn: &Connection, entity_type: &str, entity_id: &str) -> Ap
                 ctx.insert("status".into(), r.status);
                 ctx.insert("value".into(), format_major(r.value_cents));
                 ctx.insert("probability".into(), format_bp_as_percent(r.probability_bp));
-                ctx.insert("expected_close_date".into(), r.expected_close_date.unwrap_or_default());
+                ctx.insert(
+                    "expected_close_date".into(),
+                    r.expected_close_date.unwrap_or_default(),
+                );
                 ctx.insert("lost_reason".into(), r.lost_reason.unwrap_or_default());
                 ctx.insert("next_step".into(), r.next_step.unwrap_or_default());
             }
@@ -132,7 +148,12 @@ pub fn field_values(conn: &Connection, entity_type: &str, entity_id: &str) -> Ap
                 ctx.insert("start_date".into(), r.start_date.unwrap_or_default());
                 ctx.insert("end_date".into(), r.end_date.unwrap_or_default());
                 ctx.insert("renewal_date".into(), r.renewal_date.unwrap_or_default());
-                ctx.insert("notice_period_days".into(), r.notice_period_days.map(|d| d.to_string()).unwrap_or_default());
+                ctx.insert(
+                    "notice_period_days".into(),
+                    r.notice_period_days
+                        .map(|d| d.to_string())
+                        .unwrap_or_default(),
+                );
                 ctx.insert("status".into(), r.status);
                 ctx.insert("notes".into(), r.notes.unwrap_or_default());
             }
@@ -166,18 +187,39 @@ pub fn field_values(conn: &Connection, entity_type: &str, entity_id: &str) -> Ap
 /// `domain::builtin_fields` doesn't mark it actionable (status-equivalent
 /// fields, and every Quote/Order/Invoice field - see that module's
 /// comments for why each is excluded).
-pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entity_id: &str, field_key: &str, value: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn set_field(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+    field_key: &str,
+    value: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     if !builtin_fields::is_actionable_builtin_field(entity_type, field_key) {
-        return Err(AppError::Validation(format!("'{field_key}' is not an actionable built-in field on {entity_type}")));
+        return Err(AppError::Validation(format!(
+            "'{field_key}' is not an actionable built-in field on {entity_type}"
+        )));
     }
     match entity_type {
         "Company" => {
-            let r = company_repo::get(conn, entity_id)?.ok_or_else(|| AppError::NotFound("Company".into()))?;
+            let r = company_repo::get(conn, entity_id)?
+                .ok_or_else(|| AppError::NotFound("Company".into()))?;
             let mut input = CompanyInput {
-                name: r.name, status: r.status, owner_user_id: r.owner_user_id, tax_number: r.tax_number,
-                billing_address: r.billing_address, shipping_address: r.shipping_address, tags: r.tags, notes: r.notes,
-                phone: r.phone, email: r.email, website: r.website, annual_revenue_cents: r.annual_revenue_cents,
-                employee_count: r.employee_count, preferred_contact_method: r.preferred_contact_method,
+                name: r.name,
+                status: r.status,
+                owner_user_id: r.owner_user_id,
+                tax_number: r.tax_number,
+                billing_address: r.billing_address,
+                shipping_address: r.shipping_address,
+                tags: r.tags,
+                notes: r.notes,
+                phone: r.phone,
+                email: r.email,
+                website: r.website,
+                annual_revenue_cents: r.annual_revenue_cents,
+                employee_count: r.employee_count,
+                preferred_contact_method: r.preferred_contact_method,
             };
             match field_key {
                 "name" => input.name = value.to_string(),
@@ -191,12 +233,23 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
             company_service::update(conn, entity_id, &input, actor_user_id)?;
         }
         "Contact" => {
-            let r = contact_repo::get(conn, entity_id)?.ok_or_else(|| AppError::NotFound("Contact".into()))?;
+            let r = contact_repo::get(conn, entity_id)?
+                .ok_or_else(|| AppError::NotFound("Contact".into()))?;
             let mut input = ContactInput {
-                company_id: r.company_id, first_name: r.first_name, last_name: r.last_name, job_title: r.job_title,
-                email: r.email, phone: r.phone, mobile: r.mobile, is_primary: r.is_primary, status: r.status,
-                tags: r.tags, notes: r.notes, department: r.department,
-                preferred_contact_method: r.preferred_contact_method, linkedin_url: r.linkedin_url,
+                company_id: r.company_id,
+                first_name: r.first_name,
+                last_name: r.last_name,
+                job_title: r.job_title,
+                email: r.email,
+                phone: r.phone,
+                mobile: r.mobile,
+                is_primary: r.is_primary,
+                status: r.status,
+                tags: r.tags,
+                notes: r.notes,
+                department: r.department,
+                preferred_contact_method: r.preferred_contact_method,
+                linkedin_url: r.linkedin_url,
             };
             match field_key {
                 "first_name" => input.first_name = value.to_string(),
@@ -213,17 +266,34 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
             contact_service::update(conn, entity_id, &input, actor_user_id)?;
         }
         "Opportunity" => {
-            let r = opportunity_repo::get(conn, entity_id)?.ok_or_else(|| AppError::NotFound("Opportunity".into()))?;
+            let r = opportunity_repo::get(conn, entity_id)?
+                .ok_or_else(|| AppError::NotFound("Opportunity".into()))?;
             let mut input = OpportunityInput {
-                company_id: r.company_id, primary_contact_id: r.primary_contact_id, name: r.name, stage: r.stage,
-                status: r.status, value_cents: r.value_cents, currency_code: r.currency_code, probability_bp: r.probability_bp,
-                expected_close_date: r.expected_close_date, owner_user_id: r.owner_user_id, lost_reason: r.lost_reason,
+                company_id: r.company_id,
+                primary_contact_id: r.primary_contact_id,
+                name: r.name,
+                stage: r.stage,
+                status: r.status,
+                value_cents: r.value_cents,
+                currency_code: r.currency_code,
+                probability_bp: r.probability_bp,
+                expected_close_date: r.expected_close_date,
+                owner_user_id: r.owner_user_id,
+                lost_reason: r.lost_reason,
                 next_step: r.next_step,
             };
             match field_key {
                 "name" => input.name = value.to_string(),
-                "value" => input.value_cents = parse_major(value).ok_or_else(|| AppError::Validation(format!("'{value}' is not a valid amount")))?,
-                "probability" => input.probability_bp = parse_percent_to_bp(value).ok_or_else(|| AppError::Validation(format!("'{value}' is not a valid percentage")))?,
+                "value" => {
+                    input.value_cents = parse_major(value).ok_or_else(|| {
+                        AppError::Validation(format!("'{value}' is not a valid amount"))
+                    })?
+                }
+                "probability" => {
+                    input.probability_bp = parse_percent_to_bp(value).ok_or_else(|| {
+                        AppError::Validation(format!("'{value}' is not a valid percentage"))
+                    })?
+                }
                 "expected_close_date" => input.expected_close_date = opt(value.to_string()),
                 "lost_reason" => input.lost_reason = opt(value.to_string()),
                 "next_step" => input.next_step = opt(value.to_string()),
@@ -232,11 +302,19 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
             opportunity_service::update(conn, entity_id, &input, actor_user_id)?;
         }
         "Product" => {
-            let r = product_repo::get(conn, entity_id)?.ok_or_else(|| AppError::NotFound("Product".into()))?;
+            let r = product_repo::get(conn, entity_id)?
+                .ok_or_else(|| AppError::NotFound("Product".into()))?;
             let mut input = ProductInput {
-                sku: r.sku, r#type: r.r#type, name: r.name, category: r.category, description: r.description,
-                unit_price_cents: r.unit_price_cents, cost_cents: r.cost_cents, tax_rate_bp: r.tax_rate_bp,
-                default_quantity_milli: r.default_quantity_milli, is_active: r.is_active,
+                sku: r.sku,
+                r#type: r.r#type,
+                name: r.name,
+                category: r.category,
+                description: r.description,
+                unit_price_cents: r.unit_price_cents,
+                cost_cents: r.cost_cents,
+                tax_rate_bp: r.tax_rate_bp,
+                default_quantity_milli: r.default_quantity_milli,
+                is_active: r.is_active,
             };
             match field_key {
                 "name" => input.name = value.to_string(),
@@ -244,25 +322,52 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
                 "type" => input.r#type = value.to_string(),
                 "category" => input.category = opt(value.to_string()),
                 "description" => input.description = opt(value.to_string()),
-                "unit_price" => input.unit_price_cents = parse_major(value).ok_or_else(|| AppError::Validation(format!("'{value}' is not a valid amount")))?,
-                "cost" => input.cost_cents = parse_major(value).ok_or_else(|| AppError::Validation(format!("'{value}' is not a valid amount")))?,
-                "tax_rate" => input.tax_rate_bp = parse_percent_to_bp(value).ok_or_else(|| AppError::Validation(format!("'{value}' is not a valid percentage")))?,
+                "unit_price" => {
+                    input.unit_price_cents = parse_major(value).ok_or_else(|| {
+                        AppError::Validation(format!("'{value}' is not a valid amount"))
+                    })?
+                }
+                "cost" => {
+                    input.cost_cents = parse_major(value).ok_or_else(|| {
+                        AppError::Validation(format!("'{value}' is not a valid amount"))
+                    })?
+                }
+                "tax_rate" => {
+                    input.tax_rate_bp = parse_percent_to_bp(value).ok_or_else(|| {
+                        AppError::Validation(format!("'{value}' is not a valid percentage"))
+                    })?
+                }
                 _ => unreachable!("actionable Product fields are exhaustively handled above"),
             }
             product_service::update(conn, entity_id, &input, actor_user_id)?;
         }
         "Contract" => {
-            let r = contract_repo::get(conn, entity_id)?.ok_or_else(|| AppError::NotFound("Contract".into()))?;
+            let r = contract_repo::get(conn, entity_id)?
+                .ok_or_else(|| AppError::NotFound("Contract".into()))?;
             let mut input = ContractInput {
-                company_id: r.company_id, contact_id: r.contact_id, source_quote_id: r.source_quote_id, title: r.title,
-                r#type: r.r#type, value_cents: r.value_cents, currency_code: r.currency_code, owner_user_id: r.owner_user_id,
-                start_date: r.start_date, end_date: r.end_date, renewal_date: r.renewal_date,
-                notice_period_days: r.notice_period_days, status: r.status, notes: r.notes,
+                company_id: r.company_id,
+                contact_id: r.contact_id,
+                source_quote_id: r.source_quote_id,
+                title: r.title,
+                r#type: r.r#type,
+                value_cents: r.value_cents,
+                currency_code: r.currency_code,
+                owner_user_id: r.owner_user_id,
+                start_date: r.start_date,
+                end_date: r.end_date,
+                renewal_date: r.renewal_date,
+                notice_period_days: r.notice_period_days,
+                status: r.status,
+                notes: r.notes,
             };
             match field_key {
                 "title" => input.title = value.to_string(),
                 "type" => input.r#type = opt(value.to_string()),
-                "value" => input.value_cents = parse_major(value).ok_or_else(|| AppError::Validation(format!("'{value}' is not a valid amount")))?,
+                "value" => {
+                    input.value_cents = parse_major(value).ok_or_else(|| {
+                        AppError::Validation(format!("'{value}' is not a valid amount"))
+                    })?
+                }
                 "start_date" => input.start_date = opt(value.to_string()),
                 "end_date" => input.end_date = opt(value.to_string()),
                 "renewal_date" => input.renewal_date = opt(value.to_string()),
@@ -273,10 +378,17 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
             contract_service::update(conn, entity_id, &input, actor_user_id)?;
         }
         "Task" => {
-            let r = task_repo::get(conn, entity_id)?.ok_or_else(|| AppError::NotFound("Task".into()))?;
+            let r = task_repo::get(conn, entity_id)?
+                .ok_or_else(|| AppError::NotFound("Task".into()))?;
             let mut input = TaskInput {
-                title: r.title, description: r.description, owner_user_id: r.owner_user_id, priority: r.priority,
-                status: r.status, due_date: r.due_date, reminder_at: r.reminder_at, related_type: r.related_type,
+                title: r.title,
+                description: r.description,
+                owner_user_id: r.owner_user_id,
+                priority: r.priority,
+                status: r.status,
+                due_date: r.due_date,
+                reminder_at: r.reminder_at,
+                related_type: r.related_type,
                 related_id: r.related_id,
             };
             match field_key {
@@ -290,8 +402,14 @@ pub fn set_field(conn: &Connection, workspace_id: &str, entity_type: &str, entit
             task_service::update(conn, entity_id, workspace_id, &input, actor_user_id)?;
         }
         _ => {
-            let r = custom_record_repo::get(conn, entity_id)?.ok_or_else(|| AppError::NotFound("Record".into()))?;
-            let mut input = CustomRecordUpdate { primary_name: r.primary_name, status: r.status, owner_user_id: r.owner_user_id, notes: r.notes };
+            let r = custom_record_repo::get(conn, entity_id)?
+                .ok_or_else(|| AppError::NotFound("Record".into()))?;
+            let mut input = CustomRecordUpdate {
+                primary_name: r.primary_name,
+                status: r.status,
+                owner_user_id: r.owner_user_id,
+                notes: r.notes,
+            };
             match field_key {
                 "primary_name" => input.primary_name = value.to_string(),
                 "notes" => input.notes = opt(value.to_string()),

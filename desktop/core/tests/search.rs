@@ -20,9 +20,9 @@ use lanesra_core::models::quote::{QuoteInput, QuoteLineInput};
 use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    company_service, contact_service, contract_service, custom_field_service, custom_object_service,
-    custom_record_service, invoice_service, opportunity_service, order_service, product_service,
-    quote_service, search_service, task_service, workspace_service,
+    company_service, contact_service, contract_service, custom_field_service,
+    custom_object_service, custom_record_service, invoice_service, opportunity_service,
+    order_service, product_service, quote_service, search_service, task_service, workspace_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -149,7 +149,11 @@ fn vendor_object_input() -> CustomObjectDefinitionInput {
     }
 }
 
-fn searchable_text_field(entity_type: &str, label: &str, is_searchable: bool) -> CustomFieldDefinitionInput {
+fn searchable_text_field(
+    entity_type: &str,
+    label: &str,
+    is_searchable: bool,
+) -> CustomFieldDefinitionInput {
     CustomFieldDefinitionInput {
         entity_type: entity_type.into(),
         label: label.into(),
@@ -178,15 +182,23 @@ fn a_short_query_returns_no_results() {
     let (conn, ws, admin) = setup_workspace();
     company_service::create(&conn, &ws, &company_input("Zaphod Holdings"), Some(&admin)).unwrap();
 
-    assert!(search_service::global_search(&conn, &ws, "").unwrap().is_empty());
-    assert!(search_service::global_search(&conn, &ws, "Z").unwrap().is_empty());
-    assert!(search_service::global_search(&conn, &ws, " ").unwrap().is_empty());
+    assert!(search_service::global_search(&conn, &ws, "")
+        .unwrap()
+        .is_empty());
+    assert!(search_service::global_search(&conn, &ws, "Z")
+        .unwrap()
+        .is_empty());
+    assert!(search_service::global_search(&conn, &ws, " ")
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
 fn matches_a_company_by_name() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Zaphod Holdings"), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Zaphod Holdings"), Some(&admin))
+            .unwrap();
 
     let results = search_service::global_search(&conn, &ws, "zaphod").unwrap();
     assert_eq!(results.len(), 1);
@@ -198,11 +210,21 @@ fn matches_a_company_by_name() {
 #[test]
 fn matches_a_contact_by_name_and_shows_email_as_subtitle() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Beeblebrox Inc"), Some(&admin)).unwrap();
-    let contact = contact_service::create(&conn, &contact_input(&company.id, "Zaphod", "Beeblebrox"), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Beeblebrox Inc"), Some(&admin))
+            .unwrap();
+    let contact = contact_service::create(
+        &conn,
+        &contact_input(&company.id, "Zaphod", "Beeblebrox"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let results = search_service::global_search(&conn, &ws, "zaphod").unwrap();
-    let hit = results.iter().find(|r| r.entity_type == "Contact").expect("contact match");
+    let hit = results
+        .iter()
+        .find(|r| r.entity_type == "Contact")
+        .expect("contact match");
     assert_eq!(hit.entity_id, contact.id);
     assert_eq!(hit.title, "Zaphod Beeblebrox");
     assert_eq!(hit.subtitle.as_deref(), Some("zaphod.contact@example.com"));
@@ -211,12 +233,35 @@ fn matches_a_contact_by_name_and_shows_email_as_subtitle() {
 #[test]
 fn matches_an_opportunity_a_product_a_contract_and_a_task_by_their_natural_fields() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Heart of Gold Ltd"), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Heart of Gold Ltd"),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let opportunity = opportunity_service::create(&conn, &opportunity_input(&company.id, "Zaphod Expansion Deal"), Some(&admin)).unwrap();
-    let product = product_service::create(&conn, &ws, &product_input("Zaphod Widget"), Some(&admin)).unwrap();
-    let contract = contract_service::create(&conn, &contract_input(&company.id, "Zaphod Services Agreement"), Some(&admin)).unwrap();
-    let task = task_service::create(&conn, &ws, &task_input("Follow up with Zaphod"), Some(&admin)).unwrap();
+    let opportunity = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "Zaphod Expansion Deal"),
+        Some(&admin),
+    )
+    .unwrap();
+    let product =
+        product_service::create(&conn, &ws, &product_input("Zaphod Widget"), Some(&admin)).unwrap();
+    let contract = contract_service::create(
+        &conn,
+        &contract_input(&company.id, "Zaphod Services Agreement"),
+        Some(&admin),
+    )
+    .unwrap();
+    let task = task_service::create(
+        &conn,
+        &ws,
+        &task_input("Follow up with Zaphod"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let results = search_service::global_search(&conn, &ws, "zaphod").unwrap();
     let by_type = |t: &str| results.iter().find(|r| r.entity_type == t);
@@ -230,7 +275,13 @@ fn matches_an_opportunity_a_product_a_contract_and_a_task_by_their_natural_field
 #[test]
 fn matches_a_quote_an_order_and_an_invoice_by_number() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Megadodo Publications"), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Megadodo Publications"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let quote = quote_service::create(
         &conn,
@@ -268,19 +319,26 @@ fn matches_a_quote_an_order_and_an_invoice_by_number() {
     invoice_service::issue(&conn, &invoice.invoice.id, Some(&admin)).unwrap();
 
     let quote_results = search_service::global_search(&conn, &ws, &quote_number).unwrap();
-    assert!(quote_results.iter().any(|r| r.entity_type == "Quote" && r.entity_id == quote.quote.id));
+    assert!(quote_results
+        .iter()
+        .any(|r| r.entity_type == "Quote" && r.entity_id == quote.quote.id));
 
     let order_results = search_service::global_search(&conn, &ws, &order_number).unwrap();
-    assert!(order_results.iter().any(|r| r.entity_type == "Order" && r.entity_id == order.order.id));
+    assert!(order_results
+        .iter()
+        .any(|r| r.entity_type == "Order" && r.entity_id == order.order.id));
 
     let invoice_results = search_service::global_search(&conn, &ws, &invoice_number).unwrap();
-    assert!(invoice_results.iter().any(|r| r.entity_type == "Invoice" && r.entity_id == invoice.invoice.id));
+    assert!(invoice_results
+        .iter()
+        .any(|r| r.entity_type == "Invoice" && r.entity_id == invoice.invoice.id));
 }
 
 #[test]
 fn matches_an_active_custom_objects_record() {
     let (conn, ws, admin) = setup_workspace();
-    let vendor_def = custom_object_service::create(&conn, &ws, &vendor_object_input(), Some(&admin)).unwrap();
+    let vendor_def =
+        custom_object_service::create(&conn, &ws, &vendor_object_input(), Some(&admin)).unwrap();
     let vendor = custom_record_service::create(
         &conn,
         &ws,
@@ -296,7 +354,10 @@ fn matches_an_active_custom_objects_record() {
     .unwrap();
 
     let results = search_service::global_search(&conn, &ws, "zaphod").unwrap();
-    let hit = results.iter().find(|r| r.entity_type == vendor_def.key).expect("vendor record match");
+    let hit = results
+        .iter()
+        .find(|r| r.entity_type == vendor_def.key)
+        .expect("vendor record match");
     assert_eq!(hit.entity_id, vendor.id);
     assert_eq!(hit.title, "Zaphod Supply Co");
 }
@@ -304,12 +365,25 @@ fn matches_an_active_custom_objects_record() {
 #[test]
 fn matches_a_searchable_custom_field_value_and_resolves_the_owning_records_display_name() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Infinite Improbability Inc"), Some(&admin)).unwrap();
-    let field = custom_field_service::create_definition(&conn, &ws, &searchable_text_field("Company", "Nickname", true), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Infinite Improbability Inc"),
+        Some(&admin),
+    )
+    .unwrap();
+    let field = custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &searchable_text_field("Company", "Nickname", true),
+        Some(&admin),
+    )
+    .unwrap();
 
     let mut values = HashMap::new();
     values.insert(field.key.clone(), "Zaphod's Favorite".into());
-    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin))
+        .unwrap();
 
     let results = search_service::global_search(&conn, &ws, "zaphod").unwrap();
     let hit = results
@@ -323,32 +397,63 @@ fn matches_a_searchable_custom_field_value_and_resolves_the_owning_records_displ
 #[test]
 fn a_non_searchable_custom_field_value_is_never_matched() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Golgafrincham Ark Corp"), Some(&admin)).unwrap();
-    let field = custom_field_service::create_definition(&conn, &ws, &searchable_text_field("Company", "Internal Code", false), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Golgafrincham Ark Corp"),
+        Some(&admin),
+    )
+    .unwrap();
+    let field = custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &searchable_text_field("Company", "Internal Code", false),
+        Some(&admin),
+    )
+    .unwrap();
 
     let mut values = HashMap::new();
     values.insert(field.key.clone(), "ZAPHODCODE".into());
-    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &company.id, &values, Some(&admin))
+        .unwrap();
 
     let results = search_service::global_search(&conn, &ws, "zaphodcode").unwrap();
-    assert!(results.is_empty(), "a non-searchable custom field must never be matched");
+    assert!(
+        results.is_empty(),
+        "a non-searchable custom field must never be matched"
+    );
 }
 
 #[test]
 fn archived_records_are_excluded_from_results() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Vogon Constructor Fleet"), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Vogon Constructor Fleet"),
+        Some(&admin),
+    )
+    .unwrap();
     company_service::archive(&conn, &company.id, Some(&admin)).unwrap();
 
     let results = search_service::global_search(&conn, &ws, "vogon").unwrap();
-    assert!(results.is_empty(), "an archived record must not appear in search results");
+    assert!(
+        results.is_empty(),
+        "an archived record must not appear in search results"
+    );
 }
 
 #[test]
 fn results_are_capped_at_max_results() {
     let (conn, ws, admin) = setup_workspace();
     for i in 0..40 {
-        company_service::create(&conn, &ws, &company_input(&format!("Zaphod Branch {i:02}")), Some(&admin)).unwrap();
+        company_service::create(
+            &conn,
+            &ws,
+            &company_input(&format!("Zaphod Branch {i:02}")),
+            Some(&admin),
+        )
+        .unwrap();
     }
 
     let results = search_service::global_search(&conn, &ws, "zaphod").unwrap();

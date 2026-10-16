@@ -32,7 +32,13 @@ fn map_message(row: &rusqlite::Row) -> rusqlite::Result<ChatMessage> {
 /// rather than recreated each time (see `chat_service`'s own doc
 /// comment). `agent_id` is `""` for the fixed `"records"`/`"admin"`
 /// modes, and a real `ai_agents.id` for `"agent"` mode.
-pub fn get_or_create_conversation(conn: &Connection, workspace_id: &str, user_id: &str, mode: &str, agent_id: &str) -> rusqlite::Result<ChatConversation> {
+pub fn get_or_create_conversation(
+    conn: &Connection,
+    workspace_id: &str,
+    user_id: &str,
+    mode: &str,
+    agent_id: &str,
+) -> rusqlite::Result<ChatConversation> {
     let existing = conn
         .query_row(
             "SELECT * FROM chat_conversations WHERE user_id = ?1 AND mode = ?2 AND agent_id = ?3",
@@ -60,8 +66,13 @@ pub fn get_or_create_conversation(conn: &Connection, workspace_id: &str, user_id
     })
 }
 
-pub fn list_messages(conn: &Connection, conversation_id: &str) -> rusqlite::Result<Vec<ChatMessage>> {
-    let mut stmt = conn.prepare("SELECT * FROM chat_messages WHERE conversation_id = ?1 ORDER BY created_at ASC")?;
+pub fn list_messages(
+    conn: &Connection,
+    conversation_id: &str,
+) -> rusqlite::Result<Vec<ChatMessage>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM chat_messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+    )?;
     let rows = stmt.query_map([conversation_id], map_message)?;
     rows.collect()
 }
@@ -81,7 +92,10 @@ pub fn append_message(
         "INSERT INTO chat_messages (id, conversation_id, role, content, tool_calls_json, tool_call_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         (&id, conversation_id, role, content, &tool_calls_json, tool_call_id, &now),
     )?;
-    conn.execute("UPDATE chat_conversations SET updated_at = ?1 WHERE id = ?2", (&now, conversation_id))?;
+    conn.execute(
+        "UPDATE chat_conversations SET updated_at = ?1 WHERE id = ?2",
+        (&now, conversation_id),
+    )?;
     Ok(ChatMessage {
         id,
         conversation_id: conversation_id.to_string(),

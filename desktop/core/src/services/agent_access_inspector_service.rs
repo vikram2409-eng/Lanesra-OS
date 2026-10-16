@@ -24,12 +24,15 @@ pub fn inspect(
     actor_user_id: Option<&str>,
 ) -> AppResult<AgentAccessInspection> {
     user_service::require_admin(conn, actor_user_id)?;
-    let agent = ai_agent_repo::get(conn, agent_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    let agent =
+        ai_agent_repo::get(conn, agent_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
 
     let tool_in_action_list = agent.action_names.iter().any(|n| n == tool_name);
     let source = chat_service::tool_source(tool_name);
-    let policy_decision = policy_engine_service::evaluate(conn, workspace_id, Some(agent_id), tool_name, source)?;
-    let policy_source = if ai_agent_policy_repo::get(conn, workspace_id, Some(agent_id))?.is_some() {
+    let policy_decision =
+        policy_engine_service::evaluate(conn, workspace_id, Some(agent_id), tool_name, source)?;
+    let policy_source = if ai_agent_policy_repo::get(conn, workspace_id, Some(agent_id))?.is_some()
+    {
         "agent-specific policy".to_string()
     } else if ai_agent_policy_repo::get(conn, workspace_id, None)?.is_some() {
         "workspace default policy".to_string()
@@ -37,18 +40,42 @@ pub fn inspect(
         "no policy configured (defaults to Allow)".to_string()
     };
 
-    let record_access_enforced = policy_engine_service::resolve_policy(conn, workspace_id, Some(agent_id))?.map(|p| p.enforce_record_access).unwrap_or(false);
+    let record_access_enforced =
+        policy_engine_service::resolve_policy(conn, workspace_id, Some(agent_id))?
+            .map(|p| p.enforce_record_access)
+            .unwrap_or(false);
     let acting_as_user_id = if record_access_enforced {
-        agent.acts_as_user_id.clone().or_else(|| simulate_as_user_id.map(String::from))
+        agent
+            .acts_as_user_id
+            .clone()
+            .or_else(|| simulate_as_user_id.map(String::from))
     } else {
         None
     };
 
     let record_access = match (&acting_as_user_id, object_key) {
         (Some(uid), Some(key)) => match tool_name {
-            "create_record" => Some(access_service::explain_access(conn, uid, key, Capability::Create, None)?),
-            "update_record" => Some(access_service::explain_access(conn, uid, key, Capability::Update, record_id)?),
-            "archive_record" => Some(access_service::explain_access(conn, uid, key, Capability::Delete, record_id)?),
+            "create_record" => Some(access_service::explain_access(
+                conn,
+                uid,
+                key,
+                Capability::Create,
+                None,
+            )?),
+            "update_record" => Some(access_service::explain_access(
+                conn,
+                uid,
+                key,
+                Capability::Update,
+                record_id,
+            )?),
+            "archive_record" => Some(access_service::explain_access(
+                conn,
+                uid,
+                key,
+                Capability::Delete,
+                record_id,
+            )?),
             _ => None,
         },
         _ => None,

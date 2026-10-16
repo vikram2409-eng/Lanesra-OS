@@ -19,7 +19,10 @@ pub fn list_object_types(state: State<AppState>) -> AppResult<Vec<ObjectTypeSumm
 }
 
 #[tauri::command]
-pub fn get_object_type_detail(state: State<AppState>, object_type: String) -> AppResult<ObjectTypeDetail> {
+pub fn get_object_type_detail(
+    state: State<AppState>,
+    object_type: String,
+) -> AppResult<ObjectTypeDetail> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     ontology_service::get_object_type_detail(&conn, &workspace_id, &object_type)

@@ -18,7 +18,9 @@ pub(crate) fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> A
 
 fn validate_roles(roles: &[String]) -> AppResult<()> {
     if roles.is_empty() {
-        return Err(AppError::Validation("A user needs at least one role".into()));
+        return Err(AppError::Validation(
+            "A user needs at least one role".into(),
+        ));
     }
     for role in roles {
         if !user_repo::ROLES.contains(&role.as_str()) {
@@ -29,7 +31,8 @@ fn validate_roles(roles: &[String]) -> AppResult<()> {
 }
 
 fn to_public(conn: &Connection, id: &str) -> AppResult<User> {
-    let record = user_repo::find_by_id(conn, id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
+    let record =
+        user_repo::find_by_id(conn, id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
     let roles = user_repo::roles_for_user(conn, id)?;
     Ok(user_repo::to_public(record, roles))
 }
@@ -55,10 +58,14 @@ pub fn create(
 ) -> AppResult<User> {
     require_admin(conn, actor_user_id)?;
     if input.username.trim().is_empty() || input.display_name.trim().is_empty() {
-        return Err(AppError::Validation("Username and display name are required".into()));
+        return Err(AppError::Validation(
+            "Username and display name are required".into(),
+        ));
     }
     if input.password.len() < 8 {
-        return Err(AppError::Validation("Password must be at least 8 characters".into()));
+        return Err(AppError::Validation(
+            "Password must be at least 8 characters".into(),
+        ));
     }
     validate_roles(&input.roles)?;
 
@@ -85,7 +92,12 @@ pub fn create(
 
     // Access Control v1: a new user starts with a real Access Role
     // immediately, not zero grants until an admin remembers to assign one.
-    access_role_service::assign_default_role_for_new_user(conn, workspace_id, &record.id, &input.roles)?;
+    access_role_service::assign_default_role_for_new_user(
+        conn,
+        workspace_id,
+        &record.id,
+        &input.roles,
+    )?;
 
     to_public(conn, &record.id)
 }
@@ -103,7 +115,8 @@ pub fn update(
     }
     validate_roles(&input.roles)?;
 
-    let current = user_repo::find_by_id(conn, id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
+    let current =
+        user_repo::find_by_id(conn, id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
     let current_roles = user_repo::roles_for_user(conn, id)?;
     let was_active_admin = current.is_active && current_roles.iter().any(|r| r == "Administrator");
     let will_be_active_admin = input.is_active && input.roles.iter().any(|r| r == "Administrator");
@@ -143,7 +156,9 @@ pub fn set_password(
 ) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     if input.new_password.len() < 8 {
-        return Err(AppError::Validation("Password must be at least 8 characters".into()));
+        return Err(AppError::Validation(
+            "Password must be at least 8 characters".into(),
+        ));
     }
     let user = user_repo::find_by_id(conn, id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
     let password_hash = auth_service::hash_password(&input.new_password)?;

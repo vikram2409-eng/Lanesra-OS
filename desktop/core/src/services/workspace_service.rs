@@ -14,12 +14,14 @@ use crate::models::product::ProductInput;
 use crate::models::quote::{QuoteInput, QuoteLineInput};
 use crate::models::task::TaskInput;
 use crate::models::user::{NewUser, User};
-use crate::models::workspace::{DashboardKpiPrefs, Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate};
+use crate::models::workspace::{
+    DashboardKpiPrefs, Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate,
+};
 use crate::repositories::{audit_repo, user_repo, workspace_repo};
 use crate::services::{
-    access_service, auth_service, company_service, contact_service, contract_service, invoice_service,
-    opportunity_service, order_service, product_service, publisher_service, quote_service, task_service, user_service,
-    voice_policy_service, voice_provider_service,
+    access_service, auth_service, company_service, contact_service, contract_service,
+    invoice_service, opportunity_service, order_service, product_service, publisher_service,
+    quote_service, task_service, user_service, voice_policy_service, voice_provider_service,
 };
 
 /// FR-BRD-02: keeps the stored blob small - a business logo has no reason
@@ -32,22 +34,34 @@ const ALLOWED_LOGO_MIME: &[&str] = &["image/png", "image/jpeg"];
 /// passes with an explicit Access Role grant on "Workspace" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "Workspace", "Only an Administrator can edit the workspace profile")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "Workspace",
+        "Only an Administrator can edit the workspace profile",
+    )
 }
 
 fn current(conn: &Connection) -> AppResult<Workspace> {
-    workspace_repo::get_current(conn)?.ok_or_else(|| AppError::Validation("No workspace has been set up yet".into()))
+    workspace_repo::get_current(conn)?
+        .ok_or_else(|| AppError::Validation("No workspace has been set up yet".into()))
 }
 
 /// FR-BRD-01: an Administrator can edit the workspace profile at any time
 /// after first-run - previously there was no way to do this at all.
-pub fn update(conn: &Connection, input: &WorkspaceUpdate, actor_user_id: Option<&str>) -> AppResult<Workspace> {
+pub fn update(
+    conn: &Connection,
+    input: &WorkspaceUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<Workspace> {
     require_admin(conn, actor_user_id)?;
     if input.business_name.trim().is_empty() {
         return Err(AppError::Validation("Business name is required".into()));
     }
     if input.currency_code.trim().len() != 3 {
-        return Err(AppError::Validation("Currency code must be 3 letters".into()));
+        return Err(AppError::Validation(
+            "Currency code must be 3 letters".into(),
+        ));
     }
 
     let workspace = current(conn)?;
@@ -70,10 +84,16 @@ pub fn update(conn: &Connection, input: &WorkspaceUpdate, actor_user_id: Option<
 /// FR-BRD-02: rejects anything that isn't PNG/JPEG or that's too large
 /// server-side, not just in the client's upload widget - the same "don't
 /// trust the client" posture every other validated command already takes.
-pub fn set_logo(conn: &Connection, input: &WorkspaceLogo, actor_user_id: Option<&str>) -> AppResult<Workspace> {
+pub fn set_logo(
+    conn: &Connection,
+    input: &WorkspaceLogo,
+    actor_user_id: Option<&str>,
+) -> AppResult<Workspace> {
     require_admin(conn, actor_user_id)?;
     if !ALLOWED_LOGO_MIME.contains(&input.logo_mime.as_str()) {
-        return Err(AppError::Validation("Logo must be a PNG or JPEG image".into()));
+        return Err(AppError::Validation(
+            "Logo must be a PNG or JPEG image".into(),
+        ));
     }
     let decoded = BASE64
         .decode(&input.logo_base64)
@@ -87,7 +107,8 @@ pub fn set_logo(conn: &Connection, input: &WorkspaceLogo, actor_user_id: Option<
     }
 
     let workspace = current(conn)?;
-    let updated = workspace_repo::set_logo(conn, &workspace.id, &input.logo_base64, &input.logo_mime)?;
+    let updated =
+        workspace_repo::set_logo(conn, &workspace.id, &input.logo_base64, &input.logo_mime)?;
 
     audit_repo::record(
         conn,
@@ -127,14 +148,21 @@ pub fn clear_logo(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<W
 /// and in what order - an empty list resets to "show every KPI, default
 /// order" (stored as NULL, not an empty JSON array, so a workspace that
 /// never touches this setting behaves identically to before it existed).
-pub fn set_dashboard_kpis(conn: &Connection, prefs: &DashboardKpiPrefs, actor_user_id: Option<&str>) -> AppResult<Workspace> {
+pub fn set_dashboard_kpis(
+    conn: &Connection,
+    prefs: &DashboardKpiPrefs,
+    actor_user_id: Option<&str>,
+) -> AppResult<Workspace> {
     require_admin(conn, actor_user_id)?;
     let workspace = current(conn)?;
-    let json = if prefs.keys.is_empty() {
-        None
-    } else {
-        Some(serde_json::to_string(&prefs.keys).map_err(|e| AppError::Validation(format!("Could not encode KPI preferences: {e}")))?)
-    };
+    let json =
+        if prefs.keys.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_string(&prefs.keys).map_err(|e| {
+                AppError::Validation(format!("Could not encode KPI preferences: {e}"))
+            })?)
+        };
     let updated = workspace_repo::set_dashboard_kpi_prefs(conn, &workspace.id, json.as_deref())?;
 
     audit_repo::record(
@@ -385,16 +413,14 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
             expiry_date: None,
             notes: Some("Sample quote seeded by first-run setup".into()),
             terms: Some("Net 30".into()),
-            lines: vec![
-                QuoteLineInput {
-                    product_id: Some(consulting_day.id.clone()),
-                    description: consulting_day.name.clone(),
-                    quantity_milli: 5000,
-                    unit_price_cents: consulting_day.unit_price_cents,
-                    discount_bp: 0,
-                    tax_rate_bp: consulting_day.tax_rate_bp,
-                },
-            ],
+            lines: vec![QuoteLineInput {
+                product_id: Some(consulting_day.id.clone()),
+                description: consulting_day.name.clone(),
+                quantity_milli: 5000,
+                unit_price_cents: consulting_day.unit_price_cents,
+                discount_bp: 0,
+                tax_rate_bp: consulting_day.tax_rate_bp,
+            }],
         },
         actor,
     )?;
@@ -420,7 +446,9 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
     // Contract sourced from the accepted quote, with a renewal date inside
     // the 60-day alert window so the dashboard's renewal KPI has data
     // (FR-CTR-05). Deliberately has no opportunity link (FR-CTR-03).
-    let renewal_date = (Utc::now() + Duration::days(45)).format("%Y-%m-%d").to_string();
+    let renewal_date = (Utc::now() + Duration::days(45))
+        .format("%Y-%m-%d")
+        .to_string();
     let contract = contract_service::create(
         conn,
         &ContractInput {
@@ -432,7 +460,11 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
             value_cents: 540000,
             currency_code: currency_code.to_string(),
             owner_user_id: Some(actor_user_id.to_string()),
-            start_date: Some((Utc::now() - Duration::days(200)).format("%Y-%m-%d").to_string()),
+            start_date: Some(
+                (Utc::now() - Duration::days(200))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            ),
             end_date: Some(renewal_date.clone()),
             renewal_date: Some(renewal_date.clone()),
             notice_period_days: Some(30),
@@ -454,7 +486,11 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
             owner_user_id: Some(sales_rep.id.clone()),
             priority: "Normal".into(),
             status: "Not Started".into(),
-            due_date: Some((Utc::now() + Duration::days(7)).format("%Y-%m-%d").to_string()),
+            due_date: Some(
+                (Utc::now() + Duration::days(7))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            ),
             reminder_at: None,
             related_type: None,
             related_id: None,
@@ -471,7 +507,11 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
             owner_user_id: Some(actor_user_id.to_string()),
             priority: "High".into(),
             status: "In Progress".into(),
-            due_date: Some((Utc::now() - Duration::days(2)).format("%Y-%m-%d").to_string()),
+            due_date: Some(
+                (Utc::now() - Duration::days(2))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            ),
             reminder_at: None,
             related_type: Some("Opportunity".into()),
             related_id: Some(opportunity.id.clone()),
@@ -488,7 +528,11 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
             owner_user_id: Some(actor_user_id.to_string()),
             priority: "Urgent".into(),
             status: "Not Started".into(),
-            due_date: Some((Utc::now() + Duration::days(15)).format("%Y-%m-%d").to_string()),
+            due_date: Some(
+                (Utc::now() + Duration::days(15))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            ),
             reminder_at: None,
             related_type: Some("Contract".into()),
             related_id: Some(contract.id.clone()),
@@ -505,7 +549,11 @@ fn seed_sample_data(conn: &Connection, actor_user_id: &str, currency_code: &str)
             owner_user_id: Some(actor_user_id.to_string()),
             priority: "Normal".into(),
             status: "Completed".into(),
-            due_date: Some((Utc::now() - Duration::days(10)).format("%Y-%m-%d").to_string()),
+            due_date: Some(
+                (Utc::now() - Duration::days(10))
+                    .format("%Y-%m-%d")
+                    .to_string(),
+            ),
             reminder_at: None,
             related_type: Some("Company".into()),
             related_id: Some(acme.id.clone()),

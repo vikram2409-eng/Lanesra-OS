@@ -15,7 +15,11 @@ use serde_json::{json, Value};
 
 async fn spawn_server_with_state() -> (SocketAddr, SharedState) {
     let conn = open_in_memory_db().unwrap();
-    let state = ServerState::new(conn, std::env::temp_dir().join("lanesra-mcp-test-unused.sqlite3"), SecurityConfig::default());
+    let state = ServerState::new(
+        conn,
+        std::env::temp_dir().join("lanesra-mcp-test-unused.sqlite3"),
+        SecurityConfig::default(),
+    );
     let frontend_dir = std::env::temp_dir().join("lanesra-mcp-test-frontend");
     std::fs::create_dir_all(&frontend_dir).unwrap();
     let app = build_router(state.clone(), frontend_dir);
@@ -29,11 +33,22 @@ async fn spawn_server_with_state() -> (SocketAddr, SharedState) {
 }
 
 fn client_with_cookies() -> reqwest::Client {
-    reqwest::Client::builder().cookie_store(true).build().unwrap()
+    reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap()
 }
 
 async fn invoke(client: &reqwest::Client, addr: SocketAddr, command: &str, args: Value) -> Value {
-    client.post(format!("http://{addr}/api/invoke/{command}")).json(&args).send().await.unwrap().json().await.unwrap()
+    client
+        .post(format!("http://{addr}/api/invoke/{command}"))
+        .json(&args)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
 }
 
 async fn first_run(client: &reqwest::Client, addr: SocketAddr) -> Value {
@@ -52,12 +67,22 @@ async fn first_run(client: &reqwest::Client, addr: SocketAddr) -> Value {
     .await
 }
 
-fn issue_api_key(state: &SharedState, workspace_id: &str, admin_user_id: &str, scopes: &[&str]) -> String {
+fn issue_api_key(
+    state: &SharedState,
+    workspace_id: &str,
+    admin_user_id: &str,
+    scopes: &[&str],
+) -> String {
     let conn = state.conn.lock().unwrap();
     let issued = api_client_service::create(
         &conn,
         workspace_id,
-        &ApiClientInput { name: "Test MCP Client".into(), scopes: scopes.iter().map(|s| s.to_string()).collect(), allowed_cidr: None, owner_user_id: None },
+        &ApiClientInput {
+            name: "Test MCP Client".into(),
+            scopes: scopes.iter().map(|s| s.to_string()).collect(),
+            allowed_cidr: None,
+            owner_user_id: None,
+        },
         Some(admin_user_id),
     )
     .unwrap();
@@ -69,7 +94,9 @@ async fn setup_workspace_and_key(scopes: &[&str]) -> (SocketAddr, SharedState, S
     (addr, state, key)
 }
 
-async fn setup_workspace_and_key_with_admin(scopes: &[&str]) -> (SocketAddr, SharedState, String, String) {
+async fn setup_workspace_and_key_with_admin(
+    scopes: &[&str],
+) -> (SocketAddr, SharedState, String, String) {
     let (addr, state) = spawn_server_with_state().await;
     let client = client_with_cookies();
     let setup = first_run(&client, addr).await;
@@ -80,7 +107,13 @@ async fn setup_workspace_and_key_with_admin(scopes: &[&str]) -> (SocketAddr, Sha
     (addr, state, api_key, admin_id)
 }
 
-async fn rpc(http: &reqwest::Client, addr: SocketAddr, api_key: &str, method: &str, params: Value) -> Value {
+async fn rpc(
+    http: &reqwest::Client,
+    addr: SocketAddr,
+    api_key: &str,
+    method: &str,
+    params: Value,
+) -> Value {
     http.post(format!("http://{addr}/mcp"))
         .bearer_auth(api_key)
         .json(&json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}))
@@ -95,7 +128,14 @@ async fn rpc(http: &reqwest::Client, addr: SocketAddr, api_key: &str, method: &s
 #[tokio::test]
 async fn initialize_handshake_returns_protocol_version_and_server_info() {
     let (addr, _state, api_key) = setup_workspace_and_key(&["metadata.read"]).await;
-    let body = rpc(&reqwest::Client::new(), addr, &api_key, "initialize", json!({})).await;
+    let body = rpc(
+        &reqwest::Client::new(),
+        addr,
+        &api_key,
+        "initialize",
+        json!({}),
+    )
+    .await;
     assert_eq!(body["result"]["protocolVersion"], "2024-11-05");
     assert_eq!(body["result"]["serverInfo"]["name"], "lanesra-mcp");
 }
@@ -103,10 +143,33 @@ async fn initialize_handshake_returns_protocol_version_and_server_info() {
 #[tokio::test]
 async fn tools_list_returns_the_seven_object_dispatcher_tools() {
     let (addr, _state, api_key) = setup_workspace_and_key(&["metadata.read"]).await;
-    let body = rpc(&reqwest::Client::new(), addr, &api_key, "tools/list", json!({})).await;
-    let names: Vec<String> = body["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_string()).collect();
-    for expected in ["list_objects", "get_object_metadata", "list_records", "get_record", "create_record", "update_record", "archive_record"] {
-        assert!(names.contains(&expected.to_string()), "missing tool '{expected}' in {names:?}");
+    let body = rpc(
+        &reqwest::Client::new(),
+        addr,
+        &api_key,
+        "tools/list",
+        json!({}),
+    )
+    .await;
+    let names: Vec<String> = body["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap().to_string())
+        .collect();
+    for expected in [
+        "list_objects",
+        "get_object_metadata",
+        "list_records",
+        "get_record",
+        "create_record",
+        "update_record",
+        "archive_record",
+    ] {
+        assert!(
+            names.contains(&expected.to_string()),
+            "missing tool '{expected}' in {names:?}"
+        );
     }
 }
 
@@ -125,8 +188,21 @@ async fn missing_bearer_token_is_rejected_at_the_transport_level() {
 #[tokio::test]
 async fn an_unknown_tool_name_is_a_json_rpc_protocol_error() {
     let (addr, _state, api_key) = setup_workspace_and_key(&["metadata.read", "objects.read"]).await;
-    let body = rpc(&reqwest::Client::new(), addr, &api_key, "tools/call", json!({"name": "delete_everything", "arguments": {}})).await;
-    assert!(body["error"]["message"].as_str().unwrap().contains("Unknown tool"), "{body:?}");
+    let body = rpc(
+        &reqwest::Client::new(),
+        addr,
+        &api_key,
+        "tools/call",
+        json!({"name": "delete_everything", "arguments": {}}),
+    )
+    .await;
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Unknown tool"),
+        "{body:?}"
+    );
 }
 
 #[tokio::test]
@@ -142,43 +218,83 @@ async fn a_tool_call_without_the_required_scope_is_a_json_rpc_error() {
         json!({"name": "create_record", "arguments": {"object_key": "Company", "data": {"name": "Acme", "status": "Prospect"}}}),
     )
     .await;
-    assert!(body["error"]["message"].as_str().unwrap().contains("objects.write"), "{body:?}");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("objects.write"),
+        "{body:?}"
+    );
 }
 
 #[tokio::test]
 async fn full_crud_round_trip_through_tools_call() {
-    let (addr, _state, api_key) = setup_workspace_and_key(&["metadata.read", "objects.read", "objects.write"]).await;
+    let (addr, _state, api_key) =
+        setup_workspace_and_key(&["metadata.read", "objects.read", "objects.write"]).await;
     let http = reqwest::Client::new();
 
     // Create
     let created = rpc(&http, addr, &api_key, "tools/call", json!({"name": "create_record", "arguments": {"object_key": "Company", "data": {"name": "Acme Corp", "status": "Prospect"}}})).await;
     assert_eq!(created["result"]["isError"], false, "{created:?}");
-    let record: Value = serde_json::from_str(created["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let record: Value =
+        serde_json::from_str(created["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     let id = record["id"].as_str().unwrap().to_string();
     assert_eq!(record["name"], "Acme Corp");
 
     // Get
-    let fetched = rpc(&http, addr, &api_key, "tools/call", json!({"name": "get_record", "arguments": {"object_key": "Company", "id": id}})).await;
-    let fetched_record: Value = serde_json::from_str(fetched["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let fetched = rpc(
+        &http,
+        addr,
+        &api_key,
+        "tools/call",
+        json!({"name": "get_record", "arguments": {"object_key": "Company", "id": id}}),
+    )
+    .await;
+    let fetched_record: Value =
+        serde_json::from_str(fetched["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(fetched_record["id"], id);
 
     // Update
     let updated = rpc(&http, addr, &api_key, "tools/call", json!({"name": "update_record", "arguments": {"object_key": "Company", "id": id, "data": {"name": "Acme Corp Updated", "status": "Active Customer"}}})).await;
-    let updated_record: Value = serde_json::from_str(updated["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let updated_record: Value =
+        serde_json::from_str(updated["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(updated_record["name"], "Acme Corp Updated");
 
     // List - the record we created shows up
-    let listed = rpc(&http, addr, &api_key, "tools/call", json!({"name": "list_records", "arguments": {"object_key": "Company"}})).await;
-    let page: Value = serde_json::from_str(listed["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let listed = rpc(
+        &http,
+        addr,
+        &api_key,
+        "tools/call",
+        json!({"name": "list_records", "arguments": {"object_key": "Company"}}),
+    )
+    .await;
+    let page: Value =
+        serde_json::from_str(listed["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(page["total"], 1);
 
     // Archive
-    let archived = rpc(&http, addr, &api_key, "tools/call", json!({"name": "archive_record", "arguments": {"object_key": "Company", "id": id}})).await;
+    let archived = rpc(
+        &http,
+        addr,
+        &api_key,
+        "tools/call",
+        json!({"name": "archive_record", "arguments": {"object_key": "Company", "id": id}}),
+    )
+    .await;
     assert_eq!(archived["result"]["isError"], false, "{archived:?}");
 
     // Metadata
-    let metadata = rpc(&http, addr, &api_key, "tools/call", json!({"name": "get_object_metadata", "arguments": {"object_key": "Company"}})).await;
-    let metadata_value: Value = serde_json::from_str(metadata["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let metadata = rpc(
+        &http,
+        addr,
+        &api_key,
+        "tools/call",
+        json!({"name": "get_object_metadata", "arguments": {"object_key": "Company"}}),
+    )
+    .await;
+    let metadata_value: Value =
+        serde_json::from_str(metadata["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(metadata_value["object_key"], "Company");
 }
 
@@ -186,14 +302,25 @@ async fn full_crud_round_trip_through_tools_call() {
 async fn a_tool_level_error_comes_back_as_an_is_error_result_not_a_protocol_error() {
     let (addr, _state, api_key) = setup_workspace_and_key(&["metadata.read", "objects.read"]).await;
     let body = rpc(&reqwest::Client::new(), addr, &api_key, "tools/call", json!({"name": "get_record", "arguments": {"object_key": "Company", "id": "does-not-exist"}})).await;
-    assert!(body["error"].is_null(), "expected a tool-level error, not a JSON-RPC protocol error: {body:?}");
+    assert!(
+        body["error"].is_null(),
+        "expected a tool-level error, not a JSON-RPC protocol error: {body:?}"
+    );
     assert_eq!(body["result"]["isError"], true);
 }
 
 #[tokio::test]
 async fn a_write_only_document_object_is_rejected_as_not_writable() {
-    let (addr, _state, api_key) = setup_workspace_and_key(&["metadata.read", "objects.write"]).await;
-    let body = rpc(&reqwest::Client::new(), addr, &api_key, "tools/call", json!({"name": "create_record", "arguments": {"object_key": "Opportunity", "data": {}}})).await;
+    let (addr, _state, api_key) =
+        setup_workspace_and_key(&["metadata.read", "objects.write"]).await;
+    let body = rpc(
+        &reqwest::Client::new(),
+        addr,
+        &api_key,
+        "tools/call",
+        json!({"name": "create_record", "arguments": {"object_key": "Opportunity", "data": {}}}),
+    )
+    .await;
     assert_eq!(body["result"]["isError"], true, "{body:?}");
 }
 
@@ -212,7 +339,8 @@ async fn notifications_initialized_gets_no_json_rpc_response_body() {
 
 #[tokio::test]
 async fn a_revoked_client_is_rejected_the_same_as_on_the_rest_api() {
-    let (addr, state, api_key, admin_id) = setup_workspace_and_key_with_admin(&["metadata.read"]).await;
+    let (addr, state, api_key, admin_id) =
+        setup_workspace_and_key_with_admin(&["metadata.read"]).await;
     {
         let conn = state.conn.lock().unwrap();
         let workspace_id = workspace_repo::get_current(&conn).unwrap().unwrap().id;

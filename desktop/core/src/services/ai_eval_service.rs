@@ -30,42 +30,78 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-fn validate_suite_input(conn: &Connection, workspace_id: &str, input: &AiEvalSuiteInput) -> AppResult<()> {
+fn validate_suite_input(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiEvalSuiteInput,
+) -> AppResult<()> {
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Suite name is required".into()));
     }
     if !TRIGGER_TARGET_TYPES.contains(&input.target_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid target type '{}'", input.target_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid target type '{}'",
+            input.target_type
+        )));
     }
     if !EVALUATOR_TYPES.contains(&input.evaluator_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid evaluator type '{}'", input.evaluator_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid evaluator type '{}'",
+            input.evaluator_type
+        )));
     }
     if input.evaluator_type == "structured_output" && input.target_type != "agent" {
         return Err(AppError::Validation("Structured Output evaluation requires an Agent target - only an agent version can declare an output schema".into()));
     }
-    ai_orchestration_service::validate_target_exists(conn, workspace_id, &input.target_type, &input.target_id)?;
+    ai_orchestration_service::validate_target_exists(
+        conn,
+        workspace_id,
+        &input.target_type,
+        &input.target_id,
+    )?;
     if input.cases.is_empty() {
-        return Err(AppError::Validation("A suite needs at least one case".into()));
+        return Err(AppError::Validation(
+            "A suite needs at least one case".into(),
+        ));
     }
     for case in &input.cases {
         if case.input_text.trim().is_empty() {
             return Err(AppError::Validation("Every case needs an input".into()));
         }
         if input.evaluator_type == "task_completion" && case.success_criteria.trim().is_empty() {
-            return Err(AppError::Validation("Every case needs a success criteria".into()));
+            return Err(AppError::Validation(
+                "Every case needs a success criteria".into(),
+            ));
         }
     }
     Ok(())
 }
 
-pub fn create_suite(conn: &Connection, workspace_id: &str, input: &AiEvalSuiteInput, actor_user_id: Option<&str>) -> AppResult<AiEvalSuite> {
+pub fn create_suite(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiEvalSuiteInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiEvalSuite> {
     require_admin(conn, actor_user_id)?;
     validate_suite_input(conn, workspace_id, input)?;
     let id = new_uuid();
-    Ok(ai_eval_repo::create_suite(conn, &id, workspace_id, input, actor_user_id)?)
+    Ok(ai_eval_repo::create_suite(
+        conn,
+        &id,
+        workspace_id,
+        input,
+        actor_user_id,
+    )?)
 }
 
-pub fn update_suite(conn: &Connection, id: &str, workspace_id: &str, input: &AiEvalSuiteInput, actor_user_id: Option<&str>) -> AppResult<AiEvalSuite> {
+pub fn update_suite(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &AiEvalSuiteInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiEvalSuite> {
     require_admin(conn, actor_user_id)?;
     ai_eval_repo::get_suite(conn, id)?.ok_or_else(|| AppError::NotFound("Eval suite".into()))?;
     validate_suite_input(conn, workspace_id, input)?;
@@ -97,7 +133,11 @@ pub(crate) const JUDGE_SYSTEM_PROMPT: &str = "You are a strict, impartial grader
 /// node's output against an admin-supplied success criteria - the same
 /// grading primitive this module's own `run_suite` uses for a Suite Case,
 /// generalized to a one-off piece of text instead of a re-run target.
-pub(crate) fn build_judge_message(input_text: &str, success_criteria: &str, actual_output: &str) -> String {
+pub(crate) fn build_judge_message(
+    input_text: &str,
+    success_criteria: &str,
+    actual_output: &str,
+) -> String {
     format!("Task input:\n{input_text}\n\nSuccess criteria:\n{success_criteria}\n\nActual response:\n{actual_output}\n\nDoes the actual response satisfy the success criteria?")
 }
 
@@ -122,9 +162,16 @@ pub(crate) fn parse_judge_reply(reply: &str) -> (bool, String) {
 /// one judge call. A case whose target run itself fails (a provider
 /// error, a deleted agent) is recorded as failed without a wasted judge
 /// call - grading nothing is not the same as passing.
-pub async fn run_suite(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], suite_id: &str, actor_user_id: Option<&str>) -> AppResult<AiEvalRun> {
+pub async fn run_suite(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    suite_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiEvalRun> {
     require_admin(conn, actor_user_id)?;
-    let suite = ai_eval_repo::get_suite(conn, suite_id)?.ok_or_else(|| AppError::NotFound("Eval suite".into()))?;
+    let suite = ai_eval_repo::get_suite(conn, suite_id)?
+        .ok_or_else(|| AppError::NotFound("Eval suite".into()))?;
     if suite.cases.is_empty() {
         return Err(AppError::Validation("This suite has no cases".into()));
     }
@@ -135,27 +182,62 @@ pub async fn run_suite(conn: &Connection, workspace_id: &str, master_key: &[u8; 
     let mut passed_count = 0i64;
     let mut failed_count = 0i64;
     for case in &suite.cases {
-        let target_run = ai_orchestration_service::run_triggered(conn, workspace_id, master_key, &suite.target_type, &suite.target_id, actor_user_id, &case.input_text, Some("eval"), None, None).await;
+        let target_run = ai_orchestration_service::run_triggered(
+            conn,
+            workspace_id,
+            master_key,
+            &suite.target_type,
+            &suite.target_id,
+            actor_user_id,
+            &case.input_text,
+            Some("eval"),
+            None,
+            None,
+        )
+        .await;
 
         let (actual_output, target_error, policy_violations) = match target_run {
             Ok(run) if run.status == "succeeded" => {
-                let policy_violations: i64 = run.steps.iter().map(|s| s.policy_violations_count).sum();
-                (run.steps.last().and_then(|s| s.output_text.clone()), None, policy_violations)
+                let policy_violations: i64 =
+                    run.steps.iter().map(|s| s.policy_violations_count).sum();
+                (
+                    run.steps.last().and_then(|s| s.output_text.clone()),
+                    None,
+                    policy_violations,
+                )
             }
-            Ok(run) => (None, Some(run.error.unwrap_or_else(|| "The target run failed".to_string())), 0),
+            Ok(run) => (
+                None,
+                Some(
+                    run.error
+                        .unwrap_or_else(|| "The target run failed".to_string()),
+                ),
+                0,
+            ),
             Err(e) => (None, Some(e.to_string()), 0),
         };
 
         if let Some(error) = target_error {
             failed_count += 1;
-            ai_eval_repo::append_case_result(conn, &run_id, &case.id, &case.input_text, &case.success_criteria, None, false, None, Some(&error))?;
+            ai_eval_repo::append_case_result(
+                conn,
+                &run_id,
+                &case.id,
+                &case.input_text,
+                &case.success_criteria,
+                None,
+                false,
+                None,
+                Some(&error),
+            )?;
             continue;
         }
 
         let actual_output = actual_output.unwrap_or_default();
         match suite.evaluator_type.as_str() {
             "structured_output" => {
-                let (passed, reasoning, error) = evaluate_structured_output(conn, &suite.target_id, &actual_output)?;
+                let (passed, reasoning, error) =
+                    evaluate_structured_output(conn, &suite.target_id, &actual_output)?;
                 if error.is_some() {
                     failed_count += 1;
                 } else if passed {
@@ -163,7 +245,17 @@ pub async fn run_suite(conn: &Connection, workspace_id: &str, master_key: &[u8; 
                 } else {
                     failed_count += 1;
                 }
-                ai_eval_repo::append_case_result(conn, &run_id, &case.id, &case.input_text, &case.success_criteria, Some(&actual_output), passed, reasoning.as_deref(), error.as_deref())?;
+                ai_eval_repo::append_case_result(
+                    conn,
+                    &run_id,
+                    &case.id,
+                    &case.input_text,
+                    &case.success_criteria,
+                    Some(&actual_output),
+                    passed,
+                    reasoning.as_deref(),
+                    error.as_deref(),
+                )?;
             }
             "policy_compliance" => {
                 let passed = policy_violations == 0;
@@ -177,11 +269,30 @@ pub async fn run_suite(conn: &Connection, workspace_id: &str, master_key: &[u8; 
                 } else {
                     failed_count += 1;
                 }
-                ai_eval_repo::append_case_result(conn, &run_id, &case.id, &case.input_text, &case.success_criteria, Some(&actual_output), passed, Some(&reasoning), None)?;
+                ai_eval_repo::append_case_result(
+                    conn,
+                    &run_id,
+                    &case.id,
+                    &case.input_text,
+                    &case.success_criteria,
+                    Some(&actual_output),
+                    passed,
+                    Some(&reasoning),
+                    None,
+                )?;
             }
             _ => {
-                let judge_message = build_judge_message(&case.input_text, &case.success_criteria, &actual_output);
-                match ai_service::complete(conn, workspace_id, master_key, JUDGE_SYSTEM_PROMPT, &judge_message).await {
+                let judge_message =
+                    build_judge_message(&case.input_text, &case.success_criteria, &actual_output);
+                match ai_service::complete(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    JUDGE_SYSTEM_PROMPT,
+                    &judge_message,
+                )
+                .await
+                {
                     Ok(reply) => {
                         let (passed, reasoning) = parse_judge_reply(&reply);
                         if passed {
@@ -189,12 +300,32 @@ pub async fn run_suite(conn: &Connection, workspace_id: &str, master_key: &[u8; 
                         } else {
                             failed_count += 1;
                         }
-                        ai_eval_repo::append_case_result(conn, &run_id, &case.id, &case.input_text, &case.success_criteria, Some(&actual_output), passed, Some(&reasoning), None)?;
+                        ai_eval_repo::append_case_result(
+                            conn,
+                            &run_id,
+                            &case.id,
+                            &case.input_text,
+                            &case.success_criteria,
+                            Some(&actual_output),
+                            passed,
+                            Some(&reasoning),
+                            None,
+                        )?;
                     }
                     Err(e) => {
                         failed_count += 1;
                         let msg = format!("The judge call itself failed: {e}");
-                        ai_eval_repo::append_case_result(conn, &run_id, &case.id, &case.input_text, &case.success_criteria, Some(&actual_output), false, None, Some(&msg))?;
+                        ai_eval_repo::append_case_result(
+                            conn,
+                            &run_id,
+                            &case.id,
+                            &case.input_text,
+                            &case.success_criteria,
+                            Some(&actual_output),
+                            false,
+                            None,
+                            Some(&msg),
+                        )?;
                     }
                 }
             }
@@ -214,8 +345,13 @@ pub async fn run_suite(conn: &Connection, workspace_id: &str, master_key: &[u8; 
 /// judged result when the target agent has no schema declared at all,
 /// the same "record an error rather than fabricate a pass/fail" shape
 /// `run_suite`'s own target-run-failure branch already follows.
-fn evaluate_structured_output(conn: &Connection, agent_id: &str, actual_output: &str) -> AppResult<(bool, Option<String>, Option<String>)> {
-    let agent = ai_agent_service::get(conn, agent_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+fn evaluate_structured_output(
+    conn: &Connection,
+    agent_id: &str,
+    actual_output: &str,
+) -> AppResult<(bool, Option<String>, Option<String>)> {
+    let agent =
+        ai_agent_service::get(conn, agent_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     let schema: Value = match agent
         .current_version_id
         .as_deref()
@@ -230,7 +366,11 @@ fn evaluate_structured_output(conn: &Connection, agent_id: &str, actual_output: 
         Err(e) => vec![format!("Response is not valid JSON: {e}")],
     };
     if violations.is_empty() {
-        Ok((true, Some("Response conforms to the declared output schema.".to_string()), None))
+        Ok((
+            true,
+            Some("Response conforms to the declared output schema.".to_string()),
+            None,
+        ))
     } else {
         Ok((false, Some(violations.join("; ")), None))
     }

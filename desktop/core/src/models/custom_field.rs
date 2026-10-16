@@ -8,7 +8,15 @@ pub const CUSTOM_FIELD_TYPES: &[&str] = &["text", "number", "date", "boolean", "
 /// status/stage field to trigger a workflow on, but can still carry custom
 /// fields).
 pub const CUSTOM_FIELD_ENTITY_TYPES: &[&str] = &[
-    "Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task", "Product",
+    "Company",
+    "Contact",
+    "Opportunity",
+    "Quote",
+    "Order",
+    "Invoice",
+    "Contract",
+    "Task",
+    "Product",
 ];
 
 #[derive(Debug, Clone, Serialize)]

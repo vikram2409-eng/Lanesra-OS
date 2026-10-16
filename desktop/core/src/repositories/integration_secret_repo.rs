@@ -13,7 +13,15 @@ pub struct StoredSecret {
     pub nonce: String,
 }
 
-pub fn insert(conn: &Connection, id: &str, workspace_id: &str, label: &str, ciphertext: &str, nonce: &str, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn insert(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    label: &str,
+    ciphertext: &str,
+    nonce: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO integration_secrets (id, workspace_id, label, ciphertext, nonce, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         rusqlite::params![id, workspace_id, label, ciphertext, nonce, now_iso(), actor_user_id],
@@ -22,11 +30,25 @@ pub fn insert(conn: &Connection, id: &str, workspace_id: &str, label: &str, ciph
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<StoredSecret>> {
-    conn.query_row("SELECT id, ciphertext, nonce FROM integration_secrets WHERE id = ?1", [id], |row| {
-        Ok(StoredSecret { id: row.get(0)?, ciphertext: row.get(1)?, nonce: row.get(2)? })
-    })
+    conn.query_row(
+        "SELECT id, ciphertext, nonce FROM integration_secrets WHERE id = ?1",
+        [id],
+        |row| {
+            Ok(StoredSecret {
+                id: row.get(0)?,
+                ciphertext: row.get(1)?,
+                nonce: row.get(2)?,
+            })
+        },
+    )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// Rotation (spec §20: "Provide secret rotation without editing dependent

@@ -25,47 +25,95 @@ use rusqlite::Connection;
 use serde_json::{json, Value};
 
 use crate::domain::{AppError, AppResult};
+use crate::models::company::CompanyInput;
 use crate::models::contact::ContactInput;
 use crate::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
-use crate::models::integration::{ApiFieldMetadata, ApiListQuery, ApiObjectMetadata, ApiRecordPage, ApiRelationshipMetadata};
+use crate::models::integration::{
+    ApiFieldMetadata, ApiListQuery, ApiObjectMetadata, ApiRecordPage, ApiRelationshipMetadata,
+};
 use crate::models::product::ProductInput;
 use crate::models::relationship::RelatedRecord;
 use crate::models::task::TaskInput;
-use crate::models::company::CompanyInput;
 use crate::services::{
-    company_service, contact_service, custom_field_service, custom_object_service, custom_record_service, contract_service,
-    invoice_service, opportunity_service, order_service, product_service, quote_service, relationship_service, task_service,
+    company_service, contact_service, contract_service, custom_field_service,
+    custom_object_service, custom_record_service, invoice_service, opportunity_service,
+    order_service, product_service, quote_service, relationship_service, task_service,
 };
 
 /// Built-ins this dispatcher can read - a superset of the ones it can
 /// also write (see this module's own doc comment).
-const READABLE_BUILTINS: &[&str] = &["Company", "Contact", "Product", "Task", "Opportunity", "Quote", "Order", "Invoice", "Contract"];
+const READABLE_BUILTINS: &[&str] = &[
+    "Company",
+    "Contact",
+    "Product",
+    "Task",
+    "Opportunity",
+    "Quote",
+    "Order",
+    "Invoice",
+    "Contract",
+];
 pub(crate) const WRITABLE_BUILTINS: &[&str] = &["Company", "Contact", "Product", "Task"];
 
 fn is_custom(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<bool> {
-    Ok(!READABLE_BUILTINS.contains(&object_key) && custom_object_service::get_by_key(conn, workspace_id, object_key)?.is_some())
+    Ok(!READABLE_BUILTINS.contains(&object_key)
+        && custom_object_service::get_by_key(conn, workspace_id, object_key)?.is_some())
 }
 
-pub fn list_object_keys(conn: &Connection, workspace_id: &str) -> AppResult<Vec<ApiObjectMetadata>> {
-    let mut out: Vec<ApiObjectMetadata> = READABLE_BUILTINS.iter().map(|k| ApiObjectMetadata { object_key: k.to_string(), label: k.to_string(), is_custom: false, fields: vec![], relationships: vec![] }).collect();
+pub fn list_object_keys(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<Vec<ApiObjectMetadata>> {
+    let mut out: Vec<ApiObjectMetadata> = READABLE_BUILTINS
+        .iter()
+        .map(|k| ApiObjectMetadata {
+            object_key: k.to_string(),
+            label: k.to_string(),
+            is_custom: false,
+            fields: vec![],
+            relationships: vec![],
+        })
+        .collect();
     for def in custom_object_service::list(conn, workspace_id, true)? {
-        out.push(ApiObjectMetadata { object_key: def.key, label: def.singular_label, is_custom: true, fields: vec![], relationships: vec![] });
+        out.push(ApiObjectMetadata {
+            object_key: def.key,
+            label: def.singular_label,
+            is_custom: true,
+            fields: vec![],
+            relationships: vec![],
+        });
     }
     Ok(out)
 }
 
-pub fn get_metadata(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<ApiObjectMetadata> {
+pub fn get_metadata(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> AppResult<ApiObjectMetadata> {
     let (label, is_custom_obj) = if is_custom(conn, workspace_id, object_key)? {
-        (custom_object_service::get_by_key(conn, workspace_id, object_key)?.map(|d| d.singular_label).unwrap_or_else(|| object_key.to_string()), true)
+        (
+            custom_object_service::get_by_key(conn, workspace_id, object_key)?
+                .map(|d| d.singular_label)
+                .unwrap_or_else(|| object_key.to_string()),
+            true,
+        )
     } else if READABLE_BUILTINS.contains(&object_key) {
         (object_key.to_string(), false)
     } else {
         return Err(AppError::NotFound(format!("Object '{object_key}'")));
     };
-    let custom_fields = custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
+    let custom_fields =
+        custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
     let fields = custom_fields
         .into_iter()
-        .map(|f| ApiFieldMetadata { key: f.key, label: f.label, field_type: f.field_type, required: f.required, is_custom: true })
+        .map(|f| ApiFieldMetadata {
+            key: f.key,
+            label: f.label,
+            field_type: f.field_type,
+            required: f.required,
+            is_custom: true,
+        })
         .collect();
     let relationships = relationship_service::list(conn, workspace_id, true)?
         .into_iter()
@@ -79,22 +127,34 @@ pub fn get_metadata(conn: &Connection, workspace_id: &str, object_key: &str) -> 
                 // isn't statically resolvable per object_key, so it's not
                 // reported here - fetch `.../related` on an actual record.
                 Some(ApiRelationshipMetadata {
-                    relationship_key: def.key, related_object_key: def.target_entity_type,
-                    relationship_type: def.relationship_type, label: def.forward_label,
-                    direction: "forward".into(), is_polymorphic: def.target_is_polymorphic,
+                    relationship_key: def.key,
+                    related_object_key: def.target_entity_type,
+                    relationship_type: def.relationship_type,
+                    label: def.forward_label,
+                    direction: "forward".into(),
+                    is_polymorphic: def.target_is_polymorphic,
                 })
             } else if def.target_entity_type == object_key {
                 Some(ApiRelationshipMetadata {
-                    relationship_key: def.key, related_object_key: def.source_entity_type,
-                    relationship_type: def.relationship_type, label: def.reverse_label,
-                    direction: "reverse".into(), is_polymorphic: false,
+                    relationship_key: def.key,
+                    related_object_key: def.source_entity_type,
+                    relationship_type: def.relationship_type,
+                    label: def.reverse_label,
+                    direction: "reverse".into(),
+                    is_polymorphic: false,
                 })
             } else {
                 None
             }
         })
         .collect();
-    Ok(ApiObjectMetadata { object_key: object_key.to_string(), label, is_custom: is_custom_obj, fields, relationships })
+    Ok(ApiObjectMetadata {
+        object_key: object_key.to_string(),
+        label,
+        is_custom: is_custom_obj,
+        fields,
+        relationships,
+    })
 }
 
 fn paginate(mut records: Vec<Value>, query: &ApiListQuery) -> ApiRecordPage {
@@ -110,34 +170,89 @@ fn paginate(mut records: Vec<Value>, query: &ApiListQuery) -> ApiRecordPage {
             records.sort_by(|a, b| {
                 let av = a.get(field).map(|v| v.to_string()).unwrap_or_default();
                 let bv = b.get(field).map(|v| v.to_string()).unwrap_or_default();
-                if desc { bv.cmp(&av) } else { av.cmp(&bv) }
+                if desc {
+                    bv.cmp(&av)
+                } else {
+                    av.cmp(&bv)
+                }
             });
         }
     }
     let start = ((page - 1) * page_size) as usize;
-    let page_records = records.into_iter().skip(start).take(page_size as usize).collect();
-    ApiRecordPage { records: page_records, total, page, page_size }
+    let page_records = records
+        .into_iter()
+        .skip(start)
+        .take(page_size as usize)
+        .collect();
+    ApiRecordPage {
+        records: page_records,
+        total,
+        page,
+        page_size,
+    }
 }
 
 fn matches_filter(record: &Value, filter: &Value) -> bool {
-    let Some(obj) = filter.as_object() else { return true };
-    obj.iter().all(|(key, expected)| record.get(key).map(|actual| actual == expected).unwrap_or(false))
+    let Some(obj) = filter.as_object() else {
+        return true;
+    };
+    obj.iter().all(|(key, expected)| {
+        record
+            .get(key)
+            .map(|actual| actual == expected)
+            .unwrap_or(false)
+    })
 }
 
-pub fn list_records(conn: &Connection, workspace_id: &str, object_key: &str, query: &ApiListQuery) -> AppResult<ApiRecordPage> {
+pub fn list_records(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    query: &ApiListQuery,
+) -> AppResult<ApiRecordPage> {
     let mut records: Vec<Value> = if is_custom(conn, workspace_id, object_key)? {
-        custom_record_service::list(conn, workspace_id, object_key)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect()
+        custom_record_service::list(conn, workspace_id, object_key)?
+            .into_iter()
+            .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+            .collect()
     } else {
         match object_key {
-            "Company" => company_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Contact" => contact_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Product" => product_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Task" => task_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Opportunity" => opportunity_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Quote" => quote_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Order" => order_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Invoice" => invoice_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
-            "Contract" => contract_service::list(conn, workspace_id)?.into_iter().map(|r| serde_json::to_value(r).unwrap_or(Value::Null)).collect(),
+            "Company" => company_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Contact" => contact_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Product" => product_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Task" => task_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Opportunity" => opportunity_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Quote" => quote_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Order" => order_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Invoice" => invoice_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
+            "Contract" => contract_service::list(conn, workspace_id)?
+                .into_iter()
+                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
+                .collect(),
             other => return Err(AppError::NotFound(format!("Object '{other}'"))),
         }
     };
@@ -147,7 +262,12 @@ pub fn list_records(conn: &Connection, workspace_id: &str, object_key: &str, que
     Ok(paginate(records, query))
 }
 
-pub fn get_record(conn: &Connection, workspace_id: &str, object_key: &str, id: &str) -> AppResult<Value> {
+pub fn get_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    id: &str,
+) -> AppResult<Value> {
     if is_custom(conn, workspace_id, object_key)? {
         let record = custom_record_service::get(conn, id)?;
         if record.workspace_id != workspace_id || record.object_key != object_key {
@@ -179,7 +299,12 @@ pub fn get_record(conn: &Connection, workspace_id: &str, object_key: &str, id: &
 /// returns no rows, matching a record with no relationships at all,
 /// since a relationship link is workspace-scoped by definition, not by
 /// this dispatcher re-validating the record itself).
-pub fn related_records(conn: &Connection, workspace_id: &str, object_key: &str, id: &str) -> AppResult<Vec<RelatedRecord>> {
+pub fn related_records(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    id: &str,
+) -> AppResult<Vec<RelatedRecord>> {
     relationship_service::related_records_for(conn, workspace_id, object_key, id)
 }
 
@@ -189,13 +314,20 @@ fn not_writable(object_key: &str) -> AppError {
     ))
 }
 
-pub fn create_record(conn: &Connection, workspace_id: &str, object_key: &str, body: &Value, actor_user_id: Option<&str>) -> AppResult<Value> {
+pub fn create_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    body: &Value,
+    actor_user_id: Option<&str>,
+) -> AppResult<Value> {
     if is_custom(conn, workspace_id, object_key)? {
         let mut merged = body.clone();
         if let Some(obj) = merged.as_object_mut() {
             obj.insert("object_key".to_string(), json!(object_key));
         }
-        let input: CustomRecordInput = serde_json::from_value(merged).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+        let input: CustomRecordInput = serde_json::from_value(merged)
+            .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
         let record = custom_record_service::create(conn, workspace_id, &input, actor_user_id)?;
         return Ok(serde_json::to_value(record).unwrap_or(Value::Null));
     }
@@ -204,29 +336,56 @@ pub fn create_record(conn: &Connection, workspace_id: &str, object_key: &str, bo
     }
     let value = match object_key {
         "Company" => {
-            let input: CompanyInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
-            serde_json::to_value(company_service::create(conn, workspace_id, &input, actor_user_id)?)
+            let input: CompanyInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            serde_json::to_value(company_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor_user_id,
+            )?)
         }
         "Contact" => {
-            let input: ContactInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            let input: ContactInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
             serde_json::to_value(contact_service::create(conn, &input, actor_user_id)?)
         }
         "Product" => {
-            let input: ProductInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
-            serde_json::to_value(product_service::create(conn, workspace_id, &input, actor_user_id)?)
+            let input: ProductInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            serde_json::to_value(product_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor_user_id,
+            )?)
         }
         "Task" => {
-            let input: TaskInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
-            serde_json::to_value(task_service::create(conn, workspace_id, &input, actor_user_id)?)
+            let input: TaskInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            serde_json::to_value(task_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor_user_id,
+            )?)
         }
         other => return Err(AppError::NotFound(format!("Object '{other}'"))),
     };
     value.map_err(|e| AppError::Validation(format!("could not serialize record: {e}")))
 }
 
-pub fn update_record(conn: &Connection, workspace_id: &str, object_key: &str, id: &str, body: &Value, actor_user_id: Option<&str>) -> AppResult<Value> {
+pub fn update_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    id: &str,
+    body: &Value,
+    actor_user_id: Option<&str>,
+) -> AppResult<Value> {
     if is_custom(conn, workspace_id, object_key)? {
-        let input: CustomRecordUpdate = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+        let input: CustomRecordUpdate = serde_json::from_value(body.clone())
+            .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
         let record = custom_record_service::update(conn, id, &input, actor_user_id)?;
         if record.workspace_id != workspace_id || record.object_key != object_key {
             return Err(AppError::NotFound("Record".into()));
@@ -238,27 +397,43 @@ pub fn update_record(conn: &Connection, workspace_id: &str, object_key: &str, id
     }
     let value = match object_key {
         "Company" => {
-            let input: CompanyInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            let input: CompanyInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
             serde_json::to_value(company_service::update(conn, id, &input, actor_user_id)?)
         }
         "Contact" => {
-            let input: ContactInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            let input: ContactInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
             serde_json::to_value(contact_service::update(conn, id, &input, actor_user_id)?)
         }
         "Product" => {
-            let input: ProductInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            let input: ProductInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
             serde_json::to_value(product_service::update(conn, id, &input, actor_user_id)?)
         }
         "Task" => {
-            let input: TaskInput = serde_json::from_value(body.clone()).map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
-            serde_json::to_value(task_service::update(conn, id, workspace_id, &input, actor_user_id)?)
+            let input: TaskInput = serde_json::from_value(body.clone())
+                .map_err(|e| AppError::Validation(format!("Invalid record body: {e}")))?;
+            serde_json::to_value(task_service::update(
+                conn,
+                id,
+                workspace_id,
+                &input,
+                actor_user_id,
+            )?)
         }
         other => return Err(AppError::NotFound(format!("Object '{other}'"))),
     };
     value.map_err(|e| AppError::Validation(format!("could not serialize record: {e}")))
 }
 
-pub fn archive_record(conn: &Connection, workspace_id: &str, object_key: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn archive_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     if is_custom(conn, workspace_id, object_key)? {
         custom_record_service::archive(conn, id, actor_user_id)?;
         return Ok(());

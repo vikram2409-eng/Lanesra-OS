@@ -6,10 +6,24 @@ use lanesra_cli::cli::{Cli, Command, ObjectsCommand, RecordsCommand};
 
 #[test]
 fn base_url_and_api_key_are_required_globals() {
-    let cli = Cli::try_parse_from(["lanesra", "--base-url", "http://localhost:8787", "--api-key", "client_x.secret", "objects", "list"]).unwrap();
+    let cli = Cli::try_parse_from([
+        "lanesra",
+        "--base-url",
+        "http://localhost:8787",
+        "--api-key",
+        "client_x.secret",
+        "objects",
+        "list",
+    ])
+    .unwrap();
     assert_eq!(cli.base_url, "http://localhost:8787");
     assert_eq!(cli.api_key, "client_x.secret");
-    assert!(matches!(cli.command, Command::Objects { command: ObjectsCommand::List }));
+    assert!(matches!(
+        cli.command,
+        Command::Objects {
+            command: ObjectsCommand::List
+        }
+    ));
 }
 
 #[test]
@@ -32,7 +46,16 @@ fn records_list_parses_its_optional_flags() {
     ])
     .unwrap();
     match cli.command {
-        Command::Records { command: RecordsCommand::List { object_key, filter, page, page_size, sort } } => {
+        Command::Records {
+            command:
+                RecordsCommand::List {
+                    object_key,
+                    filter,
+                    page,
+                    page_size,
+                    sort,
+                },
+        } => {
             assert_eq!(object_key, "Company");
             assert_eq!(filter.as_deref(), Some(r#"{"status":"Prospect"}"#));
             assert_eq!(page, Some(2));
@@ -45,6 +68,7 @@ fn records_list_parses_its_optional_flags() {
 
 #[test]
 fn missing_required_base_url_is_rejected() {
-    let result = Cli::try_parse_from(["lanesra", "--api-key", "client_x.secret", "objects", "list"]);
+    let result =
+        Cli::try_parse_from(["lanesra", "--api-key", "client_x.secret", "objects", "list"]);
     assert!(result.is_err());
 }

@@ -77,7 +77,11 @@ pub const TASK: NumberingConfig = NumberingConfig {
 
 /// Looks up an admin-set (prefix, digits) override for this entity type,
 /// falling back to `config`'s defaults when none exists.
-fn resolve_format(conn: &Connection, workspace_id: &str, config: &NumberingConfig) -> rusqlite::Result<(String, usize)> {
+fn resolve_format(
+    conn: &Connection,
+    workspace_id: &str,
+    config: &NumberingConfig,
+) -> rusqlite::Result<(String, usize)> {
     let row = conn.query_row(
         "SELECT prefix, digits FROM numbering_configs WHERE workspace_id = ?1 AND entity_type = ?2",
         (workspace_id, config.entity_type),
@@ -85,7 +89,9 @@ fn resolve_format(conn: &Connection, workspace_id: &str, config: &NumberingConfi
     );
     match row {
         Ok(v) => Ok(v),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok((config.default_prefix.to_string(), config.digits)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            Ok((config.default_prefix.to_string(), config.digits))
+        }
         Err(e) => Err(e),
     }
 }
@@ -172,10 +178,22 @@ mod tests {
         seed_workspace(&conn, "ws1");
         seed_workspace(&conn, "ws2");
 
-        assert_eq!(allocate_number(&conn, "ws1", &COMPANY).unwrap(), "CUS-000001");
-        assert_eq!(allocate_number(&conn, "ws2", &COMPANY).unwrap(), "CUS-000001");
-        assert_eq!(allocate_number(&conn, "ws1", &CONTACT).unwrap(), "CON-000001");
-        assert_eq!(allocate_number(&conn, "ws1", &COMPANY).unwrap(), "CUS-000002");
+        assert_eq!(
+            allocate_number(&conn, "ws1", &COMPANY).unwrap(),
+            "CUS-000001"
+        );
+        assert_eq!(
+            allocate_number(&conn, "ws2", &COMPANY).unwrap(),
+            "CUS-000001"
+        );
+        assert_eq!(
+            allocate_number(&conn, "ws1", &CONTACT).unwrap(),
+            "CON-000001"
+        );
+        assert_eq!(
+            allocate_number(&conn, "ws1", &COMPANY).unwrap(),
+            "CUS-000002"
+        );
     }
 
     #[test]
@@ -183,7 +201,10 @@ mod tests {
         let conn = open_in_memory_db().unwrap();
         seed_workspace(&conn, "ws1");
 
-        assert_eq!(allocate_number(&conn, "ws1", &COMPANY).unwrap(), "CUS-000001");
+        assert_eq!(
+            allocate_number(&conn, "ws1", &COMPANY).unwrap(),
+            "CUS-000001"
+        );
 
         conn.execute(
             "INSERT INTO numbering_configs (id, workspace_id, entity_type, prefix, digits, created_at, updated_at)

@@ -19,5 +19,10 @@ pub fn create_backup(state: State<AppState>) -> AppResult<BackupPackage> {
 pub fn restore_backup(state: State<AppState>, package_base64: String) -> AppResult<BackupManifest> {
     let actor = current_actor(&state);
     let mut conn = state.conn.lock().unwrap();
-    backup_service::restore_from_package(&mut conn, &state.db_path, &package_base64, actor.as_deref())
+    backup_service::restore_from_package(
+        &mut conn,
+        &state.db_path,
+        &package_base64,
+        actor.as_deref(),
+    )
 }

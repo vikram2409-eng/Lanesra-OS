@@ -13,11 +13,14 @@ use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::user::NewUser;
-use lanesra_core::models::voice::{ConfirmVoicePlanInput, SetVoicePinInput, VoicePolicyBindingInput};
+use lanesra_core::models::voice::{
+    ConfirmVoicePlanInput, SetVoicePinInput, VoicePolicyBindingInput,
+};
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    access_role_service, company_service, custom_object_service, custom_record_service, user_service, voice_execution_service, voice_policy_service,
-    voice_session_service, workspace_service,
+    access_role_service, company_service, custom_object_service, custom_record_service,
+    user_service, voice_execution_service, voice_policy_service, voice_session_service,
+    workspace_service,
 };
 
 fn master_key() -> [u8; 32] {
@@ -61,24 +64,61 @@ fn company_input(name: &str) -> CompanyInput {
     }
 }
 
-fn make_voice_user(conn: &rusqlite::Connection, ws: &str, admin: &str, username: &str, voice: VoicePolicyBindingInput) -> String {
+fn make_voice_user(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+    username: &str,
+    voice: VoicePolicyBindingInput,
+) -> String {
     let user = user_service::create(
         conn,
         ws,
-        &NewUser { username: username.into(), display_name: username.into(), password: "anothersecretpw".into(), roles: vec!["Sales".to_string()] },
+        &NewUser {
+            username: username.into(),
+            display_name: username.into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".to_string()],
+        },
         Some(admin),
     )
     .unwrap();
-    let role = access_role_service::create(conn, ws, &AccessRoleInput { name: format!("{username}-role"), description: "".into() }, Some(admin)).unwrap();
+    let role = access_role_service::create(
+        conn,
+        ws,
+        &AccessRoleInput {
+            name: format!("{username}-role"),
+            description: "".into(),
+        },
+        Some(admin),
+    )
+    .unwrap();
     access_role_service::upsert_grant(
         conn,
         &role.id,
-        &AccessRoleGrantInput { object_key: "*".into(), can_create: true, can_read: true, can_update: true, can_delete: true, can_assign: true, record_scope: "ORGANIZATION".into() },
+        &AccessRoleGrantInput {
+            object_key: "*".into(),
+            can_create: true,
+            can_read: true,
+            can_update: true,
+            can_delete: true,
+            can_assign: true,
+            record_scope: "ORGANIZATION".into(),
+        },
         Some(admin),
     )
     .unwrap();
     access_role_service::assign_to_user(conn, &user.id, &role.id, Some(admin)).unwrap();
-    voice_policy_service::upsert_policy_binding(conn, ws, Some(admin), &VoicePolicyBindingInput { access_role_id: Some(role.id), ..voice }).unwrap();
+    voice_policy_service::upsert_policy_binding(
+        conn,
+        ws,
+        Some(admin),
+        &VoicePolicyBindingInput {
+            access_role_id: Some(role.id),
+            ..voice
+        },
+    )
+    .unwrap();
     user.id
 }
 
@@ -105,14 +145,26 @@ async fn custom_object_records_are_voice_addressable_like_a_built_in_record() {
     let def = custom_object_service::create(
         &conn,
         &ws,
-        &CustomObjectDefinitionInput { singular_label: "Unit".into(), plural_label: "Units".into(), icon: "🏠".into(), prefix: "UNIT".into(), digits: 4 },
+        &CustomObjectDefinitionInput {
+            singular_label: "Unit".into(),
+            plural_label: "Units".into(),
+            icon: "🏠".into(),
+            prefix: "UNIT".into(),
+            digits: 4,
+        },
         Some(&admin),
     )
     .unwrap();
     custom_record_service::create(
         &conn,
         &ws,
-        &CustomRecordInput { object_key: def.key.clone(), primary_name: "Unit 200".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &CustomRecordInput {
+            object_key: def.key.clone(),
+            primary_name: "Unit 200".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
     )
     .unwrap();
@@ -121,26 +173,71 @@ async fn custom_object_records_are_voice_addressable_like_a_built_in_record() {
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "open Unit 200", "en-US", None, &master_key()).await.unwrap();
-    let plan = outcome.plan.expect("a Custom Object record should be just as voice-findable as a built-in one");
-    assert_eq!(plan.status, "succeeded", "read-only NAVIGATE should never need confirmation");
+    let outcome = voice_execution_service::submit_command(
+        &conn,
+        &session.id,
+        &user,
+        "open Unit 200",
+        "en-US",
+        None,
+        &master_key(),
+    )
+    .await
+    .unwrap();
+    let plan = outcome
+        .plan
+        .expect("a Custom Object record should be just as voice-findable as a built-in one");
+    assert_eq!(
+        plan.status, "succeeded",
+        "read-only NAVIGATE should never need confirmation"
+    );
 }
 
 #[tokio::test]
 async fn fuzzy_match_resolves_a_single_close_typo() {
     let (conn, ws, admin) = setup_workspace();
-    let company = company_service::create(&conn, &ws, &company_input("Atlas Construction"), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Atlas Construction"),
+        Some(&admin),
+    )
+    .unwrap();
     let user = make_voice_user(&conn, &ws, &admin, "typo-tolerant", full_voice_access());
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
     // A real, plausible typo - "Construcion" is missing a "t" - one
     // character off in an 11-letter word, well inside the fuzzy tolerance.
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Atlas Construcion Company as Inactive", "en-US", None, &master_key()).await.unwrap();
-    let plan = outcome.plan.expect("a single close-typo match should resolve via the fuzzy fallback tier, not an honest miss");
+    let outcome = voice_execution_service::submit_command(
+        &conn,
+        &session.id,
+        &user,
+        "mark Atlas Construcion Company as Inactive",
+        "en-US",
+        None,
+        &master_key(),
+    )
+    .await
+    .unwrap();
+    let plan = outcome.plan.expect(
+        "a single close-typo match should resolve via the fuzzy fallback tier, not an honest miss",
+    );
     assert_eq!(plan.status, "awaiting_confirmation");
 
-    let result = voice_execution_service::confirm_plan(&conn, &session.id, &user, &ConfirmVoicePlanInput { plan_id: plan.id, method: "tap".into(), edited_plan: None }, &master_key()).await.unwrap();
+    let result = voice_execution_service::confirm_plan(
+        &conn,
+        &session.id,
+        &user,
+        &ConfirmVoicePlanInput {
+            plan_id: plan.id,
+            method: "tap".into(),
+            edited_plan: None,
+        },
+        &master_key(),
+    )
+    .await
+    .unwrap();
     assert_eq!(result.status, "succeeded");
     let updated = company_service::get(&conn, &company.id).unwrap();
     assert_eq!(updated.status, "Inactive");
@@ -160,20 +257,53 @@ async fn fuzzy_match_with_multiple_plausible_typos_asks_rather_than_guesses() {
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Nordic Robotics Company as Inactive", "en-US", None, &master_key()).await.unwrap();
+    let outcome = voice_execution_service::submit_command(
+        &conn,
+        &session.id,
+        &user,
+        "mark Nordic Robotics Company as Inactive",
+        "en-US",
+        None,
+        &master_key(),
+    )
+    .await
+    .unwrap();
     assert!(outcome.plan.is_none());
-    assert_eq!(outcome.candidates.len(), 2, "two plausible fuzzy matches must ask, never silently pick one (VOICE-AC-05)");
+    assert_eq!(
+        outcome.candidates.len(),
+        2,
+        "two plausible fuzzy matches must ask, never silently pick one (VOICE-AC-05)"
+    );
 }
 
 #[tokio::test]
 async fn nonsense_text_is_still_honestly_not_found_even_with_fuzzy_fallback() {
     let (conn, ws, admin) = setup_workspace();
-    company_service::create(&conn, &ws, &company_input("Atlas Construction"), Some(&admin)).unwrap();
+    company_service::create(
+        &conn,
+        &ws,
+        &company_input("Atlas Construction"),
+        Some(&admin),
+    )
+    .unwrap();
     let user = make_voice_user(&conn, &ws, &admin, "no-false-positive", full_voice_access());
     voice_session_service::set_pin(&conn, &user, &SetVoicePinInput { pin: "1234".into() }).unwrap();
     let session = voice_session_service::unlock(&conn, &user, "1234").unwrap();
 
-    let outcome = voice_execution_service::submit_command(&conn, &session.id, &user, "mark Zorblatt Enterprises Company as Inactive", "en-US", None, &master_key()).await.unwrap();
-    assert!(outcome.plan.is_none(), "a genuinely unrelated name must not fuzzy-match onto an unrelated real record");
+    let outcome = voice_execution_service::submit_command(
+        &conn,
+        &session.id,
+        &user,
+        "mark Zorblatt Enterprises Company as Inactive",
+        "en-US",
+        None,
+        &master_key(),
+    )
+    .await
+    .unwrap();
+    assert!(
+        outcome.plan.is_none(),
+        "a genuinely unrelated name must not fuzzy-match onto an unrelated real record"
+    );
     assert!(outcome.unsupported_reason.is_some());
 }

@@ -6,7 +6,10 @@ use crate::domain::{AppError, AppResult};
 use crate::models::access_role::Capability;
 use crate::models::task::{Task, TaskInput, TASK_PRIORITIES, TASK_STATUSES};
 use crate::repositories::{audit_repo, task_repo};
-use crate::services::{access_service, app_service, builtin_field_service, entity_registry, status_transition_service, workflow_service};
+use crate::services::{
+    access_service, app_service, builtin_field_service, entity_registry, status_transition_service,
+    workflow_service,
+};
 
 /// A task's related record can be any built-in entity type task_links has
 /// always supported, or (Phase D, ADM-WF-06) any active custom object -
@@ -35,10 +38,16 @@ fn validate(conn: &Connection, input: &TaskInput) -> AppResult<()> {
         return Err(AppError::Validation("Task title is required".into()));
     }
     if !TASK_PRIORITIES.contains(&input.priority.as_str()) {
-        return Err(AppError::Validation(format!("Invalid task priority '{}'", input.priority)));
+        return Err(AppError::Validation(format!(
+            "Invalid task priority '{}'",
+            input.priority
+        )));
     }
     if !TASK_STATUSES.contains(&input.status.as_str()) {
-        return Err(AppError::Validation(format!("Invalid task status '{}'", input.status)));
+        return Err(AppError::Validation(format!(
+            "Invalid task status '{}'",
+            input.status
+        )));
     }
     validate_relation(conn, input)
 }
@@ -55,7 +64,14 @@ pub fn create(
     let id = new_uuid();
     let task_number = numbering::allocate_number(conn, workspace_id, &TASK)?;
     let task = task_repo::create(conn, &id, workspace_id, &task_number, input, actor_user_id)?;
-    super::ownership_service::set_default_owner_on_create(conn, workspace_id, "Task", &task.id, actor_user_id, input.owner_user_id.as_deref())?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        workspace_id,
+        "Task",
+        &task.id,
+        actor_user_id,
+        input.owner_user_id.as_deref(),
+    )?;
     audit_repo::record(
         conn,
         workspace_id,
@@ -66,8 +82,24 @@ pub fn create(
         &format!("Created task {}", task.task_number),
         None,
     )?;
-    workflow_service::fire_event(conn, workspace_id, "Task", &task.id, None, &task.status, task.owner_user_id.as_deref(), actor_user_id)?;
-    super::event_hooks::record_created(conn, workspace_id, "Task", &task.id, &task.title, &task.status);
+    workflow_service::fire_event(
+        conn,
+        workspace_id,
+        "Task",
+        &task.id,
+        None,
+        &task.status,
+        task.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
+    super::event_hooks::record_created(
+        conn,
+        workspace_id,
+        "Task",
+        &task.id,
+        &task.title,
+        &task.status,
+    );
     Ok(task)
 }
 
@@ -79,7 +111,11 @@ pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Task>> {
     Ok(task_repo::list(conn, workspace_id)?)
 }
 
-pub fn list_by_related(conn: &Connection, related_type: &str, related_id: &str) -> AppResult<Vec<Task>> {
+pub fn list_by_related(
+    conn: &Connection,
+    related_type: &str,
+    related_id: &str,
+) -> AppResult<Vec<Task>> {
     Ok(task_repo::list_by_related(conn, related_type, related_id)?)
 }
 
@@ -95,7 +131,13 @@ pub fn update(
     access_service::require_capability(conn, actor_user_id, "Task", Capability::Update, Some(id))?;
     let before = get(conn, id)?;
     if before.status != input.status {
-        status_transition_service::validate_transition(conn, workspace_id, "Task", &before.status, &input.status)?;
+        status_transition_service::validate_transition(
+            conn,
+            workspace_id,
+            "Task",
+            &before.status,
+            &input.status,
+        )?;
     }
     let before_fields = builtin_field_service::field_values(conn, "Task", id)?;
     let task = task_repo::update(conn, id, input, actor_user_id)?;
@@ -106,20 +148,44 @@ pub fn update(
         "update",
         Some("task"),
         Some(id),
-        &format!("Updated task {} (status: {})", task.task_number, task.status),
+        &format!(
+            "Updated task {} (status: {})",
+            task.task_number, task.status
+        ),
         None,
     )?;
     workflow_service::fire_event(
-        conn, workspace_id, "Task", id, Some(&before.status), &task.status, task.owner_user_id.as_deref(), actor_user_id,
+        conn,
+        workspace_id,
+        "Task",
+        id,
+        Some(&before.status),
+        &task.status,
+        task.owner_user_id.as_deref(),
+        actor_user_id,
     )?;
     let after_fields = builtin_field_service::field_values(conn, "Task", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
-    workflow_service::fire_field_changed(conn, workspace_id, "Task", id, "builtin", &changed, task.owner_user_id.as_deref(), actor_user_id)?;
+    workflow_service::fire_field_changed(
+        conn,
+        workspace_id,
+        "Task",
+        id,
+        "builtin",
+        &changed,
+        task.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
     super::event_hooks::record_updated(conn, workspace_id, "Task", id, &task.title, &task.status);
     Ok(task)
 }
 
-pub fn archive(conn: &Connection, id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn archive(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     let existing = get(conn, id)?;
     app_service::require_object_write_access(conn, workspace_id, "Task", actor_user_id)?;
     access_service::require_capability(conn, actor_user_id, "Task", Capability::Delete, Some(id))?;

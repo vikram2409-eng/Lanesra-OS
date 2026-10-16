@@ -31,18 +31,21 @@ use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::app_definition::{AppDefinitionInput, AppDefinitionUpdate};
 use crate::models::custom_report::CustomReport;
-use crate::models::dashboard_layout::{DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets};
+use crate::models::dashboard_layout::{
+    DashboardLayoutInput, DashboardLayoutUpdate, DashboardWidget, DashboardWidgets,
+};
 use crate::models::industry_package::{
-    AppInstallRun, AppPackage, ImportPackageInput, IndustryPackageManifest, InstalledApp, InstalledAppDetail,
-    ManifestDashboardWidget, WorkspaceArtifact, WorkspaceDependency, INDUSTRY_PACKAGE_FORMAT_VERSION,
+    AppInstallRun, AppPackage, ImportPackageInput, IndustryPackageManifest, InstalledApp,
+    InstalledAppDetail, ManifestDashboardWidget, WorkspaceArtifact, WorkspaceDependency,
+    INDUSTRY_PACKAGE_FORMAT_VERSION,
 };
 use crate::models::relationship::RelationshipDefinition;
 use crate::models::screen_layout::{LayoutTabs, ScreenLayoutInput, ScreenLayoutUpdate};
 use crate::repositories::{audit_repo, industry_package_repo};
 use crate::services::{
-    app_service, business_rule_service, custom_field_service, custom_object_service, custom_record_service,
-    custom_report_service, dashboard_layout_service, numbering_service, relationship_service, screen_layout_service,
-    workflow_service,
+    app_service, business_rule_service, custom_field_service, custom_object_service,
+    custom_record_service, custom_report_service, dashboard_layout_service, numbering_service,
+    relationship_service, screen_layout_service, workflow_service,
 };
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -59,8 +62,15 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 // version string should fail the *comparison* it's used in, not panic.
 
 fn parse_version(v: &str) -> (u64, u64, u64) {
-    let mut parts = v.trim().split('.').map(|p| p.trim().parse::<u64>().unwrap_or(0));
-    (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+    let mut parts = v
+        .trim()
+        .split('.')
+        .map(|p| p.trim().parse::<u64>().unwrap_or(0));
+    (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    )
 }
 
 /// `constraint` is `"*"` (any version) or `">=X.Y.Z"` - anything else
@@ -95,8 +105,8 @@ fn checksum_of(manifest_json: &str) -> String {
 }
 
 fn parse_manifest(manifest_json: &str) -> AppResult<IndustryPackageManifest> {
-    let manifest: IndustryPackageManifest =
-        serde_json::from_str(manifest_json).map_err(|e| AppError::Validation(format!("Invalid package manifest: {e}")))?;
+    let manifest: IndustryPackageManifest = serde_json::from_str(manifest_json)
+        .map_err(|e| AppError::Validation(format!("Invalid package manifest: {e}")))?;
     if manifest.format_version != INDUSTRY_PACKAGE_FORMAT_VERSION {
         return Err(AppError::Validation(format!(
             "Unsupported manifest format_version {} (this build understands {})",
@@ -104,7 +114,9 @@ fn parse_manifest(manifest_json: &str) -> AppResult<IndustryPackageManifest> {
         )));
     }
     if manifest.package_id.trim().is_empty() {
-        return Err(AppError::Validation("Manifest is missing package_id".into()));
+        return Err(AppError::Validation(
+            "Manifest is missing package_id".into(),
+        ));
     }
     if manifest.name.trim().is_empty() {
         return Err(AppError::Validation("Manifest is missing name".into()));
@@ -125,8 +137,15 @@ fn parse_manifest(manifest_json: &str) -> AppResult<IndustryPackageManifest> {
 /// step (spec: "Admin -> App Catalog -> Review -> Validate -> Install") a
 /// cheap up-front check for the two things a collision check can't catch
 /// anyway (an unmet minimum version, a missing dependency).
-pub fn validate(conn: &Connection, workspace_id: &str, manifest: &IndustryPackageManifest) -> AppResult<()> {
-    if !version_satisfies(current_lanesra_version(), &format!(">={}", manifest.min_lanesra_version)) {
+pub fn validate(
+    conn: &Connection,
+    workspace_id: &str,
+    manifest: &IndustryPackageManifest,
+) -> AppResult<()> {
+    if !version_satisfies(
+        current_lanesra_version(),
+        &format!(">={}", manifest.min_lanesra_version),
+    ) {
         return Err(AppError::Validation(format!(
             "'{}' requires Lanesra {} or later (this workspace is running {})",
             manifest.name,
@@ -135,10 +154,17 @@ pub fn validate(conn: &Connection, workspace_id: &str, manifest: &IndustryPackag
         )));
     }
     for dep in &manifest.dependencies {
-        let installed = industry_package_repo::get_installed_app_by_package(conn, workspace_id, &dep.package_id)?;
+        let installed = industry_package_repo::get_installed_app_by_package(
+            conn,
+            workspace_id,
+            &dep.package_id,
+        )?;
         let satisfied = installed
             .as_ref()
-            .map(|app| app.status == "active" && version_satisfies(&app.installed_version, &dep.version_constraint))
+            .map(|app| {
+                app.status == "active"
+                    && version_satisfies(&app.installed_version, &dep.version_constraint)
+            })
             .unwrap_or(false);
         if !satisfied && dep.is_required {
             return Err(AppError::Validation(format!(
@@ -153,10 +179,22 @@ pub fn validate(conn: &Connection, workspace_id: &str, manifest: &IndustryPackag
 /// Parses, validates the manifest's own shape, and adds it to this
 /// workspace's local catalog (spec 13.6's "review before install") -
 /// does not install anything yet.
-pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPackageInput, actor_user_id: Option<&str>) -> AppResult<AppPackage> {
+pub fn import_package(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &ImportPackageInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AppPackage> {
     require_admin(conn, actor_user_id)?;
     let manifest = parse_manifest(&input.manifest_json)?;
-    if industry_package_repo::get_package_by_version(conn, workspace_id, &manifest.package_id, &manifest.version)?.is_some() {
+    if industry_package_repo::get_package_by_version(
+        conn,
+        workspace_id,
+        &manifest.package_id,
+        &manifest.version,
+    )?
+    .is_some()
+    {
         return Err(AppError::Conflict(format!(
             "'{}' version {} has already been imported into this workspace",
             manifest.package_id, manifest.version
@@ -167,7 +205,8 @@ pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPacka
     // this only ever rejects a hand-authored manifest under an
     // unregistered namespace - never a bundled starter.
     super::publisher_service::ensure_defaults(conn, workspace_id)?;
-    let publisher = super::publisher_service::resolve_for_package_id(conn, workspace_id, &manifest.package_id)?;
+    let publisher =
+        super::publisher_service::resolve_for_package_id(conn, workspace_id, &manifest.package_id)?;
 
     let id = new_uuid();
     let checksum = checksum_of(&input.manifest_json);
@@ -193,7 +232,14 @@ pub fn import_package(conn: &Connection, workspace_id: &str, input: &ImportPacka
     // view should be able to show every imported package's requirements,
     // not only installed ones.
     for dep in &manifest.dependencies {
-        industry_package_repo::insert_dependency(conn, &new_uuid(), &package.id, &dep.package_id, &dep.version_constraint, dep.is_required)?;
+        industry_package_repo::insert_dependency(
+            conn,
+            &new_uuid(),
+            &package.id,
+            &dep.package_id,
+            &dep.version_constraint,
+            dep.is_required,
+        )?;
     }
     Ok(package)
 }
@@ -207,8 +253,16 @@ pub fn list_packages(conn: &Connection, workspace_id: &str) -> AppResult<Vec<App
 /// `industry_package_repo::list_versions_for_package`'s own comment for
 /// why this needed no new table: each `app_packages` row already is an
 /// immutable version snapshot.
-pub fn list_package_versions(conn: &Connection, workspace_id: &str, package_id: &str) -> AppResult<Vec<AppPackage>> {
-    Ok(industry_package_repo::list_versions_for_package(conn, workspace_id, package_id)?)
+pub fn list_package_versions(
+    conn: &Connection,
+    workspace_id: &str,
+    package_id: &str,
+) -> AppResult<Vec<AppPackage>> {
+    Ok(industry_package_repo::list_versions_for_package(
+        conn,
+        workspace_id,
+        package_id,
+    )?)
 }
 
 /// Every dependency declared by every package imported into this
@@ -217,16 +271,32 @@ pub fn list_package_versions(conn: &Connection, workspace_id: &str, package_id: 
 /// whose version meets `version_constraint`. Read-only - this never
 /// blocks anything, it's what the Deployment Management "Dependencies" tab
 /// shows.
-pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<WorkspaceDependency>> {
+pub fn list_dependencies_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<Vec<WorkspaceDependency>> {
     let rows = industry_package_repo::list_dependencies_for_workspace(conn, workspace_id)?;
     rows.into_iter()
         .map(|(dependency, package_id, package_name, package_version)| {
-            let installed = industry_package_repo::get_installed_app_by_package(conn, workspace_id, &dependency.dependency_package_id)?;
+            let installed = industry_package_repo::get_installed_app_by_package(
+                conn,
+                workspace_id,
+                &dependency.dependency_package_id,
+            )?;
             let is_satisfied = installed
                 .as_ref()
-                .map(|app| app.status == "active" && version_satisfies(&app.installed_version, &dependency.version_constraint))
+                .map(|app| {
+                    app.status == "active"
+                        && version_satisfies(&app.installed_version, &dependency.version_constraint)
+                })
                 .unwrap_or(false);
-            Ok(WorkspaceDependency { dependency, package_id, package_name, package_version, is_satisfied })
+            Ok(WorkspaceDependency {
+                dependency,
+                package_id,
+                package_name,
+                package_version,
+                is_satisfied,
+            })
         })
         .collect()
 }
@@ -236,11 +306,20 @@ pub fn list_dependencies_for_workspace(conn: &Connection, workspace_id: &str) ->
 /// `get_installed_detail`'s per-app artifact list, and the "what have I
 /// customized beyond what I installed" view the Deployment Management
 /// "Components" tab exists to answer.
-pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<WorkspaceArtifact>> {
+pub fn list_artifacts_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> AppResult<Vec<WorkspaceArtifact>> {
     let rows = industry_package_repo::list_artifacts_for_workspace(conn, workspace_id)?;
     Ok(rows
         .into_iter()
-        .map(|(artifact, installed_app_name, package_id)| WorkspaceArtifact { artifact, installed_app_name, package_id })
+        .map(
+            |(artifact, installed_app_name, package_id)| WorkspaceArtifact {
+                artifact,
+                installed_app_name,
+                package_id,
+            },
+        )
         .collect())
 }
 
@@ -273,13 +352,27 @@ pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> Ap
 ///     own namespace so importing it back (into this workspace or any other
 ///     that already auto-seeded `local`, i.e. every workspace) never needs a
 ///     publisher registered first.
-pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<String> {
+pub fn export_local_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<String> {
     require_admin(conn, actor_user_id)?;
     let components = super::solution_component_service::list_local(conn, workspace_id)?;
-    let refs: Vec<(String, String)> = components.into_iter().map(|c| (c.artifact_type, c.metadata_id)).collect();
+    let refs: Vec<(String, String)> = components
+        .into_iter()
+        .map(|c| (c.artifact_type, c.metadata_id))
+        .collect();
     let version = format!("1.0.{}", chrono::Utc::now().timestamp());
-    let manifest = build_export_manifest(conn, &refs, "local.workspace_export".to_string(), "Local Workspace Export".to_string(), version)?;
-    serde_json::to_string_pretty(&manifest).map_err(|e| AppError::Validation(format!("could not serialize export: {e}")))
+    let manifest = build_export_manifest(
+        conn,
+        &refs,
+        "local.workspace_export".to_string(),
+        "Local Workspace Export".to_string(),
+        version,
+    )?;
+    serde_json::to_string_pretty(&manifest)
+        .map_err(|e| AppError::Validation(format!("could not serialize export: {e}")))
 }
 
 /// A named, scoped export - the Dynamics-365-style "build a solution in
@@ -306,13 +399,28 @@ pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_
 /// synthetic timestamp like `export_local_workspace` uses - the version is
 /// the number an admin deliberately bumps each time they hand a new
 /// snapshot to prod.
-pub fn export_solution(conn: &Connection, workspace_id: &str, solution_id: &str, actor_user_id: Option<&str>) -> AppResult<String> {
+pub fn export_solution(
+    conn: &Connection,
+    workspace_id: &str,
+    solution_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<String> {
     require_admin(conn, actor_user_id)?;
     let solution = super::solution_service::get(conn, workspace_id, solution_id)?;
     let members = super::solution_service::list_member_refs(conn, solution_id)?;
-    let refs: Vec<(String, String)> = members.into_iter().map(|m| (m.artifact_type, m.metadata_id)).collect();
-    let manifest = build_export_manifest(conn, &refs, format!("local.solution.{}", solution.id), solution.name.clone(), solution.version.clone())?;
-    serde_json::to_string_pretty(&manifest).map_err(|e| AppError::Validation(format!("could not serialize export: {e}")))
+    let refs: Vec<(String, String)> = members
+        .into_iter()
+        .map(|m| (m.artifact_type, m.metadata_id))
+        .collect();
+    let manifest = build_export_manifest(
+        conn,
+        &refs,
+        format!("local.solution.{}", solution.id),
+        solution.name.clone(),
+        solution.version.clone(),
+    )?;
+    serde_json::to_string_pretty(&manifest)
+        .map_err(|e| AppError::Validation(format!("could not serialize export: {e}")))
 }
 
 /// Shared by `export_local_workspace` and `export_solution` - everything
@@ -333,9 +441,12 @@ fn build_export_manifest(
 ) -> AppResult<IndustryPackageManifest> {
     let mut objects = Vec::new();
     let mut fields = Vec::new();
-    let mut relationships: Vec<crate::models::relationship::RelationshipDefinitionInput> = Vec::new();
-    let mut relationship_key_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let mut relationship_id_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut relationships: Vec<crate::models::relationship::RelationshipDefinitionInput> =
+        Vec::new();
+    let mut relationship_key_index: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    let mut relationship_id_index: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     let mut business_rules = Vec::new();
     let mut raw_workflows: Vec<crate::models::workflow::WorkflowDefinitionInput> = Vec::new();
     let mut screen_layouts = Vec::new();
@@ -345,10 +456,16 @@ fn build_export_manifest(
     // an agent's skill/delegate reference outside this set is dropped on
     // export, the same "a reference this export doesn't own is dropped"
     // policy already applied to a workflow action's relationship_ref above.
-    let exported_ai_skill_ids: std::collections::HashSet<&str> =
-        components.iter().filter(|(t, _)| t == "ai_skill").map(|(_, id)| id.as_str()).collect();
-    let exported_ai_agent_ids: std::collections::HashSet<&str> =
-        components.iter().filter(|(t, _)| t == "ai_agent").map(|(_, id)| id.as_str()).collect();
+    let exported_ai_skill_ids: std::collections::HashSet<&str> = components
+        .iter()
+        .filter(|(t, _)| t == "ai_skill")
+        .map(|(_, id)| id.as_str())
+        .collect();
+    let exported_ai_agent_ids: std::collections::HashSet<&str> = components
+        .iter()
+        .filter(|(t, _)| t == "ai_agent")
+        .map(|(_, id)| id.as_str())
+        .collect();
     let mut reports = Vec::new();
 
     // Pass 1: everything relationships might need to reference (objects,
@@ -437,16 +554,18 @@ fn build_export_manifest(
                         conditions: rule
                             .conditions
                             .into_iter()
-                            .map(|c| crate::models::business_rule::BusinessRuleConditionInput {
-                                field_source: c.field_source,
-                                field_key: c.field_key,
-                                operator: c.operator,
-                                value: c.value,
-                                compare_field_source: c.compare_field_source,
-                                compare_field_key: c.compare_field_key,
-                                group_id: c.group_id,
-                                relationship_definition_id: c.relationship_definition_id,
-                            })
+                            .map(
+                                |c| crate::models::business_rule::BusinessRuleConditionInput {
+                                    field_source: c.field_source,
+                                    field_key: c.field_key,
+                                    operator: c.operator,
+                                    value: c.value,
+                                    compare_field_source: c.compare_field_source,
+                                    compare_field_key: c.compare_field_key,
+                                    group_id: c.group_id,
+                                    relationship_definition_id: c.relationship_definition_id,
+                                },
+                            )
                             .collect(),
                         actions: rule
                             .actions
@@ -493,7 +612,10 @@ fn build_export_manifest(
                         actions: wf
                             .actions
                             .into_iter()
-                            .map(|a| crate::models::workflow::WorkflowActionInput { action_type: a.action_type, params_json: a.params_json })
+                            .map(|a| crate::models::workflow::WorkflowActionInput {
+                                action_type: a.action_type,
+                                params_json: a.params_json,
+                            })
                             .collect(),
                     });
                 }
@@ -522,7 +644,10 @@ fn build_export_manifest(
                 }
             }
             "ai_skill" => {
-                if let Some(skill) = crate::repositories::ai_agent_repo::get_skill(conn, metadata_id).map_err(AppError::from)? {
+                if let Some(skill) =
+                    crate::repositories::ai_agent_repo::get_skill(conn, metadata_id)
+                        .map_err(AppError::from)?
+                {
                     ai_skills.push(crate::models::industry_package::ManifestAiSkill {
                         name: skill.name,
                         description: skill.description,
@@ -531,19 +656,29 @@ fn build_export_manifest(
                 }
             }
             "ai_agent" => {
-                if let Some(agent) = crate::repositories::ai_agent_repo::get(conn, metadata_id).map_err(AppError::from)? {
+                if let Some(agent) = crate::repositories::ai_agent_repo::get(conn, metadata_id)
+                    .map_err(AppError::from)?
+                {
                     let skill_names = agent
                         .skill_ids
                         .iter()
                         .filter(|id: &&String| exported_ai_skill_ids.contains(id.as_str()))
-                        .filter_map(|id| crate::repositories::ai_agent_repo::get_skill(conn, id).ok().flatten())
+                        .filter_map(|id| {
+                            crate::repositories::ai_agent_repo::get_skill(conn, id)
+                                .ok()
+                                .flatten()
+                        })
                         .map(|s| s.name)
                         .collect();
                     let delegate_names = agent
                         .delegate_agent_ids
                         .iter()
                         .filter(|id: &&String| exported_ai_agent_ids.contains(id.as_str()))
-                        .filter_map(|id| crate::repositories::ai_agent_repo::get(conn, id).ok().flatten())
+                        .filter_map(|id| {
+                            crate::repositories::ai_agent_repo::get(conn, id)
+                                .ok()
+                                .flatten()
+                        })
                         .map(|a| a.name)
                         .collect();
                     ai_agents.push(crate::models::industry_package::ManifestAiAgent {
@@ -573,18 +708,30 @@ fn build_export_manifest(
     // `resolve_workflow_action_relationship_refs` undo on import.
     for layout in &mut screen_layouts {
         for tab in &mut layout.draft.tabs {
-            tab.related = tab.related.iter().filter_map(|key| relationship_key_index.get(key).map(|i| i.to_string())).collect();
+            tab.related = tab
+                .related
+                .iter()
+                .filter_map(|key| relationship_key_index.get(key).map(|i| i.to_string()))
+                .collect();
         }
     }
     let mut workflows = Vec::with_capacity(raw_workflows.len());
     for mut wf in raw_workflows {
         let mut keep = true;
         for action in &mut wf.actions {
-            if action.action_type != "create_record" && action.action_type != "update_related_record" {
+            if action.action_type != "create_record"
+                && action.action_type != "update_related_record"
+            {
                 continue;
             }
-            let Ok(mut params) = serde_json::from_str::<serde_json::Value>(&action.params_json) else { continue };
-            let real_id = params.get("relationship_definition_id").and_then(|v| v.as_str()).map(str::to_string);
+            let Ok(mut params) = serde_json::from_str::<serde_json::Value>(&action.params_json)
+            else {
+                continue;
+            };
+            let real_id = params
+                .get("relationship_definition_id")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
             match real_id.and_then(|id| relationship_id_index.get(&id).copied()) {
                 Some(idx) => {
                     if let Some(obj) = params.as_object_mut() {
@@ -651,15 +798,21 @@ pub fn reference_package_manifest(key: &str) -> AppResult<String> {
         "field_service" => Ok(super::reference_packages::field_service_manifest_json()),
         "property_management" => Ok(super::reference_packages::property_management_manifest_json()),
         "construction" => Ok(super::reference_packages::construction_manifest_json()),
-        "professional_services" => Ok(super::reference_packages::professional_services_manifest_json()),
+        "professional_services" => {
+            Ok(super::reference_packages::professional_services_manifest_json())
+        }
         "practice_admin" => Ok(super::reference_packages::practice_admin_manifest_json()),
         "recruitment" => Ok(super::reference_packages::recruitment_manifest_json()),
         "real_estate" => Ok(super::reference_packages::real_estate_manifest_json()),
         "legal_practice" => Ok(super::reference_packages::legal_practice_manifest_json()),
-        "nonprofit_association" => Ok(super::reference_packages::nonprofit_association_manifest_json()),
+        "nonprofit_association" => {
+            Ok(super::reference_packages::nonprofit_association_manifest_json())
+        }
         "auto_service" => Ok(super::reference_packages::auto_service_manifest_json()),
         "policy_admin_claims" => Ok(super::reference_packages::policy_admin_claims_manifest_json()),
-        "industry_foundation" => Ok(super::reference_packages::lanesra_industry_foundation_manifest_json()),
+        "industry_foundation" => {
+            Ok(super::reference_packages::lanesra_industry_foundation_manifest_json())
+        }
         other => Err(AppError::NotFound(format!("Reference package '{other}'"))),
     }
 }
@@ -667,14 +820,23 @@ pub fn reference_package_manifest(key: &str) -> AppResult<String> {
 /// Re-parses and re-validates an already-imported package's manifest -
 /// what the Admin -> App Catalog screen's "Validate" step calls before
 /// offering "Install".
-pub fn validate_package(conn: &Connection, workspace_id: &str, app_package_id: &str) -> AppResult<()> {
+pub fn validate_package(
+    conn: &Connection,
+    workspace_id: &str,
+    app_package_id: &str,
+) -> AppResult<()> {
     let package = get_owned_package(conn, workspace_id, app_package_id)?;
     let manifest = parse_manifest(&package.manifest_json)?;
     validate(conn, workspace_id, &manifest)
 }
 
-fn get_owned_package(conn: &Connection, workspace_id: &str, app_package_id: &str) -> AppResult<AppPackage> {
-    let package = industry_package_repo::get_package(conn, app_package_id)?.ok_or_else(|| AppError::NotFound("Package".into()))?;
+fn get_owned_package(
+    conn: &Connection,
+    workspace_id: &str,
+    app_package_id: &str,
+) -> AppResult<AppPackage> {
+    let package = industry_package_repo::get_package(conn, app_package_id)?
+        .ok_or_else(|| AppError::NotFound("Package".into()))?;
     if package.workspace_id != workspace_id {
         return Err(AppError::NotFound("Package".into()));
     }
@@ -696,7 +858,8 @@ fn take_safety_backup(conn: &Connection, actor_user_id: Option<&str>) -> AppResu
         .decode(&package.package_base64)
         .map_err(|e| AppError::Validation(format!("could not decode safety backup: {e}")))?;
     let path = std::env::temp_dir().join(format!("lanesra-install-backup-{}.lanesra", new_uuid()));
-    std::fs::write(&path, bytes).map_err(|e| AppError::Validation(format!("could not write safety backup: {e}")))?;
+    std::fs::write(&path, bytes)
+        .map_err(|e| AppError::Validation(format!("could not write safety backup: {e}")))?;
     Ok(path.to_string_lossy().into_owned())
 }
 
@@ -708,7 +871,10 @@ fn take_safety_backup(conn: &Connection, actor_user_id: Option<&str>) -> AppResu
 /// `IndustryPackageManifest::relationships`, written as a decimal string
 /// (e.g. `["0", "2"]`) - resolved here, once, into the real keys the
 /// screen layout actually needs.
-fn resolve_related_indices(draft: &mut LayoutTabs, relationships: &[RelationshipDefinition]) -> AppResult<()> {
+fn resolve_related_indices(
+    draft: &mut LayoutTabs,
+    relationships: &[RelationshipDefinition],
+) -> AppResult<()> {
     for tab in &mut draft.tabs {
         let mut resolved = Vec::with_capacity(tab.related.len());
         for raw in &tab.related {
@@ -736,7 +902,10 @@ fn resolve_related_indices(draft: &mut LayoutTabs, relationships: &[Relationship
 /// `"chart"` dashboard widget's `report_ref` (see `ManifestDashboard`'s
 /// own doc comment) - rewritten into the real `report_id` a
 /// `DashboardWidget` needs.
-fn resolve_dashboard_widgets(widgets: &[ManifestDashboardWidget], reports: &[CustomReport]) -> AppResult<Vec<DashboardWidget>> {
+fn resolve_dashboard_widgets(
+    widgets: &[ManifestDashboardWidget],
+    reports: &[CustomReport],
+) -> AppResult<Vec<DashboardWidget>> {
     widgets
         .iter()
         .map(|w| {
@@ -780,8 +949,13 @@ fn resolve_workflow_action_relationship_refs(
         if action.action_type != "create_record" && action.action_type != "update_related_record" {
             continue;
         }
-        let mut params: serde_json::Value = serde_json::from_str(&action.params_json)
-            .map_err(|e| AppError::Validation(format!("Invalid parameters for '{}': {e}", action.action_type)))?;
+        let mut params: serde_json::Value =
+            serde_json::from_str(&action.params_json).map_err(|e| {
+                AppError::Validation(format!(
+                    "Invalid parameters for '{}': {e}",
+                    action.action_type
+                ))
+            })?;
         let idx = match params.get("relationship_ref").and_then(|v| v.as_u64()) {
             Some(idx) => idx as usize,
             None => continue, // create_record's link is optional - no ref, nothing to resolve
@@ -796,7 +970,10 @@ fn resolve_workflow_action_relationship_refs(
         })?;
         if let Some(obj) = params.as_object_mut() {
             obj.remove("relationship_ref");
-            obj.insert("relationship_definition_id".to_string(), serde_json::Value::String(rel.id.clone()));
+            obj.insert(
+                "relationship_definition_id".to_string(),
+                serde_json::Value::String(rel.id.clone()),
+            );
         }
         action.params_json = params.to_string();
     }
@@ -815,16 +992,31 @@ fn resolve_workflow_action_relationship_refs(
 /// `app_definition_id` is known, at the very end - see the inline
 /// comments below for why `package_artifacts` rows are buffered in memory
 /// until then instead of inserted as each item is created.
-fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackageManifest, actor_user_id: Option<&str>) -> AppResult<InstalledApp> {
-    if industry_package_repo::get_installed_app_by_package(conn, workspace_id, &manifest.package_id)?.is_some() {
-        return Err(AppError::Conflict(format!("'{}' is already installed in this workspace", manifest.package_id)));
+fn run_install(
+    conn: &Connection,
+    workspace_id: &str,
+    manifest: &IndustryPackageManifest,
+    actor_user_id: Option<&str>,
+) -> AppResult<InstalledApp> {
+    if industry_package_repo::get_installed_app_by_package(
+        conn,
+        workspace_id,
+        &manifest.package_id,
+    )?
+    .is_some()
+    {
+        return Err(AppError::Conflict(format!(
+            "'{}' is already installed in this workspace",
+            manifest.package_id
+        )));
     }
     validate(conn, workspace_id, manifest)?;
     // Resolved once up front so the retag loop near the end doesn't
     // re-derive it per artifact - the same publisher `import_package`
     // already required to exist before this package could even be
     // imported (see that function's own comment).
-    let publisher = super::publisher_service::resolve_for_package_id(conn, workspace_id, &manifest.package_id)?;
+    let publisher =
+        super::publisher_service::resolve_for_package_id(conn, workspace_id, &manifest.package_id)?;
 
     // (artifact_type, metadata_id) - not inserted until the installed_apps
     // row exists (package_artifacts.installed_app_id is NOT NULL), so
@@ -832,12 +1024,24 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
     let mut artifacts: Vec<(&'static str, String)> = Vec::new();
 
     for obj in &manifest.objects {
-        let created = custom_object_service::create_with_key(conn, workspace_id, &obj.key, &obj.definition, actor_user_id)?;
+        let created = custom_object_service::create_with_key(
+            conn,
+            workspace_id,
+            &obj.key,
+            &obj.definition,
+            actor_user_id,
+        )?;
         artifacts.push(("custom_object", created.id));
     }
 
     for field in &manifest.fields {
-        let created = custom_field_service::create_definition_with_key(conn, workspace_id, &field.key, &field.definition, actor_user_id)?;
+        let created = custom_field_service::create_definition_with_key(
+            conn,
+            workspace_id,
+            &field.key,
+            &field.definition,
+            actor_user_id,
+        )?;
         artifacts.push(("custom_field", created.id));
     }
 
@@ -851,13 +1055,16 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
     }
 
     for rule_input in &manifest.business_rules {
-        let created = business_rule_service::create_rule(conn, workspace_id, rule_input, actor_user_id)?;
+        let created =
+            business_rule_service::create_rule(conn, workspace_id, rule_input, actor_user_id)?;
         artifacts.push(("business_rule", created.id));
     }
 
     for workflow_input in &manifest.workflows {
-        let resolved_input = resolve_workflow_action_relationship_refs(workflow_input, &created_relationships)?;
-        let created = workflow_service::create_rule(conn, workspace_id, &resolved_input, actor_user_id)?;
+        let resolved_input =
+            resolve_workflow_action_relationship_refs(workflow_input, &created_relationships)?;
+        let created =
+            workflow_service::create_rule(conn, workspace_id, &resolved_input, actor_user_id)?;
         artifacts.push(("workflow_definition", created.id));
     }
 
@@ -867,13 +1074,21 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
         let created = screen_layout_service::create_layout(
             conn,
             workspace_id,
-            &ScreenLayoutInput { entity_type: layout.entity_type.clone(), name: layout.name.clone(), initial_fields: vec![] },
+            &ScreenLayoutInput {
+                entity_type: layout.entity_type.clone(),
+                name: layout.name.clone(),
+                initial_fields: vec![],
+            },
             actor_user_id,
         )?;
         let created = screen_layout_service::update_layout(
             conn,
             &created.id,
-            &ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft },
+            &ScreenLayoutUpdate {
+                name: layout.name.clone(),
+                roles: vec![],
+                draft,
+            },
             actor_user_id,
         )?;
         if layout.publish {
@@ -886,7 +1101,8 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
     // report_ref against this list.
     let mut created_reports: Vec<CustomReport> = Vec::new();
     for report_input in &manifest.reports {
-        let created = custom_report_service::create(conn, workspace_id, report_input, actor_user_id)?;
+        let created =
+            custom_report_service::create(conn, workspace_id, report_input, actor_user_id)?;
         artifacts.push(("custom_report", created.id.clone()));
         created_reports.push(created);
     }
@@ -897,13 +1113,22 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
         let created = dashboard_layout_service::create_layout(
             conn,
             workspace_id,
-            &DashboardLayoutInput { name: dashboard.name.clone(), initial_kpi_keys: vec![], app_id: None },
+            &DashboardLayoutInput {
+                name: dashboard.name.clone(),
+                initial_kpi_keys: vec![],
+                app_id: None,
+            },
             actor_user_id,
         )?;
         let created = dashboard_layout_service::update_layout(
             conn,
             &created.id,
-            &DashboardLayoutUpdate { name: dashboard.name.clone(), roles: vec![], draft: DashboardWidgets { widgets }, app_id: None },
+            &DashboardLayoutUpdate {
+                name: dashboard.name.clone(),
+                roles: vec![],
+                draft: DashboardWidgets { widgets },
+                app_id: None,
+            },
             actor_user_id,
         )?;
         if dashboard.publish {
@@ -927,7 +1152,8 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
     // references afterward" shape relationships/screen layouts use above -
     // an agent's delegate_names can otherwise name an agent that appears
     // later in this same manifest.
-    let mut skill_name_to_id: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut skill_name_to_id: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     for skill_input in &manifest.ai_skills {
         let created = super::ai_agent_service::create_skill(
             conn,
@@ -943,10 +1169,15 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
         artifacts.push(("ai_skill", created.id));
     }
 
-    let mut agent_name_to_id: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut agent_name_to_id: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     let mut deferred_delegates: Vec<(String, Vec<String>)> = Vec::new();
     for agent_input in &manifest.ai_agents {
-        let skill_ids: Vec<String> = agent_input.skill_names.iter().filter_map(|n| skill_name_to_id.get(n).cloned()).collect();
+        let skill_ids: Vec<String> = agent_input
+            .skill_names
+            .iter()
+            .filter_map(|n| skill_name_to_id.get(n).cloned())
+            .collect();
         let created = super::ai_agent_service::create(
             conn,
             workspace_id,
@@ -964,10 +1195,21 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
             actor_user_id,
         )?;
         if !agent_input.memory_md.is_empty() {
-            crate::repositories::ai_agent_repo::update_memory(conn, &created.id, &agent_input.memory_md, actor_user_id.unwrap_or("import")).map_err(AppError::from)?;
+            crate::repositories::ai_agent_repo::update_memory(
+                conn,
+                &created.id,
+                &agent_input.memory_md,
+                actor_user_id.unwrap_or("import"),
+            )
+            .map_err(AppError::from)?;
         }
         if !agent_input.guardrails_md.is_empty() {
-            crate::repositories::ai_agent_repo::set_guardrails(conn, &created.id, &agent_input.guardrails_md).map_err(AppError::from)?;
+            crate::repositories::ai_agent_repo::set_guardrails(
+                conn,
+                &created.id,
+                &agent_input.guardrails_md,
+            )
+            .map_err(AppError::from)?;
         }
         agent_name_to_id.insert(created.name.clone(), created.id.clone());
         if !agent_input.delegate_names.is_empty() {
@@ -979,7 +1221,10 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
         // Names this same manifest doesn't also define as an agent are
         // dropped, same "a reference this export doesn't own" policy as
         // everywhere else in this function.
-        let delegate_ids: Vec<String> = delegate_names.iter().filter_map(|n| agent_name_to_id.get(n).cloned()).collect();
+        let delegate_ids: Vec<String> = delegate_names
+            .iter()
+            .filter_map(|n| agent_name_to_id.get(n).cloned())
+            .collect();
         if delegate_ids.is_empty() {
             continue;
         }
@@ -1014,10 +1259,18 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
             let created = app_service::create(
                 conn,
                 workspace_id,
-                &AppDefinitionInput { name: app.name.clone(), icon: app.icon.clone(), description: app.description.clone() },
+                &AppDefinitionInput {
+                    name: app.name.clone(),
+                    icon: app.icon.clone(),
+                    description: app.description.clone(),
+                },
                 actor_user_id,
             )?;
-            let dashboard_id = if app.use_package_dashboard { dashboard_layout_id.clone() } else { None };
+            let dashboard_id = if app.use_package_dashboard {
+                dashboard_layout_id.clone()
+            } else {
+                None
+            };
             let created = app_service::update(
                 conn,
                 &created.id,
@@ -1034,7 +1287,8 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
                 app_service::publish(conn, &created.id, actor_user_id)?;
             }
             app_definition_id = Some(created.id);
-            recommended_permissions_json = serde_json::to_string(&app.recommended_permissions).unwrap_or_else(|_| "[]".into());
+            recommended_permissions_json =
+                serde_json::to_string(&app.recommended_permissions).unwrap_or_else(|_| "[]".into());
             (app.name.clone(), app.icon.clone(), app.description.clone())
         }
         None => (manifest.name.clone(), "\u{2b21}".to_string(), None),
@@ -1057,7 +1311,14 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
     )?;
 
     for (artifact_type, metadata_id) in &artifacts {
-        industry_package_repo::insert_artifact(conn, &new_uuid(), &installed_app_id, artifact_type, metadata_id, &manifest.version)?;
+        industry_package_repo::insert_artifact(
+            conn,
+            &new_uuid(),
+            &installed_app_id,
+            artifact_type,
+            metadata_id,
+            &manifest.version,
+        )?;
         // Every artifact above was already tagged 'local' the moment its
         // own service function created it (see solution_component_service
         // and migration 0030's own comment) - this overwrites that tag
@@ -1072,7 +1333,15 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
         // package_artifacts without ever entering this `artifacts` buffer,
         // so they never reach this loop at all.
         if *artifact_type != "numbering_override" {
-            super::solution_component_service::retag(conn, workspace_id, artifact_type, metadata_id, &publisher.id, &installed_app_id, actor_user_id)?;
+            super::solution_component_service::retag(
+                conn,
+                workspace_id,
+                artifact_type,
+                metadata_id,
+                &publisher.id,
+                &installed_app_id,
+                actor_user_id,
+            )?;
         }
     }
 
@@ -1080,11 +1349,25 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
     // sample record can carry values for this package's own custom
     // fields, all of which now exist.
     for sample in &manifest.seed_data {
-        let record = custom_record_service::create(conn, workspace_id, &sample.record, actor_user_id)?;
+        let record =
+            custom_record_service::create(conn, workspace_id, &sample.record, actor_user_id)?;
         if !sample.field_values.is_empty() {
-            custom_field_service::set_entity_values(conn, &sample.object_key, &record.id, &sample.field_values, actor_user_id)?;
+            custom_field_service::set_entity_values(
+                conn,
+                &sample.object_key,
+                &record.id,
+                &sample.field_values,
+                actor_user_id,
+            )?;
         }
-        industry_package_repo::insert_artifact(conn, &new_uuid(), &installed_app_id, "custom_record", &record.id, &manifest.version)?;
+        industry_package_repo::insert_artifact(
+            conn,
+            &new_uuid(),
+            &installed_app_id,
+            "custom_record",
+            &record.id,
+            &manifest.version,
+        )?;
     }
 
     Ok(installed)
@@ -1099,13 +1382,26 @@ fn run_install(conn: &Connection, workspace_id: &str, manifest: &IndustryPackage
 /// `&Connection` - see this crate's other services for that convention).
 /// `app_install_runs` records the attempt either way, success or failure,
 /// so a failed install still leaves a readable "why it failed" record.
-pub fn install(conn: &Connection, workspace_id: &str, app_package_id: &str, actor_user_id: Option<&str>) -> AppResult<InstalledApp> {
+pub fn install(
+    conn: &Connection,
+    workspace_id: &str,
+    app_package_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<InstalledApp> {
     require_admin(conn, actor_user_id)?;
     let package = get_owned_package(conn, workspace_id, app_package_id)?;
     let manifest = parse_manifest(&package.manifest_json)?;
 
     let run_id = new_uuid();
-    industry_package_repo::start_run(conn, &run_id, workspace_id, &manifest.package_id, &manifest.version, "install", actor_user_id)?;
+    industry_package_repo::start_run(
+        conn,
+        &run_id,
+        workspace_id,
+        &manifest.package_id,
+        &manifest.version,
+        "install",
+        actor_user_id,
+    )?;
 
     // `validate` runs *inside* the recorded attempt (not before start_run)
     // so a rejected min-version or unmet dependency leaves the same
@@ -1124,7 +1420,13 @@ pub fn install(conn: &Connection, workspace_id: &str, app_package_id: &str, acto
 
     match outcome {
         Ok((installed, backup_path)) => {
-            industry_package_repo::complete_run(conn, &run_id, "succeeded", None, Some(&backup_path))?;
+            industry_package_repo::complete_run(
+                conn,
+                &run_id,
+                "succeeded",
+                None,
+                Some(&backup_path),
+            )?;
             audit_repo::record(
                 conn,
                 workspace_id,
@@ -1132,13 +1434,22 @@ pub fn install(conn: &Connection, workspace_id: &str, app_package_id: &str, acto
                 "install",
                 Some("app_install"),
                 Some(&installed.id),
-                &format!("Installed app '{}' from package '{}'", installed.name, manifest.name),
+                &format!(
+                    "Installed app '{}' from package '{}'",
+                    installed.name, manifest.name
+                ),
                 None,
             )?;
             Ok(installed)
         }
         Err(e) => {
-            industry_package_repo::complete_run(conn, &run_id, "failed", Some(&e.to_string()), None)?;
+            industry_package_repo::complete_run(
+                conn,
+                &run_id,
+                "failed",
+                Some(&e.to_string()),
+                None,
+            )?;
             Err(e)
         }
     }
@@ -1151,33 +1462,63 @@ pub fn install(conn: &Connection, workspace_id: &str, app_package_id: &str, acto
 /// (that's `install`'s job, not this pair's) or if its recorded
 /// installed-version manifest has somehow gone missing (should be
 /// unreachable - `app_packages` rows are never deleted).
-fn currently_installed_manifest(conn: &Connection, workspace_id: &str, package_id: &str) -> AppResult<(InstalledApp, IndustryPackageManifest)> {
-    let installed = industry_package_repo::get_installed_app_by_package(conn, workspace_id, package_id)?
-        .ok_or_else(|| AppError::Validation(format!("'{package_id}' isn't installed in this workspace yet - use Install, not Update")))?;
-    let old_package = industry_package_repo::get_package_by_version(conn, workspace_id, package_id, &installed.installed_version)?
-        .ok_or_else(|| AppError::NotFound("Currently installed package version".into()))?;
+fn currently_installed_manifest(
+    conn: &Connection,
+    workspace_id: &str,
+    package_id: &str,
+) -> AppResult<(InstalledApp, IndustryPackageManifest)> {
+    let installed =
+        industry_package_repo::get_installed_app_by_package(conn, workspace_id, package_id)?
+            .ok_or_else(|| {
+                AppError::Validation(format!(
+            "'{package_id}' isn't installed in this workspace yet - use Install, not Update"
+        ))
+            })?;
+    let old_package = industry_package_repo::get_package_by_version(
+        conn,
+        workspace_id,
+        package_id,
+        &installed.installed_version,
+    )?
+    .ok_or_else(|| AppError::NotFound("Currently installed package version".into()))?;
     let old_manifest = parse_manifest(&old_package.manifest_json)?;
     Ok((installed, old_manifest))
 }
 
-fn diff_keyed<'a, T>(old: &'a [T], new: &'a [T], key_of: impl Fn(&'a T) -> String, def_of: impl Fn(&'a T) -> serde_json::Value) -> Vec<crate::models::industry_package::PackageUpdateDiffEntry> {
+fn diff_keyed<'a, T>(
+    old: &'a [T],
+    new: &'a [T],
+    key_of: impl Fn(&'a T) -> String,
+    def_of: impl Fn(&'a T) -> serde_json::Value,
+) -> Vec<crate::models::industry_package::PackageUpdateDiffEntry> {
     use crate::models::industry_package::PackageUpdateDiffEntry;
-    let old_by_key: std::collections::HashMap<String, &T> = old.iter().map(|x| (key_of(x), x)).collect();
-    let new_by_key: std::collections::HashMap<String, &T> = new.iter().map(|x| (key_of(x), x)).collect();
+    let old_by_key: std::collections::HashMap<String, &T> =
+        old.iter().map(|x| (key_of(x), x)).collect();
+    let new_by_key: std::collections::HashMap<String, &T> =
+        new.iter().map(|x| (key_of(x), x)).collect();
     let mut entries = Vec::new();
     for (key, item) in &new_by_key {
         match old_by_key.get(key) {
-            None => entries.push(PackageUpdateDiffEntry { key: key.clone(), kind: "added".to_string() }),
+            None => entries.push(PackageUpdateDiffEntry {
+                key: key.clone(),
+                kind: "added".to_string(),
+            }),
             Some(old_item) => {
                 if def_of(item) != def_of(old_item) {
-                    entries.push(PackageUpdateDiffEntry { key: key.clone(), kind: "modified".to_string() });
+                    entries.push(PackageUpdateDiffEntry {
+                        key: key.clone(),
+                        kind: "modified".to_string(),
+                    });
                 }
             }
         }
     }
     for key in old_by_key.keys() {
         if !new_by_key.contains_key(key) {
-            entries.push(PackageUpdateDiffEntry { key: key.clone(), kind: "removed".to_string() });
+            entries.push(PackageUpdateDiffEntry {
+                key: key.clone(),
+                kind: "removed".to_string(),
+            });
         }
     }
     entries.sort_by(|a, b| a.key.cmp(&b.key));
@@ -1198,10 +1539,15 @@ fn diff_keyed<'a, T>(old: &'a [T], new: &'a [T], key_of: impl Fn(&'a T) -> Strin
 /// what `apply_update` is able to safely add (see that function's own
 /// doc comment for why positions the old manifest already declared are
 /// left untouched rather than guessed at).
-pub fn plan_update(conn: &Connection, workspace_id: &str, new_app_package_id: &str) -> AppResult<crate::models::industry_package::PackageUpdateDiff> {
+pub fn plan_update(
+    conn: &Connection,
+    workspace_id: &str,
+    new_app_package_id: &str,
+) -> AppResult<crate::models::industry_package::PackageUpdateDiff> {
     let new_package = get_owned_package(conn, workspace_id, new_app_package_id)?;
     let new_manifest = parse_manifest(&new_package.manifest_json)?;
-    let (installed, old_manifest) = currently_installed_manifest(conn, workspace_id, &new_manifest.package_id)?;
+    let (installed, old_manifest) =
+        currently_installed_manifest(conn, workspace_id, &new_manifest.package_id)?;
 
     let objects = diff_keyed(
         &old_manifest.objects,
@@ -1222,11 +1568,26 @@ pub fn plan_update(conn: &Connection, workspace_id: &str, new_app_package_id: &s
         to_version: new_manifest.version.clone(),
         objects,
         fields,
-        relationships_added: new_manifest.relationships.len().saturating_sub(old_manifest.relationships.len()) as i64,
-        business_rules_added: new_manifest.business_rules.len().saturating_sub(old_manifest.business_rules.len()) as i64,
-        workflows_added: new_manifest.workflows.len().saturating_sub(old_manifest.workflows.len()) as i64,
-        screen_layouts_added: new_manifest.screen_layouts.len().saturating_sub(old_manifest.screen_layouts.len()) as i64,
-        reports_added: new_manifest.reports.len().saturating_sub(old_manifest.reports.len()) as i64,
+        relationships_added: new_manifest
+            .relationships
+            .len()
+            .saturating_sub(old_manifest.relationships.len()) as i64,
+        business_rules_added: new_manifest
+            .business_rules
+            .len()
+            .saturating_sub(old_manifest.business_rules.len()) as i64,
+        workflows_added: new_manifest
+            .workflows
+            .len()
+            .saturating_sub(old_manifest.workflows.len()) as i64,
+        screen_layouts_added: new_manifest
+            .screen_layouts
+            .len()
+            .saturating_sub(old_manifest.screen_layouts.len()) as i64,
+        reports_added: new_manifest
+            .reports
+            .len()
+            .saturating_sub(old_manifest.reports.len()) as i64,
     })
 }
 
@@ -1260,7 +1621,11 @@ fn run_update(
     installed_app_id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    let publisher = super::publisher_service::resolve_for_package_id(conn, workspace_id, &new_manifest.package_id)?;
+    let publisher = super::publisher_service::resolve_for_package_id(
+        conn,
+        workspace_id,
+        &new_manifest.package_id,
+    )?;
     let mut new_artifacts: Vec<(&'static str, String)> = Vec::new();
 
     for obj in &new_manifest.objects {
@@ -1277,16 +1642,27 @@ fn run_update(
                 custom_object_service::update(conn, &existing.id, &update, actor_user_id)?;
             }
             None => {
-                let created = custom_object_service::create_with_key(conn, workspace_id, &obj.key, &obj.definition, actor_user_id)?;
+                let created = custom_object_service::create_with_key(
+                    conn,
+                    workspace_id,
+                    &obj.key,
+                    &obj.definition,
+                    actor_user_id,
+                )?;
                 new_artifacts.push(("custom_object", created.id));
             }
         }
     }
 
     for field in &new_manifest.fields {
-        let existing = custom_field_service::list_definitions(conn, workspace_id, &field.definition.entity_type, false)?
-            .into_iter()
-            .find(|d| d.key == field.key);
+        let existing = custom_field_service::list_definitions(
+            conn,
+            workspace_id,
+            &field.definition.entity_type,
+            false,
+        )?
+        .into_iter()
+        .find(|d| d.key == field.key);
         match existing {
             Some(existing) => {
                 let update = crate::models::custom_field::CustomFieldDefinitionUpdate {
@@ -1309,10 +1685,21 @@ fn run_update(
                     placeholder: field.definition.placeholder.clone(),
                     is_hidden_by_default: field.definition.is_hidden_by_default,
                 };
-                custom_field_service::update_definition(conn, &existing.id, &update, actor_user_id)?;
+                custom_field_service::update_definition(
+                    conn,
+                    &existing.id,
+                    &update,
+                    actor_user_id,
+                )?;
             }
             None => {
-                let created = custom_field_service::create_definition_with_key(conn, workspace_id, &field.key, &field.definition, actor_user_id)?;
+                let created = custom_field_service::create_definition_with_key(
+                    conn,
+                    workspace_id,
+                    &field.key,
+                    &field.definition,
+                    actor_user_id,
+                )?;
                 new_artifacts.push(("custom_field", created.id));
             }
         }
@@ -1322,7 +1709,8 @@ fn run_update(
     // new screen layout tab / workflow action added in this same update
     // can resolve a `relationship_ref`/`related` pointing at one of them.
     let old_relationship_count = old_manifest.relationships.len();
-    let mut new_relationship_index: std::collections::HashMap<usize, RelationshipDefinition> = std::collections::HashMap::new();
+    let mut new_relationship_index: std::collections::HashMap<usize, RelationshipDefinition> =
+        std::collections::HashMap::new();
     for (i, rel_input) in new_manifest.relationships.iter().enumerate() {
         if i < old_relationship_count {
             continue;
@@ -1334,7 +1722,8 @@ fn run_update(
 
     let old_rule_count = old_manifest.business_rules.len();
     for rule_input in new_manifest.business_rules.iter().skip(old_rule_count) {
-        let created = business_rule_service::create_rule(conn, workspace_id, rule_input, actor_user_id)?;
+        let created =
+            business_rule_service::create_rule(conn, workspace_id, rule_input, actor_user_id)?;
         new_artifacts.push(("business_rule", created.id));
     }
 
@@ -1344,16 +1733,27 @@ fn run_update(
         // relationship survives - see this function's own doc comment.
         let mut resolved = workflow_input.clone();
         for action in &mut resolved.actions {
-            if action.action_type != "create_record" && action.action_type != "update_related_record" {
+            if action.action_type != "create_record"
+                && action.action_type != "update_related_record"
+            {
                 continue;
             }
-            let Ok(mut params) = serde_json::from_str::<serde_json::Value>(&action.params_json) else { continue };
-            let idx = params.get("relationship_ref").and_then(|v| v.as_u64()).map(|v| v as usize);
+            let Ok(mut params) = serde_json::from_str::<serde_json::Value>(&action.params_json)
+            else {
+                continue;
+            };
+            let idx = params
+                .get("relationship_ref")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
             match idx.and_then(|i| new_relationship_index.get(&i)) {
                 Some(rel) => {
                     if let Some(obj) = params.as_object_mut() {
                         obj.remove("relationship_ref");
-                        obj.insert("relationship_definition_id".to_string(), serde_json::Value::String(rel.id.clone()));
+                        obj.insert(
+                            "relationship_definition_id".to_string(),
+                            serde_json::Value::String(rel.id.clone()),
+                        );
                     }
                     action.params_json = params.to_string();
                 }
@@ -1384,11 +1784,23 @@ fn run_update(
         let created = screen_layout_service::create_layout(
             conn,
             workspace_id,
-            &ScreenLayoutInput { entity_type: layout.entity_type.clone(), name: layout.name.clone(), initial_fields: vec![] },
+            &ScreenLayoutInput {
+                entity_type: layout.entity_type.clone(),
+                name: layout.name.clone(),
+                initial_fields: vec![],
+            },
             actor_user_id,
         )?;
-        let created =
-            screen_layout_service::update_layout(conn, &created.id, &ScreenLayoutUpdate { name: layout.name.clone(), roles: vec![], draft }, actor_user_id)?;
+        let created = screen_layout_service::update_layout(
+            conn,
+            &created.id,
+            &ScreenLayoutUpdate {
+                name: layout.name.clone(),
+                roles: vec![],
+                draft,
+            },
+            actor_user_id,
+        )?;
         if layout.publish {
             screen_layout_service::publish_layout(conn, &created.id, actor_user_id)?;
         }
@@ -1397,16 +1809,37 @@ fn run_update(
 
     let old_report_count = old_manifest.reports.len();
     for report_input in new_manifest.reports.iter().skip(old_report_count) {
-        let created = custom_report_service::create(conn, workspace_id, report_input, actor_user_id)?;
+        let created =
+            custom_report_service::create(conn, workspace_id, report_input, actor_user_id)?;
         new_artifacts.push(("custom_report", created.id));
     }
 
     for (artifact_type, metadata_id) in &new_artifacts {
-        industry_package_repo::insert_artifact(conn, &new_uuid(), installed_app_id, artifact_type, metadata_id, &new_manifest.version)?;
-        super::solution_component_service::retag(conn, workspace_id, artifact_type, metadata_id, &publisher.id, installed_app_id, actor_user_id)?;
+        industry_package_repo::insert_artifact(
+            conn,
+            &new_uuid(),
+            installed_app_id,
+            artifact_type,
+            metadata_id,
+            &new_manifest.version,
+        )?;
+        super::solution_component_service::retag(
+            conn,
+            workspace_id,
+            artifact_type,
+            metadata_id,
+            &publisher.id,
+            installed_app_id,
+            actor_user_id,
+        )?;
     }
 
-    industry_package_repo::update_installed_version(conn, installed_app_id, &new_manifest.version, actor_user_id)?;
+    industry_package_repo::update_installed_version(
+        conn,
+        installed_app_id,
+        &new_manifest.version,
+        actor_user_id,
+    )?;
     Ok(())
 }
 
@@ -1417,42 +1850,80 @@ fn run_update(
 /// already-installed package_id is rejected outright" behavior this
 /// module's own doc comment used to list as deferred - review the diff
 /// from `plan_update` first; this applies it unconditionally once called.
-pub fn apply_update(conn: &Connection, workspace_id: &str, new_app_package_id: &str, actor_user_id: Option<&str>) -> AppResult<InstalledApp> {
+pub fn apply_update(
+    conn: &Connection,
+    workspace_id: &str,
+    new_app_package_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<InstalledApp> {
     require_admin(conn, actor_user_id)?;
     let new_package = get_owned_package(conn, workspace_id, new_app_package_id)?;
     let new_manifest = parse_manifest(&new_package.manifest_json)?;
-    let (installed, old_manifest) = currently_installed_manifest(conn, workspace_id, &new_manifest.package_id)?;
+    let (installed, old_manifest) =
+        currently_installed_manifest(conn, workspace_id, &new_manifest.package_id)?;
 
     let run_id = new_uuid();
-    industry_package_repo::start_run(conn, &run_id, workspace_id, &new_manifest.package_id, &new_manifest.version, "update", actor_user_id)?;
+    industry_package_repo::start_run(
+        conn,
+        &run_id,
+        workspace_id,
+        &new_manifest.package_id,
+        &new_manifest.version,
+        "update",
+        actor_user_id,
+    )?;
 
     let outcome: AppResult<String> = (|| {
         validate(conn, workspace_id, &new_manifest)?;
         let backup_path = take_safety_backup(conn, actor_user_id)?;
         let tx = conn.unchecked_transaction()?;
-        run_update(&tx, workspace_id, &old_manifest, &new_manifest, &installed.id, actor_user_id)?;
+        run_update(
+            &tx,
+            workspace_id,
+            &old_manifest,
+            &new_manifest,
+            &installed.id,
+            actor_user_id,
+        )?;
         tx.commit()?;
         Ok(backup_path)
     })();
 
     match outcome {
         Ok(backup_path) => {
-            industry_package_repo::complete_run(conn, &run_id, "succeeded", None, Some(&backup_path))?;
-            industry_package_repo::get_installed_app(conn, &installed.id)?.ok_or_else(|| AppError::NotFound("Installed app".into()))
+            industry_package_repo::complete_run(
+                conn,
+                &run_id,
+                "succeeded",
+                None,
+                Some(&backup_path),
+            )?;
+            industry_package_repo::get_installed_app(conn, &installed.id)?
+                .ok_or_else(|| AppError::NotFound("Installed app".into()))
         }
         Err(e) => {
-            industry_package_repo::complete_run(conn, &run_id, "failed", Some(&e.to_string()), None)?;
+            industry_package_repo::complete_run(
+                conn,
+                &run_id,
+                "failed",
+                Some(&e.to_string()),
+                None,
+            )?;
             Err(e)
         }
     }
 }
 
 pub fn list_installed(conn: &Connection, workspace_id: &str) -> AppResult<Vec<InstalledApp>> {
-    Ok(industry_package_repo::list_installed_apps(conn, workspace_id)?)
+    Ok(industry_package_repo::list_installed_apps(
+        conn,
+        workspace_id,
+    )?)
 }
 
 pub fn get_installed_detail(conn: &Connection, id: &str) -> AppResult<InstalledAppDetail> {
-    let app = industry_package_repo::get_installed_app(conn, id)?.ok_or_else(|| AppError::NotFound("Installed app".into()))?;
+    let app = industry_package_repo::get_installed_app(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Installed app".into()))?;
     let artifacts = industry_package_repo::list_artifacts(conn, id)?;
     Ok(InstalledAppDetail { app, artifacts })
 }
@@ -1467,11 +1938,24 @@ pub fn list_runs(conn: &Connection, workspace_id: &str) -> AppResult<Vec<AppInst
 /// deactivating to actually have that effect) without touching any
 /// business record or metadata the install created - spec's stated
 /// default removal behavior. `reactivate` is the exact mirror.
-pub fn deactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<InstalledApp> {
+pub fn deactivate(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<InstalledApp> {
     require_admin(conn, actor_user_id)?;
-    let app = industry_package_repo::get_installed_app(conn, id)?.ok_or_else(|| AppError::NotFound("Installed app".into()))?;
+    let app = industry_package_repo::get_installed_app(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Installed app".into()))?;
     let run_id = new_uuid();
-    industry_package_repo::start_run(conn, &run_id, &app.workspace_id, &app.package_id, &app.installed_version, "deactivate", actor_user_id)?;
+    industry_package_repo::start_run(
+        conn,
+        &run_id,
+        &app.workspace_id,
+        &app.package_id,
+        &app.installed_version,
+        "deactivate",
+        actor_user_id,
+    )?;
     let outcome: AppResult<()> = (|| {
         industry_package_repo::set_status(conn, id, false, actor_user_id)?;
         if let Some(app_definition_id) = &app.app_definition_id {
@@ -1481,17 +1965,37 @@ pub fn deactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> A
     })();
     match &outcome {
         Ok(()) => industry_package_repo::complete_run(conn, &run_id, "succeeded", None, None)?,
-        Err(e) => industry_package_repo::complete_run(conn, &run_id, "failed", Some(&e.to_string()), None)?,
+        Err(e) => industry_package_repo::complete_run(
+            conn,
+            &run_id,
+            "failed",
+            Some(&e.to_string()),
+            None,
+        )?,
     }
     outcome?;
-    industry_package_repo::get_installed_app(conn, id)?.ok_or_else(|| AppError::NotFound("Installed app".into()))
+    industry_package_repo::get_installed_app(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Installed app".into()))
 }
 
-pub fn reactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<InstalledApp> {
+pub fn reactivate(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<InstalledApp> {
     require_admin(conn, actor_user_id)?;
-    let app = industry_package_repo::get_installed_app(conn, id)?.ok_or_else(|| AppError::NotFound("Installed app".into()))?;
+    let app = industry_package_repo::get_installed_app(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Installed app".into()))?;
     let run_id = new_uuid();
-    industry_package_repo::start_run(conn, &run_id, &app.workspace_id, &app.package_id, &app.installed_version, "reactivate", actor_user_id)?;
+    industry_package_repo::start_run(
+        conn,
+        &run_id,
+        &app.workspace_id,
+        &app.package_id,
+        &app.installed_version,
+        "reactivate",
+        actor_user_id,
+    )?;
     let outcome: AppResult<()> = (|| {
         industry_package_repo::set_status(conn, id, true, actor_user_id)?;
         if let Some(app_definition_id) = &app.app_definition_id {
@@ -1501,8 +2005,15 @@ pub fn reactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> A
     })();
     match &outcome {
         Ok(()) => industry_package_repo::complete_run(conn, &run_id, "succeeded", None, None)?,
-        Err(e) => industry_package_repo::complete_run(conn, &run_id, "failed", Some(&e.to_string()), None)?,
+        Err(e) => industry_package_repo::complete_run(
+            conn,
+            &run_id,
+            "failed",
+            Some(&e.to_string()),
+            None,
+        )?,
     }
     outcome?;
-    industry_package_repo::get_installed_app(conn, id)?.ok_or_else(|| AppError::NotFound("Installed app".into()))
+    industry_package_repo::get_installed_app(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Installed app".into()))
 }

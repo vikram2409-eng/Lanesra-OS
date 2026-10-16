@@ -23,8 +23,8 @@ use rusqlite::Connection;
 use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent_pipeline::{AgentHierarchyNode, PipelineHierarchy};
 use crate::repositories::{ai_agent_pipeline_repo, ai_agent_repo};
-use crate::services::chat_service::MAX_DELEGATION_DEPTH;
 use crate::services::ai_orchestration_service::MAX_PEER_REVIEW_ROUNDS;
+use crate::services::chat_service::MAX_DELEGATION_DEPTH;
 
 /// One agent's node in the tree, expanding its own `delegate_agent_ids`
 /// recursively. `path` is every agent id from the tree's root down to (not
@@ -42,11 +42,21 @@ fn resolve_node(
 ) -> AppResult<AgentHierarchyNode> {
     let agent = ai_agent_repo::get(conn, agent_id)?;
     let (agent_name, agent_icon, agent_is_active, delegate_ids) = match &agent {
-        Some(a) => (a.name.clone(), a.icon.clone(), a.is_active, a.delegate_agent_ids.clone()),
+        Some(a) => (
+            a.name.clone(),
+            a.icon.clone(),
+            a.is_active,
+            a.delegate_agent_ids.clone(),
+        ),
         // An agent referenced by a step or a delegate list can still be
         // deleted out from under it in principle (nothing here cascades) -
         // render a clearly-labeled stub rather than erroring the whole tree.
-        None => ("(deleted agent)".to_string(), "⚠".to_string(), false, Vec::new()),
+        None => (
+            "(deleted agent)".to_string(),
+            "⚠".to_string(),
+            false,
+            Vec::new(),
+        ),
     };
 
     if path.contains(&agent_id.to_string()) {
@@ -58,7 +68,10 @@ fn resolve_node(
             step_order,
             requires_approval,
             delegates: Vec::new(),
-            truncated: Some("Delegation cycle - this agent already appears earlier on this same path".to_string()),
+            truncated: Some(
+                "Delegation cycle - this agent already appears earlier on this same path"
+                    .to_string(),
+            ),
         });
     }
     if depth >= MAX_DELEGATION_DEPTH {
@@ -77,34 +90,68 @@ fn resolve_node(
     path.push(agent_id.to_string());
     let mut delegates = Vec::with_capacity(delegate_ids.len());
     for delegate_id in &delegate_ids {
-        delegates.push(resolve_node(conn, delegate_id, None, false, path, depth + 1)?);
+        delegates.push(resolve_node(
+            conn,
+            delegate_id,
+            None,
+            false,
+            path,
+            depth + 1,
+        )?);
     }
     path.pop();
 
-    Ok(AgentHierarchyNode { agent_id: agent_id.to_string(), agent_name, agent_icon, agent_is_active, step_order, requires_approval, delegates, truncated: None })
+    Ok(AgentHierarchyNode {
+        agent_id: agent_id.to_string(),
+        agent_name,
+        agent_icon,
+        agent_is_active,
+        step_order,
+        requires_approval,
+        delegates,
+        truncated: None,
+    })
 }
 
 /// Builds the full hierarchy for one Pipeline - one root per step, each
 /// expanded through that step's agent's own delegate graph.
 pub fn resolve(conn: &Connection, pipeline_id: &str) -> AppResult<PipelineHierarchy> {
-    let pipeline = ai_agent_pipeline_repo::get(conn, pipeline_id)?.ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
+    let pipeline = ai_agent_pipeline_repo::get(conn, pipeline_id)?
+        .ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
 
     let mut roots = Vec::with_capacity(pipeline.steps.len());
     for step in &pipeline.steps {
         let mut path = Vec::new();
-        roots.push(resolve_node(conn, &step.agent_id, Some(step.step_order), step.requires_approval, &mut path, 0)?);
+        roots.push(resolve_node(
+            conn,
+            &step.agent_id,
+            Some(step.step_order),
+            step.requires_approval,
+            &mut path,
+            0,
+        )?);
     }
 
     let description_md = describe_pipeline(&pipeline.name, &pipeline.topology, &roots);
 
-    Ok(PipelineHierarchy { pipeline_id: pipeline.id, pipeline_name: pipeline.name, topology: pipeline.topology, roots, description_md })
+    Ok(PipelineHierarchy {
+        pipeline_id: pipeline.id,
+        pipeline_name: pipeline.name,
+        topology: pipeline.topology,
+        roots,
+        description_md,
+    })
 }
 
 fn delegate_summary(node: &AgentHierarchyNode) -> String {
     if node.delegates.is_empty() {
         return String::new();
     }
-    let names: Vec<&str> = node.delegates.iter().map(|d| d.agent_name.as_str()).collect();
+    let names: Vec<&str> = node
+        .delegates
+        .iter()
+        .map(|d| d.agent_name.as_str())
+        .collect();
     format!(" (which may delegate to {})", names.join(", "))
 }
 
@@ -114,9 +161,15 @@ fn delegate_summary(node: &AgentHierarchyNode) -> String {
 /// sentence explaining how the steps relate to each other. Only ever reads
 /// `roots` (already-resolved data), never re-queries the database, so this
 /// can never disagree with what `resolve` itself just built.
-pub fn describe_pipeline(pipeline_name: &str, topology: &str, roots: &[AgentHierarchyNode]) -> String {
+pub fn describe_pipeline(
+    pipeline_name: &str,
+    topology: &str,
+    roots: &[AgentHierarchyNode],
+) -> String {
     if roots.is_empty() {
-        return format!("**{pipeline_name}** has no steps yet - add at least one to see how it runs.");
+        return format!(
+            "**{pipeline_name}** has no steps yet - add at least one to see how it runs."
+        );
     }
 
     let mut lines = Vec::new();
@@ -129,7 +182,11 @@ pub fn describe_pipeline(pipeline_name: &str, topology: &str, roots: &[AgentHier
                 candidates.len()
             ));
             for c in candidates {
-                lines.push(format!("- Candidate: **{}**{}", c.agent_name, delegate_summary(c)));
+                lines.push(format!(
+                    "- Candidate: **{}**{}",
+                    c.agent_name,
+                    delegate_summary(c)
+                ));
             }
             lines.push(format!("- Synthesizer: **{}**{}, reads every candidate's answer via `{{{{candidate_outputs}}}}`.", synthesizer.agent_name, delegate_summary(synthesizer)));
         }
@@ -144,9 +201,21 @@ pub fn describe_pipeline(pipeline_name: &str, topology: &str, roots: &[AgentHier
         _ => {
             lines.push(format!("**{pipeline_name}** runs {} step(s) in order, each one's output feeding the next via `{{{{previous_output}}}}`.", roots.len()));
             for r in roots {
-                let step_label = r.step_order.map(|n| format!("Step {}", n + 1)).unwrap_or_default();
-                let pause = if r.requires_approval { " - pauses for an Administrator's approval before continuing" } else { "" };
-                lines.push(format!("- {step_label}: **{}**{}{}", r.agent_name, delegate_summary(r), pause));
+                let step_label = r
+                    .step_order
+                    .map(|n| format!("Step {}", n + 1))
+                    .unwrap_or_default();
+                let pause = if r.requires_approval {
+                    " - pauses for an Administrator's approval before continuing"
+                } else {
+                    ""
+                };
+                lines.push(format!(
+                    "- {step_label}: **{}**{}{}",
+                    r.agent_name,
+                    delegate_summary(r),
+                    pause
+                ));
             }
         }
     }

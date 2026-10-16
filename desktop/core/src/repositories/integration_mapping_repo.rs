@@ -52,13 +52,24 @@ pub fn insert(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Mapping>> {
-    conn.query_row("SELECT * FROM integration_mappings WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM integration_mappings WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<Mapping>> {
-    let mut stmt = conn.prepare("SELECT * FROM integration_mappings WHERE workspace_id = ?1 ORDER BY name")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM integration_mappings WHERE workspace_id = ?1 ORDER BY name")?;
     let rows = stmt.query_map([workspace_id], map_row)?;
     rows.collect()
 }

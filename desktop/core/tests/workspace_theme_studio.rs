@@ -28,7 +28,11 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
 
 fn preset_input(preset_key: &str, name: &str) -> WorkspaceThemeInput {
     let tokens = theme_service::get_preset(preset_key).expect("known preset");
-    WorkspaceThemeInput { name: name.into(), preset_key: Some(preset_key.into()), tokens }
+    WorkspaceThemeInput {
+        name: name.into(),
+        preset_key: Some(preset_key.into()),
+        tokens,
+    }
 }
 
 #[test]
@@ -41,7 +45,10 @@ fn built_in_presets_cover_all_four_curated_options() {
     // starting points unmodified.
     for (key, _, _, tokens) in &presets {
         let issues = theme_service::validate_tokens(tokens);
-        assert!(issues.is_empty(), "preset '{key}' fails its own contrast check: {issues:?}");
+        assert!(
+            issues.is_empty(),
+            "preset '{key}' fails its own contrast check: {issues:?}"
+        );
     }
 }
 
@@ -52,20 +59,25 @@ fn validate_tokens_flags_a_low_contrast_pair() {
     tokens.color.surface_app = "#FFFFFF".into();
     let issues = theme_service::validate_tokens(&tokens);
     assert!(!issues.is_empty());
-    assert!(issues.iter().any(|i| i.pair_label.contains("app background")));
+    assert!(issues
+        .iter()
+        .any(|i| i.pair_label.contains("app background")));
 }
 
 #[test]
 fn save_draft_create_then_edit_then_lock_on_publish() {
     let (conn, workspace_id, admin) = setup_workspace();
     let input = preset_input("slate", "My Theme");
-    let draft = theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap();
+    let draft =
+        theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap();
     assert_eq!(draft.status, "draft");
     assert_eq!(draft.version, 1);
 
     let mut edited = input.clone();
     edited.name = "My Theme (edited)".into();
-    let updated = theme_service::save_draft(&conn, &workspace_id, Some(&draft.id), &edited, Some(&admin)).unwrap();
+    let updated =
+        theme_service::save_draft(&conn, &workspace_id, Some(&draft.id), &edited, Some(&admin))
+            .unwrap();
     assert_eq!(updated.id, draft.id);
     assert_eq!(updated.name, "My Theme (edited)");
 
@@ -75,7 +87,9 @@ fn save_draft_create_then_edit_then_lock_on_publish() {
 
     // A Published theme is immutable - editing it is rejected, not silently
     // allowed to mutate history.
-    let err = theme_service::save_draft(&conn, &workspace_id, Some(&draft.id), &edited, Some(&admin)).unwrap_err();
+    let err =
+        theme_service::save_draft(&conn, &workspace_id, Some(&draft.id), &edited, Some(&admin))
+            .unwrap_err();
     assert!(format!("{err:?}").contains("Draft"));
 }
 
@@ -86,8 +100,13 @@ fn publish_blocks_on_contrast_failure_with_no_override() {
     tokens.color.text_primary = "#DDDDDD".into();
     tokens.color.surface_app = "#FFFFFF".into();
     tokens.color.surface_card = "#FFFFFF".into();
-    let input = WorkspaceThemeInput { name: "Bad Contrast".into(), preset_key: None, tokens };
-    let draft = theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap();
+    let input = WorkspaceThemeInput {
+        name: "Bad Contrast".into(),
+        preset_key: None,
+        tokens,
+    };
+    let draft =
+        theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap();
 
     let err = theme_service::publish(&conn, &draft.id, &workspace_id, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").contains("contrast"));
@@ -100,35 +119,78 @@ fn publish_blocks_on_contrast_failure_with_no_override() {
 #[test]
 fn publish_archives_the_previously_published_version() {
     let (conn, workspace_id, admin) = setup_workspace();
-    let v1 = theme_service::save_draft(&conn, &workspace_id, None, &preset_input("orbit", "V1"), Some(&admin)).unwrap();
+    let v1 = theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        None,
+        &preset_input("orbit", "V1"),
+        Some(&admin),
+    )
+    .unwrap();
     theme_service::publish(&conn, &v1.id, &workspace_id, Some(&admin)).unwrap();
 
-    let v2 = theme_service::save_draft(&conn, &workspace_id, None, &preset_input("slate", "V2"), Some(&admin)).unwrap();
+    let v2 = theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        None,
+        &preset_input("slate", "V2"),
+        Some(&admin),
+    )
+    .unwrap();
     theme_service::publish(&conn, &v2.id, &workspace_id, Some(&admin)).unwrap();
 
     let v1_after = theme_service::get(&conn, &v1.id, &workspace_id).unwrap();
     assert_eq!(v1_after.status, "archived");
-    let published = theme_service::get_published(&conn, &workspace_id).unwrap().unwrap();
+    let published = theme_service::get_published(&conn, &workspace_id)
+        .unwrap()
+        .unwrap();
     assert_eq!(published.id, v2.id);
 
     // Exactly one published row at a time - the versions list never shows
     // two "published" rows simultaneously.
     let versions = theme_service::list_versions(&conn, &workspace_id).unwrap();
-    assert_eq!(versions.iter().filter(|v| v.status == "published").count(), 1);
+    assert_eq!(
+        versions.iter().filter(|v| v.status == "published").count(),
+        1
+    );
 }
 
 #[test]
 fn rollback_creates_a_new_draft_and_publishes_it_without_mutating_history() {
     let (conn, workspace_id, admin) = setup_workspace();
-    let v1 = theme_service::save_draft(&conn, &workspace_id, None, &preset_input("orbit", "Orbit V1"), Some(&admin)).unwrap();
+    let v1 = theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        None,
+        &preset_input("orbit", "Orbit V1"),
+        Some(&admin),
+    )
+    .unwrap();
     theme_service::publish(&conn, &v1.id, &workspace_id, Some(&admin)).unwrap();
-    let v2 = theme_service::save_draft(&conn, &workspace_id, None, &preset_input("slate", "Slate V2"), Some(&admin)).unwrap();
+    let v2 = theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        None,
+        &preset_input("slate", "Slate V2"),
+        Some(&admin),
+    )
+    .unwrap();
     theme_service::publish(&conn, &v2.id, &workspace_id, Some(&admin)).unwrap();
 
-    let rolled_back = theme_service::rollback_to_version(&conn, &workspace_id, 1, Some(&admin)).unwrap();
+    let rolled_back =
+        theme_service::rollback_to_version(&conn, &workspace_id, 1, Some(&admin)).unwrap();
     assert_eq!(rolled_back.status, "published");
-    assert_eq!(rolled_back.version, 3, "rollback creates a brand-new version, never reuses v1's id or number");
-    assert_eq!(rolled_back.tokens.color.brand_primary, theme_service::get_preset("orbit").unwrap().color.brand_primary);
+    assert_eq!(
+        rolled_back.version, 3,
+        "rollback creates a brand-new version, never reuses v1's id or number"
+    );
+    assert_eq!(
+        rolled_back.tokens.color.brand_primary,
+        theme_service::get_preset("orbit")
+            .unwrap()
+            .color
+            .brand_primary
+    );
 
     // v1 itself is untouched (still archived, not "re-published" in place).
     let v1_after = theme_service::get(&conn, &v1.id, &workspace_id).unwrap();
@@ -142,13 +204,27 @@ fn rollback_creates_a_new_draft_and_publishes_it_without_mutating_history() {
 #[test]
 fn delete_draft_rejects_a_published_or_archived_version() {
     let (conn, workspace_id, admin) = setup_workspace();
-    let v1 = theme_service::save_draft(&conn, &workspace_id, None, &preset_input("orbit", "V1"), Some(&admin)).unwrap();
+    let v1 = theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        None,
+        &preset_input("orbit", "V1"),
+        Some(&admin),
+    )
+    .unwrap();
     theme_service::publish(&conn, &v1.id, &workspace_id, Some(&admin)).unwrap();
 
     let err = theme_service::delete_draft(&conn, &v1.id, &workspace_id, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").contains("Draft"));
 
-    let v2 = theme_service::save_draft(&conn, &workspace_id, None, &preset_input("slate", "V2 draft"), Some(&admin)).unwrap();
+    let v2 = theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        None,
+        &preset_input("slate", "V2 draft"),
+        Some(&admin),
+    )
+    .unwrap();
     theme_service::delete_draft(&conn, &v2.id, &workspace_id, Some(&admin)).unwrap();
     assert!(theme_service::get(&conn, &v2.id, &workspace_id).is_err());
 }
@@ -161,7 +237,11 @@ fn delete_draft_rejects_a_published_or_archived_version() {
 fn every_preset_ships_its_own_chart_palette() {
     let presets = theme_service::built_in_presets();
     for (key, _, _, tokens) in &presets {
-        assert!(tokens.chart.palette.len() >= 3, "preset '{key}' chart palette is too short: {:?}", tokens.chart.palette);
+        assert!(
+            tokens.chart.palette.len() >= 3,
+            "preset '{key}' chart palette is too short: {:?}",
+            tokens.chart.palette
+        );
     }
     // Distinct presets should not all share the exact same palette -
     // otherwise "chart palette" wouldn't actually vary by preset.
@@ -197,8 +277,13 @@ fn validate_shape_rejects_a_too_short_chart_palette() {
     let (conn, workspace_id, admin) = setup_workspace();
     let mut tokens = theme_service::get_preset("orbit").unwrap();
     tokens.chart.palette = vec!["#111111".into(), "#222222".into()];
-    let input = WorkspaceThemeInput { name: "Too few colors".into(), preset_key: None, tokens };
-    let err = theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap_err();
+    let input = WorkspaceThemeInput {
+        name: "Too few colors".into(),
+        preset_key: None,
+        tokens,
+    };
+    let err =
+        theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap_err();
     assert!(format!("{err:?}").to_lowercase().contains("palette"));
 }
 
@@ -209,12 +294,23 @@ fn custom_chart_palette_round_trips_through_save_and_publish() {
     let (conn, workspace_id, admin) = setup_workspace();
     let mut tokens = theme_service::get_preset("orbit").unwrap();
     tokens.chart.palette = vec!["#111111".into(), "#222222".into(), "#333333".into()];
-    let input = WorkspaceThemeInput { name: "Custom palette".into(), preset_key: None, tokens };
-    let draft = theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap();
-    assert_eq!(draft.tokens.chart.palette, vec!["#111111", "#222222", "#333333"]);
+    let input = WorkspaceThemeInput {
+        name: "Custom palette".into(),
+        preset_key: None,
+        tokens,
+    };
+    let draft =
+        theme_service::save_draft(&conn, &workspace_id, None, &input, Some(&admin)).unwrap();
+    assert_eq!(
+        draft.tokens.chart.palette,
+        vec!["#111111", "#222222", "#333333"]
+    );
 
     let published = theme_service::publish(&conn, &draft.id, &workspace_id, Some(&admin)).unwrap();
-    assert_eq!(published.tokens.chart.palette, vec!["#111111", "#222222", "#333333"]);
+    assert_eq!(
+        published.tokens.chart.palette,
+        vec!["#111111", "#222222", "#333333"]
+    );
 }
 
 #[test]
@@ -225,11 +321,23 @@ fn non_admin_cannot_save_or_publish_a_theme() {
     let sales_rep = user_service::create(
         &conn,
         &workspace_id,
-        &NewUser { username: "rep".into(), display_name: "Rep".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] },
+        &NewUser {
+            username: "rep".into(),
+            display_name: "Rep".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(&admin),
     )
     .unwrap();
 
-    let err = theme_service::save_draft(&conn, &workspace_id, None, &preset_input("orbit", "Nope"), Some(&sales_rep.id)).unwrap_err();
+    let err = theme_service::save_draft(
+        &conn,
+        &workspace_id,
+        None,
+        &preset_input("orbit", "Nope"),
+        Some(&sales_rep.id),
+    )
+    .unwrap_err();
     assert!(format!("{err:?}").to_lowercase().contains("admin"));
 }

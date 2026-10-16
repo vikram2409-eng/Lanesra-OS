@@ -88,7 +88,12 @@ pub struct ExecutionFilter {
     pub correlation_id: Option<String>,
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str, filter: &ExecutionFilter, limit: i64) -> rusqlite::Result<Vec<IntegrationExecution>> {
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    filter: &ExecutionFilter,
+    limit: i64,
+) -> rusqlite::Result<Vec<IntegrationExecution>> {
     let mut sql = "SELECT * FROM integration_executions WHERE workspace_id = ?1".to_string();
     if filter.execution_type.is_some() {
         sql.push_str(" AND execution_type = ?2");
@@ -102,13 +107,25 @@ pub fn list_for_workspace(conn: &Connection, workspace_id: &str, filter: &Execut
     sql.push_str(" ORDER BY started_at DESC LIMIT ?5");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(
-        rusqlite::params![workspace_id, filter.execution_type, filter.status, filter.correlation_id, limit],
+        rusqlite::params![
+            workspace_id,
+            filter.execution_type,
+            filter.status,
+            filter.correlation_id,
+            limit
+        ],
         map_row,
     )?;
     rows.collect()
 }
 
-pub fn count_since(conn: &Connection, workspace_id: &str, execution_type: Option<&str>, status: Option<&str>, since_iso: &str) -> rusqlite::Result<i64> {
+pub fn count_since(
+    conn: &Connection,
+    workspace_id: &str,
+    execution_type: Option<&str>,
+    status: Option<&str>,
+    since_iso: &str,
+) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM integration_executions
          WHERE workspace_id = ?1 AND started_at >= ?2
@@ -122,7 +139,11 @@ pub fn count_since(conn: &Connection, workspace_id: &str, execution_type: Option
 /// Deletes execution rows older than the workspace's configured retention
 /// window (spec §22: "Log retention (days), configurable"). Returns how
 /// many rows were purged.
-pub fn purge_older_than(conn: &Connection, workspace_id: &str, cutoff_iso: &str) -> rusqlite::Result<usize> {
+pub fn purge_older_than(
+    conn: &Connection,
+    workspace_id: &str,
+    cutoff_iso: &str,
+) -> rusqlite::Result<usize> {
     conn.execute(
         "DELETE FROM integration_executions WHERE workspace_id = ?1 AND started_at < ?2",
         rusqlite::params![workspace_id, cutoff_iso],

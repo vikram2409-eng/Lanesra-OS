@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-pub const WORK_TEAM_TYPES: &[&str] = &["Operational", "Queue", "Project", "CrossFunctional", "ExternalPartner"];
+pub const WORK_TEAM_TYPES: &[&str] = &[
+    "Operational",
+    "Queue",
+    "Project",
+    "CrossFunctional",
+    "ExternalPartner",
+];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkTeam {

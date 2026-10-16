@@ -108,7 +108,12 @@ fn default_column_span() -> u8 {
 
 impl Default for NodeLayout {
     fn default() -> Self {
-        Self { column_span: default_column_span(), tablet_column_span: None, mobile_column_span: None, order: 0 }
+        Self {
+            column_span: default_column_span(),
+            tablet_column_span: None,
+            mobile_column_span: None,
+            order: 0,
+        }
     }
 }
 

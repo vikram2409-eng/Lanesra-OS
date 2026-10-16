@@ -41,8 +41,14 @@ pub fn router() -> Router<SharedState> {
         .route("/api/v1/limits", get(limits))
         .route("/api/v1/objects", get(list_object_keys))
         .route("/api/v1/objects/:key/metadata", get(get_metadata))
-        .route("/api/v1/objects/:key/records", get(list_records).post(create_record))
-        .route("/api/v1/objects/:key/records/:id", get(get_record).patch(update_record).delete(archive_record))
+        .route(
+            "/api/v1/objects/:key/records",
+            get(list_records).post(create_record),
+        )
+        .route(
+            "/api/v1/objects/:key/records/:id",
+            get(get_record).patch(update_record).delete(archive_record),
+        )
 }
 
 pub(crate) fn error_status(e: &AppError) -> StatusCode {
@@ -68,22 +74,46 @@ pub(crate) fn app_err(e: AppError) -> (StatusCode, Json<Value>) {
 /// limit - the one gate every route below goes through before touching
 /// `api_object_service`. Returns the authenticated client and this
 /// server's current workspace id.
-pub(crate) fn authorize(state: &SharedState, headers: &HeaderMap, required_scope: &str) -> Result<(ApiClient, String), (StatusCode, Json<Value>)> {
+pub(crate) fn authorize(
+    state: &SharedState,
+    headers: &HeaderMap,
+    required_scope: &str,
+) -> Result<(ApiClient, String), (StatusCode, Json<Value>)> {
     let presented = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .ok_or_else(|| err_json(StatusCode::UNAUTHORIZED, "Missing 'Authorization: Bearer <client_id>.<secret>' header"))?;
+        .ok_or_else(|| {
+            err_json(
+                StatusCode::UNAUTHORIZED,
+                "Missing 'Authorization: Bearer <client_id>.<secret>' header",
+            )
+        })?;
 
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn).map_err(app_err)?;
-    let client = api_client_service::authenticate(&conn, &workspace_id, presented).map_err(|_| err_json(StatusCode::UNAUTHORIZED, "Invalid or revoked API credential"))?;
+    let client =
+        api_client_service::authenticate(&conn, &workspace_id, presented).map_err(|_| {
+            err_json(
+                StatusCode::UNAUTHORIZED,
+                "Invalid or revoked API credential",
+            )
+        })?;
     if !api_client_service::has_scope(&client, required_scope) {
-        return Err(err_json(StatusCode::FORBIDDEN, &format!("This API client lacks the '{required_scope}' scope")));
+        return Err(err_json(
+            StatusCode::FORBIDDEN,
+            &format!("This API client lacks the '{required_scope}' scope"),
+        ));
     }
     let settings = integration_log_service::get_settings(&conn, &workspace_id).map_err(app_err)?;
-    if let Err(retry_after) = state.rate_limiter.check(&client.id, settings.api_rate_limit_per_minute) {
-        let mut resp = err_json(StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded for this API client");
+    if let Err(retry_after) = state
+        .rate_limiter
+        .check(&client.id, settings.api_rate_limit_per_minute)
+    {
+        let mut resp = err_json(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded for this API client",
+        );
         resp.1 .0["retry_after_seconds"] = json!(retry_after);
         return Err(resp);
     }
@@ -101,20 +131,42 @@ pub(crate) fn authorize(state: &SharedState, headers: &HeaderMap, required_scope
 /// exact helper too, the same execution log either surface writes to -
 /// same reasoning as `integration_commands.rs`'s `run_with_own_connection`
 /// being loosened to `pub(crate)` in phase 1, rather than duplicating it.
-pub(crate) fn logged<T>(conn: &rusqlite::Connection, workspace_id: &str, result: Result<T, AppError>) -> Result<T, AppError> {
-    let execution_id = integration_log_service::start(conn, workspace_id, "api_call", None, None, "inbound", None);
+pub(crate) fn logged<T>(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    result: Result<T, AppError>,
+) -> Result<T, AppError> {
+    let execution_id =
+        integration_log_service::start(conn, workspace_id, "api_call", None, None, "inbound", None);
     match &result {
-        Ok(_) => integration_log_service::finish(conn, &execution_id, &FinishOutcome { status: "success".into(), records_written: 1, ..Default::default() }),
+        Ok(_) => integration_log_service::finish(
+            conn,
+            &execution_id,
+            &FinishOutcome {
+                status: "success".into(),
+                records_written: 1,
+                ..Default::default()
+            },
+        ),
         Err(e) => integration_log_service::finish(
             conn,
             &execution_id,
-            &FinishOutcome { status: "failed".into(), records_failed: 1, error_category: Some("api_error".into()), error_message: Some(e.to_string()), ..Default::default() },
+            &FinishOutcome {
+                status: "failed".into(),
+                records_failed: 1,
+                error_category: Some("api_error".into()),
+                error_message: Some(e.to_string()),
+                ..Default::default()
+            },
         ),
     }
     result
 }
 
-async fn limits(State(state): State<SharedState>, headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn limits(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
     let conn = state.conn.lock().unwrap();
     let settings = integration_log_service::get_settings(&conn, &workspace_id).map_err(app_err)?;
@@ -127,17 +179,34 @@ async fn limits(State(state): State<SharedState>, headers: HeaderMap) -> Result<
     })))
 }
 
-async fn list_object_keys(State(state): State<SharedState>, headers: HeaderMap) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn list_object_keys(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
     let conn = state.conn.lock().unwrap();
-    let data = logged(&conn, &workspace_id, api_object_service::list_object_keys(&conn, &workspace_id)).map_err(app_err)?;
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::list_object_keys(&conn, &workspace_id),
+    )
+    .map_err(app_err)?;
     Ok(Json(json!({"ok": true, "data": data})))
 }
 
-async fn get_metadata(State(state): State<SharedState>, headers: HeaderMap, Path(key): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn get_metadata(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Path(key): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
     let conn = state.conn.lock().unwrap();
-    let data = logged(&conn, &workspace_id, api_object_service::get_metadata(&conn, &workspace_id, &key)).map_err(app_err)?;
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::get_metadata(&conn, &workspace_id, &key),
+    )
+    .map_err(app_err)?;
     Ok(Json(json!({"ok": true, "data": data})))
 }
 
@@ -152,8 +221,12 @@ struct ListQueryParams {
 
 fn to_api_list_query(q: ListQueryParams) -> ApiListQuery {
     ApiListQuery {
-        select: q.select.map(|s| s.split(',').map(str::trim).map(String::from).collect()),
-        sort: q.sort.map(|s| s.split(',').map(str::trim).map(String::from).collect()),
+        select: q
+            .select
+            .map(|s| s.split(',').map(str::trim).map(String::from).collect()),
+        sort: q
+            .sort
+            .map(|s| s.split(',').map(str::trim).map(String::from).collect()),
         page: q.page,
         page_size: q.page_size,
         filter: q.filter.and_then(|f| serde_json::from_str(&f).ok()),
@@ -169,21 +242,45 @@ async fn list_records(
     let (_client, workspace_id) = authorize(&state, &headers, "objects.read")?;
     let query = to_api_list_query(params);
     let conn = state.conn.lock().unwrap();
-    let data = logged(&conn, &workspace_id, api_object_service::list_records(&conn, &workspace_id, &key, &query)).map_err(app_err)?;
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::list_records(&conn, &workspace_id, &key, &query),
+    )
+    .map_err(app_err)?;
     Ok(Json(json!({"ok": true, "data": data})))
 }
 
-async fn get_record(State(state): State<SharedState>, headers: HeaderMap, Path((key, id)): Path<(String, String)>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn get_record(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Path((key, id)): Path<(String, String)>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_client, workspace_id) = authorize(&state, &headers, "objects.read")?;
     let conn = state.conn.lock().unwrap();
-    let data = logged(&conn, &workspace_id, api_object_service::get_record(&conn, &workspace_id, &key, &id)).map_err(app_err)?;
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::get_record(&conn, &workspace_id, &key, &id),
+    )
+    .map_err(app_err)?;
     Ok(Json(json!({"ok": true, "data": data})))
 }
 
-async fn create_record(State(state): State<SharedState>, headers: HeaderMap, Path(key): Path<String>, Json(body): Json<Value>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn create_record(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Path(key): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_client, workspace_id) = authorize(&state, &headers, "objects.write")?;
     let conn = state.conn.lock().unwrap();
-    let data = logged(&conn, &workspace_id, api_object_service::create_record(&conn, &workspace_id, &key, &body, None)).map_err(app_err)?;
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::create_record(&conn, &workspace_id, &key, &body, None),
+    )
+    .map_err(app_err)?;
     Ok(Json(json!({"ok": true, "data": data})))
 }
 
@@ -195,13 +292,27 @@ async fn update_record(
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_client, workspace_id) = authorize(&state, &headers, "objects.write")?;
     let conn = state.conn.lock().unwrap();
-    let data = logged(&conn, &workspace_id, api_object_service::update_record(&conn, &workspace_id, &key, &id, &body, None)).map_err(app_err)?;
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::update_record(&conn, &workspace_id, &key, &id, &body, None),
+    )
+    .map_err(app_err)?;
     Ok(Json(json!({"ok": true, "data": data})))
 }
 
-async fn archive_record(State(state): State<SharedState>, headers: HeaderMap, Path((key, id)): Path<(String, String)>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn archive_record(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Path((key, id)): Path<(String, String)>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_client, workspace_id) = authorize(&state, &headers, "objects.write")?;
     let conn = state.conn.lock().unwrap();
-    logged(&conn, &workspace_id, api_object_service::archive_record(&conn, &workspace_id, &key, &id, None)).map_err(app_err)?;
+    logged(
+        &conn,
+        &workspace_id,
+        api_object_service::archive_record(&conn, &workspace_id, &key, &id, None),
+    )
+    .map_err(app_err)?;
     Ok(Json(json!({"ok": true})))
 }

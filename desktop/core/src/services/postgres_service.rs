@@ -28,15 +28,27 @@ fn default_port() -> u16 {
     5432
 }
 
-pub async fn test_connection(connection: &ConnectionModel, secret: Option<&str>) -> AppResult<(Option<u16>, String)> {
-    let config: PostgresConfig = serde_json::from_str(&connection.config_json).map_err(|e| AppError::Validation(format!("Invalid Postgres connection config: {e}")))?;
-    let mut conninfo = format!("host={} port={} dbname={} user={}", config.host, config.port, config.database, config.username);
+pub async fn test_connection(
+    connection: &ConnectionModel,
+    secret: Option<&str>,
+) -> AppResult<(Option<u16>, String)> {
+    let config: PostgresConfig = serde_json::from_str(&connection.config_json)
+        .map_err(|e| AppError::Validation(format!("Invalid Postgres connection config: {e}")))?;
+    let mut conninfo = format!(
+        "host={} port={} dbname={} user={}",
+        config.host, config.port, config.database, config.username
+    );
     if let Some(password) = secret {
         conninfo.push_str(&format!(" password={password}"));
     }
     let (client, connection_driver) = tokio_postgres::connect(&conninfo, tokio_postgres::NoTls)
         .await
-        .map_err(|e| AppError::Validation(format!("Could not connect to {}:{}: {e}", config.host, config.port)))?;
+        .map_err(|e| {
+            AppError::Validation(format!(
+                "Could not connect to {}:{}: {e}",
+                config.host, config.port
+            ))
+        })?;
     // The connection object must be polled somewhere for the client to do
     // any work at all - tokio_postgres's own documented pattern.
     tokio::spawn(async move {
@@ -46,5 +58,11 @@ pub async fn test_connection(connection: &ConnectionModel, secret: Option<&str>)
         .simple_query("SELECT 1")
         .await
         .map_err(|e| AppError::Validation(format!("Connected, but the test query failed: {e}")))?;
-    Ok((None, format!("Reachable - connected to Postgres database '{}' on {}", config.database, config.host)))
+    Ok((
+        None,
+        format!(
+            "Reachable - connected to Postgres database '{}' on {}",
+            config.database, config.host
+        ),
+    ))
 }

@@ -11,17 +11,23 @@
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
+use crate::models::action_type::ACTION_CAPABILITIES;
 use crate::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiSkill, AiSkillInput};
-use crate::models::action_type::ACTION_CAPABILITIES;
-use crate::repositories::{action_type_repo, ai_agent_repo, ai_provider_repo, ai_token_usage_repo, audit_repo};
+use crate::repositories::{
+    action_type_repo, ai_agent_repo, ai_provider_repo, ai_token_usage_repo, audit_repo,
+};
 use crate::services::{custom_object_service, entity_registry};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-fn validate_action_names(conn: &Connection, workspace_id: &str, action_names: &[String]) -> AppResult<()> {
+fn validate_action_names(
+    conn: &Connection,
+    workspace_id: &str,
+    action_names: &[String],
+) -> AppResult<()> {
     // Connector-derived names classify by prefix alone (see
     // `chat_service::tool_source`'s own doc comment), but that doesn't
     // confirm the connector/action they name still exists and is
@@ -34,33 +40,54 @@ fn validate_action_names(conn: &Connection, workspace_id: &str, action_names: &[
         match super::chat_service::tool_source(name) {
             Some("connector_read" | "connector_write") => {
                 if connector_names.is_none() {
-                    connector_names = Some(super::connector_tool_service::agent_tool_names(conn, workspace_id)?);
+                    connector_names = Some(super::connector_tool_service::agent_tool_names(
+                        conn,
+                        workspace_id,
+                    )?);
                 }
                 if !connector_names.as_ref().unwrap().contains(name) {
-                    return Err(AppError::Validation(format!("'{name}' isn't currently available as an agent tool")));
+                    return Err(AppError::Validation(format!(
+                        "'{name}' isn't currently available as an agent tool"
+                    )));
                 }
             }
             Some("mcp_read" | "mcp_write") => {
                 if mcp_names.is_none() {
-                    mcp_names = Some(super::mcp_client_service::agent_tool_names(conn, workspace_id)?);
+                    mcp_names = Some(super::mcp_client_service::agent_tool_names(
+                        conn,
+                        workspace_id,
+                    )?);
                 }
                 if !mcp_names.as_ref().unwrap().contains(name) {
-                    return Err(AppError::Validation(format!("'{name}' isn't currently available as an agent tool")));
+                    return Err(AppError::Validation(format!(
+                        "'{name}' isn't currently available as an agent tool"
+                    )));
                 }
             }
             Some(_) => {}
-            None => return Err(AppError::Validation(format!("'{name}' isn't a known action"))),
+            None => {
+                return Err(AppError::Validation(format!(
+                    "'{name}' isn't a known action"
+                )))
+            }
         }
     }
     Ok(())
 }
 
-fn validate_agent_input(conn: &Connection, workspace_id: &str, id: Option<&str>, input: &AiAgentInput) -> AppResult<()> {
+fn validate_agent_input(
+    conn: &Connection,
+    workspace_id: &str,
+    id: Option<&str>,
+    input: &AiAgentInput,
+) -> AppResult<()> {
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Agent name is required".into()));
     }
     if input.system_prompt.trim().is_empty() {
-        return Err(AppError::Validation("Agent instructions are required".into()));
+        return Err(AppError::Validation(
+            "Agent instructions are required".into(),
+        ));
     }
     validate_action_names(conn, workspace_id, &input.action_names)?;
     // A direct self-reference is a trivial, pointless cycle worth
@@ -69,26 +96,35 @@ fn validate_agent_input(conn: &Connection, workspace_id: &str, id: Option<&str>,
     // migration 0038's own comment on why this table has no cycle check.
     if let Some(id) = id {
         if input.delegate_agent_ids.iter().any(|d| d == id) {
-            return Err(AppError::Validation("An agent can't delegate to itself".into()));
+            return Err(AppError::Validation(
+                "An agent can't delegate to itself".into(),
+            ));
         }
     }
     for delegate_id in &input.delegate_agent_ids {
-        let delegate = ai_agent_repo::get(conn, delegate_id)?.ok_or_else(|| AppError::Validation("Selected delegate agent does not exist".into()))?;
+        let delegate = ai_agent_repo::get(conn, delegate_id)?
+            .ok_or_else(|| AppError::Validation("Selected delegate agent does not exist".into()))?;
         if delegate.workspace_id != workspace_id || !delegate.is_active {
-            return Err(AppError::Validation("Selected delegate agent does not exist".into()));
+            return Err(AppError::Validation(
+                "Selected delegate agent does not exist".into(),
+            ));
         }
     }
     for skill_id in &input.skill_ids {
-        let skill = ai_agent_repo::get_skill(conn, skill_id)?.ok_or_else(|| AppError::Validation("Selected skill does not exist".into()))?;
+        let skill = ai_agent_repo::get_skill(conn, skill_id)?
+            .ok_or_else(|| AppError::Validation("Selected skill does not exist".into()))?;
         if skill.workspace_id != workspace_id || !skill.is_active {
             return Err(AppError::Validation("Selected skill does not exist".into()));
         }
     }
     validate_object_type_scopes(conn, workspace_id, &input.object_type_scopes)?;
     for action_type_id in &input.action_type_ids {
-        let action_type = action_type_repo::get(conn, action_type_id)?.ok_or_else(|| AppError::Validation("Selected Action Type does not exist".into()))?;
+        let action_type = action_type_repo::get(conn, action_type_id)?
+            .ok_or_else(|| AppError::Validation("Selected Action Type does not exist".into()))?;
         if action_type.workspace_id != workspace_id {
-            return Err(AppError::Validation("Selected Action Type does not exist".into()));
+            return Err(AppError::Validation(
+                "Selected Action Type does not exist".into(),
+            ));
         }
     }
     Ok(())
@@ -100,18 +136,36 @@ fn validate_agent_input(conn: &Connection, workspace_id: &str, id: Option<&str>,
 /// own writable-only restriction, since the generic record tools this
 /// scopes include read-only access to Opportunity/Quote/Order/Invoice/
 /// Contract too, not just the writable set.
-fn validate_object_type_scopes(conn: &Connection, workspace_id: &str, scopes: &[crate::models::ai_agent::ObjectTypeScope]) -> AppResult<()> {
+fn validate_object_type_scopes(
+    conn: &Connection,
+    workspace_id: &str,
+    scopes: &[crate::models::ai_agent::ObjectTypeScope],
+) -> AppResult<()> {
     for scope in scopes {
         let is_builtin = entity_registry::CORE_ENTITY_TYPES.contains(&scope.object_type.as_str());
-        if !is_builtin && !custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, &scope.object_type)? {
-            return Err(AppError::Validation(format!("'{}' is not a recognized object type", scope.object_type)));
+        if !is_builtin
+            && !custom_object_service::is_valid_dynamic_entity_type(
+                conn,
+                workspace_id,
+                &scope.object_type,
+            )?
+        {
+            return Err(AppError::Validation(format!(
+                "'{}' is not a recognized object type",
+                scope.object_type
+            )));
         }
         if scope.capabilities.is_empty() {
-            return Err(AppError::Validation(format!("'{}' needs at least one capability", scope.object_type)));
+            return Err(AppError::Validation(format!(
+                "'{}' needs at least one capability",
+                scope.object_type
+            )));
         }
         for capability in &scope.capabilities {
             if !ACTION_CAPABILITIES.contains(&capability.as_str()) {
-                return Err(AppError::Validation(format!("Invalid capability '{capability}'")));
+                return Err(AppError::Validation(format!(
+                    "Invalid capability '{capability}'"
+                )));
             }
         }
     }
@@ -133,26 +187,51 @@ fn validate_object_type_scopes(conn: &Connection, workspace_id: &str, scopes: &[
 /// (empty `object_type_scopes`) adds none of these - matching its own
 /// "applies to every object type" semantics, which isn't a single edge
 /// to point at.
-fn sync_graph_node(conn: &Connection, workspace_id: &str, agent: &AiAgentDefinition) -> AppResult<()> {
+fn sync_graph_node(
+    conn: &Connection,
+    workspace_id: &str,
+    agent: &AiAgentDefinition,
+) -> AppResult<()> {
     let mut edges: Vec<_> = agent
         .delegate_agent_ids
         .iter()
-        .map(|target_id| crate::models::system_graph::SystemEdgeTarget { edge_type: "delegates_to".into(), to_node_type: "ai_agent".into(), to_component_id: target_id.clone() })
+        .map(|target_id| crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "delegates_to".into(),
+            to_node_type: "ai_agent".into(),
+            to_component_id: target_id.clone(),
+        })
         .collect();
-    edges.extend(agent.object_type_scopes.iter().map(|scope| crate::models::system_graph::SystemEdgeTarget {
-        edge_type: "depends_on".into(),
-        to_node_type: "custom_object".into(),
-        to_component_id: scope.object_type.clone(),
+    edges.extend(agent.object_type_scopes.iter().map(|scope| {
+        crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "depends_on".into(),
+            to_node_type: "custom_object".into(),
+            to_component_id: scope.object_type.clone(),
+        }
     }));
-    edges.extend(agent.action_type_ids.iter().map(|action_type_id| crate::models::system_graph::SystemEdgeTarget {
-        edge_type: "invokes".into(),
-        to_node_type: "action_type_definition".into(),
-        to_component_id: action_type_id.clone(),
+    edges.extend(agent.action_type_ids.iter().map(|action_type_id| {
+        crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "invokes".into(),
+            to_node_type: "action_type_definition".into(),
+            to_component_id: action_type_id.clone(),
+        }
     }));
-    super::system_graph_service::sync_node(conn, workspace_id, "ai_agent", &agent.id, &agent.name, "{}", &edges)
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "ai_agent",
+        &agent.id,
+        &agent.name,
+        "{}",
+        &edges,
+    )
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiAgentInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_agent_input(conn, workspace_id, None, input)?;
     let id = crate::domain::ids::new_uuid();
@@ -171,20 +250,50 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &AiAgentInput, actor
     // `business_rule_service::create_rule` already follow - a package
     // install's own retag pass corrects this afterward for an agent that
     // came from a package instead of an admin's own hand.
-    super::solution_component_service::tag_local(conn, workspace_id, "ai_agent", &created.id, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "ai_agent",
+        &created.id,
+        actor_user_id,
+    )?;
     let hydrated = ai_agent_repo::get(conn, &created.id)?.expect("just created");
     sync_graph_node(conn, workspace_id, &hydrated)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("ai_agent"), Some(&created.id), &format!("Created AI agent '{}'", created.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("ai_agent"),
+        Some(&created.id),
+        &format!("Created AI agent '{}'", created.name),
+        None,
+    )?;
     Ok(hydrated)
 }
 
-pub fn update(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentInput, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &AiAgentInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     validate_agent_input(conn, workspace_id, Some(id), input)?;
     let updated = ai_agent_repo::update(conn, id, input, actor_user_id)?;
     sync_graph_node(conn, workspace_id, &updated)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "update", Some("ai_agent"), Some(id), &format!("Updated AI agent '{}'", updated.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "update",
+        Some("ai_agent"),
+        Some(id),
+        &format!("Updated AI agent '{}'", updated.name),
+        None,
+    )?;
     Ok(updated)
 }
 
@@ -198,7 +307,11 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Option<AiAgentDefinition>> 
 /// caller is computed by the caller from `agent_requires_admin`, not
 /// filtered here - the frontend hides what it can't use, and
 /// `send_agent_message` gates for real regardless (defense in depth).
-pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResult<Vec<AiAgentDefinition>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    active_only: bool,
+) -> AppResult<Vec<AiAgentDefinition>> {
     Ok(ai_agent_repo::list(conn, workspace_id, active_only)?)
 }
 
@@ -208,17 +321,37 @@ pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResu
 /// explicitly names `entity_type`. Built from `list` above plus an
 /// in-memory filter rather than a new repo query - this is a small,
 /// read-only derivation, not a new data shape.
-pub fn list_scoped_to_object_type(conn: &Connection, workspace_id: &str, entity_type: &str, active_only: bool) -> AppResult<Vec<AiAgentDefinition>> {
+pub fn list_scoped_to_object_type(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    active_only: bool,
+) -> AppResult<Vec<AiAgentDefinition>> {
     Ok(ai_agent_repo::list(conn, workspace_id, active_only)?
         .into_iter()
-        .filter(|a| a.object_type_scopes.is_empty() || a.object_type_scopes.iter().any(|s| s.object_type == entity_type))
+        .filter(|a| {
+            a.object_type_scopes.is_empty()
+                || a.object_type_scopes
+                    .iter()
+                    .any(|s| s.object_type == entity_type)
+        })
         .collect())
 }
 
-pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+pub fn set_active(
+    conn: &Connection,
+    id: &str,
+    is_active: bool,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
-    Ok(ai_agent_repo::set_active(conn, id, is_active, actor_user_id)?)
+    Ok(ai_agent_repo::set_active(
+        conn,
+        id,
+        is_active,
+        actor_user_id,
+    )?)
 }
 
 /// An admin directly editing an agent's memory from its edit form -
@@ -227,7 +360,12 @@ pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: O
 /// admin check - the agent revising its own memory during an ordinary,
 /// possibly non-admin-gated conversation must keep working regardless of
 /// who it's chatting with).
-pub fn set_memory(conn: &Connection, id: &str, memory_md: &str, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+pub fn set_memory(
+    conn: &Connection,
+    id: &str,
+    memory_md: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     ai_agent_repo::update_memory(conn, id, memory_md, actor_user_id.unwrap_or("admin"))?;
@@ -237,7 +375,12 @@ pub fn set_memory(conn: &Connection, id: &str, memory_md: &str, actor_user_id: O
 /// Phase 7c: an agent's operational-boundary statement - its own admin
 /// action, same "not part of the main create/update form payload" shape
 /// `set_memory` above already established.
-pub fn set_guardrails(conn: &Connection, id: &str, guardrails_md: &str, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+pub fn set_guardrails(
+    conn: &Connection,
+    id: &str,
+    guardrails_md: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     ai_agent_repo::set_guardrails(conn, id, guardrails_md)?;
@@ -247,27 +390,49 @@ pub fn set_guardrails(conn: &Connection, id: &str, guardrails_md: &str, actor_us
 /// Phase 7b: most-recent-first history of this agent's `memory_md`
 /// changes - read-only, Administrator only (same visibility as the rest
 /// of an agent's configuration).
-pub fn list_memory_history(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<crate::models::ai_agent::AiAgentMemorySnapshot>> {
+pub fn list_memory_history(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<crate::models::ai_agent::AiAgentMemorySnapshot>> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     Ok(ai_agent_repo::list_memory_history(conn, id)?)
 }
 
-fn validate_routing(conn: &Connection, workspace_id: &str, routing: &AiAgentModelRouting) -> AppResult<()> {
-    for provider_id in [&routing.primary_provider_id, &routing.fallback_provider_id, &routing.local_fallback_provider_id].into_iter().flatten() {
-        let provider = ai_provider_repo::get(conn, provider_id)?.ok_or_else(|| AppError::Validation("Selected AI provider does not exist".into()))?;
+fn validate_routing(
+    conn: &Connection,
+    workspace_id: &str,
+    routing: &AiAgentModelRouting,
+) -> AppResult<()> {
+    for provider_id in [
+        &routing.primary_provider_id,
+        &routing.fallback_provider_id,
+        &routing.local_fallback_provider_id,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let provider = ai_provider_repo::get(conn, provider_id)?
+            .ok_or_else(|| AppError::Validation("Selected AI provider does not exist".into()))?;
         if provider.workspace_id != workspace_id {
-            return Err(AppError::Validation("Selected AI provider does not exist".into()));
+            return Err(AppError::Validation(
+                "Selected AI provider does not exist".into(),
+            ));
         }
     }
     for class in &routing.force_air_gapped_for {
         if !super::dlp_service::CLASSES.contains(&class.as_str()) {
-            return Err(AppError::Validation(format!("'{class}' isn't a recognized sensitive-data class")));
+            return Err(AppError::Validation(format!(
+                "'{class}' isn't a recognized sensitive-data class"
+            )));
         }
     }
     if let Some(t) = routing.temperature {
         if !(0.0..=2.0).contains(&t) {
-            return Err(AppError::Validation("Temperature must be between 0 and 2".into()));
+            return Err(AppError::Validation(
+                "Temperature must be between 0 and 2".into(),
+            ));
         }
     }
     Ok(())
@@ -279,7 +444,13 @@ fn validate_routing(conn: &Connection, workspace_id: &str, routing: &AiAgentMode
 /// established. `routing: None` clears the policy entirely, returning
 /// this agent to the plain pre-7a workspace-default behavior - see
 /// `ai_agent_repo::set_routing`'s own "full overwrite" doc comment.
-pub fn set_model_routing(conn: &Connection, id: &str, workspace_id: &str, routing: Option<AiAgentModelRouting>, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+pub fn set_model_routing(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    routing: Option<AiAgentModelRouting>,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     if let Some(r) = &routing {
@@ -295,12 +466,21 @@ pub fn set_model_routing(conn: &Connection, id: &str, workspace_id: &str, routin
 /// `None` clears it (today's unscoped behavior for this agent). A `Some`
 /// value must be an active user of this workspace - the same bar a
 /// manual owner reassignment holds itself to.
-pub fn set_acts_as(conn: &Connection, id: &str, workspace_id: &str, acts_as_user_id: Option<String>, actor_user_id: Option<&str>) -> AppResult<AiAgentDefinition> {
+pub fn set_acts_as(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    acts_as_user_id: Option<String>,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
     if let Some(user_id) = &acts_as_user_id {
         let users = super::user_service::list(conn, workspace_id)?;
-        let user = users.iter().find(|u| &u.id == user_id).ok_or_else(|| AppError::Validation("Selected user does not exist".into()))?;
+        let user = users
+            .iter()
+            .find(|u| &u.id == user_id)
+            .ok_or_else(|| AppError::Validation("Selected user does not exist".into()))?;
         if !user.is_active {
             return Err(AppError::Validation("Selected user is not active".into()));
         }
@@ -313,11 +493,20 @@ pub fn set_acts_as(conn: &Connection, id: &str, workspace_id: &str, acts_as_user
 /// agent's Model Routing settings, same "any authenticated user can see
 /// the numbers" reasoning `ai_service::token_usage_today` already
 /// documents for the System tier.
-pub fn token_usage_today(conn: &Connection, id: &str, workspace_id: &str) -> AppResult<AiTokenUsageSummary> {
+pub fn token_usage_today(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+) -> AppResult<AiTokenUsageSummary> {
     let agent = ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
-    let (input_tokens, output_tokens) = ai_token_usage_repo::today_totals_for_agent(conn, workspace_id, id)?;
+    let (input_tokens, output_tokens) =
+        ai_token_usage_repo::today_totals_for_agent(conn, workspace_id, id)?;
     let daily_token_budget = agent.model_routing.and_then(|r| r.daily_token_budget);
-    Ok(AiTokenUsageSummary { today_input_tokens: input_tokens, today_output_tokens: output_tokens, daily_token_budget })
+    Ok(AiTokenUsageSummary {
+        today_input_tokens: input_tokens,
+        today_output_tokens: output_tokens,
+        daily_token_budget,
+    })
 }
 
 // --- Skills -----------------------------------------------------------
@@ -327,39 +516,93 @@ fn validate_skill_input(input: &AiSkillInput) -> AppResult<()> {
         return Err(AppError::Validation("Skill name is required".into()));
     }
     if input.description.trim().is_empty() {
-        return Err(AppError::Validation("Skill description is required - it's what the model sees before deciding to use it".into()));
+        return Err(AppError::Validation(
+            "Skill description is required - it's what the model sees before deciding to use it"
+                .into(),
+        ));
     }
     if input.instructions_md.trim().is_empty() {
-        return Err(AppError::Validation("Skill instructions are required".into()));
+        return Err(AppError::Validation(
+            "Skill instructions are required".into(),
+        ));
     }
     Ok(())
 }
 
-pub fn create_skill(conn: &Connection, workspace_id: &str, input: &AiSkillInput, actor_user_id: Option<&str>) -> AppResult<AiSkill> {
+pub fn create_skill(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiSkillInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiSkill> {
     require_admin(conn, actor_user_id)?;
     validate_skill_input(input)?;
     let id = crate::domain::ids::new_uuid();
     let created = ai_agent_repo::create_skill(conn, &id, workspace_id, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "ai_skill", &created.id, actor_user_id)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("ai_skill"), Some(&created.id), &format!("Created AI skill '{}'", created.name), None)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "ai_skill",
+        &created.id,
+        actor_user_id,
+    )?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("ai_skill"),
+        Some(&created.id),
+        &format!("Created AI skill '{}'", created.name),
+        None,
+    )?;
     Ok(created)
 }
 
-pub fn update_skill(conn: &Connection, id: &str, input: &AiSkillInput, actor_user_id: Option<&str>) -> AppResult<AiSkill> {
+pub fn update_skill(
+    conn: &Connection,
+    id: &str,
+    input: &AiSkillInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiSkill> {
     require_admin(conn, actor_user_id)?;
-    let existing = ai_agent_repo::get_skill(conn, id)?.ok_or_else(|| AppError::NotFound("Skill".into()))?;
+    let existing =
+        ai_agent_repo::get_skill(conn, id)?.ok_or_else(|| AppError::NotFound("Skill".into()))?;
     validate_skill_input(input)?;
     let updated = ai_agent_repo::update_skill(conn, id, input, actor_user_id)?;
-    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("ai_skill"), Some(id), &format!("Updated AI skill '{}'", updated.name), None)?;
+    audit_repo::record(
+        conn,
+        &existing.workspace_id,
+        actor_user_id,
+        "update",
+        Some("ai_skill"),
+        Some(id),
+        &format!("Updated AI skill '{}'", updated.name),
+        None,
+    )?;
     Ok(updated)
 }
 
-pub fn list_skills(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResult<Vec<AiSkill>> {
+pub fn list_skills(
+    conn: &Connection,
+    workspace_id: &str,
+    active_only: bool,
+) -> AppResult<Vec<AiSkill>> {
     Ok(ai_agent_repo::list_skills(conn, workspace_id, active_only)?)
 }
 
-pub fn set_skill_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> AppResult<AiSkill> {
+pub fn set_skill_active(
+    conn: &Connection,
+    id: &str,
+    is_active: bool,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiSkill> {
     require_admin(conn, actor_user_id)?;
     ai_agent_repo::get_skill(conn, id)?.ok_or_else(|| AppError::NotFound("Skill".into()))?;
-    Ok(ai_agent_repo::set_skill_active(conn, id, is_active, actor_user_id)?)
+    Ok(ai_agent_repo::set_skill_active(
+        conn,
+        id,
+        is_active,
+        actor_user_id,
+    )?)
 }

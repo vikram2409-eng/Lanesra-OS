@@ -28,14 +28,22 @@ pub fn list_for_user(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<A
     rows
 }
 
-pub fn list_assignee_user_ids(conn: &Connection, access_role_id: &str) -> rusqlite::Result<Vec<String>> {
-    let mut stmt = conn.prepare("SELECT user_id FROM user_access_roles WHERE access_role_id = ?1")?;
+pub fn list_assignee_user_ids(
+    conn: &Connection,
+    access_role_id: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt =
+        conn.prepare("SELECT user_id FROM user_access_roles WHERE access_role_id = ?1")?;
     let rows = stmt.query_map([access_role_id], |r| r.get(0))?.collect();
     rows
 }
 
 pub fn count_assignees(conn: &Connection, access_role_id: &str) -> rusqlite::Result<i64> {
-    conn.query_row("SELECT COUNT(*) FROM user_access_roles WHERE access_role_id = ?1", [access_role_id], |r| r.get(0))
+    conn.query_row(
+        "SELECT COUNT(*) FROM user_access_roles WHERE access_role_id = ?1",
+        [access_role_id],
+        |r| r.get(0),
+    )
 }
 
 pub fn assign(conn: &Connection, user_id: &str, access_role_id: &str) -> rusqlite::Result<()> {
@@ -47,6 +55,9 @@ pub fn assign(conn: &Connection, user_id: &str, access_role_id: &str) -> rusqlit
 }
 
 pub fn remove(conn: &Connection, user_id: &str, access_role_id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM user_access_roles WHERE user_id = ?1 AND access_role_id = ?2", (user_id, access_role_id))?;
+    conn.execute(
+        "DELETE FROM user_access_roles WHERE user_id = ?1 AND access_role_id = ?2",
+        (user_id, access_role_id),
+    )?;
     Ok(())
 }

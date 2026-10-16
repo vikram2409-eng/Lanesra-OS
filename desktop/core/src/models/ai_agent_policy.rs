@@ -63,6 +63,10 @@ pub enum PolicyDecision {
     Allow,
     /// Carries the effective risk level that triggered this, for the
     /// caller's own error/result message.
-    RequireApproval { risk_level: RiskLevel },
-    Deny { risk_level: RiskLevel },
+    RequireApproval {
+        risk_level: RiskLevel,
+    },
+    Deny {
+        risk_level: RiskLevel,
+    },
 }

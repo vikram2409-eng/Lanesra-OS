@@ -59,18 +59,36 @@ fn expires_at_from(ttl_seconds: Option<i64>, default_ttl: i64) -> Option<String>
 /// future non-agent writer) goes through. `agent_id` is required - unlike
 /// `policy_engine_service::evaluate`'s tool-call firewall, memory has no
 /// fixed "records"/"admin" assistant caller, only named Agents.
-pub fn remember(conn: &Connection, workspace_id: &str, agent_id: &str, input: &MemoryItemInput, context: &crate::models::ai_memory::AgentMemoryContext, created_by: &str) -> AppResult<MemoryItem> {
+pub fn remember(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: &str,
+    input: &MemoryItemInput,
+    context: &crate::models::ai_memory::AgentMemoryContext,
+    created_by: &str,
+) -> AppResult<MemoryItem> {
     if !MEMORY_TYPES.contains(&input.memory_type.as_str()) {
-        return Err(AppError::Validation(format!("'{}' is not a valid memory_type", input.memory_type)));
+        return Err(AppError::Validation(format!(
+            "'{}' is not a valid memory_type",
+            input.memory_type
+        )));
     }
     if !CLASSIFICATIONS.contains(&input.classification.as_str()) {
-        return Err(AppError::Validation(format!("'{}' is not a valid classification", input.classification)));
+        return Err(AppError::Validation(format!(
+            "'{}' is not a valid classification",
+            input.classification
+        )));
     }
     if input.content.trim().is_empty() {
         return Err(AppError::Validation("content is required".into()));
     }
 
-    if !super::policy_engine_service::evaluate_memory_write(conn, workspace_id, Some(agent_id), &input.classification)? {
+    if !super::policy_engine_service::evaluate_memory_write(
+        conn,
+        workspace_id,
+        Some(agent_id),
+        &input.classification,
+    )? {
         return Err(AppError::Validation(format!(
             "This workspace's policy excludes '{}'-classified content from durable memory",
             input.classification
@@ -79,20 +97,46 @@ pub fn remember(conn: &Connection, workspace_id: &str, agent_id: &str, input: &M
 
     let (session_key, run_id, expires_at) = match input.memory_type.as_str() {
         "session" => {
-            let key = context.session_key.as_deref().ok_or_else(|| AppError::Validation("Session Memory isn't available outside an interactive chat with a named agent".into()))?;
-            (Some(key), None, expires_at_from(input.ttl_seconds, SESSION_TTL_SECONDS))
+            let key = context.session_key.as_deref().ok_or_else(|| {
+                AppError::Validation(
+                    "Session Memory isn't available outside an interactive chat with a named agent"
+                        .into(),
+                )
+            })?;
+            (
+                Some(key),
+                None,
+                expires_at_from(input.ttl_seconds, SESSION_TTL_SECONDS),
+            )
         }
         "working" => {
-            let run_id = context.run_id.as_deref().ok_or_else(|| AppError::Validation("Working Memory isn't available outside a Pipeline or Execution Graph run".into()))?;
-            (None, Some(run_id), expires_at_from(input.ttl_seconds, WORKING_TTL_SECONDS))
+            let run_id = context.run_id.as_deref().ok_or_else(|| {
+                AppError::Validation(
+                    "Working Memory isn't available outside a Pipeline or Execution Graph run"
+                        .into(),
+                )
+            })?;
+            (
+                None,
+                Some(run_id),
+                expires_at_from(input.ttl_seconds, WORKING_TTL_SECONDS),
+            )
         }
         "entity" => {
-            if input.entity_type.as_deref().unwrap_or_default().is_empty() || input.entity_id.as_deref().unwrap_or_default().is_empty() {
-                return Err(AppError::Validation("Entity Memory requires both entity_type and entity_id".into()));
+            if input.entity_type.as_deref().unwrap_or_default().is_empty()
+                || input.entity_id.as_deref().unwrap_or_default().is_empty()
+            {
+                return Err(AppError::Validation(
+                    "Entity Memory requires both entity_type and entity_id".into(),
+                ));
             }
             (None, None, expires_at_from(input.ttl_seconds, 0))
         }
-        other => return Err(AppError::Validation(format!("'{other}' is not a valid memory_type"))),
+        other => {
+            return Err(AppError::Validation(format!(
+                "'{other}' is not a valid memory_type"
+            )))
+        }
     };
 
     let item = ai_memory_repo::create(
@@ -118,46 +162,83 @@ pub fn remember(conn: &Connection, workspace_id: &str, agent_id: &str, input: &M
 /// own ambient Session Memory injection) reads back, scoped exactly the
 /// same way `remember` writes - explicit `entity_type`/`entity_id` for
 /// Entity Memory, `context`'s own session/run key for the other two.
-pub fn list_context(conn: &Connection, agent_id: &str, memory_type: &str, entity_type: Option<&str>, entity_id: Option<&str>, context: &crate::models::ai_memory::AgentMemoryContext) -> AppResult<Vec<MemoryItem>> {
+pub fn list_context(
+    conn: &Connection,
+    agent_id: &str,
+    memory_type: &str,
+    entity_type: Option<&str>,
+    entity_id: Option<&str>,
+    context: &crate::models::ai_memory::AgentMemoryContext,
+) -> AppResult<Vec<MemoryItem>> {
     match memory_type {
         "entity" => {
             let (Some(et), Some(eid)) = (entity_type, entity_id) else {
-                return Err(AppError::Validation("Entity Memory requires both entity_type and entity_id".into()));
+                return Err(AppError::Validation(
+                    "Entity Memory requires both entity_type and entity_id".into(),
+                ));
             };
             let workspace_id = agent_workspace(conn, agent_id)?;
             Ok(ai_memory_repo::list_entity(conn, &workspace_id, et, eid)?)
         }
         "session" => {
             let Some(key) = &context.session_key else {
-                return Err(AppError::Validation("Session Memory isn't available outside an interactive chat with a named agent".into()));
+                return Err(AppError::Validation(
+                    "Session Memory isn't available outside an interactive chat with a named agent"
+                        .into(),
+                ));
             };
             Ok(ai_memory_repo::list_session(conn, agent_id, key, 25)?)
         }
         "working" => {
             let Some(run_id) = &context.run_id else {
-                return Err(AppError::Validation("Working Memory isn't available outside a Pipeline or Execution Graph run".into()));
+                return Err(AppError::Validation(
+                    "Working Memory isn't available outside a Pipeline or Execution Graph run"
+                        .into(),
+                ));
             };
             Ok(ai_memory_repo::list_working(conn, agent_id, run_id)?)
         }
-        other => Err(AppError::Validation(format!("'{other}' is not a valid memory_type"))),
+        other => Err(AppError::Validation(format!(
+            "'{other}' is not a valid memory_type"
+        ))),
     }
 }
 
 fn agent_workspace(conn: &Connection, agent_id: &str) -> AppResult<String> {
-    Ok(ai_agent_repo::get(conn, agent_id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?.workspace_id)
+    Ok(ai_agent_repo::get(conn, agent_id)?
+        .ok_or_else(|| AppError::NotFound("Agent".into()))?
+        .workspace_id)
 }
 
 /// The admin Memory Inspector's own listing - every item in the workspace,
 /// optionally narrowed by type and/or entity, unfiltered by expiry so an
 /// admin can see (and clean up) an already-expired item too.
-pub fn list_all(conn: &Connection, workspace_id: &str, memory_type: Option<&str>, entity_type: Option<&str>, entity_id: Option<&str>, actor_user_id: Option<&str>) -> AppResult<Vec<MemoryItem>> {
+pub fn list_all(
+    conn: &Connection,
+    workspace_id: &str,
+    memory_type: Option<&str>,
+    entity_type: Option<&str>,
+    entity_id: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<MemoryItem>> {
     require_admin(conn, actor_user_id)?;
-    Ok(ai_memory_repo::list_all(conn, workspace_id, memory_type, entity_type, entity_id)?)
+    Ok(ai_memory_repo::list_all(
+        conn,
+        workspace_id,
+        memory_type,
+        entity_type,
+        entity_id,
+    )?)
 }
 
 /// The explicit "an admin/user can inspect and delete retained memory"
 /// action this issue's own scope text asks for.
-pub fn forget(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn forget(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     let deleted = ai_memory_repo::delete(conn, workspace_id, id)?;
     if deleted == 0 {

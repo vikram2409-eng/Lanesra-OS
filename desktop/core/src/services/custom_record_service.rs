@@ -18,18 +18,33 @@ use crate::models::access_role::Capability;
 use crate::models::custom_object::CUSTOM_RECORD_STATUSES;
 use crate::models::custom_record::{CustomRecord, CustomRecordInput, CustomRecordUpdate};
 use crate::repositories::{audit_repo, custom_object_repo, custom_record_repo};
-use crate::services::{access_service, app_service, builtin_field_service, relationship_service, workflow_service};
+use crate::services::{
+    access_service, app_service, builtin_field_service, relationship_service, workflow_service,
+};
 
-fn resolve_active_object(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<crate::models::custom_object::CustomObjectDefinition> {
+fn resolve_active_object(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> AppResult<crate::models::custom_object::CustomObjectDefinition> {
     let def = custom_object_repo::get_by_key(conn, workspace_id, object_key)?
         .ok_or_else(|| AppError::Validation(format!("Unknown object type '{object_key}'")))?;
     if !def.is_active {
-        return Err(AppError::Validation(format!("'{}' is not currently active", def.plural_label)));
+        return Err(AppError::Validation(format!(
+            "'{}' is not currently active",
+            def.plural_label
+        )));
     }
     Ok(def)
 }
 
-fn allocate_number(conn: &Connection, workspace_id: &str, object_key: &str, prefix: &str, digits: i64) -> AppResult<String> {
+fn allocate_number(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    prefix: &str,
+    digits: i64,
+) -> AppResult<String> {
     let width = digits as usize;
     let next_value: i64 = conn.query_row(
         "INSERT INTO number_sequences (id, workspace_id, entity_type, prefix, period_key, next_value)
@@ -51,17 +66,37 @@ pub fn create(
 ) -> AppResult<CustomRecord> {
     let def = resolve_active_object(conn, workspace_id, &input.object_key)?;
     if input.primary_name.trim().is_empty() {
-        return Err(AppError::Validation(format!("{} name is required", def.singular_label)));
+        return Err(AppError::Validation(format!(
+            "{} name is required",
+            def.singular_label
+        )));
     }
     if !CUSTOM_RECORD_STATUSES.contains(&input.status.as_str()) {
-        return Err(AppError::Validation(format!("Invalid status '{}'", input.status)));
+        return Err(AppError::Validation(format!(
+            "Invalid status '{}'",
+            input.status
+        )));
     }
     app_service::require_object_write_access(conn, workspace_id, &def.key, actor_user_id)?;
     access_service::require_capability(conn, actor_user_id, &def.key, Capability::Create, None)?;
     let display_number = allocate_number(conn, workspace_id, &def.key, &def.prefix, def.digits)?;
     let id = new_uuid();
-    let record = custom_record_repo::create(conn, &id, workspace_id, &display_number, input, actor_user_id)?;
-    super::ownership_service::set_default_owner_on_create(conn, workspace_id, &def.key, &record.id, actor_user_id, input.owner_user_id.as_deref())?;
+    let record = custom_record_repo::create(
+        conn,
+        &id,
+        workspace_id,
+        &display_number,
+        input,
+        actor_user_id,
+    )?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        workspace_id,
+        &def.key,
+        &record.id,
+        actor_user_id,
+        input.owner_user_id.as_deref(),
+    )?;
     audit_repo::record(
         conn,
         workspace_id,
@@ -72,8 +107,24 @@ pub fn create(
         &format!("Created {} {}", def.singular_label, record.display_number),
         None,
     )?;
-    workflow_service::fire_event(conn, workspace_id, &def.key, &record.id, None, &record.status, record.owner_user_id.as_deref(), actor_user_id)?;
-    super::event_hooks::record_created(conn, workspace_id, &def.key, &record.id, &record.primary_name, &record.status);
+    workflow_service::fire_event(
+        conn,
+        workspace_id,
+        &def.key,
+        &record.id,
+        None,
+        &record.status,
+        record.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
+    super::event_hooks::record_created(
+        conn,
+        workspace_id,
+        &def.key,
+        &record.id,
+        &record.primary_name,
+        &record.status,
+    );
     Ok(record)
 }
 
@@ -81,7 +132,11 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<CustomRecord> {
     custom_record_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Record".into()))
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<Vec<CustomRecord>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> AppResult<Vec<CustomRecord>> {
     // Confirms the object exists so a typo'd/retired key returns a clean
     // error instead of a silently empty list.
     resolve_active_object(conn, workspace_id, object_key).or_else(|_| {
@@ -102,10 +157,24 @@ pub fn update(
         return Err(AppError::Validation("Name is required".into()));
     }
     if !CUSTOM_RECORD_STATUSES.contains(&input.status.as_str()) {
-        return Err(AppError::Validation(format!("Invalid status '{}'", input.status)));
+        return Err(AppError::Validation(format!(
+            "Invalid status '{}'",
+            input.status
+        )));
     }
-    app_service::require_object_write_access(conn, &before.workspace_id, &before.object_key, actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, &before.object_key, Capability::Update, Some(id))?;
+    app_service::require_object_write_access(
+        conn,
+        &before.workspace_id,
+        &before.object_key,
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        &before.object_key,
+        Capability::Update,
+        Some(id),
+    )?;
     let before_fields = builtin_field_service::field_values(conn, &before.object_key, id)?;
     let record = custom_record_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(
@@ -118,18 +187,58 @@ pub fn update(
         &format!("Updated {}", record.display_number),
         None,
     )?;
-    workflow_service::fire_event(conn, &record.workspace_id, &before.object_key, id, Some(&before.status), &record.status, record.owner_user_id.as_deref(), actor_user_id)?;
+    workflow_service::fire_event(
+        conn,
+        &record.workspace_id,
+        &before.object_key,
+        id,
+        Some(&before.status),
+        &record.status,
+        record.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
     let after_fields = builtin_field_service::field_values(conn, &before.object_key, id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
-    workflow_service::fire_field_changed(conn, &record.workspace_id, &before.object_key, id, "builtin", &changed, record.owner_user_id.as_deref(), actor_user_id)?;
-    super::event_hooks::record_updated(conn, &record.workspace_id, &before.object_key, id, &record.primary_name, &record.status);
+    workflow_service::fire_field_changed(
+        conn,
+        &record.workspace_id,
+        &before.object_key,
+        id,
+        "builtin",
+        &changed,
+        record.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
+    super::event_hooks::record_updated(
+        conn,
+        &record.workspace_id,
+        &before.object_key,
+        id,
+        &record.primary_name,
+        &record.status,
+    );
     Ok(record)
 }
 
-pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomRecord> {
+pub fn archive(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomRecord> {
     let record = get(conn, id)?;
-    app_service::require_object_write_access(conn, &record.workspace_id, &record.object_key, actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, &record.object_key, Capability::Delete, Some(id))?;
+    app_service::require_object_write_access(
+        conn,
+        &record.workspace_id,
+        &record.object_key,
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        &record.object_key,
+        Capability::Delete,
+        Some(id),
+    )?;
     // Phase B (ADM-CR-06): a `restrict` custom relationship still linking
     // to this record blocks archiving it; an `archive` one has its link
     // rows cleared instead of following the record into archive.
@@ -145,6 +254,12 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
         &format!("Archived {}", archived.display_number),
         None,
     )?;
-    super::event_hooks::record_archived(conn, &archived.workspace_id, &record.object_key, id, &archived.primary_name);
+    super::event_hooks::record_archived(
+        conn,
+        &archived.workspace_id,
+        &record.object_key,
+        id,
+        &archived.primary_name,
+    );
     Ok(archived)
 }

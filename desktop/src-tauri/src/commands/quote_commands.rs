@@ -1,19 +1,24 @@
 use tauri::State;
 
 use crate::commands::{current_actor, require_workspace_id};
+use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::access_role::Capability;
 use lanesra_core::models::order::OrderWithLines;
 use lanesra_core::models::quote::{Quote, QuoteInput, QuoteWithLines};
 use lanesra_core::services::{access_service, quote_service};
-use crate::state::AppState;
 
 #[tauri::command]
 pub fn list_quotes(state: State<AppState>) -> AppResult<Vec<Quote>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     let mut quotes = quote_service::list(&conn, &workspace_id)?;
-    let visible = access_service::filter_visible(&conn, current_actor(&state).as_deref(), "Quote", quotes.iter().map(|q| q.id.as_str()))?;
+    let visible = access_service::filter_visible(
+        &conn,
+        current_actor(&state).as_deref(),
+        "Quote",
+        quotes.iter().map(|q| q.id.as_str()),
+    )?;
     quotes.retain(|q| visible.contains(&q.id));
     Ok(quotes)
 }
@@ -21,7 +26,13 @@ pub fn list_quotes(state: State<AppState>) -> AppResult<Vec<Quote>> {
 #[tauri::command]
 pub fn get_quote(state: State<AppState>, id: String) -> AppResult<QuoteWithLines> {
     let conn = state.conn.lock().unwrap();
-    access_service::require_capability(&conn, current_actor(&state).as_deref(), "Quote", Capability::Read, Some(&id))?;
+    access_service::require_capability(
+        &conn,
+        current_actor(&state).as_deref(),
+        "Quote",
+        Capability::Read,
+        Some(&id),
+    )?;
     quote_service::get(&conn, &id)
 }
 
@@ -32,13 +43,20 @@ pub fn create_quote(state: State<AppState>, input: QuoteInput) -> AppResult<Quot
 }
 
 #[tauri::command]
-pub fn set_quote_status(state: State<AppState>, id: String, status: String) -> AppResult<QuoteWithLines> {
+pub fn set_quote_status(
+    state: State<AppState>,
+    id: String,
+    status: String,
+) -> AppResult<QuoteWithLines> {
     let conn = state.conn.lock().unwrap();
     quote_service::set_status(&conn, &id, &status, current_actor(&state).as_deref())
 }
 
 #[tauri::command]
-pub fn convert_quote_to_order(state: State<AppState>, quote_id: String) -> AppResult<OrderWithLines> {
+pub fn convert_quote_to_order(
+    state: State<AppState>,
+    quote_id: String,
+) -> AppResult<OrderWithLines> {
     let conn = state.conn.lock().unwrap();
     quote_service::convert_to_order(&conn, &quote_id, current_actor(&state).as_deref())
 }

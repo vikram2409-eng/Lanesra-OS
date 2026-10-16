@@ -35,15 +35,28 @@ pub fn add(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<TeamMembership>> {
-    conn.query_row("SELECT * FROM team_memberships WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM team_memberships WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// Active members only (no effective_to, or one still in the future) -
 /// matches the same "effective dating" convention the rest of this
 /// codebase already uses (e.g. Organization Units).
-pub fn list_active_members(conn: &Connection, team_id: &str) -> rusqlite::Result<Vec<TeamMembership>> {
+pub fn list_active_members(
+    conn: &Connection,
+    team_id: &str,
+) -> rusqlite::Result<Vec<TeamMembership>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM team_memberships WHERE team_id = ?1 AND (effective_to IS NULL OR effective_to > ?2) ORDER BY effective_from",
     )?;
@@ -64,6 +77,9 @@ pub fn list_for_user(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<T
 /// see 0052_work_teams.sql's own doc comment on why the two are kept
 /// deliberately independent.
 pub fn end_membership(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE team_memberships SET effective_to = ?1 WHERE id = ?2", (now_iso(), id))?;
+    conn.execute(
+        "UPDATE team_memberships SET effective_to = ?1 WHERE id = ?2",
+        (now_iso(), id),
+    )?;
     Ok(())
 }

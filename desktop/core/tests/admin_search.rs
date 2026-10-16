@@ -34,14 +34,26 @@ fn admin_search_runs_every_query_and_finds_a_matching_custom_object() {
     assert!(empty.is_empty());
 
     let created = custom_object_service::create(
-        &conn, &ws,
-        &CustomObjectDefinitionInput { singular_label: "Vendor".into(), plural_label: "Vendors".into(), icon: "🏷️".into(), prefix: "VEN".into(), digits: 4 },
+        &conn,
+        &ws,
+        &CustomObjectDefinitionInput {
+            singular_label: "Vendor".into(),
+            plural_label: "Vendors".into(),
+            icon: "🏷️".into(),
+            prefix: "VEN".into(),
+            digits: 4,
+        },
         Some(&admin),
     )
     .unwrap();
 
     let results = admin_search_service::admin_search(&conn, &ws, "Vendor", Some(&admin)).unwrap();
-    assert!(results.iter().any(|r| r.entity_id == created.id && r.admin_tab == "objects"), "{results:?}");
+    assert!(
+        results
+            .iter()
+            .any(|r| r.entity_id == created.id && r.admin_tab == "objects"),
+        "{results:?}"
+    );
 }
 
 #[test]
@@ -53,7 +65,10 @@ fn non_admin_cannot_use_admin_search() {
         password: "supersecretpassword".into(),
         roles: vec!["Sales".into()],
     };
-    let non_admin = lanesra_core::services::user_service::create(&conn, &ws, &non_admin_input, Some(&admin)).unwrap();
-    let err = admin_search_service::admin_search(&conn, &ws, "anything", Some(&non_admin.id)).unwrap_err();
+    let non_admin =
+        lanesra_core::services::user_service::create(&conn, &ws, &non_admin_input, Some(&admin))
+            .unwrap();
+    let err = admin_search_service::admin_search(&conn, &ws, "anything", Some(&non_admin.id))
+        .unwrap_err();
     assert!(err.to_string().to_lowercase().contains("admin"), "{err}");
 }

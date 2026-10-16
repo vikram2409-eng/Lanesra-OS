@@ -8,15 +8,17 @@
 use std::collections::HashMap;
 
 use lanesra_core::db::open_in_memory_db;
+use lanesra_core::models::business_rule::{
+    BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput,
+};
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
-use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
 use lanesra_core::models::custom_report::CustomReportInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::services::{
-    business_rule_service, custom_field_service, custom_object_service, custom_record_service, custom_report_service,
-    effective_dating_service, user_service,
+    business_rule_service, custom_field_service, custom_object_service, custom_record_service,
+    custom_report_service, effective_dating_service, user_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -33,7 +35,8 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
         admin_password: "supersecretpassword".into(),
         load_sample_data: false,
     };
-    let (workspace, admin) = lanesra_core::services::workspace_service::first_run_setup(&conn, &setup).unwrap();
+    let (workspace, admin) =
+        lanesra_core::services::workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
 }
 
@@ -57,10 +60,17 @@ fn an_administrator_can_define_a_custom_object_and_a_non_admin_cannot() {
     assert!(vendor.is_active);
 
     let sales_user = user_service::create(
-        &conn, &ws,
-        &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] },
+        &conn,
+        &ws,
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let denied = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&sales_user.id));
     assert!(denied.is_err());
@@ -81,19 +91,40 @@ fn records_of_a_custom_object_are_numbered_from_its_own_definition() {
     let vendor = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&admin)).unwrap();
 
     let first = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Acme Supplies".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: vendor.key.clone(),
+            primary_name: "Acme Supplies".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let second = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Beta Parts".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: vendor.key.clone(),
+            primary_name: "Beta Parts".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(first.display_number, "VEN-0001");
     assert_eq!(second.display_number, "VEN-0002");
-    assert_eq!(custom_record_service::list(&conn, &ws, &vendor.key).unwrap().len(), 2);
+    assert_eq!(
+        custom_record_service::list(&conn, &ws, &vendor.key)
+            .unwrap()
+            .len(),
+        2
+    );
 }
 
 #[test]
@@ -101,8 +132,15 @@ fn a_record_cannot_be_created_for_an_unknown_or_deactivated_object() {
     let (conn, ws, admin) = setup_workspace();
 
     let unknown = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: "not_a_real_object".into(), primary_name: "X".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: "not_a_real_object".into(),
+            primary_name: "X".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
     );
     assert!(unknown.is_err());
@@ -110,8 +148,15 @@ fn a_record_cannot_be_created_for_an_unknown_or_deactivated_object() {
     let vendor = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&admin)).unwrap();
     custom_object_service::deactivate(&conn, &vendor.id, Some(&admin)).unwrap();
     let after_deactivate = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "X".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: vendor.key.clone(),
+            primary_name: "X".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
     );
     assert!(after_deactivate.is_err());
@@ -122,10 +167,18 @@ fn deleting_an_object_definition_is_blocked_while_records_exist() {
     let (conn, ws, admin) = setup_workspace();
     let vendor = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&admin)).unwrap();
     custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Acme Supplies".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: vendor.key.clone(),
+            primary_name: "Acme Supplies".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let blocked = custom_object_service::delete(&conn, &vendor.id, Some(&admin));
     assert!(blocked.is_err());
@@ -133,7 +186,12 @@ fn deleting_an_object_definition_is_blocked_while_records_exist() {
     // Deactivating instead is always allowed, and is non-destructive.
     let deactivated = custom_object_service::deactivate(&conn, &vendor.id, Some(&admin)).unwrap();
     assert!(!deactivated.is_active);
-    assert_eq!(custom_record_service::list(&conn, &ws, &vendor.key).unwrap().len(), 1);
+    assert_eq!(
+        custom_record_service::list(&conn, &ws, &vendor.key)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 /// The real proof this is a first-class object type: custom fields,
@@ -148,7 +206,8 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
     let vendor = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&admin)).unwrap();
 
     let rating_field = custom_field_service::create_definition(
-        &conn, &ws,
+        &conn,
+        &ws,
         &CustomFieldDefinitionInput {
             entity_type: vendor.key.clone(),
             label: "Preferred".into(),
@@ -171,11 +230,13 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             is_hidden_by_default: false,
         },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(rating_field.entity_type, vendor.key);
 
     let contact_email_field = custom_field_service::create_definition(
-        &conn, &ws,
+        &conn,
+        &ws,
         &CustomFieldDefinitionInput {
             entity_type: vendor.key.clone(),
             label: "Contact Email".into(),
@@ -198,11 +259,13 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             is_hidden_by_default: false,
         },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // Business rule: require Contact Email once status is Inactive.
     business_rule_service::create_rule(
-        &conn, &ws,
+        &conn,
+        &ws,
         &BusinessRuleInput {
             app_id: None,
             entity_type: vendor.key.clone(),
@@ -219,7 +282,8 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
                 value: "Inactive".into(),
                 compare_field_source: None,
                 compare_field_key: None,
-                group_id: None, relationship_definition_id: None,
+                group_id: None,
+                relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),
@@ -230,43 +294,85 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             }],
         },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let record = custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Acme Supplies".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: vendor.key.clone(),
+            primary_name: "Acme Supplies".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     // While Active, the rule doesn't apply - empty custom values are fine.
-    custom_field_service::set_entity_values(&conn, &vendor.key, &record.id, &HashMap::new(), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        &vendor.key,
+        &record.id,
+        &HashMap::new(),
+        Some(&admin),
+    )
+    .unwrap();
 
     // Move to Inactive, then the required rule should reject an empty value.
     custom_record_service::update(
-        &conn, &record.id,
-        &CustomRecordUpdate { primary_name: record.primary_name.clone(), status: "Inactive".into(), owner_user_id: None, notes: None },
+        &conn,
+        &record.id,
+        &CustomRecordUpdate {
+            primary_name: record.primary_name.clone(),
+            status: "Inactive".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
-    let rejected = custom_field_service::set_entity_values(&conn, &vendor.key, &record.id, &HashMap::new(), Some(&admin));
+    )
+    .unwrap();
+    let rejected = custom_field_service::set_entity_values(
+        &conn,
+        &vendor.key,
+        &record.id,
+        &HashMap::new(),
+        Some(&admin),
+    );
     assert!(rejected.is_err());
 
     let mut values = HashMap::new();
     values.insert(contact_email_field.key.clone(), "ap@acme.example".into());
     values.insert(rating_field.key.clone(), "Yes".into());
-    custom_field_service::set_entity_values(&conn, &vendor.key, &record.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, &vendor.key, &record.id, &values, Some(&admin))
+        .unwrap();
 
     let stored = custom_field_service::get_entity_values(&conn, &record.id).unwrap();
-    assert_eq!(stored.get(&rating_field.key).map(String::as_str), Some("Yes"));
+    assert_eq!(
+        stored.get(&rating_field.key).map(String::as_str),
+        Some("Yes")
+    );
 
     // A second vendor, still Active, to prove the report groups correctly.
     custom_record_service::create(
-        &conn, &ws,
-        &CustomRecordInput { object_key: vendor.key.clone(), primary_name: "Beta Parts".into(), status: "Active".into(), owner_user_id: None, notes: None },
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: vendor.key.clone(),
+            primary_name: "Beta Parts".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
 
     let report = custom_report_service::create(
-        &conn, &ws,
+        &conn,
+        &ws,
         &CustomReportInput {
             name: "Vendors by status".into(),
             entity_type: vendor.key.clone(),
@@ -276,7 +382,8 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
             sum_field_key: None,
         },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let rows = custom_report_service::run(&conn, &report, None).unwrap();
     let by_group: HashMap<String, f64> = rows.into_iter().map(|r| (r.group, r.value)).collect();
     assert_eq!(by_group.get("Active"), Some(&1.0));
@@ -285,11 +392,24 @@ fn custom_fields_business_rules_and_reports_all_work_on_a_custom_object() {
 
 fn date_field_input(entity_type: &str, key_label: &str) -> CustomFieldDefinitionInput {
     CustomFieldDefinitionInput {
-        entity_type: entity_type.into(), label: key_label.into(), field_type: "date".into(),
-        options: vec![], required: false, show_in_list: false, sort_order: 0,
-        min_value: None, max_value: None, max_length: None, regex_pattern: None,
-        is_searchable: false, is_filterable: true, is_reportable: false,
-        default_value: None, is_unique: false, help_text: None, placeholder: None,
+        entity_type: entity_type.into(),
+        label: key_label.into(),
+        field_type: "date".into(),
+        options: vec![],
+        required: false,
+        show_in_list: false,
+        sort_order: 0,
+        min_value: None,
+        max_value: None,
+        max_length: None,
+        regex_pattern: None,
+        is_searchable: false,
+        is_filterable: true,
+        is_reportable: false,
+        default_value: None,
+        is_unique: false,
+        help_text: None,
+        placeholder: None,
         is_hidden_by_default: false,
     }
 }
@@ -301,47 +421,149 @@ fn date_field_input(entity_type: &str, key_label: &str) -> CustomFieldDefinition
 fn effective_dating_service_answers_whether_a_record_is_valid_as_of_a_date() {
     let (conn, ws, admin) = setup_workspace();
     let lease = custom_object_service::create(
-        &conn, &ws,
-        &CustomObjectDefinitionInput { singular_label: "Lease".into(), plural_label: "Leases".into(), icon: "📄".into(), prefix: "LSE".into(), digits: 4 },
+        &conn,
+        &ws,
+        &CustomObjectDefinitionInput {
+            singular_label: "Lease".into(),
+            plural_label: "Leases".into(),
+            icon: "📄".into(),
+            prefix: "LSE".into(),
+            digits: 4,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     // Not eligible until it has an active 'valid_from' date field.
     assert!(!effective_dating_service::is_effective_dated(&conn, &ws, &lease.key).unwrap());
-    assert!(effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-08-01").is_err());
+    assert!(effective_dating_service::active_record_ids_as_of(
+        &conn,
+        &ws,
+        &lease.key,
+        "2024-08-01"
+    )
+    .is_err());
 
-    custom_field_service::create_definition(&conn, &ws, &date_field_input(&lease.key, "Valid From"), Some(&admin)).unwrap();
-    custom_field_service::create_definition(&conn, &ws, &date_field_input(&lease.key, "Valid To"), Some(&admin)).unwrap();
+    custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &date_field_input(&lease.key, "Valid From"),
+        Some(&admin),
+    )
+    .unwrap();
+    custom_field_service::create_definition(
+        &conn,
+        &ws,
+        &date_field_input(&lease.key, "Valid To"),
+        Some(&admin),
+    )
+    .unwrap();
     assert!(effective_dating_service::is_effective_dated(&conn, &ws, &lease.key).unwrap());
 
-    let expired = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Expired Lease".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
-    custom_field_service::set_entity_values(&conn, &lease.key, &expired.id, &HashMap::from([("valid_from".to_string(), "2024-01-01".to_string()), ("valid_to".to_string(), "2024-06-30".to_string())]), Some(&admin)).unwrap();
+    let expired = custom_record_service::create(
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: lease.key.clone(),
+            primary_name: "Expired Lease".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        &lease.key,
+        &expired.id,
+        &HashMap::from([
+            ("valid_from".to_string(), "2024-01-01".to_string()),
+            ("valid_to".to_string(), "2024-06-30".to_string()),
+        ]),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let ongoing = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Ongoing Lease".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
-    custom_field_service::set_entity_values(&conn, &lease.key, &ongoing.id, &HashMap::from([("valid_from".to_string(), "2024-07-01".to_string())]), Some(&admin)).unwrap();
+    let ongoing = custom_record_service::create(
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: lease.key.clone(),
+            primary_name: "Ongoing Lease".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        &lease.key,
+        &ongoing.id,
+        &HashMap::from([("valid_from".to_string(), "2024-07-01".to_string())]),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let not_yet_started = custom_record_service::create(&conn, &ws, &CustomRecordInput { object_key: lease.key.clone(), primary_name: "Future Lease".into(), status: "Active".into(), owner_user_id: None, notes: None }, Some(&admin)).unwrap();
-    custom_field_service::set_entity_values(&conn, &lease.key, &not_yet_started.id, &HashMap::from([("valid_from".to_string(), "2025-01-01".to_string())]), Some(&admin)).unwrap();
+    let not_yet_started = custom_record_service::create(
+        &conn,
+        &ws,
+        &CustomRecordInput {
+            object_key: lease.key.clone(),
+            primary_name: "Future Lease".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        &lease.key,
+        &not_yet_started.id,
+        &HashMap::from([("valid_from".to_string(), "2025-01-01".to_string())]),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let as_of_august = effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-08-01").unwrap();
+    let as_of_august =
+        effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-08-01")
+            .unwrap();
     assert_eq!(as_of_august, vec![ongoing.id.clone()]);
 
-    let as_of_march = effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-03-01").unwrap();
+    let as_of_march =
+        effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2024-03-01")
+            .unwrap();
     assert_eq!(as_of_march, vec![expired.id.clone()]);
 
-    let as_of_next_year = effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2025-02-01").unwrap();
+    let as_of_next_year =
+        effective_dating_service::active_record_ids_as_of(&conn, &ws, &lease.key, "2025-02-01")
+            .unwrap();
     assert_eq!(as_of_next_year.len(), 2);
     assert!(as_of_next_year.contains(&ongoing.id));
     assert!(as_of_next_year.contains(&not_yet_started.id));
 
     // Wired into the custom report builder's "as of" filter.
     let report = custom_report_service::create(
-        &conn, &ws,
-        &CustomReportInput { name: "Leases by status".into(), entity_type: lease.key.clone(), group_by_source: "builtin".into(), group_by_field: "status".into(), aggregate: "count".into(), sum_field_key: None },
+        &conn,
+        &ws,
+        &CustomReportInput {
+            name: "Leases by status".into(),
+            entity_type: lease.key.clone(),
+            group_by_source: "builtin".into(),
+            group_by_field: "status".into(),
+            aggregate: "count".into(),
+            sum_field_key: None,
+        },
         Some(&admin),
-    ).unwrap();
+    )
+    .unwrap();
     let unfiltered = custom_report_service::run(&conn, &report, None).unwrap();
     assert_eq!(unfiltered[0].value, 3.0);
-    let as_of_filtered = custom_report_service::run_with_as_of(&conn, &report, Some("2024-08-01"), None).unwrap();
+    let as_of_filtered =
+        custom_report_service::run_with_as_of(&conn, &report, Some("2024-08-01"), None).unwrap();
     assert_eq!(as_of_filtered[0].value, 1.0);
 }
 
@@ -349,8 +571,15 @@ fn effective_dating_service_answers_whether_a_record_is_valid_as_of_a_date() {
 fn a_custom_object_cannot_be_named_the_same_as_a_built_in_entity() {
     let (conn, ws, admin) = setup_workspace();
     let clash = custom_object_service::create(
-        &conn, &ws,
-        &CustomObjectDefinitionInput { singular_label: "Company".into(), plural_label: "Companies".into(), icon: "◆".into(), prefix: "CMP".into(), digits: 4 },
+        &conn,
+        &ws,
+        &CustomObjectDefinitionInput {
+            singular_label: "Company".into(),
+            plural_label: "Companies".into(),
+            icon: "◆".into(),
+            prefix: "CMP".into(),
+            digits: 4,
+        },
         Some(&admin),
     );
     assert!(clash.is_err());
@@ -369,7 +598,8 @@ fn count_references_finds_a_business_rule_a_workflow_and_a_relationship() {
     assert_eq!(zero.total(), 0);
 
     business_rule_service::create_rule(
-        &conn, &ws,
+        &conn,
+        &ws,
         &BusinessRuleInput {
             app_id: None,
             entity_type: vendor.key.clone(),
@@ -427,7 +657,8 @@ fn count_references_finds_a_business_rule_a_workflow_and_a_relationship() {
     use lanesra_core::models::relationship::RelationshipDefinitionInput;
     use lanesra_core::services::relationship_service;
     relationship_service::create(
-        &conn, &ws,
+        &conn,
+        &ws,
         &RelationshipDefinitionInput {
             source_entity_type: "Company".into(),
             target_entity_type: vendor.key.clone(),
@@ -457,7 +688,8 @@ fn delete_is_blocked_while_a_business_rule_still_references_the_object_even_with
     let vendor = custom_object_service::create(&conn, &ws, &vendor_input(), Some(&admin)).unwrap();
 
     business_rule_service::create_rule(
-        &conn, &ws,
+        &conn,
+        &ws,
         &BusinessRuleInput {
             app_id: None,
             entity_type: vendor.key.clone(),

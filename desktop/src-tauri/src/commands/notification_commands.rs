@@ -7,11 +7,20 @@ use lanesra_core::models::workflow::Notification;
 use lanesra_core::repositories::notification_repo;
 
 #[tauri::command]
-pub fn list_notifications(state: State<AppState>, unread_only: bool) -> AppResult<Vec<Notification>> {
+pub fn list_notifications(
+    state: State<AppState>,
+    unread_only: bool,
+) -> AppResult<Vec<Notification>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    let user_id = current_actor(&state).ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    Ok(notification_repo::list_for_user(&conn, &workspace_id, &user_id, unread_only)?)
+    let user_id =
+        current_actor(&state).ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+    Ok(notification_repo::list_for_user(
+        &conn,
+        &workspace_id,
+        &user_id,
+        unread_only,
+    )?)
 }
 
 #[tauri::command]
@@ -24,6 +33,11 @@ pub fn mark_notification_read(state: State<AppState>, id: String) -> AppResult<(
 pub fn mark_all_notifications_read(state: State<AppState>) -> AppResult<()> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    let user_id = current_actor(&state).ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
-    Ok(notification_repo::mark_all_read(&conn, &workspace_id, &user_id)?)
+    let user_id =
+        current_actor(&state).ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
+    Ok(notification_repo::mark_all_read(
+        &conn,
+        &workspace_id,
+        &user_id,
+    )?)
 }

@@ -8,7 +8,9 @@ use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::contact::ContactInput;
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{activity_service, company_service, contact_service, opportunity_service, workspace_service};
+use lanesra_core::services::{
+    activity_service, company_service, contact_service, opportunity_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = lanesra_core::db::open_in_memory_db().unwrap();
@@ -30,8 +32,14 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
 
 fn make_company(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
     company_service::create(
-        conn, ws,
-        &CompanyInput { name: "Acme Corp".into(), status: "Prospect".into(), owner_user_id: None, ..Default::default() },
+        conn,
+        ws,
+        &CompanyInput {
+            name: "Acme Corp".into(),
+            status: "Prospect".into(),
+            owner_user_id: None,
+            ..Default::default()
+        },
         Some(admin),
     )
     .unwrap()
@@ -41,7 +49,13 @@ fn make_company(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
 fn make_contact(conn: &rusqlite::Connection, company_id: &str, admin: &str) -> String {
     contact_service::create(
         conn,
-        &ContactInput { company_id: company_id.into(), first_name: "Jane".into(), last_name: "Doe".into(), status: "Active".into(), ..Default::default() },
+        &ContactInput {
+            company_id: company_id.into(),
+            first_name: "Jane".into(),
+            last_name: "Doe".into(),
+            status: "Active".into(),
+            ..Default::default()
+        },
         Some(admin),
     )
     .unwrap()
@@ -52,9 +66,18 @@ fn make_opportunity(conn: &rusqlite::Connection, company_id: &str, admin: &str) 
     opportunity_service::create(
         conn,
         &OpportunityInput {
-            company_id: company_id.into(), primary_contact_id: None, name: "Big Deal".into(), stage: "Qualified".into(),
-            status: "Open".into(), value_cents: 100_000, currency_code: "USD".into(), probability_bp: 5000,
-            expected_close_date: None, owner_user_id: None, lost_reason: None, next_step: None,
+            company_id: company_id.into(),
+            primary_contact_id: None,
+            name: "Big Deal".into(),
+            stage: "Qualified".into(),
+            status: "Open".into(),
+            value_cents: 100_000,
+            currency_code: "USD".into(),
+            probability_bp: 5000,
+            expected_close_date: None,
+            owner_user_id: None,
+            lost_reason: None,
+            next_step: None,
         },
         Some(admin),
     )
@@ -82,8 +105,17 @@ fn logging_and_listing_round_trips_for_each_supported_entity_type() {
     let contact_id = make_contact(&conn, &company_id, &admin);
     let opportunity_id = make_opportunity(&conn, &company_id, &admin);
 
-    for (entity_type, entity_id) in [("Company", company_id.as_str()), ("Contact", contact_id.as_str()), ("Opportunity", opportunity_id.as_str())] {
-        let logged = activity_service::log_activity(&conn, &email_input(entity_type, entity_id), Some(&admin)).unwrap();
+    for (entity_type, entity_id) in [
+        ("Company", company_id.as_str()),
+        ("Contact", contact_id.as_str()),
+        ("Opportunity", opportunity_id.as_str()),
+    ] {
+        let logged = activity_service::log_activity(
+            &conn,
+            &email_input(entity_type, entity_id),
+            Some(&admin),
+        )
+        .unwrap();
         assert_eq!(logged.entity_type, entity_type);
         assert_eq!(logged.source, "manual");
         assert_eq!(logged.created_by.as_deref(), Some(admin.as_str()));
@@ -107,7 +139,8 @@ fn an_entity_with_no_logged_activity_returns_an_empty_list() {
 fn an_unsupported_entity_type_is_rejected() {
     let (conn, ws, admin) = setup_workspace();
     let company_id = make_company(&conn, &ws, &admin);
-    let result = activity_service::log_activity(&conn, &email_input("Product", &company_id), Some(&admin));
+    let result =
+        activity_service::log_activity(&conn, &email_input("Product", &company_id), Some(&admin));
     assert!(result.is_err());
 }
 
@@ -144,7 +177,11 @@ fn an_empty_body_is_rejected() {
 #[test]
 fn logging_against_a_nonexistent_record_is_not_found() {
     let (conn, _ws, admin) = setup_workspace();
-    let result = activity_service::log_activity(&conn, &email_input("Company", "does-not-exist"), Some(&admin));
+    let result = activity_service::log_activity(
+        &conn,
+        &email_input("Company", "does-not-exist"),
+        Some(&admin),
+    );
     assert!(result.is_err());
 }
 
@@ -153,9 +190,14 @@ fn a_call_activity_needs_no_direction() {
     let (conn, ws, admin) = setup_workspace();
     let company_id = make_company(&conn, &ws, &admin);
     let input = ActivityInput {
-        entity_type: "Company".into(), entity_id: company_id.clone(), channel: "call".into(), direction: None,
-        subject: Some("Discovery call".into()), body: "Discussed pricing and timeline.".into(),
-        participants: Some("Jane Doe".into()), occurred_at: "2026-01-02T15:00:00Z".into(),
+        entity_type: "Company".into(),
+        entity_id: company_id.clone(),
+        channel: "call".into(),
+        direction: None,
+        subject: Some("Discovery call".into()),
+        body: "Discussed pricing and timeline.".into(),
+        participants: Some("Jane Doe".into()),
+        occurred_at: "2026-01-02T15:00:00Z".into(),
     };
     let logged = activity_service::log_activity(&conn, &input, Some(&admin)).unwrap();
     assert_eq!(logged.channel, "call");

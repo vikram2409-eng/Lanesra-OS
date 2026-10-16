@@ -48,7 +48,13 @@ pub fn create(
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<OrgUnit>> {
     conn.query_row("SELECT * FROM org_units WHERE id = ?1", [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 /// Every unit in the workspace, ordered by path - a parent's row always
@@ -61,8 +67,12 @@ pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<OrgUn
     rows
 }
 
-pub fn list_children(conn: &Connection, parent_org_unit_id: &str) -> rusqlite::Result<Vec<OrgUnit>> {
-    let mut stmt = conn.prepare("SELECT * FROM org_units WHERE parent_org_unit_id = ?1 ORDER BY name")?;
+pub fn list_children(
+    conn: &Connection,
+    parent_org_unit_id: &str,
+) -> rusqlite::Result<Vec<OrgUnit>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM org_units WHERE parent_org_unit_id = ?1 ORDER BY name")?;
     let rows = stmt.query_map([parent_org_unit_id], map_row)?.collect();
     rows
 }
@@ -72,14 +82,25 @@ pub fn list_children(conn: &Connection, parent_org_unit_id: &str) -> rusqlite::R
 /// exists for. `path_prefix` must already end in '/' and be escaped by the
 /// caller if it can contain '%'/'_' (org unit ids are opaque hex/UUID
 /// strings, never user-supplied text, so no escaping is needed here).
-pub fn list_descendants_by_path(conn: &Connection, workspace_id: &str, path_prefix: &str) -> rusqlite::Result<Vec<OrgUnit>> {
-    let mut stmt = conn.prepare("SELECT * FROM org_units WHERE workspace_id = ?1 AND path LIKE ?2 ORDER BY path")?;
+pub fn list_descendants_by_path(
+    conn: &Connection,
+    workspace_id: &str,
+    path_prefix: &str,
+) -> rusqlite::Result<Vec<OrgUnit>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM org_units WHERE workspace_id = ?1 AND path LIKE ?2 ORDER BY path",
+    )?;
     let pattern = format!("{path_prefix}%");
     let rows = stmt.query_map((workspace_id, pattern), map_row)?.collect();
     rows
 }
 
-pub fn update(conn: &Connection, id: &str, input: &OrgUnitUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<OrgUnit> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &OrgUnitUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<OrgUnit> {
     conn.execute(
         "UPDATE org_units SET name = ?1, unit_type = ?2, manager_user_id = ?3, status = ?4, effective_from = ?5, effective_to = ?6, updated_at = ?7, updated_by = ?8
          WHERE id = ?9",
@@ -114,7 +135,13 @@ pub fn set_parent_and_path(
 /// `new_prefix`) and depth (shift by `depth_delta`) in one bounded
 /// statement - the whole point of a materialized path over a closure
 /// table: a move only ever touches the moved subtree's own rows, once.
-pub fn update_path_for_subtree(conn: &Connection, old_prefix: &str, new_prefix: &str, depth_delta: i64, actor_user_id: Option<&str>) -> rusqlite::Result<usize> {
+pub fn update_path_for_subtree(
+    conn: &Connection,
+    old_prefix: &str,
+    new_prefix: &str,
+    depth_delta: i64,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<usize> {
     conn.execute(
         "UPDATE org_units
          SET path = ?1 || substr(path, ?2), depth = depth + ?3, updated_at = ?4, updated_by = ?5

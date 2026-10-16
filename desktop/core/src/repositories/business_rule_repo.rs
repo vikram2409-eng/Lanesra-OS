@@ -2,8 +2,8 @@ use rusqlite::Connection;
 
 use crate::domain::ids::{new_uuid, now_iso};
 use crate::models::business_rule::{
-    BusinessRule, BusinessRuleAction, BusinessRuleActionInput, BusinessRuleCondition, BusinessRuleConditionInput,
-    BusinessRuleInput, BusinessRuleUpdate,
+    BusinessRule, BusinessRuleAction, BusinessRuleActionInput, BusinessRuleCondition,
+    BusinessRuleConditionInput, BusinessRuleInput, BusinessRuleUpdate,
 };
 
 fn map_condition(row: &rusqlite::Row) -> rusqlite::Result<BusinessRuleCondition> {
@@ -33,14 +33,19 @@ fn map_action(row: &rusqlite::Row) -> rusqlite::Result<BusinessRuleAction> {
     })
 }
 
-fn conditions_for(conn: &Connection, rule_id: &str) -> rusqlite::Result<Vec<BusinessRuleCondition>> {
-    let mut stmt = conn.prepare("SELECT * FROM business_rule_conditions WHERE rule_id = ?1 ORDER BY sort_order")?;
+fn conditions_for(
+    conn: &Connection,
+    rule_id: &str,
+) -> rusqlite::Result<Vec<BusinessRuleCondition>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM business_rule_conditions WHERE rule_id = ?1 ORDER BY sort_order")?;
     let rows = stmt.query_map([rule_id], map_condition)?.collect();
     rows
 }
 
 fn actions_for(conn: &Connection, rule_id: &str) -> rusqlite::Result<Vec<BusinessRuleAction>> {
-    let mut stmt = conn.prepare("SELECT * FROM business_rule_actions WHERE rule_id = ?1 ORDER BY sort_order")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM business_rule_actions WHERE rule_id = ?1 ORDER BY sort_order")?;
     let rows = stmt.query_map([rule_id], map_action)?.collect();
     rows
 }
@@ -70,8 +75,15 @@ fn map_rule_header(row: &rusqlite::Row) -> rusqlite::Result<BusinessRule> {
     })
 }
 
-fn write_conditions(conn: &Connection, rule_id: &str, conditions: &[BusinessRuleConditionInput]) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM business_rule_conditions WHERE rule_id = ?1", [rule_id])?;
+fn write_conditions(
+    conn: &Connection,
+    rule_id: &str,
+    conditions: &[BusinessRuleConditionInput],
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM business_rule_conditions WHERE rule_id = ?1",
+        [rule_id],
+    )?;
     for (i, c) in conditions.iter().enumerate() {
         conn.execute(
             "INSERT INTO business_rule_conditions (id, rule_id, field_source, field_key, operator, value, compare_field_source, compare_field_key, group_id, relationship_definition_id, sort_order)
@@ -85,8 +97,15 @@ fn write_conditions(conn: &Connection, rule_id: &str, conditions: &[BusinessRule
     Ok(())
 }
 
-fn write_actions(conn: &Connection, rule_id: &str, actions: &[BusinessRuleActionInput]) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM business_rule_actions WHERE rule_id = ?1", [rule_id])?;
+fn write_actions(
+    conn: &Connection,
+    rule_id: &str,
+    actions: &[BusinessRuleActionInput],
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM business_rule_actions WHERE rule_id = ?1",
+        [rule_id],
+    )?;
     for (i, a) in actions.iter().enumerate() {
         conn.execute(
             "INSERT INTO business_rule_actions (id, rule_id, action_type, target_field_key, target_field_source, action_value, message, sort_order)
@@ -97,7 +116,13 @@ fn write_actions(conn: &Connection, rule_id: &str, actions: &[BusinessRuleAction
     Ok(())
 }
 
-pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &BusinessRuleInput, actor_user_id: Option<&str>) -> rusqlite::Result<BusinessRule> {
+pub fn create(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &BusinessRuleInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<BusinessRule> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO business_rules
@@ -116,9 +141,19 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &BusinessR
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<BusinessRule>> {
     let header = conn
-        .query_row("SELECT * FROM business_rules WHERE id = ?1", [id], map_rule_header)
+        .query_row(
+            "SELECT * FROM business_rules WHERE id = ?1",
+            [id],
+            map_rule_header,
+        )
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })?;
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })?;
     match header {
         Some(mut rule) => {
             rule.conditions = conditions_for(conn, &rule.id)?;
@@ -129,11 +164,17 @@ pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<BusinessRule>
     }
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<BusinessRule>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<Vec<BusinessRule>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM business_rules WHERE workspace_id = ?1 AND entity_type = ?2 ORDER BY priority, name",
     )?;
-    let headers: Vec<BusinessRule> = stmt.query_map((workspace_id, entity_type), map_rule_header)?.collect::<rusqlite::Result<_>>()?;
+    let headers: Vec<BusinessRule> = stmt
+        .query_map((workspace_id, entity_type), map_rule_header)?
+        .collect::<rusqlite::Result<_>>()?;
     let mut out = Vec::with_capacity(headers.len());
     for mut rule in headers {
         rule.conditions = conditions_for(conn, &rule.id)?;
@@ -143,7 +184,12 @@ pub fn list(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlit
     Ok(out)
 }
 
-pub fn update(conn: &Connection, id: &str, input: &BusinessRuleUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<BusinessRule> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &BusinessRuleUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<BusinessRule> {
     conn.execute(
         "UPDATE business_rules
          SET name = ?1, description = ?2, match_type = ?3, priority = ?4, is_active = ?5,
@@ -197,8 +243,15 @@ pub fn create_branch(
 /// Promotes a standalone rule into the head of a new chain - called once,
 /// the first time a sibling is added to a rule that had no
 /// `branch_group_id` yet (see `create_rule_branch`).
-pub fn set_branch_group_id(conn: &Connection, id: &str, branch_group_id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE business_rules SET branch_group_id = ?1 WHERE id = ?2", rusqlite::params![branch_group_id, id])?;
+pub fn set_branch_group_id(
+    conn: &Connection,
+    id: &str,
+    branch_group_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE business_rules SET branch_group_id = ?1 WHERE id = ?2",
+        rusqlite::params![branch_group_id, id],
+    )?;
     Ok(())
 }
 
@@ -207,7 +260,11 @@ pub fn set_branch_group_id(conn: &Connection, id: &str, branch_group_id: &str) -
 /// the newest N right after inserting, so history can't grow unbounded.
 pub const VERSION_HISTORY_LIMIT: i64 = 10;
 
-pub fn insert_version(conn: &Connection, rule_id: &str, snapshot_json: &str) -> rusqlite::Result<()> {
+pub fn insert_version(
+    conn: &Connection,
+    rule_id: &str,
+    snapshot_json: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO business_rule_versions (id, business_rule_id, snapshot_json, saved_at) VALUES (?1, ?2, ?3, ?4)",
         rusqlite::params![new_uuid(), rule_id, snapshot_json, now_iso()],
@@ -223,12 +280,21 @@ pub fn insert_version(conn: &Connection, rule_id: &str, snapshot_json: &str) -> 
 
 /// Raw `(id, snapshot_json, saved_at)` rows, newest first - the service
 /// layer deserializes `snapshot_json` into a full `BusinessRule`.
-pub fn list_version_rows(conn: &Connection, rule_id: &str) -> rusqlite::Result<Vec<(String, String, String)>> {
+pub fn list_version_rows(
+    conn: &Connection,
+    rule_id: &str,
+) -> rusqlite::Result<Vec<(String, String, String)>> {
     let mut stmt = conn.prepare(
         "SELECT id, snapshot_json, saved_at FROM business_rule_versions WHERE business_rule_id = ?1 ORDER BY saved_at DESC",
     )?;
     let rows = stmt
-        .query_map([rule_id], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))?
+        .query_map([rule_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
         .collect();
     rows
 }

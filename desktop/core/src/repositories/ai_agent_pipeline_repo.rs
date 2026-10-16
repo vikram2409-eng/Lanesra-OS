@@ -5,7 +5,9 @@
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::now_iso;
-use crate::models::ai_agent_pipeline::{AiAgentPipeline, AiAgentPipelineInput, AiAgentTrigger, AiAgentTriggerInput, PipelineStep};
+use crate::models::ai_agent_pipeline::{
+    AiAgentPipeline, AiAgentPipelineInput, AiAgentTrigger, AiAgentTriggerInput, PipelineStep,
+};
 
 fn map_pipeline_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentPipeline> {
     Ok(AiAgentPipeline {
@@ -34,7 +36,9 @@ fn map_step_row(row: &rusqlite::Row) -> rusqlite::Result<PipelineStep> {
 }
 
 pub fn list_steps(conn: &Connection, pipeline_id: &str) -> rusqlite::Result<Vec<PipelineStep>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_agent_pipeline_steps WHERE pipeline_id = ?1 ORDER BY step_order")?;
+    let mut stmt = conn.prepare(
+        "SELECT * FROM ai_agent_pipeline_steps WHERE pipeline_id = ?1 ORDER BY step_order",
+    )?;
     let rows = stmt.query_map([pipeline_id], map_step_row)?.collect();
     rows
 }
@@ -44,8 +48,15 @@ fn hydrate(conn: &Connection, mut pipeline: AiAgentPipeline) -> rusqlite::Result
     Ok(pipeline)
 }
 
-fn replace_steps(conn: &Connection, pipeline_id: &str, steps: &[crate::models::ai_agent_pipeline::PipelineStepInput]) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM ai_agent_pipeline_steps WHERE pipeline_id = ?1", [pipeline_id])?;
+fn replace_steps(
+    conn: &Connection,
+    pipeline_id: &str,
+    steps: &[crate::models::ai_agent_pipeline::PipelineStepInput],
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM ai_agent_pipeline_steps WHERE pipeline_id = ?1",
+        [pipeline_id],
+    )?;
     for (i, step) in steps.iter().enumerate() {
         conn.execute(
             "INSERT INTO ai_agent_pipeline_steps (id, pipeline_id, agent_id, step_order, input_template, requires_approval) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -55,7 +66,13 @@ fn replace_steps(conn: &Connection, pipeline_id: &str, steps: &[crate::models::a
     Ok(())
 }
 
-pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentPipelineInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentPipeline> {
+pub fn create(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &AiAgentPipelineInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiAgentPipeline> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO ai_agent_pipelines (id, workspace_id, name, description, topology, is_active, created_at, created_by, updated_at, updated_by)
@@ -66,7 +83,12 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentPi
     get(conn, id).map(|p| p.expect("just inserted"))
 }
 
-pub fn update(conn: &Connection, id: &str, input: &AiAgentPipelineInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentPipeline> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &AiAgentPipelineInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiAgentPipeline> {
     let now = now_iso();
     conn.execute(
         "UPDATE ai_agent_pipelines SET name = ?1, description = ?2, topology = ?3, updated_at = ?4, updated_by = ?5 WHERE id = ?6",
@@ -77,22 +99,39 @@ pub fn update(conn: &Connection, id: &str, input: &AiAgentPipelineInput, actor_u
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<AiAgentPipeline>> {
-    let row = conn.query_row("SELECT * FROM ai_agent_pipelines WHERE id = ?1", [id], map_pipeline_row).optional()?;
+    let row = conn
+        .query_row(
+            "SELECT * FROM ai_agent_pipelines WHERE id = ?1",
+            [id],
+            map_pipeline_row,
+        )
+        .optional()?;
     row.map(|p| hydrate(conn, p)).transpose()
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> rusqlite::Result<Vec<AiAgentPipeline>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    active_only: bool,
+) -> rusqlite::Result<Vec<AiAgentPipeline>> {
     let sql = if active_only {
         "SELECT * FROM ai_agent_pipelines WHERE workspace_id = ?1 AND is_active = 1 ORDER BY name"
     } else {
         "SELECT * FROM ai_agent_pipelines WHERE workspace_id = ?1 ORDER BY name"
     };
     let mut stmt = conn.prepare(sql)?;
-    let rows: Vec<AiAgentPipeline> = stmt.query_map([workspace_id], map_pipeline_row)?.collect::<rusqlite::Result<_>>()?;
+    let rows: Vec<AiAgentPipeline> = stmt
+        .query_map([workspace_id], map_pipeline_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|p| hydrate(conn, p)).collect()
 }
 
-pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentPipeline> {
+pub fn set_active(
+    conn: &Connection,
+    id: &str,
+    is_active: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiAgentPipeline> {
     let now = now_iso();
     conn.execute("UPDATE ai_agent_pipelines SET is_active = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4", (is_active, &now, actor_user_id, id))?;
     get(conn, id).map(|p| p.expect("just updated"))
@@ -115,7 +154,13 @@ fn map_trigger_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentTrigger> {
     })
 }
 
-pub fn create_trigger(conn: &Connection, id: &str, workspace_id: &str, input: &AiAgentTriggerInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentTrigger> {
+pub fn create_trigger(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &AiAgentTriggerInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiAgentTrigger> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO ai_agent_triggers (id, workspace_id, target_type, target_id, trigger_type, interval_minutes, is_active, created_at, created_by)
@@ -126,17 +171,31 @@ pub fn create_trigger(conn: &Connection, id: &str, workspace_id: &str, input: &A
 }
 
 pub fn get_trigger(conn: &Connection, id: &str) -> rusqlite::Result<Option<AiAgentTrigger>> {
-    conn.query_row("SELECT * FROM ai_agent_triggers WHERE id = ?1", [id], map_trigger_row).optional()
+    conn.query_row(
+        "SELECT * FROM ai_agent_triggers WHERE id = ?1",
+        [id],
+        map_trigger_row,
+    )
+    .optional()
 }
 
-pub fn list_triggers_for_target(conn: &Connection, target_type: &str, target_id: &str) -> rusqlite::Result<Vec<AiAgentTrigger>> {
+pub fn list_triggers_for_target(
+    conn: &Connection,
+    target_type: &str,
+    target_id: &str,
+) -> rusqlite::Result<Vec<AiAgentTrigger>> {
     let mut stmt = conn.prepare("SELECT * FROM ai_agent_triggers WHERE target_type = ?1 AND target_id = ?2 ORDER BY created_at")?;
-    let rows = stmt.query_map((target_type, target_id), map_trigger_row)?.collect();
+    let rows = stmt
+        .query_map((target_type, target_id), map_trigger_row)?
+        .collect();
     rows
 }
 
 pub fn set_trigger_active(conn: &Connection, id: &str, is_active: bool) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_agent_triggers SET is_active = ?1 WHERE id = ?2", (is_active, id))?;
+    conn.execute(
+        "UPDATE ai_agent_triggers SET is_active = ?1 WHERE id = ?2",
+        (is_active, id),
+    )?;
     Ok(())
 }
 
@@ -148,7 +207,10 @@ pub fn delete_trigger(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 /// Schedule Triggers whose interval has elapsed since `last_run_at` (or
 /// have never run) - same "due" convention `integration_job_repo::
 /// list_due` already established.
-pub fn list_due_schedule_triggers(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AiAgentTrigger>> {
+pub fn list_due_schedule_triggers(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<AiAgentTrigger>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM ai_agent_triggers
          WHERE workspace_id = ?1 AND trigger_type = 'schedule' AND is_active = 1
@@ -160,6 +222,9 @@ pub fn list_due_schedule_triggers(conn: &Connection, workspace_id: &str) -> rusq
 }
 
 pub fn mark_trigger_run(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_agent_triggers SET last_run_at = ?1 WHERE id = ?2", (now_iso(), id))?;
+    conn.execute(
+        "UPDATE ai_agent_triggers SET last_run_at = ?1 WHERE id = ?2",
+        (now_iso(), id),
+    )?;
     Ok(())
 }

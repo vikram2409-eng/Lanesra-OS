@@ -33,7 +33,13 @@ pub struct AdminSearchResult {
 }
 
 fn like_pattern(query: &str) -> String {
-    format!("%{}%", query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"))
+    format!(
+        "%{}%",
+        query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    )
 }
 
 fn collect(
@@ -60,7 +66,12 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-pub fn admin_search(conn: &Connection, workspace_id: &str, query: &str, actor_user_id: Option<&str>) -> AppResult<Vec<AdminSearchResult>> {
+pub fn admin_search(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AdminSearchResult>> {
     require_admin(conn, actor_user_id)?;
     let query = query.trim();
     if query.chars().count() < 2 {

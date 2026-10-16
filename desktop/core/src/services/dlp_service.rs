@@ -26,14 +26,23 @@ pub const CLASSES: &[&str] = &["ssn", "credit_card", "bank_account", "phone", "e
 fn patterns() -> Vec<(&'static str, Regex)> {
     vec![
         ("ssn", Regex::new(r"\b\d{3}-\d{2}-\d{4}\b").unwrap()),
-        ("credit_card", Regex::new(r"\b(?:\d[ -]?){13,16}\d\b").unwrap()),
+        (
+            "credit_card",
+            Regex::new(r"\b(?:\d[ -]?){13,16}\d\b").unwrap(),
+        ),
         // Deliberately narrower than a bare 9-digit run (which would
         // double-count SSNs) - a routing/account number formatted with
         // the "acct#"/"routing" style separators real forms and exports
         // use.
         ("bank_account", Regex::new(r"\b\d{9,17}\b").unwrap()),
-        ("phone", Regex::new(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b").unwrap()),
-        ("email", Regex::new(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}").unwrap()),
+        (
+            "phone",
+            Regex::new(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b").unwrap(),
+        ),
+        (
+            "email",
+            Regex::new(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}").unwrap(),
+        ),
     ]
 }
 
@@ -42,7 +51,11 @@ fn patterns() -> Vec<(&'static str, Regex)> {
 /// (system prompt + latest turn), not per-tool-call, since forced air-
 /// gapping is an all-or-nothing routing decision for the whole request.
 pub fn scan(text: &str) -> Vec<&'static str> {
-    patterns().into_iter().filter(|(_, re)| re.is_match(text)).map(|(class, _)| class).collect()
+    patterns()
+        .into_iter()
+        .filter(|(_, re)| re.is_match(text))
+        .map(|(class, _)| class)
+        .collect()
 }
 
 /// Replaces every match of every class with `[REDACTED:<class>]` - used
@@ -52,7 +65,9 @@ pub fn scan(text: &str) -> Vec<&'static str> {
 pub fn redact(text: &str) -> String {
     let mut out = text.to_string();
     for (class, re) in patterns() {
-        out = re.replace_all(&out, format!("[REDACTED:{class}]").as_str()).into_owned();
+        out = re
+            .replace_all(&out, format!("[REDACTED:{class}]").as_str())
+            .into_owned();
     }
     out
 }

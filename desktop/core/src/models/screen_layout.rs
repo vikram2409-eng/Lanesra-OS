@@ -84,7 +84,10 @@ pub struct SectionField {
 
 impl SectionField {
     pub fn new(key: impl Into<String>) -> Self {
-        Self { key: key.into(), full_width: false }
+        Self {
+            key: key.into(),
+            full_width: false,
+        }
     }
 }
 

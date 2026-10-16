@@ -29,10 +29,18 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceTheme> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<WorkspaceTheme>> {
-    conn.query_row("SELECT * FROM workspace_themes WHERE id = ?1", [id], map_row).optional()
+    conn.query_row(
+        "SELECT * FROM workspace_themes WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .optional()
 }
 
-pub fn get_published(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<WorkspaceTheme>> {
+pub fn get_published(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Option<WorkspaceTheme>> {
     conn.query_row(
         "SELECT * FROM workspace_themes WHERE workspace_id = ?1 AND status = 'published'",
         [workspace_id],
@@ -41,8 +49,12 @@ pub fn get_published(conn: &Connection, workspace_id: &str) -> rusqlite::Result<
     .optional()
 }
 
-pub fn list_versions(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<WorkspaceTheme>> {
-    let mut stmt = conn.prepare("SELECT * FROM workspace_themes WHERE workspace_id = ?1 ORDER BY version DESC")?;
+pub fn list_versions(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<WorkspaceTheme>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM workspace_themes WHERE workspace_id = ?1 ORDER BY version DESC")?;
     let rows = stmt.query_map([workspace_id], map_row)?.collect();
     rows
 }
@@ -78,7 +90,11 @@ pub fn create_draft(
 /// Overwrites an existing Draft row's own tokens/name in place (editing a
 /// Draft is a normal save, not a new version) - the caller is responsible
 /// for confirming `status == "draft"` first.
-pub fn update_draft(conn: &Connection, id: &str, input: &WorkspaceThemeInput) -> rusqlite::Result<()> {
+pub fn update_draft(
+    conn: &Connection,
+    id: &str,
+    input: &WorkspaceThemeInput,
+) -> rusqlite::Result<()> {
     let tokens_json = serde_json::to_string(&input.tokens).unwrap_or_default();
     conn.execute(
         "UPDATE workspace_themes SET name = ?1, preset_key = ?2, tokens_json = ?3 WHERE id = ?4 AND status = 'draft'",
@@ -93,9 +109,17 @@ pub fn update_draft(conn: &Connection, id: &str, input: &WorkspaceThemeInput) ->
 /// sequential-statement shape (this codebase's established convention;
 /// the single-writer desktop connection makes an explicit transaction
 /// unnecessary here same as everywhere else).
-pub fn publish(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> rusqlite::Result<WorkspaceTheme> {
+pub fn publish(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<WorkspaceTheme> {
     let now = now_iso();
-    let workspace_id: String = conn.query_row("SELECT workspace_id FROM workspace_themes WHERE id = ?1", [id], |r| r.get(0))?;
+    let workspace_id: String = conn.query_row(
+        "SELECT workspace_id FROM workspace_themes WHERE id = ?1",
+        [id],
+        |r| r.get(0),
+    )?;
     conn.execute(
         "UPDATE workspace_themes SET status = 'archived' WHERE workspace_id = ?1 AND status = 'published'",
         [&workspace_id],
@@ -108,5 +132,8 @@ pub fn publish(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> rusq
 }
 
 pub fn delete_draft(conn: &Connection, id: &str) -> rusqlite::Result<usize> {
-    conn.execute("DELETE FROM workspace_themes WHERE id = ?1 AND status = 'draft'", [id])
+    conn.execute(
+        "DELETE FROM workspace_themes WHERE id = ?1 AND status = 'draft'",
+        [id],
+    )
 }

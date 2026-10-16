@@ -58,7 +58,8 @@ fn opportunity_primary_contact_must_belong_to_selected_company() {
         Some(&admin),
     )
     .unwrap();
-    let contact_b = contact_service::create(&conn, &contact_input(&company_b.id), Some(&admin)).unwrap();
+    let contact_b =
+        contact_service::create(&conn, &contact_input(&company_b.id), Some(&admin)).unwrap();
 
     let result = opportunity_service::create(
         &conn,
@@ -79,7 +80,10 @@ fn opportunity_primary_contact_must_belong_to_selected_company() {
         Some(&admin),
     );
 
-    assert!(result.is_err(), "contact from a different company must be rejected");
+    assert!(
+        result.is_err(),
+        "contact from a different company must be rejected"
+    );
 }
 
 #[test]
@@ -87,8 +91,10 @@ fn full_sales_lifecycle_company_to_paid_invoice() {
     let (conn, admin) = setup_workspace();
     let ws = workspace_id(&conn);
 
-    let company = company_service::create(&conn, &ws, &company_input("Globex"), Some(&admin)).unwrap();
-    let contact = contact_service::create(&conn, &contact_input(&company.id), Some(&admin)).unwrap();
+    let company =
+        company_service::create(&conn, &ws, &company_input("Globex"), Some(&admin)).unwrap();
+    let contact =
+        contact_service::create(&conn, &contact_input(&company.id), Some(&admin)).unwrap();
 
     let opportunity = opportunity_service::create(
         &conn,
@@ -144,10 +150,14 @@ fn full_sales_lifecycle_company_to_paid_invoice() {
     assert!(quote_service::convert_to_order(&conn, &quote.quote.id, Some(&admin)).is_err());
 
     quote_service::set_status(&conn, &quote.quote.id, "Sent", Some(&admin)).unwrap();
-    let accepted = quote_service::set_status(&conn, &quote.quote.id, "Accepted", Some(&admin)).unwrap();
+    let accepted =
+        quote_service::set_status(&conn, &quote.quote.id, "Accepted", Some(&admin)).unwrap();
 
     let order = quote_service::convert_to_order(&conn, &accepted.quote.id, Some(&admin)).unwrap();
-    assert_eq!(order.order.source_quote_id.as_deref(), Some(quote.quote.id.as_str()));
+    assert_eq!(
+        order.order.source_quote_id.as_deref(),
+        Some(quote.quote.id.as_str())
+    );
     assert_eq!(order.order.total_cents, quote.quote.total_cents);
     assert_eq!(order.lines.len(), 1);
 
@@ -156,9 +166,14 @@ fn full_sales_lifecycle_company_to_paid_invoice() {
     assert_eq!(quote_after_conversion.quote.status, "Accepted");
     assert_eq!(quote_after_conversion.quote.total_cents, 97200);
 
-    let confirmed_order = order_service::set_status(&conn, &order.order.id, "Confirmed", Some(&admin)).unwrap();
-    let invoice = order_service::convert_to_invoice(&conn, &confirmed_order.order.id, Some(&admin)).unwrap();
-    assert_eq!(invoice.invoice.source_order_id.as_deref(), Some(order.order.id.as_str()));
+    let confirmed_order =
+        order_service::set_status(&conn, &order.order.id, "Confirmed", Some(&admin)).unwrap();
+    let invoice =
+        order_service::convert_to_invoice(&conn, &confirmed_order.order.id, Some(&admin)).unwrap();
+    assert_eq!(
+        invoice.invoice.source_order_id.as_deref(),
+        Some(order.order.id.as_str())
+    );
     assert_eq!(invoice.invoice.total_cents, 97200);
     assert_eq!(invoice.invoice.balance_cents, 97200);
     assert_eq!(invoice.invoice.status, "Draft");
@@ -206,8 +221,10 @@ fn full_sales_lifecycle_company_to_paid_invoice() {
 fn company_duplicate_names_are_flagged_but_not_blocked() {
     let (conn, admin) = setup_workspace();
     let ws = workspace_id(&conn);
-    let first = company_service::create(&conn, &ws, &company_input("Duplicate Inc"), Some(&admin)).unwrap();
-    let second = company_service::create(&conn, &ws, &company_input("duplicate inc"), Some(&admin)).unwrap();
+    let first =
+        company_service::create(&conn, &ws, &company_input("Duplicate Inc"), Some(&admin)).unwrap();
+    let second =
+        company_service::create(&conn, &ws, &company_input("duplicate inc"), Some(&admin)).unwrap();
 
     let duplicates = company_service::check_duplicates(&conn, &ws, "Duplicate Inc", None).unwrap();
     assert_eq!(duplicates.len(), 2);

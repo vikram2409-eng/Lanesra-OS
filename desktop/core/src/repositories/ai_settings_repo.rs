@@ -28,9 +28,19 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiSettings> {
 }
 
 pub fn get(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<AiSettings>> {
-    conn.query_row("SELECT * FROM ai_settings WHERE workspace_id = ?1", [workspace_id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM ai_settings WHERE workspace_id = ?1",
+        [workspace_id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// The `secret_id` this workspace's settings row currently points at, if
@@ -39,8 +49,18 @@ pub fn get(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<AiS
 /// whether a new key rotates the existing secret in place or is a brand
 /// new one.
 pub fn get_secret_id(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<String>> {
-    conn.query_row("SELECT secret_id FROM ai_settings WHERE workspace_id = ?1", [workspace_id], |row| row.get(0))
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT secret_id FROM ai_settings WHERE workspace_id = ?1",
+        [workspace_id],
+        |row| row.get(0),
+    )
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// Creates the default (unconfigured) row for a workspace that has never
@@ -75,14 +95,27 @@ pub fn update(
             status = 'unconfigured', last_test_message = NULL, last_tested_at = NULL,
             updated_at = ?5, updated_by = ?6
          WHERE workspace_id = ?7",
-        rusqlite::params![provider, base_url, model, secret_id, now_iso(), actor_user_id, workspace_id],
+        rusqlite::params![
+            provider,
+            base_url,
+            model,
+            secret_id,
+            now_iso(),
+            actor_user_id,
+            workspace_id
+        ],
     )?;
     get(conn, workspace_id).map(|s| s.expect("just updated"))
 }
 
 /// Persists the outcome of `ai_service::test_key` - does not touch any of
 /// the configuration columns above.
-pub fn set_test_result(conn: &Connection, workspace_id: &str, status: &str, message: &str) -> rusqlite::Result<()> {
+pub fn set_test_result(
+    conn: &Connection,
+    workspace_id: &str,
+    status: &str,
+    message: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_settings SET status = ?1, last_test_message = ?2, last_tested_at = ?3 WHERE workspace_id = ?4",
         rusqlite::params![status, message, now_iso(), workspace_id],
@@ -94,21 +127,42 @@ pub fn set_test_result(conn: &Connection, workspace_id: &str, status: &str, mess
 /// its own setter, not folded into `update`, since it's an independent
 /// admin dial edited from the new Gateway health view, not the LLM
 /// provider form.
-pub fn set_daily_token_budget(conn: &Connection, workspace_id: &str, daily_token_budget: Option<i64>) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_settings SET daily_token_budget = ?1 WHERE workspace_id = ?2", rusqlite::params![daily_token_budget, workspace_id])?;
+pub fn set_daily_token_budget(
+    conn: &Connection,
+    workspace_id: &str,
+    daily_token_budget: Option<i64>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_settings SET daily_token_budget = ?1 WHERE workspace_id = ?2",
+        rusqlite::params![daily_token_budget, workspace_id],
+    )?;
     Ok(())
 }
 
 /// Phase 7f: same shape as `set_daily_token_budget` above - its own
 /// independent admin dial, not folded into `update`.
-pub fn set_otlp_endpoint(conn: &Connection, workspace_id: &str, otlp_endpoint: Option<&str>) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_settings SET otlp_endpoint = ?1 WHERE workspace_id = ?2", rusqlite::params![otlp_endpoint, workspace_id])?;
+pub fn set_otlp_endpoint(
+    conn: &Connection,
+    workspace_id: &str,
+    otlp_endpoint: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_settings SET otlp_endpoint = ?1 WHERE workspace_id = ?2",
+        rusqlite::params![otlp_endpoint, workspace_id],
+    )?;
     Ok(())
 }
 
 /// Phase 7g: same shape as `set_otlp_endpoint` above - its own
 /// independent admin dial, not folded into `update`.
-pub fn set_embedding_model(conn: &Connection, workspace_id: &str, embedding_model: Option<&str>) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_settings SET embedding_model = ?1 WHERE workspace_id = ?2", rusqlite::params![embedding_model, workspace_id])?;
+pub fn set_embedding_model(
+    conn: &Connection,
+    workspace_id: &str,
+    embedding_model: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_settings SET embedding_model = ?1 WHERE workspace_id = ?2",
+        rusqlite::params![embedding_model, workspace_id],
+    )?;
     Ok(())
 }

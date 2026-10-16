@@ -44,7 +44,11 @@ pub struct CustomObjectReferenceCounts {
 
 impl CustomObjectReferenceCounts {
     pub fn total(&self) -> i64 {
-        self.business_rules + self.workflows + self.screen_layouts + self.page_layouts + self.relationships
+        self.business_rules
+            + self.workflows
+            + self.screen_layouts
+            + self.page_layouts
+            + self.relationships
     }
 }
 

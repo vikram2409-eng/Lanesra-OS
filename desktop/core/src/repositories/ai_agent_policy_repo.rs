@@ -29,12 +29,26 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentPolicy> {
 }
 
 /// `agent_id = None` looks up the workspace-wide default policy.
-pub fn get(conn: &Connection, workspace_id: &str, agent_id: Option<&str>) -> rusqlite::Result<Option<AiAgentPolicy>> {
+pub fn get(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+) -> rusqlite::Result<Option<AiAgentPolicy>> {
     match agent_id {
         Some(agent_id) => conn
-            .query_row("SELECT * FROM ai_agent_policies WHERE workspace_id = ?1 AND agent_id = ?2", rusqlite::params![workspace_id, agent_id], map_row)
+            .query_row(
+                "SELECT * FROM ai_agent_policies WHERE workspace_id = ?1 AND agent_id = ?2",
+                rusqlite::params![workspace_id, agent_id],
+                map_row,
+            )
             .optional(),
-        None => conn.query_row("SELECT * FROM ai_agent_policies WHERE workspace_id = ?1 AND agent_id IS NULL", [workspace_id], map_row).optional(),
+        None => conn
+            .query_row(
+                "SELECT * FROM ai_agent_policies WHERE workspace_id = ?1 AND agent_id IS NULL",
+                [workspace_id],
+                map_row,
+            )
+            .optional(),
     }
 }
 
@@ -47,10 +61,17 @@ pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AiAge
 /// Upsert-by-`(workspace_id, agent_id)` - `agent_id = None` upserts the
 /// one workspace-default row (`idx_ai_agent_policies_one_default` is what
 /// actually enforces there's at most one).
-pub fn upsert(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, input: &AiAgentPolicyInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiAgentPolicy> {
+pub fn upsert(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    input: &AiAgentPolicyInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiAgentPolicy> {
     let now = now_iso();
     let require_approval = input.require_approval_at_or_above.map(|r| r.as_str());
-    let blocked_json = serde_json::to_string(&input.blocked_tool_names).unwrap_or_else(|_| "[]".into());
+    let blocked_json =
+        serde_json::to_string(&input.blocked_tool_names).unwrap_or_else(|_| "[]".into());
     let exclude_restricted_memory = input.exclude_restricted_memory as i64;
     let enforce_record_access = input.enforce_record_access as i64;
     let existing = get(conn, workspace_id, agent_id)?;

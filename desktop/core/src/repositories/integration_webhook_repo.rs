@@ -59,24 +59,42 @@ pub fn insert(
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Webhook>> {
     conn.query_row(&format!("{SELECT} WHERE w.id = ?1"), [id], map_webhook)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<Webhook>> {
-    let mut stmt = conn.prepare(&format!("{SELECT} WHERE w.workspace_id = ?1 ORDER BY w.name"))?;
+    let mut stmt = conn.prepare(&format!(
+        "{SELECT} WHERE w.workspace_id = ?1 ORDER BY w.name"
+    ))?;
     let rows = stmt.query_map([workspace_id], map_webhook)?;
     rows.collect()
 }
 
 /// Every active webhook subscribed to `event_type` in this workspace -
 /// what a fired internal event fans out to.
-pub fn list_active_for_event(conn: &Connection, workspace_id: &str, event_type: &str) -> rusqlite::Result<Vec<Webhook>> {
+pub fn list_active_for_event(
+    conn: &Connection,
+    workspace_id: &str,
+    event_type: &str,
+) -> rusqlite::Result<Vec<Webhook>> {
     let all = list_for_workspace(conn, workspace_id)?;
-    Ok(all.into_iter().filter(|w| w.status == "active" && w.event_types.iter().any(|e| e == event_type)).collect())
+    Ok(all
+        .into_iter()
+        .filter(|w| w.status == "active" && w.event_types.iter().any(|e| e == event_type))
+        .collect())
 }
 
 pub fn set_status(conn: &Connection, id: &str, status: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE integration_webhooks SET status = ?1, updated_at = ?2 WHERE id = ?3", rusqlite::params![status, now_iso(), id])?;
+    conn.execute(
+        "UPDATE integration_webhooks SET status = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![status, now_iso(), id],
+    )?;
     Ok(())
 }
 
@@ -122,7 +140,11 @@ pub fn insert_delivery(
     Ok(())
 }
 
-pub fn list_deliveries(conn: &Connection, webhook_id: &str, limit: i64) -> rusqlite::Result<Vec<WebhookDelivery>> {
+pub fn list_deliveries(
+    conn: &Connection,
+    webhook_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<WebhookDelivery>> {
     let mut stmt = conn.prepare("SELECT * FROM integration_webhook_deliveries WHERE webhook_id = ?1 ORDER BY created_at DESC LIMIT ?2")?;
     let rows = stmt.query_map(rusqlite::params![webhook_id, limit], map_delivery)?;
     rows.collect()
@@ -132,13 +154,22 @@ pub fn list_deliveries(conn: &Connection, webhook_id: &str, limit: i64) -> rusql
 /// webhook should flip to Degraded/Paused (spec §10.3).
 pub fn consecutive_failures(conn: &Connection, webhook_id: &str) -> rusqlite::Result<i64> {
     let mut stmt = conn.prepare("SELECT status FROM integration_webhook_deliveries WHERE webhook_id = ?1 ORDER BY created_at DESC LIMIT 20")?;
-    let statuses: Vec<String> = stmt.query_map([webhook_id], |r| r.get(0))?.collect::<Result<_, _>>()?;
-    Ok(statuses.iter().take_while(|s| s.as_str() == "failed").count() as i64)
+    let statuses: Vec<String> = stmt
+        .query_map([webhook_id], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(statuses
+        .iter()
+        .take_while(|s| s.as_str() == "failed")
+        .count() as i64)
 }
 
 /// How many delivery attempts have failed workspace-wide since `since_iso`
 /// - the Overview screen's "failed webhooks today" KPI (spec §3.1).
-pub fn count_failed_deliveries_since(conn: &Connection, workspace_id: &str, since_iso: &str) -> rusqlite::Result<i64> {
+pub fn count_failed_deliveries_since(
+    conn: &Connection,
+    workspace_id: &str,
+    since_iso: &str,
+) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM integration_webhook_deliveries d
          JOIN integration_webhooks w ON w.id = d.webhook_id

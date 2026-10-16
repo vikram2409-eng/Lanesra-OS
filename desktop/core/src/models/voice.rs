@@ -8,8 +8,16 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const VOICE_CAPABILITIES: &[&str] =
-    &["use_voice", "search", "create", "update", "act", "bulk_act", "external_act", "use_agents"];
+pub const VOICE_CAPABILITIES: &[&str] = &[
+    "use_voice",
+    "search",
+    "create",
+    "update",
+    "act",
+    "bulk_act",
+    "external_act",
+    "use_agents",
+];
 
 /// The four ceilings a policy can put on what Voice may do at all (spec
 /// §5.1), declared broadest-last so derived `Ord` gives "which level is more

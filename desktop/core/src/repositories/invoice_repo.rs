@@ -137,8 +137,7 @@ pub fn list_lines(conn: &Connection, invoice_id: &str) -> rusqlite::Result<Vec<I
 }
 
 pub fn list_payments(conn: &Connection, invoice_id: &str) -> rusqlite::Result<Vec<Payment>> {
-    let mut stmt =
-        conn.prepare("SELECT * FROM payments WHERE invoice_id = ?1 ORDER BY paid_at")?;
+    let mut stmt = conn.prepare("SELECT * FROM payments WHERE invoice_id = ?1 ORDER BY paid_at")?;
     let rows = stmt.query_map([invoice_id], map_payment_row)?;
     rows.collect()
 }
