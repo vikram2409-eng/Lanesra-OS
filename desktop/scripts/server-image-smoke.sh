@@ -67,7 +67,7 @@ expect_ok "login after restart" "$login"
 
 companies=$(invoke list_companies '{}')
 expect_ok "list records after restart" "$companies"
-if ! printf '%s' "$companies" | grep -q 'Deliberately Missing Ltd'; then
+if ! printf '%s' "$companies" | grep -q 'Persisted Ltd'; then
   echo "FAIL: record created before the restart is missing" >&2
   exit 1
 fi
