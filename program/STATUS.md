@@ -29,7 +29,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/637 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 
 ## Ready to start (all dependencies done)
@@ -63,7 +63,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0003 |
 | [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | E0.3 Architecture decisions | ✅ done | M | — | - |
 | [WP-0009](work/P0/WP-0009-foundational-adrs-run-state-machine-trace-schema-errors-migr.md) | Foundational ADRs: run state machine, trace schema, errors, migrations, prompt catalog | E0.3 Architecture decisions | ✅ done | L | — | WP-0008 |
-| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | 🔨 in progress | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
+| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
 | [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | E0.4 Security and compliance baseline | ⚪ proposed | M | — | WP-0003 |
 | [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | 🟢 ready | S | — | - |
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 🟢 ready | M | ○Online demo | - |

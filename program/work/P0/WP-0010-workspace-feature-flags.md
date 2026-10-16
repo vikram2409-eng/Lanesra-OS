@@ -3,7 +3,7 @@ id: WP-0010
 title: Workspace feature flags
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_progress
+status: in_review
 owner: claude
 depends_on: [WP-0009]
 requirements: [REQ-PRE-006, REQ-PRE-021]
@@ -13,7 +13,7 @@ delivered: [desktop, workspace, demo]
 docs: []
 docs_reason: developer-only setting; documented in desktop/README.md
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/637
 updated: 2026-10-16
 ---
 
