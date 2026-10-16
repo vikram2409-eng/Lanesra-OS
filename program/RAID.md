@@ -19,8 +19,8 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | Q-10 | Budget and API keys for live-model evaluation runs (nightly, non-blocking)? | Template gates (G2) need real-model evidence | Recorded runs only | Answered 2026-10-16: no API keys; local Ollama + recorded runs (WP-0224) |
 | Q-11 | Accept Phase 0 (~3 weeks) before Phase 1, and a re-forecast at G1? | The spec's 28 weeks has no precursor phase | Yes | Answered 2026-10-16: yes; timeline depends on available AI tokens (ROADMAP Forecasting) |
 | Q-13 | Besides OpenAI, Gemini, Claude, Ollama and OpenAI-compatible on-prem servers, must the Playground support enterprise-hosted variants: Azure OpenAI, AWS Bedrock, Google Vertex AI? Which on-prem servers do your customers use? | Each needs its own auth and URL scheme (WP-0146) | — | Answered 2026-10-16: add Azure OpenAI, Google Vertex AI and AWS Bedrock; vLLM is the first-class on-prem server (WP-0146) |
-| Q-14 | Do you need several workspaces on one Team Workspace server (for example one per department or customer), or is one workspace per server enough? | Today a server holds exactly one workspace (A-06). Several would need workspace selection at sign-in and per-workspace keys and backups | One workspace per server; run a second container for a second workspace | Open |
-| Q-15 | Should the desktop app be able to connect to a Team Workspace server as a client, or is the browser the only Team client? | Decides whether desktop needs a "connect to server" mode (sign-in, events over HTTP instead of Tauri) in WP-0105 and WP-0112 | The browser is the Team client; desktop stays a standalone single-user app | Open |
+| Q-14 | Do you need several workspaces on one Team Workspace server (for example one per department or customer), or is one workspace per server enough? | Today a server holds exactly one workspace (A-06). Several would need workspace selection at sign-in and per-workspace keys and backups | One workspace per server; run a second container for a second workspace | Answered 2026-10-16: yes, several workspaces per server; a SaaS edition is planned later, and PostgreSQL should be an option for Team Workspace (ADR-0013 #4, ADR-0014; WP-0181, WP-0420, WP-0421, WP-0422) |
+| Q-15 | Should the desktop app be able to connect to a Team Workspace server as a client, or is the browser the only Team client? | Decides whether desktop needs a "connect to server" mode (sign-in, events over HTTP instead of Tauri) in WP-0105 and WP-0112 | The browser is the Team client; desktop stays a standalone single-user app | Answered 2026-10-16: the browser is the only way a team uses Team Workspace; the desktop stays standalone (ADR-0013 #5) |
 | Q-12 | Confirm how Muse AI works: can it read the repo and open PRs itself, or do you relay its scripts into `scripts/` by hand? | Decides whether Muse can take work packages alone | — | Answered 2026-10-16: Muse reads the repo and opens issues and PRs itself; WP-0018 rescoped to tracker upkeep and test feedback in CI |
 
 ## Risks
@@ -56,7 +56,7 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | A-03 | The stack stays Rust + TypeScript + SQLite; Python appears only inside the Phase 4 code sandbox | Open |
 | A-04 | Phase durations in the spec are proposals; the real pace depends on AI token budget (ADR-0004) | Confirmed 2026-10-16 |
 | A-05 | CI uses GitHub-hosted Linux runners; Windows is built only on release | Open |
-| A-06 | Team Workspace is one workspace per server: one SQLite file (`/data/lanesra.sqlite3`), one master key, many users. Per-workspace settings (flags, budgets, allow-lists) therefore mean per server today | Open: see Q-14 |
+| A-06 | Team Workspace is one workspace per server today: one SQLite file, one master key. Superseded by the owner's decision: several workspaces per server, one database each (ADR-0014; WP-0181) | Closed 2026-10-16 |
 
 ## Issues (facts found, needing action)
 

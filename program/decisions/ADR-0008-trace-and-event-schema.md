@@ -80,7 +80,12 @@ Every live event uses this envelope, on every transport:
 ### 4. Size limits, bodies and redaction
 
 - An event's `data` must not exceed 16 KiB. Larger content, such as prompts, model outputs or tool results, is stored once and referenced by a `body_ref`; the client fetches it with a separate, permission-checked call.
-- **Bodies are off by default.** Prompt and output bodies are excluded from OTLP export and from the `steps` level unless an admin turns them on for that team, as the spec requires.
+- **Bodies are off by default, and admins can change it (owner decision, ADR-0013 #2).** The setting is `trace_bodies`:
+  - `off` (default): prompt and output bodies are neither stored in the trace nor exported.
+  - `redacted`: bodies are stored and exported after the redaction hook below.
+  - `full`: bodies are stored and exported as-is, still without secrets or do-not-persist fields.
+
+  It is set per workspace, with an optional override per Team. Only an AI Admin can change it, and every change is audited. The setting applies equally to storage, live events and OTLP export. Each trace records the setting that was in force, so a reader knows whether a missing body was never kept.
 - **Redaction:** one redaction hook runs before anything is stored or emitted. It handles secrets (the existing secret redaction), the DLP classes the workspace has set to redact (RAID T-02), and do-not-persist fields (REQ-LOOP-021, which are never written at all).
 
 ### 5. One bus, three transports

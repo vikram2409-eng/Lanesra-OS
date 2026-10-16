@@ -61,7 +61,8 @@ boundaries to keep merge conflicts low.
 | 0 | Clean room | 0012 | root, `program/tools/` |
 | 0 | Team Workspace packaging | 0020 (first: it fixes a regression) | `desktop/Dockerfile`, `.github/workflows/` |
 | 1 | Identity | 0100 → 0106 → 0101 → 0102, 0103 → 0104, 0105 | `server/src/session.rs`, auth |
-| 1 | Team Workspace platform | 0180 (after 0020 and 0007) | `server/src/`, `backup_service`, `secret_service` |
+| 1 | Team Workspace platform | 0180 (after 0020 and 0007); 0181 several workspaces (with 0100) | `server/src/`, `backup_service`, `secret_service`, control database |
+| 4 | Database portability and SaaS | 0420 storage layer → 0421 PostgreSQL; 0422 SaaS plan | `core/src/repositories/`, `db/` |
 | 1 | Run model and trace | 0110 → 0111 → 0112 → 0113 | `graph_runtime`, `events_stream`, run repos |
 | 1 | Agent loop | 0121 → 0123, 0125, 0126; 0122, 0124, 0127, 0128 | `chat_service.rs`, `ai_service.rs` |
 | 1 | Contracts and guardrails | 0130 → 0120; 0131, 0133 → 0132 | new `ai_tasks`, `ai_guardrails`, prompt catalog |

@@ -8,7 +8,7 @@
 
 ## Context
 
-The Playground build lasts months and merges to `main` continuously, while `main` keeps shipping desktop releases, Team Workspace and the live online demo. Nothing in the code can hide unfinished work today: there is no flag table, setting or helper. Each edition also needs its own defaults. For example, the online demo can show a feature early on sample data while a release build keeps it hidden.
+The Playground build lasts months and merges to `main` continuously, while `main` keeps shipping desktop releases, Team Workspace and the live online demo. Nothing in the code can hide unfinished work today: there is no flag table, setting or helper. Desktop and Team Workspace must release a feature together, and the online demo must show it **in the same release and never earlier** (owner decision, ADR-0013 #3).
 
 ## Decision
 
@@ -22,7 +22,7 @@ All flags are listed in one Rust registry, `lanesra_core::feature_flags::REGISTR
 | `description` | One line, shown on the admin screen |
 | `work_package` | The work package that introduced it |
 | `remove_by` | The work package or release by which the flag and its old code path are deleted |
-| `default` | Per edition: `desktop`, `workspace`, `demo`, each `on` or `off` |
+| `default` | Per edition: `desktop`, `workspace`, each `on` or `off`. The demo has no default of its own: it shows a feature exactly when the release that turns the feature on for desktop and Team Workspace is published |
 | `stage` | `building` (hidden; only a developer setting can turn it on), `preview` (admins may turn it on), or `ga` (on by default; the flag now only exists to be removed) |
 
 A flag that is not in the registry does not exist. Reading an unknown key is a compile-time error, because each flag is a constant.
@@ -36,7 +36,7 @@ A new table, `feature_flag_overrides`, has the columns `workspace_id`, `key`, `e
 - **Core:** `feature_flags::is_enabled(conn, workspace_id, KEY) -> bool`.
 - **Server and Tauri:** one command, `list_feature_flags`, returns the resolved flags for the current workspace. Routes and commands behind a flag answer `404 feature_disabled` when it is off, so a flag hides the API as well as the screen.
 - **Frontend:** a `useFeature(KEY)` hook. Menus, routes and buttons for a disabled feature are not rendered at all, not merely greyed out.
-- **Online demo:** reads the `demo` default from a generated copy of the registry (`app.js` data, built by a script), so the demo cannot drift from the desktop.
+- **Online demo:** reads a generated copy of the registry, published with each release (`app.js` data, built by a script). A feature appears in the demo only when it is on for desktop and Team Workspace in a published release. On `main` between releases the demo keeps the last release's state, so the live demo never shows unreleased work.
 
 ### 4. What flags may not do
 
@@ -47,7 +47,7 @@ A new table, `feature_flag_overrides`, has the columns `workspace_id`, `key`, `e
 
 ### 5. Lifecycle and tests
 
-1. A work package adds the flag as `building` with every default `off`, except `demo`, which may be `on` once the simulated version exists.
+1. A work package adds the flag as `building` with every default `off`. The demo version is built at the same time (REQ-PRE-015) but stays hidden until release.
 2. At its gate the flag becomes `preview`, then `ga`, with defaults turned `on` per edition.
 3. **Removal:** within two releases of `ga`, the flag and the old code path are deleted, as the `remove_by` field requires. CI warns when a `ga` flag passes its `remove_by` release.
 4. **Tests:** every flagged behaviour is tested in both states, and the API test asserts `404 feature_disabled` when the flag is off.
@@ -61,7 +61,7 @@ pub const PLAYGROUND_COMPARE: Flag = Flag {
     description: "Compare two runs side by side in the Playground",
     work_package: "WP-0209",
     remove_by: "WP-0223",
-    default: Defaults { desktop: Off, workspace: Off, demo: On },
+    default: Defaults { desktop: Off, workspace: Off }, // the demo follows the release
     stage: Stage::Building,
 };
 ```

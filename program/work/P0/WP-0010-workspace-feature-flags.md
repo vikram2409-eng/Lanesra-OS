@@ -6,7 +6,7 @@ epic: E0.1 Program and engineering readiness
 status: proposed
 owner: unassigned
 depends_on: [WP-0009]
-requirements: [REQ-PRE-006]
+requirements: [REQ-PRE-006, REQ-PRE-021]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []

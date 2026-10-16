@@ -7,10 +7,10 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 8 | 1 | 6 | 0 | 5 | 12 / 36 | `███░░░░░░░` 33% |
-| 1 · Foundations | 38 | 0 | 0 | 0 | 0 | 38 | 0 / 122 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 39 | 0 | 0 | 0 | 0 | 39 | 0 / 130 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
-| 4 · Enterprise scale | 19 | 0 | 0 | 0 | 0 | 19 | 0 / 75 | `░░░░░░░░░░` 0% |
+| 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -19,8 +19,8 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 105 | 1 | 2 / 372 |
-| Team Workspace | 110 | 1 | 2 / 396 |
+| Desktop | 106 | 1 | 2 / 380 |
+| Team Workspace | 113 | 1 | 2 / 420 |
 | Online demo | 84 | 0 | 0 / 300 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -46,8 +46,8 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 ## Requirement coverage
 
-- Spec requirements tracked: **235**
-- Mapped to a work package: **235**
+- Spec requirements tracked: **238**
+- Mapped to a work package: **238**
 - Delivered (every mapped work package done): **6**
 
 ## Phase 0 · Precursors
@@ -117,6 +117,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | E1.7 Agent setup experience | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0120, WP-0014 |
 | [WP-0170](work/P1/WP-0170-run-the-published-agent-version.md) | Run the published agent version | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
 | [WP-0180](work/P1/WP-0180-team-workspace-operations-backups-upgrades-health.md) | Team Workspace operations: backups, key recovery, upgrades and health | E1.9 Team Workspace platform | ⚪ proposed | L | ○Team Workspace ○Desktop | WP-0020, WP-0007 |
+| [WP-0181](work/P1/WP-0181-several-workspaces-on-one-team-workspace-server.md) | Several workspaces on one Team Workspace server | E1.9 Team Workspace platform | ⚪ proposed | XL | ○Team Workspace | WP-0100, WP-0020, WP-0007 |
 
 ## Phase 2 · Playground
 
@@ -206,6 +207,9 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0417](work/P4/WP-0417-deployment-residency-and-provider-allow-lists.md) | Deployment residency and provider allow-lists | E4.2 Compliance and governance | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0123 |
 | [WP-0418](work/P4/WP-0418-remove-pipeline-aliases.md) | Remove Pipeline aliases | E4.1 Scale | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0306 |
 | [WP-0419](work/P4/WP-0419-ga-readiness-success-metrics.md) | GA readiness: success metrics | E4.3 Advanced capabilities | ⚪ proposed | M | — | WP-0328, WP-0221 |
+| [WP-0420](work/P4/WP-0420-storage-layer-for-sqlite-and-postgresql.md) | Storage layer that can run on SQLite or PostgreSQL | E4.1 Scale | ⚪ proposed | XL | ○Team Workspace ○Desktop | WP-0181 |
+| [WP-0421](work/P4/WP-0421-postgresql-for-team-workspace.md) | PostgreSQL for Team Workspace | E4.1 Scale | ⚪ proposed | XL | ○Team Workspace | WP-0420, WP-0180 |
+| [WP-0422](work/P4/WP-0422-saas-edition-architecture-plan.md) | SaaS edition architecture plan | E4.1 Scale | ⚪ proposed | M | — | WP-0181, WP-0420 |
 
 ## Phase v2 · Open interop
 

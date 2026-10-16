@@ -31,6 +31,8 @@ Stream run events live to the browser over the existing `/api/v1/events/stream`,
 - Tauri equivalent for the desktop edition
 - Gap audit findings (WP-0008, `program/research/gap-audit.md`):
   - No usable channel exists today: the SSE stream is API-key only, polls `integration_executions` and has no consumer (I-21). Build an in-process event bus, session-cookie auth for the UI, a Tauri event channel for desktop, and the first frontend consumer (the UI polls with react-query today)
+- Owner decisions (ADR-0013, ADR-0014, 2026-10-16):
+  - Team Workspace is used only through the browser (ADR-0013 #5). The Tauri channel serves the desktop edition's own runs; the desktop never connects to a server
 
 ## Acceptance criteria
 

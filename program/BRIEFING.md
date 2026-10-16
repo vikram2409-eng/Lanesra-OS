@@ -37,6 +37,8 @@ three), and it is not done until `delivered:` lists all of them.
 - A background scheduler ticks every 60 seconds.
 - It ships as the Docker image in `desktop/Dockerfile`, put behind a TLS reverse proxy for internet use.
 - Test every server-facing change in both modes: Tauri commands and the HTTP route. WP-0020, WP-0106 and WP-0180 make it buildable, safe to expose and recoverable.
+- Owner decisions (ADR-0013 and ADR-0014): a server will host **several workspaces**, each with its own database file and data key; a **SaaS edition** is planned later; **PostgreSQL** will be an option (Phase 4). The browser is the only Team client. New code keeps SQL in `repositories/`, uses portable SQL and puts `workspace_id` on every workspace-owned table.
+- **Release rule:** a feature ships in desktop and Team Workspace in the same release, and appears in the online demo in that release, never earlier.
 
 **Every build updates the website help:** each work package's `docs:` names the
 `https://lanesraos.com/help/<slug>` articles it must create or update, and the tracker refuses `done`

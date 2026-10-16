@@ -48,6 +48,8 @@ Once agents run unattended on a Team Workspace (schedules, webhooks, long runs),
   - The Docker image uses `/api/ready` in its `HEALTHCHECK`.
 - **Logs.** Structured JSON log option (`LANESRA_LOG_FORMAT=json`). A request id on every log line and API error, so an admin can match a user's error to the log.
 - **Upgrade guide.** Steps for Docker, Compose and the desktop app, covering rollback by restoring the pre-upgrade backup. Added to the `set-up-team-workspace` and `workspace-essentials` help articles.
+- Owner decisions (ADR-0013, ADR-0014, 2026-10-16):
+  - Backups, key recovery and health work per workspace (ADR-0014 §2, §4): each workspace has its own data key wrapped by the server master key
 
 ## Acceptance criteria
 

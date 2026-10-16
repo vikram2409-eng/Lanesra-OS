@@ -80,6 +80,11 @@ Writing `status` directly in SQL anywhere else is a review blocker. Each reposit
   - Runs `waiting_scheduled` with `resume_at` in the past become `queued`.
   - Runs `waiting_model` whose background result has arrived become `queued`.
 - A person resumes an `interrupted` run from the Playground or the approvals inbox, after seeing which step was in flight.
+- **Admins choose the policy (owner decision, ADR-0013 #1).** The setting is `interrupted_run_policy`:
+  - `resume_if_safe` (default): replay-safe runs are re-queued, and the others pause as described above.
+  - `always_pause`: every interrupted run waits for a person.
+
+  It is set per workspace, with an optional override per Team. Only an AI Admin can change it, and every change is audited. The sweep reads it for each run.
 
 ### 6. Pipelines converge
 
