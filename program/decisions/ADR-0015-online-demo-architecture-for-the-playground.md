@@ -1,6 +1,6 @@
 # ADR-0015: Online demo architecture for the Playground
 
-- Status: Proposed (owner acceptance required — WP-0013 AC-1)
+- Status: Accepted (program owner, 2026-10-16, PR #638)
 - Date: 2026-10-16
 - Work package: WP-0013
 - Requirements: REQ-PRE-010, REQ-PRE-021
