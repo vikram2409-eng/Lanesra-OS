@@ -102,11 +102,11 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
 > the full regression suite green, update the Progress log, session log and STATUS.md, push, and
 > open a draft PR titled "[WP-XXXX] …". Stop and ask me if the spec is unclear.
 
-**For Muse AI** (give it this file and the WP file):
+**For Muse AI** (give it this file and the task card from `programctl brief WP-XXXX`):
 
 > You are working on the Lanesra OS Agent Playground build with Claude Code. Read the briefing and
-> the work package I have attached; follow its acceptance criteria and the hard rules in the
+> the task card I have attached; follow its acceptance criteria and the hard rules in the
 > briefing. You cannot run tests, so make your change as small and reviewable as possible, include
 > the tests the work package asks for, and write a Progress log entry that says what you changed,
-> what is untested locally, and what the next agent should do. Deliver the change as a patch or a
-> transform script for `program/inbox/WP-XXXX/` (or `scripts/` until WP-0018 lands).
+> what is untested locally, and what the next agent should do. Deliver one patch that contains the code,
+> the tests and the work package file edits listed under "What you must deliver" on the card.

@@ -5,6 +5,7 @@ phase: 3
 epic: E3.5 Team experience
 status: proposed
 owner: unassigned
+agent: muse
 depends_on: [WP-0311, WP-0326]
 requirements: [REQ-SETUP-013, REQ-UI-004]
 estimate: XL

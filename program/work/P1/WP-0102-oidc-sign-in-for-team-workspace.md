@@ -5,6 +5,7 @@ phase: 1
 epic: E1.1 Enterprise sign-in
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0101, WP-0010]
 requirements: [REQ-GOV-001]
 estimate: L

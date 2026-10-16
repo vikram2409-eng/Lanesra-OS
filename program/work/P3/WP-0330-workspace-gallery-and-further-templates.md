@@ -5,6 +5,7 @@ phase: 3
 epic: E3.5 Team experience
 status: proposed
 owner: unassigned
+agent: either
 depends_on: [WP-0221, WP-0301]
 requirements: [REQ-API-013, REQ-PG-014]
 estimate: M

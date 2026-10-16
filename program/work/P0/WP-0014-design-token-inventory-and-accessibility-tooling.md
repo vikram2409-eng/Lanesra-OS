@@ -3,9 +3,10 @@ id: WP-0014
 title: Design token inventory and accessibility tooling
 phase: 0
 epic: E0.2 Test infrastructure
-status: proposed
+status: ready
 owner: unassigned
-depends_on: [WP-0003]
+agent: muse
+depends_on: []
 requirements: [REQ-PRE-011]
 estimate: M
 branch: 
@@ -37,6 +38,10 @@ The mockups use the online demo's palette and new components (risk badges, statu
 - One axe test per existing UI primitive
 - Tag every new test with `Covers: <REQ-ID>` (and this WP id) so `programctl trace` finds it
 - Full regression suite green; test count not lower than before (see testing/REGRESSION.md)
+
+## Notes
+
+- Dependency on CI (WP-0003) removed 2026-10-16: the inventory and the unit-level axe check do not need CI; the E2E axe hook waits for WP-0006.
 
 ## Progress log
 

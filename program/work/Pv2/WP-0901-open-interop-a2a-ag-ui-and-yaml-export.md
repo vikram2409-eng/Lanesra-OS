@@ -5,6 +5,7 @@ phase: v2
 epic: Ev2 Open interop
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0419]
 requirements: [REQ-API-010, REQ-API-011, REQ-API-012]
 estimate: L

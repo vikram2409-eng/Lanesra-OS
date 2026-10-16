@@ -5,6 +5,7 @@ phase: 2
 epic: E2.3 Evaluation and publish
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0210, WP-0211, WP-0146]
 requirements: [REQ-EVAL-012]
 estimate: M

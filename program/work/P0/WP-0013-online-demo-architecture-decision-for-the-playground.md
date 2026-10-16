@@ -5,7 +5,8 @@ phase: 0
 epic: E0.3 Architecture decisions
 status: ready
 owner: unassigned
-depends_on: [WP-0008]
+agent: muse
+depends_on: []
 requirements: [REQ-PRE-010]
 estimate: M
 branch: 
@@ -36,6 +37,10 @@ The spec ships the Playground in the online demo with simulated runs using the s
 - Not a code change
 - Tag every new test with `Covers: <REQ-ID>` (and this WP id) so `programctl trace` finds it
 - Full regression suite green; test count not lower than before (see testing/REGRESSION.md)
+
+## Notes
+
+- Dependency on the gap audit (WP-0008) removed 2026-10-16 so Muse AI can start in parallel; the demo is self-contained in `app.js`.
 
 ## Progress log
 

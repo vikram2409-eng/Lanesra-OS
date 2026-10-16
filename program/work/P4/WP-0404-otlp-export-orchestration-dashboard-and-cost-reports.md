@@ -5,6 +5,7 @@ phase: 4
 epic: E4.2 Compliance and governance
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0111]
 requirements: [REQ-OBS-004, REQ-OBS-005, REQ-GOV-015]
 estimate: L

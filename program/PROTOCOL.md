@@ -59,8 +59,9 @@ A claim must be visible to every other agent immediately, without waiting for a 
    `programctl status`; commit `chore(program): claim WP-XXXX`.
 3. Open a **draft** pull request titled `[WP-XXXX] <title>` using the PR template.
 4. If `git push` of the branch is rejected because it exists, someone else has it. Pick another.
-5. Muse AI (no git): the owner pushes the branch for you, or you deliver through the Agent apply
-   Action once WP-0018 lands (`program/inbox/WP-XXXX/`).
+5. Muse AI (no git): Claude Code claims on Muse's behalf (`owner: muse`) and produces the task card
+   with `programctl brief WP-XXXX`; Muse delivers a patch that Claude Code applies, or the Agent
+   apply Action applies once WP-0018 lands (`program/inbox/WP-XXXX/`). See AGENT-PROFILES.md.
 
 Abandoning a claim: set `status: ready`, `owner: unassigned`, write why in the Progress log, push,
 close the draft PR and delete the claim branch.

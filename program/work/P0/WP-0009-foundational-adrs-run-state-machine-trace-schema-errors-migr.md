@@ -5,6 +5,7 @@ phase: 0
 epic: E0.3 Architecture decisions
 status: proposed
 owner: unassigned
+agent: either
 depends_on: [WP-0008]
 requirements: [REQ-PRE-007]
 estimate: L

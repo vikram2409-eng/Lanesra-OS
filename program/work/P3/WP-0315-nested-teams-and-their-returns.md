@@ -5,6 +5,7 @@ phase: 3
 epic: E3.2 Modes
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0304]
 requirements: [REQ-ORCH-023, REQ-ORCH-039]
 estimate: L

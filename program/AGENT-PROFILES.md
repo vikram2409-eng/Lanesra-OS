@@ -39,12 +39,47 @@ capabilities, so they take different roles and hand work over through the reposi
 | ADRs and research notes | Either | The other agent |
 | Gate reviews | Claude Code prepares evidence | Owner signs |
 
-## Handoff between the two
+## How the two agents are orchestrated
 
-1. The agent finishing a session writes the WP Progress log and a session log (PROTOCOL §6) and pushes.
-2. The owner tells the next agent which WP to take (or the agent runs `programctl next`).
-3. The next agent reads `BRIEFING.md`, the WP file and its Progress log, then the PR and CI state.
-4. A PR authored by one agent is reviewed by the other before the owner merges.
+Roles: **owner** = dispatcher and merger · **Claude Code** = builder for core/server/CI and the
+integrator (applies and tests Muse's changes, keeps the tracker consistent, prepares gates) ·
+**Muse AI** = builder for UI and the online demo, and reviewer of Claude Code's PRs.
 
-Running both at once is fine if they work different lanes (ROADMAP "Parallel lanes"), for example
-Claude Code on the Rust run model while Muse works on design tokens and screens.
+### One round
+
+1. **Pick.** Open `program/STATUS.md` (or the GitHub Issues board, milestone = phase). The sections
+   **Next for Claude Code** and **Next for Muse AI** list ready work whose dependencies are done,
+   filtered by each WP's `agent` field (`claude`, `muse`, `either`).
+2. **Claude Code** — tell it "take the next Claude Code work package". It claims (pushes `wp/` branch,
+   status `in_progress`), builds with tests, opens a draft PR, writes the Progress log.
+3. **Muse AI** — ask Claude Code: "claim WP-XXXX for Muse and give me its task card". Claude Code
+   pushes the claim (`owner: muse`, so nobody else takes it) and prints `programctl brief WP-XXXX`.
+   Paste `BRIEFING.md` plus the task card into Muse.
+4. **Muse delivers** a patch or transform script that includes its WP file edits (status, ticked
+   criteria marked "untested locally - see CI", Progress log entry) and a session log.
+5. **Land Muse's change.** Until WP-0018 exists: hand the patch to Claude Code, which applies it to
+   the claimed branch, runs the full suite and opens the PR. After WP-0018: drop it in
+   `program/inbox/WP-XXXX/` and run the *Agent apply* Action.
+6. **Feedback loop.** If tests fail, Claude Code writes the failure and the fix it expects into the
+   WP's Progress log and gives you a fresh task card - the card always carries the latest log
+   entry, so Muse sees exactly what broke. Repeat 4–6 until green.
+7. **Cross-review.** Claude Code reviews Muse's PRs (tests, accessibility, spec fit). Muse reviews
+   Claude Code's UI-facing PRs from the diff (UX, copy, consistency). Findings go on the PR.
+8. **Merge.** The owner merges. The WP becomes `done`; STATUS.md and the Issues mirror update.
+
+Both agents can run at the same time on different lanes (ROADMAP "Parallel lanes").
+
+### How Muse knows what to pick and what to update
+
+- **What to pick:** the first item under *Next for Muse AI* in `STATUS.md` that is not claimed —
+  or simply the WP whose task card you hand it. Muse never needs to search the repo.
+- **What to update:** the task card's *What you must deliver* section lists every file and line:
+  the code and tests, the WP front matter, ticked criteria, the Progress log entry, a session log.
+  Muse never edits `STATUS.md` or GitHub Issues (they regenerate).
+- **What happened before:** the card includes the previous agent's last Progress log entry.
+
+### What each agent must never do
+
+- Claude Code: take a WP claimed for Muse, or rewrite Muse's work without a review comment first.
+- Muse AI: change files outside its WP's scope, or mark a criterion done that no test proves.
+- Either: merge to `main`, or skip the handoff note.

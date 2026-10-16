@@ -5,6 +5,7 @@ phase: 0
 epic: E0.4 Security and compliance baseline
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0003]
 requirements: [REQ-PRE-009]
 estimate: M

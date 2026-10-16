@@ -5,6 +5,7 @@ phase: 1
 epic: E1.6 Approvals
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0152]
 requirements: [REQ-GOV-020]
 estimate: M

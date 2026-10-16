@@ -5,6 +5,7 @@ phase: 1
 epic: E1.7 Agent setup experience
 status: proposed
 owner: unassigned
+agent: muse
 depends_on: [WP-0120, WP-0014]
 requirements: [REQ-SETUP-001, REQ-SETUP-002, REQ-SETUP-003, REQ-SETUP-004, REQ-SETUP-005]
 estimate: L

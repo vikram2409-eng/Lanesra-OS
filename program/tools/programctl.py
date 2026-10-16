@@ -12,6 +12,8 @@ only, so it runs anywhere Python 3.9+ does.
     python3 program/tools/programctl.py show WP-0101    # one work package + its deps
     python3 program/tools/programctl.py trace           # requirement -> WP -> test coverage
     python3 program/tools/programctl.py new-log --agent claude --wp WP-0101
+    python3 program/tools/programctl.py next --agent muse   # ready work suited to one agent
+    python3 program/tools/programctl.py brief WP-0160       # self-contained task card to hand an AI
 """
 from __future__ import annotations
 
@@ -33,6 +35,8 @@ TEST_DIRS = [ROOT / "desktop", ROOT / "tests", ROOT / "program" / "tools"]
 STATUSES = ["proposed", "ready", "in_progress", "in_review", "blocked", "done", "dropped"]
 PHASES = ["0", "1", "2", "3", "4", "v2"]
 ESTIMATES = ["S", "M", "L", "XL"]
+AGENTS = ["claude", "muse", "either"]  # who a work package suits (AGENT-PROFILES.md)
+AGENT_NAMES = {"claude": "Claude Code", "muse": "Muse AI", "either": "either agent"}
 REQUIRED_FIELDS = ["id", "title", "phase", "epic", "status", "owner", "depends_on",
                    "requirements", "estimate", "updated"]
 REQUIRED_SECTIONS_READY = ["## Goal", "## Acceptance criteria", "## Test plan"]
@@ -131,6 +135,10 @@ def validate(wps, reqs, strict_coverage=True):
             errors.append(f"{where}: status {wp.get('status')!r} not in {STATUSES}")
         if str(wp.get("phase")) not in PHASES:
             errors.append(f"{where}: phase {wp.get('phase')!r} not in {PHASES}")
+        if "agent" not in wp:
+            errors.append(f"{where}: missing field 'agent' (claude, muse or either)")
+        elif wp.get("agent") not in AGENTS:
+            errors.append(f"{where}: agent {wp.get('agent')!r} not in {AGENTS}")
         if wp.get("estimate") not in ESTIMATES:
             errors.append(f"{where}: estimate {wp.get('estimate')!r} not in {ESTIMATES}")
         expected_dir = f"P{wp.get('phase')}"
@@ -223,10 +231,14 @@ def claimed_branches():
     return claims
 
 
-def ready_to_start(wps):
+def suits(wp, agent):
+    return agent is None or wp.get("agent", "either") in (agent, "either")
+
+
+def ready_to_start(wps, agent=None):
     out = []
     for wid, wp in sorted(wps.items()):
-        if wp.get("status") != "ready":
+        if wp.get("status") != "ready" or not suits(wp, agent):
             continue
         deps = wp.get("depends_on") or []
         if all(wps.get(d, {}).get("status") in ("done", "dropped") for d in deps):
@@ -276,12 +288,27 @@ def render_status(wps, reqs):
     lines += ["", "## Ready to start (all dependencies done)", ""]
     ready = ready_to_start(wps)
     if ready:
-        lines += ["| WP | Title | Phase | Estimate |", "|---|---|---|---|"]
+        lines += ["| WP | Title | Phase | Estimate | Suits |", "|---|---|---|---|---|"]
         for wid in ready:
             w = wps[wid]
-            lines.append(f"| [{wid}]({rel_link(w)}) | {w['title']} | {w['phase']} | {w['estimate']} |")
+            lines.append(f"| [{wid}]({rel_link(w)}) | {w['title']} | {w['phase']} | {w['estimate']} | "
+                         f"{AGENT_NAMES[w.get('agent', 'either')]} |")
     else:
         lines.append("None.")
+    for agent in ("claude", "muse"):
+        mine = [wid for wid in ready_to_start(wps, agent) if wps[wid].get("agent", "either") == agent]
+        shared = [wid for wid in ready_to_start(wps, agent) if wps[wid].get("agent", "either") == "either"]
+        lines += ["", f"## Next for {AGENT_NAMES[agent]}", ""]
+        picks = mine + shared
+        if picks:
+            lines += [f"Take the first one not already claimed (a `wp/WP-XXXX-*` branch or a draft PR means "
+                      f"claimed). Hand it over with `programctl brief WP-XXXX`.", ""]
+            for wid in picks[:5]:
+                w = wps[wid]
+                tag = "" if w.get("agent") == agent else " (either agent)"
+                lines.append(f"1. [{wid}]({rel_link(w)}) {w['title']} · {w['estimate']}{tag}")
+        else:
+            lines.append("Nothing ready for this agent right now; it can review the other agent's open PRs.")
 
     covered = {}
     for w in wps.values():
@@ -315,6 +342,76 @@ def badge(s):
     return {"done": "✅ done", "in_progress": "🔨 in progress", "in_review": "👀 in review",
             "blocked": "⛔ blocked", "ready": "🟢 ready", "proposed": "⚪ proposed",
             "dropped": "~~dropped~~"}.get(s, s)
+
+
+# ------------------------------------------------------------------ brief ---
+
+def render_brief(w, wps, reqs):
+    """A task card an AI with no repo access can work from: everything it needs, nothing it must look up."""
+    wid, path = w["id"], rel(w["_path"])
+    log = section(w["_body"], "## Progress log").strip()
+    entries = [e for e in log.split("\n### ") if e.strip() and not e.strip().startswith("<!--")]
+    last = ("### " + entries[-1].strip()) if entries and not entries[-1].startswith("###") else (entries[-1].strip() if entries else "No previous entry - you are the first agent on this work package.")
+    deps = "\n".join(f"- {d}: {wps[d].get('status') if d in wps else 'missing'} - {wps.get(d, {}).get('title', '')}"
+                     for d in w.get("depends_on") or []) or "- none"
+    req_lines = "\n".join(f"- {r}: {reqs.get(r, {}).get('text', 'missing')}" for r in w.get("requirements") or []) or "- none"
+    body_keep = "\n".join(part for part in [
+        "## Goal" + section(w["_body"], "## Goal"),
+        "## Scope" + section(w["_body"], "## Scope") if "## Scope" in w["_body"] else "",
+        "## Out of scope" + section(w["_body"], "## Out of scope") if "## Out of scope" in w["_body"] else "",
+        "## Acceptance criteria" + section(w["_body"], "## Acceptance criteria"),
+        "## Test plan" + section(w["_body"], "## Test plan"),
+        "## Notes" + section(w["_body"], "## Notes") if "## Notes" in w["_body"] else "",
+    ] if part)
+    today = dt.date.today().isoformat()
+    return f"""# Task card: {wid} - {w['title']}
+
+Lanesra OS Agent Playground build. Generated by `programctl brief {wid}` on {today} from `{path}`.
+Suits: {AGENT_NAMES[w.get('agent', 'either')]} · Phase {w['phase']} · Estimate {w['estimate']} · Status now: {w['status']}
+
+## Rules (from AGENTS.md and program/PROTOCOL.md)
+
+- Enterprise grade, no shortcuts: meet every acceptance criterion and prove it with a test.
+- Never skip, delete or weaken an existing test. Clean room: do not use CrewAI, Agent Framework,
+  LangGraph or AutoGen source or prompts; use Lanesra words (Team, Playbook, Run, Step).
+- The product is bring-your-own-model; tests never call a hosted model API.
+- Touch only what this work package needs. If the spec is unclear, write the question in your
+  handoff note instead of guessing.
+
+## Depends on
+
+{deps}
+
+## Requirements it delivers
+
+{req_lines}
+
+## The work package
+
+{body_keep}
+
+## Where the previous agent left off
+
+{last}
+
+## What you must deliver
+
+1. The code and test changes, as a patch (or transform script) against `main`.
+2. These edits to `{path}`, included in the same patch:
+   - front matter: `status: in_review` if every acceptance criterion is met, else `in_progress`;
+     `owner: {"muse" if w.get('agent') == 'muse' else '<you>'}`; `updated: {today}`
+   - tick `[x]` only the acceptance criteria your tests prove; write "(untested locally - see CI)" after any you could not run
+   - append to `## Progress log`:
+     ```
+     ### {today} <agent>
+     Done: ...
+     State: untested locally - see CI / green / RED because ...
+     Next: ...
+     Gotchas: ...
+     ```
+3. A new session log `program/log/{today[:4]}/{today[5:7]}/{today[8:10]}-0000-<agent>-{wid}.md` (short: goal, done, next, points, tokens used if known).
+4. Do not edit `program/STATUS.md` or GitHub Issues - they are regenerated automatically.
+"""
 
 
 # ------------------------------------------------------------------ trace ---
@@ -354,6 +451,9 @@ def main(argv=None):
     s.add_argument("--check", action="store_true", help="fail if STATUS.md is out of date")
     n = sub.add_parser("next", help="list work packages ready to start and not yet claimed")
     n.add_argument("--offline", action="store_true", help="skip the git ls-remote claim check")
+    n.add_argument("--agent", choices=["claude", "muse"], help="only work suited to this agent")
+    b = sub.add_parser("brief", help="print a self-contained task card for handing a WP to an AI")
+    b.add_argument("wp")
     sh = sub.add_parser("show", help="show one work package")
     sh.add_argument("wp")
     t = sub.add_parser("trace", help="requirement -> work package -> test coverage")
@@ -397,7 +497,7 @@ def main(argv=None):
 
     if args.cmd == "next":
         claims = None if args.offline else claimed_branches()
-        ready = ready_to_start(wps)
+        ready = ready_to_start(wps, args.agent)
         if claims is None and not args.offline:
             print("note: could not reach origin; claims not checked (a remote wp/WP-XXXX-* branch is a claim)")
         shown = 0
@@ -409,6 +509,14 @@ def main(argv=None):
             shown += 1
         if not shown:
             print("No unclaimed work package is ready. Check STATUS.md 'Active now' and blocked items.")
+        return 0
+
+    if args.cmd == "brief":
+        w = wps.get(args.wp)
+        if not w:
+            print(f"error: no such work package {args.wp}", file=sys.stderr)
+            return 1
+        print(render_brief(w, wps, reqs))
         return 0
 
     if args.cmd == "show":

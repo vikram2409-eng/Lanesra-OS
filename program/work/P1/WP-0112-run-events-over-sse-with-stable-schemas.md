@@ -5,6 +5,7 @@ phase: 1
 epic: E1.2 Run model and trace
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0111]
 requirements: [REQ-LOOP-005, REQ-OBS-003, REQ-API-005]
 estimate: L

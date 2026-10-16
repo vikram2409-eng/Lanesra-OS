@@ -5,6 +5,7 @@ phase: 0
 epic: E0.4 Security and compliance baseline
 status: ready
 owner: unassigned
+agent: either
 depends_on: []
 requirements: [REQ-CLEAN-001, REQ-CLEAN-002, REQ-CLEAN-003, REQ-CLEAN-004, REQ-CLEAN-005]
 estimate: S

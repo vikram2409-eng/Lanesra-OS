@@ -6,7 +6,7 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 18 | 0 | 4 | 7 | 0 | 7 | 0 / 34 | `░░░░░░░░░░` 0% |
+| 0 · Precursors | 18 | 0 | 4 | 8 | 0 | 6 | 0 / 34 | `░░░░░░░░░░` 0% |
 | 1 · Foundations | 34 | 0 | 0 | 0 | 0 | 34 | 0 / 106 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 124 | `░░░░░░░░░░` 0% |
@@ -26,12 +26,31 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 ## Ready to start (all dependencies done)
 
-| WP | Title | Phase | Estimate |
-|---|---|---|---|
-| [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | 0 | S |
-| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | 0 | M |
-| [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | 0 | M |
-| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | 0 | S |
+| WP | Title | Phase | Estimate | Suits |
+|---|---|---|---|---|
+| [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | 0 | S | Claude Code |
+| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | 0 | M | Claude Code |
+| [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | 0 | M | Claude Code |
+| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | 0 | S | either agent |
+| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | 0 | M | Muse AI |
+| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | 0 | M | Muse AI |
+
+## Next for Claude Code
+
+Take the first one not already claimed (a `wp/WP-XXXX-*` branch or a draft PR means claimed). Hand it over with `programctl brief WP-XXXX`.
+
+1. [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) Rust format and lint baseline · S
+1. [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) Deterministic scripted model provider for tests · M
+1. [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) Verify the spec's assumptions against the code (gap audit) · M
+1. [WP-0012](work/P0/WP-0012-clean-room-controls.md) Clean-room controls · S (either agent)
+
+## Next for Muse AI
+
+Take the first one not already claimed (a `wp/WP-XXXX-*` branch or a draft PR means claimed). Hand it over with `programctl brief WP-XXXX`.
+
+1. [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) Online demo architecture decision for the Playground · M
+1. [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) Design token inventory and accessibility tooling · M
+1. [WP-0012](work/P0/WP-0012-clean-room-controls.md) Clean-room controls · S (either agent)
 
 ## Requirement coverage
 
@@ -55,8 +74,8 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | ⚪ proposed | M | WP-0009 |
 | [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | E0.4 Security and compliance baseline | ⚪ proposed | M | WP-0003 |
 | [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | 🟢 ready | S | - |
-| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 🟢 ready | M | WP-0008 |
-| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | ⚪ proposed | M | WP-0003 |
+| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 🟢 ready | M | - |
+| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | 🟢 ready | M | - |
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | WP-0005 |
 | [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | 🔨 in progress | M | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | 🔨 in progress | S | WP-0001 |

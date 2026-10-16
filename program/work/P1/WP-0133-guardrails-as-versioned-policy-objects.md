@@ -5,6 +5,7 @@ phase: 1
 epic: E1.4 Task contracts and guardrails
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0009]
 requirements: [REQ-GOV-007]
 estimate: L

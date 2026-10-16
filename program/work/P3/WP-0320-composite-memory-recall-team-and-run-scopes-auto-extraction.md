@@ -5,6 +5,7 @@ phase: 3
 epic: E3.4 Identity, budget and memory
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0301]
 requirements: [REQ-MEM-001, REQ-MEM-002, REQ-MEM-003, REQ-MEM-004, REQ-MEM-005]
 estimate: L

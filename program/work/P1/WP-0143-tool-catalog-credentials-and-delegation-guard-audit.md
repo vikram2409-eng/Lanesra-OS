@@ -5,6 +5,7 @@ phase: 1
 epic: E1.5 Tools and firewall
 status: proposed
 owner: unassigned
+agent: claude
 depends_on: [WP-0008]
 requirements: [REQ-TOOL-001, REQ-TOOL-007, REQ-LOOP-012]
 estimate: S

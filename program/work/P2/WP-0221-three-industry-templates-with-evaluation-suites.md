@@ -5,6 +5,7 @@ phase: 2
 epic: E2.5 Templates and demo
 status: proposed
 owner: unassigned
+agent: either
 depends_on: [WP-0213, WP-0224]
 requirements: [REQ-PG-013]
 estimate: L
