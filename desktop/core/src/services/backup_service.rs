@@ -31,7 +31,12 @@ fn zip_err<E: std::fmt::Display>(e: E) -> AppError {
 /// Backup/restore touches the entire workspace, so this is a powerful grant
 /// to hand out - an admin choosing to configure it is opting in deliberately.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "Backup", "Only an Administrator can back up or restore the workspace")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "Backup",
+        "Only an Administrator can back up or restore the workspace",
+    )
 }
 
 /// Snapshots the live database via SQLite's online backup API (safe to run
@@ -63,14 +68,17 @@ pub fn create_backup(conn: &Connection, actor_user_id: Option<&str>) -> AppResul
         created_at: now_iso(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
     };
-    let manifest_json =
-        serde_json::to_vec_pretty(&manifest).map_err(|e| AppError::Validation(format!("could not build manifest: {e}")))?;
+    let manifest_json = serde_json::to_vec_pretty(&manifest)
+        .map_err(|e| AppError::Validation(format!("could not build manifest: {e}")))?;
 
     let mut zip_bytes = Vec::new();
     {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut zip_bytes));
-        let options = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-        writer.start_file(MANIFEST_ENTRY, options).map_err(zip_err)?;
+        let options =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        writer
+            .start_file(MANIFEST_ENTRY, options)
+            .map_err(zip_err)?;
         writer.write_all(&manifest_json).map_err(zip_err)?;
         writer.start_file(DB_ENTRY, options).map_err(zip_err)?;
         writer.write_all(&db_bytes).map_err(zip_err)?;
@@ -125,12 +133,13 @@ pub fn restore_from_package(
     let mut archive = zip::ZipArchive::new(Cursor::new(zip_bytes)).map_err(zip_err)?;
 
     let manifest: BackupManifest = {
-        let mut entry = archive
-            .by_name(MANIFEST_ENTRY)
-            .map_err(|_| AppError::Validation("Not a valid Lanesra OS backup file (missing manifest)".into()))?;
+        let mut entry = archive.by_name(MANIFEST_ENTRY).map_err(|_| {
+            AppError::Validation("Not a valid Lanesra OS backup file (missing manifest)".into())
+        })?;
         let mut buf = String::new();
         entry.read_to_string(&mut buf).map_err(zip_err)?;
-        serde_json::from_str(&buf).map_err(|e| AppError::Validation(format!("Invalid backup manifest: {e}")))?
+        serde_json::from_str(&buf)
+            .map_err(|e| AppError::Validation(format!("Invalid backup manifest: {e}")))?
     };
 
     let current_version = migrate::current_schema_version();
@@ -142,9 +151,9 @@ pub fn restore_from_package(
     }
 
     let db_bytes = {
-        let mut entry = archive
-            .by_name(DB_ENTRY)
-            .map_err(|_| AppError::Validation("Not a valid Lanesra OS backup file (missing database)".into()))?;
+        let mut entry = archive.by_name(DB_ENTRY).map_err(|_| {
+            AppError::Validation("Not a valid Lanesra OS backup file (missing database)".into())
+        })?;
         let mut buf = Vec::new();
         entry.read_to_end(&mut buf).map_err(zip_err)?;
         buf
@@ -156,13 +165,18 @@ pub fn restore_from_package(
     // migration path, all before anything live is touched.
     let staged_path = db_path.with_file_name(format!(
         "{}.restoring",
-        db_path.file_name().and_then(|n| n.to_str()).unwrap_or("workspace.sqlite3")
+        db_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("workspace.sqlite3")
     ));
     std::fs::write(&staged_path, &db_bytes)
         .map_err(|e| AppError::Validation(format!("could not stage restored database: {e}")))?;
 
     let staged_check = db::open_workspace_db(&staged_path).and_then(|staged_conn| {
-        staged_conn.query_row("SELECT COUNT(*) FROM workspaces", [], |r| r.get::<_, i64>(0))
+        staged_conn.query_row("SELECT COUNT(*) FROM workspaces", [], |r| {
+            r.get::<_, i64>(0)
+        })
     });
     if staged_check.is_err() {
         let _ = std::fs::remove_file(&staged_path);
@@ -185,19 +199,25 @@ pub fn restore_from_package(
     let _ = std::fs::remove_file(&wal_path);
     let _ = std::fs::remove_file(&shm_path);
 
-    std::fs::rename(&staged_path, db_path).map_err(|e| AppError::Validation(format!("could not finalize restore: {e}")))?;
+    std::fs::rename(&staged_path, db_path)
+        .map_err(|e| AppError::Validation(format!("could not finalize restore: {e}")))?;
 
     let fresh = db::open_workspace_db(db_path)?;
     *conn_slot = fresh;
 
     audit_repo::record(
         conn_slot,
-        &workspace_repo::get_current(conn_slot)?.map(|w| w.id).unwrap_or_default(),
+        &workspace_repo::get_current(conn_slot)?
+            .map(|w| w.id)
+            .unwrap_or_default(),
         actor_user_id,
         "restore",
         Some("workspace"),
         None,
-        &format!("Restored workspace '{}' from a backup made {}", manifest.workspace_name, manifest.created_at),
+        &format!(
+            "Restored workspace '{}' from a backup made {}",
+            manifest.workspace_name, manifest.created_at
+        ),
         None,
     )?;
 

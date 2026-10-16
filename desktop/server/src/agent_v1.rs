@@ -29,7 +29,10 @@ use crate::state::SharedState;
 pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/api/v1/agents/:agent_id/trigger", post(trigger_agent))
-        .route("/api/v1/agent-pipelines/:pipeline_id/trigger", post(trigger_pipeline))
+        .route(
+            "/api/v1/agent-pipelines/:pipeline_id/trigger",
+            post(trigger_pipeline),
+        )
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,15 +41,31 @@ struct TriggerBody {
     input: String,
 }
 
-async fn trigger_agent(State(state): State<SharedState>, headers: HeaderMap, Path(agent_id): Path<String>, Json(body): Json<TriggerBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn trigger_agent(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Path(agent_id): Path<String>,
+    Json(body): Json<TriggerBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     trigger(state, headers, "agent", agent_id, body).await
 }
 
-async fn trigger_pipeline(State(state): State<SharedState>, headers: HeaderMap, Path(pipeline_id): Path<String>, Json(body): Json<TriggerBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn trigger_pipeline(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Path(pipeline_id): Path<String>,
+    Json(body): Json<TriggerBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     trigger(state, headers, "pipeline", pipeline_id, body).await
 }
 
-async fn trigger(state: SharedState, headers: HeaderMap, target_type: &'static str, target_id: String, body: TriggerBody) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn trigger(
+    state: SharedState,
+    headers: HeaderMap,
+    target_type: &'static str,
+    target_id: String,
+    body: TriggerBody,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (client, workspace_id) = authorize(&state, &headers, "agents.trigger")?;
     let db_path = state.db_path.clone();
     let master_key = crate::dispatch::resolve_master_key(&state.db_path).map_err(app_err)?;
@@ -58,7 +77,23 @@ async fn trigger(state: SharedState, headers: HeaderMap, target_type: &'static s
     let actor = client.owner_user_id.clone();
     let workspace_id_for_log = workspace_id.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        logged(&conn, &workspace_id_for_log, ai_orchestration_service::run_triggered(&conn, &workspace_id, &master_key, target_type, &target_id, actor.as_deref(), &body.input, Some("webhook"), None, None).await)
+        logged(
+            &conn,
+            &workspace_id_for_log,
+            ai_orchestration_service::run_triggered(
+                &conn,
+                &workspace_id,
+                &master_key,
+                target_type,
+                &target_id,
+                actor.as_deref(),
+                &body.input,
+                Some("webhook"),
+                None,
+                None,
+            )
+            .await,
+        )
     })
     .await?;
     Ok(Json(json!({"ok": true, "data": data})))

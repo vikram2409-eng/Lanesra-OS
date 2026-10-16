@@ -15,7 +15,9 @@
 use rusqlite::Connection;
 
 use crate::domain::AppResult;
-use crate::models::ai_tool_registry::{AiToolRegistryOverride, AiToolRegistryOverrideInput, RiskLevel};
+use crate::models::ai_tool_registry::{
+    AiToolRegistryOverride, AiToolRegistryOverrideInput, RiskLevel,
+};
 use crate::repositories::ai_tool_registry_repo;
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -31,9 +33,12 @@ fn hardcoded_override(tool_name: &str) -> Option<RiskLevel> {
     match tool_name {
         "create_record" | "update_record" => Some(RiskLevel::LowWrite),
         "archive_record" => Some(RiskLevel::Destructive),
-        "create_user" | "create_api_client" | "create_connection" | "update_workspace_profile" | "run_ai_agent" | "run_ai_agent_pipeline" => {
-            Some(RiskLevel::Privileged)
-        }
+        "create_user"
+        | "create_api_client"
+        | "create_connection"
+        | "update_workspace_profile"
+        | "run_ai_agent"
+        | "run_ai_agent_pipeline" => Some(RiskLevel::Privileged),
         _ => None,
     }
 }
@@ -54,7 +59,10 @@ pub fn default_risk_for(tool_name: &str, source: Option<&str>) -> RiskLevel {
         Some("connector_read" | "mcp_read") => RiskLevel::Read,
         Some("connector_write" | "mcp_write") => RiskLevel::ExternalAction,
         _ => {
-            if tool_name.starts_with("list_") || tool_name.starts_with("get_") || tool_name.contains("search_") {
+            if tool_name.starts_with("list_")
+                || tool_name.starts_with("get_")
+                || tool_name.contains("search_")
+            {
                 RiskLevel::Read
             } else {
                 // create_*/set_*/update_* and anything this convention has
@@ -69,25 +77,49 @@ pub fn default_risk_for(tool_name: &str, source: Option<&str>) -> RiskLevel {
 
 /// The default above, unless this workspace has deliberately overridden
 /// this exact tool name.
-pub fn effective_risk(conn: &Connection, workspace_id: &str, tool_name: &str, source: Option<&str>) -> AppResult<RiskLevel> {
+pub fn effective_risk(
+    conn: &Connection,
+    workspace_id: &str,
+    tool_name: &str,
+    source: Option<&str>,
+) -> AppResult<RiskLevel> {
     if let Some(over) = ai_tool_registry_repo::get_by_tool_name(conn, workspace_id, tool_name)? {
         return Ok(over.risk_level);
     }
     Ok(default_risk_for(tool_name, source))
 }
 
-pub fn list_overrides(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<AiToolRegistryOverride>> {
+pub fn list_overrides(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AiToolRegistryOverride>> {
     require_admin(conn, actor_user_id)?;
     Ok(ai_tool_registry_repo::list(conn, workspace_id)?)
 }
 
-pub fn set_override(conn: &Connection, workspace_id: &str, input: &AiToolRegistryOverrideInput, actor_user_id: Option<&str>) -> AppResult<AiToolRegistryOverride> {
+pub fn set_override(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiToolRegistryOverrideInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiToolRegistryOverride> {
     require_admin(conn, actor_user_id)?;
-    Ok(ai_tool_registry_repo::set(conn, workspace_id, input, actor_user_id)?)
+    Ok(ai_tool_registry_repo::set(
+        conn,
+        workspace_id,
+        input,
+        actor_user_id,
+    )?)
 }
 
 /// Reverts a tool back to its built-in default classification.
-pub fn clear_override(conn: &Connection, workspace_id: &str, tool_name: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn clear_override(
+    conn: &Connection,
+    workspace_id: &str,
+    tool_name: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     Ok(ai_tool_registry_repo::clear(conn, workspace_id, tool_name)?)
 }

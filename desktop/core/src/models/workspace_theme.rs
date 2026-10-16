@@ -67,7 +67,10 @@ pub struct ThemeChartTokens {
 impl Default for ThemeChartTokens {
     fn default() -> Self {
         ThemeChartTokens {
-            palette: DEFAULT_CHART_PALETTE.iter().map(|s| s.to_string()).collect(),
+            palette: DEFAULT_CHART_PALETTE
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         }
     }
 }
@@ -77,7 +80,9 @@ impl Default for ThemeChartTokens {
 /// distinct enough from each other under normal vision and under the most
 /// common color-vision deficiencies (deuteranopia/protanopia) to stay
 /// distinguishable without relying on hue alone.
-pub const DEFAULT_CHART_PALETTE: [&str; 6] = ["#635BFF", "#0F9D76", "#F59E0B", "#EF4444", "#3B82F6", "#8B5CF6"];
+pub const DEFAULT_CHART_PALETTE: [&str; 6] = [
+    "#635BFF", "#0F9D76", "#F59E0B", "#EF4444", "#3B82F6", "#8B5CF6",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeColorTokens {

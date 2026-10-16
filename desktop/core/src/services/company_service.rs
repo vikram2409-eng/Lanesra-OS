@@ -6,7 +6,9 @@ use crate::domain::{AppError, AppResult};
 use crate::models::access_role::Capability;
 use crate::models::company::{Company, CompanyInput, COMPANY_STATUSES};
 use crate::repositories::{audit_repo, company_repo};
-use crate::services::{access_service, app_service, builtin_field_service, status_transition_service, workflow_service};
+use crate::services::{
+    access_service, app_service, builtin_field_service, status_transition_service, workflow_service,
+};
 
 fn validate(input: &CompanyInput) -> AppResult<()> {
     if input.name.trim().is_empty() {
@@ -48,8 +50,22 @@ pub fn create(
     access_service::require_capability(conn, actor_user_id, "Company", Capability::Create, None)?;
     let id = new_uuid();
     let customer_number = numbering::allocate_number(conn, workspace_id, &COMPANY)?;
-    let company = company_repo::create(conn, &id, workspace_id, &customer_number, input, actor_user_id)?;
-    super::ownership_service::set_default_owner_on_create(conn, workspace_id, "Company", &company.id, actor_user_id, input.owner_user_id.as_deref())?;
+    let company = company_repo::create(
+        conn,
+        &id,
+        workspace_id,
+        &customer_number,
+        input,
+        actor_user_id,
+    )?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        workspace_id,
+        "Company",
+        &company.id,
+        actor_user_id,
+        input.owner_user_id.as_deref(),
+    )?;
     audit_repo::record(
         conn,
         workspace_id,
@@ -60,8 +76,24 @@ pub fn create(
         &format!("Created company {}", company.customer_number),
         None,
     )?;
-    workflow_service::fire_event(conn, workspace_id, "Company", &company.id, None, &company.status, company.owner_user_id.as_deref(), actor_user_id)?;
-    super::event_hooks::record_created(conn, workspace_id, "Company", &company.id, &company.name, &company.status);
+    workflow_service::fire_event(
+        conn,
+        workspace_id,
+        "Company",
+        &company.id,
+        None,
+        &company.status,
+        company.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
+    super::event_hooks::record_created(
+        conn,
+        workspace_id,
+        "Company",
+        &company.id,
+        &company.name,
+        &company.status,
+    );
     Ok(company)
 }
 
@@ -82,9 +114,21 @@ pub fn update(
     validate(input)?;
     let before = get(conn, id)?;
     app_service::require_object_write_access(conn, &before.workspace_id, "Company", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Company", Capability::Update, Some(id))?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Company",
+        Capability::Update,
+        Some(id),
+    )?;
     if before.status != input.status {
-        status_transition_service::validate_transition(conn, &before.workspace_id, "Company", &before.status, &input.status)?;
+        status_transition_service::validate_transition(
+            conn,
+            &before.workspace_id,
+            "Company",
+            &before.status,
+            &input.status,
+        )?;
     }
     let before_fields = builtin_field_service::field_values(conn, "Company", id)?;
     let company = company_repo::update(conn, id, input, actor_user_id)?;
@@ -110,15 +154,42 @@ pub fn update(
     )?;
     let after_fields = builtin_field_service::field_values(conn, "Company", id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
-    workflow_service::fire_field_changed(conn, &before.workspace_id, "Company", id, "builtin", &changed, company.owner_user_id.as_deref(), actor_user_id)?;
-    super::event_hooks::record_updated(conn, &before.workspace_id, "Company", id, &company.name, &company.status);
+    workflow_service::fire_field_changed(
+        conn,
+        &before.workspace_id,
+        "Company",
+        id,
+        "builtin",
+        &changed,
+        company.owner_user_id.as_deref(),
+        actor_user_id,
+    )?;
+    super::event_hooks::record_updated(
+        conn,
+        &before.workspace_id,
+        "Company",
+        id,
+        &company.name,
+        &company.status,
+    );
     Ok(company)
 }
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
-    app_service::require_object_write_access(conn, &existing.workspace_id, "Company", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Company", Capability::Delete, Some(id))?;
+    app_service::require_object_write_access(
+        conn,
+        &existing.workspace_id,
+        "Company",
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Company",
+        Capability::Delete,
+        Some(id),
+    )?;
     company_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -130,6 +201,12 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
         &format!("Archived company {}", existing.customer_number),
         None,
     )?;
-    super::event_hooks::record_archived(conn, &existing.workspace_id, "Company", id, &existing.name);
+    super::event_hooks::record_archived(
+        conn,
+        &existing.workspace_id,
+        "Company",
+        id,
+        &existing.name,
+    );
     Ok(())
 }

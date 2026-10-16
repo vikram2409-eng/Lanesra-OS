@@ -16,7 +16,14 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Notification> {
     })
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, recipient_user_id: Option<&str>, message: &str, entity_type: Option<&str>, entity_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    recipient_user_id: Option<&str>,
+    message: &str,
+    entity_type: Option<&str>,
+    entity_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO notifications (id, workspace_id, recipient_user_id, message, entity_type, entity_id, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -30,7 +37,12 @@ pub fn create(conn: &Connection, workspace_id: &str, recipient_user_id: Option<&
 /// by the `all_admins` audience today, but is deliberately not filtered by
 /// role here so a future broadcast to non-admins doesn't need a schema
 /// change.
-pub fn list_for_user(conn: &Connection, workspace_id: &str, user_id: &str, unread_only: bool) -> rusqlite::Result<Vec<Notification>> {
+pub fn list_for_user(
+    conn: &Connection,
+    workspace_id: &str,
+    user_id: &str,
+    unread_only: bool,
+) -> rusqlite::Result<Vec<Notification>> {
     let sql = format!(
         "SELECT * FROM notifications WHERE workspace_id = ?1 AND (recipient_user_id = ?2 OR recipient_user_id IS NULL){}
          ORDER BY created_at DESC LIMIT 100",
@@ -42,7 +54,10 @@ pub fn list_for_user(conn: &Connection, workspace_id: &str, user_id: &str, unrea
 }
 
 pub fn mark_read(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE notifications SET read_at = ?1 WHERE id = ?2 AND read_at IS NULL", (now_iso(), id))?;
+    conn.execute(
+        "UPDATE notifications SET read_at = ?1 WHERE id = ?2 AND read_at IS NULL",
+        (now_iso(), id),
+    )?;
     Ok(())
 }
 

@@ -4,7 +4,9 @@ use lanesra_core::db::open_workspace_db;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::user::{ChangeOwnPassword, NewUser};
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{auth_service, backup_service, company_service, user_service, workspace_service};
+use lanesra_core::services::{
+    auth_service, backup_service, company_service, user_service, workspace_service,
+};
 
 fn temp_db_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -63,7 +65,8 @@ fn backup_then_restore_reverts_to_the_snapshot() {
     company_service::create(&conn, &ws, &company_input("Widgets Inc"), Some(&admin)).unwrap();
     assert_eq!(company_service::list(&conn, &ws).unwrap().len(), 2);
 
-    backup_service::restore_from_package(&mut conn, &path, &package.package_base64, Some(&admin)).unwrap();
+    backup_service::restore_from_package(&mut conn, &path, &package.package_base64, Some(&admin))
+        .unwrap();
 
     // The connection now points at the restored database - only the
     // company that existed at backup time should be there.
@@ -92,9 +95,17 @@ fn restore_requires_an_administrator() {
     .unwrap();
 
     let package = backup_service::create_backup(&conn, Some(&admin)).unwrap();
-    let result = backup_service::restore_from_package(&mut conn, &path, &package.package_base64, Some(&sales.id));
+    let result = backup_service::restore_from_package(
+        &mut conn,
+        &path,
+        &package.package_base64,
+        Some(&sales.id),
+    );
 
-    assert!(result.is_err(), "a non-administrator must not be able to restore a backup");
+    assert!(
+        result.is_err(),
+        "a non-administrator must not be able to restore a backup"
+    );
     let _ = std::fs::remove_file(&path);
 }
 
@@ -103,9 +114,17 @@ fn restore_rejects_garbage_input() {
     let path = temp_db_path("garbage");
     let (mut conn, _ws, admin) = setup_workspace(&path);
 
-    let result = backup_service::restore_from_package(&mut conn, &path, "not a real backup file", Some(&admin));
+    let result = backup_service::restore_from_package(
+        &mut conn,
+        &path,
+        "not a real backup file",
+        Some(&admin),
+    );
 
-    assert!(result.is_err(), "restore must reject input that isn't a valid .lanesra package");
+    assert!(
+        result.is_err(),
+        "restore must reject input that isn't a valid .lanesra package"
+    );
     let _ = std::fs::remove_file(&path);
 }
 
@@ -121,7 +140,10 @@ fn restore_rejects_a_newer_schema_version_than_this_build_supports() {
     let tampered = tamper_manifest_schema_version(&package.package_base64, i64::MAX);
 
     let result = backup_service::restore_from_package(&mut conn, &path, &tampered, Some(&admin));
-    assert!(result.is_err(), "restore must refuse a backup newer than this build supports");
+    assert!(
+        result.is_err(),
+        "restore must refuse a backup newer than this build supports"
+    );
 
     // Original data must still be intact - the rejected restore must not
     // have touched anything.
@@ -141,17 +163,26 @@ fn tamper_manifest_schema_version(package_base64: &str, new_version: i64) -> Str
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
 
     let mut manifest_json = String::new();
-    archive.by_name("manifest.json").unwrap().read_to_string(&mut manifest_json).unwrap();
+    archive
+        .by_name("manifest.json")
+        .unwrap()
+        .read_to_string(&mut manifest_json)
+        .unwrap();
     let mut manifest: serde_json::Value = serde_json::from_str(&manifest_json).unwrap();
     manifest["schema_version"] = serde_json::json!(new_version);
 
     let mut db_bytes = Vec::new();
-    archive.by_name("workspace.sqlite3").unwrap().read_to_end(&mut db_bytes).unwrap();
+    archive
+        .by_name("workspace.sqlite3")
+        .unwrap()
+        .read_to_end(&mut db_bytes)
+        .unwrap();
 
     let mut out = Vec::new();
     {
         let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut out));
-        let options = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options =
+            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
         writer.start_file("manifest.json", options).unwrap();
         writer.write_all(manifest.to_string().as_bytes()).unwrap();
         writer.start_file("workspace.sqlite3", options).unwrap();

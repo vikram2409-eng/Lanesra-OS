@@ -19,7 +19,11 @@ use serde_json::{json, Value};
 
 async fn spawn_server_with_state() -> (SocketAddr, SharedState) {
     let conn = open_in_memory_db().unwrap();
-    let state = ServerState::new(conn, std::env::temp_dir().join("lanesra-api-v1-test-unused.sqlite3"), SecurityConfig::default());
+    let state = ServerState::new(
+        conn,
+        std::env::temp_dir().join("lanesra-api-v1-test-unused.sqlite3"),
+        SecurityConfig::default(),
+    );
     let frontend_dir = std::env::temp_dir().join("lanesra-server-test-frontend");
     std::fs::create_dir_all(&frontend_dir).unwrap();
     let app = build_router(state.clone(), frontend_dir);
@@ -33,11 +37,22 @@ async fn spawn_server_with_state() -> (SocketAddr, SharedState) {
 }
 
 fn client_with_cookies() -> reqwest::Client {
-    reqwest::Client::builder().cookie_store(true).build().unwrap()
+    reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap()
 }
 
 async fn invoke(client: &reqwest::Client, addr: SocketAddr, command: &str, args: Value) -> Value {
-    client.post(format!("http://{addr}/api/invoke/{command}")).json(&args).send().await.unwrap().json().await.unwrap()
+    client
+        .post(format!("http://{addr}/api/invoke/{command}"))
+        .json(&args)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap()
 }
 
 async fn first_run(client: &reqwest::Client, addr: SocketAddr) -> Value {
@@ -59,12 +74,22 @@ async fn first_run(client: &reqwest::Client, addr: SocketAddr) -> Value {
 /// Issues a real `{client_id}.{secret}` API key with the given scopes,
 /// through the exact same `api_client_service::create` an admin UI would
 /// call - not a hand-rolled test-only shortcut.
-fn issue_api_key(state: &SharedState, workspace_id: &str, admin_user_id: &str, scopes: &[&str]) -> String {
+fn issue_api_key(
+    state: &SharedState,
+    workspace_id: &str,
+    admin_user_id: &str,
+    scopes: &[&str],
+) -> String {
     let conn = state.conn.lock().unwrap();
     let issued = api_client_service::create(
         &conn,
         workspace_id,
-        &ApiClientInput { name: "Test Integration".into(), scopes: scopes.iter().map(|s| s.to_string()).collect(), allowed_cidr: None, owner_user_id: None },
+        &ApiClientInput {
+            name: "Test Integration".into(),
+            scopes: scopes.iter().map(|s| s.to_string()).collect(),
+            allowed_cidr: None,
+            owner_user_id: None,
+        },
         Some(admin_user_id),
     )
     .unwrap();
@@ -76,7 +101,9 @@ async fn setup_workspace_and_key(scopes: &[&str]) -> (SocketAddr, SharedState, S
     (addr, state, key)
 }
 
-async fn setup_workspace_and_key_with_admin(scopes: &[&str]) -> (SocketAddr, SharedState, String, String) {
+async fn setup_workspace_and_key_with_admin(
+    scopes: &[&str],
+) -> (SocketAddr, SharedState, String, String) {
     let (addr, state) = spawn_server_with_state().await;
     let client = client_with_cookies();
     let setup = first_run(&client, addr).await;
@@ -90,25 +117,44 @@ async fn setup_workspace_and_key_with_admin(scopes: &[&str]) -> (SocketAddr, Sha
 #[tokio::test]
 async fn a_valid_bearer_key_can_list_object_keys() {
     let (addr, _state, api_key) = setup_workspace_and_key(&["metadata.read"]).await;
-    let response = reqwest::Client::new().get(format!("http://{addr}/api/v1/objects")).bearer_auth(&api_key).send().await.unwrap();
+    let response = reqwest::Client::new()
+        .get(format!("http://{addr}/api/v1/objects"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap();
     assert!(response.status().is_success());
     let body: Value = response.json().await.unwrap();
     assert_eq!(body["ok"], true);
-    let keys: Vec<String> = body["data"].as_array().unwrap().iter().map(|o| o["object_key"].as_str().unwrap().to_string()).collect();
+    let keys: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| o["object_key"].as_str().unwrap().to_string())
+        .collect();
     assert!(keys.contains(&"Company".to_string()));
 }
 
 #[tokio::test]
 async fn missing_authorization_header_is_rejected() {
     let (addr, _state, _key) = setup_workspace_and_key(&["metadata.read"]).await;
-    let response = reqwest::Client::new().get(format!("http://{addr}/api/v1/objects")).send().await.unwrap();
+    let response = reqwest::Client::new()
+        .get(format!("http://{addr}/api/v1/objects"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
 async fn a_malformed_or_unknown_key_is_rejected() {
     let (addr, _state, _key) = setup_workspace_and_key(&["metadata.read"]).await;
-    let response = reqwest::Client::new().get(format!("http://{addr}/api/v1/objects")).bearer_auth("client_bogus.notasecret").send().await.unwrap();
+    let response = reqwest::Client::new()
+        .get(format!("http://{addr}/api/v1/objects"))
+        .bearer_auth("client_bogus.notasecret")
+        .send()
+        .await
+        .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
 }
 
@@ -129,7 +175,8 @@ async fn a_key_without_the_required_scope_is_forbidden() {
 
 #[tokio::test]
 async fn full_crud_round_trip_through_the_generic_object_api() {
-    let (addr, _state, api_key) = setup_workspace_and_key(&["objects.read", "objects.write", "metadata.read"]).await;
+    let (addr, _state, api_key) =
+        setup_workspace_and_key(&["objects.read", "objects.write", "metadata.read"]).await;
     let http = reqwest::Client::new();
 
     // Create
@@ -148,7 +195,15 @@ async fn full_crud_round_trip_through_the_generic_object_api() {
     assert_eq!(created["data"]["name"], "Acme Corp");
 
     // Get
-    let fetched: Value = http.get(format!("http://{addr}/api/v1/objects/Company/records/{id}")).bearer_auth(&api_key).send().await.unwrap().json().await.unwrap();
+    let fetched: Value = http
+        .get(format!("http://{addr}/api/v1/objects/Company/records/{id}"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(fetched["data"]["id"], id);
 
     // Update (PATCH)
@@ -166,23 +221,50 @@ async fn full_crud_round_trip_through_the_generic_object_api() {
     assert_eq!(updated["data"]["name"], "Acme Corp Updated");
 
     // List - the record we created shows up
-    let listed: Value = http.get(format!("http://{addr}/api/v1/objects/Company/records")).bearer_auth(&api_key).send().await.unwrap().json().await.unwrap();
+    let listed: Value = http
+        .get(format!("http://{addr}/api/v1/objects/Company/records"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(listed["data"]["total"], 1);
 
     // Archive (DELETE)
-    let archived = http.delete(format!("http://{addr}/api/v1/objects/Company/records/{id}")).bearer_auth(&api_key).send().await.unwrap();
+    let archived = http
+        .delete(format!("http://{addr}/api/v1/objects/Company/records/{id}"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap();
     assert!(archived.status().is_success());
 
     // Metadata
-    let metadata: Value = http.get(format!("http://{addr}/api/v1/objects/Company/metadata")).bearer_auth(&api_key).send().await.unwrap().json().await.unwrap();
+    let metadata: Value = http
+        .get(format!("http://{addr}/api/v1/objects/Company/metadata"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(metadata["data"]["object_key"], "Company");
 }
 
 #[tokio::test]
 async fn a_revoked_client_is_rejected() {
-    let (addr, state, api_key, admin_id) = setup_workspace_and_key_with_admin(&["metadata.read"]).await;
+    let (addr, state, api_key, admin_id) =
+        setup_workspace_and_key_with_admin(&["metadata.read"]).await;
     // Works before revocation.
-    let before = reqwest::Client::new().get(format!("http://{addr}/api/v1/objects")).bearer_auth(&api_key).send().await.unwrap();
+    let before = reqwest::Client::new()
+        .get(format!("http://{addr}/api/v1/objects"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap();
     assert!(before.status().is_success());
 
     {
@@ -192,7 +274,12 @@ async fn a_revoked_client_is_rejected() {
         api_client_service::revoke(&conn, &workspace_id, &clients[0].id, Some(&admin_id)).unwrap();
     }
 
-    let after = reqwest::Client::new().get(format!("http://{addr}/api/v1/objects")).bearer_auth(&api_key).send().await.unwrap();
+    let after = reqwest::Client::new()
+        .get(format!("http://{addr}/api/v1/objects"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(after.status(), reqwest::StatusCode::UNAUTHORIZED);
 }
 
@@ -202,17 +289,36 @@ async fn rate_limit_is_enforced_per_client() {
     {
         let conn = state.conn.lock().unwrap();
         let workspace_id = workspace_repo::get_current(&conn).unwrap().unwrap().id;
-        lanesra_core::repositories::integration_settings_repo::ensure_default(&conn, &workspace_id).unwrap();
-        lanesra_core::repositories::integration_settings_repo::update(&conn, &workspace_id, 2, 3000, 90, 7, false, None).unwrap();
+        lanesra_core::repositories::integration_settings_repo::ensure_default(&conn, &workspace_id)
+            .unwrap();
+        lanesra_core::repositories::integration_settings_repo::update(
+            &conn,
+            &workspace_id,
+            2,
+            3000,
+            90,
+            7,
+            false,
+            None,
+        )
+        .unwrap();
     }
     let http = reqwest::Client::new();
     let mut saw_429 = false;
     for _ in 0..5 {
-        let response = http.get(format!("http://{addr}/api/v1/objects")).bearer_auth(&api_key).send().await.unwrap();
+        let response = http
+            .get(format!("http://{addr}/api/v1/objects"))
+            .bearer_auth(&api_key)
+            .send()
+            .await
+            .unwrap();
         if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
             saw_429 = true;
             break;
         }
     }
-    assert!(saw_429, "expected at least one 429 once the per-minute limit (2) was exceeded");
+    assert!(
+        saw_429,
+        "expected at least one 429 once the per-minute limit (2) was exceeded"
+    );
 }

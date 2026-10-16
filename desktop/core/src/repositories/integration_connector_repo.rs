@@ -73,13 +73,27 @@ pub fn insert(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Connector>> {
-    conn.query_row("SELECT * FROM integration_connectors WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM integration_connectors WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<Connector>> {
-    let mut stmt = conn.prepare("SELECT * FROM integration_connectors WHERE workspace_id = ?1 ORDER BY name")?;
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<Connector>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM integration_connectors WHERE workspace_id = ?1 ORDER BY name")?;
     let rows = stmt.query_map([workspace_id], map_row)?;
     rows.collect()
 }
@@ -108,7 +122,14 @@ pub fn update_agent_tool_settings(
             SET agent_tools_enabled = ?1, agent_write_tools_enabled = ?2, agent_reference_key = ?3,
                 updated_at = ?4, updated_by = ?5
           WHERE id = ?6",
-        rusqlite::params![agent_tools_enabled, agent_write_tools_enabled, agent_reference_key, now_iso(), actor_user_id, id],
+        rusqlite::params![
+            agent_tools_enabled,
+            agent_write_tools_enabled,
+            agent_reference_key,
+            now_iso(),
+            actor_user_id,
+            id
+        ],
     )?;
     Ok(())
 }
@@ -134,18 +155,33 @@ pub fn insert_action(
     Ok(())
 }
 
-pub fn list_actions(conn: &Connection, connector_id: &str) -> rusqlite::Result<Vec<ConnectorAction>> {
-    let mut stmt = conn.prepare("SELECT * FROM integration_connector_actions WHERE connector_id = ?1 ORDER BY action_key")?;
+pub fn list_actions(
+    conn: &Connection,
+    connector_id: &str,
+) -> rusqlite::Result<Vec<ConnectorAction>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM integration_connector_actions WHERE connector_id = ?1 ORDER BY action_key",
+    )?;
     let rows = stmt.query_map([connector_id], map_action_row)?;
     rows.collect()
 }
 
-pub fn get_action(conn: &Connection, connector_id: &str, action_key: &str) -> rusqlite::Result<Option<ConnectorAction>> {
+pub fn get_action(
+    conn: &Connection,
+    connector_id: &str,
+    action_key: &str,
+) -> rusqlite::Result<Option<ConnectorAction>> {
     conn.query_row(
         "SELECT * FROM integration_connector_actions WHERE connector_id = ?1 AND action_key = ?2",
         rusqlite::params![connector_id, action_key],
         map_action_row,
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }

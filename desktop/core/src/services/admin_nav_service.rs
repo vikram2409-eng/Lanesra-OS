@@ -16,22 +16,60 @@ fn require_user(actor_user_id: Option<&str>) -> AppResult<&str> {
     actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))
 }
 
-pub fn record_visit(conn: &Connection, workspace_id: &str, admin_tab: &str, label: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn record_visit(
+    conn: &Connection,
+    workspace_id: &str,
+    admin_tab: &str,
+    label: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     let user_id = require_user(actor_user_id)?;
-    Ok(admin_nav_repo::record_visit(conn, workspace_id, user_id, admin_tab, label)?)
+    Ok(admin_nav_repo::record_visit(
+        conn,
+        workspace_id,
+        user_id,
+        admin_tab,
+        label,
+    )?)
 }
 
-pub fn set_pinned(conn: &Connection, workspace_id: &str, admin_tab: &str, pinned: bool, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn set_pinned(
+    conn: &Connection,
+    workspace_id: &str,
+    admin_tab: &str,
+    pinned: bool,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     let user_id = require_user(actor_user_id)?;
-    Ok(admin_nav_repo::set_pinned(conn, workspace_id, user_id, admin_tab, pinned)?)
+    Ok(admin_nav_repo::set_pinned(
+        conn,
+        workspace_id,
+        user_id,
+        admin_tab,
+        pinned,
+    )?)
 }
 
-pub fn list_recent(conn: &Connection, workspace_id: &str, limit: i64, actor_user_id: Option<&str>) -> AppResult<Vec<AdminNavItem>> {
+pub fn list_recent(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AdminNavItem>> {
     let user_id = require_user(actor_user_id)?;
-    Ok(admin_nav_repo::list_recent(conn, workspace_id, user_id, limit.clamp(1, 50))?)
+    Ok(admin_nav_repo::list_recent(
+        conn,
+        workspace_id,
+        user_id,
+        limit.clamp(1, 50),
+    )?)
 }
 
-pub fn list_pinned(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<AdminNavItem>> {
+pub fn list_pinned(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AdminNavItem>> {
     let user_id = require_user(actor_user_id)?;
     Ok(admin_nav_repo::list_pinned(conn, workspace_id, user_id)?)
 }

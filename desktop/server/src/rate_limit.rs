@@ -7,9 +7,9 @@
 //! at the start of one minute and again at the start of the next, instead
 //! of a perfectly smoothed rate. That's a deliberate, stated scope limit
 //! - good enough for the "small team on a LAN / small self-hosted
-//! deployment" scale this server targets. A distributed limiter (shared
-//! across multiple server processes) is out of scope for a
-//! single-process, mutex-guarded server.
+//!   deployment" scale this server targets. A distributed limiter (shared
+//!   across multiple server processes) is out of scope for a
+//!   single-process, mutex-guarded server.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -28,7 +28,10 @@ impl RateLimiter {
     /// `Ok(())` if this request is within `limit_per_minute` for `key` in
     /// the current one-minute window; `Err(retry_after_seconds)` otherwise.
     pub fn check(&self, key: &str, limit_per_minute: i64) -> Result<(), u64> {
-        let now_secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         let window = now_secs / 60;
         let mut buckets = self.buckets.lock().unwrap();
         let entry = buckets.entry(key.to_string()).or_insert((window, 0));

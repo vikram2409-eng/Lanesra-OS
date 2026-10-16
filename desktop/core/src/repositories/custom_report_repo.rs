@@ -43,16 +43,28 @@ pub fn create(
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<CustomReport>> {
     conn.query_row("SELECT * FROM custom_reports WHERE id = ?1", [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<CustomReport>> {
-    let mut stmt = conn.prepare("SELECT * FROM custom_reports WHERE workspace_id = ?1 ORDER BY created_at")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM custom_reports WHERE workspace_id = ?1 ORDER BY created_at")?;
     let rows = stmt.query_map([workspace_id], map_row)?.collect();
     rows
 }
 
-pub fn update(conn: &Connection, id: &str, input: &CustomReportUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<CustomReport> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &CustomReportUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<CustomReport> {
     conn.execute(
         "UPDATE custom_reports
          SET name = ?1, group_by_source = ?2, group_by_field = ?3, aggregate = ?4, sum_field_key = ?5, updated_at = ?6, updated_by = ?7

@@ -9,7 +9,9 @@ use lanesra_core::models::industry_package::ImportPackageInput;
 use lanesra_core::models::publisher::PublisherInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{industry_package_service, publisher_service, user_service, workspace_service};
+use lanesra_core::services::{
+    industry_package_service, publisher_service, user_service, workspace_service,
+};
 use serde_json::json;
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -30,10 +32,22 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
     (conn, workspace.id, admin.id)
 }
 
-fn user_with_role(conn: &rusqlite::Connection, ws: &str, admin: &str, username: &str, role: &str) -> String {
+fn user_with_role(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+    username: &str,
+    role: &str,
+) -> String {
     user_service::create(
-        conn, ws,
-        &NewUser { username: username.into(), display_name: username.into(), password: "anothersecretpw".into(), roles: vec![role.into()] },
+        conn,
+        ws,
+        &NewUser {
+            username: username.into(),
+            display_name: username.into(),
+            password: "anothersecretpw".into(),
+            roles: vec![role.into()],
+        },
         Some(admin),
     )
     .unwrap()
@@ -81,7 +95,11 @@ fn ensure_defaults_is_idempotent() {
 fn creating_a_publisher_requires_admin() {
     let (conn, ws, admin) = setup_workspace();
     let sales = user_with_role(&conn, &ws, &admin, "sam", "Sales");
-    let input = PublisherInput { key: "acme".into(), name: "Acme Corp".into(), description: None };
+    let input = PublisherInput {
+        key: "acme".into(),
+        name: "Acme Corp".into(),
+        description: None,
+    };
     let err = publisher_service::create(&conn, &ws, &input, Some(&sales)).unwrap_err();
     assert!(err.to_string().contains("Administrator"));
 }
@@ -90,9 +108,16 @@ fn creating_a_publisher_requires_admin() {
 fn reserved_keys_are_rejected() {
     let (conn, ws, admin) = setup_workspace();
     for reserved in ["lanesra", "local"] {
-        let input = PublisherInput { key: reserved.into(), name: "Whatever".into(), description: None };
+        let input = PublisherInput {
+            key: reserved.into(),
+            name: "Whatever".into(),
+            description: None,
+        };
         let err = publisher_service::create(&conn, &ws, &input, Some(&admin)).unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)), "expected Validation for key '{reserved}', got {err:?}");
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "expected Validation for key '{reserved}', got {err:?}"
+        );
     }
 }
 
@@ -103,16 +128,27 @@ fn malformed_keys_are_rejected() {
     // the perfectly valid "acme" rather than failing.
     let (conn, ws, admin) = setup_workspace();
     for bad in ["A", "1acme", "acme corp", "ac-me", "a"] {
-        let input = PublisherInput { key: bad.into(), name: "Whatever".into(), description: None };
+        let input = PublisherInput {
+            key: bad.into(),
+            name: "Whatever".into(),
+            description: None,
+        };
         let err = publisher_service::create(&conn, &ws, &input, Some(&admin)).unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)), "expected Validation for key '{bad}', got {err:?}");
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "expected Validation for key '{bad}', got {err:?}"
+        );
     }
 }
 
 #[test]
 fn duplicate_keys_are_rejected() {
     let (conn, ws, admin) = setup_workspace();
-    let input = PublisherInput { key: "acme".into(), name: "Acme Corp".into(), description: None };
+    let input = PublisherInput {
+        key: "acme".into(),
+        name: "Acme Corp".into(),
+        description: None,
+    };
     publisher_service::create(&conn, &ws, &input, Some(&admin)).unwrap();
     let err = publisher_service::create(&conn, &ws, &input, Some(&admin)).unwrap_err();
     assert!(matches!(err, AppError::Conflict(_)));
@@ -121,7 +157,11 @@ fn duplicate_keys_are_rejected() {
 #[test]
 fn a_valid_publisher_can_be_created_and_is_listed() {
     let (conn, ws, admin) = setup_workspace();
-    let input = PublisherInput { key: "acme".into(), name: "Acme Corp".into(), description: Some("A test publisher".into()) };
+    let input = PublisherInput {
+        key: "acme".into(),
+        name: "Acme Corp".into(),
+        description: Some("A test publisher".into()),
+    };
     let created = publisher_service::create(&conn, &ws, &input, Some(&admin)).unwrap();
     assert_eq!(created.key, "acme");
     assert!(!created.is_official);
@@ -134,8 +174,11 @@ fn a_valid_publisher_can_be_created_and_is_listed() {
 #[test]
 fn importing_a_package_under_an_unregistered_namespace_is_rejected() {
     let (conn, ws, admin) = setup_workspace();
-    let input = ImportPackageInput { manifest_json: tiny_manifest("acme.inspection") };
-    let err = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap_err();
+    let input = ImportPackageInput {
+        manifest_json: tiny_manifest("acme.inspection"),
+    };
+    let err =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap_err();
     assert!(err.to_string().contains("acme"));
     assert!(matches!(err, AppError::Validation(_)));
 }
@@ -143,14 +186,31 @@ fn importing_a_package_under_an_unregistered_namespace_is_rejected() {
 #[test]
 fn importing_a_package_succeeds_once_its_publisher_is_registered() {
     let (conn, ws, admin) = setup_workspace();
-    publisher_service::create(&conn, &ws, &PublisherInput { key: "acme".into(), name: "Acme Corp".into(), description: None }, Some(&admin)).unwrap();
+    publisher_service::create(
+        &conn,
+        &ws,
+        &PublisherInput {
+            key: "acme".into(),
+            name: "Acme Corp".into(),
+            description: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
-    let input = ImportPackageInput { manifest_json: tiny_manifest("acme.inspection") };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: tiny_manifest("acme.inspection"),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
     assert_eq!(package.package_id, "acme.inspection");
     assert!(package.is_managed);
 
-    let acme = publisher_service::list(&conn, &ws).unwrap().into_iter().find(|p| p.key == "acme").unwrap();
+    let acme = publisher_service::list(&conn, &ws)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.key == "acme")
+        .unwrap();
     assert_eq!(package.publisher_id.as_deref(), Some(acme.id.as_str()));
 }
 
@@ -160,18 +220,28 @@ fn bundled_reference_packages_import_out_of_the_box_under_the_lanesra_publisher(
     // the first time it's needed, so every bundled starter (all namespaced
     // "lanesra.<name>") keeps working exactly as before this phase.
     let (conn, ws, admin) = setup_workspace();
-    let input = ImportPackageInput { manifest_json: tiny_manifest("lanesra.field_service") };
-    let package = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
+    let input = ImportPackageInput {
+        manifest_json: tiny_manifest("lanesra.field_service"),
+    };
+    let package =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap();
     assert!(package.is_managed);
 
-    let lanesra = publisher_service::list(&conn, &ws).unwrap().into_iter().find(|p| p.key == "lanesra").unwrap();
+    let lanesra = publisher_service::list(&conn, &ws)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.key == "lanesra")
+        .unwrap();
     assert_eq!(package.publisher_id.as_deref(), Some(lanesra.id.as_str()));
 }
 
 #[test]
 fn a_package_id_without_a_namespace_dot_is_rejected() {
     let (conn, ws, admin) = setup_workspace();
-    let input = ImportPackageInput { manifest_json: tiny_manifest("no_namespace_here") };
-    let err = industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap_err();
+    let input = ImportPackageInput {
+        manifest_json: tiny_manifest("no_namespace_here"),
+    };
+    let err =
+        industry_package_service::import_package(&conn, &ws, &input, Some(&admin)).unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
 }

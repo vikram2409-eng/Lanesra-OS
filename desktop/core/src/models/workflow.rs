@@ -1,10 +1,22 @@
 use serde::{Deserialize, Serialize};
 
 pub const TRIGGER_TYPES: &[&str] = &[
-    "record_created", "record_updated", "status_changed", "field_changed", "date_reached", "due_overdue", "scheduled",
+    "record_created",
+    "record_updated",
+    "status_changed",
+    "field_changed",
+    "date_reached",
+    "due_overdue",
+    "scheduled",
 ];
 pub const ACTION_TYPES: &[&str] = &[
-    "create_task", "update_field", "assign_owner", "create_record", "update_related_record", "add_notification", "create_reminder",
+    "create_task",
+    "update_field",
+    "assign_owner",
+    "create_record",
+    "update_related_record",
+    "add_notification",
+    "create_reminder",
     // Second addendum round: the trigger-time subset of business rules'
     // field-effect vocabulary that actually fits a "fires once when the
     // workflow triggers" model. `update_field` already covers "set field
@@ -12,7 +24,8 @@ pub const ACTION_TYPES: &[&str] = &[
     // effects (require/hide/show/lock/editable/restrict_choices/block_save/
     // show_error/show_warning) stay business-rule-only - a workflow has no
     // "re-evaluate against the open form" moment for them to apply to.
-    "set_default_field", "clear_field",
+    "set_default_field",
+    "clear_field",
     // Integration Hub (spec §17): the one Workflow action that reaches
     // outside Lanesra itself. See `workflow_service`'s own match arm for
     // why it enqueues rather than calling out synchronously.
@@ -31,7 +44,14 @@ pub const NOTIFICATION_AUDIENCES: &[&str] = &["owner", "all_admins"];
 /// from the original engine's WORKFLOW_ENTITY_TYPES), plus every active
 /// custom object (ADM-WF-06), checked dynamically rather than listed here.
 pub const CORE_WORKFLOW_ENTITY_TYPES: &[&str] = &[
-    "Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task",
+    "Company",
+    "Contact",
+    "Opportunity",
+    "Quote",
+    "Order",
+    "Invoice",
+    "Contract",
+    "Task",
 ];
 
 /// Which field's value change fires a status_changed workflow for this

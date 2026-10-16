@@ -62,7 +62,9 @@ fn a_non_2xx_status_is_still_returned_as_a_parsed_response_not_an_error() {
 fn post_sends_the_json_body() {
     let port = spawn_http_stub(200, r#"{"ok":true,"data":{"id":"abc123","name":"Acme"}}"#);
     let client = ApiClient::new(format!("http://127.0.0.1:{port}"), "client_x.secret");
-    let response = client.post("/api/v1/objects/Company/records", &json!({"name": "Acme"})).unwrap();
+    let response = client
+        .post("/api/v1/objects/Company/records", &json!({"name": "Acme"}))
+        .unwrap();
     assert_eq!(response.body["data"]["id"], "abc123");
 }
 

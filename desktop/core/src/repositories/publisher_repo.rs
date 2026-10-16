@@ -45,25 +45,48 @@ pub fn insert(
 }
 
 pub fn get_by_id(conn: &Connection, id: &str) -> rusqlite::Result<Option<Publisher>> {
-    conn.query_row("SELECT * FROM publishers WHERE id = ?1", [id], map_publisher)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM publishers WHERE id = ?1",
+        [id],
+        map_publisher,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn get_by_key(conn: &Connection, workspace_id: &str, key: &str) -> rusqlite::Result<Option<Publisher>> {
+pub fn get_by_key(
+    conn: &Connection,
+    workspace_id: &str,
+    key: &str,
+) -> rusqlite::Result<Option<Publisher>> {
     conn.query_row(
         "SELECT * FROM publishers WHERE workspace_id = ?1 AND key = ?2",
         (workspace_id, key),
         map_publisher,
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// Official and local publishers first, then the rest alphabetically by
 /// name - the two auto-seeded publishers are the ones an admin most
 /// needs to recognize at a glance.
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<Publisher>> {
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<Publisher>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM publishers WHERE workspace_id = ?1 ORDER BY is_official DESC, is_local DESC, name",
     )?;

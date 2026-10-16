@@ -14,27 +14,51 @@ use lanesra_core::models::test_eval::{TestCaseDefinition, TestCaseDefinitionInpu
 use lanesra_core::services::test_eval_service;
 
 #[tauri::command]
-pub fn list_test_case_definitions(state: State<AppState>, active_only: bool) -> AppResult<Vec<TestCaseDefinition>> {
+pub fn list_test_case_definitions(
+    state: State<AppState>,
+    active_only: bool,
+) -> AppResult<Vec<TestCaseDefinition>> {
     let conn = state.conn.lock().unwrap();
     test_eval_service::list(&conn, &require_workspace_id(&conn)?, active_only)
 }
 
 #[tauri::command]
-pub fn create_test_case_definition(state: State<AppState>, input: TestCaseDefinitionInput) -> AppResult<TestCaseDefinition> {
+pub fn create_test_case_definition(
+    state: State<AppState>,
+    input: TestCaseDefinitionInput,
+) -> AppResult<TestCaseDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    test_eval_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    test_eval_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_test_case_definition(state: State<AppState>, id: String, input: TestCaseDefinitionInput) -> AppResult<TestCaseDefinition> {
+pub fn update_test_case_definition(
+    state: State<AppState>,
+    id: String,
+    input: TestCaseDefinitionInput,
+) -> AppResult<TestCaseDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    test_eval_service::update(&conn, &id, &workspace_id, &input, current_actor(&state).as_deref())
+    test_eval_service::update(
+        &conn,
+        &id,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn deactivate_test_case_definition(state: State<AppState>, id: String) -> AppResult<TestCaseDefinition> {
+pub fn deactivate_test_case_definition(
+    state: State<AppState>,
+    id: String,
+) -> AppResult<TestCaseDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     test_eval_service::deactivate(&conn, &id, &workspace_id, current_actor(&state).as_deref())
@@ -54,7 +78,11 @@ pub fn list_test_runs(state: State<AppState>, limit: i64) -> AppResult<Vec<TestR
 }
 
 #[tauri::command]
-pub fn list_test_runs_for_solution(state: State<AppState>, solution_id: String, limit: i64) -> AppResult<Vec<TestRun>> {
+pub fn list_test_runs_for_solution(
+    state: State<AppState>,
+    solution_id: String,
+    limit: i64,
+) -> AppResult<Vec<TestRun>> {
     let conn = state.conn.lock().unwrap();
     test_eval_service::list_runs_for_solution(&conn, &solution_id, limit)
 }
@@ -74,18 +102,40 @@ pub async fn run_tests(state: State<'_, AppState>, case_ids: Vec<String>) -> App
         (require_workspace_id(&conn)?, current_actor(&state))
     };
     run_with_own_connection(db_path, move |conn| async move {
-        test_eval_service::run_tests(&conn, &workspace_id, &master_key, &case_ids, None, "manual", actor.as_deref()).await
+        test_eval_service::run_tests(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &case_ids,
+            None,
+            "manual",
+            actor.as_deref(),
+        )
+        .await
     })
     .await
 }
 
 #[tauri::command]
-pub async fn run_tests_for_solution(state: State<'_, AppState>, solution_id: String) -> AppResult<TestRun> {
+pub async fn run_tests_for_solution(
+    state: State<'_, AppState>,
+    solution_id: String,
+) -> AppResult<TestRun> {
     let master_key = crate::commands::resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
     let (workspace_id, actor) = {
         let conn = state.conn.lock().unwrap();
         (require_workspace_id(&conn)?, current_actor(&state))
     };
-    run_with_own_connection(db_path, move |conn| async move { test_eval_service::run_for_solution(&conn, &workspace_id, &master_key, &solution_id, actor.as_deref()).await }).await
+    run_with_own_connection(db_path, move |conn| async move {
+        test_eval_service::run_for_solution(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &solution_id,
+            actor.as_deref(),
+        )
+        .await
+    })
+    .await
 }

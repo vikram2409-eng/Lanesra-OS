@@ -49,24 +49,53 @@ pub fn insert(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<ApiClient>> {
-    conn.query_row("SELECT * FROM integration_api_clients WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM integration_api_clients WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 pub fn get_by_client_id(conn: &Connection, client_id: &str) -> rusqlite::Result<Option<ApiClient>> {
-    conn.query_row("SELECT * FROM integration_api_clients WHERE client_id = ?1", [client_id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM integration_api_clients WHERE client_id = ?1",
+        [client_id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<ApiClient>> {
-    let mut stmt = conn.prepare("SELECT * FROM integration_api_clients WHERE workspace_id = ?1 ORDER BY name")?;
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<ApiClient>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM integration_api_clients WHERE workspace_id = ?1 ORDER BY name")?;
     let rows = stmt.query_map([workspace_id], map_row)?;
     rows.collect()
 }
 
-pub fn set_status(conn: &Connection, id: &str, status: &str, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn set_status(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE integration_api_clients SET status = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
         rusqlite::params![status, now_iso(), actor_user_id, id],
@@ -75,7 +104,10 @@ pub fn set_status(conn: &Connection, id: &str, status: &str, actor_user_id: Opti
 }
 
 pub fn touch_last_used(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE integration_api_clients SET last_used_at = ?1 WHERE id = ?2", rusqlite::params![now_iso(), id])?;
+    conn.execute(
+        "UPDATE integration_api_clients SET last_used_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_iso(), id],
+    )?;
     Ok(())
 }
 
@@ -86,7 +118,13 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 // --- credentials -------------------------------------------------------
 
-pub fn insert_credential(conn: &Connection, id: &str, workspace_id: &str, api_client_id: &str, secret_hash: &str) -> rusqlite::Result<()> {
+pub fn insert_credential(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    api_client_id: &str,
+    secret_hash: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO integration_api_credentials (id, workspace_id, api_client_id, secret_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         rusqlite::params![id, workspace_id, api_client_id, secret_hash, now_iso()],
@@ -97,7 +135,10 @@ pub fn insert_credential(conn: &Connection, id: &str, workspace_id: &str, api_cl
 /// The current hash for a client - rotation just calls `insert_credential`
 /// again and this returns the newest row, so nothing else needs to change
 /// (spec §8.1: rotation without disrupting the client record itself).
-pub fn current_hash_for(conn: &Connection, api_client_id: &str) -> rusqlite::Result<Option<String>> {
+pub fn current_hash_for(
+    conn: &Connection,
+    api_client_id: &str,
+) -> rusqlite::Result<Option<String>> {
     conn.query_row(
         "SELECT secret_hash FROM integration_api_credentials WHERE api_client_id = ?1 ORDER BY created_at DESC LIMIT 1",
         [api_client_id],

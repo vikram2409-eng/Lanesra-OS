@@ -135,7 +135,11 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> rusq
 
 /// Count of active, non-archived contracts whose renewal_date falls within
 /// the next `days` days (used for the 30/60/90-day renewal alerts, 9.1/FR-CTR-05).
-pub fn count_renewing_within(conn: &Connection, workspace_id: &str, days: i64) -> rusqlite::Result<i64> {
+pub fn count_renewing_within(
+    conn: &Connection,
+    workspace_id: &str,
+    days: i64,
+) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM contracts
          WHERE workspace_id = ?1 AND archived_at IS NULL

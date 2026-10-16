@@ -18,13 +18,16 @@ use crate::commands::{current_actor, require_workspace_id, resolve_master_key};
 use crate::state::AppState;
 use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::integration::{
-    ApiClientInput, ApiListQuery, ConnectionInput, ConnectionRefInput, ConnectionTestResult, ConnectionUpdate, Connector,
-    ConnectorImportInput, CsvImportInput, ExternalObject, ExternalObjectInput, IntegrationJob, IntegrationJobInput, IntegrationJobRun,
+    ApiClientInput, ApiListQuery, ConnectionInput, ConnectionRefInput, ConnectionTestResult,
+    ConnectionUpdate, Connector, ConnectorImportInput, CsvImportInput, ExternalObject,
+    ExternalObjectInput, IntegrationJob, IntegrationJobInput, IntegrationJobRun,
     IntegrationSettingsUpdate, IssuedApiClient, MappingInput, OpenApiImportPreview, WebhookInput,
 };
 use lanesra_core::services::{
-    api_client_service, api_object_service, connection_ref_service, connection_service, connector_execution_service, connector_service,
-    connector_template_service, connector_tool_service, data_exchange_service, external_object_service, integration_job_service, integration_log_service, mapping_service, webhook_service,
+    api_client_service, api_object_service, connection_ref_service, connection_service,
+    connector_execution_service, connector_service, connector_template_service,
+    connector_tool_service, data_exchange_service, external_object_service,
+    integration_job_service, integration_log_service, mapping_service, webhook_service,
 };
 
 /// Runs `f` - an async closure handed a fresh, exclusively-owned
@@ -53,7 +56,9 @@ where
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .map_err(|e| AppError::Validation(format!("could not start a background runtime: {e}")))?;
+            .map_err(|e| {
+                AppError::Validation(format!("could not start a background runtime: {e}"))
+            })?;
         let conn = lanesra_core::db::open_workspace_db(&db_path)?;
         rt.block_on(f(conn))
     })
@@ -64,25 +69,47 @@ where
 // --- Connections (spec §4) ---------------------------------------------------
 
 #[tauri::command]
-pub fn list_connections(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::Connection>> {
+pub fn list_connections(
+    state: State<AppState>,
+) -> AppResult<Vec<lanesra_core::models::integration::Connection>> {
     let conn = state.conn.lock().unwrap();
     connection_service::list_for_workspace(&conn, &require_workspace_id(&conn)?)
 }
 
 #[tauri::command]
-pub fn create_connection(state: State<AppState>, input: ConnectionInput) -> AppResult<lanesra_core::models::integration::Connection> {
+pub fn create_connection(
+    state: State<AppState>,
+    input: ConnectionInput,
+) -> AppResult<lanesra_core::models::integration::Connection> {
     let master_key = resolve_master_key(&state)?;
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    connection_service::create(&conn, &workspace_id, &master_key, &input, current_actor(&state).as_deref())
+    connection_service::create(
+        &conn,
+        &workspace_id,
+        &master_key,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_connection(state: State<AppState>, id: String, input: ConnectionUpdate) -> AppResult<lanesra_core::models::integration::Connection> {
+pub fn update_connection(
+    state: State<AppState>,
+    id: String,
+    input: ConnectionUpdate,
+) -> AppResult<lanesra_core::models::integration::Connection> {
     let master_key = resolve_master_key(&state)?;
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    connection_service::update(&conn, &workspace_id, &master_key, &id, &input, current_actor(&state).as_deref())
+    connection_service::update(
+        &conn,
+        &workspace_id,
+        &master_key,
+        &id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -94,13 +121,26 @@ pub fn delete_connection(state: State<AppState>, id: String) -> AppResult<()> {
 
 /// Opens its own connection - see `run_with_own_connection`'s doc comment.
 #[tauri::command]
-pub async fn test_connection(state: State<'_, AppState>, id: String) -> AppResult<ConnectionTestResult> {
+pub async fn test_connection(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<ConnectionTestResult> {
     let master_key = resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
-    let workspace_id = { let conn = state.conn.lock().unwrap(); require_workspace_id(&conn)? };
+    let workspace_id = {
+        let conn = state.conn.lock().unwrap();
+        require_workspace_id(&conn)?
+    };
     let actor = current_actor(&state);
     run_with_own_connection(db_path, move |conn| async move {
-        connection_service::test_connection(&conn, &workspace_id, &master_key, &id, actor.as_deref()).await
+        connection_service::test_connection(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            actor.as_deref(),
+        )
+        .await
     })
     .await
 }
@@ -108,23 +148,43 @@ pub async fn test_connection(state: State<'_, AppState>, id: String) -> AppResul
 // --- Connection References (spec §5) ----------------------------------------
 
 #[tauri::command]
-pub fn list_connection_refs(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::ConnectionRef>> {
+pub fn list_connection_refs(
+    state: State<AppState>,
+) -> AppResult<Vec<lanesra_core::models::integration::ConnectionRef>> {
     let conn = state.conn.lock().unwrap();
     connection_ref_service::list_for_workspace(&conn, &require_workspace_id(&conn)?)
 }
 
 #[tauri::command]
-pub fn create_connection_ref(state: State<AppState>, input: ConnectionRefInput) -> AppResult<lanesra_core::models::integration::ConnectionRef> {
+pub fn create_connection_ref(
+    state: State<AppState>,
+    input: ConnectionRefInput,
+) -> AppResult<lanesra_core::models::integration::ConnectionRef> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    connection_ref_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    connection_ref_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn bind_connection_ref(state: State<AppState>, id: String, connection_id: Option<String>) -> AppResult<lanesra_core::models::integration::ConnectionRef> {
+pub fn bind_connection_ref(
+    state: State<AppState>,
+    id: String,
+    connection_id: Option<String>,
+) -> AppResult<lanesra_core::models::integration::ConnectionRef> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    connection_ref_service::bind(&conn, &workspace_id, &id, connection_id.as_deref(), current_actor(&state).as_deref())
+    connection_ref_service::bind(
+        &conn,
+        &workspace_id,
+        &id,
+        connection_id.as_deref(),
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -139,25 +199,39 @@ pub fn delete_connection_ref(state: State<AppState>, id: String) -> AppResult<()
 /// Connector Template Library: the curated, ready-to-import spec
 /// gallery - see `connector_template_service.rs`.
 #[tauri::command]
-pub fn list_connector_templates() -> Vec<lanesra_core::models::integration::ConnectorTemplateSummary> {
+pub fn list_connector_templates() -> Vec<lanesra_core::models::integration::ConnectorTemplateSummary>
+{
     connector_template_service::list()
 }
 
 #[tauri::command]
-pub fn get_connector_template(key: String) -> AppResult<lanesra_core::models::integration::ConnectorTemplateSpec> {
+pub fn get_connector_template(
+    key: String,
+) -> AppResult<lanesra_core::models::integration::ConnectorTemplateSpec> {
     connector_template_service::get_spec(&key)
 }
 
 #[tauri::command]
-pub fn preview_connector_import(spec_text: String, spec_format: String) -> AppResult<OpenApiImportPreview> {
+pub fn preview_connector_import(
+    spec_text: String,
+    spec_format: String,
+) -> AppResult<OpenApiImportPreview> {
     connector_service::preview_import(&spec_text, &spec_format)
 }
 
 #[tauri::command]
-pub fn import_connector(state: State<AppState>, input: ConnectorImportInput) -> AppResult<Connector> {
+pub fn import_connector(
+    state: State<AppState>,
+    input: ConnectorImportInput,
+) -> AppResult<Connector> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    connector_service::import(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    connector_service::import(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -206,7 +280,9 @@ pub fn update_connector_agent_tools(
 /// Agent tool - for the Actions-checklist UI, not the model itself. See
 /// `connector_tool_service::list_options`.
 #[tauri::command]
-pub fn list_agent_connector_tools(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::AgentConnectorToolOption>> {
+pub fn list_agent_connector_tools(
+    state: State<AppState>,
+) -> AppResult<Vec<lanesra_core::models::integration::AgentConnectorToolOption>> {
     let conn = state.conn.lock().unwrap();
     connector_tool_service::list_options(&conn, &require_workspace_id(&conn)?)
 }
@@ -214,13 +290,32 @@ pub fn list_agent_connector_tools(state: State<AppState>) -> AppResult<Vec<lanes
 /// A manual "Test Action" run - opens its own connection, same reason as
 /// `test_connection` above.
 #[tauri::command]
-pub async fn test_connector_action(state: State<'_, AppState>, connector_id: String, action_key: String, reference_key: String, params: serde_json::Value) -> AppResult<lanesra_core::models::integration::ConnectorExecutionResult> {
+pub async fn test_connector_action(
+    state: State<'_, AppState>,
+    connector_id: String,
+    action_key: String,
+    reference_key: String,
+    params: serde_json::Value,
+) -> AppResult<lanesra_core::models::integration::ConnectorExecutionResult> {
     let master_key = resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
-    let workspace_id = { let conn = state.conn.lock().unwrap(); require_workspace_id(&conn)? };
+    let workspace_id = {
+        let conn = state.conn.lock().unwrap();
+        require_workspace_id(&conn)?
+    };
     let actor = current_actor(&state);
     run_with_own_connection(db_path, move |conn| async move {
-        connector_execution_service::execute(&conn, &workspace_id, &master_key, &connector_id, &action_key, &reference_key, &params, actor.as_deref()).await
+        connector_execution_service::execute(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &connector_id,
+            &action_key,
+            &reference_key,
+            &params,
+            actor.as_deref(),
+        )
+        .await
     })
     .await
 }
@@ -228,16 +323,26 @@ pub async fn test_connector_action(state: State<'_, AppState>, connector_id: Str
 // --- API Access (spec §8) ----------------------------------------------------
 
 #[tauri::command]
-pub fn list_api_clients(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::ApiClient>> {
+pub fn list_api_clients(
+    state: State<AppState>,
+) -> AppResult<Vec<lanesra_core::models::integration::ApiClient>> {
     let conn = state.conn.lock().unwrap();
     api_client_service::list_for_workspace(&conn, &require_workspace_id(&conn)?)
 }
 
 #[tauri::command]
-pub fn create_api_client(state: State<AppState>, input: ApiClientInput) -> AppResult<IssuedApiClient> {
+pub fn create_api_client(
+    state: State<AppState>,
+    input: ApiClientInput,
+) -> AppResult<IssuedApiClient> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    api_client_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    api_client_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -271,21 +376,35 @@ pub fn delete_api_client(state: State<AppState>, id: String) -> AppResult<()> {
 // --- Webhooks & Events (spec §10) --------------------------------------------
 
 #[tauri::command]
-pub fn list_webhooks(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::Webhook>> {
+pub fn list_webhooks(
+    state: State<AppState>,
+) -> AppResult<Vec<lanesra_core::models::integration::Webhook>> {
     let conn = state.conn.lock().unwrap();
     webhook_service::list_for_workspace(&conn, &require_workspace_id(&conn)?)
 }
 
 #[tauri::command]
-pub fn create_webhook(state: State<AppState>, input: WebhookInput) -> AppResult<lanesra_core::models::integration::Webhook> {
+pub fn create_webhook(
+    state: State<AppState>,
+    input: WebhookInput,
+) -> AppResult<lanesra_core::models::integration::Webhook> {
     let master_key = resolve_master_key(&state)?;
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    webhook_service::create(&conn, &workspace_id, &master_key, &input, current_actor(&state).as_deref())
+    webhook_service::create(
+        &conn,
+        &workspace_id,
+        &master_key,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn list_webhook_deliveries(state: State<AppState>, webhook_id: String) -> AppResult<Vec<lanesra_core::models::integration::WebhookDelivery>> {
+pub fn list_webhook_deliveries(
+    state: State<AppState>,
+    webhook_id: String,
+) -> AppResult<Vec<lanesra_core::models::integration::WebhookDelivery>> {
     let conn = state.conn.lock().unwrap();
     webhook_service::list_deliveries(&conn, &require_workspace_id(&conn)?, &webhook_id)
 }
@@ -313,13 +432,26 @@ pub fn delete_webhook(state: State<AppState>, id: String) -> AppResult<()> {
 
 /// Opens its own connection - see `run_with_own_connection`'s doc comment.
 #[tauri::command]
-pub async fn test_webhook_delivery(state: State<'_, AppState>, webhook_id: String) -> AppResult<()> {
+pub async fn test_webhook_delivery(
+    state: State<'_, AppState>,
+    webhook_id: String,
+) -> AppResult<()> {
     let master_key = resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
-    let workspace_id = { let conn = state.conn.lock().unwrap(); require_workspace_id(&conn)? };
+    let workspace_id = {
+        let conn = state.conn.lock().unwrap();
+        require_workspace_id(&conn)?
+    };
     let actor = current_actor(&state);
     run_with_own_connection(db_path, move |conn| async move {
-        webhook_service::test_delivery(&conn, &workspace_id, &master_key, &webhook_id, actor.as_deref()).await
+        webhook_service::test_delivery(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &webhook_id,
+            actor.as_deref(),
+        )
+        .await
     })
     .await
 }
@@ -327,16 +459,26 @@ pub async fn test_webhook_delivery(state: State<'_, AppState>, webhook_id: Strin
 // --- Mappings (spec §14) ------------------------------------------------------
 
 #[tauri::command]
-pub fn list_mappings(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::Mapping>> {
+pub fn list_mappings(
+    state: State<AppState>,
+) -> AppResult<Vec<lanesra_core::models::integration::Mapping>> {
     let conn = state.conn.lock().unwrap();
     mapping_service::list_for_workspace(&conn, &require_workspace_id(&conn)?)
 }
 
 #[tauri::command]
-pub fn create_mapping(state: State<AppState>, input: MappingInput) -> AppResult<lanesra_core::models::integration::Mapping> {
+pub fn create_mapping(
+    state: State<AppState>,
+    input: MappingInput,
+) -> AppResult<lanesra_core::models::integration::Mapping> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    mapping_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    mapping_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -349,21 +491,35 @@ pub fn delete_mapping(state: State<AppState>, id: String) -> AppResult<()> {
 // --- Data Exchange (spec §12/§13) --------------------------------------------
 
 #[tauri::command]
-pub fn import_csv(state: State<AppState>, input: CsvImportInput) -> AppResult<lanesra_core::models::integration::CsvImportResult> {
+pub fn import_csv(
+    state: State<AppState>,
+    input: CsvImportInput,
+) -> AppResult<lanesra_core::models::integration::CsvImportResult> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    data_exchange_service::import_csv(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    data_exchange_service::import_csv(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn export_csv(state: State<AppState>, object_key: String, query: ApiListQuery) -> AppResult<String> {
+pub fn export_csv(
+    state: State<AppState>,
+    object_key: String,
+    query: ApiListQuery,
+) -> AppResult<String> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     data_exchange_service::export_csv(&conn, &workspace_id, &object_key, &query)
 }
 
 #[tauri::command]
-pub fn list_integration_object_keys(state: State<AppState>) -> AppResult<Vec<lanesra_core::models::integration::ApiObjectMetadata>> {
+pub fn list_integration_object_keys(
+    state: State<AppState>,
+) -> AppResult<Vec<lanesra_core::models::integration::ApiObjectMetadata>> {
     let conn = state.conn.lock().unwrap();
     api_object_service::list_object_keys(&conn, &require_workspace_id(&conn)?)
 }
@@ -377,10 +533,18 @@ pub fn list_external_objects(state: State<AppState>) -> AppResult<Vec<ExternalOb
 }
 
 #[tauri::command]
-pub fn create_external_object(state: State<AppState>, input: ExternalObjectInput) -> AppResult<ExternalObject> {
+pub fn create_external_object(
+    state: State<AppState>,
+    input: ExternalObjectInput,
+) -> AppResult<ExternalObject> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    external_object_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    external_object_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -393,10 +557,16 @@ pub fn delete_external_object(state: State<AppState>, id: String) -> AppResult<(
 /// A live preview of this External Object's current records - opens its
 /// own connection, see `run_with_own_connection`'s doc comment.
 #[tauri::command]
-pub async fn preview_external_object_records(state: State<'_, AppState>, object_key: String) -> AppResult<Vec<serde_json::Value>> {
+pub async fn preview_external_object_records(
+    state: State<'_, AppState>,
+    object_key: String,
+) -> AppResult<Vec<serde_json::Value>> {
     let master_key = resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
-    let workspace_id = { let conn = state.conn.lock().unwrap(); require_workspace_id(&conn)? };
+    let workspace_id = {
+        let conn = state.conn.lock().unwrap();
+        require_workspace_id(&conn)?
+    };
     run_with_own_connection(db_path, move |conn| async move {
         external_object_service::list_records(&conn, &workspace_id, &master_key, &object_key).await
     })
@@ -412,17 +582,37 @@ pub fn list_integration_jobs(state: State<AppState>) -> AppResult<Vec<Integratio
 }
 
 #[tauri::command]
-pub fn create_integration_job(state: State<AppState>, input: IntegrationJobInput) -> AppResult<IntegrationJob> {
+pub fn create_integration_job(
+    state: State<AppState>,
+    input: IntegrationJobInput,
+) -> AppResult<IntegrationJob> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    integration_job_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    integration_job_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_integration_job(state: State<AppState>, id: String, input: IntegrationJobInput, status: String) -> AppResult<IntegrationJob> {
+pub fn update_integration_job(
+    state: State<AppState>,
+    id: String,
+    input: IntegrationJobInput,
+    status: String,
+) -> AppResult<IntegrationJob> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    integration_job_service::update(&conn, &workspace_id, &id, &input, &status, current_actor(&state).as_deref())
+    integration_job_service::update(
+        &conn,
+        &workspace_id,
+        &id,
+        &input,
+        &status,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -433,7 +623,11 @@ pub fn delete_integration_job(state: State<AppState>, id: String) -> AppResult<(
 }
 
 #[tauri::command]
-pub fn list_integration_job_runs(state: State<AppState>, job_id: String, limit: i64) -> AppResult<Vec<IntegrationJobRun>> {
+pub fn list_integration_job_runs(
+    state: State<AppState>,
+    job_id: String,
+    limit: i64,
+) -> AppResult<Vec<IntegrationJobRun>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     integration_job_service::list_runs(&conn, &workspace_id, &job_id, limit)
@@ -445,13 +639,20 @@ pub fn list_integration_job_runs(state: State<AppState>, job_id: String, limit: 
 /// the *only* way a desktop-hosted Job ever runs - a real future gap
 /// worth a client-poll equivalent, not attempted this pass.
 #[tauri::command]
-pub async fn run_integration_job_now(state: State<'_, AppState>, id: String) -> AppResult<IntegrationJobRun> {
+pub async fn run_integration_job_now(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<IntegrationJobRun> {
     let master_key = resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
-    let workspace_id = { let conn = state.conn.lock().unwrap(); require_workspace_id(&conn)? };
+    let workspace_id = {
+        let conn = state.conn.lock().unwrap();
+        require_workspace_id(&conn)?
+    };
     let actor = current_actor(&state);
     run_with_own_connection(db_path, move |conn| async move {
-        integration_job_service::run_now(&conn, &workspace_id, &master_key, &id, actor.as_deref()).await
+        integration_job_service::run_now(&conn, &workspace_id, &master_key, &id, actor.as_deref())
+            .await
     })
     .await
 }
@@ -459,28 +660,43 @@ pub async fn run_integration_job_now(state: State<'_, AppState>, id: String) -> 
 // --- Logs & Monitoring / Settings (spec §21/§22/§23) -------------------------
 
 #[tauri::command]
-pub fn get_integration_overview(state: State<AppState>) -> AppResult<lanesra_core::models::integration::IntegrationOverview> {
+pub fn get_integration_overview(
+    state: State<AppState>,
+) -> AppResult<lanesra_core::models::integration::IntegrationOverview> {
     let conn = state.conn.lock().unwrap();
     integration_log_service::overview(&conn, &require_workspace_id(&conn)?)
 }
 
 #[tauri::command]
-pub fn list_integration_executions(state: State<AppState>, query: integration_log_service::ExecutionQuery) -> AppResult<Vec<lanesra_core::models::integration::IntegrationExecution>> {
+pub fn list_integration_executions(
+    state: State<AppState>,
+    query: integration_log_service::ExecutionQuery,
+) -> AppResult<Vec<lanesra_core::models::integration::IntegrationExecution>> {
     let conn = state.conn.lock().unwrap();
     integration_log_service::list_executions(&conn, &require_workspace_id(&conn)?, &query)
 }
 
 #[tauri::command]
-pub fn get_integration_settings(state: State<AppState>) -> AppResult<lanesra_core::models::integration::IntegrationSettings> {
+pub fn get_integration_settings(
+    state: State<AppState>,
+) -> AppResult<lanesra_core::models::integration::IntegrationSettings> {
     let conn = state.conn.lock().unwrap();
     integration_log_service::get_settings(&conn, &require_workspace_id(&conn)?)
 }
 
 #[tauri::command]
-pub fn update_integration_settings(state: State<AppState>, input: IntegrationSettingsUpdate) -> AppResult<lanesra_core::models::integration::IntegrationSettings> {
+pub fn update_integration_settings(
+    state: State<AppState>,
+    input: IntegrationSettingsUpdate,
+) -> AppResult<lanesra_core::models::integration::IntegrationSettings> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    integration_log_service::update_settings(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    integration_log_service::update_settings(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]

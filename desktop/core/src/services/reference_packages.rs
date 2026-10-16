@@ -416,7 +416,12 @@ fn field_service_fields() -> serde_json::Value {
         maintenance_plan_fields(),
         field_time_entry_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -1058,7 +1063,12 @@ fn property_management_fields() -> serde_json::Value {
         security_deposit_fields(),
         violation_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -1545,7 +1555,12 @@ fn construction_fields() -> serde_json::Value {
         inspection_fields(),
         punch_list_item_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -1931,7 +1946,12 @@ fn professional_services_fields() -> serde_json::Value {
         deliverable_fields(),
         change_request_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -2326,7 +2346,12 @@ fn practice_admin_fields() -> serde_json::Value {
         insurance_profile_fields(),
         billing_claim_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -2687,7 +2712,12 @@ fn recruitment_fields() -> serde_json::Value {
         candidate_skill_fields(),
         reference_check_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -3046,7 +3076,12 @@ fn real_estate_fields() -> serde_json::Value {
         agent_profile_fields(),
         commission_disbursement_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -3422,7 +3457,12 @@ fn legal_practice_fields() -> serde_json::Value {
         trust_summary_fields(),
         conflict_check_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -3832,7 +3872,12 @@ fn nonprofit_association_fields() -> serde_json::Value {
         event_fields(),
         grant_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -4219,7 +4264,12 @@ fn auto_service_fields() -> serde_json::Value {
         vehicle_appointment_fields(),
         parts_order_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -4725,7 +4775,12 @@ fn policy_admin_claims_fields() -> serde_json::Value {
         adjuster_assignment_fields(),
         subrogation_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }
@@ -5254,7 +5309,12 @@ fn lanesra_industry_foundation_fields() -> serde_json::Value {
         financial_transaction_fields(),
         data_quality_issue_fields(),
     ] {
-        all.extend(group.as_array().expect("each group is a json array").clone());
+        all.extend(
+            group
+                .as_array()
+                .expect("each group is a json array")
+                .clone(),
+        );
     }
     serde_json::Value::Array(all)
 }

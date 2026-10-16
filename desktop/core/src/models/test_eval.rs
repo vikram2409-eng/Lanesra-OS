@@ -31,8 +31,15 @@
 //!   "success_criteria": "..."}`, graded with the same judge call
 //!   `ai_eval_service::run_suite`'s `task_completion` evaluator already
 //!   uses - not a second grading mechanism.
-pub const TEST_TYPES: &[&str] =
-    &["business_rule", "workflow", "access_security", "screen_visibility", "integration_mapping", "agent_eval", "agent_team_eval"];
+pub const TEST_TYPES: &[&str] = &[
+    "business_rule",
+    "workflow",
+    "access_security",
+    "screen_visibility",
+    "integration_mapping",
+    "agent_eval",
+    "agent_team_eval",
+];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TestCaseDefinition {

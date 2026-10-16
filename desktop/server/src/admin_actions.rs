@@ -37,8 +37,10 @@ use lanesra_core::models::agent::NlReportQuery;
 use lanesra_core::models::ai_knowledge::KnowledgeSourceInput;
 use lanesra_core::models::voice::ConfirmVoicePlanInput;
 use lanesra_core::services::{
-    agent_service, ai_eval_service, ai_knowledge_service, ai_orchestration_service, ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service,
-    external_object_service, graph_runtime_service, integration_job_service, mcp_client_service, test_eval_service, vector_search_service, voice_execution_service, webhook_service,
+    agent_service, ai_eval_service, ai_knowledge_service, ai_orchestration_service,
+    ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service,
+    external_object_service, graph_runtime_service, integration_job_service, mcp_client_service,
+    test_eval_service, vector_search_service, voice_execution_service, webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -48,33 +50,87 @@ use crate::state::SharedState;
 pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/api/admin/ai/test", post(test_ai_key))
-        .route("/api/admin/ai-providers/:id/test", post(test_ai_provider_key))
+        .route(
+            "/api/admin/ai-providers/:id/test",
+            post(test_ai_provider_key),
+        )
         .route("/api/admin/agent/ask-report", post(ask_report))
         .route("/api/admin/chat/:mode/send", post(send_chat_message))
-        .route("/api/admin/chat/agent/:agent_id/send", post(send_agent_chat_message))
+        .route(
+            "/api/admin/chat/agent/:agent_id/send",
+            post(send_agent_chat_message),
+        )
         .route("/api/admin/ai-agents/:id/run", post(run_ai_agent_manual))
-        .route("/api/admin/ai-agent-pipelines/:id/run", post(run_ai_agent_pipeline_manual))
+        .route(
+            "/api/admin/ai-agent-pipelines/:id/run",
+            post(run_ai_agent_pipeline_manual),
+        )
         .route("/api/admin/ai-eval-suites/:id/run", post(run_ai_eval_suite))
         .route("/api/admin/test-runs", post(run_tests))
-        .route("/api/admin/solutions/:id/validate", post(run_tests_for_solution))
-        .route("/api/admin/ai-agent-runs/:id/approve", post(approve_ai_agent_pending_step))
-        .route("/api/admin/ai-agent-runs/:id/push-otlp", post(push_ai_agent_run_otlp))
-        .route("/api/admin/ai/vector-search/reindex", post(reindex_vector_search))
-        .route("/api/admin/execution-graphs/:id/run", post(start_graph_run_admin))
-        .route("/api/admin/execution-graph-runs/:id/resume", post(resume_graph_run_admin))
-        .route("/api/admin/execution-graph-runs/:id/approve", post(resolve_graph_run_approval_admin))
-        .route("/api/admin/execution-graph-runs/:id/cancel", post(cancel_graph_run_admin))
-        .route("/api/admin/knowledge-sources", post(create_knowledge_source_admin))
-        .route("/api/admin/knowledge-sources/:id", post(update_knowledge_source_admin))
+        .route(
+            "/api/admin/solutions/:id/validate",
+            post(run_tests_for_solution),
+        )
+        .route(
+            "/api/admin/ai-agent-runs/:id/approve",
+            post(approve_ai_agent_pending_step),
+        )
+        .route(
+            "/api/admin/ai-agent-runs/:id/push-otlp",
+            post(push_ai_agent_run_otlp),
+        )
+        .route(
+            "/api/admin/ai/vector-search/reindex",
+            post(reindex_vector_search),
+        )
+        .route(
+            "/api/admin/execution-graphs/:id/run",
+            post(start_graph_run_admin),
+        )
+        .route(
+            "/api/admin/execution-graph-runs/:id/resume",
+            post(resume_graph_run_admin),
+        )
+        .route(
+            "/api/admin/execution-graph-runs/:id/approve",
+            post(resolve_graph_run_approval_admin),
+        )
+        .route(
+            "/api/admin/execution-graph-runs/:id/cancel",
+            post(cancel_graph_run_admin),
+        )
+        .route(
+            "/api/admin/knowledge-sources",
+            post(create_knowledge_source_admin),
+        )
+        .route(
+            "/api/admin/knowledge-sources/:id",
+            post(update_knowledge_source_admin),
+        )
         .route("/api/admin/knowledge/search", post(search_knowledge_admin))
-        .route("/api/admin/mcp-servers/:id/discover", post(discover_mcp_tools_admin))
+        .route(
+            "/api/admin/mcp-servers/:id/discover",
+            post(discover_mcp_tools_admin),
+        )
         .route("/api/admin/connections/:id/test", post(test_connection))
-        .route("/api/admin/connectors/:connector_id/actions/:action_key/test", post(test_connector_action))
+        .route(
+            "/api/admin/connectors/:connector_id/actions/:action_key/test",
+            post(test_connector_action),
+        )
         .route("/api/admin/webhooks/:id/test", post(test_webhook_delivery))
         .route("/api/admin/jobs/:id/run", post(run_integration_job_now))
-        .route("/api/admin/external-objects/:object_key/preview", get(preview_external_object_records))
-        .route("/api/admin/voice/sessions/:session_id/commands", post(submit_voice_command))
-        .route("/api/admin/voice/sessions/:session_id/confirm", post(confirm_voice_plan))
+        .route(
+            "/api/admin/external-objects/:object_key/preview",
+            get(preview_external_object_records),
+        )
+        .route(
+            "/api/admin/voice/sessions/:session_id/commands",
+            post(submit_voice_command),
+        )
+        .route(
+            "/api/admin/voice/sessions/:session_id/confirm",
+            post(confirm_voice_plan),
+        )
 }
 
 fn err_json(status: StatusCode, message: &str) -> (StatusCode, Json<Value>) {
@@ -107,9 +163,17 @@ fn app_err(e: AppError) -> (StatusCode, Json<Value>) {
 /// Automation's own runtime calls `execute` with no actor at all), so
 /// this transport-level check only ever asks "is this a real, logged-in
 /// session," matching `dispatch()`'s own catch-all arm.
-fn authorize(state: &SharedState, jar: &CookieJar) -> Result<(String, String, [u8; 32]), (StatusCode, Json<Value>)> {
+fn authorize(
+    state: &SharedState,
+    jar: &CookieJar,
+) -> Result<(String, String, [u8; 32]), (StatusCode, Json<Value>)> {
     let conn = state.conn.lock().unwrap();
-    let actor = current_actor(&conn, jar).ok_or_else(|| err_json(StatusCode::UNAUTHORIZED, "Not authenticated - please log in"))?;
+    let actor = current_actor(&conn, jar).ok_or_else(|| {
+        err_json(
+            StatusCode::UNAUTHORIZED,
+            "Not authenticated - please log in",
+        )
+    })?;
     let workspace_id = require_workspace_id(&conn).map_err(app_err)?;
     drop(conn);
     let master_key = resolve_master_key(&state.db_path).map_err(app_err)?;
@@ -123,7 +187,10 @@ fn authorize(state: &SharedState, jar: &CookieJar) -> Result<(String, String, [u
 /// here. `pub(crate)`, not private: `agent_v1.rs`'s webhook Trigger route
 /// reuses this exact helper too - same reasoning as `api_v1.rs`'s own
 /// `logged` being `pub(crate)` for `mcp.rs` to reuse.
-pub(crate) async fn run_with_own_connection<T, F, Fut>(db_path: PathBuf, f: F) -> Result<T, (StatusCode, Json<Value>)>
+pub(crate) async fn run_with_own_connection<T, F, Fut>(
+    db_path: PathBuf,
+    f: F,
+) -> Result<T, (StatusCode, Json<Value>)>
 where
     T: Send + 'static,
     F: FnOnce(rusqlite::Connection) -> Fut + Send + 'static,
@@ -133,27 +200,51 @@ where
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .map_err(|e| AppError::Validation(format!("could not start a background runtime: {e}")))?;
+            .map_err(|e| {
+                AppError::Validation(format!("could not start a background runtime: {e}"))
+            })?;
         let conn = lanesra_core::db::open_workspace_db(&db_path).map_err(AppError::from)?;
         rt.block_on(f(conn))
     })
     .await
-    .map_err(|e| err_json(StatusCode::INTERNAL_SERVER_ERROR, &format!("background task panicked: {e}")))?
+    .map_err(|e| {
+        err_json(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("background task panicked: {e}"),
+        )
+    })?
     .map_err(app_err)
 }
 
-async fn test_ai_key(State(state): State<SharedState>, jar: CookieJar) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn test_ai_key(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { ai_service::test_key(&conn, &workspace_id, &master_key, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_service::test_key(&conn, &workspace_id, &master_key, Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn test_ai_provider_key(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn test_ai_provider_key(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { ai_provider_service::test_key(&conn, &id, &master_key, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_provider_service::test_key(&conn, &id, &master_key, Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,12 +252,23 @@ struct AskReportBody {
     question: String,
 }
 
-async fn ask_report(State(state): State<SharedState>, jar: CookieJar, Json(body): Json<AskReportBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn ask_report(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Json(body): Json<AskReportBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, _actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let query = NlReportQuery { question: body.question };
-    let data = run_with_own_connection(db_path, move |conn| async move { agent_service::ask_report(&conn, &workspace_id, &master_key, &query).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let query = NlReportQuery {
+        question: body.question,
+    };
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        agent_service::ask_report(&conn, &workspace_id, &master_key, &query).await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -183,10 +285,13 @@ async fn send_chat_message(
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        chat_service::send_message(&conn, &workspace_id, &master_key, &actor, &mode, &body.text).await
+        chat_service::send_message(&conn, &workspace_id, &master_key, &actor, &mode, &body.text)
+            .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 async fn send_agent_chat_message(
@@ -198,10 +303,20 @@ async fn send_agent_chat_message(
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        chat_service::send_agent_message(&conn, &workspace_id, &master_key, &actor, &agent_id, &body.text).await
+        chat_service::send_agent_message(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &actor,
+            &agent_id,
+            &body.text,
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -210,41 +325,101 @@ struct RunAiAgentBody {
     input: String,
 }
 
-async fn run_ai_agent_manual(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(body): Json<RunAiAgentBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn run_ai_agent_manual(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<RunAiAgentBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        ai_orchestration_service::run_manual(&conn, &workspace_id, &master_key, "agent", &id, &body.input, Some(&actor)).await
+        ai_orchestration_service::run_manual(
+            &conn,
+            &workspace_id,
+            &master_key,
+            "agent",
+            &id,
+            &body.input,
+            Some(&actor),
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn run_ai_agent_pipeline_manual(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(body): Json<RunAiAgentBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn run_ai_agent_pipeline_manual(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<RunAiAgentBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        ai_orchestration_service::run_manual(&conn, &workspace_id, &master_key, "pipeline", &id, &body.input, Some(&actor)).await
+        ai_orchestration_service::run_manual(
+            &conn,
+            &workspace_id,
+            &master_key,
+            "pipeline",
+            &id,
+            &body.input,
+            Some(&actor),
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn start_graph_run_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(body): Json<RunAiAgentBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn start_graph_run_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<RunAiAgentBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        graph_runtime_service::start_run(&conn, &workspace_id, &master_key, &id, &body.input, Some(&actor), None, None, None).await
+        graph_runtime_service::start_run(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            &body.input,
+            Some(&actor),
+            None,
+            None,
+            None,
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn resume_graph_run_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn resume_graph_run_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { graph_runtime_service::resume_run(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        graph_runtime_service::resume_run(&conn, &workspace_id, &master_key, &id, Some(&actor))
+            .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -263,17 +438,37 @@ async fn resolve_graph_run_approval_admin(
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        graph_runtime_service::resolve_approval(&conn, &workspace_id, &master_key, &id, body.approve, body.notes.as_deref(), Some(&actor)).await
+        graph_runtime_service::resolve_approval(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            body.approve,
+            body.notes.as_deref(),
+            Some(&actor),
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn cancel_graph_run_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn cancel_graph_run_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { graph_runtime_service::cancel_run(&conn, &workspace_id, &id, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        graph_runtime_service::cancel_run(&conn, &workspace_id, &id, Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 /// AI Agent Platform v2, Phase 4: creating/updating a Knowledge Source
@@ -281,18 +476,46 @@ async fn cancel_graph_run_admin(State(state): State<SharedState>, jar: CookieJar
 /// provider - genuinely async, so (like the graph-run routes above) these
 /// are their own routes rather than plain-sync `/api/invoke` dispatch
 /// entries.
-async fn create_knowledge_source_admin(State(state): State<SharedState>, jar: CookieJar, Json(input): Json<KnowledgeSourceInput>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn create_knowledge_source_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Json(input): Json<KnowledgeSourceInput>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { ai_knowledge_service::create_source(&conn, &workspace_id, &master_key, &input, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_knowledge_service::create_source(&conn, &workspace_id, &master_key, &input, Some(&actor))
+            .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn update_knowledge_source_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>, Json(input): Json<KnowledgeSourceInput>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn update_knowledge_source_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(input): Json<KnowledgeSourceInput>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { ai_knowledge_service::update_source(&conn, &workspace_id, &master_key, &id, &input, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_knowledge_service::update_source(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            &input,
+            Some(&actor),
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -305,23 +528,49 @@ struct SearchKnowledgeBody {
 /// The admin Knowledge panel's own "test this search" preview - calls the
 /// exact same `search_knowledge` function an agent's `search_knowledge`
 /// tool call does.
-async fn search_knowledge_admin(State(state): State<SharedState>, jar: CookieJar, Json(body): Json<SearchKnowledgeBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn search_knowledge_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Json(body): Json<SearchKnowledgeBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, _actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { ai_knowledge_service::search_knowledge(&conn, &workspace_id, &master_key, &body.query, body.collection_id.as_deref(), 10).await })
-        .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_knowledge_service::search_knowledge(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &body.query,
+            body.collection_id.as_deref(),
+            10,
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 /// AI Agent Platform v2 (GitHub issue #170, backend half): a real
 /// `initialize`/`tools/list` handshake against the external MCP server -
 /// genuinely async, so (like the Knowledge Source routes above) this is
 /// its own route rather than plain-sync `/api/invoke` dispatch.
-async fn discover_mcp_tools_admin(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn discover_mcp_tools_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { mcp_client_service::discover_tools(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        mcp_client_service::discover_tools(&conn, &workspace_id, &master_key, &id, Some(&actor))
+            .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -337,14 +586,30 @@ struct SubmitVoiceCommandBody {
 /// may now run a RUN_AGENT/RUN_PIPELINE step and so are genuinely async -
 /// `workspace_id` is discarded here since `voice_execution_service` derives
 /// it itself from the session/user row, exactly as the Tauri command does.
-async fn submit_voice_command(State(state): State<SharedState>, jar: CookieJar, Path(session_id): Path<String>, Json(body): Json<SubmitVoiceCommandBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn submit_voice_command(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(session_id): Path<String>,
+    Json(body): Json<SubmitVoiceCommandBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        voice_execution_service::submit_command(&conn, &session_id, &actor, &body.transcript, &body.language, body.speech_confidence, &master_key).await
+        voice_execution_service::submit_command(
+            &conn,
+            &session_id,
+            &actor,
+            &body.transcript,
+            &body.language,
+            body.speech_confidence,
+            &master_key,
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -352,21 +617,38 @@ struct ConfirmVoicePlanBody {
     input: ConfirmVoicePlanInput,
 }
 
-async fn confirm_voice_plan(State(state): State<SharedState>, jar: CookieJar, Path(session_id): Path<String>, Json(body): Json<ConfirmVoicePlanBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn confirm_voice_plan(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(session_id): Path<String>,
+    Json(body): Json<ConfirmVoicePlanBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (_workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        voice_execution_service::confirm_plan(&conn, &session_id, &actor, &body.input, &master_key).await
+        voice_execution_service::confirm_plan(&conn, &session_id, &actor, &body.input, &master_key)
+            .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn run_ai_eval_suite(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn run_ai_eval_suite(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { ai_eval_service::run_suite(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_eval_service::run_suite(&conn, &workspace_id, &master_key, &id, Some(&actor)).await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -374,21 +656,46 @@ struct RunTestsBody {
     case_ids: Vec<String>,
 }
 
-async fn run_tests(State(state): State<SharedState>, jar: CookieJar, Json(body): Json<RunTestsBody>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn run_tests(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Json(body): Json<RunTestsBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        test_eval_service::run_tests(&conn, &workspace_id, &master_key, &body.case_ids, None, "manual", Some(&actor)).await
+        test_eval_service::run_tests(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &body.case_ids,
+            None,
+            "manual",
+            Some(&actor),
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn run_tests_for_solution(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn run_tests_for_solution(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { test_eval_service::run_for_solution(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        test_eval_service::run_for_solution(&conn, &workspace_id, &master_key, &id, Some(&actor))
+            .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -408,38 +715,72 @@ async fn approve_ai_agent_pending_step(
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        ai_orchestration_service::approve_pending_step(&conn, &workspace_id, &master_key, &id, body.edited_output.as_deref(), Some(&actor)).await
+        ai_orchestration_service::approve_pending_step(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            body.edited_output.as_deref(),
+            Some(&actor),
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn push_ai_agent_run_otlp(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn push_ai_agent_run_otlp(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { ai_orchestration_service::push_run_trace_to_otlp(&conn, &workspace_id, &id, Some(&actor)).await }).await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        ai_orchestration_service::push_run_trace_to_otlp(&conn, &workspace_id, &id, Some(&actor))
+            .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 /// AI & Agentic Layer, Phase 7g: drains the workspace's full pending
 /// embedding queue right away - genuinely async (real outbound provider
 /// calls), same reasoning `push_ai_agent_run_otlp` above isn't in the
 /// plain-sync `dispatch.rs` table.
-async fn reindex_vector_search(State(state): State<SharedState>, jar: CookieJar) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn reindex_vector_search(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let reindexed = run_with_own_connection(db_path, move |conn| async move { vector_search_service::reindex_workspace(&conn, &workspace_id, &master_key, Some(&actor)).await }).await?;
+    let reindexed = run_with_own_connection(db_path, move |conn| async move {
+        vector_search_service::reindex_workspace(&conn, &workspace_id, &master_key, Some(&actor))
+            .await
+    })
+    .await?;
     Ok(Json(json!({"ok": true, "data": reindexed})))
 }
 
-async fn test_connection(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn test_connection(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        connection_service::test_connection(&conn, &workspace_id, &master_key, &id, Some(&actor)).await
+        connection_service::test_connection(&conn, &workspace_id, &master_key, &id, Some(&actor))
+            .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -457,32 +798,64 @@ async fn test_connector_action(
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        connector_execution_service::execute(&conn, &workspace_id, &master_key, &connector_id, &action_key, &body.reference_key, &body.params, Some(&actor)).await
+        connector_execution_service::execute(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &connector_id,
+            &action_key,
+            &body.reference_key,
+            &body.params,
+            Some(&actor),
+        )
+        .await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn test_webhook_delivery(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn test_webhook_delivery(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    run_with_own_connection(db_path, move |conn| async move { webhook_service::test_delivery(&conn, &workspace_id, &master_key, &id, Some(&actor)).await }).await?;
+    run_with_own_connection(db_path, move |conn| async move {
+        webhook_service::test_delivery(&conn, &workspace_id, &master_key, &id, Some(&actor)).await
+    })
+    .await?;
     Ok(Json(json!({"ok": true})))
 }
 
-async fn run_integration_job_now(State(state): State<SharedState>, jar: CookieJar, Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn run_integration_job_now(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
         integration_job_service::run_now(&conn, &workspace_id, &master_key, &id, Some(&actor)).await
     })
     .await?;
-    Ok(Json(json!({"ok": true, "data": to_value(data).map_err(app_err)?})))
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
-async fn preview_external_object_records(State(state): State<SharedState>, jar: CookieJar, Path(object_key): Path<String>) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+async fn preview_external_object_records(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(object_key): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     let (workspace_id, _actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
-    let data = run_with_own_connection(db_path, move |conn| async move { external_object_service::list_records(&conn, &workspace_id, &master_key, &object_key).await }).await?;
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        external_object_service::list_records(&conn, &workspace_id, &master_key, &object_key).await
+    })
+    .await?;
     Ok(Json(json!({"ok": true, "data": data})))
 }

@@ -25,11 +25,11 @@ use std::collections::HashMap;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::app_definition::{
-    AccessibleApp, AppDefinition, AppDefinitionInput, AppDefinitionUpdate, AppPermission, AppPermissionInput,
-    APP_PERMISSION_LEVELS, APP_PERMISSION_PRINCIPAL_TYPES,
+    AccessibleApp, AppDefinition, AppDefinitionInput, AppDefinitionUpdate, AppPermission,
+    AppPermissionInput, APP_PERMISSION_LEVELS, APP_PERMISSION_PRINCIPAL_TYPES,
 };
-use crate::repositories::{app_definition_repo, dashboard_layout_repo, user_repo};
 use crate::repositories::user_repo::ROLES;
+use crate::repositories::{app_definition_repo, dashboard_layout_repo, user_repo};
 use crate::services::access_service;
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
@@ -39,7 +39,12 @@ use crate::services::access_service;
 /// delete/grant); `require_object_write_access` below is the separate,
 /// already-configurable per-app record-write gate this doesn't change.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "App", "Only an Administrator can manage this App")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "App",
+        "Only an Administrator can manage this App",
+    )
 }
 
 fn hydrate(row: (AppDefinition, String)) -> AppResult<AppDefinition> {
@@ -49,21 +54,38 @@ fn hydrate(row: (AppDefinition, String)) -> AppResult<AppDefinition> {
 }
 
 pub fn list(conn: &Connection, workspace_id: &str) -> AppResult<Vec<AppDefinition>> {
-    app_definition_repo::list(conn, workspace_id)?.into_iter().map(hydrate).collect()
+    app_definition_repo::list(conn, workspace_id)?
+        .into_iter()
+        .map(hydrate)
+        .collect()
 }
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<AppDefinition> {
-    let row = app_definition_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("App".into()))?;
+    let row =
+        app_definition_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("App".into()))?;
     hydrate(row)
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &AppDefinitionInput, actor_user_id: Option<&str>) -> AppResult<AppDefinition> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AppDefinitionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AppDefinition> {
     require_admin(conn, actor_user_id)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("App name is required".into()));
     }
     let id = app_definition_repo::new_id();
-    app_definition_repo::create(conn, &id, workspace_id, input.name.trim(), &input.icon, input.description.as_deref(), actor_user_id)?;
+    app_definition_repo::create(
+        conn,
+        &id,
+        workspace_id,
+        input.name.trim(),
+        &input.icon,
+        input.description.as_deref(),
+        actor_user_id,
+    )?;
     get(conn, &id)
 }
 
@@ -79,11 +101,14 @@ fn validate_object_keys_and_dashboard(
 ) -> AppResult<()> {
     for key in object_keys {
         if !super::custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, key)? {
-            return Err(AppError::Validation(format!("'{key}' is not a valid object for this workspace")));
+            return Err(AppError::Validation(format!(
+                "'{key}' is not a valid object for this workspace"
+            )));
         }
     }
     if let Some(dash_id) = dashboard_id {
-        let (dashboard, ..) = dashboard_layout_repo::get(conn, dash_id)?.ok_or_else(|| AppError::Validation("Dashboard not found".into()))?;
+        let (dashboard, ..) = dashboard_layout_repo::get(conn, dash_id)?
+            .ok_or_else(|| AppError::Validation("Dashboard not found".into()))?;
         if dashboard.workspace_id != workspace_id {
             return Err(AppError::Validation("Dashboard not found".into()));
         }
@@ -91,31 +116,59 @@ fn validate_object_keys_and_dashboard(
     Ok(())
 }
 
-pub fn update(conn: &Connection, id: &str, update: &AppDefinitionUpdate, actor_user_id: Option<&str>) -> AppResult<AppDefinition> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    update: &AppDefinitionUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<AppDefinition> {
     require_admin(conn, actor_user_id)?;
     if update.name.trim().is_empty() {
         return Err(AppError::Validation("App name is required".into()));
     }
     let existing = get(conn, id)?;
-    validate_object_keys_and_dashboard(conn, &existing.workspace_id, &update.object_keys, update.dashboard_id.as_deref())?;
-    let object_keys_json = serde_json::to_string(&update.object_keys).expect("Vec<String> always serializes");
+    validate_object_keys_and_dashboard(
+        conn,
+        &existing.workspace_id,
+        &update.object_keys,
+        update.dashboard_id.as_deref(),
+    )?;
+    let object_keys_json =
+        serde_json::to_string(&update.object_keys).expect("Vec<String> always serializes");
     app_definition_repo::update(
-        conn, id, update.name.trim(), &update.icon, update.description.as_deref(), &object_keys_json, update.dashboard_id.as_deref(), actor_user_id,
+        conn,
+        id,
+        update.name.trim(),
+        &update.icon,
+        update.description.as_deref(),
+        &object_keys_json,
+        update.dashboard_id.as_deref(),
+        actor_user_id,
     )?;
     get(conn, id)
 }
 
-pub fn publish(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<AppDefinition> {
+pub fn publish(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AppDefinition> {
     require_admin(conn, actor_user_id)?;
     let app = get(conn, id)?;
     if app.object_keys.is_empty() {
-        return Err(AppError::Validation("Add at least one object before publishing this app".into()));
+        return Err(AppError::Validation(
+            "Add at least one object before publishing this app".into(),
+        ));
     }
     app_definition_repo::set_published(conn, id, true, actor_user_id)?;
     get(conn, id)
 }
 
-pub fn unpublish(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<AppDefinition> {
+pub fn unpublish(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<AppDefinition> {
     require_admin(conn, actor_user_id)?;
     app_definition_repo::set_published(conn, id, false, actor_user_id)?;
     get(conn, id)
@@ -130,29 +183,48 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
 
 // ---- Permissions ------------------------------------------------------
 
-pub fn list_permissions(conn: &Connection, app_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<AppPermission>> {
+pub fn list_permissions(
+    conn: &Connection,
+    app_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AppPermission>> {
     require_admin(conn, actor_user_id)?;
     get(conn, app_id)?;
     Ok(app_definition_repo::list_permissions(conn, app_id)?)
 }
 
-pub fn grant_permission(conn: &Connection, app_id: &str, input: &AppPermissionInput, actor_user_id: Option<&str>) -> AppResult<AppPermission> {
+pub fn grant_permission(
+    conn: &Connection,
+    app_id: &str,
+    input: &AppPermissionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AppPermission> {
     require_admin(conn, actor_user_id)?;
     let app = get(conn, app_id)?;
     if !APP_PERMISSION_PRINCIPAL_TYPES.contains(&input.principal_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid principal type '{}'", input.principal_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid principal type '{}'",
+            input.principal_type
+        )));
     }
     if !APP_PERMISSION_LEVELS.contains(&input.level.as_str()) {
-        return Err(AppError::Validation(format!("Invalid access level '{}'", input.level)));
+        return Err(AppError::Validation(format!(
+            "Invalid access level '{}'",
+            input.level
+        )));
     }
     match input.principal_type.as_str() {
         "role" => {
             if !ROLES.contains(&input.principal_id.as_str()) {
-                return Err(AppError::Validation(format!("'{}' is not a role", input.principal_id)));
+                return Err(AppError::Validation(format!(
+                    "'{}' is not a role",
+                    input.principal_id
+                )));
             }
         }
         "user" => {
-            let user = user_repo::find_by_id(conn, &input.principal_id)?.ok_or_else(|| AppError::Validation("User not found".into()))?;
+            let user = user_repo::find_by_id(conn, &input.principal_id)?
+                .ok_or_else(|| AppError::Validation("User not found".into()))?;
             if user.workspace_id != app.workspace_id {
                 return Err(AppError::Validation("User not found".into()));
             }
@@ -160,7 +232,15 @@ pub fn grant_permission(conn: &Connection, app_id: &str, input: &AppPermissionIn
         _ => unreachable!("validated above"),
     }
     let id = app_definition_repo::new_id();
-    app_definition_repo::upsert_permission(conn, &id, app_id, &input.principal_type, &input.principal_id, &input.level, actor_user_id)?;
+    app_definition_repo::upsert_permission(
+        conn,
+        &id,
+        app_id,
+        &input.principal_type,
+        &input.principal_id,
+        &input.level,
+        actor_user_id,
+    )?;
     // The upsert may have updated an existing row under a different id than
     // the one just minted (a re-grant) - re-read by (app_id, principal) to
     // return the row that actually exists now.
@@ -170,7 +250,11 @@ pub fn grant_permission(conn: &Connection, app_id: &str, input: &AppPermissionIn
         .ok_or_else(|| AppError::NotFound("App permission".into()))
 }
 
-pub fn revoke_permission(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn revoke_permission(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     app_definition_repo::delete_permission(conn, id)?;
     Ok(())
@@ -180,7 +264,11 @@ pub fn revoke_permission(conn: &Connection, id: &str, actor_user_id: Option<&str
 /// than one grant (e.g. two different role grants) applies to the same
 /// actor on the same app.
 fn stronger(a: &str, b: &str) -> String {
-    if a == "editor" || b == "editor" { "editor".into() } else { "viewer".into() }
+    if a == "editor" || b == "editor" {
+        "editor".into()
+    } else {
+        "viewer".into()
+    }
 }
 
 /// Every published app the actor can see, with their resolved access
@@ -192,15 +280,31 @@ fn stronger(a: &str, b: &str) -> String {
 /// intent), otherwise the strongest of whatever role grants match one of
 /// the actor's roles; no matching grant at all means the app doesn't
 /// appear for them, unpublished or not.
-pub fn list_accessible(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<AccessibleApp>> {
-    let published: Vec<AppDefinition> = list(conn, workspace_id)?.into_iter().filter(|a| a.is_published).collect();
-    let Some(actor_id) = actor_user_id else { return Ok(Vec::new()) };
+pub fn list_accessible(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<AccessibleApp>> {
+    let published: Vec<AppDefinition> = list(conn, workspace_id)?
+        .into_iter()
+        .filter(|a| a.is_published)
+        .collect();
+    let Some(actor_id) = actor_user_id else {
+        return Ok(Vec::new());
+    };
     let actor_roles = user_repo::roles_for_user(conn, actor_id)?;
     if actor_roles.iter().any(|r| r == "Administrator") {
-        return Ok(published.into_iter().map(|app| AccessibleApp { app, level: "editor".into() }).collect());
+        return Ok(published
+            .into_iter()
+            .map(|app| AccessibleApp {
+                app,
+                level: "editor".into(),
+            })
+            .collect());
     }
 
-    let all_permissions = app_definition_repo::list_all_permissions_for_workspace(conn, workspace_id)?;
+    let all_permissions =
+        app_definition_repo::list_all_permissions_for_workspace(conn, workspace_id)?;
     let mut by_app: HashMap<&str, Vec<&AppPermission>> = HashMap::new();
     for p in &all_permissions {
         by_app.entry(p.app_id.as_str()).or_default().push(p);
@@ -210,14 +314,25 @@ pub fn list_accessible(conn: &Connection, workspace_id: &str, actor_user_id: Opt
     for app in published {
         let grants = by_app.get(app.id.as_str());
         let Some(grants) = grants else { continue };
-        if let Some(user_grant) = grants.iter().find(|p| p.principal_type == "user" && p.principal_id == actor_id) {
-            out.push(AccessibleApp { level: user_grant.level.clone(), app });
+        if let Some(user_grant) = grants
+            .iter()
+            .find(|p| p.principal_type == "user" && p.principal_id == actor_id)
+        {
+            out.push(AccessibleApp {
+                level: user_grant.level.clone(),
+                app,
+            });
             continue;
         }
         let role_level = grants
             .iter()
             .filter(|p| p.principal_type == "role" && actor_roles.contains(&p.principal_id))
-            .fold(None::<String>, |acc, p| Some(match acc { Some(a) => stronger(&a, &p.level), None => p.level.clone() }));
+            .fold(None::<String>, |acc, p| {
+                Some(match acc {
+                    Some(a) => stronger(&a, &p.level),
+                    None => p.level.clone(),
+                })
+            });
         if let Some(level) = role_level {
             out.push(AccessibleApp { level, app });
         }
@@ -242,12 +357,22 @@ pub fn list_accessible(conn: &Connection, workspace_id: &str, actor_user_id: Opt
 /// one app. "Editor" on at least one such app is enough to write; "viewer"
 /// everywhere it matters, or no access to any app that claims this entity
 /// type at all, is not.
-pub fn require_object_write_access(conn: &Connection, workspace_id: &str, entity_type: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn require_object_write_access(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     let accessible = list_accessible(conn, workspace_id, actor_user_id)?;
     let level = accessible
         .iter()
         .filter(|a| a.app.object_keys.iter().any(|k| k == entity_type))
-        .fold(None::<String>, |acc, a| Some(match acc { Some(l) => stronger(&l, &a.level), None => a.level.clone() }));
+        .fold(None::<String>, |acc, a| {
+            Some(match acc {
+                Some(l) => stronger(&l, &a.level),
+                None => a.level.clone(),
+            })
+        });
     match level.as_deref() {
         Some("editor") => Ok(()),
         Some(_) => Err(AppError::Validation(format!(
@@ -279,6 +404,11 @@ pub fn require_object_write_access(conn: &Connection, workspace_id: &str, entity
 /// boundary (the frontend can't be trusted to have called it, or called it
 /// honestly) - `require_object_write_access` at each command's own call
 /// site is what actually blocks the write; this is purely UI convenience.
-pub fn can_write_object(conn: &Connection, workspace_id: &str, entity_type: &str, actor_user_id: Option<&str>) -> AppResult<bool> {
+pub fn can_write_object(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<bool> {
     Ok(require_object_write_access(conn, workspace_id, entity_type, actor_user_id).is_ok())
 }

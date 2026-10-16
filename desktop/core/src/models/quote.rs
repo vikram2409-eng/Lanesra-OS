@@ -70,5 +70,11 @@ pub struct QuoteWithLines {
 }
 
 pub const QUOTE_STATUSES: &[&str] = &[
-    "Draft", "Sent", "Viewed", "Accepted", "Rejected", "Expired", "Cancelled",
+    "Draft",
+    "Sent",
+    "Viewed",
+    "Accepted",
+    "Rejected",
+    "Expired",
+    "Cancelled",
 ];

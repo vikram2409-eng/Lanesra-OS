@@ -1,10 +1,10 @@
 //! Integration Hub (Lanesra_OS_Integration_Hub_Admin_Design_Development_Spec_v1.0)
 //! - every model this feature's services/repositories operate on, grouped
-//! by resource with a section comment each rather than split into many
-//! small files (matches `models::industry_package`'s own precedent for a
-//! comparably multi-shaped subsystem). See migration 0032's own comment
-//! for the full table list and `services::connection_service` and
-//! friends for the behavior built on top of these.
+//!   by resource with a section comment each rather than split into many
+//!   small files (matches `models::industry_package`'s own precedent for a
+//!   comparably multi-shaped subsystem). See migration 0032's own comment
+//!   for the full table list and `services::connection_service` and
+//!   friends for the behavior built on top of these.
 
 use serde::{Deserialize, Serialize};
 
@@ -522,8 +522,8 @@ pub struct ExternalObjectInput {
 
 /// One column's worth of metadata for `GET /api/v1/objects/{key}/metadata`
 /// - deliberately the same shape whether `object_key` resolves to a
-/// built-in entity or a Custom Object, since both go through
-/// `api_object_service`.
+///   built-in entity or a Custom Object, since both go through
+///   `api_object_service`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiFieldMetadata {
     pub key: String,

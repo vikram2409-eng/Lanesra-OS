@@ -28,17 +28,28 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiProvider> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<AiProvider>> {
-    conn.query_row("SELECT * FROM ai_providers WHERE id = ?1", [id], map_row).optional()
+    conn.query_row("SELECT * FROM ai_providers WHERE id = ?1", [id], map_row)
+        .optional()
 }
 
 /// The raw `secret_id`, not exposed on the public model - same reason
 /// `ai_settings_repo::get_secret_id` exists (deciding rotate-vs-insert,
 /// and resolving the real key for a dispatch).
 pub fn get_secret_id(conn: &Connection, id: &str) -> rusqlite::Result<Option<String>> {
-    conn.query_row("SELECT secret_id FROM ai_providers WHERE id = ?1", [id], |row| row.get(0)).optional().map(|o| o.flatten())
+    conn.query_row(
+        "SELECT secret_id FROM ai_providers WHERE id = ?1",
+        [id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map(|o| o.flatten())
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> rusqlite::Result<Vec<AiProvider>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    active_only: bool,
+) -> rusqlite::Result<Vec<AiProvider>> {
     let sql = if active_only {
         "SELECT * FROM ai_providers WHERE workspace_id = ?1 AND is_active = 1 ORDER BY name"
     } else {
@@ -49,7 +60,14 @@ pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> rusqlit
     rows
 }
 
-pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiProviderInput, secret_id: Option<&str>, actor_user_id: Option<&str>) -> rusqlite::Result<AiProvider> {
+pub fn create(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &AiProviderInput,
+    secret_id: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiProvider> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO ai_providers (id, workspace_id, name, provider, base_url, model, secret_id, is_active, created_at, created_by, updated_at, updated_by)
@@ -59,7 +77,13 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AiProvide
     get(conn, id).map(|p| p.expect("just inserted"))
 }
 
-pub fn update(conn: &Connection, id: &str, input: &AiProviderInput, secret_id: Option<&str>, actor_user_id: Option<&str>) -> rusqlite::Result<AiProvider> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &AiProviderInput,
+    secret_id: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiProvider> {
     let now = now_iso();
     conn.execute(
         "UPDATE ai_providers SET name = ?1, provider = ?2, base_url = ?3, model = ?4, secret_id = ?5, updated_at = ?6, updated_by = ?7 WHERE id = ?8",
@@ -68,8 +92,16 @@ pub fn update(conn: &Connection, id: &str, input: &AiProviderInput, secret_id: O
     get(conn, id).map(|p| p.expect("just updated"))
 }
 
-pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> rusqlite::Result<AiProvider> {
+pub fn set_active(
+    conn: &Connection,
+    id: &str,
+    is_active: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiProvider> {
     let now = now_iso();
-    conn.execute("UPDATE ai_providers SET is_active = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4", rusqlite::params![is_active, now, actor_user_id, id])?;
+    conn.execute(
+        "UPDATE ai_providers SET is_active = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
+        rusqlite::params![is_active, now, actor_user_id, id],
+    )?;
     get(conn, id).map(|p| p.expect("just updated"))
 }

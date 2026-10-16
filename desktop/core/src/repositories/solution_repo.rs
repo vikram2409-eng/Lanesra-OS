@@ -53,19 +53,48 @@ pub fn insert(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<Solution>> {
-    conn.query_row(&format!("{SELECT_SOLUTION} WHERE s.id = ?1"), [id], map_solution)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        &format!("{SELECT_SOLUTION} WHERE s.id = ?1"),
+        [id],
+        map_solution,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn get_by_name(conn: &Connection, workspace_id: &str, name: &str) -> rusqlite::Result<Option<Solution>> {
-    conn.query_row(&format!("{SELECT_SOLUTION} WHERE s.workspace_id = ?1 AND s.name = ?2"), (workspace_id, name), map_solution)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+pub fn get_by_name(
+    conn: &Connection,
+    workspace_id: &str,
+    name: &str,
+) -> rusqlite::Result<Option<Solution>> {
+    conn.query_row(
+        &format!("{SELECT_SOLUTION} WHERE s.workspace_id = ?1 AND s.name = ?2"),
+        (workspace_id, name),
+        map_solution,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<Solution>> {
-    let mut stmt = conn.prepare(&format!("{SELECT_SOLUTION} WHERE s.workspace_id = ?1 ORDER BY s.name"))?;
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<Solution>> {
+    let mut stmt = conn.prepare(&format!(
+        "{SELECT_SOLUTION} WHERE s.workspace_id = ?1 ORDER BY s.name"
+    ))?;
     let rows = stmt.query_map([workspace_id], map_solution)?;
     rows.collect()
 }
@@ -133,7 +162,12 @@ pub fn add_member(
 /// this membership row - the component itself, and its
 /// `solution_components` ownership tag, are untouched (matches every
 /// other "remove from view, don't destroy" convention in this module).
-pub fn remove_member(conn: &Connection, solution_id: &str, artifact_type: &str, metadata_id: &str) -> rusqlite::Result<()> {
+pub fn remove_member(
+    conn: &Connection,
+    solution_id: &str,
+    artifact_type: &str,
+    metadata_id: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "DELETE FROM solution_members WHERE solution_id = ?1 AND artifact_type = ?2 AND metadata_id = ?3",
         (solution_id, artifact_type, metadata_id),
@@ -142,7 +176,9 @@ pub fn remove_member(conn: &Connection, solution_id: &str, artifact_type: &str, 
 }
 
 pub fn list_members(conn: &Connection, solution_id: &str) -> rusqlite::Result<Vec<SolutionMember>> {
-    let mut stmt = conn.prepare("SELECT * FROM solution_members WHERE solution_id = ?1 ORDER BY artifact_type, added_at")?;
+    let mut stmt = conn.prepare(
+        "SELECT * FROM solution_members WHERE solution_id = ?1 ORDER BY artifact_type, added_at",
+    )?;
     let rows = stmt.query_map([solution_id], map_member)?;
     rows.collect()
 }

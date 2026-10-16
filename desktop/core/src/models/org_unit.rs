@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-pub const ORG_UNIT_TYPES: &[&str] = &["Division", "Region", "Department", "Branch", "BusinessLine", "Custom"];
+pub const ORG_UNIT_TYPES: &[&str] = &[
+    "Division",
+    "Region",
+    "Department",
+    "Branch",
+    "BusinessLine",
+    "Custom",
+];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OrgUnit {

@@ -3,7 +3,8 @@ use rusqlite::{Connection, OptionalExtension};
 use crate::domain::ids::{new_uuid, now_iso};
 use crate::models::task::{Task, TaskInput};
 
-const SELECT_TASK: &str = "SELECT t.*, tl.related_type AS link_related_type, tl.related_id AS link_related_id
+const SELECT_TASK: &str =
+    "SELECT t.*, tl.related_type AS link_related_type, tl.related_id AS link_related_id
     FROM tasks t LEFT JOIN task_links tl ON tl.task_id = t.id";
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<Task> {
@@ -83,7 +84,11 @@ pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<Task>
     rows.collect()
 }
 
-pub fn list_by_related(conn: &Connection, related_type: &str, related_id: &str) -> rusqlite::Result<Vec<Task>> {
+pub fn list_by_related(
+    conn: &Connection,
+    related_type: &str,
+    related_id: &str,
+) -> rusqlite::Result<Vec<Task>> {
     let mut stmt = conn.prepare(&format!(
         "{SELECT_TASK} WHERE tl.related_type = ?1 AND tl.related_id = ?2 AND t.archived_at IS NULL ORDER BY t.due_date IS NULL, t.due_date"
     ))?;
@@ -128,7 +133,10 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> rusq
     Ok(())
 }
 
-pub fn count_open_and_overdue(conn: &Connection, workspace_id: &str) -> rusqlite::Result<(i64, i64)> {
+pub fn count_open_and_overdue(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<(i64, i64)> {
     conn.query_row(
         "SELECT
             SUM(CASE WHEN status NOT IN ('Completed', 'Cancelled') THEN 1 ELSE 0 END),

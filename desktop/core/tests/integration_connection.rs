@@ -25,14 +25,23 @@ use std::net::TcpListener;
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::integration::{ConnectionInput, ConnectionRefInput, ConnectionUpdate};
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{connection_ref_service, connection_service, secret_service, workspace_service};
+use lanesra_core::services::{
+    connection_ref_service, connection_service, secret_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
     let setup = WorkspaceSetup {
-        business_name: "Connection Co".into(), legal_name: None, currency_code: "USD".into(), locale: "en-US".into(),
-        timezone: "UTC".into(), default_tax_rate_bp: 0, admin_username: "admin".into(), admin_display_name: "Admin".into(),
-        admin_password: "supersecretpassword".into(), load_sample_data: false,
+        business_name: "Connection Co".into(),
+        legal_name: None,
+        currency_code: "USD".into(),
+        locale: "en-US".into(),
+        timezone: "UTC".into(),
+        default_tax_rate_bp: 0,
+        admin_username: "admin".into(),
+        admin_display_name: "Admin".into(),
+        admin_password: "supersecretpassword".into(),
+        load_sample_data: false,
     };
     let (workspace, admin) = workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
@@ -48,10 +57,21 @@ fn master_key() -> [u8; 32] {
 /// changed the plaintext has to go through the same
 /// secret_id -> integration_secrets -> decrypt path it uses internally,
 /// using only public API.
-fn read_connection_secret(conn: &rusqlite::Connection, master_key: &[u8; 32], connection_id: &str) -> Option<String> {
-    let secret_id: Option<String> = conn.query_row("SELECT secret_id FROM integration_connections WHERE id = ?1", [connection_id], |r| r.get(0)).unwrap();
+fn read_connection_secret(
+    conn: &rusqlite::Connection,
+    master_key: &[u8; 32],
+    connection_id: &str,
+) -> Option<String> {
+    let secret_id: Option<String> = conn
+        .query_row(
+            "SELECT secret_id FROM integration_connections WHERE id = ?1",
+            [connection_id],
+            |r| r.get(0),
+        )
+        .unwrap();
     let secret_id = secret_id?;
-    let stored = lanesra_core::repositories::integration_secret_repo::get(conn, &secret_id).unwrap()?;
+    let stored =
+        lanesra_core::repositories::integration_secret_repo::get(conn, &secret_id).unwrap()?;
     Some(secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce).unwrap())
 }
 
@@ -116,11 +136,30 @@ async fn rest_test_connection_reports_real_success_and_real_failure() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let ok_port = spawn_status_server(200);
     let connection = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "Local REST API".into(), connection_type: "rest".into(), base_url: Some(format!("http://127.0.0.1:{ok_port}")), auth_mode: "none".into(), secret_value: None, config_json: "{}".into(), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "Local REST API".into(),
+            connection_type: "rest".into(),
+            base_url: Some(format!("http://127.0.0.1:{ok_port}")),
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: "{}".into(),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
-    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    )
+    .unwrap();
+    let result = connection_service::test_connection(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &connection.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
     assert!(result.ok, "{result:?}");
     assert_eq!(result.status_code, Some(200));
 
@@ -129,13 +168,37 @@ async fn rest_test_connection_reports_real_success_and_real_failure() {
 
     // A closed port (nothing listening) is a real, not simulated, failure.
     let unreachable = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "Unreachable".into(), connection_type: "rest".into(), base_url: Some("http://127.0.0.1:1".into()), auth_mode: "none".into(), secret_value: None, config_json: r#"{"timeout_ms": 500}"#.into(), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "Unreachable".into(),
+            connection_type: "rest".into(),
+            base_url: Some("http://127.0.0.1:1".into()),
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: r#"{"timeout_ms": 500}"#.into(),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
-    let failed = connection_service::test_connection(&conn, &workspace_id, &master_key(), &unreachable.id, Some(&admin_id)).await.unwrap();
+    )
+    .unwrap();
+    let failed = connection_service::test_connection(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &unreachable.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
     assert!(!failed.ok);
-    assert_eq!(connection_service::get(&conn, &workspace_id, &unreachable.id).unwrap().status, "failed");
+    assert_eq!(
+        connection_service::get(&conn, &workspace_id, &unreachable.id)
+            .unwrap()
+            .status,
+        "failed"
+    );
 }
 
 #[tokio::test]
@@ -143,11 +206,30 @@ async fn rest_test_connection_treats_a_server_error_as_a_failed_test() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let port = spawn_status_server(500);
     let connection = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "Flaky".into(), connection_type: "rest".into(), base_url: Some(format!("http://127.0.0.1:{port}")), auth_mode: "none".into(), secret_value: None, config_json: "{}".into(), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "Flaky".into(),
+            connection_type: "rest".into(),
+            base_url: Some(format!("http://127.0.0.1:{port}")),
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: "{}".into(),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
-    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    )
+    .unwrap();
+    let result = connection_service::test_connection(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &connection.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
     assert!(!result.ok);
     assert_eq!(result.status_code, Some(500));
 }
@@ -157,11 +239,30 @@ async fn smtp_test_connection_succeeds_against_a_real_local_smtp_dialogue() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let port = spawn_smtp_stub();
     let connection = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "Local SMTP".into(), connection_type: "smtp".into(), base_url: None, auth_mode: "none".into(), secret_value: None, config_json: format!(r#"{{"host": "127.0.0.1", "port": {port}}}"#), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "Local SMTP".into(),
+            connection_type: "smtp".into(),
+            base_url: None,
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: format!(r#"{{"host": "127.0.0.1", "port": {port}}}"#),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
-    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    )
+    .unwrap();
+    let result = connection_service::test_connection(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &connection.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
     assert!(result.ok, "{result:?}");
 }
 
@@ -179,7 +280,15 @@ async fn postgres_test_connection_succeeds_against_a_real_local_postgres() {
         },
         Some(&admin_id),
     ).unwrap();
-    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    let result = connection_service::test_connection(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &connection.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
     assert!(result.ok, "{result:?}");
 }
 
@@ -189,12 +298,34 @@ async fn a_wrong_postgres_password_is_a_real_failure_not_ignored() {
     // Deliberately not #[ignore] - this doesn't need Postgres running at
     // all, since tokio_postgres fails during connection setup before ever
     // reaching the server for a host that plain doesn't resolve/listen.
-    let connection = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "Bad Postgres".into(), connection_type: "postgres".into(), base_url: None, auth_mode: "basic".into(), secret_value: Some("whatever".into()), config_json: r#"{"host": "127.0.0.1", "port": 1, "database": "nope", "username": "nope"}"#.into(), owner_user_id: None },
+    let connection =
+        connection_service::create(
+            &conn,
+            &workspace_id,
+            &master_key(),
+            &ConnectionInput {
+                name: "Bad Postgres".into(),
+                connection_type: "postgres".into(),
+                base_url: None,
+                auth_mode: "basic".into(),
+                secret_value: Some("whatever".into()),
+                config_json:
+                    r#"{"host": "127.0.0.1", "port": 1, "database": "nope", "username": "nope"}"#
+                        .into(),
+                owner_user_id: None,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+    let result = connection_service::test_connection(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &connection.id,
         Some(&admin_id),
-    ).unwrap();
-    let result = connection_service::test_connection(&conn, &workspace_id, &master_key(), &connection.id, Some(&admin_id)).await.unwrap();
+    )
+    .await
+    .unwrap();
     assert!(!result.ok);
 }
 
@@ -202,75 +333,201 @@ async fn a_wrong_postgres_password_is_a_real_failure_not_ignored() {
 fn crud_and_secret_rotation_round_trip() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let created = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "API Key Conn".into(), connection_type: "rest".into(), base_url: Some("http://example.invalid".into()), auth_mode: "api_key".into(), secret_value: Some("original-secret".into()), config_json: "{}".into(), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "API Key Conn".into(),
+            connection_type: "rest".into(),
+            base_url: Some("http://example.invalid".into()),
+            auth_mode: "api_key".into(),
+            secret_value: Some("original-secret".into()),
+            config_json: "{}".into(),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
+    )
+    .unwrap();
     assert!(created.has_secret);
-    assert_eq!(connection_service::list_for_workspace(&conn, &workspace_id).unwrap().len(), 1);
+    assert_eq!(
+        connection_service::list_for_workspace(&conn, &workspace_id)
+            .unwrap()
+            .len(),
+        1
+    );
 
     // The secret is never exposed on the model, only whether one exists.
     let secret_before = read_connection_secret(&conn, &master_key(), &created.id);
     assert_eq!(secret_before.as_deref(), Some("original-secret"));
 
     let updated = connection_service::update(
-        &conn, &workspace_id, &master_key(), &created.id,
-        &ConnectionUpdate { name: "API Key Conn Renamed".into(), base_url: Some("http://example.invalid".into()), auth_mode: "api_key".into(), secret_value: Some("rotated-secret".into()), config_json: "{}".into(), owner_user_id: None, status: "disabled".into() },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &created.id,
+        &ConnectionUpdate {
+            name: "API Key Conn Renamed".into(),
+            base_url: Some("http://example.invalid".into()),
+            auth_mode: "api_key".into(),
+            secret_value: Some("rotated-secret".into()),
+            config_json: "{}".into(),
+            owner_user_id: None,
+            status: "disabled".into(),
+        },
         Some(&admin_id),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(updated.name, "API Key Conn Renamed");
     let secret_after = read_connection_secret(&conn, &master_key(), &created.id);
     assert_eq!(secret_after.as_deref(), Some("rotated-secret"));
 
     connection_service::delete(&conn, &workspace_id, &created.id, Some(&admin_id)).unwrap();
-    assert!(connection_service::list_for_workspace(&conn, &workspace_id).unwrap().is_empty());
+    assert!(connection_service::list_for_workspace(&conn, &workspace_id)
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
 fn delete_is_blocked_while_a_connection_reference_still_points_at_it() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let connection = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "Referenced".into(), connection_type: "rest".into(), base_url: Some("http://example.invalid".into()), auth_mode: "none".into(), secret_value: None, config_json: "{}".into(), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "Referenced".into(),
+            connection_type: "rest".into(),
+            base_url: Some("http://example.invalid".into()),
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: "{}".into(),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
-    connection_ref_service::create(&conn, &workspace_id, &ConnectionRefInput { reference_name: "Widgets".into(), reference_key: "widgets".into(), expected_connection_type: "rest".into(), connection_id: Some(connection.id.clone()) }, Some(&admin_id)).unwrap();
+    )
+    .unwrap();
+    connection_ref_service::create(
+        &conn,
+        &workspace_id,
+        &ConnectionRefInput {
+            reference_name: "Widgets".into(),
+            reference_key: "widgets".into(),
+            expected_connection_type: "rest".into(),
+            connection_id: Some(connection.id.clone()),
+        },
+        Some(&admin_id),
+    )
+    .unwrap();
 
-    assert!(connection_service::delete(&conn, &workspace_id, &connection.id, Some(&admin_id)).is_err());
+    assert!(
+        connection_service::delete(&conn, &workspace_id, &connection.id, Some(&admin_id)).is_err()
+    );
 }
 
 #[test]
 fn connection_ref_rejects_binding_to_the_wrong_connection_type() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let smtp_connection = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "SMTP".into(), connection_type: "smtp".into(), base_url: None, auth_mode: "none".into(), secret_value: None, config_json: r#"{"host": "localhost"}"#.into(), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "SMTP".into(),
+            connection_type: "smtp".into(),
+            base_url: None,
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: r#"{"host": "localhost"}"#.into(),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
+    )
+    .unwrap();
 
-    let reference = connection_ref_service::create(&conn, &workspace_id, &ConnectionRefInput { reference_name: "Widgets".into(), reference_key: "widgets".into(), expected_connection_type: "rest".into(), connection_id: None }, Some(&admin_id)).unwrap();
-    assert!(reference.connection_id.is_none(), "unbound until an admin binds it");
+    let reference = connection_ref_service::create(
+        &conn,
+        &workspace_id,
+        &ConnectionRefInput {
+            reference_name: "Widgets".into(),
+            reference_key: "widgets".into(),
+            expected_connection_type: "rest".into(),
+            connection_id: None,
+        },
+        Some(&admin_id),
+    )
+    .unwrap();
+    assert!(
+        reference.connection_id.is_none(),
+        "unbound until an admin binds it"
+    );
 
-    let bind_result = connection_ref_service::bind(&conn, &workspace_id, &reference.id, Some(&smtp_connection.id), Some(&admin_id));
-    assert!(bind_result.is_err(), "binding a 'rest' reference to an 'smtp' connection must be rejected");
+    let bind_result = connection_ref_service::bind(
+        &conn,
+        &workspace_id,
+        &reference.id,
+        Some(&smtp_connection.id),
+        Some(&admin_id),
+    );
+    assert!(
+        bind_result.is_err(),
+        "binding a 'rest' reference to an 'smtp' connection must be rejected"
+    );
 }
 
 #[test]
 fn connection_ref_binds_and_unbinds() {
     let (conn, workspace_id, admin_id) = setup_workspace();
     let rest_connection = connection_service::create(
-        &conn, &workspace_id, &master_key(),
-        &ConnectionInput { name: "REST".into(), connection_type: "rest".into(), base_url: Some("http://example.invalid".into()), auth_mode: "none".into(), secret_value: None, config_json: "{}".into(), owner_user_id: None },
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &ConnectionInput {
+            name: "REST".into(),
+            connection_type: "rest".into(),
+            base_url: Some("http://example.invalid".into()),
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: "{}".into(),
+            owner_user_id: None,
+        },
         Some(&admin_id),
-    ).unwrap();
-    let reference = connection_ref_service::create(&conn, &workspace_id, &ConnectionRefInput { reference_name: "Widgets".into(), reference_key: "widgets".into(), expected_connection_type: "rest".into(), connection_id: None }, Some(&admin_id)).unwrap();
+    )
+    .unwrap();
+    let reference = connection_ref_service::create(
+        &conn,
+        &workspace_id,
+        &ConnectionRefInput {
+            reference_name: "Widgets".into(),
+            reference_key: "widgets".into(),
+            expected_connection_type: "rest".into(),
+            connection_id: None,
+        },
+        Some(&admin_id),
+    )
+    .unwrap();
 
-    let bound = connection_ref_service::bind(&conn, &workspace_id, &reference.id, Some(&rest_connection.id), Some(&admin_id)).unwrap();
-    assert_eq!(bound.connection_id.as_deref(), Some(rest_connection.id.as_str()));
+    let bound = connection_ref_service::bind(
+        &conn,
+        &workspace_id,
+        &reference.id,
+        Some(&rest_connection.id),
+        Some(&admin_id),
+    )
+    .unwrap();
+    assert_eq!(
+        bound.connection_id.as_deref(),
+        Some(rest_connection.id.as_str())
+    );
 
-    let unbound = connection_ref_service::bind(&conn, &workspace_id, &reference.id, None, Some(&admin_id)).unwrap();
+    let unbound =
+        connection_ref_service::bind(&conn, &workspace_id, &reference.id, None, Some(&admin_id))
+            .unwrap();
     assert!(unbound.connection_id.is_none());
 
     connection_ref_service::delete(&conn, &workspace_id, &reference.id, Some(&admin_id)).unwrap();
-    assert!(connection_ref_service::list_for_workspace(&conn, &workspace_id).unwrap().is_empty());
+    assert!(
+        connection_ref_service::list_for_workspace(&conn, &workspace_id)
+            .unwrap()
+            .is_empty()
+    );
 }

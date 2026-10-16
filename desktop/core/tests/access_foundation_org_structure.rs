@@ -5,7 +5,10 @@ use lanesra_core::models::ownership::OwnerRef;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::work_team::{TeamMembershipInput, WorkTeamInput, WorkTeamUpdate};
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{company_service, org_unit_service, organization_service, ownership_service, user_service, work_team_service, workspace_service};
+use lanesra_core::services::{
+    company_service, org_unit_service, organization_service, ownership_service, user_service,
+    work_team_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -79,7 +82,10 @@ fn org_unit_create_requires_a_parent() {
         effective_to: None,
     };
     let result = org_unit_service::create(&conn, &ws, &input, Some(&admin));
-    assert!(result.is_err(), "a second top-level Organization Unit must be rejected");
+    assert!(
+        result.is_err(),
+        "a second top-level Organization Unit must be rejected"
+    );
 }
 
 #[test]
@@ -87,11 +93,25 @@ fn org_unit_create_computes_path_and_depth_across_levels() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
 
-    let region = org_unit_service::create(&conn, &ws, &child_unit_input("East Region", &root.root_org_unit_id), Some(&admin)).unwrap();
+    let region = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("East Region", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(region.depth, 1);
-    assert!(region.path.starts_with(&format!("/{}/", root.root_org_unit_id)));
+    assert!(region
+        .path
+        .starts_with(&format!("/{}/", root.root_org_unit_id)));
 
-    let branch = org_unit_service::create(&conn, &ws, &child_unit_input("Boston Branch", &region.id), Some(&admin)).unwrap();
+    let branch = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Boston Branch", &region.id),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(branch.depth, 2);
     assert!(branch.path.starts_with(&region.path));
 }
@@ -102,52 +122,128 @@ fn org_unit_non_administrator_cannot_create() {
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
     let sales = user_service::create(&conn, &ws, &non_admin_input("sam"), Some(&admin)).unwrap();
 
-    let result = org_unit_service::create(&conn, &ws, &child_unit_input("Shadow Unit", &root.root_org_unit_id), Some(&sales.id));
-    assert!(result.is_err(), "a non-administrator must not be able to create Organization Units");
+    let result = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Shadow Unit", &root.root_org_unit_id),
+        Some(&sales.id),
+    );
+    assert!(
+        result.is_err(),
+        "a non-administrator must not be able to create Organization Units"
+    );
 }
 
 #[test]
 fn org_unit_move_rejects_cycles() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
-    let parent = org_unit_service::create(&conn, &ws, &child_unit_input("Parent", &root.root_org_unit_id), Some(&admin)).unwrap();
-    let child = org_unit_service::create(&conn, &ws, &child_unit_input("Child", &parent.id), Some(&admin)).unwrap();
+    let parent = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Parent", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
+    let child = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Child", &parent.id),
+        Some(&admin),
+    )
+    .unwrap();
 
     // Moving the parent under its own child is a cycle and must be rejected.
     let result = org_unit_service::move_unit(&conn, &ws, &parent.id, &child.id, Some(&admin));
-    assert!(result.is_err(), "moving a unit under its own descendant must be rejected");
+    assert!(
+        result.is_err(),
+        "moving a unit under its own descendant must be rejected"
+    );
 
     // Moving a unit under itself is likewise rejected.
     let result = org_unit_service::move_unit(&conn, &ws, &parent.id, &parent.id, Some(&admin));
     assert!(result.is_err());
 
     // The root itself can never be moved.
-    let result = org_unit_service::move_unit(&conn, &ws, &root.root_org_unit_id, &parent.id, Some(&admin));
-    assert!(result.is_err(), "the root Organization Unit must not be movable");
+    let result =
+        org_unit_service::move_unit(&conn, &ws, &root.root_org_unit_id, &parent.id, Some(&admin));
+    assert!(
+        result.is_err(),
+        "the root Organization Unit must not be movable"
+    );
 }
 
 #[test]
 fn org_unit_move_previews_impact_then_recomputes_subtree_paths() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
-    let east = org_unit_service::create(&conn, &ws, &child_unit_input("East", &root.root_org_unit_id), Some(&admin)).unwrap();
-    let west = org_unit_service::create(&conn, &ws, &child_unit_input("West", &root.root_org_unit_id), Some(&admin)).unwrap();
-    let boston = org_unit_service::create(&conn, &ws, &child_unit_input("Boston", &east.id), Some(&admin)).unwrap();
+    let east = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("East", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
+    let west = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("West", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
+    let boston = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Boston", &east.id),
+        Some(&admin),
+    )
+    .unwrap();
 
     // Give a company an owning_org_unit_id under the subtree being moved,
     // so the impact preview has something real to count.
     let company = company_service::create(
         &conn,
         &ws,
-        &CompanyInput { name: "Acme".into(), status: "Prospect".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, phone: None, email: None, website: None, annual_revenue_cents: None, employee_count: None, preferred_contact_method: None },
+        &CompanyInput {
+            name: "Acme".into(),
+            status: "Prospect".into(),
+            owner_user_id: None,
+            tax_number: None,
+            billing_address: None,
+            shipping_address: None,
+            tags: None,
+            notes: None,
+            phone: None,
+            email: None,
+            website: None,
+            annual_revenue_cents: None,
+            employee_count: None,
+            preferred_contact_method: None,
+        },
         Some(&admin),
     )
     .unwrap();
-    ownership_service::set_owner(&conn, &ws, "Company", &company.id, &OwnerRef::user(&admin), Some(&boston.id), Some(&admin)).unwrap();
+    ownership_service::set_owner(
+        &conn,
+        &ws,
+        "Company",
+        &company.id,
+        &OwnerRef::user(&admin),
+        Some(&boston.id),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let preview = org_unit_service::preview_move(&conn, &ws, &east.id, &west.id, Some(&admin)).unwrap();
-    assert_eq!(preview.descendant_unit_count, 1, "Boston is East's only descendant");
-    assert!(preview.owned_record_counts.iter().any(|(key, count)| key == "Company" && *count == 1));
+    let preview =
+        org_unit_service::preview_move(&conn, &ws, &east.id, &west.id, Some(&admin)).unwrap();
+    assert_eq!(
+        preview.descendant_unit_count, 1,
+        "Boston is East's only descendant"
+    );
+    assert!(preview
+        .owned_record_counts
+        .iter()
+        .any(|(key, count)| key == "Company" && *count == 1));
 
     let moved = org_unit_service::move_unit(&conn, &ws, &east.id, &west.id, Some(&admin)).unwrap();
     assert_eq!(moved.parent_org_unit_id.as_deref(), Some(west.id.as_str()));
@@ -165,11 +261,26 @@ fn org_unit_move_previews_impact_then_recomputes_subtree_paths() {
 fn org_unit_delete_blocked_while_children_exist() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
-    let parent = org_unit_service::create(&conn, &ws, &child_unit_input("Parent", &root.root_org_unit_id), Some(&admin)).unwrap();
-    let child = org_unit_service::create(&conn, &ws, &child_unit_input("Child", &parent.id), Some(&admin)).unwrap();
+    let parent = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Parent", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
+    let child = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Child", &parent.id),
+        Some(&admin),
+    )
+    .unwrap();
 
     let result = org_unit_service::delete(&conn, &parent.id, Some(&admin));
-    assert!(result.is_err(), "a unit with children must not be deletable");
+    assert!(
+        result.is_err(),
+        "a unit with children must not be deletable"
+    );
 
     org_unit_service::delete(&conn, &child.id, Some(&admin)).unwrap();
     org_unit_service::delete(&conn, &parent.id, Some(&admin)).unwrap();
@@ -180,12 +291,25 @@ fn org_unit_delete_blocked_while_children_exist() {
 fn org_unit_update_edits_name_and_status() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
-    let unit = org_unit_service::create(&conn, &ws, &child_unit_input("Original", &root.root_org_unit_id), Some(&admin)).unwrap();
+    let unit = org_unit_service::create(
+        &conn,
+        &ws,
+        &child_unit_input("Original", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
 
     let updated = org_unit_service::update(
         &conn,
         &unit.id,
-        &OrgUnitUpdate { name: "Renamed".into(), unit_type: "Region".into(), manager_user_id: None, status: "Inactive".into(), effective_from: None, effective_to: None },
+        &OrgUnitUpdate {
+            name: "Renamed".into(),
+            unit_type: "Region".into(),
+            manager_user_id: None,
+            status: "Inactive".into(),
+            effective_from: None,
+            effective_to: None,
+        },
         Some(&admin),
     )
     .unwrap();
@@ -212,18 +336,38 @@ fn work_team_crud_and_code_uniqueness() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
 
-    let team = work_team_service::create(&conn, &ws, &team_input("East Sales", "EAST-SALES", &root.root_org_unit_id), Some(&admin)).unwrap();
+    let team = work_team_service::create(
+        &conn,
+        &ws,
+        &team_input("East Sales", "EAST-SALES", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(team.code, "EAST-SALES");
     assert!(team.can_own_records);
 
-    let dup = work_team_service::create(&conn, &ws, &team_input("Duplicate", "EAST-SALES", &root.root_org_unit_id), Some(&admin));
+    let dup = work_team_service::create(
+        &conn,
+        &ws,
+        &team_input("Duplicate", "EAST-SALES", &root.root_org_unit_id),
+        Some(&admin),
+    );
     assert!(dup.is_err(), "team codes must be unique per workspace");
 
     let updated = work_team_service::update(
         &conn,
         &ws,
         &team.id,
-        &WorkTeamUpdate { name: "East Sales Desk".into(), team_type: "Queue".into(), primary_org_unit_id: root.root_org_unit_id.clone(), owner_user_id: None, can_own_records: true, status: "Active".into(), effective_from: None, effective_to: None },
+        &WorkTeamUpdate {
+            name: "East Sales Desk".into(),
+            team_type: "Queue".into(),
+            primary_org_unit_id: root.root_org_unit_id.clone(),
+            owner_user_id: None,
+            can_own_records: true,
+            status: "Active".into(),
+            effective_from: None,
+            effective_to: None,
+        },
         Some(&admin),
     )
     .unwrap();
@@ -239,26 +383,54 @@ fn work_team_crud_and_code_uniqueness() {
 fn work_team_membership_add_and_end() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
-    let team = work_team_service::create(&conn, &ws, &team_input("Queue", "Q1", &root.root_org_unit_id), Some(&admin)).unwrap();
+    let team = work_team_service::create(
+        &conn,
+        &ws,
+        &team_input("Queue", "Q1", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
     let sam = user_service::create(&conn, &ws, &non_admin_input("sam"), Some(&admin)).unwrap();
 
-    let membership = work_team_service::add_member(&conn, &ws, &team.id, &sam.id, None, Some(&admin)).unwrap();
-    assert_eq!(work_team_service::list_members(&conn, &team.id).unwrap().len(), 1);
+    let membership =
+        work_team_service::add_member(&conn, &ws, &team.id, &sam.id, None, Some(&admin)).unwrap();
+    assert_eq!(
+        work_team_service::list_members(&conn, &team.id)
+            .unwrap()
+            .len(),
+        1
+    );
 
     work_team_service::end_membership(&conn, &membership.id, Some(&admin)).unwrap();
-    assert_eq!(work_team_service::list_members(&conn, &team.id).unwrap().len(), 0, "an ended membership must drop out of the active list");
+    assert_eq!(
+        work_team_service::list_members(&conn, &team.id)
+            .unwrap()
+            .len(),
+        0,
+        "an ended membership must drop out of the active list"
+    );
 }
 
 #[test]
 fn work_team_delete_blocked_while_active_members_exist() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
-    let team = work_team_service::create(&conn, &ws, &team_input("Queue", "Q1", &root.root_org_unit_id), Some(&admin)).unwrap();
+    let team = work_team_service::create(
+        &conn,
+        &ws,
+        &team_input("Queue", "Q1", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
     let sam = user_service::create(&conn, &ws, &non_admin_input("sam"), Some(&admin)).unwrap();
-    let membership = work_team_service::add_member(&conn, &ws, &team.id, &sam.id, None, Some(&admin)).unwrap();
+    let membership =
+        work_team_service::add_member(&conn, &ws, &team.id, &sam.id, None, Some(&admin)).unwrap();
 
     let result = work_team_service::delete(&conn, &team.id, Some(&admin));
-    assert!(result.is_err(), "a team with active members must not be deletable");
+    assert!(
+        result.is_err(),
+        "a team with active members must not be deletable"
+    );
 
     work_team_service::end_membership(&conn, &membership.id, Some(&admin)).unwrap();
     work_team_service::delete(&conn, &team.id, Some(&admin)).unwrap();
@@ -272,27 +444,69 @@ fn work_team_delete_blocked_while_active_members_exist() {
 fn ending_team_membership_never_touches_owned_records() {
     let (conn, ws, admin) = setup_workspace();
     let root = organization_service::get(&conn, &ws, Some(&admin)).unwrap();
-    let team = work_team_service::create(&conn, &ws, &team_input("Queue", "Q1", &root.root_org_unit_id), Some(&admin)).unwrap();
+    let team = work_team_service::create(
+        &conn,
+        &ws,
+        &team_input("Queue", "Q1", &root.root_org_unit_id),
+        Some(&admin),
+    )
+    .unwrap();
     let sam = user_service::create(&conn, &ws, &non_admin_input("sam"), Some(&admin)).unwrap();
-    let membership = work_team_service::add_member(&conn, &ws, &team.id, &sam.id, None, Some(&admin)).unwrap();
+    let membership =
+        work_team_service::add_member(&conn, &ws, &team.id, &sam.id, None, Some(&admin)).unwrap();
 
     let company = company_service::create(
         &conn,
         &ws,
-        &CompanyInput { name: "Acme".into(), status: "Prospect".into(), owner_user_id: None, tax_number: None, billing_address: None, shipping_address: None, tags: None, notes: None, phone: None, email: None, website: None, annual_revenue_cents: None, employee_count: None, preferred_contact_method: None },
+        &CompanyInput {
+            name: "Acme".into(),
+            status: "Prospect".into(),
+            owner_user_id: None,
+            tax_number: None,
+            billing_address: None,
+            shipping_address: None,
+            tags: None,
+            notes: None,
+            phone: None,
+            email: None,
+            website: None,
+            annual_revenue_cents: None,
+            employee_count: None,
+            preferred_contact_method: None,
+        },
         Some(&admin),
     )
     .unwrap();
-    ownership_service::set_owner(&conn, &ws, "Company", &company.id, &OwnerRef::team(&team.id), None, Some(&admin)).unwrap();
+    ownership_service::set_owner(
+        &conn,
+        &ws,
+        "Company",
+        &company.id,
+        &OwnerRef::team(&team.id),
+        None,
+        Some(&admin),
+    )
+    .unwrap();
 
-    let owner_before = ownership_service::get_owner(&conn, "Company", &company.id).unwrap().unwrap();
+    let owner_before = ownership_service::get_owner(&conn, "Company", &company.id)
+        .unwrap()
+        .unwrap();
     assert_eq!(owner_before.owner.as_ref().unwrap().owner_id, team.id);
 
     work_team_service::end_membership(&conn, &membership.id, Some(&admin)).unwrap();
 
-    let owner_after = ownership_service::get_owner(&conn, "Company", &company.id).unwrap().unwrap();
-    assert_eq!(owner_after.owner.as_ref().unwrap().owner_id, team.id, "ending a membership must not change record ownership");
-    assert_eq!(owner_after.ownership_version, owner_before.ownership_version, "ending a membership must not bump ownership_version");
+    let owner_after = ownership_service::get_owner(&conn, "Company", &company.id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        owner_after.owner.as_ref().unwrap().owner_id,
+        team.id,
+        "ending a membership must not change record ownership"
+    );
+    assert_eq!(
+        owner_after.ownership_version, owner_before.ownership_version,
+        "ending a membership must not bump ownership_version"
+    );
 }
 
 #[test]
@@ -301,5 +515,9 @@ fn add_member_input_type_is_constructible() {
     // today (add_member takes its fields individually), but it's part of
     // the public model surface (e.g. for a future bulk-import path) and
     // must stay a valid, constructible shape.
-    let _ = TeamMembershipInput { user_id: "u1".into(), role_in_team: Some("Lead".into()), effective_from: None };
+    let _ = TeamMembershipInput {
+        user_id: "u1".into(),
+        role_in_team: Some("Lead".into()),
+        effective_from: None,
+    };
 }

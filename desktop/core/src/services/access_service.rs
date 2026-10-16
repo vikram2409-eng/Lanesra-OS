@@ -14,9 +14,14 @@
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
-use crate::models::access_role::{AccessDecision, AccessInspectorResult, AccessRoleCheck, AccessRoleGrant, Capability, RecordScope};
+use crate::models::access_role::{
+    AccessDecision, AccessInspectorResult, AccessRoleCheck, AccessRoleGrant, Capability,
+    RecordScope,
+};
 use crate::models::ownership::OWNER_TYPE_USER;
-use crate::repositories::{access_role_repo, org_unit_repo, team_membership_repo, user_access_role_repo, user_repo};
+use crate::repositories::{
+    access_role_repo, org_unit_repo, team_membership_repo, user_access_role_repo, user_repo,
+};
 use crate::services::{access_role_service, entity_registry, ownership_service};
 
 /// Bootstraps this actor's Access Roles on first use - see
@@ -32,11 +37,19 @@ fn ensure_actor_bootstrapped(conn: &Connection, actor_user_id: &str) -> AppResul
 
 /// The grant that applies to `object_key` for one role - its own exact-key
 /// row if it has one, else its `'*'` default, else nothing.
-fn resolve_grant(conn: &Connection, access_role_id: &str, object_key: &str) -> AppResult<Option<AccessRoleGrant>> {
+fn resolve_grant(
+    conn: &Connection,
+    access_role_id: &str,
+    object_key: &str,
+) -> AppResult<Option<AccessRoleGrant>> {
     if let Some(g) = access_role_repo::get_grant_for_object_key(conn, access_role_id, object_key)? {
         return Ok(Some(g));
     }
-    Ok(access_role_repo::get_grant_for_object_key(conn, access_role_id, "*")?)
+    Ok(access_role_repo::get_grant_for_object_key(
+        conn,
+        access_role_id,
+        "*",
+    )?)
 }
 
 /// Whether any of the actor's Access Roles carries an *explicit* grant for
@@ -49,11 +62,19 @@ fn resolve_grant(conn: &Connection, access_role_id: &str, object_key: &str) -> A
 /// the "same as today" behavior those screens must keep. Returns `false`
 /// (never an error) for `actor_user_id: None` - this is an additional,
 /// optional path, not itself the authentication check.
-pub fn has_explicit_capability(conn: &Connection, actor_user_id: Option<&str>, object_key: &str, capability: Capability) -> AppResult<bool> {
-    let Some(actor_id) = actor_user_id else { return Ok(false) };
+pub fn has_explicit_capability(
+    conn: &Connection,
+    actor_user_id: Option<&str>,
+    object_key: &str,
+    capability: Capability,
+) -> AppResult<bool> {
+    let Some(actor_id) = actor_user_id else {
+        return Ok(false);
+    };
     let roles = user_access_role_repo::list_for_user(conn, actor_id)?;
     for role in &roles {
-        if let Some(grant) = access_role_repo::get_grant_for_object_key(conn, &role.id, object_key)? {
+        if let Some(grant) = access_role_repo::get_grant_for_object_key(conn, &role.id, object_key)?
+        {
             if grant.allows(capability) {
                 return Ok(true);
             }
@@ -72,9 +93,17 @@ pub fn has_explicit_capability(conn: &Connection, actor_user_id: Option<&str>, o
 /// explicitly grants Update on `object_key` (see `has_explicit_capability`'s
 /// own doc comment on why this never falls back to `'*'`). Everyone else
 /// gets back exactly the subsystem's own existing deny message.
-pub fn require_admin_or_explicit_update(conn: &Connection, actor_user_id: Option<&str>, object_key: &str, deny_message: &str) -> AppResult<()> {
+pub fn require_admin_or_explicit_update(
+    conn: &Connection,
+    actor_user_id: Option<&str>,
+    object_key: &str,
+    deny_message: &str,
+) -> AppResult<()> {
     if let Some(actor_id) = actor_user_id {
-        if user_repo::roles_for_user(conn, actor_id)?.iter().any(|r| r == "Administrator") {
+        if user_repo::roles_for_user(conn, actor_id)?
+            .iter()
+            .any(|r| r == "Administrator")
+        {
             return Ok(());
         }
     }
@@ -87,7 +116,12 @@ pub fn require_admin_or_explicit_update(conn: &Connection, actor_user_id: Option
 /// The broadest Record Scope any of the actor's Access Roles grant for this
 /// capability on this object_key - `None` if nothing grants it at all.
 /// Doesn't check a specific record; pairs with `scope_allows_record` for that.
-pub fn capability_grant_for(conn: &Connection, actor_user_id: &str, object_key: &str, capability: Capability) -> AppResult<Option<RecordScope>> {
+pub fn capability_grant_for(
+    conn: &Connection,
+    actor_user_id: &str,
+    object_key: &str,
+    capability: Capability,
+) -> AppResult<Option<RecordScope>> {
     ensure_actor_bootstrapped(conn, actor_user_id)?;
     let roles = user_access_role_repo::list_for_user(conn, actor_user_id)?;
     let mut best: Option<RecordScope> = None;
@@ -111,7 +145,11 @@ fn is_owner(actor_user_id: &str, owner: &Option<crate::models::ownership::OwnerR
 /// Owner ⊂ Team: true if the actor owns the record outright, or the
 /// record's Team owner counts the actor as an active member, or the
 /// record's User owner shares an active Team membership with the actor.
-fn is_within_team_scope(conn: &Connection, actor_user_id: &str, owner: &Option<crate::models::ownership::OwnerRef>) -> AppResult<bool> {
+fn is_within_team_scope(
+    conn: &Connection,
+    actor_user_id: &str,
+    owner: &Option<crate::models::ownership::OwnerRef>,
+) -> AppResult<bool> {
     if is_owner(actor_user_id, owner) {
         return Ok(true);
     }
@@ -123,10 +161,19 @@ fn is_within_team_scope(conn: &Connection, actor_user_id: &str, owner: &Option<c
         }
         OWNER_TYPE_USER => {
             let actor_team_ids: std::collections::HashSet<String> =
-                team_membership_repo::list_for_user(conn, actor_user_id)?.into_iter().map(|m| m.team_id).collect();
+                team_membership_repo::list_for_user(conn, actor_user_id)?
+                    .into_iter()
+                    .map(|m| m.team_id)
+                    .collect();
             let owner_team_ids: std::collections::HashSet<String> =
-                team_membership_repo::list_for_user(conn, &owner.owner_id)?.into_iter().map(|m| m.team_id).collect();
-            Ok(actor_team_ids.intersection(&owner_team_ids).next().is_some())
+                team_membership_repo::list_for_user(conn, &owner.owner_id)?
+                    .into_iter()
+                    .map(|m| m.team_id)
+                    .collect();
+            Ok(actor_team_ids
+                .intersection(&owner_team_ids)
+                .next()
+                .is_some())
         }
         _ => Ok(false),
     }
@@ -136,11 +183,23 @@ fn is_within_team_scope(conn: &Connection, actor_user_id: &str, owner: &Option<c
 /// Organization Unit is at or below the actor's own primary Organization
 /// Unit, using the materialized `path` prefix the same way
 /// `org_unit_repo::list_descendants_by_path` already does.
-fn is_within_org_unit_scope(conn: &Connection, actor_user_id: &str, owning_org_unit_id: Option<&str>) -> AppResult<bool> {
-    let Some(owning_org_unit_id) = owning_org_unit_id else { return Ok(false) };
-    let Some(actor_org_unit_id) = user_repo::primary_org_unit_id(conn, actor_user_id)? else { return Ok(false) };
-    let Some(actor_unit) = org_unit_repo::get(conn, &actor_org_unit_id)? else { return Ok(false) };
-    let Some(record_unit) = org_unit_repo::get(conn, owning_org_unit_id)? else { return Ok(false) };
+fn is_within_org_unit_scope(
+    conn: &Connection,
+    actor_user_id: &str,
+    owning_org_unit_id: Option<&str>,
+) -> AppResult<bool> {
+    let Some(owning_org_unit_id) = owning_org_unit_id else {
+        return Ok(false);
+    };
+    let Some(actor_org_unit_id) = user_repo::primary_org_unit_id(conn, actor_user_id)? else {
+        return Ok(false);
+    };
+    let Some(actor_unit) = org_unit_repo::get(conn, &actor_org_unit_id)? else {
+        return Ok(false);
+    };
+    let Some(record_unit) = org_unit_repo::get(conn, owning_org_unit_id)? else {
+        return Ok(false);
+    };
     Ok(record_unit.path.starts_with(&actor_unit.path))
 }
 
@@ -148,7 +207,13 @@ fn is_within_org_unit_scope(conn: &Connection, actor_user_id: &str, owning_org_u
 /// strict superset of the one before it (spec: Owner ⊂ Team ⊂
 /// OrgUnitAndBelow ⊂ Organization), so this only ever checks the named
 /// level directly - a broader scope already implies the narrower ones.
-pub fn scope_allows_record(conn: &Connection, scope: RecordScope, actor_user_id: &str, object_key: &str, record_id: &str) -> AppResult<bool> {
+pub fn scope_allows_record(
+    conn: &Connection,
+    scope: RecordScope,
+    actor_user_id: &str,
+    object_key: &str,
+    record_id: &str,
+) -> AppResult<bool> {
     let ownership = match ownership_service::get_owner(conn, object_key, record_id)? {
         Some(o) => o,
         None => return Ok(false),
@@ -158,7 +223,11 @@ pub fn scope_allows_record(conn: &Connection, scope: RecordScope, actor_user_id:
         RecordScope::Team => is_within_team_scope(conn, actor_user_id, &ownership.owner)?,
         RecordScope::OrgUnitAndBelow => {
             is_within_team_scope(conn, actor_user_id, &ownership.owner)?
-                || is_within_org_unit_scope(conn, actor_user_id, ownership.owning_org_unit_id.as_deref())?
+                || is_within_org_unit_scope(
+                    conn,
+                    actor_user_id,
+                    ownership.owning_org_unit_id.as_deref(),
+                )?
         }
         RecordScope::Organization => true,
     })
@@ -182,10 +251,16 @@ pub fn explain_access(
     let mut best_role_name: Option<String> = None;
     for role in &roles {
         let grant = resolve_grant(conn, &role.id, object_key)?;
-        let granted = grant.as_ref().map(|g| g.allows(capability)).unwrap_or(false);
+        let granted = grant
+            .as_ref()
+            .map(|g| g.allows(capability))
+            .unwrap_or(false);
         if granted {
-            let scope = grant.as_ref().expect("granted implies a grant exists").record_scope;
-            if best.map_or(true, |b| scope > b) {
+            let scope = grant
+                .as_ref()
+                .expect("granted implies a grant exists")
+                .record_scope;
+            if best.is_none_or(|b| scope > b) {
                 best = Some(scope);
                 best_role_name = Some(role.name.clone());
             }
@@ -208,7 +283,10 @@ pub fn explain_access(
             allowed: false,
             scope: None,
             matched_role: None,
-            reason: format!("No Access Role held by this user grants '{}' on '{object_key}'", capability.as_str()),
+            reason: format!(
+                "No Access Role held by this user grants '{}' on '{object_key}'",
+                capability.as_str()
+            ),
         },
         Some(scope) => {
             let role_name = best_role_name.unwrap_or_default();
@@ -217,7 +295,11 @@ pub fn explain_access(
                     allowed: true,
                     scope: Some(scope),
                     matched_role: Some(role_name.clone()),
-                    reason: format!("'{role_name}' grants '{}' on '{object_key}' ({} scope)", capability.as_str(), scope.as_str()),
+                    reason: format!(
+                        "'{role_name}' grants '{}' on '{object_key}' ({} scope)",
+                        capability.as_str(),
+                        scope.as_str()
+                    ),
                 },
                 Some(id) => {
                     let allowed = scope_allows_record(conn, scope, actor_user_id, object_key, id)?;
@@ -260,8 +342,16 @@ pub fn explain_access(
 /// `ownership_service::require_assign_capability`) enforces that itself
 /// before ever calling this function, rather than this function guessing
 /// which callers need a stricter rule than the rest.
-pub fn require_capability(conn: &Connection, actor_user_id: Option<&str>, object_key: &str, capability: Capability, record_id: Option<&str>) -> AppResult<()> {
-    let Some(actor_id) = actor_user_id else { return Ok(()) };
+pub fn require_capability(
+    conn: &Connection,
+    actor_user_id: Option<&str>,
+    object_key: &str,
+    capability: Capability,
+    record_id: Option<&str>,
+) -> AppResult<()> {
+    let Some(actor_id) = actor_user_id else {
+        return Ok(());
+    };
     let result = explain_access(conn, actor_id, object_key, capability, record_id)?;
     if result.decision.allowed {
         Ok(())

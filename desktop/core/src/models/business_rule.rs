@@ -40,17 +40,47 @@ pub const TRIGGER_SOURCES: &[&str] = &["builtin", "custom"];
 /// rule matches - same `LIST_SEPARATOR` convention `in_list`/`not_in_list`
 /// condition values already use.
 pub const ACTION_TYPES: &[&str] = &[
-    "require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value",
-    "restrict_choices", "block_save", "show_error", "show_warning", "show_message",
+    "require",
+    "hide",
+    "show",
+    "lock",
+    "editable",
+    "set_default",
+    "set_value",
+    "clear_value",
+    "restrict_choices",
+    "block_save",
+    "show_error",
+    "show_warning",
+    "show_message",
 ];
-pub const FIELD_TARGETED_ACTIONS: &[&str] =
-    &["require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value", "restrict_choices"];
+pub const FIELD_TARGETED_ACTIONS: &[&str] = &[
+    "require",
+    "hide",
+    "show",
+    "lock",
+    "editable",
+    "set_default",
+    "set_value",
+    "clear_value",
+    "restrict_choices",
+];
 pub const MESSAGE_ACTIONS: &[&str] = &["block_save", "show_error", "show_warning", "show_message"];
 /// Actions a rule builder should still let an admin pick when creating a
 /// *new* rule - `show_message` is excluded (legacy-only, see above).
 pub const CURRENT_ACTION_TYPES: &[&str] = &[
-    "require", "hide", "show", "lock", "editable", "set_default", "set_value", "clear_value",
-    "restrict_choices", "block_save", "show_error", "show_warning",
+    "require",
+    "hide",
+    "show",
+    "lock",
+    "editable",
+    "set_default",
+    "set_value",
+    "clear_value",
+    "restrict_choices",
+    "block_save",
+    "show_error",
+    "show_warning",
 ];
 /// `set_value`, `set_default`, `restrict_choices` require a value; `clear_value`
 /// deliberately doesn't (the whole point is writing empty).
@@ -189,7 +219,7 @@ pub struct BusinessRuleInput {
     pub effective_end_date: Option<String>,
     /// `None` (the default, via `#[serde(default)]`) means workspace-wide
     /// - existing callers/tests that never set this keep getting exactly
-    /// that.
+    ///   that.
     #[serde(default)]
     pub app_id: Option<String>,
     pub conditions: Vec<BusinessRuleConditionInput>,

@@ -24,7 +24,9 @@
 //! validation in each entity's own service), and letting a generic
 //! `set_value` action silently overwrite it would sidestep that.
 
-pub const BUILTIN_FIELD_TYPES: &[&str] = &["text", "number", "money", "percent", "date", "boolean", "select"];
+pub const BUILTIN_FIELD_TYPES: &[&str] = &[
+    "text", "number", "money", "percent", "date", "boolean", "select",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuiltinField {
@@ -42,16 +44,34 @@ const EMPTY_OPTIONS: &[&str] = &[];
 
 macro_rules! field {
     ($key:expr, $label:expr, $type:expr, $actionable:expr) => {
-        BuiltinField { key: $key, label: $label, field_type: $type, options: EMPTY_OPTIONS, actionable: $actionable }
+        BuiltinField {
+            key: $key,
+            label: $label,
+            field_type: $type,
+            options: EMPTY_OPTIONS,
+            actionable: $actionable,
+        }
     };
     ($key:expr, $label:expr, $type:expr, $options:expr, $actionable:expr) => {
-        BuiltinField { key: $key, label: $label, field_type: $type, options: $options, actionable: $actionable }
+        BuiltinField {
+            key: $key,
+            label: $label,
+            field_type: $type,
+            options: $options,
+            actionable: $actionable,
+        }
     };
 }
 
 const COMPANY_FIELDS: &[BuiltinField] = &[
     field!("name", "Company name", "text", true),
-    field!("status", "Status", "select", crate::models::company::COMPANY_STATUSES, false),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::company::COMPANY_STATUSES,
+        false
+    ),
     field!("tax_number", "Tax number", "text", true),
     field!("billing_address", "Billing address", "text", true),
     field!("shipping_address", "Shipping address", "text", true),
@@ -67,15 +87,33 @@ const CONTACT_FIELDS: &[BuiltinField] = &[
     field!("phone", "Phone", "text", true),
     field!("mobile", "Mobile", "text", true),
     field!("is_primary", "Primary contact", "boolean", true),
-    field!("status", "Status", "select", crate::models::contact::CONTACT_STATUSES, false),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::contact::CONTACT_STATUSES,
+        false
+    ),
     field!("tags", "Tags", "text", true),
     field!("notes", "Notes", "text", true),
 ];
 
 const OPPORTUNITY_FIELDS: &[BuiltinField] = &[
     field!("name", "Opportunity name", "text", true),
-    field!("stage", "Stage", "select", crate::models::opportunity::OPPORTUNITY_STAGES, false),
-    field!("status", "Status", "select", crate::models::opportunity::OPPORTUNITY_STATUSES, false),
+    field!(
+        "stage",
+        "Stage",
+        "select",
+        crate::models::opportunity::OPPORTUNITY_STAGES,
+        false
+    ),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::opportunity::OPPORTUNITY_STATUSES,
+        false
+    ),
     field!("value", "Value", "money", true),
     field!("probability", "Probability", "percent", true),
     field!("expected_close_date", "Expected close date", "date", true),
@@ -86,7 +124,13 @@ const OPPORTUNITY_FIELDS: &[BuiltinField] = &[
 const PRODUCT_FIELDS: &[BuiltinField] = &[
     field!("name", "Name", "text", true),
     field!("sku", "SKU", "text", true),
-    field!("type", "Type", "select", crate::models::product::PRODUCT_TYPES, true),
+    field!(
+        "type",
+        "Type",
+        "select",
+        crate::models::product::PRODUCT_TYPES,
+        true
+    ),
     field!("category", "Category", "text", true),
     field!("description", "Description", "text", true),
     field!("unit_price", "Unit price", "money", true),
@@ -106,7 +150,13 @@ const PRODUCT_FIELDS: &[BuiltinField] = &[
 // exist anywhere else in the product, which is well outside this registry's
 // job to decide.
 const QUOTE_FIELDS: &[BuiltinField] = &[
-    field!("status", "Status", "select", crate::models::quote::QUOTE_STATUSES, false),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::quote::QUOTE_STATUSES,
+        false
+    ),
     field!("issue_date", "Issue date", "date", false),
     field!("expiry_date", "Valid until", "date", false),
     field!("terms", "Terms", "text", false),
@@ -114,13 +164,25 @@ const QUOTE_FIELDS: &[BuiltinField] = &[
 ];
 
 const ORDER_FIELDS: &[BuiltinField] = &[
-    field!("status", "Status", "select", crate::models::order::ORDER_STATUSES, false),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::order::ORDER_STATUSES,
+        false
+    ),
     field!("order_date", "Order date", "date", false),
     field!("notes", "Notes", "text", false),
 ];
 
 const INVOICE_FIELDS: &[BuiltinField] = &[
-    field!("status", "Status", "select", crate::models::invoice::INVOICE_STATUSES, false),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::invoice::INVOICE_STATUSES,
+        false
+    ),
     field!("issue_date", "Issue date", "date", false),
     field!("due_date", "Due date", "date", false),
     field!("payment_terms", "Payment terms", "text", false),
@@ -135,15 +197,33 @@ const CONTRACT_FIELDS: &[BuiltinField] = &[
     field!("end_date", "End date", "date", true),
     field!("renewal_date", "Renewal date", "date", true),
     field!("notice_period_days", "Notice period (days)", "number", true),
-    field!("status", "Status", "select", crate::models::contract::CONTRACT_STATUSES, false),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::contract::CONTRACT_STATUSES,
+        false
+    ),
     field!("notes", "Notes", "text", true),
 ];
 
 const TASK_FIELDS: &[BuiltinField] = &[
     field!("title", "Title", "text", true),
     field!("description", "Description", "text", true),
-    field!("priority", "Priority", "select", crate::models::task::TASK_PRIORITIES, true),
-    field!("status", "Status", "select", crate::models::task::TASK_STATUSES, false),
+    field!(
+        "priority",
+        "Priority",
+        "select",
+        crate::models::task::TASK_PRIORITIES,
+        true
+    ),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::task::TASK_STATUSES,
+        false
+    ),
     field!("due_date", "Due date", "date", true),
     field!("reminder_at", "Reminder", "date", true),
 ];
@@ -154,7 +234,13 @@ const TASK_FIELDS: &[BuiltinField] = &[
 /// fields, never built-in ones.
 const CUSTOM_RECORD_FIELDS: &[BuiltinField] = &[
     field!("primary_name", "Name", "text", true),
-    field!("status", "Status", "select", crate::models::custom_object::CUSTOM_RECORD_STATUSES, false),
+    field!(
+        "status",
+        "Status",
+        "select",
+        crate::models::custom_object::CUSTOM_RECORD_STATUSES,
+        false
+    ),
     field!("notes", "Notes", "text", true),
 ];
 
@@ -178,7 +264,9 @@ pub fn builtin_fields_for(entity_type: &str) -> &'static [BuiltinField] {
 }
 
 pub fn find_builtin_field(entity_type: &str, key: &str) -> Option<&'static BuiltinField> {
-    builtin_fields_for(entity_type).iter().find(|f| f.key == key)
+    builtin_fields_for(entity_type)
+        .iter()
+        .find(|f| f.key == key)
 }
 
 pub fn is_actionable_builtin_field(entity_type: &str, key: &str) -> bool {
@@ -191,10 +279,21 @@ mod tests {
 
     #[test]
     fn every_entity_has_a_non_actionable_status_equivalent_field() {
-        for entity in ["Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task"] {
+        for entity in [
+            "Company",
+            "Contact",
+            "Opportunity",
+            "Quote",
+            "Order",
+            "Invoice",
+            "Contract",
+            "Task",
+        ] {
             let fields = builtin_fields_for(entity);
             assert!(
-                fields.iter().any(|f| !f.actionable && f.field_type == "select"),
+                fields
+                    .iter()
+                    .any(|f| !f.actionable && f.field_type == "select"),
                 "{entity} should have at least one non-actionable select (status-equivalent) field"
             );
         }
@@ -203,7 +302,10 @@ mod tests {
     #[test]
     fn custom_objects_fall_back_to_the_shared_custom_record_shape() {
         assert_eq!(builtin_fields_for("vendor"), CUSTOM_RECORD_FIELDS);
-        assert_eq!(builtin_fields_for("anything_unrecognized"), CUSTOM_RECORD_FIELDS);
+        assert_eq!(
+            builtin_fields_for("anything_unrecognized"),
+            CUSTOM_RECORD_FIELDS
+        );
     }
 
     #[test]

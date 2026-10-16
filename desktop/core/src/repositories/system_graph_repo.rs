@@ -32,7 +32,12 @@ fn map_edge_row(row: &rusqlite::Row) -> rusqlite::Result<SystemEdge> {
     })
 }
 
-pub fn get_node_by_component(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> rusqlite::Result<Option<SystemNode>> {
+pub fn get_node_by_component(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> rusqlite::Result<Option<SystemNode>> {
     conn.query_row(
         "SELECT * FROM system_nodes WHERE workspace_id = ?1 AND node_type = ?2 AND component_id = ?3",
         params![workspace_id, node_type, component_id],
@@ -42,14 +47,26 @@ pub fn get_node_by_component(conn: &Connection, workspace_id: &str, node_type: &
 }
 
 pub fn get_node(conn: &Connection, node_id: &str) -> rusqlite::Result<Option<SystemNode>> {
-    conn.query_row("SELECT * FROM system_nodes WHERE id = ?1", params![node_id], map_node_row).optional()
+    conn.query_row(
+        "SELECT * FROM system_nodes WHERE id = ?1",
+        params![node_id],
+        map_node_row,
+    )
+    .optional()
 }
 
 /// Upserts a node keyed by `(workspace_id, node_type, component_id)` -
 /// `id` is only generated on first insert and preserved on every later
 /// sync, since `system_edges` rows already reference it. Returns the
 /// stable id either way.
-pub fn upsert_node(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str, label: &str, metadata_json: &str) -> rusqlite::Result<String> {
+pub fn upsert_node(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+    label: &str,
+    metadata_json: &str,
+) -> rusqlite::Result<String> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO system_nodes (id, workspace_id, node_type, component_id, label, metadata_json, created_at, updated_at)
@@ -58,7 +75,8 @@ pub fn upsert_node(conn: &Connection, workspace_id: &str, node_type: &str, compo
             label = excluded.label, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at",
         params![new_uuid(), workspace_id, node_type, component_id, label, metadata_json, now],
     )?;
-    let node = get_node_by_component(conn, workspace_id, node_type, component_id)?.expect("just upserted");
+    let node =
+        get_node_by_component(conn, workspace_id, node_type, component_id)?.expect("just upserted");
     Ok(node.id)
 }
 
@@ -67,7 +85,12 @@ pub fn upsert_node(conn: &Connection, workspace_id: &str, node_type: &str, compo
 /// `to_node_id` removes every edge touching it. A soft-deactivate must
 /// NOT call this - see `system_graph_service::remove_node`'s own doc
 /// comment.
-pub fn remove_node(conn: &Connection, workspace_id: &str, node_type: &str, component_id: &str) -> rusqlite::Result<()> {
+pub fn remove_node(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+    component_id: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "DELETE FROM system_nodes WHERE workspace_id = ?1 AND node_type = ?2 AND component_id = ?3",
         params![workspace_id, node_type, component_id],
@@ -80,8 +103,16 @@ pub fn remove_node(conn: &Connection, workspace_id: &str, node_type: &str, compo
 /// `execution_graph_repo::replace_nodes_and_edges` already uses for a
 /// whole graph, just scoped to one node's outgoing side instead of an
 /// entire graph.
-pub fn replace_outgoing_edges(conn: &Connection, workspace_id: &str, from_node_id: &str, edges: &[(&str, &str)]) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM system_edges WHERE from_node_id = ?1", params![from_node_id])?;
+pub fn replace_outgoing_edges(
+    conn: &Connection,
+    workspace_id: &str,
+    from_node_id: &str,
+    edges: &[(&str, &str)],
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM system_edges WHERE from_node_id = ?1",
+        params![from_node_id],
+    )?;
     let now = now_iso();
     for (edge_type, to_node_id) in edges {
         conn.execute(
@@ -97,15 +128,28 @@ pub fn replace_outgoing_edges(conn: &Connection, workspace_id: &str, from_node_i
 /// Every outgoing edge from one node, with no traversal - used by tests
 /// and by a future admin "raw edges" debug view; the Dependency
 /// Explorer's own queries go through `traverse` below instead.
-pub fn list_outgoing_edges(conn: &Connection, from_node_id: &str) -> rusqlite::Result<Vec<SystemEdge>> {
+pub fn list_outgoing_edges(
+    conn: &Connection,
+    from_node_id: &str,
+) -> rusqlite::Result<Vec<SystemEdge>> {
     let mut stmt = conn.prepare("SELECT * FROM system_edges WHERE from_node_id = ?1")?;
-    let rows: rusqlite::Result<Vec<SystemEdge>> = stmt.query_map(params![from_node_id], map_edge_row)?.collect();
+    let rows: rusqlite::Result<Vec<SystemEdge>> = stmt
+        .query_map(params![from_node_id], map_edge_row)?
+        .collect();
     rows
 }
 
-pub fn list_nodes_by_type(conn: &Connection, workspace_id: &str, node_type: &str) -> rusqlite::Result<Vec<SystemNode>> {
-    let mut stmt = conn.prepare("SELECT * FROM system_nodes WHERE workspace_id = ?1 AND node_type = ?2 ORDER BY label")?;
-    let rows: rusqlite::Result<Vec<SystemNode>> = stmt.query_map(params![workspace_id, node_type], map_node_row)?.collect();
+pub fn list_nodes_by_type(
+    conn: &Connection,
+    workspace_id: &str,
+    node_type: &str,
+) -> rusqlite::Result<Vec<SystemNode>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM system_nodes WHERE workspace_id = ?1 AND node_type = ?2 ORDER BY label",
+    )?;
+    let rows: rusqlite::Result<Vec<SystemNode>> = stmt
+        .query_map(params![workspace_id, node_type], map_node_row)?
+        .collect();
     rows
 }
 
@@ -123,7 +167,12 @@ pub fn list_nodes_by_type(conn: &Connection, workspace_id: &str, node_type: &str
 /// cycle just means some nodes are revisited at a deeper depth until the
 /// bound cuts it off, which `system_graph_service` dedupes by node id
 /// before returning (keeping each node's *shortest* depth).
-pub fn traverse(conn: &Connection, root_node_id: &str, forward: bool, max_depth: i64) -> rusqlite::Result<Vec<SystemGraphHit>> {
+pub fn traverse(
+    conn: &Connection,
+    root_node_id: &str,
+    forward: bool,
+    max_depth: i64,
+) -> rusqlite::Result<Vec<SystemGraphHit>> {
     let sql = if forward {
         "WITH RECURSIVE reach(node_id, edge_type, depth) AS (
             SELECT to_node_id, edge_type, 1 FROM system_edges WHERE from_node_id = ?1
@@ -148,7 +197,11 @@ pub fn traverse(conn: &Connection, root_node_id: &str, forward: bool, max_depth:
     let mut stmt = conn.prepare(sql)?;
     let rows: Vec<SystemGraphHit> = stmt
         .query_map(params![root_node_id, max_depth], |row| {
-            Ok(SystemGraphHit { node: map_node_row(row)?, edge_type: row.get("hit_edge_type")?, depth: row.get("hit_depth")? })
+            Ok(SystemGraphHit {
+                node: map_node_row(row)?,
+                edge_type: row.get("hit_edge_type")?,
+                depth: row.get("hit_depth")?,
+            })
         })?
         .collect::<rusqlite::Result<_>>()?;
 
@@ -160,6 +213,10 @@ pub fn traverse(conn: &Connection, root_node_id: &str, forward: bool, max_depth:
         seen.entry(hit.node.id.clone()).or_insert(hit);
     }
     let mut out: Vec<SystemGraphHit> = seen.into_values().collect();
-    out.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.node.label.cmp(&b.node.label)));
+    out.sort_by(|a, b| {
+        a.depth
+            .cmp(&b.depth)
+            .then_with(|| a.node.label.cmp(&b.node.label))
+    });
     Ok(out)
 }

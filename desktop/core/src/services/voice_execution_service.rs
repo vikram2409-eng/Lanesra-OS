@@ -31,14 +31,18 @@ use crate::models::contract::ContractInput;
 use crate::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use crate::models::opportunity::OpportunityInput;
 use crate::models::task::TaskInput;
-use crate::models::voice::{ConfirmVoicePlanInput, ResolutionCandidate, VoiceActionPlan, VoiceCommand, VoiceExecutionResult, VoiceResolution};
+use crate::models::voice::{
+    ConfirmVoicePlanInput, ResolutionCandidate, VoiceActionPlan, VoiceCommand,
+    VoiceExecutionResult, VoiceResolution,
+};
 use crate::repositories::{custom_field_repo, voice_repo};
+use crate::services::voice_planner_service::PlanOutcome;
 use crate::services::{
-    activity_service, ai_orchestration_service, chat_service, company_service, contact_service, contract_service, custom_field_service,
-    custom_record_service, opportunity_service, order_service, quote_service, task_service, voice_llm_planner_service, voice_planner_service,
+    activity_service, ai_orchestration_service, chat_service, company_service, contact_service,
+    contract_service, custom_field_service, custom_record_service, opportunity_service,
+    order_service, quote_service, task_service, voice_llm_planner_service, voice_planner_service,
     voice_policy_service, voice_risk_service, voice_session_service,
 };
-use crate::services::voice_planner_service::PlanOutcome;
 
 /// Everything `submit_command` hands back to the frontend in one shot -
 /// the command it recorded, plus whichever of resolution/plan/clarification/
@@ -73,14 +77,25 @@ pub async fn submit_command(
     voice_session_service::set_state(conn, session_id, user_id, "processing")?;
 
     let correlation_id = new_uuid();
-    let command = voice_repo::create_command(conn, &new_uuid(), session_id, &session.workspace_id, user_id, transcript, language, speech_confidence, &correlation_id)?;
+    let command = voice_repo::create_command(
+        conn,
+        &new_uuid(),
+        session_id,
+        &session.workspace_id,
+        user_id,
+        transcript,
+        language,
+        speech_confidence,
+        &correlation_id,
+    )?;
 
     // Voice-First Mode, PR 2 (part 2): the last record this session's own
     // conversation actually resolved (spec §14) - a second, lower-priority
     // fallback for "it"/"that" behind the record currently on screen, not
     // a replacement for it. See `voice_entity_resolver::resolve_by_reference`'s
     // own doc comment for the exact priority order.
-    let conversation_reference = voice_session_service::last_conversation_reference(conn, session_id)?;
+    let conversation_reference =
+        voice_session_service::last_conversation_reference(conn, session_id)?;
     // Voice-First Mode, PR 2 (part 3): a guided create already in progress
     // on this session - when present, `plan()` reads this transcript as
     // the answer to whichever field it last asked about instead of a
@@ -93,7 +108,9 @@ pub async fn submit_command(
         transcript,
         session.context_object_key.as_deref(),
         session.context_record_id.as_deref(),
-        conversation_reference.as_ref().map(|(k, r)| (k.as_str(), r.as_str())),
+        conversation_reference
+            .as_ref()
+            .map(|(k, r)| (k.as_str(), r.as_str())),
         pending_create.as_ref(),
     )?;
 
@@ -104,7 +121,9 @@ pub async fn submit_command(
     // own doc comment for why this always runs, not just when one existed
     // going in.
     match &outcome {
-        PlanOutcome::NeedsMoreInfo { pending, .. } => voice_session_service::set_pending_create(conn, session_id, Some(pending))?,
+        PlanOutcome::NeedsMoreInfo { pending, .. } => {
+            voice_session_service::set_pending_create(conn, session_id, Some(pending))?
+        }
         _ => voice_session_service::set_pending_create(conn, session_id, None)?,
     }
 
@@ -120,20 +139,23 @@ pub async fn submit_command(
     // manually-phrased one would.
     let outcome = match outcome {
         PlanOutcome::Unsupported { reason } => {
-            let fallback = if voice_policy_service::voice_capability_allows(conn, user_id, "use_agents")? {
-                voice_llm_planner_service::try_plan(
-                    conn,
-                    &session.workspace_id,
-                    master_key,
-                    transcript,
-                    session.context_object_key.as_deref(),
-                    session.context_record_id.as_deref(),
-                    conversation_reference.as_ref().map(|(k, r)| (k.as_str(), r.as_str())),
-                )
-                .await?
-            } else {
-                None
-            };
+            let fallback =
+                if voice_policy_service::voice_capability_allows(conn, user_id, "use_agents")? {
+                    voice_llm_planner_service::try_plan(
+                        conn,
+                        &session.workspace_id,
+                        master_key,
+                        transcript,
+                        session.context_object_key.as_deref(),
+                        session.context_record_id.as_deref(),
+                        conversation_reference
+                            .as_ref()
+                            .map(|(k, r)| (k.as_str(), r.as_str())),
+                    )
+                    .await?
+                } else {
+                    None
+                };
             fallback.unwrap_or(PlanOutcome::Unsupported { reason })
         }
         other => other,
@@ -143,12 +165,29 @@ pub async fn submit_command(
         PlanOutcome::Unsupported { reason } => {
             voice_repo::set_command_status(conn, &command.id, "failed")?;
             voice_session_service::set_state(conn, session_id, user_id, "idle")?;
-            Ok(VoiceCommandOutcome { command, resolution: None, plan: None, clarification_question: None, candidates: vec![], unsupported_reason: Some(reason) })
+            Ok(VoiceCommandOutcome {
+                command,
+                resolution: None,
+                plan: None,
+                clarification_question: None,
+                candidates: vec![],
+                unsupported_reason: Some(reason),
+            })
         }
-        PlanOutcome::NeedsClarification { question, candidates } => {
+        PlanOutcome::NeedsClarification {
+            question,
+            candidates,
+        } => {
             voice_repo::set_command_status(conn, &command.id, "needs_clarification")?;
             voice_session_service::set_state(conn, session_id, user_id, "needs_clarification")?;
-            Ok(VoiceCommandOutcome { command, resolution: None, plan: None, clarification_question: Some(question), candidates, unsupported_reason: None })
+            Ok(VoiceCommandOutcome {
+                command,
+                resolution: None,
+                plan: None,
+                clarification_question: Some(question),
+                candidates,
+                unsupported_reason: None,
+            })
         }
         // Voice-First Mode, PR 2 (part 3): a guided create still needs at
         // least one more field - the pending state was already persisted
@@ -158,9 +197,23 @@ pub async fn submit_command(
         PlanOutcome::NeedsMoreInfo { question, .. } => {
             voice_repo::set_command_status(conn, &command.id, "needs_clarification")?;
             voice_session_service::set_state(conn, session_id, user_id, "needs_clarification")?;
-            Ok(VoiceCommandOutcome { command, resolution: None, plan: None, clarification_question: Some(question), candidates: vec![], unsupported_reason: None })
+            Ok(VoiceCommandOutcome {
+                command,
+                resolution: None,
+                plan: None,
+                clarification_question: Some(question),
+                candidates: vec![],
+                unsupported_reason: None,
+            })
         }
-        PlanOutcome::Ready { plan, intent, object_key, resolved_record_id, intent_confidence, entity_confidence } => {
+        PlanOutcome::Ready {
+            plan,
+            intent,
+            object_key,
+            resolved_record_id,
+            intent_confidence,
+            entity_confidence,
+        } => {
             let resolution = voice_repo::create_resolution(
                 conn,
                 &new_uuid(),
@@ -180,7 +233,9 @@ pub async fn submit_command(
             // since the *reference* was still real even if the action on
             // it isn't executed immediately (or is blocked/needs approval).
             if let (Some(ok), Some(oid)) = (&object_key, &resolved_record_id) {
-                voice_session_service::record_conversation_turn(conn, session_id, transcript, &intent, ok, oid)?;
+                voice_session_service::record_conversation_turn(
+                    conn, session_id, transcript, &intent, ok, oid,
+                )?;
             }
 
             let policy = voice_policy_service::effective_policy(conn, user_id)?;
@@ -189,7 +244,14 @@ pub async fn submit_command(
             if let Some(reason) = &risk_decision.blocked_reason {
                 voice_repo::set_command_status(conn, &command.id, "failed")?;
                 voice_session_service::set_state(conn, session_id, user_id, "idle")?;
-                return Ok(VoiceCommandOutcome { command, resolution: Some(resolution), plan: None, clarification_question: None, candidates: vec![], unsupported_reason: Some(reason.clone()) });
+                return Ok(VoiceCommandOutcome {
+                    command,
+                    resolution: Some(resolution),
+                    plan: None,
+                    clarification_question: None,
+                    candidates: vec![],
+                    unsupported_reason: Some(reason.clone()),
+                });
             }
 
             let status = if risk_decision.requires_approval {
@@ -199,22 +261,54 @@ pub async fn submit_command(
             } else {
                 "confirmed"
             };
-            let plan_row = voice_repo::create_plan(conn, &new_uuid(), &command.id, &plan, risk_decision.risk, risk_decision.confirmation_required, status)?;
+            let plan_row = voice_repo::create_plan(
+                conn,
+                &new_uuid(),
+                &command.id,
+                &plan,
+                risk_decision.risk,
+                risk_decision.confirmation_required,
+                status,
+            )?;
             voice_repo::set_command_status(conn, &command.id, "planned")?;
 
             if status == "confirmed" {
                 // No confirmation needed (read-only, or Act-level low risk) -
                 // execute immediately, same as the UI never asking "are you
                 // sure?" before a plain read.
-                let result = run_plan(conn, &plan_row, user_id, &correlation_id, master_key).await?;
+                let result =
+                    run_plan(conn, &plan_row, user_id, &correlation_id, master_key).await?;
                 voice_session_service::set_state(conn, session_id, user_id, "idle")?;
                 let final_plan = voice_repo::get_plan(conn, &plan_row.id)?.unwrap_or(plan_row);
                 let _ = result;
-                return Ok(VoiceCommandOutcome { command, resolution: Some(resolution), plan: Some(final_plan), clarification_question: None, candidates: vec![], unsupported_reason: None });
+                return Ok(VoiceCommandOutcome {
+                    command,
+                    resolution: Some(resolution),
+                    plan: Some(final_plan),
+                    clarification_question: None,
+                    candidates: vec![],
+                    unsupported_reason: None,
+                });
             }
 
-            voice_session_service::set_state(conn, session_id, user_id, if status == "awaiting_approval" { "awaiting_approval" } else { "awaiting_confirmation" })?;
-            Ok(VoiceCommandOutcome { command, resolution: Some(resolution), plan: Some(plan_row), clarification_question: None, candidates: vec![], unsupported_reason: None })
+            voice_session_service::set_state(
+                conn,
+                session_id,
+                user_id,
+                if status == "awaiting_approval" {
+                    "awaiting_approval"
+                } else {
+                    "awaiting_confirmation"
+                },
+            )?;
+            Ok(VoiceCommandOutcome {
+                command,
+                resolution: Some(resolution),
+                plan: Some(plan_row),
+                clarification_question: None,
+                candidates: vec![],
+                unsupported_reason: None,
+            })
         }
     }
 }
@@ -222,27 +316,52 @@ pub async fn submit_command(
 /// Records the user's response to an `awaiting_confirmation` plan and, if
 /// confirmed, executes it. `edited_plan` (spec §14: "No, I said Won") lets
 /// the caller correct the plan without re-running the planner from scratch.
-pub async fn confirm_plan(conn: &Connection, session_id: &str, user_id: &str, input: &ConfirmVoicePlanInput, master_key: &[u8; 32]) -> AppResult<VoiceExecutionResult> {
+pub async fn confirm_plan(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+    input: &ConfirmVoicePlanInput,
+    master_key: &[u8; 32],
+) -> AppResult<VoiceExecutionResult> {
     let session = voice_session_service::require_active_session(conn, session_id, user_id)?;
-    let plan_row = voice_repo::get_plan(conn, &input.plan_id)?.ok_or_else(|| AppError::NotFound("Voice action plan".into()))?;
+    let plan_row = voice_repo::get_plan(conn, &input.plan_id)?
+        .ok_or_else(|| AppError::NotFound("Voice action plan".into()))?;
     if plan_row.status != "awaiting_confirmation" {
-        return Err(AppError::Validation(format!("This plan is not awaiting confirmation (status: {})", plan_row.status)));
+        return Err(AppError::Validation(format!(
+            "This plan is not awaiting confirmation (status: {})",
+            plan_row.status
+        )));
     }
 
-    let outcome = if input.method == "reject" { "rejected" } else if input.edited_plan.is_some() { "edited" } else { "confirmed" };
+    let outcome = if input.method == "reject" {
+        "rejected"
+    } else if input.edited_plan.is_some() {
+        "edited"
+    } else {
+        "confirmed"
+    };
     // `voice_confirmations.method` records *how* the user interacted
     // (voice/tap/auto) - it never stores "reject" itself, which is an
     // outcome, not an interaction method (`outcome` above already carries
     // that). The frontend's Reject button sends `method: "reject"` as a
     // convenient single field, so it's mapped to "tap" here (rejecting is
     // always a UI action in this PR - there's no voice "no" path yet).
-    let db_method = if input.method == "reject" { "tap" } else { input.method.as_str() };
+    let db_method = if input.method == "reject" {
+        "tap"
+    } else {
+        input.method.as_str()
+    };
     voice_repo::create_confirmation(conn, &new_uuid(), &plan_row.id, db_method, outcome, user_id)?;
 
     if outcome == "rejected" {
         voice_repo::set_plan_status(conn, &plan_row.id, "rejected")?;
         voice_session_service::set_state(conn, session_id, user_id, "idle")?;
-        return Ok(VoiceExecutionResult { plan_id: plan_row.id, status: "rejected".into(), executions: vec![], notes: vec![] });
+        return Ok(VoiceExecutionResult {
+            plan_id: plan_row.id,
+            status: "rejected".into(),
+            executions: vec![],
+            notes: vec![],
+        });
     }
 
     let plan_row = if let Some(edited) = &input.edited_plan {
@@ -256,13 +375,21 @@ pub async fn confirm_plan(conn: &Connection, session_id: &str, user_id: &str, in
         plan_row
     };
 
-    let correlation_id = voice_repo::get_command(conn, &plan_row.command_id)?.map(|c| c.correlation_id).unwrap_or_else(new_uuid);
+    let correlation_id = voice_repo::get_command(conn, &plan_row.command_id)?
+        .map(|c| c.correlation_id)
+        .unwrap_or_else(new_uuid);
     let result = run_plan(conn, &plan_row, user_id, &correlation_id, master_key).await?;
     voice_session_service::set_state(conn, &session.id, user_id, "idle")?;
     Ok(result)
 }
 
-async fn run_plan(conn: &Connection, plan_row: &VoiceActionPlan, actor_user_id: &str, correlation_id: &str, master_key: &[u8; 32]) -> AppResult<VoiceExecutionResult> {
+async fn run_plan(
+    conn: &Connection,
+    plan_row: &VoiceActionPlan,
+    actor_user_id: &str,
+    correlation_id: &str,
+    master_key: &[u8; 32],
+) -> AppResult<VoiceExecutionResult> {
     voice_repo::set_plan_status(conn, &plan_row.id, "executing")?;
     let mut any_failed = false;
     let mut notes = Vec::new();
@@ -271,13 +398,37 @@ async fn run_plan(conn: &Connection, plan_row: &VoiceActionPlan, actor_user_id: 
         let outcome = execute_step(conn, step, actor_user_id, correlation_id, master_key).await;
         match outcome {
             Ok((entity_id, undo_token, note)) => {
-                voice_repo::create_execution(conn, &new_uuid(), &plan_row.id, idx as i64, &step.object_key, entity_id.as_deref(), &step.action, "ok", None, undo_token.as_deref(), correlation_id)?;
+                voice_repo::create_execution(
+                    conn,
+                    &new_uuid(),
+                    &plan_row.id,
+                    idx as i64,
+                    &step.object_key,
+                    entity_id.as_deref(),
+                    &step.action,
+                    "ok",
+                    None,
+                    undo_token.as_deref(),
+                    correlation_id,
+                )?;
                 if let Some(note) = note {
                     notes.push(note);
                 }
             }
             Err(e) => {
-                voice_repo::create_execution(conn, &new_uuid(), &plan_row.id, idx as i64, &step.object_key, step.record_id.as_deref(), &step.action, "error", Some(&e.to_string()), None, correlation_id)?;
+                voice_repo::create_execution(
+                    conn,
+                    &new_uuid(),
+                    &plan_row.id,
+                    idx as i64,
+                    &step.object_key,
+                    step.record_id.as_deref(),
+                    &step.action,
+                    "error",
+                    Some(&e.to_string()),
+                    None,
+                    correlation_id,
+                )?;
                 any_failed = true;
                 // Stop at the first failure (spec §13) - never silently
                 // continue past a step that didn't succeed.
@@ -286,10 +437,19 @@ async fn run_plan(conn: &Connection, plan_row: &VoiceActionPlan, actor_user_id: 
         }
     }
 
-    let final_status = if any_failed { "partially_failed" } else { "succeeded" };
+    let final_status = if any_failed {
+        "partially_failed"
+    } else {
+        "succeeded"
+    };
     voice_repo::set_plan_status(conn, &plan_row.id, final_status)?;
     let executions = voice_repo::list_executions_for_plan(conn, &plan_row.id)?;
-    Ok(VoiceExecutionResult { plan_id: plan_row.id.clone(), status: final_status.to_string(), executions, notes })
+    Ok(VoiceExecutionResult {
+        plan_id: plan_row.id.clone(),
+        status: final_status.to_string(),
+        executions,
+        notes,
+    })
 }
 
 #[derive(Serialize, Deserialize)]
@@ -318,7 +478,13 @@ struct UndoPayload {
 /// code; only the `run_agent`/`run_pipeline` arms actually `.await`
 /// anything, but the whole function is `async` so both kinds of step can
 /// share one execution loop (`run_plan`) and one typed step shape.
-async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanStep, actor_user_id: &str, _correlation_id: &str, master_key: &[u8; 32]) -> AppResult<(Option<String>, Option<String>, Option<String>)> {
+async fn execute_step(
+    conn: &Connection,
+    step: &crate::models::voice::VoicePlanStep,
+    actor_user_id: &str,
+    _correlation_id: &str,
+    master_key: &[u8; 32],
+) -> AppResult<(Option<String>, Option<String>, Option<String>)> {
     let actor = Some(actor_user_id);
     match step.action.as_str() {
         "navigate" | "query" => Ok((step.record_id.clone(), None, None)),
@@ -326,7 +492,11 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
         "create_task" => {
             let workspace_id = task_workspace_id(conn, actor_user_id)?;
             let input = TaskInput {
-                title: step.fields.get("title").cloned().unwrap_or_else(|| "Voice task".into()),
+                title: step
+                    .fields
+                    .get("title")
+                    .cloned()
+                    .unwrap_or_else(|| "Voice task".into()),
                 description: None,
                 owner_user_id: Some(actor_user_id.to_string()),
                 priority: "Normal".into(),
@@ -337,7 +507,14 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
                 related_id: None,
             };
             let task = task_service::create(conn, &workspace_id, &input, actor)?;
-            let undo = serde_json::to_string(&UndoPayload { action: "archive_task".into(), object_key: "Task".into(), record_id: task.id.clone(), previous_value: None, status_field_key: None }).ok();
+            let undo = serde_json::to_string(&UndoPayload {
+                action: "archive_task".into(),
+                object_key: "Task".into(),
+                record_id: task.id.clone(),
+                previous_value: None,
+                status_field_key: None,
+            })
+            .ok();
             Ok((Some(task.id), undo, None))
         }
 
@@ -371,25 +548,67 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
                     preferred_contact_method: None,
                 };
                 let company = company_service::create(conn, &workspace_id, &input, actor)?;
-                apply_guided_create_custom_fields(conn, "Company", &company.id, &step.fields, "name", actor)?;
-                let undo = serde_json::to_string(&UndoPayload { action: "archive_company".into(), object_key: "Company".into(), record_id: company.id.clone(), previous_value: None, status_field_key: None }).ok();
+                apply_guided_create_custom_fields(
+                    conn,
+                    "Company",
+                    &company.id,
+                    &step.fields,
+                    "name",
+                    actor,
+                )?;
+                let undo = serde_json::to_string(&UndoPayload {
+                    action: "archive_company".into(),
+                    object_key: "Company".into(),
+                    record_id: company.id.clone(),
+                    previous_value: None,
+                    status_field_key: None,
+                })
+                .ok();
                 Ok((Some(company.id), undo, None))
             } else {
                 let primary_name = step.fields.get("primary_name").cloned().unwrap_or_default();
-                let input = CustomRecordInput { object_key: step.object_key.clone(), primary_name, status: "Active".into(), owner_user_id: Some(actor_user_id.to_string()), notes: None };
+                let input = CustomRecordInput {
+                    object_key: step.object_key.clone(),
+                    primary_name,
+                    status: "Active".into(),
+                    owner_user_id: Some(actor_user_id.to_string()),
+                    notes: None,
+                };
                 let record = custom_record_service::create(conn, &workspace_id, &input, actor)?;
-                apply_guided_create_custom_fields(conn, &step.object_key, &record.id, &step.fields, "primary_name", actor)?;
-                let undo = serde_json::to_string(&UndoPayload { action: "archive_custom_record".into(), object_key: step.object_key.clone(), record_id: record.id.clone(), previous_value: None, status_field_key: None }).ok();
+                apply_guided_create_custom_fields(
+                    conn,
+                    &step.object_key,
+                    &record.id,
+                    &step.fields,
+                    "primary_name",
+                    actor,
+                )?;
+                let undo = serde_json::to_string(&UndoPayload {
+                    action: "archive_custom_record".into(),
+                    object_key: step.object_key.clone(),
+                    record_id: record.id.clone(),
+                    previous_value: None,
+                    status_field_key: None,
+                })
+                .ok();
                 Ok((Some(record.id), undo, None))
             }
         }
 
         "log_activity" => {
-            let Some(record_id) = &step.record_id else { return Err(AppError::Validation("No record to log this interaction against".into())) };
+            let Some(record_id) = &step.record_id else {
+                return Err(AppError::Validation(
+                    "No record to log this interaction against".into(),
+                ));
+            };
             let input = ActivityInput {
                 entity_type: step.object_key.clone(),
                 entity_id: record_id.clone(),
-                channel: step.fields.get("channel").cloned().unwrap_or_else(|| "message".into()),
+                channel: step
+                    .fields
+                    .get("channel")
+                    .cloned()
+                    .unwrap_or_else(|| "message".into()),
                 direction: None,
                 subject: None,
                 body: step.fields.get("body").cloned().unwrap_or_default(),
@@ -405,8 +624,12 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
         }
 
         "update_status" => {
-            let Some(record_id) = step.record_id.clone() else { return Err(AppError::Validation("No record to update".into())) };
-            let Some(new_status) = step.fields.get("status").cloned() else { return Err(AppError::Validation("No status value in plan".into())) };
+            let Some(record_id) = step.record_id.clone() else {
+                return Err(AppError::Validation("No record to update".into()));
+            };
+            let Some(new_status) = step.fields.get("status").cloned() else {
+                return Err(AppError::Validation("No status value in plan".into()));
+            };
             // Voice-First Mode, PR 3: `status_field_key` is only ever
             // something other than "status" for a Custom Object whose
             // spoken value matched one of its own industry-vocabulary
@@ -414,14 +637,36 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
             // every core object's arm below still ignores it and writes
             // its own hardcoded field, unaffected.
             let status_field_key = step.fields.get("status_field_key").cloned();
-            let previous = update_status_for_object(conn, &step.object_key, &record_id, &new_status, status_field_key.as_deref(), actor)?;
-            let undo = serde_json::to_string(&UndoPayload { action: "revert_status".into(), object_key: step.object_key.clone(), record_id: record_id.clone(), previous_value: Some(previous), status_field_key }).ok();
+            let previous = update_status_for_object(
+                conn,
+                &step.object_key,
+                &record_id,
+                &new_status,
+                status_field_key.as_deref(),
+                actor,
+            )?;
+            let undo = serde_json::to_string(&UndoPayload {
+                action: "revert_status".into(),
+                object_key: step.object_key.clone(),
+                record_id: record_id.clone(),
+                previous_value: Some(previous),
+                status_field_key,
+            })
+            .ok();
             Ok((Some(record_id), undo, None))
         }
 
         "update_custom_fields" => {
-            let Some(record_id) = step.record_id.clone() else { return Err(AppError::Validation("No record to update".into())) };
-            let notices = custom_field_service::set_entity_values(conn, &step.object_key, &record_id, &step.fields, actor)?;
+            let Some(record_id) = step.record_id.clone() else {
+                return Err(AppError::Validation("No record to update".into()));
+            };
+            let notices = custom_field_service::set_entity_values(
+                conn,
+                &step.object_key,
+                &record_id,
+                &step.fields,
+                actor,
+            )?;
             if let Some(first_error) = notices.errors.first() {
                 return Err(AppError::Validation(first_error.clone()));
             }
@@ -435,11 +680,31 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
         // write); the full conversation stays in that agent's own real
         // chat history, reachable via `entity_id` (the agent's own id).
         "run_agent" => {
-            let Some(agent_id) = step.record_id.clone() else { return Err(AppError::Validation("No Agent selected".into())) };
+            let Some(agent_id) = step.record_id.clone() else {
+                return Err(AppError::Validation("No Agent selected".into()));
+            };
             let workspace_id = task_workspace_id(conn, actor_user_id)?;
             let message = step.fields.get("message").cloned().unwrap_or_default();
-            let messages = chat_service::send_agent_message(conn, &workspace_id, master_key, actor_user_id, &agent_id, &message).await?;
-            let reply = messages.iter().rev().find_map(|m| if m.role == "assistant" { m.content.clone() } else { None }).unwrap_or_else(|| "(no reply)".into());
+            let messages = chat_service::send_agent_message(
+                conn,
+                &workspace_id,
+                master_key,
+                actor_user_id,
+                &agent_id,
+                &message,
+            )
+            .await?;
+            let reply = messages
+                .iter()
+                .rev()
+                .find_map(|m| {
+                    if m.role == "assistant" {
+                        m.content.clone()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| "(no reply)".into());
             Ok((Some(agent_id), None, Some(reply)))
         }
 
@@ -449,19 +714,45 @@ async fn execute_step(conn: &Connection, step: &crate::models::voice::VoicePlanS
         // id, so the full step-by-step trace stays reachable from Voice
         // Activity exactly like a manually triggered run would be.
         "run_pipeline" => {
-            let Some(pipeline_id) = step.record_id.clone() else { return Err(AppError::Validation("No Pipeline selected".into())) };
+            let Some(pipeline_id) = step.record_id.clone() else {
+                return Err(AppError::Validation("No Pipeline selected".into()));
+            };
             let workspace_id = task_workspace_id(conn, actor_user_id)?;
             let message = step.fields.get("message").cloned().unwrap_or_default();
-            let run = ai_orchestration_service::run_manual(conn, &workspace_id, master_key, "pipeline", &pipeline_id, &message, actor).await?;
+            let run = ai_orchestration_service::run_manual(
+                conn,
+                &workspace_id,
+                master_key,
+                "pipeline",
+                &pipeline_id,
+                &message,
+                actor,
+            )
+            .await?;
             let note = match run.status.as_str() {
-                "succeeded" => run.steps.last().and_then(|s| s.output_text.clone()).unwrap_or_else(|| "Pipeline finished with no output".into()),
-                "awaiting_approval" => "Pipeline is now awaiting an Administrator's approval on one of its steps.".into(),
-                other => format!("Pipeline run ended with status \"{other}\"{}", run.error.as_deref().map(|e| format!(": {e}")).unwrap_or_default()),
+                "succeeded" => run
+                    .steps
+                    .last()
+                    .and_then(|s| s.output_text.clone())
+                    .unwrap_or_else(|| "Pipeline finished with no output".into()),
+                "awaiting_approval" => {
+                    "Pipeline is now awaiting an Administrator's approval on one of its steps."
+                        .into()
+                }
+                other => format!(
+                    "Pipeline run ended with status \"{other}\"{}",
+                    run.error
+                        .as_deref()
+                        .map(|e| format!(": {e}"))
+                        .unwrap_or_default()
+                ),
             };
             Ok((Some(run.id.clone()), None, Some(note)))
         }
 
-        other => Err(AppError::Validation(format!("Unsupported voice action '{other}'"))),
+        other => Err(AppError::Validation(format!(
+            "Unsupported voice action '{other}'"
+        ))),
     }
 }
 
@@ -480,12 +771,21 @@ fn apply_guided_create_custom_fields(
     name_field_key: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    let custom_fields: std::collections::HashMap<String, String> =
-        fields.iter().filter(|(k, _)| k.as_str() != name_field_key).map(|(k, v)| (k.clone(), v.clone())).collect();
+    let custom_fields: std::collections::HashMap<String, String> = fields
+        .iter()
+        .filter(|(k, _)| k.as_str() != name_field_key)
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
     if custom_fields.is_empty() {
         return Ok(());
     }
-    let notices = custom_field_service::set_entity_values(conn, object_key, record_id, &custom_fields, actor_user_id)?;
+    let notices = custom_field_service::set_entity_values(
+        conn,
+        object_key,
+        record_id,
+        &custom_fields,
+        actor_user_id,
+    )?;
     if let Some(first_error) = notices.errors.first() {
         return Err(AppError::Validation(first_error.clone()));
     }
@@ -506,15 +806,33 @@ fn task_workspace_id(conn: &Connection, actor_user_id: &str) -> AppResult<String
 /// so a later Undo can revert to it. `status_field_key` is only consulted
 /// by the Custom Object arm (`_` below) - every core object here already
 /// writes its own hardcoded field regardless of what the planner passed.
-fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str, new_status: &str, status_field_key: Option<&str>, actor: Option<&str>) -> AppResult<String> {
+fn update_status_for_object(
+    conn: &Connection,
+    object_key: &str,
+    record_id: &str,
+    new_status: &str,
+    status_field_key: Option<&str>,
+    actor: Option<&str>,
+) -> AppResult<String> {
     match object_key {
         "Company" => {
             let c = company_service::get(conn, record_id)?;
             let previous = c.status.clone();
             let input = CompanyInput {
-                name: c.name, status: new_status.to_string(), owner_user_id: c.owner_user_id, tax_number: c.tax_number, billing_address: c.billing_address,
-                shipping_address: c.shipping_address, tags: c.tags, notes: c.notes, phone: c.phone, email: c.email, website: c.website,
-                annual_revenue_cents: c.annual_revenue_cents, employee_count: c.employee_count, preferred_contact_method: c.preferred_contact_method,
+                name: c.name,
+                status: new_status.to_string(),
+                owner_user_id: c.owner_user_id,
+                tax_number: c.tax_number,
+                billing_address: c.billing_address,
+                shipping_address: c.shipping_address,
+                tags: c.tags,
+                notes: c.notes,
+                phone: c.phone,
+                email: c.email,
+                website: c.website,
+                annual_revenue_cents: c.annual_revenue_cents,
+                employee_count: c.employee_count,
+                preferred_contact_method: c.preferred_contact_method,
             };
             company_service::update(conn, record_id, &input, actor)?;
             Ok(previous)
@@ -523,9 +841,20 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
             let c = contact_service::get(conn, record_id)?;
             let previous = c.status.clone();
             let input = ContactInput {
-                company_id: c.company_id, first_name: c.first_name, last_name: c.last_name, job_title: c.job_title, email: c.email, phone: c.phone,
-                mobile: c.mobile, is_primary: c.is_primary, status: new_status.to_string(), tags: c.tags, notes: c.notes, department: c.department,
-                preferred_contact_method: c.preferred_contact_method, linkedin_url: c.linkedin_url,
+                company_id: c.company_id,
+                first_name: c.first_name,
+                last_name: c.last_name,
+                job_title: c.job_title,
+                email: c.email,
+                phone: c.phone,
+                mobile: c.mobile,
+                is_primary: c.is_primary,
+                status: new_status.to_string(),
+                tags: c.tags,
+                notes: c.notes,
+                department: c.department,
+                preferred_contact_method: c.preferred_contact_method,
+                linkedin_url: c.linkedin_url,
             };
             contact_service::update(conn, record_id, &input, actor)?;
             Ok(previous)
@@ -534,9 +863,18 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
             let o = opportunity_service::get(conn, record_id)?;
             let previous = o.stage.clone();
             let input = OpportunityInput {
-                company_id: o.company_id, primary_contact_id: o.primary_contact_id, name: o.name, stage: new_status.to_string(), status: o.status,
-                value_cents: o.value_cents, currency_code: o.currency_code, probability_bp: o.probability_bp, expected_close_date: o.expected_close_date,
-                owner_user_id: o.owner_user_id, lost_reason: o.lost_reason, next_step: o.next_step,
+                company_id: o.company_id,
+                primary_contact_id: o.primary_contact_id,
+                name: o.name,
+                stage: new_status.to_string(),
+                status: o.status,
+                value_cents: o.value_cents,
+                currency_code: o.currency_code,
+                probability_bp: o.probability_bp,
+                expected_close_date: o.expected_close_date,
+                owner_user_id: o.owner_user_id,
+                lost_reason: o.lost_reason,
+                next_step: o.next_step,
             };
             opportunity_service::update(conn, record_id, &input, actor)?;
             Ok(previous)
@@ -545,9 +883,20 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
             let c = contract_service::get(conn, record_id)?;
             let previous = c.status.clone();
             let input = ContractInput {
-                company_id: c.company_id, contact_id: c.contact_id, source_quote_id: c.source_quote_id, title: c.title, r#type: c.r#type,
-                value_cents: c.value_cents, currency_code: c.currency_code, owner_user_id: c.owner_user_id, start_date: c.start_date, end_date: c.end_date,
-                renewal_date: c.renewal_date, notice_period_days: c.notice_period_days, status: new_status.to_string(), notes: c.notes,
+                company_id: c.company_id,
+                contact_id: c.contact_id,
+                source_quote_id: c.source_quote_id,
+                title: c.title,
+                r#type: c.r#type,
+                value_cents: c.value_cents,
+                currency_code: c.currency_code,
+                owner_user_id: c.owner_user_id,
+                start_date: c.start_date,
+                end_date: c.end_date,
+                renewal_date: c.renewal_date,
+                notice_period_days: c.notice_period_days,
+                status: new_status.to_string(),
+                notes: c.notes,
             };
             contract_service::update(conn, record_id, &input, actor)?;
             Ok(previous)
@@ -557,8 +906,15 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
             let previous = t.status.clone();
             let workspace_id = t.workspace_id.clone();
             let input = TaskInput {
-                title: t.title, description: t.description, owner_user_id: t.owner_user_id, priority: t.priority, status: new_status.to_string(),
-                due_date: t.due_date, reminder_at: t.reminder_at, related_type: t.related_type, related_id: t.related_id,
+                title: t.title,
+                description: t.description,
+                owner_user_id: t.owner_user_id,
+                priority: t.priority,
+                status: new_status.to_string(),
+                due_date: t.due_date,
+                reminder_at: t.reminder_at,
+                related_type: t.related_type,
+                related_id: t.related_id,
             };
             task_service::update(conn, record_id, &workspace_id, &input, actor)?;
             Ok(previous)
@@ -597,7 +953,9 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
                 // on this object as newly blank.
                 let mut values = before.clone();
                 values.insert(field_key.to_string(), new_status.to_string());
-                let notices = custom_field_service::set_entity_values(conn, object_key, record_id, &values, actor)?;
+                let notices = custom_field_service::set_entity_values(
+                    conn, object_key, record_id, &values, actor,
+                )?;
                 if let Some(first_error) = notices.errors.first() {
                     return Err(AppError::Validation(first_error.clone()));
                 }
@@ -608,7 +966,12 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
             None => {
                 let r = custom_record_service::get(conn, record_id)?;
                 let previous = r.status.clone();
-                let update = CustomRecordUpdate { primary_name: r.primary_name, status: new_status.to_string(), owner_user_id: r.owner_user_id, notes: r.notes };
+                let update = CustomRecordUpdate {
+                    primary_name: r.primary_name,
+                    status: new_status.to_string(),
+                    owner_user_id: r.owner_user_id,
+                    notes: r.notes,
+                };
                 custom_record_service::update(conn, record_id, &update, actor)?;
                 Ok(previous)
             }
@@ -620,12 +983,16 @@ fn update_status_for_object(conn: &Connection, object_key: &str, record_id: &str
 /// audited compensating write through the same real entity services -
 /// never by erasing the original execution/audit row (spec §22).
 pub fn undo(conn: &Connection, execution_id: &str, actor_user_id: &str) -> AppResult<()> {
-    let execution = voice_repo::get_execution(conn, execution_id)?.ok_or_else(|| AppError::NotFound("Voice execution".into()))?;
+    let execution = voice_repo::get_execution(conn, execution_id)?
+        .ok_or_else(|| AppError::NotFound("Voice execution".into()))?;
     if execution.undone_at.is_some() {
         return Err(AppError::Validation("Already undone".into()));
     }
-    let Some(token) = &execution.undo_token else { return Err(AppError::Validation("This action cannot be undone".into())) };
-    let payload: UndoPayload = serde_json::from_str(token).map_err(|_| AppError::Validation("Invalid undo token".into()))?;
+    let Some(token) = &execution.undo_token else {
+        return Err(AppError::Validation("This action cannot be undone".into()));
+    };
+    let payload: UndoPayload = serde_json::from_str(token)
+        .map_err(|_| AppError::Validation("Invalid undo token".into()))?;
 
     match payload.action.as_str() {
         "archive_task" => {
@@ -633,8 +1000,17 @@ pub fn undo(conn: &Connection, execution_id: &str, actor_user_id: &str) -> AppRe
             task_service::archive(conn, &payload.record_id, &workspace_id, Some(actor_user_id))?;
         }
         "revert_status" => {
-            let previous = payload.previous_value.ok_or_else(|| AppError::Validation("No previous value recorded".into()))?;
-            update_status_for_object(conn, &payload.object_key, &payload.record_id, &previous, payload.status_field_key.as_deref(), Some(actor_user_id))?;
+            let previous = payload
+                .previous_value
+                .ok_or_else(|| AppError::Validation("No previous value recorded".into()))?;
+            update_status_for_object(
+                conn,
+                &payload.object_key,
+                &payload.record_id,
+                &previous,
+                payload.status_field_key.as_deref(),
+                Some(actor_user_id),
+            )?;
         }
         "archive_company" => {
             company_service::archive(conn, &payload.record_id, Some(actor_user_id))?;
@@ -642,7 +1018,11 @@ pub fn undo(conn: &Connection, execution_id: &str, actor_user_id: &str) -> AppRe
         "archive_custom_record" => {
             custom_record_service::archive(conn, &payload.record_id, Some(actor_user_id))?;
         }
-        other => return Err(AppError::Validation(format!("Unknown undo action '{other}'"))),
+        other => {
+            return Err(AppError::Validation(format!(
+                "Unknown undo action '{other}'"
+            )))
+        }
     }
     voice_repo::mark_execution_undone(conn, execution_id)?;
     Ok(())

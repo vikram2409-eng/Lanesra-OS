@@ -34,7 +34,10 @@ fn map_ownership_row(row: &rusqlite::Row) -> rusqlite::Result<RecordOwnership> {
     let owner_id: Option<String> = row.get(1)?;
     Ok(RecordOwnership {
         owner: match (owner_type, owner_id) {
-            (Some(t), Some(i)) => Some(crate::models::ownership::OwnerRef { owner_type: t, owner_id: i }),
+            (Some(t), Some(i)) => Some(crate::models::ownership::OwnerRef {
+                owner_type: t,
+                owner_id: i,
+            }),
             _ => None,
         },
         owning_org_unit_id: row.get(2)?,
@@ -43,11 +46,20 @@ fn map_ownership_row(row: &rusqlite::Row) -> rusqlite::Result<RecordOwnership> {
     })
 }
 
-pub fn get_owner(conn: &Connection, object_key: &str, id: &str) -> rusqlite::Result<Option<RecordOwnership>> {
-    let sql_cols = "record_owner_type, record_owner_id, owning_org_unit_id, assigned_at, ownership_version";
+pub fn get_owner(
+    conn: &Connection,
+    object_key: &str,
+    id: &str,
+) -> rusqlite::Result<Option<RecordOwnership>> {
+    let sql_cols =
+        "record_owner_type, record_owner_id, owning_org_unit_id, assigned_at, ownership_version";
     if let Some(table) = table_name_for(object_key) {
-        conn.query_row(&format!("SELECT {sql_cols} FROM {table} WHERE id = ?1"), [id], map_ownership_row)
-            .optional()
+        conn.query_row(
+            &format!("SELECT {sql_cols} FROM {table} WHERE id = ?1"),
+            [id],
+            map_ownership_row,
+        )
+        .optional()
     } else {
         conn.query_row(
             &format!("SELECT {sql_cols} FROM custom_records WHERE id = ?1 AND object_key = ?2"),
@@ -88,26 +100,41 @@ pub fn set_owner(
 /// Every non-archived record id under `owning_org_unit_id` for this object
 /// type - used by org_unit_service's move-impact preview (counts, not a
 /// listing) and by ownership_service's bulk-transfer eligibility scan.
-pub fn list_ids_by_owning_org_unit(conn: &Connection, object_key: &str, owning_org_unit_id: &str) -> rusqlite::Result<Vec<String>> {
+pub fn list_ids_by_owning_org_unit(
+    conn: &Connection,
+    object_key: &str,
+    owning_org_unit_id: &str,
+) -> rusqlite::Result<Vec<String>> {
     let sql = if let Some(table) = table_name_for(object_key) {
         format!("SELECT id FROM {table} WHERE owning_org_unit_id = ?1")
     } else {
-        "SELECT id FROM custom_records WHERE owning_org_unit_id = ?1 AND object_key = ?2".to_string()
+        "SELECT id FROM custom_records WHERE owning_org_unit_id = ?1 AND object_key = ?2"
+            .to_string()
     };
     let mut stmt = conn.prepare(&sql)?;
     let rows: rusqlite::Result<Vec<String>> = if table_name_for(object_key).is_some() {
-        stmt.query_map([owning_org_unit_id], |r| r.get(0))?.collect()
+        stmt.query_map([owning_org_unit_id], |r| r.get(0))?
+            .collect()
     } else {
-        stmt.query_map((owning_org_unit_id, object_key), |r| r.get(0))?.collect()
+        stmt.query_map((owning_org_unit_id, object_key), |r| r.get(0))?
+            .collect()
     };
     rows
 }
 
 /// Row count only, for the move-impact preview's per-object summary -
 /// avoids materializing every id when only a count is shown.
-pub fn count_by_owning_org_unit(conn: &Connection, object_key: &str, owning_org_unit_id: &str) -> rusqlite::Result<i64> {
+pub fn count_by_owning_org_unit(
+    conn: &Connection,
+    object_key: &str,
+    owning_org_unit_id: &str,
+) -> rusqlite::Result<i64> {
     if let Some(table) = table_name_for(object_key) {
-        conn.query_row(&format!("SELECT COUNT(*) FROM {table} WHERE owning_org_unit_id = ?1"), [owning_org_unit_id], |r| r.get(0))
+        conn.query_row(
+            &format!("SELECT COUNT(*) FROM {table} WHERE owning_org_unit_id = ?1"),
+            [owning_org_unit_id],
+            |r| r.get(0),
+        )
     } else {
         conn.query_row(
             "SELECT COUNT(*) FROM custom_records WHERE owning_org_unit_id = ?1 AND object_key = ?2",

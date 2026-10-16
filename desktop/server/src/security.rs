@@ -39,9 +39,18 @@ impl SecurityConfig {
             .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true"))
             .unwrap_or(false);
         let allowed_origins = std::env::var("LANESRA_ALLOWED_ORIGINS")
-            .map(|v| v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect())
+            .map(|v| {
+                v.split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .collect()
+            })
             .unwrap_or_default();
-        SecurityConfig { trust_proxy_https, allowed_origins }
+        SecurityConfig {
+            trust_proxy_https,
+            allowed_origins,
+        }
     }
 }
 
@@ -52,12 +61,25 @@ impl SecurityConfig {
 /// actually plain HTTP end-to-end (the LAN-only default) would be
 /// meaningless, and browsers ignore it over plain HTTP regardless, so
 /// gating it just keeps the response honest about what's actually true.
-pub async fn security_headers(State(config): State<SecurityConfig>, request: Request, next: Next) -> Response {
+pub async fn security_headers(
+    State(config): State<SecurityConfig>,
+    request: Request,
+    next: Next,
+) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
-    headers.insert(HeaderName::from_static("x-content-type-options"), HeaderValue::from_static("nosniff"));
-    headers.insert(HeaderName::from_static("x-frame-options"), HeaderValue::from_static("DENY"));
-    headers.insert(HeaderName::from_static("referrer-policy"), HeaderValue::from_static("strict-origin-when-cross-origin"));
+    headers.insert(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY"),
+    );
+    headers.insert(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
     if config.trust_proxy_https {
         headers.insert(
             HeaderName::from_static("strict-transport-security"),
@@ -74,7 +96,10 @@ pub fn cors_layer(allowed_origins: &[String]) -> Option<tower_http::cors::CorsLa
     if allowed_origins.is_empty() {
         return None;
     }
-    let origins: Vec<HeaderValue> = allowed_origins.iter().filter_map(|o| o.parse().ok()).collect();
+    let origins: Vec<HeaderValue> = allowed_origins
+        .iter()
+        .filter_map(|o| o.parse().ok())
+        .collect();
     Some(
         tower_http::cors::CorsLayer::new()
             .allow_origin(tower_http::cors::AllowOrigin::list(origins))

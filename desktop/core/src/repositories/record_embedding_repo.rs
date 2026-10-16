@@ -21,12 +21,22 @@ fn encode(embedding: &[f32]) -> Vec<u8> {
 }
 
 fn decode(bytes: &[u8]) -> Vec<f32> {
-    bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+    bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
 }
 
 /// Replaces whatever embedding this record already had (if any) - a
 /// record is always reindexed wholesale, never partially updated.
-pub fn upsert(conn: &Connection, workspace_id: &str, object_key: &str, record_id: &str, embedding: &[f32], model: &str) -> rusqlite::Result<()> {
+pub fn upsert(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    record_id: &str,
+    embedding: &[f32],
+    model: &str,
+) -> rusqlite::Result<()> {
     let bytes = encode(embedding);
     conn.execute(
         "INSERT INTO record_embeddings (workspace_id, object_key, record_id, embedding, dim, model, updated_at)
@@ -40,7 +50,10 @@ pub fn upsert(conn: &Connection, workspace_id: &str, object_key: &str, record_id
 }
 
 pub fn delete(conn: &Connection, record_id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM record_embeddings WHERE record_id = ?1", params![record_id])?;
+    conn.execute(
+        "DELETE FROM record_embeddings WHERE record_id = ?1",
+        params![record_id],
+    )?;
     Ok(())
 }
 
@@ -54,17 +67,36 @@ pub struct StoredEmbedding {
 /// `object_key` - `vector_search_service::semantic_search_records` loads
 /// this wholesale and ranks in Rust; see that module's own doc comment on
 /// why a brute-force scan is the honest tradeoff here.
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str, object_key: Option<&str>) -> rusqlite::Result<Vec<StoredEmbedding>> {
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: Option<&str>,
+) -> rusqlite::Result<Vec<StoredEmbedding>> {
     let rows: Vec<(String, String, Vec<u8>)> = if let Some(object_key) = object_key {
         let mut stmt = conn.prepare("SELECT object_key, record_id, embedding FROM record_embeddings WHERE workspace_id = ?1 AND object_key = ?2")?;
-        let mapped = stmt.query_map(params![workspace_id, object_key], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
+        let mapped = stmt
+            .query_map(params![workspace_id, object_key], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
         mapped
     } else {
         let mut stmt = conn.prepare("SELECT object_key, record_id, embedding FROM record_embeddings WHERE workspace_id = ?1")?;
-        let mapped = stmt.query_map(params![workspace_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect::<rusqlite::Result<_>>()?;
+        let mapped = stmt
+            .query_map(params![workspace_id], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
         mapped
     };
-    Ok(rows.into_iter().map(|(object_key, record_id, bytes)| StoredEmbedding { object_key, record_id, embedding: decode(&bytes) }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|(object_key, record_id, bytes)| StoredEmbedding {
+            object_key,
+            record_id,
+            embedding: decode(&bytes),
+        })
+        .collect())
 }
 
 pub struct PendingEmbedding {
@@ -77,14 +109,26 @@ pub struct PendingEmbedding {
 /// these, the same "enqueue now, drain later" shape
 /// `ai_agent_pending_run_repo::list_batch` already established for agent
 /// runs.
-pub fn list_pending_batch(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<PendingEmbedding>> {
+pub fn list_pending_batch(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<PendingEmbedding>> {
     let mut stmt = conn.prepare("SELECT object_key, record_id FROM pending_record_embeddings WHERE workspace_id = ?1 ORDER BY created_at LIMIT ?2")?;
-    let rows = stmt.query_map(params![workspace_id, limit], |r| Ok(PendingEmbedding { object_key: r.get(0)?, record_id: r.get(1)? }))?;
+    let rows = stmt.query_map(params![workspace_id, limit], |r| {
+        Ok(PendingEmbedding {
+            object_key: r.get(0)?,
+            record_id: r.get(1)?,
+        })
+    })?;
     rows.collect()
 }
 
 pub fn delete_pending(conn: &Connection, record_id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM pending_record_embeddings WHERE record_id = ?1", params![record_id])?;
+    conn.execute(
+        "DELETE FROM pending_record_embeddings WHERE record_id = ?1",
+        params![record_id],
+    )?;
     Ok(())
 }
 
@@ -92,8 +136,16 @@ pub fn delete_pending(conn: &Connection, record_id: &str) -> rusqlite::Result<()
 /// Search panel - proves reindexing actually happened rather than
 /// silently doing nothing when no provider key is configured.
 pub fn counts(conn: &Connection, workspace_id: &str) -> rusqlite::Result<(i64, i64)> {
-    let embedded: i64 = conn.query_row("SELECT COUNT(*) FROM record_embeddings WHERE workspace_id = ?1", params![workspace_id], |r| r.get(0))?;
-    let pending: i64 = conn.query_row("SELECT COUNT(*) FROM pending_record_embeddings WHERE workspace_id = ?1", params![workspace_id], |r| r.get(0))?;
+    let embedded: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM record_embeddings WHERE workspace_id = ?1",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
+    let pending: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pending_record_embeddings WHERE workspace_id = ?1",
+        params![workspace_id],
+        |r| r.get(0),
+    )?;
     Ok((embedded, pending))
 }
 
@@ -105,7 +157,10 @@ pub fn counts(conn: &Connection, workspace_id: &str) -> rusqlite::Result<(i64, i
 /// is archived) - `vector_search_service::drain_pending_embeddings`
 /// treats that as "nothing to do", not an error, since a record can be
 /// archived or deleted between being enqueued and drained.
-pub fn searchable_text(conn: &Connection, record_id: &str) -> rusqlite::Result<Option<(String, String, String, String)>> {
+pub fn searchable_text(
+    conn: &Connection,
+    record_id: &str,
+) -> rusqlite::Result<Option<(String, String, String, String)>> {
     conn.query_row(
         "SELECT r.workspace_id, r.object_key, r.primary_name,
                 r.primary_name || ' ' || r.display_number || ' ' || COALESCE((
@@ -120,5 +175,11 @@ pub fn searchable_text(conn: &Connection, record_id: &str) -> rusqlite::Result<O
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }

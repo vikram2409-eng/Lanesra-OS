@@ -11,7 +11,11 @@ use crate::domain::{AppError, AppResult};
 use crate::models::voice::VoiceActivityEntry;
 use crate::repositories::{user_repo, voice_repo};
 
-pub fn list_my_voice_activity(conn: &Connection, user_id: &str, limit: i64) -> AppResult<Vec<VoiceActivityEntry>> {
+pub fn list_my_voice_activity(
+    conn: &Connection,
+    user_id: &str,
+    limit: i64,
+) -> AppResult<Vec<VoiceActivityEntry>> {
     Ok(voice_repo::list_activity_for_user(conn, user_id, limit)?)
 }
 
@@ -23,12 +27,23 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     let actor_id = actor_user_id.ok_or_else(|| AppError::Validation("Not authenticated".into()))?;
     let roles = user_repo::roles_for_user(conn, actor_id)?;
     if !roles.iter().any(|r| r == "Administrator") {
-        return Err(AppError::Validation("Only an Administrator can search Voice Activity".into()));
+        return Err(AppError::Validation(
+            "Only an Administrator can search Voice Activity".into(),
+        ));
     }
     Ok(())
 }
 
-pub fn search_voice_activity(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>, limit: i64) -> AppResult<Vec<VoiceActivityEntry>> {
+pub fn search_voice_activity(
+    conn: &Connection,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+    limit: i64,
+) -> AppResult<Vec<VoiceActivityEntry>> {
     require_admin(conn, actor_user_id)?;
-    Ok(voice_repo::search_activity_for_workspace(conn, workspace_id, limit)?)
+    Ok(voice_repo::search_activity_for_workspace(
+        conn,
+        workspace_id,
+        limit,
+    )?)
 }

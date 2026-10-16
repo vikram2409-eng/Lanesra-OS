@@ -8,14 +8,19 @@
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::{new_uuid, now_iso};
-use crate::models::ai_knowledge::{KnowledgeCollection, KnowledgeCollectionInput, KnowledgeSource, KnowledgeSourceInput};
+use crate::models::ai_knowledge::{
+    KnowledgeCollection, KnowledgeCollectionInput, KnowledgeSource, KnowledgeSourceInput,
+};
 
 fn encode(embedding: &[f32]) -> Vec<u8> {
     embedding.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
 fn decode(bytes: &[u8]) -> Vec<f32> {
-    bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+    bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
 }
 
 // --- Collections -----------------------------------------------------------
@@ -33,7 +38,12 @@ fn map_collection_row(row: &rusqlite::Row) -> rusqlite::Result<KnowledgeCollecti
     })
 }
 
-pub fn create_collection(conn: &Connection, workspace_id: &str, input: &KnowledgeCollectionInput, actor_user_id: Option<&str>) -> rusqlite::Result<KnowledgeCollection> {
+pub fn create_collection(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &KnowledgeCollectionInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<KnowledgeCollection> {
     let id = new_uuid();
     let now = now_iso();
     conn.execute(
@@ -44,7 +54,12 @@ pub fn create_collection(conn: &Connection, workspace_id: &str, input: &Knowledg
     get_collection(conn, &id).map(|r| r.expect("just inserted"))
 }
 
-pub fn update_collection(conn: &Connection, id: &str, input: &KnowledgeCollectionInput, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn update_collection(
+    conn: &Connection,
+    id: &str,
+    input: &KnowledgeCollectionInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_knowledge_collections SET name = ?1, description = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?5",
         rusqlite::params![input.name, input.description, now_iso(), actor_user_id, id],
@@ -52,13 +67,27 @@ pub fn update_collection(conn: &Connection, id: &str, input: &KnowledgeCollectio
     Ok(())
 }
 
-pub fn get_collection(conn: &Connection, id: &str) -> rusqlite::Result<Option<KnowledgeCollection>> {
-    conn.query_row("SELECT * FROM ai_knowledge_collections WHERE id = ?1", [id], map_collection_row).optional()
+pub fn get_collection(
+    conn: &Connection,
+    id: &str,
+) -> rusqlite::Result<Option<KnowledgeCollection>> {
+    conn.query_row(
+        "SELECT * FROM ai_knowledge_collections WHERE id = ?1",
+        [id],
+        map_collection_row,
+    )
+    .optional()
 }
 
-pub fn list_collections(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<KnowledgeCollection>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_knowledge_collections WHERE workspace_id = ?1 ORDER BY name")?;
-    let rows = stmt.query_map([workspace_id], map_collection_row)?.collect();
+pub fn list_collections(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<KnowledgeCollection>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM ai_knowledge_collections WHERE workspace_id = ?1 ORDER BY name")?;
+    let rows = stmt
+        .query_map([workspace_id], map_collection_row)?
+        .collect();
     rows
 }
 
@@ -85,7 +114,13 @@ fn map_source_row(row: &rusqlite::Row) -> rusqlite::Result<KnowledgeSource> {
     })
 }
 
-pub fn create_source(conn: &Connection, workspace_id: &str, input: &KnowledgeSourceInput, chunk_count: i64, actor_user_id: Option<&str>) -> rusqlite::Result<KnowledgeSource> {
+pub fn create_source(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &KnowledgeSourceInput,
+    chunk_count: i64,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<KnowledgeSource> {
     let id = new_uuid();
     let now = now_iso();
     conn.execute(
@@ -96,7 +131,13 @@ pub fn create_source(conn: &Connection, workspace_id: &str, input: &KnowledgeSou
     get_source(conn, &id).map(|r| r.expect("just inserted"))
 }
 
-pub fn update_source(conn: &Connection, id: &str, input: &KnowledgeSourceInput, chunk_count: i64, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn update_source(
+    conn: &Connection,
+    id: &str,
+    input: &KnowledgeSourceInput,
+    chunk_count: i64,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_knowledge_sources SET collection_id = ?1, name = ?2, content = ?3, status = 'indexed', chunk_count = ?4, updated_at = ?5, updated_by = ?6 WHERE id = ?7",
         rusqlite::params![input.collection_id, input.name, input.content, chunk_count, now_iso(), actor_user_id, id],
@@ -105,18 +146,31 @@ pub fn update_source(conn: &Connection, id: &str, input: &KnowledgeSourceInput, 
 }
 
 pub fn get_source(conn: &Connection, id: &str) -> rusqlite::Result<Option<KnowledgeSource>> {
-    conn.query_row("SELECT * FROM ai_knowledge_sources WHERE id = ?1", [id], map_source_row).optional()
+    conn.query_row(
+        "SELECT * FROM ai_knowledge_sources WHERE id = ?1",
+        [id],
+        map_source_row,
+    )
+    .optional()
 }
 
-pub fn list_sources(conn: &Connection, workspace_id: &str, collection_id: Option<&str>) -> rusqlite::Result<Vec<KnowledgeSource>> {
+pub fn list_sources(
+    conn: &Connection,
+    workspace_id: &str,
+    collection_id: Option<&str>,
+) -> rusqlite::Result<Vec<KnowledgeSource>> {
     match collection_id {
         Some(cid) => {
             let mut stmt = conn.prepare("SELECT * FROM ai_knowledge_sources WHERE workspace_id = ?1 AND collection_id = ?2 ORDER BY name")?;
-            let rows = stmt.query_map(rusqlite::params![workspace_id, cid], map_source_row)?.collect();
+            let rows = stmt
+                .query_map(rusqlite::params![workspace_id, cid], map_source_row)?
+                .collect();
             rows
         }
         None => {
-            let mut stmt = conn.prepare("SELECT * FROM ai_knowledge_sources WHERE workspace_id = ?1 ORDER BY name")?;
+            let mut stmt = conn.prepare(
+                "SELECT * FROM ai_knowledge_sources WHERE workspace_id = ?1 ORDER BY name",
+            )?;
             let rows = stmt.query_map([workspace_id], map_source_row)?.collect();
             rows
         }
@@ -135,8 +189,16 @@ pub fn delete_source(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 /// wholesale on update, the same "replace-all" shape `execution_graph_repo
 /// ::replace_nodes_and_edges` already established for a draft graph's
 /// nodes/edges.
-pub fn replace_chunks(conn: &Connection, source_id: &str, workspace_id: &str, chunks: &[(String, Vec<f32>, String)]) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM ai_knowledge_chunks WHERE source_id = ?1", [source_id])?;
+pub fn replace_chunks(
+    conn: &Connection,
+    source_id: &str,
+    workspace_id: &str,
+    chunks: &[(String, Vec<f32>, String)],
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM ai_knowledge_chunks WHERE source_id = ?1",
+        [source_id],
+    )?;
     let now = now_iso();
     for (i, (content, embedding, model)) in chunks.iter().enumerate() {
         let bytes = encode(embedding);
@@ -161,7 +223,11 @@ pub struct StoredChunk {
 /// wholesale and ranks in Rust, the same brute-force-cosine tradeoff
 /// `vector_search_service::semantic_search_records` already makes at this
 /// project's scale.
-pub fn list_chunks_for_workspace(conn: &Connection, workspace_id: &str, collection_id: Option<&str>) -> rusqlite::Result<Vec<StoredChunk>> {
+pub fn list_chunks_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    collection_id: Option<&str>,
+) -> rusqlite::Result<Vec<StoredChunk>> {
     let rows: Vec<(String, i64, String, Vec<u8>)> = match collection_id {
         Some(cid) => {
             let mut stmt = conn.prepare(
@@ -169,14 +235,30 @@ pub fn list_chunks_for_workspace(conn: &Connection, workspace_id: &str, collecti
                  JOIN ai_knowledge_sources s ON s.id = c.source_id
                  WHERE c.workspace_id = ?1 AND s.collection_id = ?2 AND c.embedding IS NOT NULL",
             )?;
-            let mapped = stmt.query_map(rusqlite::params![workspace_id, cid], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?;
+            let mapped = stmt
+                .query_map(rusqlite::params![workspace_id, cid], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })?
+                .collect::<rusqlite::Result<_>>()?;
             mapped
         }
         None => {
             let mut stmt = conn.prepare("SELECT source_id, chunk_index, content, embedding FROM ai_knowledge_chunks WHERE workspace_id = ?1 AND embedding IS NOT NULL")?;
-            let mapped = stmt.query_map([workspace_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?.collect::<rusqlite::Result<_>>()?;
+            let mapped = stmt
+                .query_map([workspace_id], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })?
+                .collect::<rusqlite::Result<_>>()?;
             mapped
         }
     };
-    Ok(rows.into_iter().map(|(source_id, chunk_index, content, bytes)| StoredChunk { source_id, chunk_index, content, embedding: decode(&bytes) }).collect())
+    Ok(rows
+        .into_iter()
+        .map(|(source_id, chunk_index, content, bytes)| StoredChunk {
+            source_id,
+            chunk_index,
+            content,
+            embedding: decode(&bytes),
+        })
+        .collect())
 }

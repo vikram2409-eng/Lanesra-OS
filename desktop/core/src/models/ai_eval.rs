@@ -16,7 +16,8 @@ use serde::{Deserialize, Serialize};
 /// declared output schema (AI Agent Platform v2 Phase 1) against the
 /// actual response; `policy_compliance` checks whether the target run
 /// had any Tool-Call Firewall denial/required-approval (Phase 2).
-pub const EVALUATOR_TYPES: [&str; 3] = ["task_completion", "structured_output", "policy_compliance"];
+pub const EVALUATOR_TYPES: [&str; 3] =
+    ["task_completion", "structured_output", "policy_compliance"];
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AiEvalCase {

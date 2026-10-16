@@ -3,7 +3,10 @@ use tauri::State;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::app_definition::{AccessibleApp, AppDefinition, AppDefinitionInput, AppDefinitionUpdate, AppPermission, AppPermissionInput};
+use lanesra_core::models::app_definition::{
+    AccessibleApp, AppDefinition, AppDefinitionInput, AppDefinitionUpdate, AppPermission,
+    AppPermissionInput,
+};
 use lanesra_core::services::app_service;
 
 #[tauri::command]
@@ -16,11 +19,20 @@ pub fn list_apps(state: State<AppState>) -> AppResult<Vec<AppDefinition>> {
 pub fn create_app(state: State<AppState>, input: AppDefinitionInput) -> AppResult<AppDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    app_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    app_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_app(state: State<AppState>, id: String, update: AppDefinitionUpdate) -> AppResult<AppDefinition> {
+pub fn update_app(
+    state: State<AppState>,
+    id: String,
+    update: AppDefinitionUpdate,
+) -> AppResult<AppDefinition> {
     let conn = state.conn.lock().unwrap();
     app_service::update(&conn, &id, &update, current_actor(&state).as_deref())
 }
@@ -44,13 +56,20 @@ pub fn delete_app(state: State<AppState>, id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn list_app_permissions(state: State<AppState>, app_id: String) -> AppResult<Vec<AppPermission>> {
+pub fn list_app_permissions(
+    state: State<AppState>,
+    app_id: String,
+) -> AppResult<Vec<AppPermission>> {
     let conn = state.conn.lock().unwrap();
     app_service::list_permissions(&conn, &app_id, current_actor(&state).as_deref())
 }
 
 #[tauri::command]
-pub fn grant_app_permission(state: State<AppState>, app_id: String, input: AppPermissionInput) -> AppResult<AppPermission> {
+pub fn grant_app_permission(
+    state: State<AppState>,
+    app_id: String,
+    input: AppPermissionInput,
+) -> AppResult<AppPermission> {
     let conn = state.conn.lock().unwrap();
     app_service::grant_permission(&conn, &app_id, &input, current_actor(&state).as_deref())
 }
@@ -80,5 +99,10 @@ pub fn list_accessible_apps(state: State<AppState>) -> AppResult<Vec<AccessibleA
 pub fn can_write_object(state: State<AppState>, entity_type: String) -> AppResult<bool> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    app_service::can_write_object(&conn, &workspace_id, &entity_type, current_actor(&state).as_deref())
+    app_service::can_write_object(
+        &conn,
+        &workspace_id,
+        &entity_type,
+        current_actor(&state).as_deref(),
+    )
 }

@@ -33,14 +33,22 @@ use crate::services::custom_object_service;
 /// an active custom object with an active, `date`-typed `valid_from`
 /// field. Exposed separately so a list/report UI can decide whether to
 /// even offer an "as of" filter for a given object.
-pub fn is_effective_dated(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<bool> {
-    let is_active_custom_object = custom_object_service::get_by_key(conn, workspace_id, entity_type)?.is_some_and(|d| d.is_active);
+pub fn is_effective_dated(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<bool> {
+    let is_active_custom_object =
+        custom_object_service::get_by_key(conn, workspace_id, entity_type)?
+            .is_some_and(|d| d.is_active);
     if !is_active_custom_object {
         return Ok(false);
     }
-    Ok(custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
-        .iter()
-        .any(|d| d.key == "valid_from" && d.is_active && d.field_type == "date"))
+    Ok(
+        custom_field_repo::list_definitions(conn, workspace_id, entity_type)?
+            .iter()
+            .any(|d| d.key == "valid_from" && d.is_active && d.field_type == "date"),
+    )
 }
 
 /// Every non-archived record id of `entity_type` whose currently stored
@@ -50,7 +58,12 @@ pub fn is_effective_dated(conn: &Connection, workspace_id: &str, entity_type: &s
 /// `valid_from <= as_of AND (valid_to is blank OR valid_to >= as_of)`.
 /// A record with no `valid_from` value recorded is excluded rather than
 /// treated as always-valid - "effective-dated" claims a start date.
-pub fn active_record_ids_as_of(conn: &Connection, workspace_id: &str, entity_type: &str, as_of: &str) -> AppResult<Vec<String>> {
+pub fn active_record_ids_as_of(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    as_of: &str,
+) -> AppResult<Vec<String>> {
     if !is_effective_dated(conn, workspace_id, entity_type)? {
         return Err(AppError::Validation(format!(
             "'{entity_type}' is not effective-dated - it needs an active 'valid_from' date custom field"

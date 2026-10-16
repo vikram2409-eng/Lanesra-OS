@@ -5,7 +5,9 @@
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::{new_uuid, now_iso};
-use crate::models::ai_eval::{AiEvalCase, AiEvalCaseInput, AiEvalCaseResult, AiEvalRun, AiEvalSuite, AiEvalSuiteInput};
+use crate::models::ai_eval::{
+    AiEvalCase, AiEvalCaseInput, AiEvalCaseResult, AiEvalRun, AiEvalSuite, AiEvalSuiteInput,
+};
 
 fn map_suite_row(row: &rusqlite::Row) -> rusqlite::Result<AiEvalSuite> {
     Ok(AiEvalSuite {
@@ -25,11 +27,17 @@ fn map_suite_row(row: &rusqlite::Row) -> rusqlite::Result<AiEvalSuite> {
 }
 
 fn map_case_row(row: &rusqlite::Row) -> rusqlite::Result<AiEvalCase> {
-    Ok(AiEvalCase { id: row.get("id")?, case_order: row.get("case_order")?, input_text: row.get("input_text")?, success_criteria: row.get("success_criteria")? })
+    Ok(AiEvalCase {
+        id: row.get("id")?,
+        case_order: row.get("case_order")?,
+        input_text: row.get("input_text")?,
+        success_criteria: row.get("success_criteria")?,
+    })
 }
 
 pub fn list_cases(conn: &Connection, suite_id: &str) -> rusqlite::Result<Vec<AiEvalCase>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_eval_cases WHERE suite_id = ?1 ORDER BY case_order")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_eval_cases WHERE suite_id = ?1 ORDER BY case_order")?;
     let rows = stmt.query_map([suite_id], map_case_row)?.collect();
     rows
 }
@@ -39,7 +47,11 @@ fn hydrate(conn: &Connection, mut suite: AiEvalSuite) -> rusqlite::Result<AiEval
     Ok(suite)
 }
 
-fn replace_cases(conn: &Connection, suite_id: &str, cases: &[AiEvalCaseInput]) -> rusqlite::Result<()> {
+fn replace_cases(
+    conn: &Connection,
+    suite_id: &str,
+    cases: &[AiEvalCaseInput],
+) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM ai_eval_cases WHERE suite_id = ?1", [suite_id])?;
     for (i, case) in cases.iter().enumerate() {
         conn.execute(
@@ -50,7 +62,13 @@ fn replace_cases(conn: &Connection, suite_id: &str, cases: &[AiEvalCaseInput]) -
     Ok(())
 }
 
-pub fn create_suite(conn: &Connection, id: &str, workspace_id: &str, input: &AiEvalSuiteInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiEvalSuite> {
+pub fn create_suite(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &AiEvalSuiteInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiEvalSuite> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO ai_eval_suites (id, workspace_id, name, description, target_type, target_id, evaluator_type, created_at, created_by, updated_at, updated_by)
@@ -61,7 +79,12 @@ pub fn create_suite(conn: &Connection, id: &str, workspace_id: &str, input: &AiE
     get_suite(conn, id).map(|s| s.expect("just inserted"))
 }
 
-pub fn update_suite(conn: &Connection, id: &str, input: &AiEvalSuiteInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiEvalSuite> {
+pub fn update_suite(
+    conn: &Connection,
+    id: &str,
+    input: &AiEvalSuiteInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiEvalSuite> {
     let now = now_iso();
     conn.execute(
         "UPDATE ai_eval_suites SET name = ?1, description = ?2, target_type = ?3, target_id = ?4, evaluator_type = ?5, updated_at = ?6, updated_by = ?7 WHERE id = ?8",
@@ -72,13 +95,22 @@ pub fn update_suite(conn: &Connection, id: &str, input: &AiEvalSuiteInput, actor
 }
 
 pub fn get_suite(conn: &Connection, id: &str) -> rusqlite::Result<Option<AiEvalSuite>> {
-    let row = conn.query_row("SELECT * FROM ai_eval_suites WHERE id = ?1", [id], map_suite_row).optional()?;
+    let row = conn
+        .query_row(
+            "SELECT * FROM ai_eval_suites WHERE id = ?1",
+            [id],
+            map_suite_row,
+        )
+        .optional()?;
     row.map(|s| hydrate(conn, s)).transpose()
 }
 
 pub fn list_suites(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AiEvalSuite>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_eval_suites WHERE workspace_id = ?1 ORDER BY name")?;
-    let rows: Vec<AiEvalSuite> = stmt.query_map([workspace_id], map_suite_row)?.collect::<rusqlite::Result<_>>()?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_eval_suites WHERE workspace_id = ?1 ORDER BY name")?;
+    let rows: Vec<AiEvalSuite> = stmt
+        .query_map([workspace_id], map_suite_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|s| hydrate(conn, s)).collect()
 }
 
@@ -116,8 +148,12 @@ fn map_run_row(row: &rusqlite::Row) -> rusqlite::Result<AiEvalRun> {
     })
 }
 
-pub fn list_case_results(conn: &Connection, eval_run_id: &str) -> rusqlite::Result<Vec<AiEvalCaseResult>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_eval_case_results WHERE eval_run_id = ?1 ORDER BY rowid")?;
+pub fn list_case_results(
+    conn: &Connection,
+    eval_run_id: &str,
+) -> rusqlite::Result<Vec<AiEvalCaseResult>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_eval_case_results WHERE eval_run_id = ?1 ORDER BY rowid")?;
     let rows = stmt.query_map([eval_run_id], map_result_row)?.collect();
     rows
 }
@@ -130,7 +166,12 @@ fn hydrate_run(conn: &Connection, mut run: AiEvalRun) -> rusqlite::Result<AiEval
 /// Starts a run row up front (mirrors `ai_agent_run_repo::start_run`'s
 /// own "insert now, finish later" shape), so a run interrupted mid-way
 /// still leaves a record rather than silently vanishing.
-pub fn start_run(conn: &Connection, id: &str, suite_id: &str, workspace_id: &str) -> rusqlite::Result<()> {
+pub fn start_run(
+    conn: &Connection,
+    id: &str,
+    suite_id: &str,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO ai_eval_runs (id, suite_id, workspace_id, status, started_at) VALUES (?1, ?2, ?3, 'running', ?4)",
         (id, suite_id, workspace_id, now_iso()),
@@ -158,7 +199,12 @@ pub fn append_case_result(
     Ok(())
 }
 
-pub fn finish_run(conn: &Connection, id: &str, passed_count: i64, failed_count: i64) -> rusqlite::Result<()> {
+pub fn finish_run(
+    conn: &Connection,
+    id: &str,
+    passed_count: i64,
+    failed_count: i64,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_eval_runs SET status = 'completed', passed_count = ?1, failed_count = ?2, finished_at = ?3 WHERE id = ?4",
         (passed_count, failed_count, now_iso(), id),
@@ -167,12 +213,26 @@ pub fn finish_run(conn: &Connection, id: &str, passed_count: i64, failed_count: 
 }
 
 pub fn get_run(conn: &Connection, id: &str) -> rusqlite::Result<Option<AiEvalRun>> {
-    let row = conn.query_row("SELECT * FROM ai_eval_runs WHERE id = ?1", [id], map_run_row).optional()?;
+    let row = conn
+        .query_row(
+            "SELECT * FROM ai_eval_runs WHERE id = ?1",
+            [id],
+            map_run_row,
+        )
+        .optional()?;
     row.map(|r| hydrate_run(conn, r)).transpose()
 }
 
-pub fn list_runs_for_suite(conn: &Connection, suite_id: &str, limit: i64) -> rusqlite::Result<Vec<AiEvalRun>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_eval_runs WHERE suite_id = ?1 ORDER BY started_at DESC LIMIT ?2")?;
-    let rows: Vec<AiEvalRun> = stmt.query_map(rusqlite::params![suite_id, limit], map_run_row)?.collect::<rusqlite::Result<_>>()?;
+pub fn list_runs_for_suite(
+    conn: &Connection,
+    suite_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<AiEvalRun>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM ai_eval_runs WHERE suite_id = ?1 ORDER BY started_at DESC LIMIT ?2",
+    )?;
+    let rows: Vec<AiEvalRun> = stmt
+        .query_map(rusqlite::params![suite_id, limit], map_run_row)?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate_run(conn, r)).collect()
 }

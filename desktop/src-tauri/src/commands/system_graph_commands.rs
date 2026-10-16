@@ -20,21 +20,33 @@ pub fn list_system_nodes(state: State<AppState>, node_type: String) -> AppResult
 }
 
 #[tauri::command]
-pub fn get_system_node(state: State<AppState>, node_type: String, component_id: String) -> AppResult<Option<SystemNode>> {
+pub fn get_system_node(
+    state: State<AppState>,
+    node_type: String,
+    component_id: String,
+) -> AppResult<Option<SystemNode>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     system_graph_service::get_node(&conn, &workspace_id, &node_type, &component_id)
 }
 
 #[tauri::command]
-pub fn get_system_node_dependencies(state: State<AppState>, node_type: String, component_id: String) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_system_node_dependencies(
+    state: State<AppState>,
+    node_type: String,
+    component_id: String,
+) -> AppResult<Vec<SystemGraphHit>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     system_graph_service::get_dependencies(&conn, &workspace_id, &node_type, &component_id)
 }
 
 #[tauri::command]
-pub fn get_system_node_dependents(state: State<AppState>, node_type: String, component_id: String) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_system_node_dependents(
+    state: State<AppState>,
+    node_type: String,
+    component_id: String,
+) -> AppResult<Vec<SystemGraphHit>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     system_graph_service::get_dependents(&conn, &workspace_id, &node_type, &component_id)
@@ -44,7 +56,11 @@ pub fn get_system_node_dependents(state: State<AppState>, node_type: String, com
 /// blast radius of things it feeds into") - the Dependency Explorer's
 /// "Lineage" direction.
 #[tauri::command]
-pub fn get_system_node_lineage(state: State<AppState>, node_type: String, component_id: String) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_system_node_lineage(
+    state: State<AppState>,
+    node_type: String,
+    component_id: String,
+) -> AppResult<Vec<SystemGraphHit>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     system_graph_service::get_lineage(&conn, &workspace_id, &node_type, &component_id)
@@ -55,7 +71,11 @@ pub fn get_system_node_lineage(state: State<AppState>, node_type: String, compon
 /// "Impact" direction, and the direct generalization of
 /// `custom_object_service::count_references` to a real transitive answer.
 #[tauri::command]
-pub fn get_system_node_impact(state: State<AppState>, node_type: String, component_id: String) -> AppResult<Vec<SystemGraphHit>> {
+pub fn get_system_node_impact(
+    state: State<AppState>,
+    node_type: String,
+    component_id: String,
+) -> AppResult<Vec<SystemGraphHit>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     system_graph_service::get_impact(&conn, &workspace_id, &node_type, &component_id)

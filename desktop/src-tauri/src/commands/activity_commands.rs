@@ -21,7 +21,11 @@ pub fn log_activity(state: State<AppState>, input: ActivityInput) -> AppResult<A
 /// access model `list_audit_events` already uses (see that command's
 /// own comment).
 #[tauri::command]
-pub fn list_activities(state: State<AppState>, entity_type: String, entity_id: String) -> AppResult<Vec<Activity>> {
+pub fn list_activities(
+    state: State<AppState>,
+    entity_type: String,
+    entity_id: String,
+) -> AppResult<Vec<Activity>> {
     let conn = state.conn.lock().unwrap();
     activity_service::list_for_entity(&conn, &entity_type, &entity_id)
 }

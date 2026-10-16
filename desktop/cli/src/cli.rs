@@ -3,7 +3,11 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "lanesra", version, about = "Scriptable access to a Lanesra OS Team Workspace server's REST API")]
+#[command(
+    name = "lanesra",
+    version,
+    about = "Scriptable access to a Lanesra OS Team Workspace server's REST API"
+)]
 pub struct Cli {
     /// Team Workspace server base URL, e.g. http://localhost:8787
     #[arg(long, env = "LANESRA_API_URL")]

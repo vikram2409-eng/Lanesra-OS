@@ -43,7 +43,13 @@ fn like_pattern(query: &str) -> String {
     // Escapes the two characters SQLite's LIKE treats specially so a
     // query containing a literal "%" or "_" searches for that literal
     // text instead of being interpreted as a wildcard.
-    format!("%{}%", query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"))
+    format!(
+        "%{}%",
+        query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    )
 }
 
 /// Runs `sql` (already scoped to `workspace_id` and non-archived rows) and
@@ -75,7 +81,11 @@ fn collect(
 /// `is_searchable` custom field values - in roughly that priority order,
 /// since a match on a record's own name/number is usually what the user
 /// meant even when a custom field also happens to match.
-pub fn global_search(conn: &Connection, workspace_id: &str, query: &str) -> AppResult<Vec<SearchResult>> {
+pub fn global_search(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &str,
+) -> AppResult<Vec<SearchResult>> {
     let query = query.trim();
     if query.chars().count() < 2 {
         return Ok(Vec::new());
@@ -182,12 +192,20 @@ pub fn global_search(conn: &Connection, workspace_id: &str, query: &str) -> AppR
             break;
         }
         collect(
-            conn, &mut out,
+            conn,
+            &mut out,
             "SELECT id, primary_name, display_number FROM custom_records
              WHERE workspace_id = ?1 AND object_key = ?2 AND archived_at IS NULL
                AND (primary_name LIKE ?3 ESCAPE '\\' OR display_number LIKE ?3 ESCAPE '\\')",
             params![workspace_id, def.key, like],
-            |r| Ok(SearchResult { entity_type: def.key.clone(), entity_id: r.get("id")?, title: r.get("primary_name")?, subtitle: None }),
+            |r| {
+                Ok(SearchResult {
+                    entity_type: def.key.clone(),
+                    entity_id: r.get("id")?,
+                    title: r.get("primary_name")?,
+                    subtitle: None,
+                })
+            },
         )?;
     }
 
@@ -209,16 +227,24 @@ pub fn global_search(conn: &Connection, workspace_id: &str, query: &str) -> AppR
         )?;
         let matches: Vec<(String, String, String, String)> = stmt
             .query_map(params![workspace_id, like, remaining], |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?))
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                ))
             })?
             .collect::<rusqlite::Result<_>>()?;
         for (entity_id, entity_type, label, value) in matches {
             if out.len() >= MAX_RESULTS {
                 break;
             }
-            if let Some(resolved) = crate::services::entity_registry::resolve(conn, &entity_type, &entity_id)? {
+            if let Some(resolved) =
+                crate::services::entity_registry::resolve(conn, &entity_type, &entity_id)?
+            {
                 out.push(SearchResult {
-                    entity_type, entity_id,
+                    entity_type,
+                    entity_id,
                     title: resolved.display_name,
                     subtitle: Some(format!("{label}: {value}")),
                 });
@@ -297,7 +323,11 @@ fn fuzzy_score(query_chars: &[char], title: &str) -> Option<f64> {
 /// code needed per object). Deliberately not the primary path: an exact or
 /// substring match is always more precise and cheaper than an edit-
 /// distance scan, so this only ever runs when that already found nothing.
-pub fn fuzzy_search(conn: &Connection, workspace_id: &str, query: &str) -> AppResult<Vec<SearchResult>> {
+pub fn fuzzy_search(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &str,
+) -> AppResult<Vec<SearchResult>> {
     let query = query.trim();
     if query.chars().count() < 2 {
         return Ok(Vec::new());
@@ -305,15 +335,29 @@ pub fn fuzzy_search(conn: &Connection, workspace_id: &str, query: &str) -> AppRe
     let query_chars: Vec<char> = query.to_lowercase().chars().collect();
     let mut scored: Vec<(f64, SearchResult)> = Vec::new();
 
-    let mut push = |entity_type: &str, entity_id: String, title: String, subtitle: Option<String>| {
-        if let Some(score) = fuzzy_score(&query_chars, &title) {
-            scored.push((score, SearchResult { entity_type: entity_type.into(), entity_id, title, subtitle }));
-        }
-    };
+    let mut push =
+        |entity_type: &str, entity_id: String, title: String, subtitle: Option<String>| {
+            if let Some(score) = fuzzy_score(&query_chars, &title) {
+                scored.push((
+                    score,
+                    SearchResult {
+                        entity_type: entity_type.into(),
+                        entity_id,
+                        title,
+                        subtitle,
+                    },
+                ));
+            }
+        };
 
     let mut stmt = conn.prepare("SELECT id, name, email, phone FROM companies WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
     for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?))
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, Option<String>>(2)?,
+            r.get::<_, Option<String>>(3)?,
+        ))
     })? {
         let (id, name, email, phone) = row?;
         push("Company", id, name, email.or(phone));
@@ -321,32 +365,59 @@ pub fn fuzzy_search(conn: &Connection, workspace_id: &str, query: &str) -> AppRe
 
     let mut stmt = conn.prepare("SELECT id, first_name, last_name, email, phone FROM contacts WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
     for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
-        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?))
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, Option<String>>(3)?,
+            r.get::<_, Option<String>>(4)?,
+        ))
     })? {
         let (id, first, last, email, phone) = row?;
-        push("Contact", id, format!("{first} {last}").trim().to_string(), email.or(phone));
+        push(
+            "Contact",
+            id,
+            format!("{first} {last}").trim().to_string(),
+            email.or(phone),
+        );
     }
 
     let mut stmt = conn.prepare("SELECT id, name FROM opportunities WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
-    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (id, name) = row?;
         push("Opportunity", id, name, None);
     }
 
     let mut stmt = conn.prepare("SELECT id, name, sku FROM products WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
-    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?)))? {
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, Option<String>>(2)?,
+        ))
+    })? {
         let (id, name, sku) = row?;
         push("Product", id, name, sku);
     }
 
-    let mut stmt = conn.prepare("SELECT id, title FROM contracts WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
-    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    let mut stmt = conn.prepare(
+        "SELECT id, title FROM contracts WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2",
+    )?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (id, title) = row?;
         push("Contract", id, title, None);
     }
 
-    let mut stmt = conn.prepare("SELECT id, title FROM tasks WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
-    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    let mut stmt = conn.prepare(
+        "SELECT id, title FROM tasks WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2",
+    )?;
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (id, title) = row?;
         push("Task", id, title, None);
     }
@@ -355,31 +426,44 @@ pub fn fuzzy_search(conn: &Connection, workspace_id: &str, query: &str) -> AppRe
     // a formatted number ("Q-2024-0031") is exactly what a person reads
     // off the record, so it's the fuzzy title too, same as global_search.
     let mut stmt = conn.prepare("SELECT id, quote_number FROM quotes WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
-    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (id, number) = row?;
         push("Quote", id, number, None);
     }
     let mut stmt = conn.prepare("SELECT id, order_number FROM orders WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
-    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (id, number) = row?;
         push("Order", id, number, None);
     }
     let mut stmt = conn.prepare("SELECT id, invoice_number FROM invoices WHERE workspace_id = ?1 AND archived_at IS NULL LIMIT ?2")?;
-    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    for row in stmt.query_map(params![workspace_id, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (id, number) = row?;
         push("Invoice", id, number, None);
     }
 
     for def in custom_object_service::list(conn, workspace_id, true)? {
         let mut stmt = conn.prepare("SELECT id, primary_name FROM custom_records WHERE workspace_id = ?1 AND object_key = ?2 AND archived_at IS NULL LIMIT ?3")?;
-        for row in stmt.query_map(params![workspace_id, def.key, FUZZY_MAX_CANDIDATES_PER_TYPE], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+        for row in stmt.query_map(
+            params![workspace_id, def.key, FUZZY_MAX_CANDIDATES_PER_TYPE],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )? {
             let (id, name) = row?;
             push(&def.key, id, name, None);
         }
     }
 
     scored.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    Ok(scored.into_iter().take(MAX_FUZZY_RESULTS).map(|(_, r)| r).collect())
+    Ok(scored
+        .into_iter()
+        .take(MAX_FUZZY_RESULTS)
+        .map(|(_, r)| r)
+        .collect())
 }
 
 // --- Phase 7b: ranked full-text search over Custom Object records ---------
@@ -407,7 +491,11 @@ const MAX_RANKED_RESULTS: i64 = 25;
 /// (embedded `"` doubled per FTS5's own escaping rule), then joined with
 /// FTS5's implicit AND, e.g. `unpaid invoice` -> `"unpaid" "invoice"`.
 fn fts_match_expr(query: &str) -> String {
-    query.split_whitespace().map(|tok| format!("\"{}\"", tok.replace('"', "\"\""))).collect::<Vec<_>>().join(" ")
+    query
+        .split_whitespace()
+        .map(|tok| format!("\"{}\"", tok.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Ranked (bm25()) full-text search over the `record_search_fts` index
@@ -451,7 +539,12 @@ pub fn search_custom_records(
              WHERE record_search_fts MATCH ?1 AND workspace_id = ?2 AND object_key = ?3
              ORDER BY score LIMIT ?4",
         )?;
-        let result: rusqlite::Result<Vec<_>> = stmt.query_map(params![match_expr, workspace_id, object_key, limit], map_row)?.collect();
+        let result: rusqlite::Result<Vec<_>> = stmt
+            .query_map(
+                params![match_expr, workspace_id, object_key, limit],
+                map_row,
+            )?
+            .collect();
         result?
     } else {
         let mut stmt = conn.prepare(
@@ -459,7 +552,9 @@ pub fn search_custom_records(
              WHERE record_search_fts MATCH ?1 AND workspace_id = ?2
              ORDER BY score LIMIT ?3",
         )?;
-        let result: rusqlite::Result<Vec<_>> = stmt.query_map(params![match_expr, workspace_id, limit], map_row)?.collect();
+        let result: rusqlite::Result<Vec<_>> = stmt
+            .query_map(params![match_expr, workspace_id, limit], map_row)?
+            .collect();
         result?
     };
     Ok(hits)

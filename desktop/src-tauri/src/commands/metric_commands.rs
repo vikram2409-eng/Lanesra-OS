@@ -10,34 +10,61 @@ use lanesra_core::models::semantic::{MetricDefinition, MetricDefinitionInput, Me
 use lanesra_core::services::metric_service;
 
 #[tauri::command]
-pub fn list_metric_definitions(state: State<AppState>, active_only: bool) -> AppResult<Vec<MetricDefinition>> {
+pub fn list_metric_definitions(
+    state: State<AppState>,
+    active_only: bool,
+) -> AppResult<Vec<MetricDefinition>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     metric_service::list(&conn, &workspace_id, active_only)
 }
 
 #[tauri::command]
-pub fn create_metric_definition(state: State<AppState>, input: MetricDefinitionInput) -> AppResult<MetricDefinition> {
+pub fn create_metric_definition(
+    state: State<AppState>,
+    input: MetricDefinitionInput,
+) -> AppResult<MetricDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    metric_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    metric_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_metric_definition(state: State<AppState>, id: String, input: MetricDefinitionInput) -> AppResult<MetricDefinition> {
+pub fn update_metric_definition(
+    state: State<AppState>,
+    id: String,
+    input: MetricDefinitionInput,
+) -> AppResult<MetricDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    metric_service::update(&conn, &id, &workspace_id, &input, current_actor(&state).as_deref())
+    metric_service::update(
+        &conn,
+        &id,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn list_metric_versions(state: State<AppState>, metric_id: String) -> AppResult<Vec<MetricVersion>> {
+pub fn list_metric_versions(
+    state: State<AppState>,
+    metric_id: String,
+) -> AppResult<Vec<MetricVersion>> {
     let conn = state.conn.lock().unwrap();
     metric_service::list_versions(&conn, &metric_id, current_actor(&state).as_deref())
 }
 
 #[tauri::command]
-pub fn deactivate_metric_definition(state: State<AppState>, id: String) -> AppResult<MetricDefinition> {
+pub fn deactivate_metric_definition(
+    state: State<AppState>,
+    id: String,
+) -> AppResult<MetricDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     metric_service::deactivate(&conn, &id, &workspace_id, current_actor(&state).as_deref())

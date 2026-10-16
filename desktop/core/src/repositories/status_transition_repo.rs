@@ -18,11 +18,17 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<StatusTransition> {
     })
 }
 
-pub fn list(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<StatusTransition>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<Vec<StatusTransition>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM status_transitions WHERE workspace_id = ?1 AND entity_type = ?2 ORDER BY created_at",
     )?;
-    let rows = stmt.query_map((workspace_id, entity_type), map_row)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, entity_type), map_row)?
+        .collect();
     rows
 }
 
@@ -31,18 +37,34 @@ pub fn list(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlit
 /// (this app is single-tenant per database), so this is equivalent to
 /// `list` filtered to `is_active`, kept separate to make the enforcement
 /// call site's intent explicit.
-pub fn list_active(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<StatusTransition>> {
+pub fn list_active(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<Vec<StatusTransition>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM status_transitions WHERE workspace_id = ?1 AND entity_type = ?2 AND is_active = 1",
     )?;
-    let rows = stmt.query_map((workspace_id, entity_type), map_row)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, entity_type), map_row)?
+        .collect();
     rows
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<StatusTransition>> {
-    conn.query_row("SELECT * FROM status_transitions WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM status_transitions WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 pub fn create(
@@ -61,7 +83,12 @@ pub fn create(
     Ok(get(conn, id)?.expect("just inserted"))
 }
 
-pub fn set_active(conn: &Connection, id: &str, is_active: bool, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn set_active(
+    conn: &Connection,
+    id: &str,
+    is_active: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE status_transitions SET is_active = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?1",
         (id, is_active, now_iso(), actor_user_id),

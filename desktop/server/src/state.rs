@@ -29,6 +29,11 @@ pub type SharedState = Arc<ServerState>;
 
 impl ServerState {
     pub fn new(conn: Connection, db_path: PathBuf, security: SecurityConfig) -> SharedState {
-        Arc::new(ServerState { conn: Mutex::new(conn), db_path, security, rate_limiter: RateLimiter::new() })
+        Arc::new(ServerState {
+            conn: Mutex::new(conn),
+            db_path,
+            security,
+            rate_limiter: RateLimiter::new(),
+        })
     }
 }

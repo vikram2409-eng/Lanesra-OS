@@ -10,28 +10,52 @@ use lanesra_core::models::semantic::{BusinessGlossaryTerm, BusinessGlossaryTermI
 use lanesra_core::services::glossary_service;
 
 #[tauri::command]
-pub fn list_glossary_terms(state: State<AppState>, active_only: bool) -> AppResult<Vec<BusinessGlossaryTerm>> {
+pub fn list_glossary_terms(
+    state: State<AppState>,
+    active_only: bool,
+) -> AppResult<Vec<BusinessGlossaryTerm>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     glossary_service::list(&conn, &workspace_id, active_only)
 }
 
 #[tauri::command]
-pub fn create_glossary_term(state: State<AppState>, input: BusinessGlossaryTermInput) -> AppResult<BusinessGlossaryTerm> {
+pub fn create_glossary_term(
+    state: State<AppState>,
+    input: BusinessGlossaryTermInput,
+) -> AppResult<BusinessGlossaryTerm> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    glossary_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    glossary_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_glossary_term(state: State<AppState>, id: String, input: BusinessGlossaryTermInput) -> AppResult<BusinessGlossaryTerm> {
+pub fn update_glossary_term(
+    state: State<AppState>,
+    id: String,
+    input: BusinessGlossaryTermInput,
+) -> AppResult<BusinessGlossaryTerm> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    glossary_service::update(&conn, &id, &workspace_id, &input, current_actor(&state).as_deref())
+    glossary_service::update(
+        &conn,
+        &id,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn deactivate_glossary_term(state: State<AppState>, id: String) -> AppResult<BusinessGlossaryTerm> {
+pub fn deactivate_glossary_term(
+    state: State<AppState>,
+    id: String,
+) -> AppResult<BusinessGlossaryTerm> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     glossary_service::deactivate(&conn, &id, &workspace_id, current_actor(&state).as_deref())

@@ -45,7 +45,8 @@ fn map_step_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentRunStep> {
 }
 
 pub fn list_run_steps(conn: &Connection, run_id: &str) -> rusqlite::Result<Vec<AiAgentRunStep>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_agent_run_steps WHERE run_id = ?1 ORDER BY step_order")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_agent_run_steps WHERE run_id = ?1 ORDER BY step_order")?;
     let rows = stmt.query_map([run_id], map_step_row)?.collect();
     rows
 }
@@ -100,7 +101,12 @@ pub fn append_run_step(
     Ok(())
 }
 
-pub fn finish_run(conn: &Connection, id: &str, status: &str, error: Option<&str>) -> rusqlite::Result<()> {
+pub fn finish_run(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    error: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_agent_runs SET status = ?1, error = ?2, finished_at = ?3, paused_at_step_order = NULL, resume_previous_output = NULL WHERE id = ?4",
         (status, error, now_iso(), id),
@@ -113,7 +119,12 @@ pub fn finish_run(conn: &Connection, id: &str, status: &str, error: Option<&str>
 /// isn't done), and the resume point is persisted so a later, entirely
 /// separate request (`approve_pending_step`/`reject_pending_run`) can
 /// pick it back up correctly.
-pub fn pause_for_approval(conn: &Connection, id: &str, paused_at_step_order: i64, resume_previous_output: &str) -> rusqlite::Result<()> {
+pub fn pause_for_approval(
+    conn: &Connection,
+    id: &str,
+    paused_at_step_order: i64,
+    resume_previous_output: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_agent_runs SET status = 'awaiting_approval', paused_at_step_order = ?1, resume_previous_output = ?2 WHERE id = ?3",
         (paused_at_step_order, resume_previous_output, id),
@@ -122,12 +133,28 @@ pub fn pause_for_approval(conn: &Connection, id: &str, paused_at_step_order: i64
 }
 
 pub fn get_run(conn: &Connection, id: &str) -> rusqlite::Result<Option<AiAgentRun>> {
-    let row = conn.query_row("SELECT * FROM ai_agent_runs WHERE id = ?1", [id], map_run_row).optional()?;
+    let row = conn
+        .query_row(
+            "SELECT * FROM ai_agent_runs WHERE id = ?1",
+            [id],
+            map_run_row,
+        )
+        .optional()?;
     row.map(|r| hydrate(conn, r)).transpose()
 }
 
-pub fn list_runs_for_target(conn: &Connection, target_type: &str, target_id: &str, limit: i64) -> rusqlite::Result<Vec<AiAgentRun>> {
+pub fn list_runs_for_target(
+    conn: &Connection,
+    target_type: &str,
+    target_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<AiAgentRun>> {
     let mut stmt = conn.prepare("SELECT * FROM ai_agent_runs WHERE target_type = ?1 AND target_id = ?2 ORDER BY started_at DESC LIMIT ?3")?;
-    let rows: Vec<AiAgentRun> = stmt.query_map(rusqlite::params![target_type, target_id, limit], map_run_row)?.collect::<rusqlite::Result<_>>()?;
+    let rows: Vec<AiAgentRun> = stmt
+        .query_map(
+            rusqlite::params![target_type, target_id, limit],
+            map_run_row,
+        )?
+        .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
 }

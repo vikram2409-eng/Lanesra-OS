@@ -40,9 +40,12 @@ use crate::domain::{AppError, AppResult};
 use crate::models::ai::AiGatewayFailoverEvent;
 use crate::models::ai_agent::AiAgentDefinition;
 use crate::models::chat::ChatMessage;
-use crate::repositories::{ai_gateway_failover_repo, ai_provider_repo, ai_settings_repo, ai_token_usage_repo, integration_secret_repo};
+use crate::repositories::{
+    ai_gateway_failover_repo, ai_provider_repo, ai_settings_repo, ai_token_usage_repo,
+    integration_secret_repo,
+};
 
-use super::ai_service::{self, CompletionOutcome, ToolSpec, TokenUsage};
+use super::ai_service::{self, CompletionOutcome, TokenUsage, ToolSpec};
 use super::dlp_service;
 
 /// What `dispatch` actually did, beyond the raw model outcome - the
@@ -65,24 +68,60 @@ pub(crate) struct ResolvedTier {
 /// module's own doc comment on why that's "the default," not "skip." Also
 /// used directly by `voice_llm_planner_service` (a non-agent caller that
 /// still wants a specific `ai_providers` row resolved the same way).
-pub(crate) fn resolve_tier(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], provider_id: Option<&str>) -> AppResult<ResolvedTier> {
+pub(crate) fn resolve_tier(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    provider_id: Option<&str>,
+) -> AppResult<ResolvedTier> {
     match provider_id {
         Some(pid) => {
-            let provider = ai_provider_repo::get(conn, pid)?.ok_or_else(|| AppError::Validation(format!("Configured AI provider '{pid}' no longer exists")))?;
+            let provider = ai_provider_repo::get(conn, pid)?.ok_or_else(|| {
+                AppError::Validation(format!("Configured AI provider '{pid}' no longer exists"))
+            })?;
             if !provider.is_active {
-                return Err(AppError::Validation(format!("AI provider '{}' is deactivated", provider.name)));
+                return Err(AppError::Validation(format!(
+                    "AI provider '{}' is deactivated",
+                    provider.name
+                )));
             }
-            let secret_id = ai_provider_repo::get_secret_id(conn, pid)?.ok_or_else(|| AppError::Validation(format!("AI provider '{}' has no key configured", provider.name)))?;
-            let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
-            let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
-            Ok(ResolvedTier { provider: provider.provider, base_url: provider.base_url, model: provider.model, api_key })
+            let secret_id = ai_provider_repo::get_secret_id(conn, pid)?.ok_or_else(|| {
+                AppError::Validation(format!(
+                    "AI provider '{}' has no key configured",
+                    provider.name
+                ))
+            })?;
+            let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| {
+                AppError::Validation("Stored key not found - reconfigure it".into())
+            })?;
+            let api_key =
+                super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
+            Ok(ResolvedTier {
+                provider: provider.provider,
+                base_url: provider.base_url,
+                model: provider.model,
+                api_key,
+            })
         }
         None => {
             let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
-            let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| AppError::Validation("Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into()))?;
-            let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
-            let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
-            Ok(ResolvedTier { provider: settings.provider, base_url: settings.base_url, model: settings.model, api_key })
+            let secret_id =
+                ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| {
+                    AppError::Validation(
+                        "Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into(),
+                    )
+                })?;
+            let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| {
+                AppError::Validation("Stored key not found - reconfigure it".into())
+            })?;
+            let api_key =
+                super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
+            Ok(ResolvedTier {
+                provider: settings.provider,
+                base_url: settings.base_url,
+                model: settings.model,
+                api_key,
+            })
         }
     }
 }
@@ -121,15 +160,35 @@ pub async fn dispatch(
         Some(r) => r,
         None => {
             // No routing policy configured - unchanged pre-7a behavior.
-            let (outcome, usage) = ai_service::complete_with_tools(conn, workspace_id, master_key, system_prompt, tools, history).await?;
-            ai_token_usage_repo::increment(conn, workspace_id, &agent.id, user_id, usage.input_tokens, usage.output_tokens)?;
-            return Ok(GatewayOutcome { outcome, usage, served_by: "primary" });
+            let (outcome, usage) = ai_service::complete_with_tools(
+                conn,
+                workspace_id,
+                master_key,
+                system_prompt,
+                tools,
+                history,
+            )
+            .await?;
+            ai_token_usage_repo::increment(
+                conn,
+                workspace_id,
+                &agent.id,
+                user_id,
+                usage.input_tokens,
+                usage.output_tokens,
+            )?;
+            return Ok(GatewayOutcome {
+                outcome,
+                usage,
+                served_by: "primary",
+            });
         }
     };
 
     // Agent tier: only checked once a routing policy exists to check it against.
     if let Some(budget) = routing.daily_token_budget {
-        let (input, output) = ai_token_usage_repo::today_totals_for_agent(conn, workspace_id, &agent.id)?;
+        let (input, output) =
+            ai_token_usage_repo::today_totals_for_agent(conn, workspace_id, &agent.id)?;
         if input + output >= budget {
             return Err(AppError::Validation(format!(
                 "'{}' has reached its daily AI token budget ({budget}) - try again tomorrow, or raise it in this agent's Model Routing settings.",
@@ -152,15 +211,23 @@ pub async fn dispatch(
         parts.join("\n")
     };
     let matched_classes = dlp_service::scan(&outbound_text);
-    let forced_air_gap = matched_classes.iter().any(|m| routing.force_air_gapped_for.iter().any(|c| c == m));
+    let forced_air_gap = matched_classes
+        .iter()
+        .any(|m| routing.force_air_gapped_for.iter().any(|c| c == m));
 
     let tiers: Vec<(&'static str, Option<&str>)> = if forced_air_gap {
-        vec![("local_fallback", routing.local_fallback_provider_id.as_deref())]
+        vec![(
+            "local_fallback",
+            routing.local_fallback_provider_id.as_deref(),
+        )]
     } else {
         vec![
             ("primary", routing.primary_provider_id.as_deref()),
             ("fallback", routing.fallback_provider_id.as_deref()),
-            ("local_fallback", routing.local_fallback_provider_id.as_deref()),
+            (
+                "local_fallback",
+                routing.local_fallback_provider_id.as_deref(),
+            ),
         ]
     };
 
@@ -173,29 +240,78 @@ pub async fn dispatch(
                 continue;
             }
         };
-        match ai_service::dispatch_with_tools(&resolved.provider, resolved.base_url.as_deref(), &resolved.model, &resolved.api_key, system_prompt, tools, history).await {
+        match ai_service::dispatch_with_tools(
+            &resolved.provider,
+            resolved.base_url.as_deref(),
+            &resolved.model,
+            &resolved.api_key,
+            system_prompt,
+            tools,
+            history,
+        )
+        .await
+        {
             Ok((outcome, usage)) => {
-                ai_token_usage_repo::increment(conn, workspace_id, &agent.id, user_id, usage.input_tokens, usage.output_tokens)?;
+                ai_token_usage_repo::increment(
+                    conn,
+                    workspace_id,
+                    &agent.id,
+                    user_id,
+                    usage.input_tokens,
+                    usage.output_tokens,
+                )?;
                 if forced_air_gap {
-                    let reason = format!("Forced air-gapped routing: outbound payload matched {}", matched_classes.join(", "));
-                    ai_gateway_failover_repo::record(conn, workspace_id, &agent.id, tier_name, &reason)?;
+                    let reason = format!(
+                        "Forced air-gapped routing: outbound payload matched {}",
+                        matched_classes.join(", ")
+                    );
+                    ai_gateway_failover_repo::record(
+                        conn,
+                        workspace_id,
+                        &agent.id,
+                        tier_name,
+                        &reason,
+                    )?;
                 } else if idx > 0 {
-                    let reason = last_err.as_ref().map(|e| e.to_string()).unwrap_or_else(|| "the prior tier failed".into());
-                    ai_gateway_failover_repo::record(conn, workspace_id, &agent.id, tier_name, &reason)?;
+                    let reason = last_err
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_else(|| "the prior tier failed".into());
+                    ai_gateway_failover_repo::record(
+                        conn,
+                        workspace_id,
+                        &agent.id,
+                        tier_name,
+                        &reason,
+                    )?;
                 }
-                return Ok(GatewayOutcome { outcome, usage, served_by: tier_name });
+                return Ok(GatewayOutcome {
+                    outcome,
+                    usage,
+                    served_by: tier_name,
+                });
             }
             Err(e) => last_err = Some(e),
         }
     }
 
-    Err(last_err.unwrap_or_else(|| AppError::Validation("No AI provider tier is configured for this agent".into())))
+    Err(last_err.unwrap_or_else(|| {
+        AppError::Validation("No AI provider tier is configured for this agent".into())
+    }))
 }
 
 /// The Gateway health view's own data source (Admin -> LLM & MCP ->
 /// Gateway) - any authenticated user can read it, same "the numbers
 /// aren't the secret, the key is" reasoning `ai_service::get_settings`
 /// already documents.
-pub fn recent_failover_events(conn: &Connection, workspace_id: &str, limit: i64) -> AppResult<Vec<AiGatewayFailoverEvent>> {
-    Ok(ai_gateway_failover_repo::list_recent(conn, workspace_id, limit)?)
+pub fn recent_failover_events(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> AppResult<Vec<AiGatewayFailoverEvent>> {
+    Ok(ai_gateway_failover_repo::list_recent(
+        conn,
+        workspace_id,
+        limit,
+    )?)
 }

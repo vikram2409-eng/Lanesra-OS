@@ -25,8 +25,20 @@ pub const AGGREGATIONS: &[&str] = &["sum", "avg", "count", "count_distinct", "mi
 /// codebase) means adding a value later is a one-line constant change,
 /// never a migration.
 pub const SEMANTIC_ROLES: &[&str] = &[
-    "customer", "policyholder", "amount", "currency", "quantity", "percentage", "effective_date", "expiration_date", "region",
-    "owner", "status", "identifier", "email", "phone",
+    "customer",
+    "policyholder",
+    "amount",
+    "currency",
+    "quantity",
+    "percentage",
+    "effective_date",
+    "expiration_date",
+    "region",
+    "owner",
+    "status",
+    "identifier",
+    "email",
+    "phone",
 ];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

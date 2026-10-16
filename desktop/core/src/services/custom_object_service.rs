@@ -12,7 +12,10 @@ use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::custom_field::CUSTOM_FIELD_ENTITY_TYPES;
-use crate::models::custom_object::{CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate, CustomObjectReferenceCounts};
+use crate::models::custom_object::{
+    CustomObjectDefinition, CustomObjectDefinitionInput, CustomObjectDefinitionUpdate,
+    CustomObjectReferenceCounts,
+};
 use crate::repositories::{audit_repo, custom_object_repo, custom_record_repo};
 use crate::services::access_service;
 
@@ -20,7 +23,12 @@ use crate::services::access_service;
 /// passes with an explicit Access Role grant on "CustomObject" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "CustomObject", "Only an Administrator can manage custom objects")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "CustomObject",
+        "Only an Administrator can manage custom objects",
+    )
 }
 
 /// True when `entity_type` is either one of the built-in Rust-level types,
@@ -29,13 +37,19 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 /// records get custom fields, business rules and reports "for free" -
 /// nothing in those subsystems is keyed off entity_type any differently
 /// than a built-in one.
-pub fn is_valid_dynamic_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<bool> {
+pub fn is_valid_dynamic_entity_type(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<bool> {
     if CUSTOM_FIELD_ENTITY_TYPES.contains(&entity_type) {
         return Ok(true);
     }
-    Ok(custom_object_repo::get_by_key(conn, workspace_id, entity_type)?
-        .map(|d| d.is_active)
-        .unwrap_or(false))
+    Ok(
+        custom_object_repo::get_by_key(conn, workspace_id, entity_type)?
+            .map(|d| d.is_active)
+            .unwrap_or(false),
+    )
 }
 
 /// Turns a label into a stable lowercase key - the same approach
@@ -56,14 +70,21 @@ fn slugify(conn: &Connection, workspace_id: &str, label: &str) -> AppResult<Stri
     }
     let key = key.trim_end_matches('_').to_string();
     if key.is_empty() {
-        return Err(AppError::Validation("Object name must contain at least one letter or number".into()));
+        return Err(AppError::Validation(
+            "Object name must contain at least one letter or number".into(),
+        ));
     }
     // A custom object literally named e.g. "Company" would slug-collide in
     // spirit (not in practice, since built-in types are always PascalCase
     // and this key is always lowercase) with a built-in entity type - block
     // it outright rather than leave a confusing near-miss in the admin UI.
-    if CUSTOM_FIELD_ENTITY_TYPES.iter().any(|t| t.eq_ignore_ascii_case(&key)) {
-        return Err(AppError::Validation(format!("'{label}' is too close to a built-in object name - choose another")));
+    if CUSTOM_FIELD_ENTITY_TYPES
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case(&key))
+    {
+        return Err(AppError::Validation(format!(
+            "'{label}' is too close to a built-in object name - choose another"
+        )));
     }
 
     let existing = custom_object_repo::list(conn, workspace_id)?;
@@ -90,10 +111,14 @@ fn validate_shape(input: &CustomObjectDefinitionInput) -> AppResult<()> {
     }
     let prefix = input.prefix.trim();
     if prefix.is_empty() || prefix.chars().count() > 20 {
-        return Err(AppError::Validation("Record-number prefix must be 1-20 characters".into()));
+        return Err(AppError::Validation(
+            "Record-number prefix must be 1-20 characters".into(),
+        ));
     }
     if !(1..=10).contains(&input.digits) {
-        return Err(AppError::Validation("Digit width must be between 1 and 10".into()));
+        return Err(AppError::Validation(
+            "Digit width must be between 1 and 10".into(),
+        ));
     }
     if input.icon.trim().is_empty() {
         return Err(AppError::Validation("Choose an icon".into()));
@@ -101,15 +126,43 @@ fn validate_shape(input: &CustomObjectDefinitionInput) -> AppResult<()> {
     Ok(())
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &CustomObjectDefinitionInput, actor_user_id: Option<&str>) -> AppResult<CustomObjectDefinition> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &CustomObjectDefinitionInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomObjectDefinition> {
     require_admin(conn, actor_user_id)?;
     validate_shape(input)?;
     let key = slugify(conn, workspace_id, &input.singular_label)?;
     let id = crate::domain::ids::new_uuid();
     let created = custom_object_repo::create(conn, &id, workspace_id, &key, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "custom_object", &created.id, actor_user_id)?;
-    super::system_graph_service::sync_node(conn, workspace_id, "custom_object", &created.key, &created.plural_label, "{}", &[])?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("custom_object"), Some(&created.id), &format!("Created custom object '{}'", created.plural_label), None)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "custom_object",
+        &created.id,
+        actor_user_id,
+    )?;
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "custom_object",
+        &created.key,
+        &created.plural_label,
+        "{}",
+        &[],
+    )?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("custom_object"),
+        Some(&created.id),
+        &format!("Created custom object '{}'", created.plural_label),
+        None,
+    )?;
     Ok(created)
 }
 
@@ -134,25 +187,54 @@ pub fn create_with_key(
     if key.trim().is_empty() {
         return Err(AppError::Validation("Object key is required".into()));
     }
-    if CUSTOM_FIELD_ENTITY_TYPES.iter().any(|t| t.eq_ignore_ascii_case(key)) {
-        return Err(AppError::Validation(format!("'{key}' is too close to a built-in object name - choose another")));
+    if CUSTOM_FIELD_ENTITY_TYPES
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case(key))
+    {
+        return Err(AppError::Validation(format!(
+            "'{key}' is too close to a built-in object name - choose another"
+        )));
     }
     if custom_object_repo::get_by_key(conn, workspace_id, key)?.is_some() {
-        return Err(AppError::Validation(format!("An object with key '{key}' already exists in this workspace")));
+        return Err(AppError::Validation(format!(
+            "An object with key '{key}' already exists in this workspace"
+        )));
     }
     let id = crate::domain::ids::new_uuid();
     let created = custom_object_repo::create(conn, &id, workspace_id, key, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "custom_object", &created.id, actor_user_id)?;
-    super::system_graph_service::sync_node(conn, workspace_id, "custom_object", &created.key, &created.plural_label, "{}", &[])?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "custom_object",
+        &created.id,
+        actor_user_id,
+    )?;
+    super::system_graph_service::sync_node(
+        conn,
+        workspace_id,
+        "custom_object",
+        &created.key,
+        &created.plural_label,
+        "{}",
+        &[],
+    )?;
     Ok(created)
 }
 
 /// Any authenticated user can list active object definitions (needed to
 /// build the sidebar nav and quick-create menu); only an Administrator
 /// sees inactive ones too, via the admin screen.
-pub fn list(conn: &Connection, workspace_id: &str, active_only: bool) -> AppResult<Vec<CustomObjectDefinition>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    active_only: bool,
+) -> AppResult<Vec<CustomObjectDefinition>> {
     let all = custom_object_repo::list(conn, workspace_id)?;
-    Ok(if active_only { all.into_iter().filter(|d| d.is_active).collect() } else { all })
+    Ok(if active_only {
+        all.into_iter().filter(|d| d.is_active).collect()
+    } else {
+        all
+    })
 }
 
 /// Used by `industry_package_service::export_local_workspace` to read a
@@ -162,46 +244,95 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Option<CustomObjectDefiniti
     Ok(custom_object_repo::get(conn, id)?)
 }
 
-pub fn get_by_key(conn: &Connection, workspace_id: &str, key: &str) -> AppResult<Option<CustomObjectDefinition>> {
+pub fn get_by_key(
+    conn: &Connection,
+    workspace_id: &str,
+    key: &str,
+) -> AppResult<Option<CustomObjectDefinition>> {
     Ok(custom_object_repo::get_by_key(conn, workspace_id, key)?)
 }
 
-pub fn update(conn: &Connection, id: &str, input: &CustomObjectDefinitionUpdate, actor_user_id: Option<&str>) -> AppResult<CustomObjectDefinition> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &CustomObjectDefinitionUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomObjectDefinition> {
     require_admin(conn, actor_user_id)?;
     custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
     if input.singular_label.trim().is_empty() || input.plural_label.trim().is_empty() {
-        return Err(AppError::Validation("Singular and plural names are required".into()));
+        return Err(AppError::Validation(
+            "Singular and plural names are required".into(),
+        ));
     }
     let prefix = input.prefix.trim();
     if prefix.is_empty() || prefix.chars().count() > 20 {
-        return Err(AppError::Validation("Record-number prefix must be 1-20 characters".into()));
+        return Err(AppError::Validation(
+            "Record-number prefix must be 1-20 characters".into(),
+        ));
     }
     if !(1..=10).contains(&input.digits) {
-        return Err(AppError::Validation("Digit width must be between 1 and 10".into()));
+        return Err(AppError::Validation(
+            "Digit width must be between 1 and 10".into(),
+        ));
     }
     let updated = custom_object_repo::update(conn, id, input, actor_user_id)?;
-    super::system_graph_service::sync_node(conn, &updated.workspace_id, "custom_object", &updated.key, &updated.plural_label, "{}", &[])?;
-    audit_repo::record(conn, &updated.workspace_id, actor_user_id, "update", Some("custom_object"), Some(id), &format!("Updated custom object '{}'", updated.plural_label), None)?;
+    super::system_graph_service::sync_node(
+        conn,
+        &updated.workspace_id,
+        "custom_object",
+        &updated.key,
+        &updated.plural_label,
+        "{}",
+        &[],
+    )?;
+    audit_repo::record(
+        conn,
+        &updated.workspace_id,
+        actor_user_id,
+        "update",
+        Some("custom_object"),
+        Some(id),
+        &format!("Updated custom object '{}'", updated.plural_label),
+        None,
+    )?;
     Ok(updated)
 }
 
 /// Enterprise Access Foundation, Phase 1: change a Custom Object's
 /// Ownership Mode - see `models::ownership::OwnershipMode`.
-pub fn set_ownership_mode(conn: &Connection, id: &str, ownership_mode: &str, actor_user_id: Option<&str>) -> AppResult<CustomObjectDefinition> {
+pub fn set_ownership_mode(
+    conn: &Connection,
+    id: &str,
+    ownership_mode: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomObjectDefinition> {
     require_admin(conn, actor_user_id)?;
     custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
     if crate::models::ownership::OwnershipMode::from_str(ownership_mode).is_none() {
-        return Err(AppError::Validation(format!("'{ownership_mode}' is not a valid Ownership Mode")));
+        return Err(AppError::Validation(format!(
+            "'{ownership_mode}' is not a valid Ownership Mode"
+        )));
     }
-    Ok(custom_object_repo::set_ownership_mode(conn, id, ownership_mode, actor_user_id)?)
+    Ok(custom_object_repo::set_ownership_mode(
+        conn,
+        id,
+        ownership_mode,
+        actor_user_id,
+    )?)
 }
 
 /// Deactivating an object hides it from navigation and new-record creation
 /// but keeps its records, fields, rules and data fully intact - always
 /// allowed, since it's non-destructive (ADM-CO-10's "archive it" path).
-pub fn deactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomObjectDefinition> {
+pub fn deactivate(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomObjectDefinition> {
     require_admin(conn, actor_user_id)?;
-    let existing = custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
+    let existing = custom_object_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Custom object".into()))?;
     let plural_label = existing.plural_label.clone();
     let workspace_id = existing.workspace_id.clone();
     let update = CustomObjectDefinitionUpdate {
@@ -213,7 +344,16 @@ pub fn deactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> A
         is_active: false,
     };
     let updated = custom_object_repo::update(conn, id, &update, actor_user_id)?;
-    audit_repo::record(conn, &workspace_id, actor_user_id, "deactivate", Some("custom_object"), Some(id), &format!("Deactivated custom object '{plural_label}'"), None)?;
+    audit_repo::record(
+        conn,
+        &workspace_id,
+        actor_user_id,
+        "deactivate",
+        Some("custom_object"),
+        Some(id),
+        &format!("Deactivated custom object '{plural_label}'"),
+        None,
+    )?;
     Ok(updated)
 }
 
@@ -225,21 +365,40 @@ pub fn deactivate(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> A
 /// `admin_home_service::get_summary` already uses, extending the single
 /// narrower "N dependents" precedent `connection_service::delete` already
 /// established for Integration Hub Connections.
-pub fn count_references(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<CustomObjectReferenceCounts> {
+pub fn count_references(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomObjectReferenceCounts> {
     require_admin(conn, actor_user_id)?;
-    let existing = custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
+    let existing = custom_object_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Custom object".into()))?;
     let ws = &existing.workspace_id;
     let key = &existing.key;
     let business_rules: i64 = conn.query_row("SELECT COUNT(*) FROM business_rules WHERE workspace_id = ?1 AND entity_type = ?2 AND is_active = 1", rusqlite::params![ws, key], |r| r.get(0))?;
     let workflows: i64 = conn.query_row("SELECT COUNT(*) FROM workflow_definitions WHERE workspace_id = ?1 AND entity_type = ?2 AND is_active = 1", rusqlite::params![ws, key], |r| r.get(0))?;
-    let screen_layouts: i64 = conn.query_row("SELECT COUNT(*) FROM screen_layouts WHERE workspace_id = ?1 AND entity_type = ?2", rusqlite::params![ws, key], |r| r.get(0))?;
-    let page_layouts: i64 = conn.query_row("SELECT COUNT(*) FROM page_layouts WHERE workspace_id = ?1 AND entity_type = ?2", rusqlite::params![ws, key], |r| r.get(0))?;
+    let screen_layouts: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM screen_layouts WHERE workspace_id = ?1 AND entity_type = ?2",
+        rusqlite::params![ws, key],
+        |r| r.get(0),
+    )?;
+    let page_layouts: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM page_layouts WHERE workspace_id = ?1 AND entity_type = ?2",
+        rusqlite::params![ws, key],
+        |r| r.get(0),
+    )?;
     let relationships: i64 = conn.query_row(
         "SELECT COUNT(*) FROM relationship_definitions WHERE workspace_id = ?1 AND is_active = 1 AND (source_entity_type = ?2 OR target_entity_type = ?2)",
         rusqlite::params![ws, key],
         |r| r.get(0),
     )?;
-    Ok(CustomObjectReferenceCounts { business_rules, workflows, screen_layouts, page_layouts, relationships })
+    Ok(CustomObjectReferenceCounts {
+        business_rules,
+        workflows,
+        screen_layouts,
+        page_layouts,
+        relationships,
+    })
 }
 
 /// Hard-deletes an object definition. Blocked while any record - active or
@@ -250,7 +409,8 @@ pub fn count_references(conn: &Connection, id: &str, actor_user_id: Option<&str>
 /// comment; deactivating instead keeps all of those working unchanged.
 pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
-    let existing = custom_object_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom object".into()))?;
+    let existing = custom_object_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Custom object".into()))?;
     let remaining = custom_record_repo::list_all(conn, &existing.workspace_id, &existing.key)?;
     if !remaining.is_empty() {
         return Err(AppError::Validation(format!(
@@ -262,11 +422,21 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
     let refs = count_references(conn, id, actor_user_id)?;
     if refs.total() > 0 {
         let mut parts = Vec::new();
-        if refs.business_rules > 0 { parts.push(format!("{} business rule(s)", refs.business_rules)); }
-        if refs.workflows > 0 { parts.push(format!("{} workflow(s)", refs.workflows)); }
-        if refs.screen_layouts > 0 { parts.push(format!("{} screen layout(s)", refs.screen_layouts)); }
-        if refs.page_layouts > 0 { parts.push(format!("{} page(s)", refs.page_layouts)); }
-        if refs.relationships > 0 { parts.push(format!("{} relationship(s)", refs.relationships)); }
+        if refs.business_rules > 0 {
+            parts.push(format!("{} business rule(s)", refs.business_rules));
+        }
+        if refs.workflows > 0 {
+            parts.push(format!("{} workflow(s)", refs.workflows));
+        }
+        if refs.screen_layouts > 0 {
+            parts.push(format!("{} screen layout(s)", refs.screen_layouts));
+        }
+        if refs.page_layouts > 0 {
+            parts.push(format!("{} page(s)", refs.page_layouts));
+        }
+        if refs.relationships > 0 {
+            parts.push(format!("{} relationship(s)", refs.relationships));
+        }
         return Err(AppError::Validation(format!(
             "Cannot delete '{}' - still referenced by {}. Remove those references first, or deactivate the object instead.",
             existing.plural_label,
@@ -274,7 +444,21 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
         )));
     }
     custom_object_repo::delete(conn, id)?;
-    super::system_graph_service::remove_node(conn, &existing.workspace_id, "custom_object", &existing.key)?;
-    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "delete", Some("custom_object"), Some(id), &format!("Deleted custom object '{}'", existing.plural_label), None)?;
+    super::system_graph_service::remove_node(
+        conn,
+        &existing.workspace_id,
+        "custom_object",
+        &existing.key,
+    )?;
+    audit_repo::record(
+        conn,
+        &existing.workspace_id,
+        actor_user_id,
+        "delete",
+        Some("custom_object"),
+        Some(id),
+        &format!("Deleted custom object '{}'", existing.plural_label),
+        None,
+    )?;
     Ok(())
 }

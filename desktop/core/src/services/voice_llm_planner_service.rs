@@ -55,11 +55,19 @@ fn parse_response(text: &str) -> Option<LlmOutcome> {
     let trimmed = text.trim();
     if let Some(rest) = trimmed.strip_prefix("REWRITE:") {
         let rewritten = rest.trim();
-        return if rewritten.is_empty() { None } else { Some(LlmOutcome::Rewrite(rewritten.to_string())) };
+        return if rewritten.is_empty() {
+            None
+        } else {
+            Some(LlmOutcome::Rewrite(rewritten.to_string()))
+        };
     }
     if let Some(rest) = trimmed.strip_prefix("CLARIFY:") {
         let question = rest.trim();
-        return if question.is_empty() { None } else { Some(LlmOutcome::Clarify(question.to_string())) };
+        return if question.is_empty() {
+            None
+        } else {
+            Some(LlmOutcome::Clarify(question.to_string()))
+        };
     }
     None
 }
@@ -82,12 +90,21 @@ pub async fn try_plan(
     context_record_id: Option<&str>,
     conversation_reference: Option<(&str, &str)>,
 ) -> AppResult<Option<PlanOutcome>> {
-    let Some(settings) = voice_repo::get_llm_settings(conn, workspace_id)? else { return Ok(None) };
+    let Some(settings) = voice_repo::get_llm_settings(conn, workspace_id)? else {
+        return Ok(None);
+    };
     if !settings.enabled {
         return Ok(None);
     }
 
-    let Ok(resolved) = resolve_tier(conn, workspace_id, master_key, settings.provider_id.as_deref()) else { return Ok(None) };
+    let Ok(resolved) = resolve_tier(
+        conn,
+        workspace_id,
+        master_key,
+        settings.provider_id.as_deref(),
+    ) else {
+        return Ok(None);
+    };
 
     let catalog = voice_planner_service::full_catalog(conn, workspace_id)?;
     let prompt = system_prompt(&voice_planner_service::catalog_summary(&catalog));
@@ -101,18 +118,41 @@ pub async fn try_plan(
         created_at: String::new(),
     }];
 
-    let Ok((outcome, _usage)) = ai_service::dispatch_with_tools(&resolved.provider, resolved.base_url.as_deref(), &resolved.model, &resolved.api_key, &prompt, &[], &history).await else {
+    let Ok((outcome, _usage)) = ai_service::dispatch_with_tools(
+        &resolved.provider,
+        resolved.base_url.as_deref(),
+        &resolved.model,
+        &resolved.api_key,
+        &prompt,
+        &[],
+        &history,
+    )
+    .await
+    else {
         return Ok(None);
     };
-    let CompletionOutcome::Text(text) = outcome else { return Ok(None) };
+    let CompletionOutcome::Text(text) = outcome else {
+        return Ok(None);
+    };
 
     match parse_response(&text) {
-        Some(LlmOutcome::Clarify(question)) => Ok(Some(PlanOutcome::NeedsClarification { question, candidates: vec![] })),
+        Some(LlmOutcome::Clarify(question)) => Ok(Some(PlanOutcome::NeedsClarification {
+            question,
+            candidates: vec![],
+        })),
         Some(LlmOutcome::Rewrite(rewritten)) => {
             // Hands off to the exact same deterministic pipeline a
             // manually-typed command goes through - real entity
             // resolution, real risk classification, nothing skipped.
-            match voice_planner_service::plan(conn, workspace_id, &rewritten, context_object_key, context_record_id, conversation_reference, None)? {
+            match voice_planner_service::plan(
+                conn,
+                workspace_id,
+                &rewritten,
+                context_object_key,
+                context_record_id,
+                conversation_reference,
+                None,
+            )? {
                 // The rewrite didn't actually land on a recognized shape -
                 // surface the caller's original Unsupported reason, not a
                 // second, confusing "the AI tried and also failed" one.

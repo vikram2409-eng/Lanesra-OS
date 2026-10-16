@@ -50,15 +50,17 @@ use crate::models::ai_agent::{validate_output_schema, AiAgentDefinition};
 use crate::models::ai_agent_policy::PolicyDecision;
 use crate::models::ai_memory::{AgentMemoryContext, MemoryItemInput};
 use crate::models::chat::ChatMessage;
-use crate::repositories::{ai_agent_repo, ai_agent_version_repo, ai_token_usage_repo, audit_repo, chat_repo};
+use crate::repositories::action_type_repo;
+use crate::repositories::{
+    ai_agent_repo, ai_agent_version_repo, ai_token_usage_repo, audit_repo, chat_repo,
+};
+use crate::services::action_type_service;
 use crate::services::ai_gateway_service;
 use crate::services::ai_knowledge_service;
 use crate::services::ai_memory_service;
 use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
 use crate::services::api_object_service;
 use crate::services::policy_engine_service;
-use crate::repositories::action_type_repo;
-use crate::services::action_type_service;
 
 const MAX_ROUNDS: u8 = 8;
 
@@ -67,7 +69,11 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 }
 
 fn tool(name: &str, description: &str, schema: Value) -> ToolSpec {
-    ToolSpec { name: name.to_string(), description: description.to_string(), input_schema: schema }
+    ToolSpec {
+        name: name.to_string(),
+        description: description.to_string(),
+        input_schema: schema,
+    }
 }
 
 fn object_schema() -> Value {
@@ -120,12 +126,20 @@ fn record_tools() -> Vec<ToolSpec> {
 }
 
 fn required_str<'a>(args: &'a Value, key: &str) -> AppResult<&'a str> {
-    args.get(key).and_then(Value::as_str).ok_or_else(|| AppError::Validation(format!("Missing required argument '{key}'")))
+    args.get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError::Validation(format!("Missing required argument '{key}'")))
 }
 
 fn required_object<'a>(args: &'a Value, key: &str) -> AppResult<&'a Value> {
-    let v = args.get(key).ok_or_else(|| AppError::Validation(format!("Missing required argument '{key}'")))?;
-    if v.is_object() { Ok(v) } else { Err(AppError::Validation(format!("'{key}' must be an object"))) }
+    let v = args
+        .get(key)
+        .ok_or_else(|| AppError::Validation(format!("Missing required argument '{key}'")))?;
+    if v.is_object() {
+        Ok(v)
+    } else {
+        Err(AppError::Validation(format!("'{key}' must be an object")))
+    }
 }
 
 /// The plain validated capability string (`models::access_role::Capability`'s
@@ -137,7 +151,12 @@ fn implied_capability(tool_name: &str) -> Option<&'static str> {
         "create_record" => Some("create"),
         "update_record" => Some("update"),
         "archive_record" => Some("delete"),
-        "list_records" | "get_record" | "search_records" | "get_related_records" | "semantic_search_records" | "get_object_metadata" => Some("read"),
+        "list_records"
+        | "get_record"
+        | "search_records"
+        | "get_related_records"
+        | "semantic_search_records"
+        | "get_object_metadata" => Some("read"),
         _ => None,
     }
 }
@@ -151,20 +170,33 @@ fn implied_capability(tool_name: &str) -> Option<&'static str> {
 /// already took: no `object_key` argument at all is a deny too, not an
 /// unchecked pass-through, since a scoped agent must always declare
 /// which object type it's touching to be checked against its own scope.
-fn check_object_type_scope(agent: &AiAgentDefinition, tool_name: &str, arguments: &Value) -> AppResult<()> {
+fn check_object_type_scope(
+    agent: &AiAgentDefinition,
+    tool_name: &str,
+    arguments: &Value,
+) -> AppResult<()> {
     if agent.object_type_scopes.is_empty() {
         return Ok(());
     }
-    let Some(capability) = implied_capability(tool_name) else { return Ok(()) };
+    let Some(capability) = implied_capability(tool_name) else {
+        return Ok(());
+    };
     let object_key = arguments.get("object_key").and_then(Value::as_str);
     let Some(object_key) = object_key else {
         return Err(AppError::Validation(format!("'{tool_name}' needs an object_key - this agent is scoped to specific object types and cannot be called without naming one")));
     };
-    let scope = agent.object_type_scopes.iter().find(|s| s.object_type == object_key);
+    let scope = agent
+        .object_type_scopes
+        .iter()
+        .find(|s| s.object_type == object_key);
     match scope {
         Some(s) if s.capabilities.iter().any(|c| c == capability) => Ok(()),
-        Some(_) => Err(AppError::Validation(format!("This agent's Ontology scope for '{object_key}' does not grant '{capability}'"))),
-        None => Err(AppError::Validation(format!("This agent is not scoped to act on '{object_key}'"))),
+        Some(_) => Err(AppError::Validation(format!(
+            "This agent's Ontology scope for '{object_key}' does not grant '{capability}'"
+        ))),
+        None => Err(AppError::Validation(format!(
+            "This agent is not scoped to act on '{object_key}'"
+        ))),
     }
 }
 
@@ -174,17 +206,28 @@ fn check_object_type_scope(agent: &AiAgentDefinition, tool_name: &str, arguments
 /// enforcement; passed straight through to `api_object_service`'s own
 /// already-existing `actor_user_id` parameter on the three record-write
 /// branches below, unchanged everywhere else.
-async fn dispatch_record_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], name: &str, arguments: &Value, access_actor: Option<&str>) -> AppResult<Value> {
+async fn dispatch_record_tool(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    name: &str,
+    arguments: &Value,
+    access_actor: Option<&str>,
+) -> AppResult<Value> {
     match name {
-        "list_objects" => api_object_service::list_object_keys(conn, workspace_id).and_then(|v| serde_json::to_value(v).map_err(ser_err)),
+        "list_objects" => api_object_service::list_object_keys(conn, workspace_id)
+            .and_then(|v| serde_json::to_value(v).map_err(ser_err)),
         "get_object_metadata" => {
             let key = required_str(arguments, "object_key")?;
-            api_object_service::get_metadata(conn, workspace_id, key).and_then(|v| serde_json::to_value(v).map_err(ser_err))
+            api_object_service::get_metadata(conn, workspace_id, key)
+                .and_then(|v| serde_json::to_value(v).map_err(ser_err))
         }
         "list_records" => {
             let key = required_str(arguments, "object_key")?;
-            let query: crate::models::integration::ApiListQuery = serde_json::from_value(arguments.clone()).unwrap_or_default();
-            api_object_service::list_records(conn, workspace_id, key, &query).and_then(|v| serde_json::to_value(v).map_err(ser_err))
+            let query: crate::models::integration::ApiListQuery =
+                serde_json::from_value(arguments.clone()).unwrap_or_default();
+            api_object_service::list_records(conn, workspace_id, key, &query)
+                .and_then(|v| serde_json::to_value(v).map_err(ser_err))
         }
         "get_record" => {
             let key = required_str(arguments, "object_key")?;
@@ -205,26 +248,42 @@ async fn dispatch_record_tool(conn: &Connection, workspace_id: &str, master_key:
         "archive_record" => {
             let key = required_str(arguments, "object_key")?;
             let id = required_str(arguments, "id")?;
-            api_object_service::archive_record(conn, workspace_id, key, id, access_actor).map(|_| json!({"archived": true}))
+            api_object_service::archive_record(conn, workspace_id, key, id, access_actor)
+                .map(|_| json!({"archived": true}))
         }
         "search_records" => {
             let query = required_str(arguments, "query")?;
             let object_key = arguments.get("object_key").and_then(Value::as_str);
             let limit = arguments.get("limit").and_then(Value::as_i64).unwrap_or(10);
-            let hits = crate::services::search_service::search_custom_records(conn, workspace_id, query, object_key, limit)?;
+            let hits = crate::services::search_service::search_custom_records(
+                conn,
+                workspace_id,
+                query,
+                object_key,
+                limit,
+            )?;
             serde_json::to_value(hits).map_err(ser_err)
         }
         "get_related_records" => {
             let key = required_str(arguments, "object_key")?;
             let id = required_str(arguments, "id")?;
-            api_object_service::related_records(conn, workspace_id, key, id).and_then(|v| serde_json::to_value(v).map_err(ser_err))
+            api_object_service::related_records(conn, workspace_id, key, id)
+                .and_then(|v| serde_json::to_value(v).map_err(ser_err))
         }
         "get_platform_overview" => platform_overview(conn, workspace_id),
         "semantic_search_records" => {
             let query = required_str(arguments, "query")?;
             let object_key = arguments.get("object_key").and_then(Value::as_str);
             let limit = arguments.get("limit").and_then(Value::as_i64).unwrap_or(10);
-            let hits = super::vector_search_service::semantic_search_records(conn, workspace_id, master_key, query, object_key, limit).await?;
+            let hits = super::vector_search_service::semantic_search_records(
+                conn,
+                workspace_id,
+                master_key,
+                query,
+                object_key,
+                limit,
+            )
+            .await?;
             serde_json::to_value(hits).map_err(ser_err)
         }
         other => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
@@ -386,19 +445,27 @@ fn admin_tools() -> Vec<ToolSpec> {
 /// Integration Hub Tool Bridge: a connector-derived tool name is
 /// self-describing by prefix (`connector_tool_service`'s own doc comment)
 /// - "connector_read"/"connector_write" classify it without a DB round
-/// trip, same as the two fixed catalogs below. Whether the name actually
-/// resolves to a real, currently-enabled connector action is checked
-/// where it matters (`ai_agent_service::validate_action_names` at save
-/// time, `connector_tool_service::dispatch` at call time), not here.
-/// Agent Access Governance (issue #245): the Foundry-only tool names
-/// `execute_agent_tool` dispatches directly, never through
-/// `dispatch_record_tool`/`dispatch_admin_tool` - `tool_source` used to
-/// return `None` for every one of these (see `tool_registry_service::
+///   trip, same as the two fixed catalogs below. Whether the name actually
+///   resolves to a real, currently-enabled connector action is checked
+///   where it matters (`ai_agent_service::validate_action_names` at save
+///   time, `connector_tool_service::dispatch` at call time), not here.
+///   Agent Access Governance (issue #245): the Foundry-only tool names
+///   `execute_agent_tool` dispatches directly, never through
+///   `dispatch_record_tool`/`dispatch_admin_tool` - `tool_source` used to
+///   return `None` for every one of these (see `tool_registry_service::
 /// default_risk_for`'s old doc comment), the exact reason the Tool-Call
-/// Firewall never saw them. Classified as their own source so a workspace
-/// can still block/risk-gate `delegate_to_agent`, say, without this
-/// function pretending they're record/admin tools.
-const AGENT_INTERNAL_TOOLS: &[&str] = &["update_memory", "remember", "get_memory", "search_knowledge", "use_skill", "delegate_to_agent", "invoke_action"];
+///   Firewall never saw them. Classified as their own source so a workspace
+///   can still block/risk-gate `delegate_to_agent`, say, without this
+///   function pretending they're record/admin tools.
+const AGENT_INTERNAL_TOOLS: &[&str] = &[
+    "update_memory",
+    "remember",
+    "get_memory",
+    "search_knowledge",
+    "use_skill",
+    "delegate_to_agent",
+    "invoke_action",
+];
 
 pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
     if record_tools().iter().any(|t| t.name == name) {
@@ -426,7 +493,12 @@ pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
 /// `mode == "admin"` gate `send_message` already has, just keyed off a
 /// computed set instead of a literal mode string.
 pub(crate) fn agent_requires_admin(action_names: &[String]) -> bool {
-    action_names.iter().any(|n| matches!(tool_source(n), Some("admin" | "connector_write" | "mcp_write")))
+    action_names.iter().any(|n| {
+        matches!(
+            tool_source(n),
+            Some("admin" | "connector_write" | "mcp_write")
+        )
+    })
 }
 
 fn to_val<T: serde::Serialize>(r: AppResult<T>) -> AppResult<Value> {
@@ -434,12 +506,21 @@ fn to_val<T: serde::Serialize>(r: AppResult<T>) -> AppResult<Value> {
 }
 
 #[allow(clippy::too_many_lines)]
-async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Option<&str>, master_key: &[u8; 32], name: &str, arguments: &Value) -> AppResult<Value> {
+async fn dispatch_admin_tool(
+    conn: &Connection,
+    workspace_id: &str,
+    actor: Option<&str>,
+    master_key: &[u8; 32],
+    name: &str,
+    arguments: &Value,
+) -> AppResult<Value> {
     use crate::models::business_rule::BusinessRuleInput;
     use crate::models::custom_field::CustomFieldDefinitionInput;
     use crate::models::custom_object::CustomObjectDefinitionInput;
     use crate::models::custom_report::CustomReportInput;
-    use crate::models::integration::{ApiClientInput, ConnectionInput, IntegrationJobInput, WebhookInput};
+    use crate::models::integration::{
+        ApiClientInput, ConnectionInput, IntegrationJobInput, WebhookInput,
+    };
     use crate::models::numbering_override::NumberingOverrideInput;
     use crate::models::relationship::RelationshipDefinitionInput;
     use crate::models::saved_view::SavedViewInput;
@@ -447,57 +528,109 @@ async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Optio
     use crate::models::user::NewUser;
     use crate::models::workflow::WorkflowDefinitionInput;
     use crate::services::{
-        api_client_service, app_service, business_rule_service, connection_service, custom_object_service, custom_report_service,
-        dashboard_layout_service, integration_job_service, numbering_service, relationship_service, saved_view_service,
+        api_client_service, app_service, business_rule_service, connection_service,
+        custom_object_service, custom_report_service, dashboard_layout_service,
+        integration_job_service, numbering_service, relationship_service, saved_view_service,
         status_transition_service, user_service, webhook_service, workflow_service,
     };
 
     fn from_args<T: serde::de::DeserializeOwned>(arguments: &Value) -> AppResult<T> {
-        serde_json::from_value(arguments.clone()).map_err(|e| AppError::Validation(format!("Invalid arguments for this tool: {e}")))
+        serde_json::from_value(arguments.clone())
+            .map_err(|e| AppError::Validation(format!("Invalid arguments for this tool: {e}")))
     }
 
     match name {
         "list_business_rules" => {
             let entity_type = required_str(arguments, "entity_type")?;
-            to_val(business_rule_service::list_rules(conn, workspace_id, entity_type, true))
+            to_val(business_rule_service::list_rules(
+                conn,
+                workspace_id,
+                entity_type,
+                true,
+            ))
         }
         "create_business_rule" => {
             let input: BusinessRuleInput = from_args(arguments)?;
-            to_val(business_rule_service::create_rule(conn, workspace_id, &input, actor))
+            to_val(business_rule_service::create_rule(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_workflows" => {
             let entity_type = required_str(arguments, "entity_type")?;
-            to_val(workflow_service::list_rules(conn, workspace_id, entity_type, actor))
+            to_val(workflow_service::list_rules(
+                conn,
+                workspace_id,
+                entity_type,
+                actor,
+            ))
         }
         "create_workflow" => {
             let input: WorkflowDefinitionInput = from_args(arguments)?;
-            to_val(workflow_service::create_rule(conn, workspace_id, &input, actor))
+            to_val(workflow_service::create_rule(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_custom_objects" => to_val(custom_object_service::list(conn, workspace_id, true)),
         "create_custom_object" => {
             let input: CustomObjectDefinitionInput = from_args(arguments)?;
-            to_val(custom_object_service::create(conn, workspace_id, &input, actor))
+            to_val(custom_object_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_custom_fields" => {
             let entity_type = required_str(arguments, "entity_type")?;
-            to_val(super::custom_field_service::list_definitions(conn, workspace_id, entity_type, true))
+            to_val(super::custom_field_service::list_definitions(
+                conn,
+                workspace_id,
+                entity_type,
+                true,
+            ))
         }
         "create_custom_field" => {
             let input: CustomFieldDefinitionInput = from_args(arguments)?;
-            to_val(super::custom_field_service::create_definition(conn, workspace_id, &input, actor))
+            to_val(super::custom_field_service::create_definition(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_relationships" => to_val(relationship_service::list(conn, workspace_id, true)),
         "create_relationship" => {
             let input: RelationshipDefinitionInput = from_args(arguments)?;
-            to_val(relationship_service::create(conn, workspace_id, &input, actor))
+            to_val(relationship_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_status_transitions" => {
             let entity_type = required_str(arguments, "entity_type")?;
-            to_val(status_transition_service::list(conn, workspace_id, entity_type, actor))
+            to_val(status_transition_service::list(
+                conn,
+                workspace_id,
+                entity_type,
+                actor,
+            ))
         }
         "create_status_transition" => {
             let input: StatusTransitionInput = from_args(arguments)?;
-            to_val(status_transition_service::create(conn, workspace_id, &input, actor))
+            to_val(status_transition_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_connections" => to_val(connection_service::list_for_workspace(conn, workspace_id)),
         "create_connection" => {
@@ -507,29 +640,57 @@ async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Optio
             // regardless of what the model or user supplied.
             let mut input: ConnectionInput = from_args(arguments)?;
             input.secret_value = None;
-            to_val(connection_service::create(conn, workspace_id, master_key, &input, actor))
+            to_val(connection_service::create(
+                conn,
+                workspace_id,
+                master_key,
+                &input,
+                actor,
+            ))
         }
         "list_webhooks" => to_val(webhook_service::list_for_workspace(conn, workspace_id)),
         "create_webhook" => {
             let input: WebhookInput = from_args(arguments)?;
-            to_val(webhook_service::create(conn, workspace_id, master_key, &input, actor))
+            to_val(webhook_service::create(
+                conn,
+                workspace_id,
+                master_key,
+                &input,
+                actor,
+            ))
         }
-        "list_integration_jobs" => to_val(integration_job_service::list_for_workspace(conn, workspace_id)),
+        "list_integration_jobs" => to_val(integration_job_service::list_for_workspace(
+            conn,
+            workspace_id,
+        )),
         "create_integration_job" => {
             let input: IntegrationJobInput = from_args(arguments)?;
-            to_val(integration_job_service::create(conn, workspace_id, &input, actor))
+            to_val(integration_job_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_api_clients" => to_val(api_client_service::list_for_workspace(conn, workspace_id)),
         "create_api_client" => {
             let input: ApiClientInput = from_args(arguments)?;
             let issued = api_client_service::create(conn, workspace_id, &input, actor)?;
             // "Shown once" convention - never into chat history at all.
-            Ok(json!({"client": issued.client, "note": "Credential generated - retrieve it once from Integration Hub -> API Access, not shown in chat."}))
+            Ok(
+                json!({"client": issued.client, "note": "Credential generated - retrieve it once from Integration Hub -> API Access, not shown in chat."}),
+            )
         }
         "list_dashboards" => to_val(dashboard_layout_service::list_layouts(conn, workspace_id)),
         "create_dashboard" => {
-            let input: crate::models::dashboard_layout::DashboardLayoutInput = from_args(arguments)?;
-            to_val(dashboard_layout_service::create_layout(conn, workspace_id, &input, actor))
+            let input: crate::models::dashboard_layout::DashboardLayoutInput =
+                from_args(arguments)?;
+            to_val(dashboard_layout_service::create_layout(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_apps" => to_val(app_service::list(conn, workspace_id)),
         "create_app" => {
@@ -539,15 +700,30 @@ async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Optio
         "list_custom_reports" => to_val(custom_report_service::list(conn, workspace_id)),
         "create_custom_report" => {
             let input: CustomReportInput = from_args(arguments)?;
-            to_val(custom_report_service::create(conn, workspace_id, &input, actor))
+            to_val(custom_report_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_saved_views" => {
             let object_key = required_str(arguments, "object_key")?;
-            to_val(saved_view_service::list_for_object(conn, workspace_id, object_key, actor))
+            to_val(saved_view_service::list_for_object(
+                conn,
+                workspace_id,
+                object_key,
+                actor,
+            ))
         }
         "create_saved_view" => {
             let input: SavedViewInput = from_args(arguments)?;
-            to_val(saved_view_service::create(conn, workspace_id, &input, actor))
+            to_val(saved_view_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "list_users" => to_val(user_service::list(conn, workspace_id)),
         "create_user" => {
@@ -557,9 +733,17 @@ async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Optio
         "list_numbering" => to_val(numbering_service::list_effective(conn, workspace_id, actor)),
         "set_numbering" => {
             let input: NumberingOverrideInput = from_args(arguments)?;
-            to_val(numbering_service::set_override(conn, workspace_id, &input, actor))
+            to_val(numbering_service::set_override(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
-        "get_workspace_profile" => to_val(Ok(crate::repositories::workspace_repo::get_current(conn).map_err(AppError::from)?)),
+        "get_workspace_profile" => to_val(Ok(crate::repositories::workspace_repo::get_current(
+            conn,
+        )
+        .map_err(AppError::from)?)),
         "update_workspace_profile" => {
             let current = crate::repositories::workspace_repo::get_current(conn)
                 .map_err(AppError::from)?
@@ -579,41 +763,106 @@ async fn dispatch_admin_tool(conn: &Connection, workspace_id: &str, actor: Optio
                 timezone: current.timezone,
                 default_tax_rate_bp: current.default_tax_rate_bp,
             };
-            if let Some(v) = arguments.get("business_name").and_then(Value::as_str) { update.business_name = v.to_string(); }
-            if let Some(v) = arguments.get("legal_name").and_then(Value::as_str) { update.legal_name = Some(v.to_string()); }
-            if let Some(v) = arguments.get("business_address").and_then(Value::as_str) { update.business_address = Some(v.to_string()); }
-            if let Some(v) = arguments.get("phone").and_then(Value::as_str) { update.phone = Some(v.to_string()); }
-            if let Some(v) = arguments.get("currency_code").and_then(Value::as_str) { update.currency_code = v.to_string(); }
-            if let Some(v) = arguments.get("locale").and_then(Value::as_str) { update.locale = v.to_string(); }
-            if let Some(v) = arguments.get("timezone").and_then(Value::as_str) { update.timezone = v.to_string(); }
-            if let Some(v) = arguments.get("default_tax_rate_bp").and_then(Value::as_i64) { update.default_tax_rate_bp = v; }
+            if let Some(v) = arguments.get("business_name").and_then(Value::as_str) {
+                update.business_name = v.to_string();
+            }
+            if let Some(v) = arguments.get("legal_name").and_then(Value::as_str) {
+                update.legal_name = Some(v.to_string());
+            }
+            if let Some(v) = arguments.get("business_address").and_then(Value::as_str) {
+                update.business_address = Some(v.to_string());
+            }
+            if let Some(v) = arguments.get("phone").and_then(Value::as_str) {
+                update.phone = Some(v.to_string());
+            }
+            if let Some(v) = arguments.get("currency_code").and_then(Value::as_str) {
+                update.currency_code = v.to_string();
+            }
+            if let Some(v) = arguments.get("locale").and_then(Value::as_str) {
+                update.locale = v.to_string();
+            }
+            if let Some(v) = arguments.get("timezone").and_then(Value::as_str) {
+                update.timezone = v.to_string();
+            }
+            if let Some(v) = arguments.get("default_tax_rate_bp").and_then(Value::as_i64) {
+                update.default_tax_rate_bp = v;
+            }
             to_val(super::workspace_service::update(conn, &update, actor))
         }
-        "list_connectors" => to_val(super::connector_service::list_for_workspace(conn, workspace_id)),
+        "list_connectors" => to_val(super::connector_service::list_for_workspace(
+            conn,
+            workspace_id,
+        )),
         "list_ai_agents" => to_val(super::ai_agent_service::list(conn, workspace_id, true)),
         "create_ai_agent" => {
             let input: crate::models::ai_agent::AiAgentInput = from_args(arguments)?;
-            to_val(super::ai_agent_service::create(conn, workspace_id, &input, actor))
+            to_val(super::ai_agent_service::create(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
-        "list_ai_skills" => to_val(super::ai_agent_service::list_skills(conn, workspace_id, true)),
+        "list_ai_skills" => to_val(super::ai_agent_service::list_skills(
+            conn,
+            workspace_id,
+            true,
+        )),
         "create_ai_skill" => {
             let input: crate::models::ai_agent::AiSkillInput = from_args(arguments)?;
-            to_val(super::ai_agent_service::create_skill(conn, workspace_id, &input, actor))
+            to_val(super::ai_agent_service::create_skill(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
-        "list_ai_agent_pipelines" => to_val(super::ai_orchestration_service::list_pipelines(conn, workspace_id, true)),
+        "list_ai_agent_pipelines" => to_val(super::ai_orchestration_service::list_pipelines(
+            conn,
+            workspace_id,
+            true,
+        )),
         "create_ai_agent_pipeline" => {
-            let input: crate::models::ai_agent_pipeline::AiAgentPipelineInput = from_args(arguments)?;
-            to_val(super::ai_orchestration_service::create_pipeline(conn, workspace_id, &input, actor))
+            let input: crate::models::ai_agent_pipeline::AiAgentPipelineInput =
+                from_args(arguments)?;
+            to_val(super::ai_orchestration_service::create_pipeline(
+                conn,
+                workspace_id,
+                &input,
+                actor,
+            ))
         }
         "run_ai_agent" => {
             let agent_id = required_str(arguments, "agent_id")?;
             let input = required_str(arguments, "input")?;
-            to_val(super::ai_orchestration_service::run_manual(conn, workspace_id, master_key, "agent", agent_id, input, actor).await)
+            to_val(
+                super::ai_orchestration_service::run_manual(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    "agent",
+                    agent_id,
+                    input,
+                    actor,
+                )
+                .await,
+            )
         }
         "run_ai_agent_pipeline" => {
             let pipeline_id = required_str(arguments, "pipeline_id")?;
             let input = required_str(arguments, "input")?;
-            to_val(super::ai_orchestration_service::run_manual(conn, workspace_id, master_key, "pipeline", pipeline_id, input, actor).await)
+            to_val(
+                super::ai_orchestration_service::run_manual(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    "pipeline",
+                    pipeline_id,
+                    input,
+                    actor,
+                )
+                .await,
+            )
         }
         other => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
     }
@@ -668,7 +917,9 @@ fn system_prompt(mode: &str) -> &'static str {
 /// re-stringify). A no-op for anything that isn't a `create_connection`
 /// call - most assistant turns pass through unchanged.
 fn redact_secret_tool_calls(raw_assistant: &Value) -> Value {
-    let Some(items) = raw_assistant.as_array() else { return raw_assistant.clone() };
+    let Some(items) = raw_assistant.as_array() else {
+        return raw_assistant.clone();
+    };
     Value::Array(items.iter().map(redact_one_tool_call).collect())
 }
 
@@ -676,8 +927,9 @@ const REDACTED_SECRET: &str = "<redacted - never stored in chat history>";
 
 fn redact_one_tool_call(item: &Value) -> Value {
     let mut item = item.clone();
-    let is_anthropic_create_connection =
-        item.get("type").and_then(Value::as_str) == Some("tool_use") && item.get("name").and_then(Value::as_str) == Some("create_connection");
+    let is_anthropic_create_connection = item.get("type").and_then(Value::as_str)
+        == Some("tool_use")
+        && item.get("name").and_then(Value::as_str) == Some("create_connection");
     if is_anthropic_create_connection {
         if let Some(input) = item.get_mut("input").and_then(Value::as_object_mut) {
             if input.contains_key("secret_value") {
@@ -686,10 +938,18 @@ fn redact_one_tool_call(item: &Value) -> Value {
         }
         return item;
     }
-    let is_openai_create_connection = item.get("function").and_then(|f| f.get("name")).and_then(Value::as_str) == Some("create_connection");
+    let is_openai_create_connection = item
+        .get("function")
+        .and_then(|f| f.get("name"))
+        .and_then(Value::as_str)
+        == Some("create_connection");
     if is_openai_create_connection {
         if let Some(function) = item.get_mut("function").and_then(Value::as_object_mut) {
-            if let Some(mut parsed) = function.get("arguments").and_then(Value::as_str).and_then(|s| serde_json::from_str::<Value>(s).ok()) {
+            if let Some(mut parsed) = function
+                .get("arguments")
+                .and_then(Value::as_str)
+                .and_then(|s| serde_json::from_str::<Value>(s).ok())
+            {
                 if let Some(obj) = parsed.as_object_mut() {
                     if obj.contains_key("secret_value") {
                         obj.insert("secret_value".to_string(), json!(REDACTED_SECRET));
@@ -715,7 +975,14 @@ fn redact_one_tool_call(item: &Value) -> Value {
 /// `mode == "admin"` requires Administrator, checked once here before
 /// the loop starts - not relied on only implicitly inside each tool
 /// (even though every admin service function already gates itself too).
-pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], user_id: &str, mode: &str, text: &str) -> AppResult<Vec<ChatMessage>> {
+pub async fn send_message(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    user_id: &str,
+    mode: &str,
+    text: &str,
+) -> AppResult<Vec<ChatMessage>> {
     if text.trim().is_empty() {
         return Err(AppError::Validation("Say something first".into()));
     }
@@ -723,25 +990,58 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
         require_admin(conn, Some(user_id))?;
     }
     let tools = tools_for_mode(mode)?;
-    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode, "")?;
+    let conversation =
+        chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode, "")?;
 
     let mut appended = Vec::new();
-    appended.push(chat_repo::append_message(conn, &conversation.id, "user", Some(text), None, None)?);
+    appended.push(chat_repo::append_message(
+        conn,
+        &conversation.id,
+        "user",
+        Some(text),
+        None,
+        None,
+    )?);
 
     for _round in 0..MAX_ROUNDS {
         let history = chat_repo::list_messages(conn, &conversation.id)?;
-        let (outcome, usage) = ai_service::complete_with_tools(conn, workspace_id, master_key, system_prompt(mode), &tools, &history).await?;
+        let (outcome, usage) = ai_service::complete_with_tools(
+            conn,
+            workspace_id,
+            master_key,
+            system_prompt(mode),
+            &tools,
+            &history,
+        )
+        .await?;
         // Phase 7a: recorded for Gateway health-view visibility even on
         // this plain (no-agent) path - agent_id "" is the same "not an
         // agent run" sentinel `ai_token_usage_repo`'s own doc comment
         // describes, matching `chat_conversations.agent_id`'s convention.
-        let _ = ai_token_usage_repo::increment(conn, workspace_id, "", user_id, usage.input_tokens, usage.output_tokens);
+        let _ = ai_token_usage_repo::increment(
+            conn,
+            workspace_id,
+            "",
+            user_id,
+            usage.input_tokens,
+            usage.output_tokens,
+        );
         match outcome {
             CompletionOutcome::Text(text) => {
-                appended.push(chat_repo::append_message(conn, &conversation.id, "assistant", Some(&text), None, None)?);
+                appended.push(chat_repo::append_message(
+                    conn,
+                    &conversation.id,
+                    "assistant",
+                    Some(&text),
+                    None,
+                    None,
+                )?);
                 return Ok(appended);
             }
-            CompletionOutcome::ToolCalls { raw_assistant, calls } => {
+            CompletionOutcome::ToolCalls {
+                raw_assistant,
+                calls,
+            } => {
                 // The one non-negotiable boundary this module's own doc
                 // comment names, enforced a second time here: even though
                 // dispatch_admin_tool's own create_connection arm already
@@ -755,14 +1055,30 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
                 // only in admin mode, since it's a no-op for any tool call
                 // that isn't create_connection.
                 let persisted_assistant = redact_secret_tool_calls(&raw_assistant);
-                appended.push(chat_repo::append_message(conn, &conversation.id, "assistant", None, Some(&persisted_assistant), None)?);
+                appended.push(chat_repo::append_message(
+                    conn,
+                    &conversation.id,
+                    "assistant",
+                    None,
+                    Some(&persisted_assistant),
+                    None,
+                )?);
                 for call in calls {
-                    let result = execute_tool(conn, workspace_id, master_key, Some(user_id), mode, &call).await;
+                    let result =
+                        execute_tool(conn, workspace_id, master_key, Some(user_id), mode, &call)
+                            .await;
                     let content = match result {
                         Ok(value) => value.to_string(),
                         Err(e) => format!("Error: {e}"),
                     };
-                    appended.push(chat_repo::append_message(conn, &conversation.id, "tool", Some(&content), None, Some(&call.id))?);
+                    appended.push(chat_repo::append_message(
+                        conn,
+                        &conversation.id,
+                        "tool",
+                        Some(&content),
+                        None,
+                        Some(&call.id),
+                    )?);
                 }
             }
         }
@@ -779,15 +1095,31 @@ pub async fn send_message(conn: &Connection, workspace_id: &str, master_key: &[u
 /// `None` for the fixed "records"/"admin" chat assistants, which have no
 /// agent identity of their own - only a workspace-default policy can
 /// govern those.
-fn apply_tool_firewall(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, actor: Option<&str>, name: &str, arguments: &Value) -> AppResult<()> {
+fn apply_tool_firewall(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    actor: Option<&str>,
+    name: &str,
+    arguments: &Value,
+) -> AppResult<()> {
     let source = tool_source(name);
     match policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)? {
         PolicyDecision::Allow => Ok(()),
-        PolicyDecision::Deny { risk_level } => {
-            Err(AppError::PolicyBlocked(format!("'{name}' is blocked by this workspace's agent policy (risk level: {}).", risk_level.as_str())))
-        }
+        PolicyDecision::Deny { risk_level } => Err(AppError::PolicyBlocked(format!(
+            "'{name}' is blocked by this workspace's agent policy (risk level: {}).",
+            risk_level.as_str()
+        ))),
         PolicyDecision::RequireApproval { risk_level } => {
-            policy_engine_service::record_pending_tool_call(conn, workspace_id, agent_id, name, arguments, risk_level, actor)?;
+            policy_engine_service::record_pending_tool_call(
+                conn,
+                workspace_id,
+                agent_id,
+                name,
+                arguments,
+                risk_level,
+                actor,
+            )?;
             Err(AppError::PolicyBlocked(format!(
                 "'{name}' requires administrator approval under this workspace's agent policy (risk level: {}) - a pending approval has been recorded for an administrator to review.",
                 risk_level.as_str()
@@ -796,7 +1128,14 @@ fn apply_tool_firewall(conn: &Connection, workspace_id: &str, agent_id: Option<&
     }
 }
 
-async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, mode: &str, call: &RequestedToolCall) -> AppResult<Value> {
+async fn execute_tool(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    mode: &str,
+    call: &RequestedToolCall,
+) -> AppResult<Value> {
     if mode == "records" || mode == "admin" {
         apply_tool_firewall(conn, workspace_id, None, actor, &call.name, &call.arguments)?;
     }
@@ -806,7 +1145,17 @@ async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 3
     // `effective_write_actor`'s own doc comment.
     let access_actor = effective_write_actor(conn, workspace_id, None, actor, None)?;
     match mode {
-        "records" => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments, access_actor.as_deref()).await,
+        "records" => {
+            dispatch_record_tool(
+                conn,
+                workspace_id,
+                master_key,
+                &call.name,
+                &call.arguments,
+                access_actor.as_deref(),
+            )
+            .await
+        }
         // Admin mode's own tool list is the records catalog plus the
         // admin one (see `tools_for_mode`) - an admin who can create a
         // Business Rule can obviously also read what get_object_metadata/
@@ -815,8 +1164,28 @@ async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 3
         // belongs to rather than assuming the whole mode maps to one
         // dispatcher.
         "admin" => match tool_source(&call.name) {
-            Some("record") => dispatch_record_tool(conn, workspace_id, master_key, &call.name, &call.arguments, access_actor.as_deref()).await,
-            _ => dispatch_admin_tool(conn, workspace_id, actor, master_key, &call.name, &call.arguments).await,
+            Some("record") => {
+                dispatch_record_tool(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    &call.name,
+                    &call.arguments,
+                    access_actor.as_deref(),
+                )
+                .await
+            }
+            _ => {
+                dispatch_admin_tool(
+                    conn,
+                    workspace_id,
+                    actor,
+                    master_key,
+                    &call.name,
+                    &call.arguments,
+                )
+                .await
+            }
         },
         other => Err(AppError::Validation(format!("Unknown chat mode '{other}'"))),
     }
@@ -833,16 +1202,32 @@ async fn execute_tool(conn: &Connection, workspace_id: &str, master_key: &[u8; 3
 /// human is chatting right now (`actor`); a scheduled/background run
 /// with neither stays unattributed even with the toggle on, since
 /// there's no identity to check against.
-fn effective_write_actor(conn: &Connection, workspace_id: &str, agent_id: Option<&str>, actor: Option<&str>, acts_as: Option<&str>) -> AppResult<Option<String>> {
-    let enforce = policy_engine_service::resolve_policy(conn, workspace_id, agent_id)?.map(|p| p.enforce_record_access).unwrap_or(false);
+fn effective_write_actor(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    actor: Option<&str>,
+    acts_as: Option<&str>,
+) -> AppResult<Option<String>> {
+    let enforce = policy_engine_service::resolve_policy(conn, workspace_id, agent_id)?
+        .map(|p| p.enforce_record_access)
+        .unwrap_or(false);
     if !enforce {
         return Ok(None);
     }
-    Ok(acts_as.map(String::from).or_else(|| actor.map(String::from)))
+    Ok(acts_as
+        .map(String::from)
+        .or_else(|| actor.map(String::from)))
 }
 
-pub fn get_history(conn: &Connection, workspace_id: &str, user_id: &str, mode: &str) -> AppResult<Vec<ChatMessage>> {
-    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode, "")?;
+pub fn get_history(
+    conn: &Connection,
+    workspace_id: &str,
+    user_id: &str,
+    mode: &str,
+) -> AppResult<Vec<ChatMessage>> {
+    let conversation =
+        chat_repo::get_or_create_conversation(conn, workspace_id, user_id, mode, "")?;
     Ok(chat_repo::list_messages(conn, &conversation.id)?)
 }
 
@@ -895,7 +1280,12 @@ impl Drop for DelegationDepthGuard {
 /// `role`/`content`/`tool_calls`/`tool_call_id` matter, since those are
 /// all `ai_service::complete_with_tools`'s own message-building functions
 /// ever read from a `ChatMessage`.
-fn synthetic_message(role: &str, content: Option<&str>, tool_calls: Option<&Value>, tool_call_id: Option<&str>) -> ChatMessage {
+fn synthetic_message(
+    role: &str,
+    content: Option<&str>,
+    tool_calls: Option<&Value>,
+    tool_call_id: Option<&str>,
+) -> ChatMessage {
     ChatMessage {
         id: String::new(),
         conversation_id: String::new(),
@@ -928,7 +1318,15 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
     let mut tools: Vec<ToolSpec> = agent
         .action_names
         .iter()
-        .filter_map(|name| all_record.iter().chain(all_admin.iter()).chain(all_connector.iter()).chain(all_mcp.iter()).find(|t| &t.name == name).cloned())
+        .filter_map(|name| {
+            all_record
+                .iter()
+                .chain(all_admin.iter())
+                .chain(all_connector.iter())
+                .chain(all_mcp.iter())
+                .find(|t| &t.name == name)
+                .cloned()
+        })
         .collect();
 
     tools.push(tool(
@@ -1002,14 +1400,30 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
     if !agent.action_type_ids.is_empty() {
         let mut descriptions = Vec::new();
         for action_type_id in &agent.action_type_ids {
-            if let Some(def) = action_type_repo::get(conn, action_type_id).map_err(AppError::from)? {
+            if let Some(def) =
+                action_type_repo::get(conn, action_type_id).map_err(AppError::from)?
+            {
                 if def.is_active {
                     let params = if def.parameters.is_empty() {
                         "no parameters".to_string()
                     } else {
-                        def.parameters.iter().map(|p| format!("{} ({}{})", p.key, p.field_type, if p.required { ", required" } else { "" })).collect::<Vec<_>>().join(", ")
+                        def.parameters
+                            .iter()
+                            .map(|p| {
+                                format!(
+                                    "{} ({}{})",
+                                    p.key,
+                                    p.field_type,
+                                    if p.required { ", required" } else { "" }
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     };
-                    descriptions.push(format!("'{}' on {} - {} [params: {params}]", def.name, def.target_object_type, def.description));
+                    descriptions.push(format!(
+                        "'{}' on {} - {} [params: {params}]",
+                        def.name, def.target_object_type, def.description
+                    ));
                 }
             }
         }
@@ -1041,13 +1455,19 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
 /// `get_memory` - the "never dump an entire table into a prompt"
 /// structured-retrieval discipline this issue's own scope text asks for;
 /// unlike Session Memory, they aren't naturally singular/small per turn.
-fn agent_system_prompt(conn: &Connection, agent: &AiAgentDefinition, memory_context: &AgentMemoryContext) -> AppResult<String> {
+fn agent_system_prompt(
+    conn: &Connection,
+    agent: &AiAgentDefinition,
+    memory_context: &AgentMemoryContext,
+) -> AppResult<String> {
     let mut prompt = agent.system_prompt.clone();
     if !agent.memory_md.trim().is_empty() {
         prompt.push_str("\n\nYour persistent memory from prior runs (revise it with update_memory whenever something worth remembering happens):\n\n");
         prompt.push_str(&agent.memory_md);
     }
-    if let Ok(items) = ai_memory_service::list_context(conn, &agent.id, "session", None, None, memory_context) {
+    if let Ok(items) =
+        ai_memory_service::list_context(conn, &agent.id, "session", None, None, memory_context)
+    {
         if !items.is_empty() {
             prompt.push_str("\n\nThings you remember about this specific conversation (from remember, memory_type='session'):\n");
             for item in &items {
@@ -1060,7 +1480,9 @@ fn agent_system_prompt(conn: &Connection, agent: &AiAgentDefinition, memory_cont
         prompt.push_str(&agent.guardrails_md);
     }
     if !agent.skill_ids.is_empty() {
-        prompt.push_str("\n\nSkills available to you - call use_skill by name when one is relevant:\n");
+        prompt.push_str(
+            "\n\nSkills available to you - call use_skill by name when one is relevant:\n",
+        );
         for skill_id in &agent.skill_ids {
             if let Some(skill) = ai_agent_repo::get_skill(conn, skill_id).map_err(AppError::from)? {
                 prompt.push_str(&format!("- {}: {}\n", skill.name, skill.description));
@@ -1093,80 +1515,144 @@ fn execute_agent_tool<'a>(
         // internal ones matched directly below, which used to dispatch
         // before the firewall ever saw them. The inner `other` branch no
         // longer repeats this call.
-        apply_tool_firewall(conn, workspace_id, Some(&agent.id), actor, &call.name, &call.arguments)?;
+        apply_tool_firewall(
+            conn,
+            workspace_id,
+            Some(&agent.id),
+            actor,
+            &call.name,
+            &call.arguments,
+        )?;
         match call.name.as_str() {
             "update_memory" => {
                 let content = required_str(&call.arguments, "content")?;
-                ai_agent_repo::update_memory(conn, &agent.id, content, "agent").map_err(AppError::from)?;
+                ai_agent_repo::update_memory(conn, &agent.id, content, "agent")
+                    .map_err(AppError::from)?;
                 Ok(json!({"memory_updated": true}))
             }
             "remember" => {
-                let input: MemoryItemInput = serde_json::from_value(call.arguments.clone()).map_err(|e| AppError::Validation(format!("invalid arguments: {e}")))?;
-                let item = ai_memory_service::remember(conn, workspace_id, &agent.id, &input, memory_context, "agent")?;
+                let input: MemoryItemInput = serde_json::from_value(call.arguments.clone())
+                    .map_err(|e| AppError::Validation(format!("invalid arguments: {e}")))?;
+                let item = ai_memory_service::remember(
+                    conn,
+                    workspace_id,
+                    &agent.id,
+                    &input,
+                    memory_context,
+                    "agent",
+                )?;
                 Ok(json!({"remembered": true, "id": item.id}))
             }
             "get_memory" => {
                 let memory_type = required_str(&call.arguments, "memory_type")?;
                 let entity_type = call.arguments.get("entity_type").and_then(|v| v.as_str());
                 let entity_id = call.arguments.get("entity_id").and_then(|v| v.as_str());
-                let items = ai_memory_service::list_context(conn, &agent.id, memory_type, entity_type, entity_id, memory_context)?;
-                Ok(json!({"items": items.iter().map(|i| json!({"content": i.content, "source": i.source, "confidence": i.confidence, "created_at": i.created_at})).collect::<Vec<_>>()}))
+                let items = ai_memory_service::list_context(
+                    conn,
+                    &agent.id,
+                    memory_type,
+                    entity_type,
+                    entity_id,
+                    memory_context,
+                )?;
+                Ok(
+                    json!({"items": items.iter().map(|i| json!({"content": i.content, "source": i.source, "confidence": i.confidence, "created_at": i.created_at})).collect::<Vec<_>>()}),
+                )
             }
             "search_knowledge" => {
                 let query = required_str(&call.arguments, "query")?;
                 let collection_id = call.arguments.get("collection_id").and_then(|v| v.as_str());
-                let hits = ai_knowledge_service::search_knowledge(conn, workspace_id, master_key, query, collection_id, 5).await?;
-                Ok(json!({"results": hits.iter().map(|h| json!({"source_name": h.source_name, "content": h.content, "similarity": h.similarity})).collect::<Vec<_>>()}))
+                let hits = ai_knowledge_service::search_knowledge(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    query,
+                    collection_id,
+                    5,
+                )
+                .await?;
+                Ok(
+                    json!({"results": hits.iter().map(|h| json!({"source_name": h.source_name, "content": h.content, "similarity": h.similarity})).collect::<Vec<_>>()}),
+                )
             }
             "use_skill" => {
                 let skill_name = required_str(&call.arguments, "name")?;
                 for skill_id in &agent.skill_ids {
-                    if let Some(skill) = ai_agent_repo::get_skill(conn, skill_id).map_err(AppError::from)? {
+                    if let Some(skill) =
+                        ai_agent_repo::get_skill(conn, skill_id).map_err(AppError::from)?
+                    {
                         if skill.name == skill_name {
                             return Ok(json!({"instructions": skill.instructions_md}));
                         }
                     }
                 }
-                Err(AppError::Validation(format!("'{skill_name}' isn't one of this agent's attached skills")))
+                Err(AppError::Validation(format!(
+                    "'{skill_name}' isn't one of this agent's attached skills"
+                )))
             }
             "delegate_to_agent" => {
                 let agent_name = required_str(&call.arguments, "agent_name")?;
                 let input = required_str(&call.arguments, "input")?;
                 let mut target = None;
                 for delegate_id in &agent.delegate_agent_ids {
-                    if let Some(candidate) = ai_agent_repo::get(conn, delegate_id).map_err(AppError::from)? {
+                    if let Some(candidate) =
+                        ai_agent_repo::get(conn, delegate_id).map_err(AppError::from)?
+                    {
                         if candidate.name == agent_name && candidate.is_active {
                             target = Some(candidate);
                             break;
                         }
                     }
                 }
-                let target = target.ok_or_else(|| AppError::Validation(format!("'{agent_name}' isn't one of this agent's delegate sub-agents")))?;
+                let target = target.ok_or_else(|| {
+                    AppError::Validation(format!(
+                        "'{agent_name}' isn't one of this agent's delegate sub-agents"
+                    ))
+                })?;
                 let seed = vec![synthetic_message("user", Some(input), None, None)];
                 // Delegation preserves the same memory context - a
                 // sub-agent's `remember`/`get_memory` calls scope to the
                 // same session/run its supervisor is already running in.
-                let outcome = run_agent_once(conn, workspace_id, master_key, actor, &target, seed, memory_context).await?;
+                let outcome = run_agent_once(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    actor,
+                    &target,
+                    seed,
+                    memory_context,
+                )
+                .await?;
                 Ok(json!({"answer": outcome.final_text}))
             }
             "invoke_action" => {
                 let action_type_name = required_str(&call.arguments, "action_type_name")?;
                 let mut matched_id = None;
                 for candidate_id in &agent.action_type_ids {
-                    if let Some(def) = action_type_repo::get(conn, candidate_id).map_err(AppError::from)? {
+                    if let Some(def) =
+                        action_type_repo::get(conn, candidate_id).map_err(AppError::from)?
+                    {
                         if def.is_active && def.name == action_type_name {
                             matched_id = Some(def.id);
                             break;
                         }
                     }
                 }
-                let action_type_id = matched_id.ok_or_else(|| AppError::Validation(format!("'{action_type_name}' isn't one of this agent's granted Action Types")))?;
+                let action_type_id = matched_id.ok_or_else(|| {
+                    AppError::Validation(format!(
+                        "'{action_type_name}' isn't one of this agent's granted Action Types"
+                    ))
+                })?;
                 let record_id = required_str(&call.arguments, "record_id")?;
                 let params: std::collections::HashMap<String, String> = call
                     .arguments
                     .get("params")
                     .and_then(|v| v.as_object())
-                    .map(|obj| obj.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect())
+                    .map(|obj| {
+                        obj.iter()
+                            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 // Action Types are a governed primitive by design (issue
                 // #343's own `required_capability` check) - always
@@ -1177,21 +1663,73 @@ fn execute_agent_tool<'a>(
                 // deny an agent/actor without Assign even when this
                 // agent's own Ontology scope only grants `update`.
                 let invoking_actor = agent.acts_as_user_id.as_deref().or(actor);
-                action_type_service::invoke(conn, workspace_id, &action_type_id, record_id, &params, invoking_actor)
+                action_type_service::invoke(
+                    conn,
+                    workspace_id,
+                    &action_type_id,
+                    record_id,
+                    &params,
+                    invoking_actor,
+                )
             }
             other => match tool_source(other) {
-                Some(src @ ("record" | "admin" | "connector_read" | "connector_write" | "mcp_read" | "mcp_write")) => {
-                    match src {
-                        "record" => {
-                            check_object_type_scope(agent, other, &call.arguments)?;
-                            let access_actor = effective_write_actor(conn, workspace_id, Some(&agent.id), actor, agent.acts_as_user_id.as_deref())?;
-                            dispatch_record_tool(conn, workspace_id, master_key, other, &call.arguments, access_actor.as_deref()).await
-                        }
-                        "admin" => dispatch_admin_tool(conn, workspace_id, actor, master_key, other, &call.arguments).await,
-                        "connector_read" | "connector_write" => super::connector_tool_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
-                        _ => super::mcp_client_service::dispatch(conn, workspace_id, master_key, actor, other, &call.arguments).await,
+                Some(
+                    src @ ("record" | "admin" | "connector_read" | "connector_write" | "mcp_read"
+                    | "mcp_write"),
+                ) => match src {
+                    "record" => {
+                        check_object_type_scope(agent, other, &call.arguments)?;
+                        let access_actor = effective_write_actor(
+                            conn,
+                            workspace_id,
+                            Some(&agent.id),
+                            actor,
+                            agent.acts_as_user_id.as_deref(),
+                        )?;
+                        dispatch_record_tool(
+                            conn,
+                            workspace_id,
+                            master_key,
+                            other,
+                            &call.arguments,
+                            access_actor.as_deref(),
+                        )
+                        .await
                     }
-                }
+                    "admin" => {
+                        dispatch_admin_tool(
+                            conn,
+                            workspace_id,
+                            actor,
+                            master_key,
+                            other,
+                            &call.arguments,
+                        )
+                        .await
+                    }
+                    "connector_read" | "connector_write" => {
+                        super::connector_tool_service::dispatch(
+                            conn,
+                            workspace_id,
+                            master_key,
+                            actor,
+                            other,
+                            &call.arguments,
+                        )
+                        .await
+                    }
+                    _ => {
+                        super::mcp_client_service::dispatch(
+                            conn,
+                            workspace_id,
+                            master_key,
+                            actor,
+                            other,
+                            &call.arguments,
+                        )
+                        .await
+                    }
+                },
                 _ => Err(AppError::Validation(format!("Unknown tool '{other}'"))),
             },
         }
@@ -1235,7 +1773,16 @@ pub async fn run_agent_once_with_text(
     memory_context: &AgentMemoryContext,
 ) -> AppResult<AgentRunOutcome> {
     let seed = vec![synthetic_message("user", Some(input_text), None, None)];
-    run_agent_once(conn, workspace_id, master_key, actor, agent, seed, memory_context).await
+    run_agent_once(
+        conn,
+        workspace_id,
+        master_key,
+        actor,
+        agent,
+        seed,
+        memory_context,
+    )
+    .await
 }
 
 pub async fn run_agent_once(
@@ -1247,8 +1794,11 @@ pub async fn run_agent_once(
     seed_history: Vec<ChatMessage>,
     memory_context: &AgentMemoryContext,
 ) -> AppResult<AgentRunOutcome> {
-    let _depth_guard = DelegationDepthGuard::enter()
-        .ok_or_else(|| AppError::Validation("Delegation depth limit reached - simplify this agent's delegation chain".into()))?;
+    let _depth_guard = DelegationDepthGuard::enter().ok_or_else(|| {
+        AppError::Validation(
+            "Delegation depth limit reached - simplify this agent's delegation chain".into(),
+        )
+    })?;
     if agent_requires_admin(&agent.action_names) {
         require_admin(conn, actor)?;
     }
@@ -1291,7 +1841,17 @@ pub async fn run_agent_once(
         // forced air-gapping) and records real token usage itself; an
         // agent with no routing configured gets exactly its pre-7a
         // behavior back (see `ai_gateway_service`'s own doc comment).
-        let gateway_outcome = ai_gateway_service::dispatch(conn, workspace_id, master_key, agent, actor, &system_prompt, &tools, &history).await?;
+        let gateway_outcome = ai_gateway_service::dispatch(
+            conn,
+            workspace_id,
+            master_key,
+            agent,
+            actor,
+            &system_prompt,
+            &tools,
+            &history,
+        )
+        .await?;
         let outcome = gateway_outcome.outcome;
         match outcome {
             CompletionOutcome::Text(text) => {
@@ -1315,18 +1875,30 @@ pub async fn run_agent_once(
                             "Your last response didn't conform to the required output schema:\n{}\n\nRespond again with ONLY valid JSON matching the schema, no other text.",
                             violations.join("\n")
                         );
-                        let repair_msg = synthetic_message("user", Some(&repair_prompt), None, None);
+                        let repair_msg =
+                            synthetic_message("user", Some(&repair_prompt), None, None);
                         history.push(repair_msg.clone());
                         produced.push(repair_msg);
                         continue;
                     }
                 }
                 produced.push(synthetic_message("assistant", Some(&text), None, None));
-                return Ok(AgentRunOutcome { final_text: text, produced, policy_violations });
+                return Ok(AgentRunOutcome {
+                    final_text: text,
+                    produced,
+                    policy_violations,
+                });
             }
-            CompletionOutcome::ToolCalls { raw_assistant, calls } => {
+            CompletionOutcome::ToolCalls {
+                raw_assistant,
+                calls,
+            } => {
                 match calls.first().filter(|_| calls.len() == 1) {
-                    Some(only_call) if last_call.as_ref().is_some_and(|(n, a)| *n == only_call.name && *a == only_call.arguments) => {
+                    Some(only_call)
+                        if last_call.as_ref().is_some_and(|(n, a)| {
+                            *n == only_call.name && *a == only_call.arguments
+                        }) =>
+                    {
                         repeat_streak += 1;
                         if repeat_streak >= 3 {
                             return Err(AppError::Validation(format!(
@@ -1345,11 +1917,21 @@ pub async fn run_agent_once(
                     }
                 }
                 let persisted_assistant = redact_secret_tool_calls(&raw_assistant);
-                let assistant_msg = synthetic_message("assistant", None, Some(&persisted_assistant), None);
+                let assistant_msg =
+                    synthetic_message("assistant", None, Some(&persisted_assistant), None);
                 history.push(assistant_msg.clone());
                 produced.push(assistant_msg);
                 for call in calls {
-                    let result = execute_agent_tool(conn, workspace_id, master_key, actor, agent, &call, memory_context).await;
+                    let result = execute_agent_tool(
+                        conn,
+                        workspace_id,
+                        master_key,
+                        actor,
+                        agent,
+                        &call,
+                        memory_context,
+                    )
+                    .await;
                     let ok = result.is_ok();
                     if matches!(&result, Err(AppError::PolicyBlocked(_))) {
                         policy_violations += 1;
@@ -1373,7 +1955,12 @@ pub async fn run_agent_once(
                         "ai_agent_tool_call",
                         Some("ai_agent"),
                         Some(&agent.id),
-                        &format!("Agent '{}' called '{}'{}", agent.name, call.name, if ok { "" } else { " (failed)" }),
+                        &format!(
+                            "Agent '{}' called '{}'{}",
+                            agent.name,
+                            call.name,
+                            if ok { "" } else { " (failed)" }
+                        ),
                         None,
                     );
                     let tool_msg = synthetic_message("tool", Some(&content), None, Some(&call.id));
@@ -1391,29 +1978,60 @@ pub async fn run_agent_once(
 /// structural sibling of `send_message` (same "persist the user's message,
 /// run the loop, persist what it produced" shape), not a forced
 /// abstraction over it - see this section's own doc comment.
-pub async fn send_agent_message(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], user_id: &str, agent_id: &str, text: &str) -> AppResult<Vec<ChatMessage>> {
+pub async fn send_agent_message(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    user_id: &str,
+    agent_id: &str,
+    text: &str,
+) -> AppResult<Vec<ChatMessage>> {
     if text.trim().is_empty() {
         return Err(AppError::Validation("Say something first".into()));
     }
-    let agent = ai_agent_repo::get(conn, agent_id).map_err(AppError::from)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    let agent = ai_agent_repo::get(conn, agent_id)
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound("Agent".into()))?;
     if !agent.is_active {
-        return Err(AppError::Validation("This agent has been deactivated".into()));
+        return Err(AppError::Validation(
+            "This agent has been deactivated".into(),
+        ));
     }
     if agent_requires_admin(&agent.action_names) {
         require_admin(conn, Some(user_id))?;
     }
 
-    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, "agent", agent_id)?;
+    let conversation =
+        chat_repo::get_or_create_conversation(conn, workspace_id, user_id, "agent", agent_id)?;
     let mut appended = Vec::new();
-    appended.push(chat_repo::append_message(conn, &conversation.id, "user", Some(text), None, None)?);
+    appended.push(chat_repo::append_message(
+        conn,
+        &conversation.id,
+        "user",
+        Some(text),
+        None,
+        None,
+    )?);
 
     let history = chat_repo::list_messages(conn, &conversation.id)?;
     // AI Agent Platform v2, Phase 4: this conversation's own durable id is
     // exactly the "session" Session Memory is scoped by - this agent's
     // ongoing relationship with this user, the same conversation row
     // `get_or_create_conversation` already keeps stable across messages.
-    let memory_context = AgentMemoryContext { session_key: Some(conversation.id.clone()), run_id: None };
-    let outcome = run_agent_once(conn, workspace_id, master_key, Some(user_id), &agent, history, &memory_context).await?;
+    let memory_context = AgentMemoryContext {
+        session_key: Some(conversation.id.clone()),
+        run_id: None,
+    };
+    let outcome = run_agent_once(
+        conn,
+        workspace_id,
+        master_key,
+        Some(user_id),
+        &agent,
+        history,
+        &memory_context,
+    )
+    .await?;
     for msg in outcome.produced {
         appended.push(chat_repo::append_message(
             conn,
@@ -1427,7 +2045,13 @@ pub async fn send_agent_message(conn: &Connection, workspace_id: &str, master_ke
     Ok(appended)
 }
 
-pub fn get_agent_history(conn: &Connection, workspace_id: &str, user_id: &str, agent_id: &str) -> AppResult<Vec<ChatMessage>> {
-    let conversation = chat_repo::get_or_create_conversation(conn, workspace_id, user_id, "agent", agent_id)?;
+pub fn get_agent_history(
+    conn: &Connection,
+    workspace_id: &str,
+    user_id: &str,
+    agent_id: &str,
+) -> AppResult<Vec<ChatMessage>> {
+    let conversation =
+        chat_repo::get_or_create_conversation(conn, workspace_id, user_id, "agent", agent_id)?;
     Ok(chat_repo::list_messages(conn, &conversation.id)?)
 }

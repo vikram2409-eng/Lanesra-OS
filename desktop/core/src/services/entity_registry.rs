@@ -20,8 +20,8 @@ use rusqlite::Connection;
 
 use crate::domain::AppResult;
 use crate::repositories::{
-    company_repo, contact_repo, contract_repo, custom_record_repo, invoice_repo, opportunity_repo, order_repo,
-    product_repo, quote_repo, task_repo,
+    company_repo, contact_repo, contract_repo, custom_record_repo, invoice_repo, opportunity_repo,
+    order_repo, product_repo, quote_repo, task_repo,
 };
 
 /// The generic view of a record any entity_type resolves to - enough for
@@ -48,10 +48,22 @@ pub struct ResolvedRecord {
 /// same list under a different name for a different subsystem's own
 /// documentation trail.
 pub const CORE_ENTITY_TYPES: &[&str] = &[
-    "Company", "Contact", "Opportunity", "Quote", "Order", "Invoice", "Contract", "Task", "Product",
+    "Company",
+    "Contact",
+    "Opportunity",
+    "Quote",
+    "Order",
+    "Invoice",
+    "Contract",
+    "Task",
+    "Product",
 ];
 
-pub fn resolve(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResult<Option<ResolvedRecord>> {
+pub fn resolve(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> AppResult<Option<ResolvedRecord>> {
     let resolved = match entity_type {
         "Company" => company_repo::get(conn, entity_id)?.map(|r| ResolvedRecord {
             workspace_id: r.workspace_id,
@@ -61,7 +73,9 @@ pub fn resolve(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResu
         }),
         "Contact" => contact_repo::get(conn, entity_id)?.map(|r| ResolvedRecord {
             workspace_id: r.workspace_id,
-            display_name: format!("{} {}", r.first_name, r.last_name).trim().to_string(),
+            display_name: format!("{} {}", r.first_name, r.last_name)
+                .trim()
+                .to_string(),
             status: r.status,
             archived: r.archived_at.is_some(),
         }),
@@ -104,7 +118,11 @@ pub fn resolve(conn: &Connection, entity_type: &str, entity_id: &str) -> AppResu
         "Product" => product_repo::get(conn, entity_id)?.map(|r| ResolvedRecord {
             workspace_id: r.workspace_id,
             display_name: r.name,
-            status: if r.is_active { "Active".into() } else { "Inactive".into() },
+            status: if r.is_active {
+                "Active".into()
+            } else {
+                "Inactive".into()
+            },
             archived: r.archived_at.is_some(),
         }),
         _ => custom_record_repo::get(conn, entity_id)?.and_then(|r| {

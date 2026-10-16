@@ -2,6 +2,22 @@
 resolver = "2"
 members = ["core", "src-tauri", "server", "cli"]
 
+# Lint baseline (WP-0004). CI runs `cargo clippy -- -D warnings`, so every
+# warning not listed here fails the build. Each allow below is deliberate
+# and has a reason; removing one is a welcome refactor (RAID tech-debt T-01).
+[workspace.lints.clippy]
+# Service functions take (conn, workspace_id, ..., actor) by convention; a
+# params struct per call site would churn hundreds of callers for no safety gain.
+too_many_arguments = "allow"
+# Tuple-heavy row types in repositories; worth type aliases, but not as a
+# blanket change in a baseline commit.
+type_complexity = "allow"
+# Domain enums expose `from_str(&str) -> Option<Self>`; implementing FromStr
+# would change their signatures to Result and every caller with them.
+should_implement_trait = "allow"
+# Money literals group the last two digits as cents (100_00 = $100.00).
+inconsistent_digit_grouping = "allow"
+
 [profile.release]
 # Not panic = "abort": the server binary must not take the whole process
 # down if a single request handler panics.

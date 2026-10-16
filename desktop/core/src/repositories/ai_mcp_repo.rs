@@ -35,7 +35,13 @@ const SERVER_SELECT: &str = "SELECT s.id, s.workspace_id, s.connection_id, s.nam
         s.last_discovery_message, s.created_at, s.created_by, s.updated_at, s.updated_by
      FROM ai_mcp_servers s JOIN integration_connections c ON c.id = s.connection_id";
 
-pub fn create_server(conn: &Connection, workspace_id: &str, connection_id: &str, name: &str, actor_user_id: Option<&str>) -> rusqlite::Result<McpServer> {
+pub fn create_server(
+    conn: &Connection,
+    workspace_id: &str,
+    connection_id: &str,
+    name: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<McpServer> {
     let id = new_uuid();
     let now = now_iso();
     conn.execute(
@@ -47,16 +53,33 @@ pub fn create_server(conn: &Connection, workspace_id: &str, connection_id: &str,
 }
 
 pub fn get_server(conn: &Connection, id: &str) -> rusqlite::Result<Option<McpServer>> {
-    conn.query_row(&format!("{SERVER_SELECT} WHERE s.id = ?1"), [id], map_server_row).optional()
+    conn.query_row(
+        &format!("{SERVER_SELECT} WHERE s.id = ?1"),
+        [id],
+        map_server_row,
+    )
+    .optional()
 }
 
-pub fn list_servers_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<McpServer>> {
-    let mut stmt = conn.prepare(&format!("{SERVER_SELECT} WHERE s.workspace_id = ?1 ORDER BY s.name"))?;
+pub fn list_servers_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<McpServer>> {
+    let mut stmt = conn.prepare(&format!(
+        "{SERVER_SELECT} WHERE s.workspace_id = ?1 ORDER BY s.name"
+    ))?;
     let rows = stmt.query_map([workspace_id], map_server_row)?.collect();
     rows
 }
 
-pub fn update_server(conn: &Connection, id: &str, name: &str, agent_tools_enabled: bool, agent_write_tools_enabled: bool, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn update_server(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+    agent_tools_enabled: bool,
+    agent_write_tools_enabled: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_mcp_servers SET name = ?1, agent_tools_enabled = ?2, agent_write_tools_enabled = ?3, updated_at = ?4, updated_by = ?5 WHERE id = ?6",
         rusqlite::params![name, agent_tools_enabled as i64, agent_write_tools_enabled as i64, now_iso(), actor_user_id, id],
@@ -64,7 +87,12 @@ pub fn update_server(conn: &Connection, id: &str, name: &str, agent_tools_enable
     Ok(())
 }
 
-pub fn set_discovery_result(conn: &Connection, id: &str, status: &str, message: &str) -> rusqlite::Result<()> {
+pub fn set_discovery_result(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    message: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE ai_mcp_servers SET last_discovered_at = ?1, last_discovery_status = ?2, last_discovery_message = ?3 WHERE id = ?4",
         rusqlite::params![now_iso(), status, message, id],
@@ -91,13 +119,23 @@ fn map_tool_row(row: &rusqlite::Row) -> rusqlite::Result<McpTool> {
 }
 
 pub fn list_tools(conn: &Connection, mcp_server_id: &str) -> rusqlite::Result<Vec<McpTool>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_mcp_tools WHERE mcp_server_id = ?1 ORDER BY tool_name")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM ai_mcp_tools WHERE mcp_server_id = ?1 ORDER BY tool_name")?;
     let rows = stmt.query_map([mcp_server_id], map_tool_row)?.collect();
     rows
 }
 
-pub fn get_tool(conn: &Connection, mcp_server_id: &str, tool_name: &str) -> rusqlite::Result<Option<McpTool>> {
-    conn.query_row("SELECT * FROM ai_mcp_tools WHERE mcp_server_id = ?1 AND tool_name = ?2", rusqlite::params![mcp_server_id, tool_name], map_tool_row).optional()
+pub fn get_tool(
+    conn: &Connection,
+    mcp_server_id: &str,
+    tool_name: &str,
+) -> rusqlite::Result<Option<McpTool>> {
+    conn.query_row(
+        "SELECT * FROM ai_mcp_tools WHERE mcp_server_id = ?1 AND tool_name = ?2",
+        rusqlite::params![mcp_server_id, tool_name],
+        map_tool_row,
+    )
+    .optional()
 }
 
 /// Replaces every tool row for `mcp_server_id` with a fresh discovery
@@ -106,10 +144,17 @@ pub fn get_tool(conn: &Connection, mcp_server_id: &str, tool_name: &str) -> rusq
 /// default, see migration's own comment), and a tool present in both the
 /// old and new set keeps whatever `is_write`/`enabled` an admin already
 /// set on it rather than resetting to the default on every re-discovery.
-pub fn replace_tools(conn: &Connection, mcp_server_id: &str, discovered: &[DiscoveredTool]) -> rusqlite::Result<Vec<McpTool>> {
+pub fn replace_tools(
+    conn: &Connection,
+    mcp_server_id: &str,
+    discovered: &[DiscoveredTool],
+) -> rusqlite::Result<Vec<McpTool>> {
     let existing = list_tools(conn, mcp_server_id)?;
     let now = now_iso();
-    conn.execute("DELETE FROM ai_mcp_tools WHERE mcp_server_id = ?1", [mcp_server_id])?;
+    conn.execute(
+        "DELETE FROM ai_mcp_tools WHERE mcp_server_id = ?1",
+        [mcp_server_id],
+    )?;
     for tool in discovered {
         let carried = existing.iter().find(|t| t.tool_name == tool.tool_name);
         let is_write = carried.map(|t| t.is_write).unwrap_or(false);
@@ -123,7 +168,13 @@ pub fn replace_tools(conn: &Connection, mcp_server_id: &str, discovered: &[Disco
     list_tools(conn, mcp_server_id)
 }
 
-pub fn set_tool_flags(conn: &Connection, mcp_server_id: &str, tool_name: &str, is_write: bool, enabled: bool) -> rusqlite::Result<usize> {
+pub fn set_tool_flags(
+    conn: &Connection,
+    mcp_server_id: &str,
+    tool_name: &str,
+    is_write: bool,
+    enabled: bool,
+) -> rusqlite::Result<usize> {
     conn.execute(
         "UPDATE ai_mcp_tools SET is_write = ?1, enabled = ?2 WHERE mcp_server_id = ?3 AND tool_name = ?4",
         rusqlite::params![is_write as i64, enabled as i64, mcp_server_id, tool_name],
@@ -137,7 +188,10 @@ pub fn set_tool_flags(conn: &Connection, mcp_server_id: &str, tool_name: &str, i
 /// gate on top of this (a plain SQL join can't express "unless is_write
 /// and the server's write gate is off" as cleanly as one more filter in
 /// Rust can).
-pub fn list_enabled_tools_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<(McpServer, McpTool)>> {
+pub fn list_enabled_tools_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<(McpServer, McpTool)>> {
     let servers = list_servers_for_workspace(conn, workspace_id)?;
     let mut out = Vec::new();
     for server in servers {

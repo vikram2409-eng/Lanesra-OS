@@ -110,6 +110,9 @@ pub fn get_spec(key: &str) -> AppResult<ConnectorTemplateSpec> {
     TEMPLATES
         .iter()
         .find(|t| t.key == key)
-        .map(|t| ConnectorTemplateSpec { spec_text: t.spec_text.to_string(), spec_format: t.spec_format.to_string() })
+        .map(|t| ConnectorTemplateSpec {
+            spec_text: t.spec_text.to_string(),
+            spec_format: t.spec_format.to_string(),
+        })
         .ok_or_else(|| AppError::NotFound("Connector template".into()))
 }

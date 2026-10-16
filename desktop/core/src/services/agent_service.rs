@@ -36,7 +36,11 @@ use crate::repositories::custom_field_repo;
 const MAX_QUESTION_LEN: usize = 500;
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max { s.to_string() } else { format!("{}...", s.chars().take(max).collect::<String>()) }
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", s.chars().take(max).collect::<String>())
+    }
 }
 
 /// One line per reportable object: its key, its builtin group-by field,
@@ -50,10 +54,22 @@ fn describe_catalog(conn: &Connection, workspace_id: &str) -> AppResult<String> 
         let fields: Vec<String> = custom_field_repo::list_definitions(conn, workspace_id, key)?
             .into_iter()
             .filter(|d| d.is_active && d.is_reportable)
-            .map(|d| if d.field_type == "number" { format!("{} (key: \"{}\", numeric, can be summed)", d.label, d.key) } else { format!("{} (key: \"{}\")", d.label, d.key) })
+            .map(|d| {
+                if d.field_type == "number" {
+                    format!("{} (key: \"{}\", numeric, can be summed)", d.label, d.key)
+                } else {
+                    format!("{} (key: \"{}\")", d.label, d.key)
+                }
+            })
             .collect();
-        let extra = if fields.is_empty() { String::new() } else { format!(" Custom fields: {}.", fields.join(", ")) };
-        lines.push(format!("- \"{key}\" ({label}): built-in group-by field is \"{builtin}\".{extra}"));
+        let extra = if fields.is_empty() {
+            String::new()
+        } else {
+            format!(" Custom fields: {}.", fields.join(", "))
+        };
+        lines.push(format!(
+            "- \"{key}\" ({label}): built-in group-by field is \"{builtin}\".{extra}"
+        ));
         Ok(())
     };
     for key in CUSTOM_FIELD_ENTITY_TYPES {
@@ -87,21 +103,32 @@ fn system_prompt(catalog: &str) -> String {
 
 fn strip_code_fence(s: &str) -> &str {
     let t = s.trim();
-    let Some(rest) = t.strip_prefix("```") else { return t };
+    let Some(rest) = t.strip_prefix("```") else {
+        return t;
+    };
     let rest = rest.strip_prefix("json").unwrap_or(rest).trim_start();
     rest.strip_suffix("```").unwrap_or(rest).trim()
 }
 
 fn required_str<'a>(value: &'a Value, key: &str) -> AppResult<&'a str> {
-    value.get(key).and_then(Value::as_str).ok_or_else(|| AppError::Validation(format!("The model's response is missing '{key}'")))
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError::Validation(format!("The model's response is missing '{key}'")))
 }
 
 fn parse_directive(raw: &str, question: &str) -> AppResult<CustomReportInput> {
     let cleaned = strip_code_fence(raw);
-    let value: Value = serde_json::from_str(cleaned)
-        .map_err(|_| AppError::Validation(format!("The model didn't return valid JSON: {}", truncate(raw, 300))))?;
+    let value: Value = serde_json::from_str(cleaned).map_err(|_| {
+        AppError::Validation(format!(
+            "The model didn't return valid JSON: {}",
+            truncate(raw, 300)
+        ))
+    })?;
     if let Some(reason) = value.get("error").and_then(Value::as_str) {
-        return Err(AppError::Validation(format!("That question doesn't fit the report engine: {reason}")));
+        return Err(AppError::Validation(format!(
+            "That question doesn't fit the report engine: {reason}"
+        )));
     }
     Ok(CustomReportInput {
         name: truncate(question, 60),
@@ -109,7 +136,10 @@ fn parse_directive(raw: &str, question: &str) -> AppResult<CustomReportInput> {
         group_by_source: required_str(&value, "group_by_source")?.to_string(),
         group_by_field: required_str(&value, "group_by_field")?.to_string(),
         aggregate: required_str(&value, "aggregate")?.to_string(),
-        sum_field_key: value.get("sum_field_key").and_then(Value::as_str).map(String::from),
+        sum_field_key: value
+            .get("sum_field_key")
+            .and_then(Value::as_str)
+            .map(String::from),
     })
 }
 
@@ -117,17 +147,25 @@ fn parse_directive(raw: &str, question: &str) -> AppResult<CustomReportInput> {
 /// `custom_report_service::preview` (which this calls) already
 /// document: asking a question needs no more privilege than viewing an
 /// existing report's numbers already does.
-pub async fn ask_report(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], query: &NlReportQuery) -> AppResult<NlReportResult> {
+pub async fn ask_report(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    query: &NlReportQuery,
+) -> AppResult<NlReportResult> {
     let question = query.question.trim();
     if question.is_empty() {
         return Err(AppError::Validation("Ask a question first".into()));
     }
     if question.chars().count() > MAX_QUESTION_LEN {
-        return Err(AppError::Validation(format!("Keep the question under {MAX_QUESTION_LEN} characters")));
+        return Err(AppError::Validation(format!(
+            "Keep the question under {MAX_QUESTION_LEN} characters"
+        )));
     }
     let catalog = describe_catalog(conn, workspace_id)?;
     let prompt = system_prompt(&catalog);
-    let raw = super::ai_service::complete(conn, workspace_id, master_key, &prompt, question).await?;
+    let raw =
+        super::ai_service::complete(conn, workspace_id, master_key, &prompt, question).await?;
     let report = parse_directive(&raw, question)?;
     let rows = super::custom_report_service::preview(conn, workspace_id, &report)?;
     Ok(NlReportResult { report, rows })

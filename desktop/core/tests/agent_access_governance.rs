@@ -19,15 +19,23 @@ use lanesra_core::models::ai_tool_registry::RiskLevel;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    access_role_service, agent_access_inspector_service, ai_agent_service, ai_service, chat_service, policy_engine_service, user_service, workspace_service,
+    access_role_service, agent_access_inspector_service, ai_agent_service, ai_service,
+    chat_service, policy_engine_service, user_service, workspace_service,
 };
 
 fn setup_workspace(business_name: &str) -> (rusqlite::Connection, String, String) {
     let conn = lanesra_core::db::open_in_memory_db().unwrap();
     let setup = WorkspaceSetup {
-        business_name: business_name.into(), legal_name: None, currency_code: "USD".into(), locale: "en-US".into(),
-        timezone: "UTC".into(), default_tax_rate_bp: 0, admin_username: "admin".into(), admin_display_name: "Admin".into(),
-        admin_password: "supersecretpassword".into(), load_sample_data: false,
+        business_name: business_name.into(),
+        legal_name: None,
+        currency_code: "USD".into(),
+        locale: "en-US".into(),
+        timezone: "UTC".into(),
+        default_tax_rate_bp: 0,
+        admin_username: "admin".into(),
+        admin_display_name: "Admin".into(),
+        admin_password: "supersecretpassword".into(),
+        load_sample_data: false,
     };
     let (workspace, admin) = workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
@@ -37,17 +45,30 @@ fn master_key() -> [u8; 32] {
     [62u8; 32]
 }
 
-fn configure_anthropic_key(conn: &rusqlite::Connection, workspace_id: &str, admin: &str, port: u16) {
+fn configure_anthropic_key(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    admin: &str,
+    port: u16,
+) {
     ai_service::save_settings(
-        conn, workspace_id, &master_key(),
-        &AiSettingsInput { provider: "anthropic".into(), base_url: Some(format!("http://127.0.0.1:{port}")), model: "claude-haiku-4-5-20251001".into(), api_key: Some("sk-ant-test".into()) },
+        conn,
+        workspace_id,
+        &master_key(),
+        &AiSettingsInput {
+            provider: "anthropic".into(),
+            base_url: Some(format!("http://127.0.0.1:{port}")),
+            model: "claude-haiku-4-5-20251001".into(),
+            api_key: Some("sk-ant-test".into()),
+        },
         Some(admin),
     )
     .unwrap();
 }
 
 fn anthropic_tool_use_body(id: &str, name: &str, input: serde_json::Value) -> String {
-    serde_json::json!({"content": [{"type": "tool_use", "id": id, "name": name, "input": input}]}).to_string()
+    serde_json::json!({"content": [{"type": "tool_use", "id": id, "name": name, "input": input}]})
+        .to_string()
 }
 
 fn anthropic_text_body(text: &str) -> String {
@@ -86,7 +107,11 @@ fn spawn_sequence_stub(bodies: Vec<String>) -> u16 {
             let _ = reader.read_exact(&mut body_buf);
             let body = {
                 let mut q = queue.lock().unwrap();
-                if q.len() > 1 { q.pop_front().unwrap() } else { q.front().cloned().unwrap_or_default() }
+                if q.len() > 1 {
+                    q.pop_front().unwrap()
+                } else {
+                    q.front().cloned().unwrap_or_default()
+                }
             };
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -100,13 +125,34 @@ fn spawn_sequence_stub(bodies: Vec<String>) -> u16 {
 }
 
 fn no_op_policy() -> AiAgentPolicyInput {
-    AiAgentPolicyInput { require_approval_at_or_above: None, blocked_tool_names: vec![], exclude_restricted_memory: true, enforce_record_access: false }
+    AiAgentPolicyInput {
+        require_approval_at_or_above: None,
+        blocked_tool_names: vec![],
+        exclude_restricted_memory: true,
+        enforce_record_access: false,
+    }
 }
 
-fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, action_names: Vec<String>) -> lanesra_core::models::ai_agent::AiAgentDefinition {
+fn make_agent(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+    action_names: Vec<String>,
+) -> lanesra_core::models::ai_agent::AiAgentDefinition {
     ai_agent_service::create(
-        conn, ws,
-        &AiAgentInput { name: "Records Agent".into(), description: None, icon: "🤖".into(), system_prompt: "You act on records.".into(), action_names, delegate_agent_ids: vec![], skill_ids: vec![], object_type_scopes: vec![], action_type_ids: vec![] },
+        conn,
+        ws,
+        &AiAgentInput {
+            name: "Records Agent".into(),
+            description: None,
+            icon: "🤖".into(),
+            system_prompt: "You act on records.".into(),
+            action_names,
+            delegate_agent_ids: vec![],
+            skill_ids: vec![],
+            object_type_scopes: vec![],
+            action_type_ids: vec![],
+        },
         Some(admin),
     )
     .unwrap()
@@ -123,10 +169,23 @@ fn make_agent(conn: &rusqlite::Connection, ws: &str, admin: &str, action_names: 
 /// "Standard User"'s own grant instead, scoped to this one in-memory
 /// workspace.
 fn deny_default_create_access(conn: &rusqlite::Connection, ws: &str, admin: &str) {
-    let standard = access_role_service::list(conn, ws).unwrap().into_iter().find(|r| r.name == "Standard User").expect("Standard User should already be bootstrapped");
+    let standard = access_role_service::list(conn, ws)
+        .unwrap()
+        .into_iter()
+        .find(|r| r.name == "Standard User")
+        .expect("Standard User should already be bootstrapped");
     access_role_service::upsert_grant(
-        conn, &standard.id,
-        &AccessRoleGrantInput { object_key: "*".into(), can_create: false, can_read: true, can_update: true, can_delete: true, can_assign: false, record_scope: "ORGANIZATION".into() },
+        conn,
+        &standard.id,
+        &AccessRoleGrantInput {
+            object_key: "*".into(),
+            can_create: false,
+            can_read: true,
+            can_update: true,
+            can_delete: true,
+            can_assign: false,
+            record_scope: "ORGANIZATION".into(),
+        },
         Some(admin),
     )
     .unwrap();
@@ -139,22 +198,46 @@ async fn a_blocklisted_foundry_internal_tool_is_denied_before_it_ever_runs() {
     let (conn, ws, admin) = setup_workspace("Foundry Firewall Test Co");
     let agent = make_agent(&conn, &ws, &admin, vec!["list_objects".into()]);
     policy_engine_service::upsert_policy(
-        &conn, &ws, Some(&agent.id),
-        &AiAgentPolicyInput { blocked_tool_names: vec!["get_memory".into()], ..no_op_policy() },
+        &conn,
+        &ws,
+        Some(&agent.id),
+        &AiAgentPolicyInput {
+            blocked_tool_names: vec!["get_memory".into()],
+            ..no_op_policy()
+        },
         Some(&admin),
     )
     .unwrap();
 
     let port = spawn_sequence_stub(vec![
-        anthropic_tool_use_body("t1", "get_memory", serde_json::json!({"memory_type": "entity"})),
+        anthropic_tool_use_body(
+            "t1",
+            "get_memory",
+            serde_json::json!({"memory_type": "entity"}),
+        ),
         anthropic_text_body("Understood, I can't check that."),
     ]);
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let messages = chat_service::send_agent_message(&conn, &ws, &master_key(), &admin, &agent.id, "what do you remember about this record?").await.unwrap();
-    let tool_message = messages.iter().find(|m| m.role == "tool").expect("a tool-result message was appended");
+    let messages = chat_service::send_agent_message(
+        &conn,
+        &ws,
+        &master_key(),
+        &admin,
+        &agent.id,
+        "what do you remember about this record?",
+    )
+    .await
+    .unwrap();
+    let tool_message = messages
+        .iter()
+        .find(|m| m.role == "tool")
+        .expect("a tool-result message was appended");
     let content = tool_message.content.as_deref().unwrap_or_default();
-    assert!(content.contains("is blocked by this workspace's agent policy"), "unexpected tool message: {content}");
+    assert!(
+        content.contains("is blocked by this workspace's agent policy"),
+        "unexpected tool message: {content}"
+    );
 }
 
 // --- enforce_record_access: opt-in, backward-compatible by default -----
@@ -162,20 +245,58 @@ async fn a_blocklisted_foundry_internal_tool_is_denied_before_it_ever_runs() {
 #[tokio::test]
 async fn enforce_record_access_off_preserves_the_unattributed_default() {
     let (conn, ws, admin) = setup_workspace("Unattributed Default Test Co");
-    let zero_role_user = user_service::create(&conn, &ws, &NewUser { username: "zero_role".into(), display_name: "Zero Role".into(), password: "supersecretpassword".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
+    let zero_role_user = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "zero_role".into(),
+            display_name: "Zero Role".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
     let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into()]);
-    ai_agent_service::set_acts_as(&conn, &agent.id, &ws, Some(zero_role_user.id.clone()), Some(&admin)).unwrap();
+    ai_agent_service::set_acts_as(
+        &conn,
+        &agent.id,
+        &ws,
+        Some(zero_role_user.id.clone()),
+        Some(&admin),
+    )
+    .unwrap();
     // No policy configured at all - enforce_record_access defaults false.
-    assert!(policy_engine_service::resolve_policy(&conn, &ws, Some(&agent.id)).unwrap().is_none());
+    assert!(
+        policy_engine_service::resolve_policy(&conn, &ws, Some(&agent.id))
+            .unwrap()
+            .is_none()
+    );
 
     let port = spawn_sequence_stub(vec![
-        anthropic_tool_use_body("t1", "create_record", serde_json::json!({"object_key": "Company", "data": {"name": "Acme", "status": "Prospect"}})),
+        anthropic_tool_use_body(
+            "t1",
+            "create_record",
+            serde_json::json!({"object_key": "Company", "data": {"name": "Acme", "status": "Prospect"}}),
+        ),
         anthropic_text_body("Created it."),
     ]);
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let messages = chat_service::send_agent_message(&conn, &ws, &master_key(), &admin, &agent.id, "create a company named Acme").await.unwrap();
-    let tool_message = messages.iter().find(|m| m.role == "tool").expect("a tool-result message was appended");
+    let messages = chat_service::send_agent_message(
+        &conn,
+        &ws,
+        &master_key(),
+        &admin,
+        &agent.id,
+        "create a company named Acme",
+    )
+    .await
+    .unwrap();
+    let tool_message = messages
+        .iter()
+        .find(|m| m.role == "tool")
+        .expect("a tool-result message was appended");
     let content = tool_message.content.as_deref().unwrap_or_default();
     assert!(!content.starts_with("Error:"), "a zero-role acts_as user shouldn't block the write while enforcement is off, got: {content}");
 }
@@ -183,53 +304,165 @@ async fn enforce_record_access_off_preserves_the_unattributed_default() {
 #[tokio::test]
 async fn enforce_record_access_on_actually_blocks_a_write_access_control_v1_would_deny() {
     let (conn, ws, admin) = setup_workspace("Real Enforcement Test Co");
-    let zero_role_user = user_service::create(&conn, &ws, &NewUser { username: "zero_role2".into(), display_name: "Zero Role Two".into(), password: "supersecretpassword".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
+    let zero_role_user = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "zero_role2".into(),
+            display_name: "Zero Role Two".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
     deny_default_create_access(&conn, &ws, &admin);
     let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into()]);
-    ai_agent_service::set_acts_as(&conn, &agent.id, &ws, Some(zero_role_user.id.clone()), Some(&admin)).unwrap();
-    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { enforce_record_access: true, ..no_op_policy() }, Some(&admin)).unwrap();
+    ai_agent_service::set_acts_as(
+        &conn,
+        &agent.id,
+        &ws,
+        Some(zero_role_user.id.clone()),
+        Some(&admin),
+    )
+    .unwrap();
+    policy_engine_service::upsert_policy(
+        &conn,
+        &ws,
+        Some(&agent.id),
+        &AiAgentPolicyInput {
+            enforce_record_access: true,
+            ..no_op_policy()
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
     let port = spawn_sequence_stub(vec![
-        anthropic_tool_use_body("t1", "create_record", serde_json::json!({"object_key": "Company", "data": {"name": "Acme", "status": "Prospect"}})),
+        anthropic_tool_use_body(
+            "t1",
+            "create_record",
+            serde_json::json!({"object_key": "Company", "data": {"name": "Acme", "status": "Prospect"}}),
+        ),
         anthropic_text_body("I couldn't create that."),
     ]);
     configure_anthropic_key(&conn, &ws, &admin, port);
 
     // The admin is the one chatting, but this agent's own acts_as wins -
     // proving this isn't just inheriting whoever happens to be chatting.
-    let messages = chat_service::send_agent_message(&conn, &ws, &master_key(), &admin, &agent.id, "create a company named Acme").await.unwrap();
-    let tool_message = messages.iter().find(|m| m.role == "tool").expect("a tool-result message was appended");
+    let messages = chat_service::send_agent_message(
+        &conn,
+        &ws,
+        &master_key(),
+        &admin,
+        &agent.id,
+        "create a company named Acme",
+    )
+    .await
+    .unwrap();
+    let tool_message = messages
+        .iter()
+        .find(|m| m.role == "tool")
+        .expect("a tool-result message was appended");
     let content = tool_message.content.as_deref().unwrap_or_default();
-    assert!(content.starts_with("Error:"), "a zero-role acts_as user under real enforcement should be denied, got: {content}");
+    assert!(
+        content.starts_with("Error:"),
+        "a zero-role acts_as user under real enforcement should be denied, got: {content}"
+    );
 }
 
 #[tokio::test]
 async fn enforce_record_access_on_still_allows_a_write_a_real_role_grants() {
     let (conn, ws, admin) = setup_workspace("Real Enforcement Allow Test Co");
-    let granted_user = user_service::create(&conn, &ws, &NewUser { username: "granted".into(), display_name: "Granted User".into(), password: "supersecretpassword".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
-    let role = access_role_service::create(&conn, &ws, &AccessRoleInput { name: "Company Creator".into(), description: "".into() }, Some(&admin)).unwrap();
+    let granted_user = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "granted".into(),
+            display_name: "Granted User".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    let role = access_role_service::create(
+        &conn,
+        &ws,
+        &AccessRoleInput {
+            name: "Company Creator".into(),
+            description: "".into(),
+        },
+        Some(&admin),
+    )
+    .unwrap();
     access_role_service::upsert_grant(
-        &conn, &role.id,
-        &AccessRoleGrantInput { object_key: "*".into(), can_create: true, can_read: true, can_update: true, can_delete: false, can_assign: false, record_scope: "ORGANIZATION".into() },
+        &conn,
+        &role.id,
+        &AccessRoleGrantInput {
+            object_key: "*".into(),
+            can_create: true,
+            can_read: true,
+            can_update: true,
+            can_delete: false,
+            can_assign: false,
+            record_scope: "ORGANIZATION".into(),
+        },
         Some(&admin),
     )
     .unwrap();
     access_role_service::assign_to_user(&conn, &granted_user.id, &role.id, Some(&admin)).unwrap();
 
     let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into()]);
-    ai_agent_service::set_acts_as(&conn, &agent.id, &ws, Some(granted_user.id.clone()), Some(&admin)).unwrap();
-    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { enforce_record_access: true, ..no_op_policy() }, Some(&admin)).unwrap();
+    ai_agent_service::set_acts_as(
+        &conn,
+        &agent.id,
+        &ws,
+        Some(granted_user.id.clone()),
+        Some(&admin),
+    )
+    .unwrap();
+    policy_engine_service::upsert_policy(
+        &conn,
+        &ws,
+        Some(&agent.id),
+        &AiAgentPolicyInput {
+            enforce_record_access: true,
+            ..no_op_policy()
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
     let port = spawn_sequence_stub(vec![
-        anthropic_tool_use_body("t1", "create_record", serde_json::json!({"object_key": "Company", "data": {"name": "Acme", "status": "Prospect"}})),
+        anthropic_tool_use_body(
+            "t1",
+            "create_record",
+            serde_json::json!({"object_key": "Company", "data": {"name": "Acme", "status": "Prospect"}}),
+        ),
         anthropic_text_body("Created it."),
     ]);
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let messages = chat_service::send_agent_message(&conn, &ws, &master_key(), &admin, &agent.id, "create a company named Acme").await.unwrap();
-    let tool_message = messages.iter().find(|m| m.role == "tool").expect("a tool-result message was appended");
+    let messages = chat_service::send_agent_message(
+        &conn,
+        &ws,
+        &master_key(),
+        &admin,
+        &agent.id,
+        "create a company named Acme",
+    )
+    .await
+    .unwrap();
+    let tool_message = messages
+        .iter()
+        .find(|m| m.role == "tool")
+        .expect("a tool-result message was appended");
     let content = tool_message.content.as_deref().unwrap_or_default();
-    assert!(!content.starts_with("Error:"), "a user with a real Create grant should succeed under real enforcement, got: {content}");
+    assert!(
+        !content.starts_with("Error:"),
+        "a user with a real Create grant should succeed under real enforcement, got: {content}"
+    );
 }
 
 // --- set_acts_as validation ----------------------------------------------
@@ -239,11 +472,39 @@ fn acts_as_must_be_an_active_user_of_this_workspace() {
     let (conn, ws, admin) = setup_workspace("Acts As Validation Test Co");
     let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into()]);
 
-    let err = ai_agent_service::set_acts_as(&conn, &agent.id, &ws, Some("not-a-real-user-id".into()), Some(&admin)).unwrap_err();
-    assert!(err.to_string().to_lowercase().contains("does not exist"), "unexpected error: {err}");
+    let err = ai_agent_service::set_acts_as(
+        &conn,
+        &agent.id,
+        &ws,
+        Some("not-a-real-user-id".into()),
+        Some(&admin),
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().to_lowercase().contains("does not exist"),
+        "unexpected error: {err}"
+    );
 
-    let other_user = user_service::create(&conn, &ws, &NewUser { username: "real".into(), display_name: "Real User".into(), password: "supersecretpassword".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
-    let updated = ai_agent_service::set_acts_as(&conn, &agent.id, &ws, Some(other_user.id.clone()), Some(&admin)).unwrap();
+    let other_user = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "real".into(),
+            display_name: "Real User".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    let updated = ai_agent_service::set_acts_as(
+        &conn,
+        &agent.id,
+        &ws,
+        Some(other_user.id.clone()),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(updated.acts_as_user_id, Some(other_user.id));
 
     // Clearing it back to None is always allowed.
@@ -263,16 +524,59 @@ fn setting_acts_as_requires_an_administrator() {
 #[test]
 fn the_inspector_reports_the_same_policy_decision_the_firewall_would_make() {
     let (conn, ws, admin) = setup_workspace("Inspector Decision Test Co");
-    let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into(), "list_objects".into()]);
-    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { blocked_tool_names: vec!["list_objects".into()], ..no_op_policy() }, Some(&admin)).unwrap();
+    let agent = make_agent(
+        &conn,
+        &ws,
+        &admin,
+        vec!["create_record".into(), "list_objects".into()],
+    );
+    policy_engine_service::upsert_policy(
+        &conn,
+        &ws,
+        Some(&agent.id),
+        &AiAgentPolicyInput {
+            blocked_tool_names: vec!["list_objects".into()],
+            ..no_op_policy()
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
-    let blocked = agent_access_inspector_service::inspect(&conn, &ws, &agent.id, "list_objects", None, None, None, Some(&admin)).unwrap();
+    let blocked = agent_access_inspector_service::inspect(
+        &conn,
+        &ws,
+        &agent.id,
+        "list_objects",
+        None,
+        None,
+        None,
+        Some(&admin),
+    )
+    .unwrap();
     assert!(blocked.tool_in_action_list);
-    assert_eq!(blocked.policy_decision, PolicyDecision::Deny { risk_level: RiskLevel::Read });
+    assert_eq!(
+        blocked.policy_decision,
+        PolicyDecision::Deny {
+            risk_level: RiskLevel::Read
+        }
+    );
     assert_eq!(blocked.policy_source, "agent-specific policy");
 
-    let not_in_list = agent_access_inspector_service::inspect(&conn, &ws, &agent.id, "archive_record", None, None, None, Some(&admin)).unwrap();
-    assert!(!not_in_list.tool_in_action_list, "archive_record was never added to this agent's action_names");
+    let not_in_list = agent_access_inspector_service::inspect(
+        &conn,
+        &ws,
+        &agent.id,
+        "archive_record",
+        None,
+        None,
+        None,
+        Some(&admin),
+    )
+    .unwrap();
+    assert!(
+        !not_in_list.tool_in_action_list,
+        "archive_record was never added to this agent's action_names"
+    );
 }
 
 #[test]
@@ -280,7 +584,17 @@ fn the_inspector_honestly_reports_when_record_access_is_not_enforced_yet() {
     let (conn, ws, admin) = setup_workspace("Inspector Unenforced Test Co");
     let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into()]);
 
-    let result = agent_access_inspector_service::inspect(&conn, &ws, &agent.id, "create_record", Some("Company"), None, Some(&admin), Some(&admin)).unwrap();
+    let result = agent_access_inspector_service::inspect(
+        &conn,
+        &ws,
+        &agent.id,
+        "create_record",
+        Some("Company"),
+        None,
+        Some(&admin),
+        Some(&admin),
+    )
+    .unwrap();
     assert!(!result.record_access_enforced);
     assert!(result.acting_as_user_id.is_none());
     assert!(result.record_access.is_none(), "no trace should be produced while enforcement is off, even with a simulate-as user supplied");
@@ -289,15 +603,48 @@ fn the_inspector_honestly_reports_when_record_access_is_not_enforced_yet() {
 #[test]
 fn the_inspector_traces_the_real_access_control_decision_once_enforced() {
     let (conn, ws, admin) = setup_workspace("Inspector Enforced Test Co");
-    let zero_role_user = user_service::create(&conn, &ws, &NewUser { username: "inspected".into(), display_name: "Inspected User".into(), password: "supersecretpassword".into(), roles: vec!["Sales".into()] }, Some(&admin)).unwrap();
+    let zero_role_user = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "inspected".into(),
+            display_name: "Inspected User".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
     deny_default_create_access(&conn, &ws, &admin);
     let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into()]);
-    policy_engine_service::upsert_policy(&conn, &ws, Some(&agent.id), &AiAgentPolicyInput { enforce_record_access: true, ..no_op_policy() }, Some(&admin)).unwrap();
+    policy_engine_service::upsert_policy(
+        &conn,
+        &ws,
+        Some(&agent.id),
+        &AiAgentPolicyInput {
+            enforce_record_access: true,
+            ..no_op_policy()
+        },
+        Some(&admin),
+    )
+    .unwrap();
 
-    let result = agent_access_inspector_service::inspect(&conn, &ws, &agent.id, "create_record", Some("Company"), None, Some(&zero_role_user.id), Some(&admin)).unwrap();
+    let result = agent_access_inspector_service::inspect(
+        &conn,
+        &ws,
+        &agent.id,
+        "create_record",
+        Some("Company"),
+        None,
+        Some(&zero_role_user.id),
+        Some(&admin),
+    )
+    .unwrap();
     assert!(result.record_access_enforced);
     assert_eq!(result.acting_as_user_id, Some(zero_role_user.id));
-    let trace = result.record_access.expect("a record-write tool with a resolvable actor should produce a real trace");
+    let trace = result
+        .record_access
+        .expect("a record-write tool with a resolvable actor should produce a real trace");
     assert!(!trace.decision.allowed, "a zero-role user should be denied");
 }
 
@@ -305,5 +652,15 @@ fn the_inspector_traces_the_real_access_control_decision_once_enforced() {
 fn inspecting_agent_access_requires_an_administrator() {
     let (conn, ws, admin) = setup_workspace("Inspector Auth Test Co");
     let agent = make_agent(&conn, &ws, &admin, vec!["create_record".into()]);
-    assert!(agent_access_inspector_service::inspect(&conn, &ws, &agent.id, "create_record", None, None, None, None).is_err());
+    assert!(agent_access_inspector_service::inspect(
+        &conn,
+        &ws,
+        &agent.id,
+        "create_record",
+        None,
+        None,
+        None,
+        None
+    )
+    .is_err());
 }

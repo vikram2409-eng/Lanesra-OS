@@ -14,36 +14,78 @@ use lanesra_core::models::action_type::{ActionTypeDefinition, ActionTypeDefiniti
 use lanesra_core::services::action_type_service;
 
 #[tauri::command]
-pub fn list_action_types(state: State<AppState>, target_object_type: Option<String>, active_only: bool) -> AppResult<Vec<ActionTypeDefinition>> {
+pub fn list_action_types(
+    state: State<AppState>,
+    target_object_type: Option<String>,
+    active_only: bool,
+) -> AppResult<Vec<ActionTypeDefinition>> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    action_type_service::list(&conn, &workspace_id, target_object_type.as_deref(), active_only)
+    action_type_service::list(
+        &conn,
+        &workspace_id,
+        target_object_type.as_deref(),
+        active_only,
+    )
 }
 
 #[tauri::command]
-pub fn create_action_type(state: State<AppState>, input: ActionTypeDefinitionInput) -> AppResult<ActionTypeDefinition> {
+pub fn create_action_type(
+    state: State<AppState>,
+    input: ActionTypeDefinitionInput,
+) -> AppResult<ActionTypeDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    action_type_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    action_type_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn update_action_type(state: State<AppState>, id: String, input: ActionTypeDefinitionInput) -> AppResult<ActionTypeDefinition> {
+pub fn update_action_type(
+    state: State<AppState>,
+    id: String,
+    input: ActionTypeDefinitionInput,
+) -> AppResult<ActionTypeDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    action_type_service::update(&conn, &id, &workspace_id, &input, current_actor(&state).as_deref())
+    action_type_service::update(
+        &conn,
+        &id,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
-pub fn deactivate_action_type(state: State<AppState>, id: String) -> AppResult<ActionTypeDefinition> {
+pub fn deactivate_action_type(
+    state: State<AppState>,
+    id: String,
+) -> AppResult<ActionTypeDefinition> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     action_type_service::deactivate(&conn, &id, &workspace_id, current_actor(&state).as_deref())
 }
 
 #[tauri::command]
-pub fn invoke_action_type(state: State<AppState>, action_type_id: String, record_id: String, input_params: HashMap<String, String>) -> AppResult<serde_json::Value> {
+pub fn invoke_action_type(
+    state: State<AppState>,
+    action_type_id: String,
+    record_id: String,
+    input_params: HashMap<String, String>,
+) -> AppResult<serde_json::Value> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    action_type_service::invoke(&conn, &workspace_id, &action_type_id, &record_id, &input_params, current_actor(&state).as_deref())
+    action_type_service::invoke(
+        &conn,
+        &workspace_id,
+        &action_type_id,
+        &record_id,
+        &input_params,
+        current_actor(&state).as_deref(),
+    )
 }

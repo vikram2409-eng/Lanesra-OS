@@ -17,14 +17,24 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<NumberingOverride> {
     })
 }
 
-pub fn get_for_entity(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Option<NumberingOverride>> {
+pub fn get_for_entity(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<Option<NumberingOverride>> {
     conn.query_row(
         "SELECT * FROM numbering_configs WHERE workspace_id = ?1 AND entity_type = ?2",
         (workspace_id, entity_type),
         map_row,
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// On a fresh insert, `actor_user_id` becomes both `created_by` and

@@ -11,7 +11,10 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::voice::{ConversationTurn, PendingCreate, SetVoicePinInput, VoicePreferencesInput, VoiceSession, VoiceUserSettings};
+use crate::models::voice::{
+    ConversationTurn, PendingCreate, SetVoicePinInput, VoicePreferencesInput, VoiceSession,
+    VoiceUserSettings,
+};
 use crate::repositories::{audit_repo, user_repo, voice_repo};
 use crate::services::{auth_service, voice_policy_service};
 
@@ -34,7 +37,9 @@ fn minutes_from_now(minutes: i64) -> String {
 }
 
 pub fn get_settings(conn: &Connection, user_id: &str) -> AppResult<VoiceUserSettings> {
-    Ok(voice_repo::to_safe_settings(voice_repo::ensure_settings_row(conn, user_id)?))
+    Ok(voice_repo::to_safe_settings(
+        voice_repo::ensure_settings_row(conn, user_id)?,
+    ))
 }
 
 /// Sets (or resets) the user's Voice PIN - always requires the user has
@@ -42,20 +47,40 @@ pub fn get_settings(conn: &Connection, user_id: &str) -> AppResult<VoiceUserSett
 /// reset the Voice PIN only after normal authentication"), which is already
 /// true of every Tauri command's `actor_user_id`. Clears any prior lockout,
 /// matching how changing a password also resets its own failure state.
-pub fn set_pin(conn: &Connection, user_id: &str, input: &SetVoicePinInput) -> AppResult<VoiceUserSettings> {
+pub fn set_pin(
+    conn: &Connection,
+    user_id: &str,
+    input: &SetVoicePinInput,
+) -> AppResult<VoiceUserSettings> {
     if input.pin.len() != 4 || !input.pin.chars().all(|c| c.is_ascii_digit()) {
-        return Err(AppError::Validation("Voice PIN must be exactly 4 digits".into()));
+        return Err(AppError::Validation(
+            "Voice PIN must be exactly 4 digits".into(),
+        ));
     }
     voice_repo::ensure_settings_row(conn, user_id)?;
     let hash = auth_service::hash_password(&input.pin)?;
     voice_repo::set_pin_hash(conn, user_id, &hash)?;
 
-    let user = user_repo::find_by_id(conn, user_id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
-    audit_repo::record(conn, &user.workspace_id, Some(user_id), "voice_pin_set", Some("user"), Some(user_id), "Voice PIN set", None)?;
+    let user =
+        user_repo::find_by_id(conn, user_id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
+    audit_repo::record(
+        conn,
+        &user.workspace_id,
+        Some(user_id),
+        "voice_pin_set",
+        Some("user"),
+        Some(user_id),
+        "Voice PIN set",
+        None,
+    )?;
     get_settings(conn, user_id)
 }
 
-pub fn update_preferences(conn: &Connection, user_id: &str, input: &VoicePreferencesInput) -> AppResult<VoiceUserSettings> {
+pub fn update_preferences(
+    conn: &Connection,
+    user_id: &str,
+    input: &VoicePreferencesInput,
+) -> AppResult<VoiceUserSettings> {
     voice_repo::ensure_settings_row(conn, user_id)?;
     voice_repo::update_preferences(conn, user_id, input)?;
     get_settings(conn, user_id)
@@ -72,7 +97,8 @@ pub fn update_preferences(conn: &Connection, user_id: &str, input: &VoicePrefere
 /// allowed Voice unlock duration").
 pub fn unlock(conn: &Connection, user_id: &str, pin: &str) -> AppResult<VoiceSession> {
     let settings = voice_repo::ensure_settings_row(conn, user_id)?;
-    let user = user_repo::find_by_id(conn, user_id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
+    let user =
+        user_repo::find_by_id(conn, user_id)?.ok_or_else(|| AppError::NotFound("User".into()))?;
 
     if voice_repo::is_pin_locked(conn, user_id)? {
         return Err(AppError::Validation(
@@ -80,13 +106,28 @@ pub fn unlock(conn: &Connection, user_id: &str, pin: &str) -> AppResult<VoiceSes
         ));
     }
     let Some(hash) = &settings.pin_hash else {
-        return Err(AppError::Validation("No Voice PIN set yet - set one from Personal Settings first".into()));
+        return Err(AppError::Validation(
+            "No Voice PIN set yet - set one from Personal Settings first".into(),
+        ));
     };
     if !auth_service::verify_password(pin, hash) {
         let attempts = settings.failed_attempts + 1;
-        let locked_until = if attempts >= MAX_PIN_ATTEMPTS { Some(minutes_from_now(PIN_LOCKOUT_MINUTES)) } else { None };
+        let locked_until = if attempts >= MAX_PIN_ATTEMPTS {
+            Some(minutes_from_now(PIN_LOCKOUT_MINUTES))
+        } else {
+            None
+        };
         voice_repo::record_failed_pin_attempt(conn, user_id, attempts, locked_until.as_deref())?;
-        audit_repo::record(conn, &user.workspace_id, Some(user_id), "voice_pin_failed", Some("user"), Some(user_id), "Failed Voice PIN attempt", None)?;
+        audit_repo::record(
+            conn,
+            &user.workspace_id,
+            Some(user_id),
+            "voice_pin_failed",
+            Some("user"),
+            Some(user_id),
+            "Failed Voice PIN attempt",
+            None,
+        )?;
         return Err(AppError::Validation("Incorrect Voice PIN".into()));
     }
     voice_repo::reset_pin_attempts(conn, user_id)?;
@@ -95,11 +136,24 @@ pub fn unlock(conn: &Connection, user_id: &str, pin: &str) -> AppResult<VoiceSes
     if !policy.can_use_voice {
         return Err(AppError::Validation("Voice Mode is not enabled for your Access Role - ask an Administrator to grant it under Voice Governance".into()));
     }
-    let minutes = settings.unlock_duration_minutes.min(policy.max_unlock_minutes).max(1);
+    let minutes = settings
+        .unlock_duration_minutes
+        .min(policy.max_unlock_minutes)
+        .max(1);
     let expires_at = minutes_from_now(minutes);
 
-    let session = voice_repo::create_session(conn, &new_uuid(), &user.workspace_id, user_id, &expires_at)?;
-    audit_repo::record(conn, &user.workspace_id, Some(user_id), "voice_session_unlocked", Some("voice_session"), Some(&session.id), "Voice Mode unlocked", None)?;
+    let session =
+        voice_repo::create_session(conn, &new_uuid(), &user.workspace_id, user_id, &expires_at)?;
+    audit_repo::record(
+        conn,
+        &user.workspace_id,
+        Some(user_id),
+        "voice_session_unlocked",
+        Some("voice_session"),
+        Some(&session.id),
+        "Voice Mode unlocked",
+        None,
+    )?;
     Ok(session)
 }
 
@@ -108,13 +162,20 @@ pub fn unlock(conn: &Connection, user_id: &str, pin: &str) -> AppResult<VoiceSes
 /// again" is a real, visible state rather than silently reverting to
 /// looking un-unlocked with no explanation (spec §3's `Expired` state).
 pub fn current_session(conn: &Connection, user_id: &str) -> AppResult<Option<VoiceSession>> {
-    let Some(session) = voice_repo::get_latest_session_for_user(conn, user_id)? else { return Ok(None) };
+    let Some(session) = voice_repo::get_latest_session_for_user(conn, user_id)? else {
+        return Ok(None);
+    };
     voice_repo::expire_stale_session(conn, &session.id)?;
     Ok(voice_repo::get_session(conn, &session.id)?)
 }
 
-fn require_owned_session(conn: &Connection, session_id: &str, user_id: &str) -> AppResult<VoiceSession> {
-    let session = voice_repo::get_session(conn, session_id)?.ok_or_else(|| AppError::NotFound("Voice session".into()))?;
+fn require_owned_session(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+) -> AppResult<VoiceSession> {
+    let session = voice_repo::get_session(conn, session_id)?
+        .ok_or_else(|| AppError::NotFound("Voice session".into()))?;
     if session.user_id != user_id {
         return Err(AppError::Validation("Not your Voice session".into()));
     }
@@ -125,11 +186,17 @@ fn require_owned_session(conn: &Connection, session_id: &str, user_id: &str) -> 
 /// anything - `voice_planner_service`/`voice_execution_service` all take a
 /// session_id and call this first, so an expired session can never plan or
 /// execute a command no matter how it's invoked.
-pub fn require_active_session(conn: &Connection, session_id: &str, user_id: &str) -> AppResult<VoiceSession> {
+pub fn require_active_session(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+) -> AppResult<VoiceSession> {
     let session = require_owned_session(conn, session_id, user_id)?;
     voice_repo::expire_stale_session(conn, &session.id)?;
     if !voice_repo::session_is_active(conn, &session.id)? {
-        return Err(AppError::Validation("Voice session expired - unlock again".into()));
+        return Err(AppError::Validation(
+            "Voice session expired - unlock again".into(),
+        ));
     }
     Ok(session)
 }
@@ -138,7 +205,10 @@ pub fn extend(conn: &Connection, session_id: &str, user_id: &str) -> AppResult<V
     let session = require_active_session(conn, session_id, user_id)?;
     let settings = voice_repo::ensure_settings_row(conn, user_id)?;
     let policy = voice_policy_service::effective_policy(conn, user_id)?;
-    let minutes = settings.unlock_duration_minutes.min(policy.max_unlock_minutes).max(1);
+    let minutes = settings
+        .unlock_duration_minutes
+        .min(policy.max_unlock_minutes)
+        .max(1);
     voice_repo::extend_session(conn, &session.id, &minutes_from_now(minutes))?;
     Ok(voice_repo::get_session(conn, &session.id)?.expect("just extended"))
 }
@@ -148,7 +218,13 @@ pub fn expire(conn: &Connection, session_id: &str, user_id: &str) -> AppResult<(
     voice_repo::set_session_state(conn, &session.id, "expired").map_err(AppError::from)
 }
 
-pub fn set_context(conn: &Connection, session_id: &str, user_id: &str, object_key: Option<&str>, record_id: Option<&str>) -> AppResult<VoiceSession> {
+pub fn set_context(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+    object_key: Option<&str>,
+    record_id: Option<&str>,
+) -> AppResult<VoiceSession> {
     let session = require_active_session(conn, session_id, user_id)?;
     voice_repo::set_session_context(conn, &session.id, object_key, record_id)?;
     Ok(voice_repo::get_session(conn, &session.id)?.expect("just updated"))
@@ -157,13 +233,22 @@ pub fn set_context(conn: &Connection, session_id: &str, user_id: &str, object_ke
 /// Clears conversational references ("this", "the CRM one", ...) without
 /// logging the user out or re-locking Voice Mode (spec §14's "Reset voice
 /// context" action) - a fresh empty history, same session.
-pub fn reset_conversation(conn: &Connection, session_id: &str, user_id: &str) -> AppResult<VoiceSession> {
+pub fn reset_conversation(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+) -> AppResult<VoiceSession> {
     let session = require_owned_session(conn, session_id, user_id)?;
     voice_repo::reset_session_conversation(conn, &session.id)?;
     Ok(voice_repo::get_session(conn, &session.id)?.expect("just reset"))
 }
 
-pub fn set_state(conn: &Connection, session_id: &str, user_id: &str, state: &str) -> AppResult<VoiceSession> {
+pub fn set_state(
+    conn: &Connection,
+    session_id: &str,
+    user_id: &str,
+    state: &str,
+) -> AppResult<VoiceSession> {
     let session = require_owned_session(conn, session_id, user_id)?;
     voice_repo::set_session_state(conn, &session.id, state)?;
     Ok(voice_repo::get_session(conn, &session.id)?.expect("just updated"))
@@ -177,25 +262,43 @@ pub fn set_state(conn: &Connection, session_id: &str, user_id: &str, state: &str
 /// already cover). Malformed/legacy `conversation_json` degrades to "no
 /// conversation context" rather than an error - this is a convenience
 /// fallback, never a required input.
-pub fn last_conversation_reference(conn: &Connection, session_id: &str) -> AppResult<Option<(String, String)>> {
+pub fn last_conversation_reference(
+    conn: &Connection,
+    session_id: &str,
+) -> AppResult<Option<(String, String)>> {
     let raw = voice_repo::get_session_conversation(conn, session_id)?;
     let turns: Vec<ConversationTurn> = serde_json::from_str(&raw).unwrap_or_default();
-    Ok(turns.last().map(|t| (t.object_key.clone(), t.record_id.clone())))
+    Ok(turns
+        .last()
+        .map(|t| (t.object_key.clone(), t.record_id.clone())))
 }
 
 /// Appends one resolved-record turn (spec §14), most-recent-last, capped
 /// at `MAX_CONVERSATION_TURNS` - never called for a command that didn't
 /// resolve to one specific record, so "it" is never left pointing at
 /// something aggregate or ambiguous.
-pub fn record_conversation_turn(conn: &Connection, session_id: &str, transcript: &str, intent: &str, object_key: &str, record_id: &str) -> AppResult<()> {
+pub fn record_conversation_turn(
+    conn: &Connection,
+    session_id: &str,
+    transcript: &str,
+    intent: &str,
+    object_key: &str,
+    record_id: &str,
+) -> AppResult<()> {
     let raw = voice_repo::get_session_conversation(conn, session_id)?;
     let mut turns: Vec<ConversationTurn> = serde_json::from_str(&raw).unwrap_or_default();
-    turns.push(ConversationTurn { transcript: transcript.to_string(), intent: intent.to_string(), object_key: object_key.to_string(), record_id: record_id.to_string() });
+    turns.push(ConversationTurn {
+        transcript: transcript.to_string(),
+        intent: intent.to_string(),
+        object_key: object_key.to_string(),
+        record_id: record_id.to_string(),
+    });
     if turns.len() > MAX_CONVERSATION_TURNS {
         let drop = turns.len() - MAX_CONVERSATION_TURNS;
         turns.drain(0..drop);
     }
-    let json = serde_json::to_string(&turns).map_err(|e| AppError::Validation(format!("could not serialize conversation turn: {e}")))?;
+    let json = serde_json::to_string(&turns)
+        .map_err(|e| AppError::Validation(format!("could not serialize conversation turn: {e}")))?;
     voice_repo::set_session_conversation(conn, session_id, &json)?;
     Ok(())
 }
@@ -216,9 +319,15 @@ pub fn get_pending_create(conn: &Connection, session_id: &str) -> AppResult<Opti
 /// is read as this question's answer; every other outcome clears it, so a
 /// finished or abandoned create can never leak into an unrelated later
 /// command.
-pub fn set_pending_create(conn: &Connection, session_id: &str, pending: Option<&PendingCreate>) -> AppResult<()> {
+pub fn set_pending_create(
+    conn: &Connection,
+    session_id: &str,
+    pending: Option<&PendingCreate>,
+) -> AppResult<()> {
     let json = match pending {
-        Some(p) => Some(serde_json::to_string(p).map_err(|e| AppError::Validation(format!("could not serialize pending create: {e}")))?),
+        Some(p) => Some(serde_json::to_string(p).map_err(|e| {
+            AppError::Validation(format!("could not serialize pending create: {e}"))
+        })?),
         None => None,
     };
     voice_repo::set_session_pending_create(conn, session_id, json.as_deref())?;

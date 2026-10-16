@@ -17,14 +17,23 @@ use lanesra_core::models::ai::AiSettingsInput;
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{agent_service, ai_service, company_service, custom_field_service, workspace_service};
+use lanesra_core::services::{
+    agent_service, ai_service, company_service, custom_field_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = lanesra_core::db::open_in_memory_db().unwrap();
     let setup = WorkspaceSetup {
-        business_name: "Agent Test Co".into(), legal_name: None, currency_code: "USD".into(), locale: "en-US".into(),
-        timezone: "UTC".into(), default_tax_rate_bp: 0, admin_username: "admin".into(), admin_display_name: "Admin".into(),
-        admin_password: "supersecretpassword".into(), load_sample_data: false,
+        business_name: "Agent Test Co".into(),
+        legal_name: None,
+        currency_code: "USD".into(),
+        locale: "en-US".into(),
+        timezone: "UTC".into(),
+        default_tax_rate_bp: 0,
+        admin_username: "admin".into(),
+        admin_display_name: "Admin".into(),
+        admin_password: "supersecretpassword".into(),
+        load_sample_data: false,
     };
     let (workspace, admin) = workspace_service::first_run_setup(&conn, &setup).unwrap();
     (conn, workspace.id, admin.id)
@@ -34,10 +43,22 @@ fn master_key() -> [u8; 32] {
     [7u8; 32]
 }
 
-fn configure_anthropic_key(conn: &rusqlite::Connection, workspace_id: &str, admin: &str, port: u16) {
+fn configure_anthropic_key(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    admin: &str,
+    port: u16,
+) {
     ai_service::save_settings(
-        conn, workspace_id, &master_key(),
-        &AiSettingsInput { provider: "anthropic".into(), base_url: Some(format!("http://127.0.0.1:{port}")), model: "claude-haiku-4-5-20251001".into(), api_key: Some("sk-ant-test".into()) },
+        conn,
+        workspace_id,
+        &master_key(),
+        &AiSettingsInput {
+            provider: "anthropic".into(),
+            base_url: Some(format!("http://127.0.0.1:{port}")),
+            model: "claude-haiku-4-5-20251001".into(),
+            api_key: Some("sk-ant-test".into()),
+        },
         Some(admin),
     )
     .unwrap();
@@ -80,7 +101,19 @@ fn spawn_http_stub(status: u16, body: String) -> u16 {
 }
 
 fn make_company(conn: &rusqlite::Connection, ws: &str, admin: &str, status: &str) -> String {
-    company_service::create(conn, ws, &CompanyInput { name: format!("Co {status}"), status: status.into(), owner_user_id: None, ..Default::default() }, Some(admin)).unwrap().id
+    company_service::create(
+        conn,
+        ws,
+        &CompanyInput {
+            name: format!("Co {status}"),
+            status: status.into(),
+            owner_user_id: None,
+            ..Default::default()
+        },
+        Some(admin),
+    )
+    .unwrap()
+    .id
 }
 
 #[tokio::test]
@@ -90,13 +123,28 @@ async fn a_count_directive_runs_a_real_report_against_seeded_data() {
     make_company(&conn, &ws, &admin, "Prospect");
     make_company(&conn, &ws, &admin, "Active Customer");
 
-    let port = spawn_anthropic_stub(r#"{"entity_type":"Company","group_by_source":"builtin","group_by_field":"status","aggregate":"count","sum_field_key":null}"#);
+    let port = spawn_anthropic_stub(
+        r#"{"entity_type":"Company","group_by_source":"builtin","group_by_field":"status","aggregate":"count","sum_field_key":null}"#,
+    );
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let result = agent_service::ask_report(&conn, &ws, &master_key(), &NlReportQuery { question: "how many companies by status?".into() }).await.unwrap();
+    let result = agent_service::ask_report(
+        &conn,
+        &ws,
+        &master_key(),
+        &NlReportQuery {
+            question: "how many companies by status?".into(),
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(result.report.entity_type, "Company");
     assert_eq!(result.report.aggregate, "count");
-    let by_group: HashMap<String, f64> = result.rows.into_iter().map(|r| (r.group, r.value)).collect();
+    let by_group: HashMap<String, f64> = result
+        .rows
+        .into_iter()
+        .map(|r| (r.group, r.value))
+        .collect();
     assert_eq!(by_group.get("Prospect"), Some(&2.0));
     assert_eq!(by_group.get("Active Customer"), Some(&1.0));
 }
@@ -105,25 +153,66 @@ async fn a_count_directive_runs_a_real_report_against_seeded_data() {
 async fn a_sum_directive_over_a_custom_field_runs_correctly() {
     let (conn, ws, admin) = setup_workspace();
     custom_field_service::create_definition(
-        &conn, &ws,
+        &conn,
+        &ws,
         &CustomFieldDefinitionInput {
-            entity_type: "Company".into(), label: "Deal Size".into(), field_type: "number".into(), options: vec![],
-            required: false, show_in_list: false, sort_order: 0, min_value: None, max_value: None, max_length: None,
-            regex_pattern: None, is_searchable: false, is_filterable: false, is_reportable: true, default_value: None,
-            is_unique: false, help_text: None, placeholder: None, is_hidden_by_default: false,
+            entity_type: "Company".into(),
+            label: "Deal Size".into(),
+            field_type: "number".into(),
+            options: vec![],
+            required: false,
+            show_in_list: false,
+            sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: true,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
+            is_hidden_by_default: false,
         },
         Some(&admin),
     )
     .unwrap();
     let c1 = make_company(&conn, &ws, &admin, "Prospect");
     let c2 = make_company(&conn, &ws, &admin, "Prospect");
-    custom_field_service::set_entity_values(&conn, "Company", &c1, &HashMap::from([("deal_size".to_string(), "100".to_string())]), Some(&admin)).unwrap();
-    custom_field_service::set_entity_values(&conn, "Company", &c2, &HashMap::from([("deal_size".to_string(), "250".to_string())]), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "Company",
+        &c1,
+        &HashMap::from([("deal_size".to_string(), "100".to_string())]),
+        Some(&admin),
+    )
+    .unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "Company",
+        &c2,
+        &HashMap::from([("deal_size".to_string(), "250".to_string())]),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let port = spawn_anthropic_stub(r#"{"entity_type":"Company","group_by_source":"builtin","group_by_field":"status","aggregate":"sum","sum_field_key":"deal_size"}"#);
+    let port = spawn_anthropic_stub(
+        r#"{"entity_type":"Company","group_by_source":"builtin","group_by_field":"status","aggregate":"sum","sum_field_key":"deal_size"}"#,
+    );
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let result = agent_service::ask_report(&conn, &ws, &master_key(), &NlReportQuery { question: "total deal size by status".into() }).await.unwrap();
+    let result = agent_service::ask_report(
+        &conn,
+        &ws,
+        &master_key(),
+        &NlReportQuery {
+            question: "total deal size by status".into(),
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(result.rows.len(), 1);
     assert_eq!(result.rows[0].group, "Prospect");
     assert_eq!(result.rows[0].value, 350.0);
@@ -132,10 +221,20 @@ async fn a_sum_directive_over_a_custom_field_runs_correctly() {
 #[tokio::test]
 async fn the_models_own_error_reply_surfaces_as_a_validation_error() {
     let (conn, ws, admin) = setup_workspace();
-    let port = spawn_anthropic_stub(r#"{"error":"that needs a date range, which this engine doesn't support"}"#);
+    let port = spawn_anthropic_stub(
+        r#"{"error":"that needs a date range, which this engine doesn't support"}"#,
+    );
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let result = agent_service::ask_report(&conn, &ws, &master_key(), &NlReportQuery { question: "revenue last quarter vs this quarter".into() }).await;
+    let result = agent_service::ask_report(
+        &conn,
+        &ws,
+        &master_key(),
+        &NlReportQuery {
+            question: "revenue last quarter vs this quarter".into(),
+        },
+    )
+    .await;
     let err = result.unwrap_err().to_string();
     assert!(err.contains("date range"), "{err}");
 }
@@ -146,7 +245,15 @@ async fn a_non_json_reply_is_rejected() {
     let port = spawn_anthropic_stub("Sure, I can help you with that!");
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let result = agent_service::ask_report(&conn, &ws, &master_key(), &NlReportQuery { question: "how many companies?".into() }).await;
+    let result = agent_service::ask_report(
+        &conn,
+        &ws,
+        &master_key(),
+        &NlReportQuery {
+            question: "how many companies?".into(),
+        },
+    )
+    .await;
     assert!(result.is_err());
 }
 
@@ -157,7 +264,16 @@ async fn a_markdown_fenced_reply_is_still_parsed() {
     let port = spawn_anthropic_stub("```json\n{\"entity_type\":\"Company\",\"group_by_source\":\"builtin\",\"group_by_field\":\"status\",\"aggregate\":\"count\",\"sum_field_key\":null}\n```");
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let result = agent_service::ask_report(&conn, &ws, &master_key(), &NlReportQuery { question: "how many companies?".into() }).await.unwrap();
+    let result = agent_service::ask_report(
+        &conn,
+        &ws,
+        &master_key(),
+        &NlReportQuery {
+            question: "how many companies?".into(),
+        },
+    )
+    .await
+    .unwrap();
     assert_eq!(result.rows.len(), 1);
 }
 
@@ -168,10 +284,20 @@ async fn an_invalid_field_name_is_rejected_by_the_reused_validation() {
     // group_by_source "custom" naming a field that was never defined -
     // validate_shape (via custom_report_service::preview) must reject
     // this exactly as it would a human's own manual mistake.
-    let port = spawn_anthropic_stub(r#"{"entity_type":"Company","group_by_source":"custom","group_by_field":"totally_made_up","aggregate":"count","sum_field_key":null}"#);
+    let port = spawn_anthropic_stub(
+        r#"{"entity_type":"Company","group_by_source":"custom","group_by_field":"totally_made_up","aggregate":"count","sum_field_key":null}"#,
+    );
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let result = agent_service::ask_report(&conn, &ws, &master_key(), &NlReportQuery { question: "group by made-up field".into() }).await;
+    let result = agent_service::ask_report(
+        &conn,
+        &ws,
+        &master_key(),
+        &NlReportQuery {
+            question: "group by made-up field".into(),
+        },
+    )
+    .await;
     assert!(result.is_err());
 }
 
@@ -181,7 +307,15 @@ async fn an_empty_question_is_rejected_before_any_network_call() {
     // No key configured at all - if this reached ai_service::complete it
     // would fail for that reason instead, so succeeding here proves the
     // empty-question check runs first.
-    let result = agent_service::ask_report(&conn, &ws, &master_key(), &NlReportQuery { question: "   ".into() }).await;
+    let result = agent_service::ask_report(
+        &conn,
+        &ws,
+        &master_key(),
+        &NlReportQuery {
+            question: "   ".into(),
+        },
+    )
+    .await;
     let err = result.unwrap_err().to_string();
     assert!(err.contains("question"), "{err}");
 }

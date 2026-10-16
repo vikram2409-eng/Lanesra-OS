@@ -52,13 +52,20 @@ pub fn enqueue(
     Ok(())
 }
 
-pub fn list_batch(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<PendingAction>> {
+pub fn list_batch(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<PendingAction>> {
     let mut stmt = conn.prepare("SELECT * FROM integration_pending_actions WHERE workspace_id = ?1 ORDER BY created_at LIMIT ?2")?;
     let rows = stmt.query_map(rusqlite::params![workspace_id, limit], map_row)?;
     rows.collect()
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM integration_pending_actions WHERE id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM integration_pending_actions WHERE id = ?1",
+        [id],
+    )?;
     Ok(())
 }

@@ -10,13 +10,14 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
-use crate::models::custom_report::{
-    CustomReport, CustomReportInput, CustomReportRow, CustomReportUpdate, REPORT_AGGREGATES, REPORT_GROUP_BY_SOURCES,
-};
 use crate::models::business_rule::builtin_trigger_field_for;
+use crate::models::custom_report::{
+    CustomReport, CustomReportInput, CustomReportRow, CustomReportUpdate, REPORT_AGGREGATES,
+    REPORT_GROUP_BY_SOURCES,
+};
 use crate::repositories::{
-    company_repo, contact_repo, contract_repo, custom_field_repo, custom_report_repo, invoice_repo, opportunity_repo,
-    order_repo, product_repo, quote_repo, task_repo,
+    company_repo, contact_repo, contract_repo, custom_field_repo, custom_report_repo, invoice_repo,
+    opportunity_repo, order_repo, product_repo, quote_repo, task_repo,
 };
 use crate::services::access_service;
 
@@ -24,7 +25,12 @@ use crate::services::access_service;
 /// passes with an explicit Access Role grant on "CustomReport" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "CustomReport", "Only an Administrator can manage custom reports")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "CustomReport",
+        "Only an Administrator can manage custom reports",
+    )
 }
 
 fn validate_shape(
@@ -40,14 +46,21 @@ fn validate_shape(
     if name.trim().is_empty() {
         return Err(AppError::Validation("Report name is required".into()));
     }
-    if !super::custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, entity_type)? {
-        return Err(AppError::Validation(format!("Invalid entity type '{entity_type}'")));
+    if !super::custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, entity_type)?
+    {
+        return Err(AppError::Validation(format!(
+            "Invalid entity type '{entity_type}'"
+        )));
     }
     if !REPORT_GROUP_BY_SOURCES.contains(&group_by_source) {
-        return Err(AppError::Validation(format!("Invalid group-by source '{group_by_source}'")));
+        return Err(AppError::Validation(format!(
+            "Invalid group-by source '{group_by_source}'"
+        )));
     }
     if !REPORT_AGGREGATES.contains(&aggregate) {
-        return Err(AppError::Validation(format!("Invalid aggregate '{aggregate}'")));
+        return Err(AppError::Validation(format!(
+            "Invalid aggregate '{aggregate}'"
+        )));
     }
 
     // ADM-CF-05: a field flagged not reportable is off-limits as a group-by
@@ -72,9 +85,16 @@ fn validate_shape(
     }
 
     if aggregate == "sum" {
-        let key = sum_field_key.ok_or_else(|| AppError::Validation("A sum report needs a numeric field to sum".into()))?;
-        if !active_defs.iter().any(|d| d.key == key && d.field_type == "number") {
-            return Err(AppError::Validation(format!("'{key}' is not an active numeric custom field to sum")));
+        let key = sum_field_key.ok_or_else(|| {
+            AppError::Validation("A sum report needs a numeric field to sum".into())
+        })?;
+        if !active_defs
+            .iter()
+            .any(|d| d.key == key && d.field_type == "number")
+        {
+            return Err(AppError::Validation(format!(
+                "'{key}' is not an active numeric custom field to sum"
+            )));
         }
     }
 
@@ -90,10 +110,20 @@ fn validate_shape(
 /// separately-checked path. No admin gate, same as `run` itself:
 /// previewing needs no more privilege than viewing an existing report's
 /// numbers already does.
-pub fn preview(conn: &Connection, workspace_id: &str, input: &CustomReportInput) -> AppResult<Vec<CustomReportRow>> {
+pub fn preview(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &CustomReportInput,
+) -> AppResult<Vec<CustomReportRow>> {
     validate_shape(
-        conn, workspace_id, &input.entity_type, &input.name, &input.group_by_source, &input.group_by_field,
-        &input.aggregate, input.sum_field_key.as_deref(),
+        conn,
+        workspace_id,
+        &input.entity_type,
+        &input.name,
+        &input.group_by_source,
+        &input.group_by_field,
+        &input.aggregate,
+        input.sum_field_key.as_deref(),
     )?;
     // id/timestamps are never read by run()'s own logic - only
     // workspace_id/entity_type/group_by_*/aggregate/sum_field_key are,
@@ -121,15 +151,32 @@ pub fn preview(conn: &Connection, workspace_id: &str, input: &CustomReportInput)
     run(conn, &synthetic, None)
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &CustomReportInput, actor_user_id: Option<&str>) -> AppResult<CustomReport> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &CustomReportInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomReport> {
     require_admin(conn, actor_user_id)?;
     validate_shape(
-        conn, workspace_id, &input.entity_type, &input.name, &input.group_by_source, &input.group_by_field,
-        &input.aggregate, input.sum_field_key.as_deref(),
+        conn,
+        workspace_id,
+        &input.entity_type,
+        &input.name,
+        &input.group_by_source,
+        &input.group_by_field,
+        &input.aggregate,
+        input.sum_field_key.as_deref(),
     )?;
     let id = crate::domain::ids::new_uuid();
     let created = custom_report_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "custom_report", &created.id, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "custom_report",
+        &created.id,
+        actor_user_id,
+    )?;
     Ok(created)
 }
 
@@ -142,14 +189,26 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Option<CustomReport>> {
     Ok(custom_report_repo::get(conn, id)?)
 }
 
-pub fn update(conn: &Connection, id: &str, input: &CustomReportUpdate, actor_user_id: Option<&str>) -> AppResult<CustomReport> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &CustomReportUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<CustomReport> {
     require_admin(conn, actor_user_id)?;
-    let existing = custom_report_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Custom report".into()))?;
+    let existing = custom_report_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Custom report".into()))?;
     // entity_type is immutable after creation, same as custom field definitions - it defines
     // which group-by/sum fields are even valid, so changing it invalidates the rest of the report.
     validate_shape(
-        conn, &existing.workspace_id, &existing.entity_type, &input.name, &input.group_by_source, &input.group_by_field,
-        &input.aggregate, input.sum_field_key.as_deref(),
+        conn,
+        &existing.workspace_id,
+        &existing.entity_type,
+        &input.name,
+        &input.group_by_source,
+        &input.group_by_field,
+        &input.aggregate,
+        input.sum_field_key.as_deref(),
     )?;
     Ok(custom_report_repo::update(conn, id, input, actor_user_id)?)
 }
@@ -164,19 +223,56 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
 /// the workspace - the same per-entity status/stage/is_active convention
 /// `custom_field_service::resolve_entity_workspace` uses for one record at
 /// a time, just listed in bulk here.
-fn list_builtin_values(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<Vec<(String, String)>> {
+fn list_builtin_values(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<Vec<(String, String)>> {
     Ok(match entity_type {
-        "Company" => company_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
-        "Contact" => contact_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
-        "Opportunity" => opportunity_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
-        "Quote" => quote_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
-        "Order" => order_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
-        "Invoice" => invoice_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
-        "Contract" => contract_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
-        "Task" => task_repo::list(conn, workspace_id)?.into_iter().map(|r| (r.id, r.status)).collect(),
+        "Company" => company_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
+        "Contact" => contact_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
+        "Opportunity" => opportunity_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
+        "Quote" => quote_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
+        "Order" => order_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
+        "Invoice" => invoice_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
+        "Contract" => contract_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
+        "Task" => task_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|r| (r.id, r.status))
+            .collect(),
         "Product" => product_repo::list(conn, workspace_id)?
             .into_iter()
-            .map(|r| (r.id, if r.is_active { "true".to_string() } else { "false".to_string() }))
+            .map(|r| {
+                (
+                    r.id,
+                    if r.is_active {
+                        "true".to_string()
+                    } else {
+                        "false".to_string()
+                    },
+                )
+            })
             .collect(),
         other => crate::repositories::custom_record_repo::list(conn, workspace_id, other)?
             .into_iter()
@@ -193,7 +289,11 @@ fn list_builtin_values(conn: &Connection, workspace_id: &str, entity_type: &str)
 /// AI-reporting caller) runs unfiltered - see `access_service::
 /// filter_visible`'s own doc comment for why that's the same unattributed/
 /// system convention `require_capability` already uses, not a new one.
-pub fn run(conn: &Connection, report: &CustomReport, actor_user_id: Option<&str>) -> AppResult<Vec<CustomReportRow>> {
+pub fn run(
+    conn: &Connection,
+    report: &CustomReport,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<CustomReportRow>> {
     run_with_as_of(conn, report, None, actor_user_id)
 }
 
@@ -209,11 +309,21 @@ pub fn run(conn: &Connection, report: &CustomReport, actor_user_id: Option<&str>
 /// number that counts a record the viewer isn't allowed to see, the same
 /// reasoning `dashboard_widget_service::run` filters before its own
 /// truncation for.
-pub fn run_with_as_of(conn: &Connection, report: &CustomReport, as_of: Option<&str>, actor_user_id: Option<&str>) -> AppResult<Vec<CustomReportRow>> {
+pub fn run_with_as_of(
+    conn: &Connection,
+    report: &CustomReport,
+    as_of: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<CustomReportRow>> {
     let entity_ids = if let Some(as_of) = as_of {
-        let eligible = super::effective_dating_service::active_record_ids_as_of(conn, &report.workspace_id, &report.entity_type, as_of)?
-            .into_iter()
-            .collect::<std::collections::HashSet<_>>();
+        let eligible = super::effective_dating_service::active_record_ids_as_of(
+            conn,
+            &report.workspace_id,
+            &report.entity_type,
+            as_of,
+        )?
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
         list_builtin_values(conn, &report.workspace_id, &report.entity_type)?
             .into_iter()
             .filter(|(id, _)| eligible.contains(id))
@@ -221,18 +331,33 @@ pub fn run_with_as_of(conn: &Connection, report: &CustomReport, as_of: Option<&s
     } else {
         list_builtin_values(conn, &report.workspace_id, &report.entity_type)?
     };
-    let visible = access_service::filter_visible(conn, actor_user_id, &report.entity_type, entity_ids.iter().map(|(id, _)| id.as_str()))?;
-    let entity_ids: Vec<(String, String)> = entity_ids.into_iter().filter(|(id, _)| visible.contains(id)).collect();
+    let visible = access_service::filter_visible(
+        conn,
+        actor_user_id,
+        &report.entity_type,
+        entity_ids.iter().map(|(id, _)| id.as_str()),
+    )?;
+    let entity_ids: Vec<(String, String)> = entity_ids
+        .into_iter()
+        .filter(|(id, _)| visible.contains(id))
+        .collect();
 
     // group_key(entity_id, builtin_value) -> group label
-    let group_of: Box<dyn Fn(&str, &str, &HashMap<String, String>) -> String> = if report.group_by_source == "builtin" {
-        Box::new(|_id, builtin_value, _values| builtin_value.to_string())
-    } else {
-        let field = report.group_by_field.clone();
-        Box::new(move |_id, _builtin_value, values: &HashMap<String, String>| {
-            values.get(&field).filter(|v| !v.is_empty()).cloned().unwrap_or_else(|| "(none)".to_string())
-        })
-    };
+    let group_of: Box<dyn Fn(&str, &str, &HashMap<String, String>) -> String> =
+        if report.group_by_source == "builtin" {
+            Box::new(|_id, builtin_value, _values| builtin_value.to_string())
+        } else {
+            let field = report.group_by_field.clone();
+            Box::new(
+                move |_id, _builtin_value, values: &HashMap<String, String>| {
+                    values
+                        .get(&field)
+                        .filter(|v| !v.is_empty())
+                        .cloned()
+                        .unwrap_or_else(|| "(none)".to_string())
+                },
+            )
+        };
 
     let mut totals: HashMap<String, f64> = HashMap::new();
     let mut order: Vec<String> = Vec::new();
@@ -262,8 +387,11 @@ pub fn run_with_as_of(conn: &Connection, report: &CustomReport, as_of: Option<&s
         *totals.entry(group).or_insert(0.0) += contribution;
     }
 
-    Ok(order.into_iter().map(|group| {
-        let value = totals[&group];
-        CustomReportRow { group, value }
-    }).collect())
+    Ok(order
+        .into_iter()
+        .map(|group| {
+            let value = totals[&group];
+            CustomReportRow { group, value }
+        })
+        .collect())
 }

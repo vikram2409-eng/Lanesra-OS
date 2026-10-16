@@ -4,7 +4,7 @@ version = "0.14.0"
 description = "Lanesra OS domain logic, shared by the desktop app and the Team Workspace server"
 license = "MIT"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.97"
 
 [lib]
 name = "lanesra_core"
@@ -54,3 +54,6 @@ lettre = { version = "0.11", default-features = false, features = ["smtp-transpo
 # generalized import/export wizard - quoted fields, embedded commas and
 # escaped quotes handled correctly, not a naive split(',').
 csv = "1"
+
+[lints]
+workspace = true

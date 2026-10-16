@@ -1,7 +1,10 @@
 use rusqlite::Connection;
 
 use crate::domain::ids::now_iso;
-use crate::models::access_role::{AccessRole, AccessRoleGrant, AccessRoleGrantInput, AccessRoleInput, AccessRoleUpdate, RecordScope};
+use crate::models::access_role::{
+    AccessRole, AccessRoleGrant, AccessRoleGrantInput, AccessRoleInput, AccessRoleUpdate,
+    RecordScope,
+};
 
 fn map_role(row: &rusqlite::Row) -> rusqlite::Result<AccessRole> {
     Ok(AccessRole {
@@ -32,7 +35,14 @@ fn map_grant(row: &rusqlite::Row) -> rusqlite::Result<AccessRoleGrant> {
     })
 }
 
-pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AccessRoleInput, is_system: bool, actor_user_id: Option<&str>) -> rusqlite::Result<AccessRole> {
+pub fn create(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    input: &AccessRoleInput,
+    is_system: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AccessRole> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO access_roles (id, workspace_id, name, description, is_system, created_at, created_by, updated_at, updated_by)
@@ -45,11 +55,19 @@ pub fn create(conn: &Connection, id: &str, workspace_id: &str, input: &AccessRol
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<AccessRole>> {
     conn.query_row("SELECT * FROM access_roles WHERE id = ?1", [id], map_role)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AccessRole>> {
-    let mut stmt = conn.prepare("SELECT * FROM access_roles WHERE workspace_id = ?1 ORDER BY is_system DESC, name")?;
+    let mut stmt = conn.prepare(
+        "SELECT * FROM access_roles WHERE workspace_id = ?1 ORDER BY is_system DESC, name",
+    )?;
     let rows = stmt.query_map([workspace_id], map_role)?.collect();
     rows
 }
@@ -58,13 +76,32 @@ pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<Acces
 /// name - used to assign a starting Access Role to a newly created user,
 /// the same bridge the 0056 migration's own backfill applies to users that
 /// already existed when it ran.
-pub fn get_by_name(conn: &Connection, workspace_id: &str, name: &str) -> rusqlite::Result<Option<AccessRole>> {
-    conn.query_row("SELECT * FROM access_roles WHERE workspace_id = ?1 AND name = ?2", (workspace_id, name), map_role)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+pub fn get_by_name(
+    conn: &Connection,
+    workspace_id: &str,
+    name: &str,
+) -> rusqlite::Result<Option<AccessRole>> {
+    conn.query_row(
+        "SELECT * FROM access_roles WHERE workspace_id = ?1 AND name = ?2",
+        (workspace_id, name),
+        map_role,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn update(conn: &Connection, id: &str, input: &AccessRoleUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<AccessRole> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &AccessRoleUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AccessRole> {
     conn.execute(
         "UPDATE access_roles SET name = ?1, description = ?2, updated_at = ?3, updated_by = ?4 WHERE id = ?5",
         rusqlite::params![input.name, input.description, now_iso(), actor_user_id, id],
@@ -73,7 +110,10 @@ pub fn update(conn: &Connection, id: &str, input: &AccessRoleUpdate, actor_user_
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM access_role_grants WHERE access_role_id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM access_role_grants WHERE access_role_id = ?1",
+        [id],
+    )?;
     conn.execute("DELETE FROM access_roles WHERE id = ?1", [id])?;
     Ok(())
 }
@@ -82,27 +122,45 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 /// plus a `'*'` row if it has a default. `access_service::capability_grant_for`
 /// is the one place that resolves "the right row for this object_key,
 /// falling back to `'*'`" - this just returns everything, unfiltered.
-pub fn list_grants(conn: &Connection, access_role_id: &str) -> rusqlite::Result<Vec<AccessRoleGrant>> {
+pub fn list_grants(
+    conn: &Connection,
+    access_role_id: &str,
+) -> rusqlite::Result<Vec<AccessRoleGrant>> {
     let mut stmt = conn.prepare("SELECT * FROM access_role_grants WHERE access_role_id = ?1 ORDER BY (object_key = '*'), object_key")?;
     let rows = stmt.query_map([access_role_id], map_grant)?.collect();
     rows
 }
 
-pub fn get_grant_for_object_key(conn: &Connection, access_role_id: &str, object_key: &str) -> rusqlite::Result<Option<AccessRoleGrant>> {
+pub fn get_grant_for_object_key(
+    conn: &Connection,
+    access_role_id: &str,
+    object_key: &str,
+) -> rusqlite::Result<Option<AccessRoleGrant>> {
     conn.query_row(
         "SELECT * FROM access_role_grants WHERE access_role_id = ?1 AND object_key = ?2",
         (access_role_id, object_key),
         map_grant,
     )
     .map(Some)
-    .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// Insert-or-replace a role's grant for one object_key (including `'*'`) -
 /// the admin UI's per-row "save" action. Keeps the existing row's `id` on
 /// an update (only the touched columns change) rather than generating a new
 /// one, so nothing else referencing this grant's id is disturbed.
-pub fn upsert_grant(conn: &Connection, id: &str, access_role_id: &str, input: &AccessRoleGrantInput) -> rusqlite::Result<AccessRoleGrant> {
+pub fn upsert_grant(
+    conn: &Connection,
+    id: &str,
+    access_role_id: &str,
+    input: &AccessRoleGrantInput,
+) -> rusqlite::Result<AccessRoleGrant> {
     let now = now_iso();
     conn.execute(
         "INSERT INTO access_role_grants (id, access_role_id, object_key, can_create, can_read, can_update, can_delete, can_assign, record_scope, created_at, updated_at)
@@ -116,10 +174,18 @@ pub fn upsert_grant(conn: &Connection, id: &str, access_role_id: &str, input: &A
             input.can_delete, input.can_assign, input.record_scope, now,
         ],
     )?;
-    get_grant_for_object_key(conn, access_role_id, &input.object_key).map(|d| d.expect("just upserted"))
+    get_grant_for_object_key(conn, access_role_id, &input.object_key)
+        .map(|d| d.expect("just upserted"))
 }
 
-pub fn delete_grant(conn: &Connection, access_role_id: &str, object_key: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM access_role_grants WHERE access_role_id = ?1 AND object_key = ?2", (access_role_id, object_key))?;
+pub fn delete_grant(
+    conn: &Connection,
+    access_role_id: &str,
+    object_key: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM access_role_grants WHERE access_role_id = ?1 AND object_key = ?2",
+        (access_role_id, object_key),
+    )?;
     Ok(())
 }

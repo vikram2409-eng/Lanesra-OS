@@ -8,13 +8,17 @@ use chrono::Utc;
 use rusqlite::Connection;
 
 use crate::domain::AppResult;
-use crate::models::report::{ArAgingBucket, LostReasonBreakdown, RevenueByMonth, SalesByOwner, WinRateByOwner};
+use crate::models::report::{
+    ArAgingBucket, LostReasonBreakdown, RevenueByMonth, SalesByOwner, WinRateByOwner,
+};
 
 /// `from`/`to` default to a wide-open range when not given, rather than
 /// requiring the caller to know today's date.
 fn resolve_range(from: &Option<String>, to: &Option<String>) -> (String, String) {
     let from = from.clone().unwrap_or_else(|| "0000-01-01".to_string());
-    let to = to.clone().unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
+    let to = to
+        .clone()
+        .unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
     (from, to)
 }
 
@@ -112,8 +116,14 @@ pub fn lost_reason_breakdown(
 /// Bucket order is fixed here rather than left to SQL's GROUP BY, since
 /// "Not yet due" and "No due date" don't sort naturally next to the
 /// numeric bands.
-pub fn ar_aging(conn: &Connection, workspace_id: &str, as_of_date: &Option<String>) -> AppResult<Vec<ArAgingBucket>> {
-    let as_of = as_of_date.clone().unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
+pub fn ar_aging(
+    conn: &Connection,
+    workspace_id: &str,
+    as_of_date: &Option<String>,
+) -> AppResult<Vec<ArAgingBucket>> {
+    let as_of = as_of_date
+        .clone()
+        .unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
     let mut stmt = conn.prepare(
         "SELECT
             CASE
@@ -147,7 +157,12 @@ pub fn ar_aging(conn: &Connection, workspace_id: &str, as_of_date: &Option<Strin
         "90+ days overdue",
         "No due date",
     ];
-    rows.sort_by_key(|r| order.iter().position(|b| *b == r.bucket).unwrap_or(usize::MAX));
+    rows.sort_by_key(|r| {
+        order
+            .iter()
+            .position(|b| *b == r.bucket)
+            .unwrap_or(usize::MAX)
+    });
     Ok(rows)
 }
 

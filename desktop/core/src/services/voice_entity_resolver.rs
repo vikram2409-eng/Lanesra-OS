@@ -25,14 +25,29 @@ use crate::services::{entity_registry, search_service};
 
 #[derive(Debug, Clone)]
 pub enum ResolutionOutcome {
-    Resolved { record_id: String, object_key: String, confidence: f64 },
-    NeedsClarification { candidates: Vec<ResolutionCandidate> },
+    Resolved {
+        record_id: String,
+        object_key: String,
+        confidence: f64,
+    },
+    NeedsClarification {
+        candidates: Vec<ResolutionCandidate>,
+    },
     NotFound,
 }
 
 fn is_context_reference(text: &str) -> bool {
     let t = text.trim().to_lowercase();
-    matches!(t.as_str(), "" | "this" | "it" | "that" | "this record" | "this one" | "the current one" | "current record")
+    matches!(
+        t.as_str(),
+        "" | "this"
+            | "it"
+            | "that"
+            | "this record"
+            | "this one"
+            | "the current one"
+            | "current record"
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -53,8 +68,16 @@ pub fn resolve_by_reference(
     // here). Confidence 1.0: the user is looking straight at the record.
     if is_context_reference(text) {
         if let (Some(ck), Some(cid)) = (context_object_key, context_record_id) {
-            if object_key_hint.map(|h| h.eq_ignore_ascii_case(ck)).unwrap_or(true) && entity_registry::exists(conn, ck, cid)? {
-                return Ok(ResolutionOutcome::Resolved { record_id: cid.to_string(), object_key: ck.to_string(), confidence: 1.0 });
+            if object_key_hint
+                .map(|h| h.eq_ignore_ascii_case(ck))
+                .unwrap_or(true)
+                && entity_registry::exists(conn, ck, cid)?
+            {
+                return Ok(ResolutionOutcome::Resolved {
+                    record_id: cid.to_string(),
+                    object_key: ck.to_string(),
+                    confidence: 1.0,
+                });
             }
         }
         // Second priority (spec §14, PR 2): no record on screen matched,
@@ -64,8 +87,16 @@ pub fn resolve_by_reference(
         // Slightly lower confidence than a live on-screen record, since
         // the user isn't looking straight at it anymore.
         if let Some((ck, cid)) = conversation_reference {
-            if object_key_hint.map(|h| h.eq_ignore_ascii_case(ck)).unwrap_or(true) && entity_registry::exists(conn, ck, cid)? {
-                return Ok(ResolutionOutcome::Resolved { record_id: cid.to_string(), object_key: ck.to_string(), confidence: 0.9 });
+            if object_key_hint
+                .map(|h| h.eq_ignore_ascii_case(ck))
+                .unwrap_or(true)
+                && entity_registry::exists(conn, ck, cid)?
+            {
+                return Ok(ResolutionOutcome::Resolved {
+                    record_id: cid.to_string(),
+                    object_key: ck.to_string(),
+                    confidence: 0.9,
+                });
             }
         }
         if text.is_empty() {
@@ -79,7 +110,10 @@ pub fn resolve_by_reference(
         // object type and nothing of that type matched, that's a real
         // "not found", not a silent hand-off to some other object type
         // that happened to match the same words.
-        Some(hint) => all_results.into_iter().filter(|r| r.entity_type.eq_ignore_ascii_case(hint)).collect(),
+        Some(hint) => all_results
+            .into_iter()
+            .filter(|r| r.entity_type.eq_ignore_ascii_case(hint))
+            .collect(),
         None => all_results,
     };
 
@@ -91,7 +125,10 @@ pub fn resolve_by_reference(
         // substring match), more than one always asks (VOICE-AC-05).
         let all_fuzzy = search_service::fuzzy_search(conn, workspace_id, text)?;
         let fuzzy: Vec<_> = match object_key_hint {
-            Some(hint) => all_fuzzy.into_iter().filter(|r| r.entity_type.eq_ignore_ascii_case(hint)).collect(),
+            Some(hint) => all_fuzzy
+                .into_iter()
+                .filter(|r| r.entity_type.eq_ignore_ascii_case(hint))
+                .collect(),
             None => all_fuzzy,
         };
         if fuzzy.is_empty() {
@@ -99,7 +136,11 @@ pub fn resolve_by_reference(
         }
         if fuzzy.len() == 1 {
             let r = &fuzzy[0];
-            return Ok(ResolutionOutcome::Resolved { record_id: r.entity_id.clone(), object_key: r.entity_type.clone(), confidence: 0.5 });
+            return Ok(ResolutionOutcome::Resolved {
+                record_id: r.entity_id.clone(),
+                object_key: r.entity_type.clone(),
+                confidence: 0.5,
+            });
         }
         let candidates = fuzzy
             .iter()
@@ -115,10 +156,17 @@ pub fn resolve_by_reference(
         return Ok(ResolutionOutcome::NeedsClarification { candidates });
     }
 
-    let exact: Vec<_> = results.iter().filter(|r| r.title.eq_ignore_ascii_case(text)).collect();
+    let exact: Vec<_> = results
+        .iter()
+        .filter(|r| r.title.eq_ignore_ascii_case(text))
+        .collect();
     if exact.len() == 1 {
         let r = exact[0];
-        return Ok(ResolutionOutcome::Resolved { record_id: r.entity_id.clone(), object_key: r.entity_type.clone(), confidence: 0.95 });
+        return Ok(ResolutionOutcome::Resolved {
+            record_id: r.entity_id.clone(),
+            object_key: r.entity_type.clone(),
+            confidence: 0.95,
+        });
     }
     if exact.is_empty() && results.len() == 1 {
         // A single fuzzy (substring, not exact-title) match - real, but
@@ -126,7 +174,11 @@ pub fn resolve_by_reference(
         // planner may still choose to clarify on this depending on the
         // action's own risk, but the resolver itself doesn't force it.
         let r = &results[0];
-        return Ok(ResolutionOutcome::Resolved { record_id: r.entity_id.clone(), object_key: r.entity_type.clone(), confidence: 0.7 });
+        return Ok(ResolutionOutcome::Resolved {
+            record_id: r.entity_id.clone(),
+            object_key: r.entity_type.clone(),
+            confidence: 0.7,
+        });
     }
 
     // Either multiple exact-title matches (two Companies both named

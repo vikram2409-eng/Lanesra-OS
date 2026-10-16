@@ -1,7 +1,10 @@
 use rusqlite::Connection;
 
 use crate::domain::ids::now_iso;
-use crate::models::relationship::{RelationshipDefinition, RelationshipDefinitionInput, RelationshipDefinitionUpdate, RelationshipInstance};
+use crate::models::relationship::{
+    RelationshipDefinition, RelationshipDefinitionInput, RelationshipDefinitionUpdate,
+    RelationshipInstance,
+};
 
 fn map_def(row: &rusqlite::Row) -> rusqlite::Result<RelationshipDefinition> {
     Ok(RelationshipDefinition {
@@ -54,7 +57,11 @@ pub fn create_definition(
     // A polymorphic-target definition stores '' for target_entity_type -
     // it's an ignored placeholder once target_is_polymorphic is set (see
     // relationship_service::validate_shape/link and migration 0049).
-    let target_entity_type = if input.target_is_polymorphic { "" } else { input.target_entity_type.as_str() };
+    let target_entity_type = if input.target_is_polymorphic {
+        ""
+    } else {
+        input.target_entity_type.as_str()
+    };
     conn.execute(
         "INSERT INTO relationship_definitions
             (id, workspace_id, key, source_entity_type, target_entity_type, target_is_polymorphic, relationship_type,
@@ -70,13 +77,29 @@ pub fn create_definition(
     get_definition(conn, id).map(|d| d.expect("just inserted"))
 }
 
-pub fn get_definition(conn: &Connection, id: &str) -> rusqlite::Result<Option<RelationshipDefinition>> {
-    conn.query_row("SELECT * FROM relationship_definitions WHERE id = ?1", [id], map_def)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+pub fn get_definition(
+    conn: &Connection,
+    id: &str,
+) -> rusqlite::Result<Option<RelationshipDefinition>> {
+    conn.query_row(
+        "SELECT * FROM relationship_definitions WHERE id = ?1",
+        [id],
+        map_def,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_definitions(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<RelationshipDefinition>> {
+pub fn list_definitions(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<RelationshipDefinition>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM relationship_definitions WHERE workspace_id = ?1 ORDER BY sort_order, forward_label",
     )?;
@@ -86,27 +109,46 @@ pub fn list_definitions(conn: &Connection, workspace_id: &str) -> rusqlite::Resu
 
 /// Every active definition where `entity_type` participates on either side
 /// - used to work out which related lists a given record's detail page
-/// should render.
-pub fn list_definitions_for_entity(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<RelationshipDefinition>> {
+///   should render.
+pub fn list_definitions_for_entity(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> rusqlite::Result<Vec<RelationshipDefinition>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM relationship_definitions
          WHERE workspace_id = ?1 AND is_active = 1
            AND (source_entity_type = ?2 OR target_entity_type = ?2 OR target_is_polymorphic = 1)
          ORDER BY sort_order, forward_label",
     )?;
-    let rows = stmt.query_map((workspace_id, entity_type), map_def)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, entity_type), map_def)?
+        .collect();
     rows
 }
 
-pub fn update_definition(conn: &Connection, id: &str, input: &RelationshipDefinitionUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<RelationshipDefinition> {
+pub fn update_definition(
+    conn: &Connection,
+    id: &str,
+    input: &RelationshipDefinitionUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<RelationshipDefinition> {
     conn.execute(
         "UPDATE relationship_definitions
          SET forward_label = ?1, reverse_label = ?2, is_required = ?3, show_related_list = ?4,
              delete_behavior = ?5, sort_order = ?6, is_active = ?7, updated_at = ?8, updated_by = ?9
          WHERE id = ?10",
         rusqlite::params![
-            input.forward_label, input.reverse_label, input.is_required, input.show_related_list,
-            input.delete_behavior, input.sort_order, input.is_active, now_iso(), actor_user_id, id,
+            input.forward_label,
+            input.reverse_label,
+            input.is_required,
+            input.show_related_list,
+            input.delete_behavior,
+            input.sort_order,
+            input.is_active,
+            now_iso(),
+            actor_user_id,
+            id,
         ],
     )?;
     get_definition(conn, id).map(|d| d.expect("just updated"))
@@ -117,7 +159,10 @@ pub fn delete_definition(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-pub fn count_instances_for_definition(conn: &Connection, definition_id: &str) -> rusqlite::Result<i64> {
+pub fn count_instances_for_definition(
+    conn: &Connection,
+    definition_id: &str,
+) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM relationship_instances WHERE relationship_definition_id = ?1",
         [definition_id],
@@ -125,7 +170,11 @@ pub fn count_instances_for_definition(conn: &Connection, definition_id: &str) ->
     )
 }
 
-pub fn count_by_source(conn: &Connection, definition_id: &str, source_id: &str) -> rusqlite::Result<i64> {
+pub fn count_by_source(
+    conn: &Connection,
+    definition_id: &str,
+    source_id: &str,
+) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM relationship_instances WHERE relationship_definition_id = ?1 AND source_id = ?2",
         (definition_id, source_id),
@@ -133,7 +182,11 @@ pub fn count_by_source(conn: &Connection, definition_id: &str, source_id: &str) 
     )
 }
 
-pub fn count_by_target(conn: &Connection, definition_id: &str, target_id: &str) -> rusqlite::Result<i64> {
+pub fn count_by_target(
+    conn: &Connection,
+    definition_id: &str,
+    target_id: &str,
+) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM relationship_instances WHERE relationship_definition_id = ?1 AND target_id = ?2",
         (definition_id, target_id),
@@ -163,9 +216,19 @@ pub fn create_instance(
 }
 
 pub fn get_instance(conn: &Connection, id: &str) -> rusqlite::Result<Option<RelationshipInstance>> {
-    conn.query_row("SELECT * FROM relationship_instances WHERE id = ?1", [id], map_instance)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM relationship_instances WHERE id = ?1",
+        [id],
+        map_instance,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 pub fn delete_instance(conn: &Connection, id: &str) -> rusqlite::Result<()> {
@@ -173,7 +236,11 @@ pub fn delete_instance(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     Ok(())
 }
 
-pub fn delete_instances_for_record(conn: &Connection, entity_type: &str, entity_id: &str) -> rusqlite::Result<usize> {
+pub fn delete_instances_for_record(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> rusqlite::Result<usize> {
     let a = conn.execute(
         "DELETE FROM relationship_instances WHERE source_entity_type = ?1 AND source_id = ?2",
         (entity_type, entity_id),
@@ -185,19 +252,31 @@ pub fn delete_instances_for_record(conn: &Connection, entity_type: &str, entity_
     Ok(a + b)
 }
 
-pub fn list_instances_where_source(conn: &Connection, definition_id: &str, source_id: &str) -> rusqlite::Result<Vec<RelationshipInstance>> {
+pub fn list_instances_where_source(
+    conn: &Connection,
+    definition_id: &str,
+    source_id: &str,
+) -> rusqlite::Result<Vec<RelationshipInstance>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM relationship_instances WHERE relationship_definition_id = ?1 AND source_id = ?2 ORDER BY created_at",
     )?;
-    let rows = stmt.query_map((definition_id, source_id), map_instance)?.collect();
+    let rows = stmt
+        .query_map((definition_id, source_id), map_instance)?
+        .collect();
     rows
 }
 
-pub fn list_instances_where_target(conn: &Connection, definition_id: &str, target_id: &str) -> rusqlite::Result<Vec<RelationshipInstance>> {
+pub fn list_instances_where_target(
+    conn: &Connection,
+    definition_id: &str,
+    target_id: &str,
+) -> rusqlite::Result<Vec<RelationshipInstance>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM relationship_instances WHERE relationship_definition_id = ?1 AND target_id = ?2 ORDER BY created_at",
     )?;
-    let rows = stmt.query_map((definition_id, target_id), map_instance)?.collect();
+    let rows = stmt
+        .query_map((definition_id, target_id), map_instance)?
+        .collect();
     rows
 }
 
@@ -205,12 +284,18 @@ pub fn list_instances_where_target(conn: &Connection, definition_id: &str, targe
 /// across every relationship definition. Used both to render "all related
 /// records" on a detail page and to check whether deleting the record is
 /// blocked by a `restrict` relationship.
-pub fn list_instances_for_record(conn: &Connection, entity_type: &str, entity_id: &str) -> rusqlite::Result<Vec<RelationshipInstance>> {
+pub fn list_instances_for_record(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+) -> rusqlite::Result<Vec<RelationshipInstance>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM relationship_instances
          WHERE (source_entity_type = ?1 AND source_id = ?2) OR (target_entity_type = ?1 AND target_id = ?2)
          ORDER BY created_at",
     )?;
-    let rows = stmt.query_map((entity_type, entity_id), map_instance)?.collect();
+    let rows = stmt
+        .query_map((entity_type, entity_id), map_instance)?
+        .collect();
     rows
 }

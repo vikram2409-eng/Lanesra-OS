@@ -55,11 +55,10 @@ pub fn to_public(record: UserRecord, roles: Vec<String>) -> User {
 pub fn set_roles(conn: &Connection, user_id: &str, roles: &[String]) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM user_roles WHERE user_id = ?1", [user_id])?;
     for role_name in roles {
-        let role_id: String = conn.query_row(
-            "SELECT id FROM roles WHERE name = ?1",
-            [role_name],
-            |r| r.get(0),
-        )?;
+        let role_id: String =
+            conn.query_row("SELECT id FROM roles WHERE name = ?1", [role_name], |r| {
+                r.get(0)
+            })?;
         conn.execute(
             "INSERT INTO user_roles (user_id, role_id) VALUES (?1, ?2)",
             (user_id, role_id),
@@ -166,21 +165,41 @@ pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<UserR
 // Organization Unit membership (0053_users_org_units.sql) ------------------
 
 pub fn primary_org_unit_id(conn: &Connection, user_id: &str) -> rusqlite::Result<Option<String>> {
-    conn.query_row("SELECT primary_org_unit_id FROM users WHERE id = ?1", [user_id], |r| r.get(0))
+    conn.query_row(
+        "SELECT primary_org_unit_id FROM users WHERE id = ?1",
+        [user_id],
+        |r| r.get(0),
+    )
 }
 
-pub fn set_primary_org_unit(conn: &Connection, user_id: &str, org_unit_id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE users SET primary_org_unit_id = ?1, updated_at = ?2 WHERE id = ?3", (org_unit_id, now_iso(), user_id))?;
+pub fn set_primary_org_unit(
+    conn: &Connection,
+    user_id: &str,
+    org_unit_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE users SET primary_org_unit_id = ?1, updated_at = ?2 WHERE id = ?3",
+        (org_unit_id, now_iso(), user_id),
+    )?;
     Ok(())
 }
 
-pub fn list_additional_org_units(conn: &Connection, user_id: &str) -> rusqlite::Result<Vec<String>> {
-    let mut stmt = conn.prepare("SELECT org_unit_id FROM user_org_units WHERE user_id = ?1 ORDER BY created_at")?;
+pub fn list_additional_org_units(
+    conn: &Connection,
+    user_id: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn
+        .prepare("SELECT org_unit_id FROM user_org_units WHERE user_id = ?1 ORDER BY created_at")?;
     let rows = stmt.query_map([user_id], |r| r.get(0))?;
     rows.collect()
 }
 
-pub fn add_additional_org_unit(conn: &Connection, workspace_id: &str, user_id: &str, org_unit_id: &str) -> rusqlite::Result<()> {
+pub fn add_additional_org_unit(
+    conn: &Connection,
+    workspace_id: &str,
+    user_id: &str,
+    org_unit_id: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT OR IGNORE INTO user_org_units (id, workspace_id, user_id, org_unit_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         (new_uuid(), workspace_id, user_id, org_unit_id, now_iso()),
@@ -188,7 +207,14 @@ pub fn add_additional_org_unit(conn: &Connection, workspace_id: &str, user_id: &
     Ok(())
 }
 
-pub fn remove_additional_org_unit(conn: &Connection, user_id: &str, org_unit_id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM user_org_units WHERE user_id = ?1 AND org_unit_id = ?2", (user_id, org_unit_id))?;
+pub fn remove_additional_org_unit(
+    conn: &Connection,
+    user_id: &str,
+    org_unit_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM user_org_units WHERE user_id = ?1 AND org_unit_id = ?2",
+        (user_id, org_unit_id),
+    )?;
     Ok(())
 }

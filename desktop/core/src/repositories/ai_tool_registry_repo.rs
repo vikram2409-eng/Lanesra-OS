@@ -6,7 +6,9 @@
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::{new_uuid, now_iso};
-use crate::models::ai_tool_registry::{AiToolRegistryOverride, AiToolRegistryOverrideInput, RiskLevel};
+use crate::models::ai_tool_registry::{
+    AiToolRegistryOverride, AiToolRegistryOverrideInput, RiskLevel,
+};
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiToolRegistryOverride> {
     let risk_level: String = row.get("risk_level")?;
@@ -23,13 +25,22 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiToolRegistryOverride> {
 }
 
 /// Most-recently-updated first.
-pub fn list(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<AiToolRegistryOverride>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_tool_registry WHERE workspace_id = ?1 ORDER BY updated_at DESC")?;
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<AiToolRegistryOverride>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM ai_tool_registry WHERE workspace_id = ?1 ORDER BY updated_at DESC",
+    )?;
     let rows = stmt.query_map([workspace_id], map_row)?.collect();
     rows
 }
 
-pub fn get_by_tool_name(conn: &Connection, workspace_id: &str, tool_name: &str) -> rusqlite::Result<Option<AiToolRegistryOverride>> {
+pub fn get_by_tool_name(
+    conn: &Connection,
+    workspace_id: &str,
+    tool_name: &str,
+) -> rusqlite::Result<Option<AiToolRegistryOverride>> {
     conn.query_row(
         "SELECT * FROM ai_tool_registry WHERE workspace_id = ?1 AND tool_name = ?2",
         rusqlite::params![workspace_id, tool_name],
@@ -40,7 +51,12 @@ pub fn get_by_tool_name(conn: &Connection, workspace_id: &str, tool_name: &str) 
 
 /// Upsert-by-`(workspace_id, tool_name)`, matching the table's own
 /// `UNIQUE` constraint.
-pub fn set(conn: &Connection, workspace_id: &str, input: &AiToolRegistryOverrideInput, actor_user_id: Option<&str>) -> rusqlite::Result<AiToolRegistryOverride> {
+pub fn set(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiToolRegistryOverrideInput,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiToolRegistryOverride> {
     let now = now_iso();
     let existing = get_by_tool_name(conn, workspace_id, &input.tool_name)?;
     if let Some(existing) = existing {
@@ -61,6 +77,9 @@ pub fn set(conn: &Connection, workspace_id: &str, input: &AiToolRegistryOverride
 }
 
 pub fn clear(conn: &Connection, workspace_id: &str, tool_name: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM ai_tool_registry WHERE workspace_id = ?1 AND tool_name = ?2", rusqlite::params![workspace_id, tool_name])?;
+    conn.execute(
+        "DELETE FROM ai_tool_registry WHERE workspace_id = ?1 AND tool_name = ?2",
+        rusqlite::params![workspace_id, tool_name],
+    )?;
     Ok(())
 }

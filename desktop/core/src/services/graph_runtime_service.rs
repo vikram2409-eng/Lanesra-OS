@@ -90,7 +90,10 @@ use crate::models::ai_approval::AiApprovalInput;
 use crate::models::execution_graph::{is_single_unconditional_outgoing, ExecutionGraph, GraphNode};
 use crate::models::graph_run::GraphRun;
 use crate::repositories::{ai_agent_repo, execution_graph_repo, graph_run_repo};
-use crate::services::{ai_eval_service, ai_orchestration_service, ai_service, approval_service, chat_service, workflow_service};
+use crate::services::{
+    ai_eval_service, ai_orchestration_service, ai_service, approval_service, chat_service,
+    workflow_service,
+};
 
 /// Policy-configurable in a later phase (see issue #168's own "Concurrency"
 /// note); a fixed default for this one, applied uniformly regardless of
@@ -110,7 +113,10 @@ enum NodeOutcome {
     /// at the node *after* the delay, not the delay node itself (which
     /// would otherwise recompute a fresh `resume_at` and pause forever,
     /// never actually advancing).
-    WaitingScheduled { resume_at: String, next_node_id: String },
+    WaitingScheduled {
+        resume_at: String,
+        next_node_id: String,
+    },
 }
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -139,7 +145,9 @@ fn lookup_token(token: &str, trigger_input: &str, context: &HashMap<String, Valu
         Some((k, f)) => (k, Some(f)),
         None => (token, None),
     };
-    let Some(value) = context.get(key) else { return String::new() };
+    let Some(value) = context.get(key) else {
+        return String::new();
+    };
     let target = match field {
         Some(f) => value.get(f),
         None => Some(value),
@@ -151,7 +159,11 @@ fn lookup_token(token: &str, trigger_input: &str, context: &HashMap<String, Valu
     }
 }
 
-fn resolve_run_template(template: &str, trigger_input: &str, context: &HashMap<String, Value>) -> String {
+fn resolve_run_template(
+    template: &str,
+    trigger_input: &str,
+    context: &HashMap<String, Value>,
+) -> String {
     let mut out = String::with_capacity(template.len());
     let mut rest = template;
     while let Some(start) = rest.find("{{") {
@@ -207,34 +219,72 @@ fn single_outgoing<'a>(graph: &'a ExecutionGraph, node_id: &str) -> AppResult<&'
         .iter()
         .find(|e| e.from_node_id == node_id && e.branch_label.is_none())
         .map(|e| e.to_node_id.as_str())
-        .ok_or_else(|| AppError::Validation("graph shape error: expected exactly one unconditional outgoing edge".into()))
+        .ok_or_else(|| {
+            AppError::Validation(
+                "graph shape error: expected exactly one unconditional outgoing edge".into(),
+            )
+        })
 }
 
-fn branch_outgoing<'a>(graph: &'a ExecutionGraph, node_id: &str, label: &str) -> AppResult<&'a str> {
+fn branch_outgoing<'a>(
+    graph: &'a ExecutionGraph,
+    node_id: &str,
+    label: &str,
+) -> AppResult<&'a str> {
     graph
         .edges
         .iter()
         .find(|e| e.from_node_id == node_id && e.branch_label.as_deref() == Some(label))
         .map(|e| e.to_node_id.as_str())
-        .ok_or_else(|| AppError::Validation(format!("graph shape error: expected an outgoing edge labeled '{label}'")))
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "graph shape error: expected an outgoing edge labeled '{label}'"
+            ))
+        })
 }
 
-fn evaluate_conditions_config(config: &Value, trigger_input: &str, context: &HashMap<String, Value>) -> bool {
-    let match_type = config.get("match_type").and_then(|v| v.as_str()).unwrap_or("all");
-    let conditions = config.get("conditions").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+fn evaluate_conditions_config(
+    config: &Value,
+    trigger_input: &str,
+    context: &HashMap<String, Value>,
+) -> bool {
+    let match_type = config
+        .get("match_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("all");
+    let conditions = config
+        .get("conditions")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     let ctx = condition_ctx(trigger_input, context);
     let resolved: Vec<(Option<String>, String, String, String)> = conditions
         .iter()
         .map(|c| {
             (
                 c.get("group_id").and_then(|v| v.as_str()).map(String::from),
-                c.get("field_key").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                c.get("operator").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-                c.get("value").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                c.get("field_key")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                c.get("operator")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                c.get("value")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
             )
         })
         .collect();
-    crate::domain::conditions::conditions_match(match_type, resolved.iter().map(|(g, f, o, v)| (g.as_deref(), f.as_str(), o.as_str(), v.as_str())), &ctx)
+    crate::domain::conditions::conditions_match(
+        match_type,
+        resolved
+            .iter()
+            .map(|(g, f, o, v)| (g.as_deref(), f.as_str(), o.as_str(), v.as_str())),
+        &ctx,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -250,7 +300,11 @@ async fn execute_node(
 ) -> AppResult<NodeOutcome> {
     let config: Value = serde_json::from_str(&node.config_json).unwrap_or(json!({}));
     let started_at = now_iso();
-    let attempt = graph_run_repo::list_run_nodes(conn, &run.id)?.iter().filter(|n| n.node_id == node.id).count() as i64 + 1;
+    let attempt = graph_run_repo::list_run_nodes(conn, &run.id)?
+        .iter()
+        .filter(|n| n.node_id == node.id)
+        .count() as i64
+        + 1;
 
     macro_rules! record {
         ($status:expr, $input:expr, $output:expr, $err:expr) => {
@@ -289,45 +343,108 @@ async fn execute_node(
                 }
             }
             record!("completed", None, None, None);
-            Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+            Ok(NodeOutcome::Continue(
+                single_outgoing(graph, &node.id)?.to_string(),
+            ))
         }
         "condition" => {
             let result = evaluate_conditions_config(&config, &run.trigger_input, context);
-            record!("completed", Some(&node.config_json), Some(&json!({"result": result}).to_string()), None);
+            record!(
+                "completed",
+                Some(&node.config_json),
+                Some(&json!({"result": result}).to_string()),
+                None
+            );
             let label = if result { "true" } else { "false" };
-            Ok(NodeOutcome::Continue(branch_outgoing(graph, &node.id, label)?.to_string()))
+            Ok(NodeOutcome::Continue(
+                branch_outgoing(graph, &node.id, label)?.to_string(),
+            ))
         }
         "router" => {
-            let branches = config.get("branches").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+            let branches = config
+                .get("branches")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
             let mut chosen: Option<String> = None;
             for branch in &branches {
-                let label = branch.get("branch_label").and_then(|v| v.as_str()).unwrap_or_default();
+                let label = branch
+                    .get("branch_label")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
                 if evaluate_conditions_config(branch, &run.trigger_input, context) {
                     chosen = Some(label.to_string());
                     break;
                 }
             }
-            let label = chosen.or_else(|| graph.edges.iter().any(|e| e.from_node_id == node.id && e.branch_label.as_deref() == Some("default")).then(|| "default".to_string()));
+            let label = chosen.or_else(|| {
+                graph
+                    .edges
+                    .iter()
+                    .any(|e| {
+                        e.from_node_id == node.id && e.branch_label.as_deref() == Some("default")
+                    })
+                    .then(|| "default".to_string())
+            });
             let Some(label) = label else {
-                record!("failed", Some(&node.config_json), None, Some("no router branch matched and no 'default' edge exists"));
-                return Err(AppError::Validation("no router branch matched and no 'default' edge exists".into()));
+                record!(
+                    "failed",
+                    Some(&node.config_json),
+                    None,
+                    Some("no router branch matched and no 'default' edge exists")
+                );
+                return Err(AppError::Validation(
+                    "no router branch matched and no 'default' edge exists".into(),
+                ));
             };
-            record!("completed", Some(&node.config_json), Some(&json!({"branch_label": label}).to_string()), None);
-            Ok(NodeOutcome::Continue(branch_outgoing(graph, &node.id, &label)?.to_string()))
+            record!(
+                "completed",
+                Some(&node.config_json),
+                Some(&json!({"branch_label": label}).to_string()),
+                None
+            );
+            Ok(NodeOutcome::Continue(
+                branch_outgoing(graph, &node.id, &label)?.to_string(),
+            ))
         }
         "action" => {
-            let (Some(entity_type), Some(entity_id)) = (run.source_entity_type.as_deref(), run.source_entity_id.as_deref()) else {
+            let (Some(entity_type), Some(entity_id)) = (
+                run.source_entity_type.as_deref(),
+                run.source_entity_id.as_deref(),
+            ) else {
                 let msg = "Action node requires the run to carry a source entity (source_entity_type/source_entity_id)";
                 record!("failed", Some(&node.config_json), None, Some(msg));
                 return Err(AppError::Validation(msg.into()));
             };
-            let action_type = config.get("action_type").and_then(|v| v.as_str()).unwrap_or_default();
-            let params_json = config.get("params_json").and_then(|v| v.as_str()).unwrap_or("{}");
-            match workflow_service::apply_action(conn, workspace_id, action_type, params_json, entity_type, entity_id, None, actor) {
+            let action_type = config
+                .get("action_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let params_json = config
+                .get("params_json")
+                .and_then(|v| v.as_str())
+                .unwrap_or("{}");
+            match workflow_service::apply_action(
+                conn,
+                workspace_id,
+                action_type,
+                params_json,
+                entity_type,
+                entity_id,
+                None,
+                actor,
+            ) {
                 Ok(summary) => {
                     context.insert(node.node_key.clone(), json!({"summary": summary}));
-                    record!("completed", Some(&node.config_json), Some(&json!({"summary": summary}).to_string()), None);
-                    Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+                    record!(
+                        "completed",
+                        Some(&node.config_json),
+                        Some(&json!({"summary": summary}).to_string()),
+                        None
+                    );
+                    Ok(NodeOutcome::Continue(
+                        single_outgoing(graph, &node.id)?.to_string(),
+                    ))
                 }
                 Err(e) => {
                     let msg = e.to_string();
@@ -337,8 +454,14 @@ async fn execute_node(
             }
         }
         "agent" => {
-            let agent_id = config.get("agent_id").and_then(|v| v.as_str()).unwrap_or_default();
-            let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default();
+            let agent_id = config
+                .get("agent_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let input_template = config
+                .get("input_template")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             let input_text = resolve_run_template(input_template, &run.trigger_input, context);
             // AI Agent Platform v2, Agent Studio 2.0 (issue #196): an
             // `agent` node may be "embedded" instead of referencing a saved
@@ -358,16 +481,24 @@ async fn execute_node(
                 };
                 agent
             } else {
-                let persona = config.get("embedded_persona").and_then(|v| v.as_str()).unwrap_or_default();
+                let persona = config
+                    .get("embedded_persona")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
                 if persona.is_empty() {
-                    let msg = "agent node has neither agent_id nor embedded_persona set".to_string();
+                    let msg =
+                        "agent node has neither agent_id nor embedded_persona set".to_string();
                     record!("failed", Some(&input_text), None, Some(&msg));
                     return Err(AppError::Validation(msg));
                 }
                 let action_names: Vec<String> = config
                     .get("embedded_action_names")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 crate::models::ai_agent::AiAgentDefinition {
                     id: format!("embedded:{}", node.node_key),
@@ -396,12 +527,32 @@ async fn execute_node(
             // AI Agent Platform v2, Phase 4: this graph run's own id scopes
             // Working Memory the same way an Orchestration Pipeline's run
             // id does (see `ai_orchestration_service`'s own call site).
-            let memory_context = crate::models::ai_memory::AgentMemoryContext { session_key: None, run_id: Some(run.id.clone()) };
-            match chat_service::run_agent_once_with_text(conn, workspace_id, master_key, actor, &agent, &input_text, &memory_context).await {
+            let memory_context = crate::models::ai_memory::AgentMemoryContext {
+                session_key: None,
+                run_id: Some(run.id.clone()),
+            };
+            match chat_service::run_agent_once_with_text(
+                conn,
+                workspace_id,
+                master_key,
+                actor,
+                &agent,
+                &input_text,
+                &memory_context,
+            )
+            .await
+            {
                 Ok(outcome) => {
                     context.insert(node.node_key.clone(), json!({"output": outcome.final_text}));
-                    record!("completed", Some(&input_text), Some(&json!({"output": outcome.final_text}).to_string()), None);
-                    Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+                    record!(
+                        "completed",
+                        Some(&input_text),
+                        Some(&json!({"output": outcome.final_text}).to_string()),
+                        None
+                    );
+                    Ok(NodeOutcome::Continue(
+                        single_outgoing(graph, &node.id)?.to_string(),
+                    ))
                 }
                 Err(e) => {
                     let msg = e.to_string();
@@ -411,51 +562,140 @@ async fn execute_node(
             }
         }
         "approval" => {
-            let subject_type = config.get("subject_type").and_then(|v| v.as_str()).unwrap_or("execution_graph_node");
-            let proposal = json!({"run_id": run.id, "node_key": node.node_key, "context_snapshot": context});
-            let approval = approval_service::create(conn, workspace_id, &AiApprovalInput { subject_type: subject_type.to_string(), subject_id: run.id.clone(), proposal }, actor)?;
+            let subject_type = config
+                .get("subject_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("execution_graph_node");
+            let proposal =
+                json!({"run_id": run.id, "node_key": node.node_key, "context_snapshot": context});
+            let approval = approval_service::create(
+                conn,
+                workspace_id,
+                &AiApprovalInput {
+                    subject_type: subject_type.to_string(),
+                    subject_id: run.id.clone(),
+                    proposal,
+                },
+                actor,
+            )?;
             record!("waiting_approval", Some(&node.config_json), None, None);
             Ok(NodeOutcome::WaitingApproval(approval.id))
         }
         "delay" => {
-            let delay_seconds = config.get("delay_seconds").and_then(|v| v.as_i64()).unwrap_or(0).max(0);
-            let resume_at = (chrono::Utc::now() + chrono::Duration::seconds(delay_seconds)).to_rfc3339();
+            let delay_seconds = config
+                .get("delay_seconds")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0)
+                .max(0);
+            let resume_at =
+                (chrono::Utc::now() + chrono::Duration::seconds(delay_seconds)).to_rfc3339();
             let next_node_id = single_outgoing(graph, &node.id)?.to_string();
-            record!("completed", Some(&node.config_json), Some(&json!({"resume_at": resume_at}).to_string()), None);
-            Ok(NodeOutcome::WaitingScheduled { resume_at, next_node_id })
+            record!(
+                "completed",
+                Some(&node.config_json),
+                Some(&json!({"resume_at": resume_at}).to_string()),
+                None
+            );
+            Ok(NodeOutcome::WaitingScheduled {
+                resume_at,
+                next_node_id,
+            })
         }
         "transform" => {
-            let sets = config.get("set").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+            let sets = config
+                .get("set")
+                .and_then(|v| v.as_object())
+                .cloned()
+                .unwrap_or_default();
             let mut resolved = serde_json::Map::new();
             for (key, template) in &sets {
                 let template_str = template.as_str().unwrap_or_default();
-                resolved.insert(key.clone(), Value::String(resolve_run_template(template_str, &run.trigger_input, context)));
+                resolved.insert(
+                    key.clone(),
+                    Value::String(resolve_run_template(
+                        template_str,
+                        &run.trigger_input,
+                        context,
+                    )),
+                );
             }
             context.insert(node.node_key.clone(), Value::Object(resolved.clone()));
-            record!("completed", Some(&node.config_json), Some(&Value::Object(resolved).to_string()), None);
-            Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+            record!(
+                "completed",
+                Some(&node.config_json),
+                Some(&Value::Object(resolved).to_string()),
+                None
+            );
+            Ok(NodeOutcome::Continue(
+                single_outgoing(graph, &node.id)?.to_string(),
+            ))
         }
         "loop" => {
-            let max_iterations = config.get("max_iterations").and_then(|v| v.as_i64()).unwrap_or(1).max(1);
+            let max_iterations = config
+                .get("max_iterations")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(1)
+                .max(1);
             if attempt > max_iterations {
-                record!("completed", Some(&node.config_json), Some(&json!({"result": "max_iterations_exceeded"}).to_string()), None);
-                Ok(NodeOutcome::Continue(branch_outgoing(graph, &node.id, "exit")?.to_string()))
+                record!(
+                    "completed",
+                    Some(&node.config_json),
+                    Some(&json!({"result": "max_iterations_exceeded"}).to_string()),
+                    None
+                );
+                Ok(NodeOutcome::Continue(
+                    branch_outgoing(graph, &node.id, "exit")?.to_string(),
+                ))
             } else {
-                record!("completed", Some(&node.config_json), Some(&json!({"result": "continue", "attempt": attempt}).to_string()), None);
-                Ok(NodeOutcome::Continue(branch_outgoing(graph, &node.id, "body")?.to_string()))
+                record!(
+                    "completed",
+                    Some(&node.config_json),
+                    Some(&json!({"result": "continue", "attempt": attempt}).to_string()),
+                    None
+                );
+                Ok(NodeOutcome::Continue(
+                    branch_outgoing(graph, &node.id, "body")?.to_string(),
+                ))
             }
         }
         "parallel_split" => {
-            let branch_starts: Vec<String> = graph.edges.iter().filter(|e| e.from_node_id == node.id).map(|e| e.to_node_id.clone()).collect();
-            let (join_id, branch_oks) = Box::pin(run_parallel_branches(conn, workspace_id, master_key, actor, graph, &branch_starts, run, context)).await?;
-            record!("completed", None, Some(&json!({"branch_results": branch_oks}).to_string()), None);
+            let branch_starts: Vec<String> = graph
+                .edges
+                .iter()
+                .filter(|e| e.from_node_id == node.id)
+                .map(|e| e.to_node_id.clone())
+                .collect();
+            let (join_id, branch_oks) = Box::pin(run_parallel_branches(
+                conn,
+                workspace_id,
+                master_key,
+                actor,
+                graph,
+                &branch_starts,
+                run,
+                context,
+            ))
+            .await?;
+            record!(
+                "completed",
+                None,
+                Some(&json!({"branch_results": branch_oks}).to_string()),
+                None
+            );
             context.insert("__parallel_join_results".to_string(), json!(branch_oks));
             Ok(NodeOutcome::Continue(join_id))
         }
         "join" => {
             let mode = config.get("mode").and_then(|v| v.as_str()).unwrap_or("all");
-            let results: Vec<bool> = context.remove("__parallel_join_results").and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
-            let required_count = config.get("required_count").and_then(|v| v.as_i64()).unwrap_or(1).max(1) as usize;
+            let results: Vec<bool> = context
+                .remove("__parallel_join_results")
+                .and_then(|v| serde_json::from_value(v).ok())
+                .unwrap_or_default();
+            let required_count = config
+                .get("required_count")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(1)
+                .max(1) as usize;
             let ok_count = results.iter().filter(|b| **b).count();
             let passes = match mode {
                 "all" => !results.is_empty() && ok_count == results.len(),
@@ -467,15 +707,32 @@ async fn execute_node(
                 _ => ok_count >= 1,
             };
             if !passes {
-                let msg = format!("Join '{}' (mode={mode}) did not pass: {ok_count}/{} branches succeeded", node.node_key, results.len());
+                let msg = format!(
+                    "Join '{}' (mode={mode}) did not pass: {ok_count}/{} branches succeeded",
+                    node.node_key,
+                    results.len()
+                );
                 record!("failed", None, None, Some(&msg));
                 return Err(AppError::Validation(msg));
             }
-            record!("completed", None, Some(&json!({"mode": mode, "ok_count": ok_count, "total": results.len()}).to_string()), None);
-            Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+            record!(
+                "completed",
+                None,
+                Some(
+                    &json!({"mode": mode, "ok_count": ok_count, "total": results.len()})
+                        .to_string()
+                ),
+                None
+            );
+            Ok(NodeOutcome::Continue(
+                single_outgoing(graph, &node.id)?.to_string(),
+            ))
         }
         "run_agent_team" => {
-            let target_graph_id = config.get("target_graph_id").and_then(|v| v.as_str()).unwrap_or_default();
+            let target_graph_id = config
+                .get("target_graph_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             // Agent Studio 2.0 (issue #196): a "Run Agent Team" node may
             // target either an old-style Pipeline (`pipeline_id`, the
             // original Workflow Studio 2.0 behavior below) or another
@@ -495,15 +752,29 @@ async fn execute_node(
                     record!("failed", None, None, Some(&msg));
                     return Err(AppError::Validation(msg));
                 }
-                let mapping = config.get("variable_mapping").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+                let mapping = config
+                    .get("variable_mapping")
+                    .and_then(|v| v.as_object())
+                    .cloned()
+                    .unwrap_or_default();
                 let input_text = if mapping.is_empty() {
-                    let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default();
+                    let input_template = config
+                        .get("input_template")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default();
                     resolve_run_template(input_template, &run.trigger_input, context)
                 } else {
                     let mut resolved = serde_json::Map::new();
                     for (key, template) in &mapping {
                         let template_str = template.as_str().unwrap_or_default();
-                        resolved.insert(key.clone(), Value::String(resolve_run_template(template_str, &run.trigger_input, context)));
+                        resolved.insert(
+                            key.clone(),
+                            Value::String(resolve_run_template(
+                                template_str,
+                                &run.trigger_input,
+                                context,
+                            )),
+                        );
                     }
                     Value::Object(resolved).to_string()
                 };
@@ -521,10 +792,18 @@ async fn execute_node(
                 .await;
                 return match nested {
                     Ok(nested_run) if nested_run.status == "completed" => {
-                        let output: Value = serde_json::from_str(&nested_run.context_json).unwrap_or(json!({}));
+                        let output: Value =
+                            serde_json::from_str(&nested_run.context_json).unwrap_or(json!({}));
                         context.insert(node.node_key.clone(), json!({"output": output}));
-                        record!("completed", Some(&input_text), Some(&json!({"output": output}).to_string()), None);
-                        Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+                        record!(
+                            "completed",
+                            Some(&input_text),
+                            Some(&json!({"output": output}).to_string()),
+                            None
+                        );
+                        Ok(NodeOutcome::Continue(
+                            single_outgoing(graph, &node.id)?.to_string(),
+                        ))
                     }
                     Ok(nested_run) => {
                         let msg = format!(
@@ -541,8 +820,14 @@ async fn execute_node(
                     }
                 };
             }
-            let pipeline_id = config.get("pipeline_id").and_then(|v| v.as_str()).unwrap_or_default();
-            let input_template = config.get("input_template").and_then(|v| v.as_str()).unwrap_or_default();
+            let pipeline_id = config
+                .get("pipeline_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let input_template = config
+                .get("input_template")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             let input_text = resolve_run_template(input_template, &run.trigger_input, context);
             match ai_orchestration_service::run_triggered(
                 conn,
@@ -559,10 +844,21 @@ async fn execute_node(
             .await
             {
                 Ok(pipeline_run) if pipeline_run.status == "succeeded" => {
-                    let output = pipeline_run.steps.last().and_then(|s| s.output_text.clone()).unwrap_or_default();
+                    let output = pipeline_run
+                        .steps
+                        .last()
+                        .and_then(|s| s.output_text.clone())
+                        .unwrap_or_default();
                     context.insert(node.node_key.clone(), json!({"output": output}));
-                    record!("completed", Some(&input_text), Some(&json!({"output": output}).to_string()), None);
-                    Ok(NodeOutcome::Continue(single_outgoing(graph, &node.id)?.to_string()))
+                    record!(
+                        "completed",
+                        Some(&input_text),
+                        Some(&json!({"output": output}).to_string()),
+                        None
+                    );
+                    Ok(NodeOutcome::Continue(
+                        single_outgoing(graph, &node.id)?.to_string(),
+                    ))
                 }
                 Ok(pipeline_run) => {
                     let msg = format!(
@@ -580,16 +876,41 @@ async fn execute_node(
             }
         }
         "evaluate_result" => {
-            let source_node_key = config.get("source_node_key").and_then(|v| v.as_str()).unwrap_or_default();
-            let success_criteria = config.get("success_criteria").and_then(|v| v.as_str()).unwrap_or_default();
+            let source_node_key = config
+                .get("source_node_key")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let success_criteria = config
+                .get("success_criteria")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
             let actual_output = lookup_token(source_node_key, &run.trigger_input, context);
-            let judge_message = ai_eval_service::build_judge_message(&run.trigger_input, success_criteria, &actual_output);
-            match ai_service::complete(conn, workspace_id, master_key, ai_eval_service::JUDGE_SYSTEM_PROMPT, &judge_message).await {
+            let judge_message = ai_eval_service::build_judge_message(
+                &run.trigger_input,
+                success_criteria,
+                &actual_output,
+            );
+            match ai_service::complete(
+                conn,
+                workspace_id,
+                master_key,
+                ai_eval_service::JUDGE_SYSTEM_PROMPT,
+                &judge_message,
+            )
+            .await
+            {
                 Ok(reply) => {
                     let (passed, reasoning) = ai_eval_service::parse_judge_reply(&reply);
                     let label = if passed { "pass" } else { "fail" };
-                    record!("completed", Some(&actual_output), Some(&json!({"passed": passed, "reasoning": reasoning}).to_string()), None);
-                    Ok(NodeOutcome::Continue(branch_outgoing(graph, &node.id, label)?.to_string()))
+                    record!(
+                        "completed",
+                        Some(&actual_output),
+                        Some(&json!({"passed": passed, "reasoning": reasoning}).to_string()),
+                        None
+                    );
+                    Ok(NodeOutcome::Continue(
+                        branch_outgoing(graph, &node.id, label)?.to_string(),
+                    ))
                 }
                 Err(e) => {
                     let msg = format!("The judge call itself failed: {e}");
@@ -598,7 +919,9 @@ async fn execute_node(
                 }
             }
         }
-        other => Err(AppError::Validation(format!("unsupported node_type '{other}'"))),
+        other => Err(AppError::Validation(format!(
+            "unsupported node_type '{other}'"
+        ))),
     }
 }
 
@@ -642,50 +965,121 @@ async fn run_parallel_branches(
                     node.node_type, node.node_key
                 )));
             }
-            match execute_node(conn, workspace_id, master_key, actor, graph, node, run, context).await {
+            match execute_node(
+                conn,
+                workspace_id,
+                master_key,
+                actor,
+                graph,
+                node,
+                run,
+                context,
+            )
+            .await
+            {
                 Ok(NodeOutcome::Continue(next)) => current = next,
-                Ok(_) => return Err(AppError::Validation("a Parallel Split branch node cannot pause the run in this phase".into())),
+                Ok(_) => {
+                    return Err(AppError::Validation(
+                        "a Parallel Split branch node cannot pause the run in this phase".into(),
+                    ))
+                }
                 Err(_) => break false,
             }
         };
         branch_oks.push(ok);
     }
 
-    let join_id = join_id.ok_or_else(|| AppError::Validation("Parallel Split's branches never reached a Join node".into()))?;
+    let join_id = join_id.ok_or_else(|| {
+        AppError::Validation("Parallel Split's branches never reached a Join node".into())
+    })?;
     Ok((join_id, branch_oks))
 }
 
-async fn run_from(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor: Option<&str>, graph: &ExecutionGraph, run_id: &str, start_node_id: &str) -> AppResult<GraphRun> {
+async fn run_from(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor: Option<&str>,
+    graph: &ExecutionGraph,
+    run_id: &str,
+    start_node_id: &str,
+) -> AppResult<GraphRun> {
     let mut current_id = start_node_id.to_string();
     loop {
-        let run = graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+        let run = graph_run_repo::get_run(conn, run_id)?
+            .ok_or_else(|| AppError::NotFound("Run".into()))?;
         if run.steps_executed >= MAX_STEPS_DEFAULT {
             graph_run_repo::finish_run(conn, run_id, "failed", Some("step limit exceeded"))?;
             break;
         }
         let Some(node) = graph.nodes.iter().find(|n| n.id == current_id) else {
-            graph_run_repo::finish_run(conn, run_id, "failed", Some("graph shape error: current node not found"))?;
+            graph_run_repo::finish_run(
+                conn,
+                run_id,
+                "failed",
+                Some("graph shape error: current node not found"),
+            )?;
             break;
         };
         if node.node_type == "end" {
             let mut context = parse_context(&run.context_json);
             context.remove("__parallel_join_results");
-            graph_run_repo::checkpoint(conn, run_id, "running", &dump_context(&context), None, run.steps_executed + 1)?;
+            graph_run_repo::checkpoint(
+                conn,
+                run_id,
+                "running",
+                &dump_context(&context),
+                None,
+                run.steps_executed + 1,
+            )?;
             graph_run_repo::finish_run(conn, run_id, "completed", None)?;
             break;
         }
         let mut context = parse_context(&run.context_json);
-        match execute_node(conn, workspace_id, master_key, actor, graph, node, &run, &mut context).await {
+        match execute_node(
+            conn,
+            workspace_id,
+            master_key,
+            actor,
+            graph,
+            node,
+            &run,
+            &mut context,
+        )
+        .await
+        {
             Ok(NodeOutcome::Continue(next_id)) => {
-                graph_run_repo::checkpoint(conn, run_id, "running", &dump_context(&context), Some(&next_id), run.steps_executed + 1)?;
+                graph_run_repo::checkpoint(
+                    conn,
+                    run_id,
+                    "running",
+                    &dump_context(&context),
+                    Some(&next_id),
+                    run.steps_executed + 1,
+                )?;
                 current_id = next_id;
             }
             Ok(NodeOutcome::WaitingApproval(approval_id)) => {
-                graph_run_repo::set_waiting_approval(conn, run_id, &dump_context(&context), &node.id, &approval_id)?;
+                graph_run_repo::set_waiting_approval(
+                    conn,
+                    run_id,
+                    &dump_context(&context),
+                    &node.id,
+                    &approval_id,
+                )?;
                 break;
             }
-            Ok(NodeOutcome::WaitingScheduled { resume_at, next_node_id }) => {
-                graph_run_repo::set_waiting_scheduled(conn, run_id, &dump_context(&context), &next_node_id, &resume_at)?;
+            Ok(NodeOutcome::WaitingScheduled {
+                resume_at,
+                next_node_id,
+            }) => {
+                graph_run_repo::set_waiting_scheduled(
+                    conn,
+                    run_id,
+                    &dump_context(&context),
+                    &next_node_id,
+                    &resume_at,
+                )?;
                 break;
             }
             Err(e) => {
@@ -697,13 +1091,20 @@ async fn run_from(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], 
     graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
 }
 
-fn get_published_graph(conn: &Connection, graph_id: &str, workspace_id: &str) -> AppResult<ExecutionGraph> {
-    let graph = execution_graph_repo::get(conn, graph_id)?.ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+fn get_published_graph(
+    conn: &Connection,
+    graph_id: &str,
+    workspace_id: &str,
+) -> AppResult<ExecutionGraph> {
+    let graph = execution_graph_repo::get(conn, graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
     if graph.workspace_id != workspace_id {
         return Err(AppError::NotFound("Execution graph".into()));
     }
     if graph.status != "published" {
-        return Err(AppError::Validation("graph must be published before it can be run".into()));
+        return Err(AppError::Validation(
+            "graph must be published before it can be run".into(),
+        ));
     }
     Ok(graph)
 }
@@ -721,15 +1122,38 @@ pub async fn start_run(
     source_entity_id: Option<&str>,
 ) -> AppResult<GraphRun> {
     let graph = get_published_graph(conn, graph_id, workspace_id)?;
-    let trigger = graph.nodes.iter().find(|n| n.node_type == "trigger").ok_or_else(|| AppError::Validation("graph has no trigger node".into()))?;
+    let trigger = graph
+        .nodes
+        .iter()
+        .find(|n| n.node_type == "trigger")
+        .ok_or_else(|| AppError::Validation("graph has no trigger node".into()))?;
     let run_id = crate::domain::ids::new_uuid();
-    graph_run_repo::start_run(conn, &run_id, workspace_id, graph_id, trigger_input, triggered_by, source_entity_type, source_entity_id)?;
+    graph_run_repo::start_run(
+        conn,
+        &run_id,
+        workspace_id,
+        graph_id,
+        trigger_input,
+        triggered_by,
+        source_entity_type,
+        source_entity_id,
+    )?;
     graph_run_repo::checkpoint(conn, &run_id, "running", "{}", Some(&trigger.id), 0)?;
-    run_from(conn, workspace_id, master_key, actor, &graph, &run_id, &trigger.id).await
+    run_from(
+        conn,
+        workspace_id,
+        master_key,
+        actor,
+        &graph,
+        &run_id,
+        &trigger.id,
+    )
+    .await
 }
 
 fn get_owned_run(conn: &Connection, run_id: &str, workspace_id: &str) -> AppResult<GraphRun> {
-    let run = graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
     if run.workspace_id != workspace_id {
         return Err(AppError::NotFound("Run".into()));
     }
@@ -739,47 +1163,105 @@ fn get_owned_run(conn: &Connection, run_id: &str, workspace_id: &str) -> AppResu
 /// Picks a run interrupted mid-flight (a process restart, a panic) back
 /// up from exactly `current_node_id`/`context_json` as last checkpointed -
 /// the durability guarantee this whole module exists to provide (AI-AC-06).
-pub async fn resume_run(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], run_id: &str, actor: Option<&str>) -> AppResult<GraphRun> {
+pub async fn resume_run(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    actor: Option<&str>,
+) -> AppResult<GraphRun> {
     let run = get_owned_run(conn, run_id, workspace_id)?;
     if !crate::models::graph_run::is_waiting_status(&run.status) {
-        return Err(AppError::Validation(format!("run is '{}', not resumable", run.status)));
+        return Err(AppError::Validation(format!(
+            "run is '{}', not resumable",
+            run.status
+        )));
     }
-    let graph = execution_graph_repo::get(conn, &run.graph_id)?.ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
-    let current = run.current_node_id.clone().ok_or_else(|| AppError::Validation("run has no current_node_id to resume from".into()))?;
-    run_from(conn, workspace_id, master_key, actor, &graph, run_id, &current).await
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let current = run
+        .current_node_id
+        .clone()
+        .ok_or_else(|| AppError::Validation("run has no current_node_id to resume from".into()))?;
+    run_from(
+        conn,
+        workspace_id,
+        master_key,
+        actor,
+        &graph,
+        run_id,
+        &current,
+    )
+    .await
 }
 
 /// Resolves the durable `ai_approvals` row a `waiting_approval` run is
 /// blocked on, then continues down the `approved`/`rejected` edge from
 /// the paused Approval node - the graph engine's one consolidated
 /// approval-gate primitive (see this module's top doc comment).
-pub async fn resolve_approval(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], run_id: &str, approve: bool, notes: Option<&str>, actor: Option<&str>) -> AppResult<GraphRun> {
+pub async fn resolve_approval(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    approve: bool,
+    notes: Option<&str>,
+    actor: Option<&str>,
+) -> AppResult<GraphRun> {
     let run = get_owned_run(conn, run_id, workspace_id)?;
     if run.status != "waiting_approval" {
-        return Err(AppError::Validation(format!("run is '{}', not waiting on an approval", run.status)));
+        return Err(AppError::Validation(format!(
+            "run is '{}', not waiting on an approval",
+            run.status
+        )));
     }
-    let approval_id = run.pending_approval_id.clone().ok_or_else(|| AppError::Validation("run has no pending approval".into()))?;
+    let approval_id = run
+        .pending_approval_id
+        .clone()
+        .ok_or_else(|| AppError::Validation("run has no pending approval".into()))?;
     approval_service::resolve(
         conn,
         &approval_id,
         workspace_id,
-        &crate::models::ai_approval::AiApprovalResolution { approve, resolution_notes: notes.map(String::from) },
+        &crate::models::ai_approval::AiApprovalResolution {
+            approve,
+            resolution_notes: notes.map(String::from),
+        },
         actor,
     )?;
-    let graph = execution_graph_repo::get(conn, &run.graph_id)?.ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
-    let approval_node_id = run.current_node_id.clone().ok_or_else(|| AppError::Validation("run has no current_node_id".into()))?;
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let approval_node_id = run
+        .current_node_id
+        .clone()
+        .ok_or_else(|| AppError::Validation("run has no current_node_id".into()))?;
     let label = if approve { "approved" } else { "rejected" };
     let next = branch_outgoing(&graph, &approval_node_id, label)?.to_string();
     graph_run_repo::clear_wait_markers(conn, run_id)?;
-    graph_run_repo::checkpoint(conn, run_id, "running", &run.context_json, Some(&next), run.steps_executed + 1)?;
+    graph_run_repo::checkpoint(
+        conn,
+        run_id,
+        "running",
+        &run.context_json,
+        Some(&next),
+        run.steps_executed + 1,
+    )?;
     run_from(conn, workspace_id, master_key, actor, &graph, run_id, &next).await
 }
 
-pub async fn cancel_run(conn: &Connection, workspace_id: &str, run_id: &str, actor_user_id: Option<&str>) -> AppResult<GraphRun> {
+pub async fn cancel_run(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
     require_admin(conn, actor_user_id)?;
     let run = get_owned_run(conn, run_id, workspace_id)?;
     if crate::models::graph_run::is_terminal_status(&run.status) {
-        return Err(AppError::Validation(format!("run is already '{}'", run.status)));
+        return Err(AppError::Validation(format!(
+            "run is already '{}'",
+            run.status
+        )));
     }
     graph_run_repo::finish_run(conn, run_id, "cancelled", None)?;
     get_owned_run(conn, run_id, workspace_id)
@@ -790,25 +1272,43 @@ pub async fn cancel_run(conn: &Connection, workspace_id: &str, run_id: &str, act
 /// sweep pattern for the Workflow engine's `scheduled` trigger type,
 /// generalized to a Delay node's resume point instead of a whole
 /// workflow's next scheduled firing.
-pub async fn resume_due_delays(conn: &Connection, workspace_id: &str, master_key: &[u8; 32]) -> AppResult<usize> {
+pub async fn resume_due_delays(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+) -> AppResult<usize> {
     let due = graph_run_repo::list_due_delayed_runs(conn, workspace_id)?;
     let mut resumed = 0;
     for run in due {
-        if resume_run(conn, workspace_id, master_key, &run.id, None).await.is_ok() {
+        if resume_run(conn, workspace_id, master_key, &run.id, None)
+            .await
+            .is_ok()
+        {
             resumed += 1;
         }
     }
     Ok(resumed)
 }
 
-pub fn get_run(conn: &Connection, run_id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<GraphRun> {
+pub fn get_run(
+    conn: &Connection,
+    run_id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
     require_admin(conn, actor_user_id)?;
     get_owned_run(conn, run_id, workspace_id)
 }
 
-pub fn list_runs_for_graph(conn: &Connection, graph_id: &str, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<GraphRun>> {
+pub fn list_runs_for_graph(
+    conn: &Connection,
+    graph_id: &str,
+    workspace_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<GraphRun>> {
     require_admin(conn, actor_user_id)?;
-    let graph = execution_graph_repo::get(conn, graph_id)?.ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let graph = execution_graph_repo::get(conn, graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
     if graph.workspace_id != workspace_id {
         return Err(AppError::NotFound("Execution graph".into()));
     }
@@ -821,13 +1321,25 @@ pub fn list_runs_for_graph(conn: &Connection, graph_id: &str, workspace_id: &str
 /// single item's failure (a bad graph shape, a provider error) is
 /// recorded on its own `ai_runs` row via `start_run`'s existing error
 /// handling and never aborts the batch.
-pub async fn drain_pending_graph_runs(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], limit: i64) -> AppResult<usize> {
+pub async fn drain_pending_graph_runs(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    limit: i64,
+) -> AppResult<usize> {
     let batch = crate::repositories::graph_pending_run_repo::list_batch(conn, workspace_id, limit)?;
     let mut drained = 0;
     for item in &batch {
         let _ = start_run(
-            conn, workspace_id, master_key, &item.graph_id, &item.trigger_input, None,
-            item.triggered_by.as_deref(), item.source_entity_type.as_deref(), item.source_entity_id.as_deref(),
+            conn,
+            workspace_id,
+            master_key,
+            &item.graph_id,
+            &item.trigger_input,
+            None,
+            item.triggered_by.as_deref(),
+            item.source_entity_type.as_deref(),
+            item.source_entity_id.as_deref(),
         )
         .await;
         crate::repositories::graph_pending_run_repo::delete(conn, &item.id)?;

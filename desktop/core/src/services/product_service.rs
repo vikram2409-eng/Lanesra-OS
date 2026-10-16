@@ -32,8 +32,22 @@ pub fn create(
     access_service::require_capability(conn, actor_user_id, "Product", Capability::Create, None)?;
     let id = new_uuid();
     let product_number = numbering::allocate_number(conn, workspace_id, &PRODUCT)?;
-    let product = product_repo::create(conn, &id, workspace_id, &product_number, input, actor_user_id)?;
-    super::ownership_service::set_default_owner_on_create(conn, workspace_id, "Product", &product.id, actor_user_id, None)?;
+    let product = product_repo::create(
+        conn,
+        &id,
+        workspace_id,
+        &product_number,
+        input,
+        actor_user_id,
+    )?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        workspace_id,
+        "Product",
+        &product.id,
+        actor_user_id,
+        None,
+    )?;
     audit_repo::record(
         conn,
         workspace_id,
@@ -44,7 +58,18 @@ pub fn create(
         &format!("Created product {}", product.product_number),
         None,
     )?;
-    super::event_hooks::record_created(conn, workspace_id, "Product", &product.id, &product.name, if product.is_active { "active" } else { "inactive" });
+    super::event_hooks::record_created(
+        conn,
+        workspace_id,
+        "Product",
+        &product.id,
+        &product.name,
+        if product.is_active {
+            "active"
+        } else {
+            "inactive"
+        },
+    );
     Ok(product)
 }
 
@@ -65,7 +90,13 @@ pub fn update(
     validate(input)?;
     let workspace_id = get(conn, id)?.workspace_id;
     app_service::require_object_write_access(conn, &workspace_id, "Product", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Product", Capability::Update, Some(id))?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Product",
+        Capability::Update,
+        Some(id),
+    )?;
     let product = product_repo::update(conn, id, input, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -77,14 +108,36 @@ pub fn update(
         &format!("Updated product {}", product.product_number),
         None,
     )?;
-    super::event_hooks::record_updated(conn, &workspace_id, "Product", id, &product.name, if product.is_active { "active" } else { "inactive" });
+    super::event_hooks::record_updated(
+        conn,
+        &workspace_id,
+        "Product",
+        id,
+        &product.name,
+        if product.is_active {
+            "active"
+        } else {
+            "inactive"
+        },
+    );
     Ok(product)
 }
 
 pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     let existing = get(conn, id)?;
-    app_service::require_object_write_access(conn, &existing.workspace_id, "Product", actor_user_id)?;
-    access_service::require_capability(conn, actor_user_id, "Product", Capability::Delete, Some(id))?;
+    app_service::require_object_write_access(
+        conn,
+        &existing.workspace_id,
+        "Product",
+        actor_user_id,
+    )?;
+    access_service::require_capability(
+        conn,
+        actor_user_id,
+        "Product",
+        Capability::Delete,
+        Some(id),
+    )?;
     product_repo::archive(conn, id, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -96,6 +149,12 @@ pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppR
         &format!("Archived product {}", existing.product_number),
         None,
     )?;
-    super::event_hooks::record_archived(conn, &existing.workspace_id, "Product", id, &existing.name);
+    super::event_hooks::record_archived(
+        conn,
+        &existing.workspace_id,
+        "Product",
+        id,
+        &existing.name,
+    );
     Ok(())
 }

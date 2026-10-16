@@ -7,10 +7,14 @@
 //! just the record-CRUD services that already called `audit_repo::record`
 //! before this issue.
 
-use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
+use lanesra_core::models::business_rule::{
+    BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput,
+};
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{audit_service, business_rule_service, custom_object_service, workspace_service};
+use lanesra_core::services::{
+    audit_service, business_rule_service, custom_object_service, workspace_service,
+};
 
 fn setup_workspace(business_name: &str) -> (rusqlite::Connection, String, String) {
     let conn = lanesra_core::db::open_in_memory_db().unwrap();
@@ -35,14 +39,22 @@ fn list_recent_surfaces_admin_config_changes_across_domains() {
     let (conn, ws, admin) = setup_workspace("Admin Audit Trail Co");
 
     let object = custom_object_service::create(
-        &conn, &ws,
-        &CustomObjectDefinitionInput { singular_label: "Vendor".into(), plural_label: "Vendors".into(), icon: "🏷️".into(), prefix: "VEN".into(), digits: 4 },
+        &conn,
+        &ws,
+        &CustomObjectDefinitionInput {
+            singular_label: "Vendor".into(),
+            plural_label: "Vendors".into(),
+            icon: "🏷️".into(),
+            prefix: "VEN".into(),
+            digits: 4,
+        },
         Some(&admin),
     )
     .unwrap();
 
     let rule = business_rule_service::create_rule(
-        &conn, &ws,
+        &conn,
+        &ws,
         &BusinessRuleInput {
             entity_type: "Company".into(),
             name: "Require phone for prospects".into(),
@@ -76,11 +88,17 @@ fn list_recent_surfaces_admin_config_changes_across_domains() {
 
     let recent = audit_service::list_recent(&conn, &ws, 50, Some(&admin)).unwrap();
 
-    let object_entry = recent.iter().find(|e| e.entity_type.as_deref() == Some("custom_object") && e.entity_id.as_deref() == Some(&object.id));
+    let object_entry = recent.iter().find(|e| {
+        e.entity_type.as_deref() == Some("custom_object")
+            && e.entity_id.as_deref() == Some(&object.id)
+    });
     assert!(object_entry.is_some(), "{recent:?}");
     assert_eq!(object_entry.unwrap().event_type, "create");
 
-    let rule_entry = recent.iter().find(|e| e.entity_type.as_deref() == Some("business_rule") && e.entity_id.as_deref() == Some(&rule.id));
+    let rule_entry = recent.iter().find(|e| {
+        e.entity_type.as_deref() == Some("business_rule")
+            && e.entity_id.as_deref() == Some(&rule.id)
+    });
     assert!(rule_entry.is_some(), "{recent:?}");
     assert_eq!(rule_entry.unwrap().event_type, "create");
 
@@ -97,7 +115,9 @@ fn non_admin_cannot_list_recent_changes() {
         password: "supersecretpassword".into(),
         roles: vec!["Sales".into()],
     };
-    let non_admin = lanesra_core::services::user_service::create(&conn, &ws, &non_admin_input, Some(&admin)).unwrap();
+    let non_admin =
+        lanesra_core::services::user_service::create(&conn, &ws, &non_admin_input, Some(&admin))
+            .unwrap();
     let err = audit_service::list_recent(&conn, &ws, 50, Some(&non_admin.id)).unwrap_err();
     assert!(err.to_string().to_lowercase().contains("admin"), "{err}");
 }

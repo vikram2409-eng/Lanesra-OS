@@ -219,14 +219,24 @@ pub struct AiAgentVersionInput {
 /// one call site. Returns every violation found (not just the first), each
 /// as a human-readable `path: problem` string, so a repair prompt can name
 /// exactly what to fix.
-pub fn validate_output_schema(schema: &serde_json::Value, instance: &serde_json::Value) -> Vec<String> {
+pub fn validate_output_schema(
+    schema: &serde_json::Value,
+    instance: &serde_json::Value,
+) -> Vec<String> {
     let mut errors = Vec::new();
     validate_node(schema, instance, "$", &mut errors);
     errors
 }
 
-fn validate_node(schema: &serde_json::Value, instance: &serde_json::Value, path: &str, errors: &mut Vec<String>) {
-    let Some(schema_obj) = schema.as_object() else { return };
+fn validate_node(
+    schema: &serde_json::Value,
+    instance: &serde_json::Value,
+    path: &str,
+    errors: &mut Vec<String>,
+) {
+    let Some(schema_obj) = schema.as_object() else {
+        return;
+    };
 
     if let Some(expected_type) = schema_obj.get("type").and_then(|t| t.as_str()) {
         let matches = match expected_type {
@@ -240,14 +250,19 @@ fn validate_node(schema: &serde_json::Value, instance: &serde_json::Value, path:
             _ => true,
         };
         if !matches {
-            errors.push(format!("{path}: expected type '{expected_type}', got {}", type_name(instance)));
+            errors.push(format!(
+                "{path}: expected type '{expected_type}', got {}",
+                type_name(instance)
+            ));
             return;
         }
     }
 
     if let Some(allowed) = schema_obj.get("enum").and_then(|e| e.as_array()) {
         if !allowed.contains(instance) {
-            errors.push(format!("{path}: value is not one of the allowed enum values"));
+            errors.push(format!(
+                "{path}: value is not one of the allowed enum values"
+            ));
         }
     }
 

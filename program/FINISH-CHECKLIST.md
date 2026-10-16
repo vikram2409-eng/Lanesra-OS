@@ -46,4 +46,4 @@ Format (parsed by `programctl export`, keep it): `## Group` headings, then `- [ 
 - [ ] **Marked done** — `status: done` and the PR link in the work package file; claim branch deleted
 - [ ] **Unblocked work checked** — the "Unblocks" list on the dashboard: dependants that are now ready are moved from `proposed` to `ready` if they meet the Definition of Ready
 - [ ] **Gate checked** — if this was the last work package of a phase, the gate file in `program/gates/` is filled with evidence for the owner to sign
-- [ ] **Dashboard refreshed** — GitHub Issues update automatically on merge; the program dashboard page (https://claude.ai/artifact/TANp9Vzmur4A37bsgHEtKg) is republished by Claude Code at its next session (`program/dashboard/README.md`)
+- [ ] **Dashboard refreshed** — GitHub Issues and the dashboard at https://vikram2409-eng.github.io/Lanesra-OS/ update automatically on merge; Claude Code also republishes the claude.ai copy at its next session (`program/dashboard/README.md`)

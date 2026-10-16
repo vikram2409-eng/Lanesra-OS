@@ -45,22 +45,52 @@ pub fn insert(
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<ConnectionRef>> {
     conn.query_row(&format!("{SELECT} WHERE r.id = ?1"), [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
-pub fn get_by_key(conn: &Connection, workspace_id: &str, reference_key: &str) -> rusqlite::Result<Option<ConnectionRef>> {
-    conn.query_row(&format!("{SELECT} WHERE r.workspace_id = ?1 AND r.reference_key = ?2"), (workspace_id, reference_key), map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+pub fn get_by_key(
+    conn: &Connection,
+    workspace_id: &str,
+    reference_key: &str,
+) -> rusqlite::Result<Option<ConnectionRef>> {
+    conn.query_row(
+        &format!("{SELECT} WHERE r.workspace_id = ?1 AND r.reference_key = ?2"),
+        (workspace_id, reference_key),
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<ConnectionRef>> {
-    let mut stmt = conn.prepare(&format!("{SELECT} WHERE r.workspace_id = ?1 ORDER BY r.reference_name"))?;
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<ConnectionRef>> {
+    let mut stmt = conn.prepare(&format!(
+        "{SELECT} WHERE r.workspace_id = ?1 ORDER BY r.reference_name"
+    ))?;
     let rows = stmt.query_map([workspace_id], map_row)?;
     rows.collect()
 }
 
-pub fn bind(conn: &Connection, id: &str, connection_id: Option<&str>, actor_user_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn bind(
+    conn: &Connection,
+    id: &str,
+    connection_id: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE integration_connection_refs SET connection_id = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
         rusqlite::params![connection_id, now_iso(), actor_user_id, id],
@@ -69,6 +99,9 @@ pub fn bind(conn: &Connection, id: &str, connection_id: Option<&str>, actor_user
 }
 
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("DELETE FROM integration_connection_refs WHERE id = ?1", [id])?;
+    conn.execute(
+        "DELETE FROM integration_connection_refs WHERE id = ?1",
+        [id],
+    )?;
     Ok(())
 }

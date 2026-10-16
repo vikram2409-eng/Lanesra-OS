@@ -55,8 +55,14 @@ pub fn enqueue(
     Ok(())
 }
 
-pub fn list_batch(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<PendingRun>> {
-    let mut stmt = conn.prepare("SELECT * FROM ai_agent_pending_runs WHERE workspace_id = ?1 ORDER BY created_at LIMIT ?2")?;
+pub fn list_batch(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<PendingRun>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM ai_agent_pending_runs WHERE workspace_id = ?1 ORDER BY created_at LIMIT ?2",
+    )?;
     let rows = stmt.query_map(rusqlite::params![workspace_id, limit], map_row)?;
     rows.collect()
 }

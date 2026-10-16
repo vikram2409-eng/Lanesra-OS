@@ -12,10 +12,23 @@ use crate::services::{access_service, app_service, status_transition_service, wo
 /// Quotes have no owner of their own, so a workflow assigning to "the
 /// record's owner" resolves via the Quote's Company owner - the same
 /// attribution invoice_service and report_service::sales_by_owner use.
-fn fire_workflow(conn: &Connection, quote: &Quote, old_status: Option<&str>, new_status: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+fn fire_workflow(
+    conn: &Connection,
+    quote: &Quote,
+    old_status: Option<&str>,
+    new_status: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     let owner_user_id = company_repo::get(conn, &quote.company_id)?.and_then(|c| c.owner_user_id);
     workflow_service::fire_event(
-        conn, &quote.workspace_id, "Quote", &quote.id, old_status, new_status, owner_user_id.as_deref(), actor_user_id,
+        conn,
+        &quote.workspace_id,
+        "Quote",
+        &quote.id,
+        old_status,
+        new_status,
+        owner_user_id.as_deref(),
+        actor_user_id,
     )?;
     Ok(())
 }
@@ -71,7 +84,14 @@ pub fn create(
     let calculations: Vec<_> = input
         .lines
         .iter()
-        .map(|l| money::compute_line(l.quantity_milli, l.unit_price_cents, l.discount_bp, l.tax_rate_bp))
+        .map(|l| {
+            money::compute_line(
+                l.quantity_milli,
+                l.unit_price_cents,
+                l.discount_bp,
+                l.tax_rate_bp,
+            )
+        })
         .collect();
     let totals: DocumentTotals = money::aggregate_lines(&calculations);
 
@@ -99,7 +119,14 @@ pub fn create(
         quote_repo::insert_line(conn, &id, line_input, calc.line_total_cents, idx as i64)?;
     }
 
-    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Quote", &id, actor_user_id, None)?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        &workspace_id,
+        "Quote",
+        &id,
+        actor_user_id,
+        None,
+    )?;
 
     audit_repo::record(
         conn,
@@ -113,7 +140,13 @@ pub fn create(
     )?;
 
     let created = load(conn, &id)?;
-    fire_workflow(conn, &created.quote, None, &created.quote.status, actor_user_id)?;
+    fire_workflow(
+        conn,
+        &created.quote,
+        None,
+        &created.quote.status,
+        actor_user_id,
+    )?;
     Ok(created)
 }
 
@@ -132,13 +165,26 @@ pub fn set_status(
     actor_user_id: Option<&str>,
 ) -> AppResult<QuoteWithLines> {
     if !QUOTE_STATUSES.contains(&status) {
-        return Err(AppError::Validation(format!("Invalid quote status '{status}'")));
+        return Err(AppError::Validation(format!(
+            "Invalid quote status '{status}'"
+        )));
     }
     let existing = load(conn, id)?;
-    app_service::require_object_write_access(conn, &existing.quote.workspace_id, "Quote", actor_user_id)?;
+    app_service::require_object_write_access(
+        conn,
+        &existing.quote.workspace_id,
+        "Quote",
+        actor_user_id,
+    )?;
     access_service::require_capability(conn, actor_user_id, "Quote", Capability::Update, Some(id))?;
     if existing.quote.status != status {
-        status_transition_service::validate_transition(conn, &existing.quote.workspace_id, "Quote", &existing.quote.status, status)?;
+        status_transition_service::validate_transition(
+            conn,
+            &existing.quote.workspace_id,
+            "Quote",
+            &existing.quote.status,
+            status,
+        )?;
     }
     quote_repo::update_status(conn, id, status, actor_user_id)?;
     audit_repo::record(
@@ -148,10 +194,19 @@ pub fn set_status(
         "status_change",
         Some("quote"),
         Some(id),
-        &format!("Quote {} status changed to {}", existing.quote.quote_number, status),
+        &format!(
+            "Quote {} status changed to {}",
+            existing.quote.quote_number, status
+        ),
         None,
     )?;
-    fire_workflow(conn, &existing.quote, Some(&existing.quote.status), status, actor_user_id)?;
+    fire_workflow(
+        conn,
+        &existing.quote,
+        Some(&existing.quote.status),
+        status,
+        actor_user_id,
+    )?;
     load(conn, id)
 }
 
@@ -173,11 +228,17 @@ pub fn convert_to_order(
     // never mutated - see this function's own doc comment above), so the
     // gate is on Order write access, the same as calling order_service::
     // create directly would require.
-    app_service::require_object_write_access(conn, &source.quote.workspace_id, "Order", actor_user_id)?;
+    app_service::require_object_write_access(
+        conn,
+        &source.quote.workspace_id,
+        "Order",
+        actor_user_id,
+    )?;
     access_service::require_capability(conn, actor_user_id, "Order", Capability::Create, None)?;
 
     let order_id = new_uuid();
-    let order_number = numbering::allocate_number(conn, &source.quote.workspace_id, &numbering::ORDER)?;
+    let order_number =
+        numbering::allocate_number(conn, &source.quote.workspace_id, &numbering::ORDER)?;
 
     let totals = DocumentTotals {
         subtotal_cents: source.quote.subtotal_cents,

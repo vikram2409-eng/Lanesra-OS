@@ -1,0 +1,5 @@
+# Commits that only reformat code. `git blame` skips them with
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs`; GitHub applies this file automatically.
+
+# rustfmt applied to the whole Rust workspace (WP-0004)
+971ba7f0c55ffb802bb8696ebd8d913578166271

@@ -89,14 +89,25 @@ pub fn update(
 pub fn get_by_id(conn: &Connection, id: &str) -> rusqlite::Result<Option<SavedView>> {
     conn.query_row("SELECT * FROM saved_views WHERE id = ?1", [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 /// Every view a `user_id` may use for `object_key`: their own (private or
 /// shared) plus every other user's shared views - private views owned by
 /// someone else never come back here, enforced by this query rather than
 /// filtered after the fact.
-pub fn list_usable(conn: &Connection, workspace_id: &str, object_key: &str, user_id: &str) -> rusqlite::Result<Vec<SavedView>> {
+pub fn list_usable(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    user_id: &str,
+) -> rusqlite::Result<Vec<SavedView>> {
     let mut stmt = conn.prepare(
         "SELECT sv.*, u.display_name AS owner_name FROM saved_views sv
          LEFT JOIN users u ON u.id = sv.owner_user_id
@@ -104,15 +115,24 @@ pub fn list_usable(conn: &Connection, workspace_id: &str, object_key: &str, user
            AND (sv.owner_user_id = ?3 OR sv.visibility = 'shared')
          ORDER BY sv.is_object_default DESC, sv.name COLLATE NOCASE",
     )?;
-    let rows = stmt.query_map(rusqlite::params![workspace_id, object_key, user_id], |row| {
-        let mut view = map_row(row)?;
-        view.owner_name = row.get("owner_name")?;
-        Ok(view)
-    })?.collect();
+    let rows = stmt
+        .query_map(
+            rusqlite::params![workspace_id, object_key, user_id],
+            |row| {
+                let mut view = map_row(row)?;
+                view.owner_name = row.get("owner_name")?;
+                Ok(view)
+            },
+        )?
+        .collect();
     rows
 }
 
-pub fn find_default(conn: &Connection, workspace_id: &str, object_key: &str) -> rusqlite::Result<Option<SavedView>> {
+pub fn find_default(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> rusqlite::Result<Option<SavedView>> {
     conn.query_row(
         "SELECT * FROM saved_views WHERE workspace_id = ?1 AND object_key = ?2 AND is_object_default = 1",
         (workspace_id, object_key),
@@ -122,7 +142,11 @@ pub fn find_default(conn: &Connection, workspace_id: &str, object_key: &str) -> 
     .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
 }
 
-pub fn clear_default_for_object(conn: &Connection, workspace_id: &str, object_key: &str) -> rusqlite::Result<()> {
+pub fn clear_default_for_object(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE saved_views SET is_object_default = 0 WHERE workspace_id = ?1 AND object_key = ?2 AND is_object_default = 1",
         (workspace_id, object_key),
@@ -131,7 +155,10 @@ pub fn clear_default_for_object(conn: &Connection, workspace_id: &str, object_ke
 }
 
 pub fn set_default(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE saved_views SET is_object_default = 1 WHERE id = ?1", [id])?;
+    conn.execute(
+        "UPDATE saved_views SET is_object_default = 1 WHERE id = ?1",
+        [id],
+    )?;
     Ok(())
 }
 

@@ -1,17 +1,20 @@
 use std::collections::HashMap;
 
 use lanesra_core::db::open_in_memory_db;
+use lanesra_core::models::business_rule::{
+    BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput,
+};
 use lanesra_core::models::company::CompanyInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
-use lanesra_core::models::business_rule::{BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput};
 use lanesra_core::models::custom_report::CustomReportInput;
 use lanesra_core::models::numbering_override::NumberingOverrideInput;
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::{DashboardKpiPrefs, WorkspaceUpdate};
 use lanesra_core::services::{
-    business_rule_service, company_service, custom_field_service, custom_report_service, numbering_service,
-    opportunity_service, task_service, user_service, workflow_service, workspace_service,
+    business_rule_service, company_service, custom_field_service, custom_report_service,
+    numbering_service, opportunity_service, task_service, user_service, workflow_service,
+    workspace_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -120,7 +123,8 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
                 value: "Won".into(),
                 compare_field_source: None,
                 compare_field_key: None,
-                group_id: None, relationship_definition_id: None,
+                group_id: None,
+                relationship_definition_id: None,
             }],
             actions: vec![BusinessRuleActionInput {
                 action_type: "require".into(),
@@ -163,28 +167,60 @@ fn custom_fields_business_rules_and_workflow_automation_all_work_on_opportunity(
     )
     .unwrap();
 
-    let company = company_service::create(&conn, &ws, &company_input("Acme", "Active Customer"), Some(&admin)).unwrap();
-    let opp = opportunity_service::create(&conn, &opportunity_input(&company.id, "New", 100000), Some(&admin)).unwrap();
+    let company = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Acme", "Active Customer"),
+        Some(&admin),
+    )
+    .unwrap();
+    let opp = opportunity_service::create(
+        &conn,
+        &opportunity_input(&company.id, "New", 100000),
+        Some(&admin),
+    )
+    .unwrap();
 
     // While the opportunity is still New/Open, the rule doesn't apply -
     // empty custom field values save without complaint.
-    custom_field_service::set_entity_values(&conn, "Opportunity", &opp.id, &HashMap::new(), Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "Opportunity",
+        &opp.id,
+        &HashMap::new(),
+        Some(&admin),
+    )
+    .unwrap();
 
     // Workflow automation: moving the opportunity's stage to Won fires
     // the workflow rule and creates a follow-up task.
-    opportunity_service::update(&conn, &opp.id, &opportunity_input(&company.id, "Won", 100000), Some(&admin)).unwrap();
+    opportunity_service::update(
+        &conn,
+        &opp.id,
+        &opportunity_input(&company.id, "Won", 100000),
+        Some(&admin),
+    )
+    .unwrap();
     let tasks = task_service::list_by_related(&conn, "Opportunity", &opp.id).unwrap();
     assert_eq!(tasks.len(), 1);
     assert_eq!(tasks[0].title, "Kick off onboarding");
 
     // Business rule enforcement: now that status is Won (opportunity_input
     // sets status = Won whenever stage = Won), the custom field is required.
-    let err = custom_field_service::set_entity_values(&conn, "Opportunity", &opp.id, &HashMap::new(), Some(&admin)).unwrap_err();
+    let err = custom_field_service::set_entity_values(
+        &conn,
+        "Opportunity",
+        &opp.id,
+        &HashMap::new(),
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(format!("{err:?}").contains("Lead Source is required"));
 
     let mut values = HashMap::new();
     values.insert("lead_source".to_string(), "Referral".to_string());
-    custom_field_service::set_entity_values(&conn, "Opportunity", &opp.id, &values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Opportunity", &opp.id, &values, Some(&admin))
+        .unwrap();
 }
 
 // --- Configurable numbering format ---
@@ -198,19 +234,31 @@ fn admin_can_override_a_number_format_and_it_applies_immediately() {
     assert!(!company_default.is_custom);
     assert_eq!(company_default.prefix, "CUS");
 
-    let company1 = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
+    let company1 =
+        company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin))
+            .unwrap();
     assert_eq!(company1.customer_number, "CUS-000001");
 
     numbering_service::set_override(
         &conn,
         &ws,
-        &NumberingOverrideInput { entity_type: "Company".into(), prefix: "ACC".into(), digits: 4 },
+        &NumberingOverrideInput {
+            entity_type: "Company".into(),
+            prefix: "ACC".into(),
+            digits: 4,
+        },
         Some(&admin),
     )
     .unwrap();
 
     // Sequence continues (2), just reformatted with the new prefix/width.
-    let company2 = company_service::create(&conn, &ws, &company_input("Globex", "Prospect"), Some(&admin)).unwrap();
+    let company2 = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Globex", "Prospect"),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(company2.customer_number, "ACC-0002");
 
     let after = numbering_service::list_effective(&conn, &ws, Some(&admin)).unwrap();
@@ -221,7 +269,13 @@ fn admin_can_override_a_number_format_and_it_applies_immediately() {
 
     let reset = numbering_service::reset_override(&conn, &ws, "Company", Some(&admin)).unwrap();
     assert!(!reset.is_custom);
-    let company3 = company_service::create(&conn, &ws, &company_input("Initech", "Prospect"), Some(&admin)).unwrap();
+    let company3 = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Initech", "Prospect"),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(company3.customer_number, "CUS-000003");
 }
 
@@ -231,7 +285,12 @@ fn non_administrator_cannot_change_a_number_format() {
     let sales_user = user_service::create(
         &conn,
         &ws,
-        &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] },
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(&admin),
     )
     .unwrap();
@@ -239,7 +298,11 @@ fn non_administrator_cannot_change_a_number_format() {
     let err = numbering_service::set_override(
         &conn,
         &ws,
-        &NumberingOverrideInput { entity_type: "Company".into(), prefix: "ACC".into(), digits: 4 },
+        &NumberingOverrideInput {
+            entity_type: "Company".into(),
+            prefix: "ACC".into(),
+            digits: 4,
+        },
         Some(&sales_user.id),
     )
     .unwrap_err();
@@ -252,8 +315,20 @@ fn non_administrator_cannot_change_a_number_format() {
 fn custom_report_counts_companies_grouped_by_status() {
     let (conn, ws, admin) = setup_workspace();
     company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
-    company_service::create(&conn, &ws, &company_input("Globex", "Prospect"), Some(&admin)).unwrap();
-    company_service::create(&conn, &ws, &company_input("Initech", "Active Customer"), Some(&admin)).unwrap();
+    company_service::create(
+        &conn,
+        &ws,
+        &company_input("Globex", "Prospect"),
+        Some(&admin),
+    )
+    .unwrap();
+    company_service::create(
+        &conn,
+        &ws,
+        &company_input("Initech", "Active Customer"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let report = custom_report_service::create(
         &conn,
@@ -283,8 +358,13 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
         &conn,
         &ws,
         &CustomFieldDefinitionInput {
-            entity_type: "Company".into(), label: "Region".into(), field_type: "text".into(),
-            options: vec![], required: false, show_in_list: false, sort_order: 0,
+            entity_type: "Company".into(),
+            label: "Region".into(),
+            field_type: "text".into(),
+            options: vec![],
+            required: false,
+            show_in_list: false,
+            sort_order: 0,
             min_value: None,
             max_value: None,
             max_length: None,
@@ -305,8 +385,13 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
         &conn,
         &ws,
         &CustomFieldDefinitionInput {
-            entity_type: "Company".into(), label: "Headcount".into(), field_type: "number".into(),
-            options: vec![], required: false, show_in_list: false, sort_order: 0,
+            entity_type: "Company".into(),
+            label: "Headcount".into(),
+            field_type: "number".into(),
+            options: vec![],
+            required: false,
+            show_in_list: false,
+            sort_order: 0,
             min_value: None,
             max_value: None,
             max_length: None,
@@ -324,17 +409,33 @@ fn custom_report_sums_a_numeric_custom_field_grouped_by_another_custom_field() {
     )
     .unwrap();
 
-    let acme = company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin)).unwrap();
+    let acme =
+        company_service::create(&conn, &ws, &company_input("Acme", "Prospect"), Some(&admin))
+            .unwrap();
     let mut acme_values = HashMap::new();
     acme_values.insert(region.key.clone(), "EMEA".to_string());
     acme_values.insert(headcount.key.clone(), "50".to_string());
-    custom_field_service::set_entity_values(&conn, "Company", &acme.id, &acme_values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &acme.id, &acme_values, Some(&admin))
+        .unwrap();
 
-    let globex = company_service::create(&conn, &ws, &company_input("Globex", "Prospect"), Some(&admin)).unwrap();
+    let globex = company_service::create(
+        &conn,
+        &ws,
+        &company_input("Globex", "Prospect"),
+        Some(&admin),
+    )
+    .unwrap();
     let mut globex_values = HashMap::new();
     globex_values.insert(region.key.clone(), "EMEA".to_string());
     globex_values.insert(headcount.key.clone(), "30".to_string());
-    custom_field_service::set_entity_values(&conn, "Company", &globex.id, &globex_values, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(
+        &conn,
+        "Company",
+        &globex.id,
+        &globex_values,
+        Some(&admin),
+    )
+    .unwrap();
 
     let report = custom_report_service::create(
         &conn,
@@ -364,8 +465,13 @@ fn a_sum_report_must_target_an_active_numeric_custom_field() {
         &conn,
         &ws,
         &CustomFieldDefinitionInput {
-            entity_type: "Company".into(), label: "Notes field".into(), field_type: "text".into(),
-            options: vec![], required: false, show_in_list: false, sort_order: 0,
+            entity_type: "Company".into(),
+            label: "Notes field".into(),
+            field_type: "text".into(),
+            options: vec![],
+            required: false,
+            show_in_list: false,
+            sort_order: 0,
             min_value: None,
             max_value: None,
             max_length: None,
@@ -409,14 +515,24 @@ fn admin_can_choose_which_dashboard_kpis_show() {
 
     let updated = workspace_service::set_dashboard_kpis(
         &conn,
-        &DashboardKpiPrefs { keys: vec!["open_pipeline".into(), "overdue_invoices".into()] },
+        &DashboardKpiPrefs {
+            keys: vec!["open_pipeline".into(), "overdue_invoices".into()],
+        },
         Some(&admin),
     )
     .unwrap();
-    assert_eq!(updated.dashboard_kpi_prefs.as_deref(), Some(r#"["open_pipeline","overdue_invoices"]"#));
+    assert_eq!(
+        updated.dashboard_kpi_prefs.as_deref(),
+        Some(r#"["open_pipeline","overdue_invoices"]"#)
+    );
 
     // An empty list resets to "show every KPI, default order" (NULL).
-    let reset = workspace_service::set_dashboard_kpis(&conn, &DashboardKpiPrefs { keys: vec![] }, Some(&admin)).unwrap();
+    let reset = workspace_service::set_dashboard_kpis(
+        &conn,
+        &DashboardKpiPrefs { keys: vec![] },
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(reset.dashboard_kpi_prefs, None);
 }
 
@@ -426,14 +542,21 @@ fn non_administrator_cannot_change_dashboard_kpi_prefs() {
     let sales_user = user_service::create(
         &conn,
         &ws,
-        &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] },
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(&admin),
     )
     .unwrap();
 
     let err = workspace_service::set_dashboard_kpis(
         &conn,
-        &DashboardKpiPrefs { keys: vec!["open_pipeline".into()] },
+        &DashboardKpiPrefs {
+            keys: vec!["open_pipeline".into()],
+        },
         Some(&sales_user.id),
     )
     .unwrap_err();

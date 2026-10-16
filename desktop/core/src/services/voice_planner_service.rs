@@ -28,8 +28,13 @@ use crate::models::opportunity::OPPORTUNITY_STAGES;
 use crate::models::order::ORDER_STATUSES;
 use crate::models::quote::QUOTE_STATUSES;
 use crate::models::task::TASK_STATUSES;
-use crate::models::voice::{PendingCreate, ResolutionCandidate, VoiceActionPlanBody, VoicePlanStep};
-use crate::services::{ai_agent_service, ai_orchestration_service, custom_field_service, custom_object_service, voice_entity_resolver};
+use crate::models::voice::{
+    PendingCreate, ResolutionCandidate, VoiceActionPlanBody, VoicePlanStep,
+};
+use crate::services::{
+    ai_agent_service, ai_orchestration_service, custom_field_service, custom_object_service,
+    voice_entity_resolver,
+};
 use voice_entity_resolver::ResolutionOutcome;
 
 // A tiny helper module so a catalog entry can hold either a `&'static str`
@@ -73,13 +78,53 @@ pub(crate) struct CatalogEntry {
 
 fn core_catalog() -> Vec<CatalogEntry> {
     vec![
-        CatalogEntry { object_key: Str::Static("Company"), nouns: vec!["company".into(), "companies".into(), "customer".into(), "account".into()], status_values: COMPANY_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
-        CatalogEntry { object_key: Str::Static("Contact"), nouns: vec!["contact".into(), "contacts".into(), "person".into()], status_values: CONTACT_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
-        CatalogEntry { object_key: Str::Static("Opportunity"), nouns: vec!["opportunity".into(), "opportunities".into(), "deal".into()], status_values: OPPORTUNITY_STAGES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
-        CatalogEntry { object_key: Str::Static("Quote"), nouns: vec!["quote".into(), "quotes".into()], status_values: QUOTE_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
-        CatalogEntry { object_key: Str::Static("Order"), nouns: vec!["order".into(), "orders".into()], status_values: ORDER_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
-        CatalogEntry { object_key: Str::Static("Contract"), nouns: vec!["contract".into(), "contracts".into(), "agreement".into()], status_values: CONTRACT_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
-        CatalogEntry { object_key: Str::Static("Task"), nouns: vec!["task".into(), "tasks".into(), "to-do".into(), "todo".into()], status_values: TASK_STATUSES.iter().map(|s| s.to_string()).collect(), extra_status_fields: vec![] },
+        CatalogEntry {
+            object_key: Str::Static("Company"),
+            nouns: vec![
+                "company".into(),
+                "companies".into(),
+                "customer".into(),
+                "account".into(),
+            ],
+            status_values: COMPANY_STATUSES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields: vec![],
+        },
+        CatalogEntry {
+            object_key: Str::Static("Contact"),
+            nouns: vec!["contact".into(), "contacts".into(), "person".into()],
+            status_values: CONTACT_STATUSES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields: vec![],
+        },
+        CatalogEntry {
+            object_key: Str::Static("Opportunity"),
+            nouns: vec!["opportunity".into(), "opportunities".into(), "deal".into()],
+            status_values: OPPORTUNITY_STAGES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields: vec![],
+        },
+        CatalogEntry {
+            object_key: Str::Static("Quote"),
+            nouns: vec!["quote".into(), "quotes".into()],
+            status_values: QUOTE_STATUSES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields: vec![],
+        },
+        CatalogEntry {
+            object_key: Str::Static("Order"),
+            nouns: vec!["order".into(), "orders".into()],
+            status_values: ORDER_STATUSES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields: vec![],
+        },
+        CatalogEntry {
+            object_key: Str::Static("Contract"),
+            nouns: vec!["contract".into(), "contracts".into(), "agreement".into()],
+            status_values: CONTRACT_STATUSES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields: vec![],
+        },
+        CatalogEntry {
+            object_key: Str::Static("Task"),
+            nouns: vec!["task".into(), "tasks".into(), "to-do".into(), "todo".into()],
+            status_values: TASK_STATUSES.iter().map(|s| s.to_string()).collect(),
+            extra_status_fields: vec![],
+        },
     ]
 }
 
@@ -113,14 +158,21 @@ pub(crate) fn full_catalog(conn: &Connection, workspace_id: &str) -> AppResult<V
         // rules the way core objects do), so every select field is offered
         // and `detect_status_value` below resolves which one a spoken
         // value actually belongs to.
-        let extra_status_fields = custom_field_service::list_definitions(conn, workspace_id, &def.key, true)?
-            .into_iter()
-            .filter(|f| f.field_type == "select" && !f.options.is_empty())
-            .map(|f| (f.key, f.options))
-            .collect();
+        let extra_status_fields =
+            custom_field_service::list_definitions(conn, workspace_id, &def.key, true)?
+                .into_iter()
+                .filter(|f| f.field_type == "select" && !f.options.is_empty())
+                .map(|f| (f.key, f.options))
+                .collect();
         catalog.push(CatalogEntry {
-            nouns: vec![def.singular_label.to_lowercase(), def.plural_label.to_lowercase()],
-            status_values: CUSTOM_RECORD_STATUSES.iter().map(|s| s.to_string()).collect(),
+            nouns: vec![
+                def.singular_label.to_lowercase(),
+                def.plural_label.to_lowercase(),
+            ],
+            status_values: CUSTOM_RECORD_STATUSES
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             extra_status_fields,
             object_key: Str::Owned(def.key),
         });
@@ -130,8 +182,13 @@ pub(crate) fn full_catalog(conn: &Connection, workspace_id: &str) -> AppResult<V
 
 /// Finds the object the transcript names explicitly (by singular/plural
 /// noun), if any - session context supplies the object type otherwise.
-fn detect_object_key<'a>(catalog: &'a [CatalogEntry], text_lower: &str) -> Option<&'a CatalogEntry> {
-    catalog.iter().find(|e| e.nouns.iter().any(|n| text_lower.contains(n.as_str())))
+fn detect_object_key<'a>(
+    catalog: &'a [CatalogEntry],
+    text_lower: &str,
+) -> Option<&'a CatalogEntry> {
+    catalog
+        .iter()
+        .find(|e| e.nouns.iter().any(|n| text_lower.contains(n.as_str())))
 }
 
 /// The longest (most specific) value in `options` that appears in
@@ -144,7 +201,11 @@ fn detect_object_key<'a>(catalog: &'a [CatalogEntry], text_lower: &str) -> Optio
 /// `detect_object_key` above's noun check still legitimately is (an
 /// object's nouns are never substrings of each other).
 fn longest_matching_value(options: &[String], text_lower: &str) -> Option<String> {
-    options.iter().filter(|v| text_lower.contains(&v.to_lowercase())).max_by_key(|v| v.len()).cloned()
+    options
+        .iter()
+        .filter(|v| text_lower.contains(&v.to_lowercase()))
+        .max_by_key(|v| v.len())
+        .cloned()
 }
 
 /// Finds a status/stage value the transcript names, constrained to one
@@ -171,9 +232,31 @@ fn detect_status_value(entry: &CatalogEntry, text_lower: &str) -> Option<(String
     None
 }
 
-const NAVIGATE_TRIGGERS: &[&str] = &["open ", "show me ", "show ", "pull up ", "find ", "go to ", "navigate to "];
-const QUERY_TRIGGERS: &[&str] = &["summarize ", "summarise ", "tell me about ", "what is ", "what's ", "describe "];
-const CREATE_TASK_TRIGGERS: &[&str] = &["create a task ", "create task ", "add a task ", "add task ", "schedule a task ", "remind me to "];
+const NAVIGATE_TRIGGERS: &[&str] = &[
+    "open ",
+    "show me ",
+    "show ",
+    "pull up ",
+    "find ",
+    "go to ",
+    "navigate to ",
+];
+const QUERY_TRIGGERS: &[&str] = &[
+    "summarize ",
+    "summarise ",
+    "tell me about ",
+    "what is ",
+    "what's ",
+    "describe ",
+];
+const CREATE_TASK_TRIGGERS: &[&str] = &[
+    "create a task ",
+    "create task ",
+    "add a task ",
+    "add task ",
+    "schedule a task ",
+    "remind me to ",
+];
 /// Voice-First Mode, PR 2 (part 3): generic CREATE for anything that isn't
 /// a Task (which `CREATE_TASK_TRIGGERS` above already owns, checked first
 /// in `plan()` so "create a task ..." never falls through to here).
@@ -188,8 +271,24 @@ const CREATE_TRIGGERS: &[&str] = &["create a ", "create an ", "add a ", "add an 
 /// supported here alongside every Custom Object, which by construction
 /// only ever requires `primary_name` (VOICE-AC-06: no new code needed for
 /// an admin-defined object).
-const CREATE_UNSUPPORTED_CORE_OBJECTS: &[&str] = &["Contact", "Opportunity", "Quote", "Order", "Contract", "Task"];
-const CAPTURE_TRIGGERS: &[&str] = &["add an interaction ", "add interaction ", "log a call ", "log an email ", "log a message ", "note that ", "add a note ", "add note "];
+const CREATE_UNSUPPORTED_CORE_OBJECTS: &[&str] = &[
+    "Contact",
+    "Opportunity",
+    "Quote",
+    "Order",
+    "Contract",
+    "Task",
+];
+const CAPTURE_TRIGGERS: &[&str] = &[
+    "add an interaction ",
+    "add interaction ",
+    "log a call ",
+    "log an email ",
+    "log a message ",
+    "note that ",
+    "add a note ",
+    "add note ",
+];
 const UPDATE_TRIGGERS: &[&str] = &["mark ", "set ", "update ", "change "];
 /// Voice-First Mode, PR 2: RUN_AGENT (spec v0.4 "Voice & AI Agents") - the
 /// same design principle as every other intent: Voice is a new *caller*
@@ -198,7 +297,14 @@ const UPDATE_TRIGGERS: &[&str] = &["mark ", "set ", "update ", "change "];
 /// never a second agent-runtime. "delegate to " is deliberately generic
 /// (no "agent"/"pipeline" noun required) since a spoken name usually makes
 /// the target obvious on its own.
-const RUN_AGENT_TRIGGERS: &[&str] = &["ask agent ", "ask the agent ", "ask ", "run agent ", "delegate to agent ", "delegate to "];
+const RUN_AGENT_TRIGGERS: &[&str] = &[
+    "ask agent ",
+    "ask the agent ",
+    "ask ",
+    "run agent ",
+    "delegate to agent ",
+    "delegate to ",
+];
 const RUN_PIPELINE_TRIGGERS: &[&str] = &["run pipeline ", "run the pipeline ", "trigger pipeline "];
 
 fn strip_any_prefix<'a>(text: &'a str, prefixes: &[&str]) -> Option<&'a str> {
@@ -242,14 +348,30 @@ fn resolve_date_phrase(word: &str) -> Option<String> {
 }
 
 fn extract_due_date(text: &str) -> (Option<String>, String) {
-    let words = ["today", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    let words = [
+        "today",
+        "tomorrow",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ];
     let lower = text.to_lowercase();
     for w in words {
         if let Some(pos) = lower.find(w) {
             if let Some(date) = resolve_date_phrase(w) {
                 let mut cleaned = text.to_string();
                 cleaned.replace_range(pos..pos + w.len(), "");
-                let cleaned = cleaned.replace("  ", " ").trim().trim_start_matches("for").trim_start_matches("on").trim().to_string();
+                let cleaned = cleaned
+                    .replace("  ", " ")
+                    .trim()
+                    .trim_start_matches("for")
+                    .trim_start_matches("on")
+                    .trim()
+                    .to_string();
                 return (Some(date), cleaned);
             }
         }
@@ -262,8 +384,18 @@ fn extract_due_date(text: &str) -> (Option<String>, String) {
 /// honest "didn't understand" (never a guess, per spec §20).
 #[derive(Debug)]
 pub enum PlanOutcome {
-    Ready { plan: VoiceActionPlanBody, intent: String, object_key: Option<String>, resolved_record_id: Option<String>, intent_confidence: f64, entity_confidence: Option<f64> },
-    NeedsClarification { question: String, candidates: Vec<ResolutionCandidate> },
+    Ready {
+        plan: VoiceActionPlanBody,
+        intent: String,
+        object_key: Option<String>,
+        resolved_record_id: Option<String>,
+        intent_confidence: f64,
+        entity_confidence: Option<f64>,
+    },
+    NeedsClarification {
+        question: String,
+        candidates: Vec<ResolutionCandidate>,
+    },
     /// Voice-First Mode, PR 2 (part 3): a guided CREATE still has at least
     /// one required field left to ask about - distinct from
     /// `NeedsClarification` (which always offers a fixed list of existing
@@ -271,8 +403,13 @@ pub enum PlanOutcome {
     /// answer to `question`, and `pending` is what `voice_execution_service`
     /// persists so the *next* transcript is read as that answer rather than
     /// re-parsed as a brand-new command.
-    NeedsMoreInfo { question: String, pending: PendingCreate },
-    Unsupported { reason: String },
+    NeedsMoreInfo {
+        question: String,
+        pending: PendingCreate,
+    },
+    Unsupported {
+        reason: String,
+    },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -300,23 +437,63 @@ pub fn plan(
 
     if let Some(rest) = strip_any_prefix(&lower, NAVIGATE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference, "NAVIGATE", |object_key, record_id| VoiceActionPlanBody {
-            steps: vec![VoicePlanStep { action: "navigate".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Open this {object_key} record"), brief_description: format!("Opening {object_key}"), detail_note: None }],
-        });
+        return resolve_and_wrap(
+            conn,
+            workspace_id,
+            &catalog,
+            reference,
+            context_object_key,
+            context_record_id,
+            conversation_reference,
+            "NAVIGATE",
+            |object_key, record_id| VoiceActionPlanBody {
+                steps: vec![VoicePlanStep {
+                    action: "navigate".into(),
+                    object_key: object_key.into(),
+                    record_id: Some(record_id.into()),
+                    fields: Default::default(),
+                    description: format!("Open this {object_key} record"),
+                    brief_description: format!("Opening {object_key}"),
+                    detail_note: None,
+                }],
+            },
+        );
     }
 
     if let Some(rest) = strip_any_prefix(&lower, QUERY_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return resolve_and_wrap(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference, "QUERY", |object_key, record_id| VoiceActionPlanBody {
-            steps: vec![VoicePlanStep { action: "query".into(), object_key: object_key.into(), record_id: Some(record_id.into()), fields: Default::default(), description: format!("Read-only summary of this {object_key} record"), brief_description: "Summary".into(), detail_note: None }],
-        });
+        return resolve_and_wrap(
+            conn,
+            workspace_id,
+            &catalog,
+            reference,
+            context_object_key,
+            context_record_id,
+            conversation_reference,
+            "QUERY",
+            |object_key, record_id| VoiceActionPlanBody {
+                steps: vec![VoicePlanStep {
+                    action: "query".into(),
+                    object_key: object_key.into(),
+                    record_id: Some(record_id.into()),
+                    fields: Default::default(),
+                    description: format!("Read-only summary of this {object_key} record"),
+                    brief_description: "Summary".into(),
+                    detail_note: None,
+                }],
+            },
+        );
     }
 
     if let Some(rest) = strip_any_prefix(&lower, CREATE_TASK_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
         let (due_date, title) = extract_due_date(reference);
         if title.is_empty() {
-            return Ok(PlanOutcome::Unsupported { reason: "I didn't catch what the task should say - try again with a short description.".into() });
+            return Ok(PlanOutcome::Unsupported {
+                reason:
+                    "I didn't catch what the task should say - try again with a short description."
+                        .into(),
+            });
         }
         let mut fields = std::collections::HashMap::new();
         fields.insert("title".to_string(), title.clone());
@@ -342,7 +519,15 @@ pub fn plan(
     // CREATE_TRIGGERS above).
     if let Some(rest) = strip_any_prefix(&lower, CAPTURE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return plan_capture(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference);
+        return plan_capture(
+            conn,
+            workspace_id,
+            &catalog,
+            reference,
+            context_object_key,
+            context_record_id,
+            conversation_reference,
+        );
     }
 
     if let Some(rest) = strip_any_prefix(&lower, CREATE_TRIGGERS) {
@@ -352,7 +537,15 @@ pub fn plan(
 
     if let Some(rest) = strip_any_prefix(&lower, UPDATE_TRIGGERS) {
         let reference = &text[text.len() - rest.len()..];
-        return plan_update_status(conn, workspace_id, &catalog, reference, context_object_key, context_record_id, conversation_reference);
+        return plan_update_status(
+            conn,
+            workspace_id,
+            &catalog,
+            reference,
+            context_object_key,
+            context_record_id,
+            conversation_reference,
+        );
     }
 
     if let Some(rest) = strip_any_prefix(&lower, RUN_PIPELINE_TRIGGERS) {
@@ -378,9 +571,14 @@ pub fn plan(
 /// the others cover the Agent phrasing ("ask the Sales Coach agent to ...").
 fn split_name_and_message(reference: &str) -> (String, String) {
     let lower = reference.to_lowercase();
-    let split_at = [" to ", " with ", " that ", ": ", " saying "].iter().find_map(|kw| lower.find(kw).map(|i| (i, kw.len())));
+    let split_at = [" to ", " with ", " that ", ": ", " saying "]
+        .iter()
+        .find_map(|kw| lower.find(kw).map(|i| (i, kw.len())));
     match split_at {
-        Some((idx, kw_len)) => (reference[..idx].trim().to_string(), reference[idx + kw_len..].trim().to_string()),
+        Some((idx, kw_len)) => (
+            reference[..idx].trim().to_string(),
+            reference[idx + kw_len..].trim().to_string(),
+        ),
         None => (String::new(), String::new()),
     }
 }
@@ -392,15 +590,28 @@ fn split_name_and_message(reference: &str) -> (String, String) {
 /// `chat_service::send_agent_message`, the exact same function the AI
 /// Agent Foundry chat panel calls (see `voice_execution_service`'s own
 /// design-principle doc comment).
-fn plan_run_agent(conn: &Connection, workspace_id: &str, reference: &str) -> AppResult<PlanOutcome> {
+fn plan_run_agent(
+    conn: &Connection,
+    workspace_id: &str,
+    reference: &str,
+) -> AppResult<PlanOutcome> {
     let (name_part, message) = split_name_and_message(reference);
     if name_part.is_empty() || message.is_empty() {
         return Ok(PlanOutcome::Unsupported { reason: "Try \"ask <agent name> to <what you want>\", e.g. \"ask the Sales Coach agent to summarize this deal\".".into() });
     }
     let name_lower = name_part.to_lowercase();
-    let name_lower = name_lower.trim_start_matches("the ").trim_end_matches(" agent").trim();
+    let name_lower = name_lower
+        .trim_start_matches("the ")
+        .trim_end_matches(" agent")
+        .trim();
     let agents = ai_agent_service::list(conn, workspace_id, true)?;
-    let matches: Vec<_> = agents.into_iter().filter(|a| { let n = a.name.to_lowercase(); n.contains(name_lower) || name_lower.contains(n.as_str()) }).collect();
+    let matches: Vec<_> = agents
+        .into_iter()
+        .filter(|a| {
+            let n = a.name.to_lowercase();
+            n.contains(name_lower) || name_lower.contains(n.as_str())
+        })
+        .collect();
     match matches.len() {
         0 => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find an AI Agent named \"{name_part}\" - check the name under AI Agent Foundry.") }),
         1 => {
@@ -427,15 +638,28 @@ fn plan_run_agent(conn: &Connection, workspace_id: &str, reference: &str) -> App
 /// `ai_orchestration_service::list_pipelines` and executed through
 /// `ai_orchestration_service::run_manual`, never a second orchestration
 /// engine for Voice.
-fn plan_run_pipeline(conn: &Connection, workspace_id: &str, reference: &str) -> AppResult<PlanOutcome> {
+fn plan_run_pipeline(
+    conn: &Connection,
+    workspace_id: &str,
+    reference: &str,
+) -> AppResult<PlanOutcome> {
     let (name_part, message) = split_name_and_message(reference);
     if name_part.is_empty() || message.is_empty() {
         return Ok(PlanOutcome::Unsupported { reason: "Try \"run pipeline <name> with <input>\", e.g. \"run pipeline Lead Triage with this new lead\".".into() });
     }
     let name_lower = name_part.to_lowercase();
-    let name_lower = name_lower.trim_start_matches("the ").trim_end_matches(" pipeline").trim();
+    let name_lower = name_lower
+        .trim_start_matches("the ")
+        .trim_end_matches(" pipeline")
+        .trim();
     let pipelines = ai_orchestration_service::list_pipelines(conn, workspace_id, true)?;
-    let matches: Vec<_> = pipelines.into_iter().filter(|p| { let n = p.name.to_lowercase(); n.contains(name_lower) || name_lower.contains(n.as_str()) }).collect();
+    let matches: Vec<_> = pipelines
+        .into_iter()
+        .filter(|p| {
+            let n = p.name.to_lowercase();
+            n.contains(name_lower) || name_lower.contains(n.as_str())
+        })
+        .collect();
     match matches.len() {
         0 => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find a Pipeline named \"{name_part}\" - check the name under Orchestration.") }),
         1 => {
@@ -470,9 +694,22 @@ fn resolve_and_wrap(
     intent: &str,
     build: impl FnOnce(&str, &str) -> VoiceActionPlanBody,
 ) -> AppResult<PlanOutcome> {
-    let hint = detect_object_key(catalog, &reference.to_lowercase()).map(|e| e.object_key.as_str().to_string());
-    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, hint.as_deref(), reference, context_object_key, context_record_id, conversation_reference)? {
-        ResolutionOutcome::Resolved { record_id, object_key, confidence } => Ok(PlanOutcome::Ready {
+    let hint = detect_object_key(catalog, &reference.to_lowercase())
+        .map(|e| e.object_key.as_str().to_string());
+    match voice_entity_resolver::resolve_by_reference(
+        conn,
+        workspace_id,
+        hint.as_deref(),
+        reference,
+        context_object_key,
+        context_record_id,
+        conversation_reference,
+    )? {
+        ResolutionOutcome::Resolved {
+            record_id,
+            object_key,
+            confidence,
+        } => Ok(PlanOutcome::Ready {
             plan: build(&object_key, &record_id),
             intent: intent.to_string(),
             object_key: Some(object_key),
@@ -480,8 +717,16 @@ fn resolve_and_wrap(
             intent_confidence: 0.85,
             entity_confidence: Some(confidence),
         }),
-        ResolutionOutcome::NeedsClarification { candidates } => Ok(PlanOutcome::NeedsClarification { question: "I found more than one record that could match - which one did you mean?".into(), candidates }),
-        ResolutionOutcome::NotFound => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find a record matching \"{reference}\".") }),
+        ResolutionOutcome::NeedsClarification { candidates } => {
+            Ok(PlanOutcome::NeedsClarification {
+                question: "I found more than one record that could match - which one did you mean?"
+                    .into(),
+                candidates,
+            })
+        }
+        ResolutionOutcome::NotFound => Ok(PlanOutcome::Unsupported {
+            reason: format!("I couldn't find a record matching \"{reference}\"."),
+        }),
     }
 }
 
@@ -514,7 +759,12 @@ fn plan_update_status(
         for (_, options) in &entry.extra_status_fields {
             all_values.extend(options.iter().cloned());
         }
-        return Ok(PlanOutcome::Unsupported { reason: format!("I didn't catch a valid status for {entry_owned} - valid values are: {}.", all_values.join(", ")) });
+        return Ok(PlanOutcome::Unsupported {
+            reason: format!(
+                "I didn't catch a valid status for {entry_owned} - valid values are: {}.",
+                all_values.join(", ")
+            ),
+        });
     };
 
     // Whatever's left after removing the object noun and the status value
@@ -526,11 +776,31 @@ fn plan_update_status(
     remainder = remainder.replace(&status_value.to_lowercase(), " ");
     // Trim stray connective words ("mark X as Won" -> just "X") - the
     // status word itself is already stripped above.
-    let reference_text = remainder.split_whitespace().filter(|w| !["as", "to", "the"].contains(w)).collect::<Vec<_>>().join(" ");
-    let reference_text = if reference_text.trim().is_empty() { reference.to_string() } else { reference_text };
+    let reference_text = remainder
+        .split_whitespace()
+        .filter(|w| !["as", "to", "the"].contains(w))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let reference_text = if reference_text.trim().is_empty() {
+        reference.to_string()
+    } else {
+        reference_text
+    };
 
-    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, Some(&entry_owned), &reference_text, context_object_key, context_record_id, conversation_reference)? {
-        ResolutionOutcome::Resolved { record_id, object_key, confidence } => {
+    match voice_entity_resolver::resolve_by_reference(
+        conn,
+        workspace_id,
+        Some(&entry_owned),
+        &reference_text,
+        context_object_key,
+        context_record_id,
+        conversation_reference,
+    )? {
+        ResolutionOutcome::Resolved {
+            record_id,
+            object_key,
+            confidence,
+        } => {
             let mut fields = std::collections::HashMap::new();
             fields.insert("status".to_string(), status_value.clone());
             // Only meaningful for a Custom Object ("status" itself when
@@ -538,7 +808,11 @@ fn plan_update_status(
             // column) - voice_execution_service's core-object arms ignore
             // this marker entirely, since each already writes to its own
             // hardcoded field.
-            let human_field = if status_field_key == "status" { "status".to_string() } else { status_field_key.replace('_', " ") };
+            let human_field = if status_field_key == "status" {
+                "status".to_string()
+            } else {
+                status_field_key.replace('_', " ")
+            };
             fields.insert("status_field_key".to_string(), status_field_key);
             Ok(PlanOutcome::Ready {
                 plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "update_status".into(), object_key: object_key.clone(), record_id: Some(record_id.clone()), fields, description: format!("Set {object_key} status to {status_value}"), brief_description: format!("Status: {status_value}"), detail_note: Some(format!("This only changes the {human_field} field on this {object_key} record - nothing else is affected.")) }] },
@@ -549,8 +823,15 @@ fn plan_update_status(
                 entity_confidence: Some(confidence),
             })
         }
-        ResolutionOutcome::NeedsClarification { candidates } => Ok(PlanOutcome::NeedsClarification { question: format!("Which {entry_owned} did you mean?"), candidates }),
-        ResolutionOutcome::NotFound => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find a {entry_owned} matching \"{reference_text}\".") }),
+        ResolutionOutcome::NeedsClarification { candidates } => {
+            Ok(PlanOutcome::NeedsClarification {
+                question: format!("Which {entry_owned} did you mean?"),
+                candidates,
+            })
+        }
+        ResolutionOutcome::NotFound => Ok(PlanOutcome::Unsupported {
+            reason: format!("I couldn't find a {entry_owned} matching \"{reference_text}\"."),
+        }),
     }
 }
 
@@ -569,21 +850,48 @@ fn plan_capture(
     // about) and (what to log); fall back to session context entirely if
     // no target is named (spec §7).
     let lower = reference.to_lowercase();
-    let split_at = ["that ", "saying ", "noting ", "noting that "].iter().find_map(|kw| lower.find(kw).map(|i| (i, kw.len())));
+    let split_at = ["that ", "saying ", "noting ", "noting that "]
+        .iter()
+        .find_map(|kw| lower.find(kw).map(|i| (i, kw.len())));
 
     let (target_part, body) = match split_at {
-        Some((idx, kw_len)) => (reference[..idx].trim().to_string(), reference[idx + kw_len..].trim().to_string()),
+        Some((idx, kw_len)) => (
+            reference[..idx].trim().to_string(),
+            reference[idx + kw_len..].trim().to_string(),
+        ),
         None => (String::new(), reference.to_string()),
     };
     if body.is_empty() {
         return Ok(PlanOutcome::Unsupported { reason: "I didn't catch what to note - try \"add an interaction to <record> that <what happened>\".".into() });
     }
 
-    let hint = detect_object_key(catalog, &target_part.to_lowercase()).map(|e| e.object_key.as_str().to_string());
-    let target_text = if target_part.is_empty() { "this".to_string() } else { target_part.replace("to ", "").replace("on ", "").replace("for ", "").trim().to_string() };
+    let hint = detect_object_key(catalog, &target_part.to_lowercase())
+        .map(|e| e.object_key.as_str().to_string());
+    let target_text = if target_part.is_empty() {
+        "this".to_string()
+    } else {
+        target_part
+            .replace("to ", "")
+            .replace("on ", "")
+            .replace("for ", "")
+            .trim()
+            .to_string()
+    };
 
-    match voice_entity_resolver::resolve_by_reference(conn, workspace_id, hint.as_deref(), &target_text, context_object_key, context_record_id, conversation_reference)? {
-        ResolutionOutcome::Resolved { record_id, object_key, confidence } => {
+    match voice_entity_resolver::resolve_by_reference(
+        conn,
+        workspace_id,
+        hint.as_deref(),
+        &target_text,
+        context_object_key,
+        context_record_id,
+        conversation_reference,
+    )? {
+        ResolutionOutcome::Resolved {
+            record_id,
+            object_key,
+            confidence,
+        } => {
             let mut fields = std::collections::HashMap::new();
             fields.insert("body".to_string(), body.clone());
             fields.insert("channel".to_string(), "message".to_string());
@@ -596,8 +904,15 @@ fn plan_capture(
                 entity_confidence: Some(confidence),
             })
         }
-        ResolutionOutcome::NeedsClarification { candidates } => Ok(PlanOutcome::NeedsClarification { question: "Which record should this interaction be logged against?".into(), candidates }),
-        ResolutionOutcome::NotFound => Ok(PlanOutcome::Unsupported { reason: format!("I couldn't find a record matching \"{target_text}\".") }),
+        ResolutionOutcome::NeedsClarification { candidates } => {
+            Ok(PlanOutcome::NeedsClarification {
+                question: "Which record should this interaction be logged against?".into(),
+                candidates,
+            })
+        }
+        ResolutionOutcome::NotFound => Ok(PlanOutcome::Unsupported {
+            reason: format!("I couldn't find a record matching \"{target_text}\"."),
+        }),
     }
 }
 
@@ -607,7 +922,12 @@ fn plan_capture(
 /// reference so whatever's left (if anything) is taken as the record's
 /// name/title, exactly the same "everything after the noun is the value"
 /// shape `CREATE_TASK_TRIGGERS` already uses for a Task's title.
-fn plan_create_record(conn: &Connection, workspace_id: &str, catalog: &[CatalogEntry], reference: &str) -> AppResult<PlanOutcome> {
+fn plan_create_record(
+    conn: &Connection,
+    workspace_id: &str,
+    catalog: &[CatalogEntry],
+    reference: &str,
+) -> AppResult<PlanOutcome> {
     let lower = reference.to_lowercase();
     let Some(entry) = detect_object_key(catalog, &lower) else {
         return Ok(PlanOutcome::Unsupported { reason: "I couldn't tell what kind of record to create - try naming it, e.g. \"create a company Acme Corp\" or \"create a Unit\".".into() });
@@ -625,11 +945,18 @@ fn plan_create_record(conn: &Connection, workspace_id: &str, catalog: &[CatalogE
     // needed the lowercased copy to find which noun matched.
     let mut remainder_orig = reference.to_string();
     let remainder_lower = lower.clone();
-    if let Some(pos) = entry.nouns.iter().find_map(|n| remainder_lower.find(n.as_str()).map(|p| (p, n.len()))) {
+    if let Some(pos) = entry
+        .nouns
+        .iter()
+        .find_map(|n| remainder_lower.find(n.as_str()).map(|p| (p, n.len())))
+    {
         let (pos, len) = pos;
         remainder_orig = format!("{}{}", &remainder_orig[..pos], &remainder_orig[pos + len..]);
     }
-    let given_name = remainder_orig.split_whitespace().collect::<Vec<_>>().join(" ");
+    let given_name = remainder_orig
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
 
     let (name_key, _) = create_name_field(conn, workspace_id, &object_key)?;
     let mut fields = std::collections::HashMap::new();
@@ -644,7 +971,11 @@ fn plan_create_record(conn: &Connection, workspace_id: &str, catalog: &[CatalogE
 /// object supported here (Company), `primary_name` for any Custom Object
 /// (the field every custom record has unconditionally, per
 /// `CustomRecordInput`/VOICE-AC-06 - no per-object configuration needed).
-fn create_name_field(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<(String, String)> {
+fn create_name_field(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> AppResult<(String, String)> {
     if object_key == "Company" {
         return Ok(("name".to_string(), "company name".to_string()));
     }
@@ -653,7 +984,10 @@ fn create_name_field(conn: &Connection, workspace_id: &str, object_key: &str) ->
         .find(|d| d.key == object_key)
         .map(|d| d.singular_label)
         .unwrap_or_else(|| object_key.to_string());
-    Ok(("primary_name".to_string(), format!("{} name", label.to_lowercase())))
+    Ok((
+        "primary_name".to_string(),
+        format!("{} name", label.to_lowercase()),
+    ))
 }
 
 /// The single loop every turn of a guided create runs through: is the
@@ -665,32 +999,83 @@ fn create_name_field(conn: &Connection, workspace_id: &str, object_key: &str) ->
 /// first utterance and every follow-up answer (`continue_guided_create`
 /// below), so there is exactly one place that decides "what's still
 /// missing" - never two copies to keep in sync.
-fn build_guided_create_outcome(conn: &Connection, workspace_id: &str, object_key: &str, fields: std::collections::HashMap<String, String>) -> AppResult<PlanOutcome> {
+fn build_guided_create_outcome(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    fields: std::collections::HashMap<String, String>,
+) -> AppResult<PlanOutcome> {
     let (name_key, name_label) = create_name_field(conn, workspace_id, object_key)?;
-    if fields.get(&name_key).map(|v| v.trim().is_empty()).unwrap_or(true) {
-        let pending = PendingCreate { object_key: object_key.to_string(), fields, asking_key: name_key, asking_label: name_label.clone(), asking_type: "text".to_string() };
-        return Ok(PlanOutcome::NeedsMoreInfo { question: format!("What should the {name_label} be?"), pending });
+    if fields
+        .get(&name_key)
+        .map(|v| v.trim().is_empty())
+        .unwrap_or(true)
+    {
+        let pending = PendingCreate {
+            object_key: object_key.to_string(),
+            fields,
+            asking_key: name_key,
+            asking_label: name_label.clone(),
+            asking_type: "text".to_string(),
+        };
+        return Ok(PlanOutcome::NeedsMoreInfo {
+            question: format!("What should the {name_label} be?"),
+            pending,
+        });
     }
 
     let mut defs = custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
     defs.sort_by_key(|d| d.sort_order);
     for def in defs.iter().filter(|d| d.required) {
-        if fields.get(&def.key).map(|v| v.trim().is_empty()).unwrap_or(true) {
+        if fields
+            .get(&def.key)
+            .map(|v| v.trim().is_empty())
+            .unwrap_or(true)
+        {
             let hint = match def.field_type.as_str() {
-                "select" if !def.options.is_empty() => format!(" (one of: {})", def.options.join(", ")),
+                "select" if !def.options.is_empty() => {
+                    format!(" (one of: {})", def.options.join(", "))
+                }
                 "boolean" => " (yes or no)".to_string(),
                 _ => String::new(),
             };
-            let pending = PendingCreate { object_key: object_key.to_string(), fields, asking_key: def.key.clone(), asking_label: def.label.clone(), asking_type: def.field_type.clone() };
-            return Ok(PlanOutcome::NeedsMoreInfo { question: format!("What's the {}{hint}?", def.label), pending });
+            let pending = PendingCreate {
+                object_key: object_key.to_string(),
+                fields,
+                asking_key: def.key.clone(),
+                asking_label: def.label.clone(),
+                asking_type: def.field_type.clone(),
+            };
+            return Ok(PlanOutcome::NeedsMoreInfo {
+                question: format!("What's the {}{hint}?", def.label),
+                pending,
+            });
         }
     }
 
     let display = fields.get(&name_key).cloned().unwrap_or_default();
-    let extra_fields: Vec<String> = fields.iter().filter(|(k, _)| *k != &name_key).map(|(k, v)| format!("{}: {v}", k.replace('_', " "))).collect();
-    let detail_note = if extra_fields.is_empty() { None } else { Some(format!("Also sets {}.", extra_fields.join(", "))) };
+    let extra_fields: Vec<String> = fields
+        .iter()
+        .filter(|(k, _)| *k != &name_key)
+        .map(|(k, v)| format!("{}: {v}", k.replace('_', " ")))
+        .collect();
+    let detail_note = if extra_fields.is_empty() {
+        None
+    } else {
+        Some(format!("Also sets {}.", extra_fields.join(", ")))
+    };
     Ok(PlanOutcome::Ready {
-        plan: VoiceActionPlanBody { steps: vec![VoicePlanStep { action: "create_record".into(), object_key: object_key.to_string(), record_id: None, fields, description: format!("Create {object_key} \"{display}\""), brief_description: format!("New {object_key}: {display}"), detail_note }] },
+        plan: VoiceActionPlanBody {
+            steps: vec![VoicePlanStep {
+                action: "create_record".into(),
+                object_key: object_key.to_string(),
+                record_id: None,
+                fields,
+                description: format!("Create {object_key} \"{display}\""),
+                brief_description: format!("New {object_key}: {display}"),
+                detail_note,
+            }],
+        },
         intent: "CREATE".into(),
         object_key: Some(object_key.to_string()),
         resolved_record_id: None,
@@ -709,13 +1094,25 @@ fn build_guided_create_outcome(conn: &Connection, workspace_id: &str, object_key
 /// is the actual enforcement backstop, exactly like every other field this
 /// codebase validates - this function only tries to make the common
 /// spoken forms ("yes", "tomorrow", an option's own wording) land cleanly.
-fn normalize_answer(conn: &Connection, workspace_id: &str, object_key: &str, field_key: &str, field_type: &str, raw: &str) -> AppResult<String> {
+fn normalize_answer(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    field_key: &str,
+    field_type: &str,
+    raw: &str,
+) -> AppResult<String> {
     match field_type {
         "select" => {
-            let defs = custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
+            let defs =
+                custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
             if let Some(def) = defs.iter().find(|d| d.key == field_key) {
                 let lower = raw.to_lowercase();
-                if let Some(opt) = def.options.iter().find(|o| o.to_lowercase() == lower || lower.contains(&o.to_lowercase())) {
+                if let Some(opt) = def
+                    .options
+                    .iter()
+                    .find(|o| o.to_lowercase() == lower || lower.contains(&o.to_lowercase()))
+                {
                     return Ok(opt.clone());
                 }
             }
@@ -743,18 +1140,38 @@ fn normalize_answer(conn: &Connection, workspace_id: &str, object_key: &str, fie
 /// abandons the create outright (returned as `Unsupported`, which is what
 /// makes `voice_execution_service::submit_command` clear the pending state
 /// - see its own doc comment) rather than forcing the user to answer a
-/// question about a record they no longer want.
-fn continue_guided_create(conn: &Connection, workspace_id: &str, answer_text: &str, pending: &PendingCreate) -> AppResult<PlanOutcome> {
+///   question about a record they no longer want.
+fn continue_guided_create(
+    conn: &Connection,
+    workspace_id: &str,
+    answer_text: &str,
+    pending: &PendingCreate,
+) -> AppResult<PlanOutcome> {
     let raw = answer_text.trim();
     let lower = raw.to_lowercase();
     if ["cancel", "never mind", "nevermind", "stop", "forget it"].contains(&lower.as_str()) {
-        return Ok(PlanOutcome::Unsupported { reason: format!("Okay, cancelled creating that {}.", pending.object_key) });
+        return Ok(PlanOutcome::Unsupported {
+            reason: format!("Okay, cancelled creating that {}.", pending.object_key),
+        });
     }
     if raw.is_empty() {
-        return Ok(PlanOutcome::NeedsMoreInfo { question: format!("I still need the {} - what should it be?", pending.asking_label), pending: pending.clone() });
+        return Ok(PlanOutcome::NeedsMoreInfo {
+            question: format!(
+                "I still need the {} - what should it be?",
+                pending.asking_label
+            ),
+            pending: pending.clone(),
+        });
     }
 
-    let value = normalize_answer(conn, workspace_id, &pending.object_key, &pending.asking_key, &pending.asking_type, raw)?;
+    let value = normalize_answer(
+        conn,
+        workspace_id,
+        &pending.object_key,
+        &pending.asking_key,
+        &pending.asking_type,
+        raw,
+    )?;
     let mut fields = pending.fields.clone();
     fields.insert(pending.asking_key.clone(), value);
     build_guided_create_outcome(conn, workspace_id, &pending.object_key, fields)
@@ -763,8 +1180,15 @@ fn continue_guided_create(conn: &Connection, workspace_id: &str, answer_text: &s
 /// Public helper `voice_execution_service`/the Tauri layer use to look up a
 /// custom field by label for the "set <label> to <value>" shape - kept
 /// here since it's planning-time metadata resolution, not execution.
-pub fn find_custom_field_by_label(conn: &Connection, workspace_id: &str, object_key: &str, label_text: &str) -> AppResult<Option<crate::models::custom_field::CustomFieldDefinition>> {
+pub fn find_custom_field_by_label(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    label_text: &str,
+) -> AppResult<Option<crate::models::custom_field::CustomFieldDefinition>> {
     let defs = custom_field_service::list_definitions(conn, workspace_id, object_key, true)?;
     let lower = label_text.to_lowercase();
-    Ok(defs.into_iter().find(|d| lower.contains(&d.label.to_lowercase())))
+    Ok(defs
+        .into_iter()
+        .find(|d| lower.contains(&d.label.to_lowercase())))
 }

@@ -27,7 +27,11 @@ pub struct ApiResponse {
 
 impl ApiClient {
     pub fn new(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
-        Self { base_url: base_url.into().trim_end_matches('/').to_string(), api_key: api_key.into(), http: Client::new() }
+        Self {
+            base_url: base_url.into().trim_end_matches('/').to_string(),
+            api_key: api_key.into(),
+            http: Client::new(),
+        }
     }
 
     fn url(&self, path: &str) -> String {
@@ -36,32 +40,66 @@ impl ApiClient {
 
     fn to_response(&self, resp: Response) -> Result<ApiResponse, String> {
         let status = resp.status();
-        let body: Value = resp.json().map_err(|e| format!("could not parse response body as JSON: {e}"))?;
+        let body: Value = resp
+            .json()
+            .map_err(|e| format!("could not parse response body as JSON: {e}"))?;
         Ok(ApiResponse { status, body })
     }
 
     pub fn get(&self, path: &str) -> Result<ApiResponse, String> {
-        let resp = self.http.get(self.url(path)).bearer_auth(&self.api_key).send().map_err(|e| e.to_string())?;
+        let resp = self
+            .http
+            .get(self.url(path))
+            .bearer_auth(&self.api_key)
+            .send()
+            .map_err(|e| e.to_string())?;
         self.to_response(resp)
     }
 
-    pub fn get_with_query(&self, path: &str, query: &[(&str, String)]) -> Result<ApiResponse, String> {
-        let resp = self.http.get(self.url(path)).bearer_auth(&self.api_key).query(query).send().map_err(|e| e.to_string())?;
+    pub fn get_with_query(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<ApiResponse, String> {
+        let resp = self
+            .http
+            .get(self.url(path))
+            .bearer_auth(&self.api_key)
+            .query(query)
+            .send()
+            .map_err(|e| e.to_string())?;
         self.to_response(resp)
     }
 
     pub fn post(&self, path: &str, body: &Value) -> Result<ApiResponse, String> {
-        let resp = self.http.post(self.url(path)).bearer_auth(&self.api_key).json(body).send().map_err(|e| e.to_string())?;
+        let resp = self
+            .http
+            .post(self.url(path))
+            .bearer_auth(&self.api_key)
+            .json(body)
+            .send()
+            .map_err(|e| e.to_string())?;
         self.to_response(resp)
     }
 
     pub fn patch(&self, path: &str, body: &Value) -> Result<ApiResponse, String> {
-        let resp = self.http.patch(self.url(path)).bearer_auth(&self.api_key).json(body).send().map_err(|e| e.to_string())?;
+        let resp = self
+            .http
+            .patch(self.url(path))
+            .bearer_auth(&self.api_key)
+            .json(body)
+            .send()
+            .map_err(|e| e.to_string())?;
         self.to_response(resp)
     }
 
     pub fn delete(&self, path: &str) -> Result<ApiResponse, String> {
-        let resp = self.http.delete(self.url(path)).bearer_auth(&self.api_key).send().map_err(|e| e.to_string())?;
+        let resp = self
+            .http
+            .delete(self.url(path))
+            .bearer_auth(&self.api_key)
+            .send()
+            .map_err(|e| e.to_string())?;
         self.to_response(resp)
     }
 }

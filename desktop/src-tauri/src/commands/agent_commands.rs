@@ -13,12 +13,18 @@ use lanesra_core::models::agent::{NlReportQuery, NlReportResult};
 use lanesra_core::services::agent_service;
 
 #[tauri::command]
-pub async fn ask_report(state: State<'_, AppState>, query: NlReportQuery) -> AppResult<NlReportResult> {
+pub async fn ask_report(
+    state: State<'_, AppState>,
+    query: NlReportQuery,
+) -> AppResult<NlReportResult> {
     let master_key = resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
     let workspace_id = {
         let conn = state.conn.lock().unwrap();
         require_workspace_id(&conn)?
     };
-    run_with_own_connection(db_path, move |conn| async move { agent_service::ask_report(&conn, &workspace_id, &master_key, &query).await }).await
+    run_with_own_connection(db_path, move |conn| async move {
+        agent_service::ask_report(&conn, &workspace_id, &master_key, &query).await
+    })
+    .await
 }

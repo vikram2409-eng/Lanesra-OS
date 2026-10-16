@@ -57,9 +57,19 @@ pub fn insert(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<ConnectionModel>> {
-    conn.query_row("SELECT * FROM integration_connections WHERE id = ?1", [id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM integration_connections WHERE id = ?1",
+        [id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 pub fn secret_id_for(conn: &Connection, id: &str) -> rusqlite::Result<Option<String>> {
@@ -68,12 +78,26 @@ pub fn secret_id_for(conn: &Connection, id: &str) -> rusqlite::Result<Option<Str
     // `secret_id` (any `auth_mode == "none"` connection, or one whose
     // secret hasn't been set yet) - the inner `Option<String>` already
     // covers that second case, so this must not also wrap it in `Some`.
-    conn.query_row("SELECT secret_id FROM integration_connections WHERE id = ?1", [id], |r| r.get::<_, Option<String>>(0))
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT secret_id FROM integration_connections WHERE id = ?1",
+        [id],
+        |r| r.get::<_, Option<String>>(0),
+    )
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
-pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<ConnectionModel>> {
-    let mut stmt = conn.prepare("SELECT * FROM integration_connections WHERE workspace_id = ?1 ORDER BY name")?;
+pub fn list_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<ConnectionModel>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM integration_connections WHERE workspace_id = ?1 ORDER BY name")?;
     let rows = stmt.query_map([workspace_id], map_row)?;
     rows.collect()
 }
@@ -98,7 +122,13 @@ pub fn update(
     get(conn, id).map(|c| c.expect("just updated"))
 }
 
-pub fn set_test_result(conn: &Connection, id: &str, status: &str, message: &str, failed: bool) -> rusqlite::Result<()> {
+pub fn set_test_result(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    message: &str,
+    failed: bool,
+) -> rusqlite::Result<()> {
     let now = now_iso();
     if failed {
         conn.execute(
@@ -121,7 +151,11 @@ pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
 
 /// How many connections in this workspace currently report `status` -
 /// the Overview screen's "active"/"failed connections" KPIs (spec §3.1).
-pub fn count_by_status(conn: &Connection, workspace_id: &str, status: &str) -> rusqlite::Result<i64> {
+pub fn count_by_status(
+    conn: &Connection,
+    workspace_id: &str,
+    status: &str,
+) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COUNT(*) FROM integration_connections WHERE workspace_id = ?1 AND status = ?2",
         rusqlite::params![workspace_id, status],

@@ -18,8 +18,9 @@ use lanesra_core::models::task::TaskInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    bulk_action_service, company_service, custom_field_service, custom_object_service, custom_record_service,
-    saved_view_service, status_transition_service, task_service, user_service, workspace_service,
+    bulk_action_service, company_service, custom_field_service, custom_object_service,
+    custom_record_service, saved_view_service, status_transition_service, task_service,
+    user_service, workspace_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -40,10 +41,22 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
     (conn, workspace.id, admin.id)
 }
 
-fn user_with_role(conn: &rusqlite::Connection, ws: &str, admin: &str, username: &str, role: &str) -> String {
+fn user_with_role(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+    username: &str,
+    role: &str,
+) -> String {
     user_service::create(
-        conn, ws,
-        &NewUser { username: username.into(), display_name: username.into(), password: "anothersecretpw".into(), roles: vec![role.into()] },
+        conn,
+        ws,
+        &NewUser {
+            username: username.into(),
+            display_name: username.into(),
+            password: "anothersecretpw".into(),
+            roles: vec![role.into()],
+        },
         Some(admin),
     )
     .unwrap()
@@ -52,26 +65,64 @@ fn user_with_role(conn: &rusqlite::Connection, ws: &str, admin: &str, username: 
 
 fn make_company(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str) -> String {
     let input = CompanyInput {
-        name: name.into(), status: "Prospect".into(), owner_user_id: None, tax_number: None,
-        billing_address: None, shipping_address: None, tags: None, notes: None,
-        phone: None, email: None, website: None, annual_revenue_cents: None,
-        employee_count: None, preferred_contact_method: None,
+        name: name.into(),
+        status: "Prospect".into(),
+        owner_user_id: None,
+        tax_number: None,
+        billing_address: None,
+        shipping_address: None,
+        tags: None,
+        notes: None,
+        phone: None,
+        email: None,
+        website: None,
+        annual_revenue_cents: None,
+        employee_count: None,
+        preferred_contact_method: None,
     };
-    company_service::create(conn, ws, &input, Some(admin)).unwrap().id
+    company_service::create(conn, ws, &input, Some(admin))
+        .unwrap()
+        .id
 }
 
 fn make_task(conn: &rusqlite::Connection, ws: &str, admin: &str, title: &str) -> String {
     let input = TaskInput {
-        title: title.into(), description: None, owner_user_id: None, priority: "Normal".into(),
-        status: "Not Started".into(), due_date: None, reminder_at: None, related_type: None, related_id: None,
+        title: title.into(),
+        description: None,
+        owner_user_id: None,
+        priority: "Normal".into(),
+        status: "Not Started".into(),
+        due_date: None,
+        reminder_at: None,
+        related_type: None,
+        related_id: None,
     };
-    task_service::create(conn, ws, &input, Some(admin)).unwrap().id
+    task_service::create(conn, ws, &input, Some(admin))
+        .unwrap()
+        .id
 }
 
-fn make_custom_object_and_record(conn: &rusqlite::Connection, ws: &str, admin: &str) -> (String, String) {
-    let obj_input = CustomObjectDefinitionInput { singular_label: "Vendor".into(), plural_label: "Vendors".into(), icon: "🏭".into(), prefix: "VEN".into(), digits: 4 };
-    let def = custom_object_service::create_with_key(conn, ws, "vendor", &obj_input, Some(admin)).unwrap();
-    let record_input = CustomRecordInput { object_key: def.key.clone(), primary_name: "Acme Supply".into(), status: "Active".into(), owner_user_id: None, notes: None };
+fn make_custom_object_and_record(
+    conn: &rusqlite::Connection,
+    ws: &str,
+    admin: &str,
+) -> (String, String) {
+    let obj_input = CustomObjectDefinitionInput {
+        singular_label: "Vendor".into(),
+        plural_label: "Vendors".into(),
+        icon: "🏭".into(),
+        prefix: "VEN".into(),
+        digits: 4,
+    };
+    let def = custom_object_service::create_with_key(conn, ws, "vendor", &obj_input, Some(admin))
+        .unwrap();
+    let record_input = CustomRecordInput {
+        object_key: def.key.clone(),
+        primary_name: "Acme Supply".into(),
+        status: "Active".into(),
+        owner_user_id: None,
+        notes: None,
+    };
     let record = custom_record_service::create(conn, ws, &record_input, Some(admin)).unwrap();
     (def.key, record.id)
 }
@@ -94,7 +145,13 @@ fn base_view_input(object_key: &str, name: &str, visibility: &str) -> SavedViewI
 #[test]
 fn a_saved_view_can_be_created_listed_updated_and_deleted() {
     let (conn, ws, admin) = setup_workspace();
-    let created = saved_view_service::create(&conn, &ws, &base_view_input("Company", "My prospects", "private"), Some(&admin)).unwrap();
+    let created = saved_view_service::create(
+        &conn,
+        &ws,
+        &base_view_input("Company", "My prospects", "private"),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(created.owner_user_id, admin);
     assert!(!created.is_object_default);
 
@@ -109,7 +166,8 @@ fn a_saved_view_can_be_created_listed_updated_and_deleted() {
     assert_eq!(updated.sort_direction, "desc");
 
     saved_view_service::delete(&conn, &created.id, Some(&admin)).unwrap();
-    let after_delete = saved_view_service::list_for_object(&conn, &ws, "Company", Some(&admin)).unwrap();
+    let after_delete =
+        saved_view_service::list_for_object(&conn, &ws, "Company", Some(&admin)).unwrap();
     assert!(after_delete.is_empty());
 }
 
@@ -118,15 +176,28 @@ fn private_views_are_not_visible_to_other_users_but_shared_views_are() {
     let (conn, ws, admin) = setup_workspace();
     let sam = user_with_role(&conn, &ws, &admin, "sam", "Sales");
 
-    let private = saved_view_service::create(&conn, &ws, &base_view_input("Company", "Admin's private view", "private"), Some(&admin)).unwrap();
-    let shared = saved_view_service::create(&conn, &ws, &base_view_input("Company", "Team view", "shared"), Some(&admin)).unwrap();
+    let private = saved_view_service::create(
+        &conn,
+        &ws,
+        &base_view_input("Company", "Admin's private view", "private"),
+        Some(&admin),
+    )
+    .unwrap();
+    let shared = saved_view_service::create(
+        &conn,
+        &ws,
+        &base_view_input("Company", "Team view", "shared"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let sam_views = saved_view_service::list_for_object(&conn, &ws, "Company", Some(&sam)).unwrap();
     let sam_ids: Vec<&str> = sam_views.iter().map(|v| v.id.as_str()).collect();
     assert!(!sam_ids.contains(&private.id.as_str()));
     assert!(sam_ids.contains(&shared.id.as_str()));
 
-    let admin_views = saved_view_service::list_for_object(&conn, &ws, "Company", Some(&admin)).unwrap();
+    let admin_views =
+        saved_view_service::list_for_object(&conn, &ws, "Company", Some(&admin)).unwrap();
     assert_eq!(admin_views.len(), 2);
 }
 
@@ -134,15 +205,33 @@ fn private_views_are_not_visible_to_other_users_but_shared_views_are() {
 fn only_one_default_view_exists_per_object_key_and_setting_default_requires_admin() {
     let (conn, ws, admin) = setup_workspace();
     let sam = user_with_role(&conn, &ws, &admin, "sam", "Sales");
-    let a = saved_view_service::create(&conn, &ws, &base_view_input("Company", "View A", "shared"), Some(&admin)).unwrap();
-    let b = saved_view_service::create(&conn, &ws, &base_view_input("Company", "View B", "shared"), Some(&admin)).unwrap();
+    let a = saved_view_service::create(
+        &conn,
+        &ws,
+        &base_view_input("Company", "View A", "shared"),
+        Some(&admin),
+    )
+    .unwrap();
+    let b = saved_view_service::create(
+        &conn,
+        &ws,
+        &base_view_input("Company", "View B", "shared"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let err = saved_view_service::set_default(&conn, &a.id, Some(&sam)).unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
 
     let a_default = saved_view_service::set_default(&conn, &a.id, Some(&admin)).unwrap();
     assert!(a_default.is_object_default);
-    assert_eq!(saved_view_service::get_default(&conn, &ws, "Company").unwrap().unwrap().id, a.id);
+    assert_eq!(
+        saved_view_service::get_default(&conn, &ws, "Company")
+            .unwrap()
+            .unwrap()
+            .id,
+        a.id
+    );
 
     let b_default = saved_view_service::set_default(&conn, &b.id, Some(&admin)).unwrap();
     assert!(b_default.is_object_default);
@@ -151,22 +240,43 @@ fn only_one_default_view_exists_per_object_key_and_setting_default_requires_admi
         .into_iter()
         .find(|v| v.id == a.id)
         .unwrap();
-    assert!(!a_reloaded.is_object_default, "setting B as default must clear A's default flag");
+    assert!(
+        !a_reloaded.is_object_default,
+        "setting B as default must clear A's default flag"
+    );
 }
 
 #[test]
 fn only_the_owner_or_an_admin_may_edit_or_delete_a_shared_view() {
     let (conn, ws, admin) = setup_workspace();
     let sam = user_with_role(&conn, &ws, &admin, "sam", "Sales");
-    let view = saved_view_service::create(&conn, &ws, &base_view_input("Company", "Team view", "shared"), Some(&admin)).unwrap();
+    let view = saved_view_service::create(
+        &conn,
+        &ws,
+        &base_view_input("Company", "Team view", "shared"),
+        Some(&admin),
+    )
+    .unwrap();
 
-    let err = saved_view_service::update(&conn, &view.id, &base_view_input("Company", "Hijacked", "shared"), Some(&sam)).unwrap_err();
+    let err = saved_view_service::update(
+        &conn,
+        &view.id,
+        &base_view_input("Company", "Hijacked", "shared"),
+        Some(&sam),
+    )
+    .unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
     let err = saved_view_service::delete(&conn, &view.id, Some(&sam)).unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
 
     // The owner (admin) can still edit/delete their own shared view.
-    saved_view_service::update(&conn, &view.id, &base_view_input("Company", "Renamed by owner", "shared"), Some(&admin)).unwrap();
+    saved_view_service::update(
+        &conn,
+        &view.id,
+        &base_view_input("Company", "Renamed by owner", "shared"),
+        Some(&admin),
+    )
+    .unwrap();
 }
 
 // ---------------------------------------------------------------- Bulk Actions
@@ -177,7 +287,16 @@ fn bulk_update_builtin_field_applies_to_every_selected_company() {
     let a = make_company(&conn, &ws, &admin, "Acme");
     let b = make_company(&conn, &ws, &admin, "Zeta");
 
-    let results = bulk_action_service::bulk_update_builtin_field(&conn, &ws, "Company", &[a.clone(), b.clone()], "tax_number", "TAX-999", Some(&admin)).unwrap();
+    let results = bulk_action_service::bulk_update_builtin_field(
+        &conn,
+        &ws,
+        "Company",
+        &[a.clone(), b.clone()],
+        "tax_number",
+        "TAX-999",
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(results.len(), 2);
     assert!(results.iter().all(|r| r.ok));
     for id in [&a, &b] {
@@ -193,24 +312,55 @@ fn bulk_update_custom_field_only_touches_the_targeted_key() {
 
     fn field_input(label: &str) -> CustomFieldDefinitionInput {
         CustomFieldDefinitionInput {
-            entity_type: "Company".into(), label: label.into(), field_type: "text".into(), options: vec![],
-            required: false, show_in_list: true, sort_order: 1, min_value: None, max_value: None, max_length: None,
-            regex_pattern: None, is_searchable: false, is_filterable: false, is_reportable: false, default_value: None,
-            is_unique: false, help_text: None, placeholder: None, is_hidden_by_default: false,
+            entity_type: "Company".into(),
+            label: label.into(),
+            field_type: "text".into(),
+            options: vec![],
+            required: false,
+            show_in_list: true,
+            sort_order: 1,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: false,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
+            is_hidden_by_default: false,
         }
     }
-    let region_def = custom_field_service::create_definition(&conn, &ws, &field_input("Region"), Some(&admin)).unwrap();
-    let segment_def = custom_field_service::create_definition(&conn, &ws, &field_input("Segment"), Some(&admin)).unwrap();
+    let region_def =
+        custom_field_service::create_definition(&conn, &ws, &field_input("Region"), Some(&admin))
+            .unwrap();
+    let segment_def =
+        custom_field_service::create_definition(&conn, &ws, &field_input("Segment"), Some(&admin))
+            .unwrap();
 
     let mut initial = HashMap::new();
     initial.insert(region_def.key.clone(), "West".to_string());
     initial.insert(segment_def.key.clone(), "Enterprise".to_string());
-    custom_field_service::set_entity_values(&conn, "Company", &company, &initial, Some(&admin)).unwrap();
+    custom_field_service::set_entity_values(&conn, "Company", &company, &initial, Some(&admin))
+        .unwrap();
 
-    bulk_action_service::bulk_update_custom_field(&conn, "Company", &[company.clone()], &region_def.key, "East", Some(&admin)).unwrap();
+    bulk_action_service::bulk_update_custom_field(
+        &conn,
+        "Company",
+        std::slice::from_ref(&company),
+        &region_def.key,
+        "East",
+        Some(&admin),
+    )
+    .unwrap();
 
     let values = custom_field_service::get_entity_values(&conn, &company).unwrap();
-    assert_eq!(values.get(&region_def.key).map(String::as_str), Some("East"));
+    assert_eq!(
+        values.get(&region_def.key).map(String::as_str),
+        Some("East")
+    );
     assert_eq!(
         values.get(&segment_def.key).map(String::as_str),
         Some("Enterprise"),
@@ -224,13 +374,35 @@ fn bulk_reassign_owner_only_supports_entities_with_an_owner_column() {
     let sam = user_with_role(&conn, &ws, &admin, "sam", "Sales");
     let task = make_task(&conn, &ws, &admin, "Follow up");
 
-    let results = bulk_action_service::bulk_reassign_owner(&conn, &ws, "Task", &[task.clone()], Some(&sam), Some(&admin)).unwrap();
+    let results = bulk_action_service::bulk_reassign_owner(
+        &conn,
+        &ws,
+        "Task",
+        std::slice::from_ref(&task),
+        Some(&sam),
+        Some(&admin),
+    )
+    .unwrap();
     assert!(results[0].ok);
-    assert_eq!(task_service::get(&conn, &task).unwrap().owner_user_id.as_deref(), Some(sam.as_str()));
+    assert_eq!(
+        task_service::get(&conn, &task)
+            .unwrap()
+            .owner_user_id
+            .as_deref(),
+        Some(sam.as_str())
+    );
 
     // Product has no owner_user_id column at all - a clean, fail-fast
     // validation error, not a panic or a silent no-op.
-    let err = bulk_action_service::bulk_reassign_owner(&conn, &ws, "Product", &["nonexistent".into()], Some(&sam), Some(&admin)).unwrap_err();
+    let err = bulk_action_service::bulk_reassign_owner(
+        &conn,
+        &ws,
+        "Product",
+        &["nonexistent".into()],
+        Some(&sam),
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
 }
 
@@ -242,11 +414,23 @@ fn bulk_change_status_is_independent_per_record_and_respects_status_transition_r
     // Move `blocked` off Prospect while no rule exists yet to restrict it -
     // this fixture-setup update is itself unrestricted.
     company_service::update(
-        &conn, &blocked,
+        &conn,
+        &blocked,
         &CompanyInput {
-            name: "Will fail".into(), status: "Inactive".into(), owner_user_id: None, tax_number: None,
-            billing_address: None, shipping_address: None, tags: None, notes: None, phone: None, email: None,
-            website: None, annual_revenue_cents: None, employee_count: None, preferred_contact_method: None,
+            name: "Will fail".into(),
+            status: "Inactive".into(),
+            owner_user_id: None,
+            tax_number: None,
+            billing_address: None,
+            shipping_address: None,
+            tags: None,
+            notes: None,
+            phone: None,
+            email: None,
+            website: None,
+            annual_revenue_cents: None,
+            employee_count: None,
+            preferred_contact_method: None,
         },
         Some(&admin),
     )
@@ -256,19 +440,45 @@ fn bulk_change_status_is_independent_per_record_and_respects_status_transition_r
     // only, so `allowed` (still Prospect) can reach "Active Customer" but
     // `blocked` (now Inactive) cannot.
     status_transition_service::create(
-        &conn, &ws,
-        &StatusTransitionInput { entity_type: "Company".into(), from_status: Some("Prospect".into()), to_status: "Active Customer".into() },
+        &conn,
+        &ws,
+        &StatusTransitionInput {
+            entity_type: "Company".into(),
+            from_status: Some("Prospect".into()),
+            to_status: "Active Customer".into(),
+        },
         Some(&admin),
     )
     .unwrap();
 
-    let results = bulk_action_service::bulk_change_status(&conn, &ws, "Company", &[allowed.clone(), blocked.clone()], "Active Customer", Some(&admin)).unwrap();
+    let results = bulk_action_service::bulk_change_status(
+        &conn,
+        &ws,
+        "Company",
+        &[allowed.clone(), blocked.clone()],
+        "Active Customer",
+        Some(&admin),
+    )
+    .unwrap();
     let allowed_result = results.iter().find(|r| r.id == allowed).unwrap();
     let blocked_result = results.iter().find(|r| r.id == blocked).unwrap();
-    assert!(allowed_result.ok, "Prospect -> Active Customer is the one rule explicitly permitted");
-    assert!(!blocked_result.ok, "Inactive -> Active Customer has no rule permitting it");
-    assert_eq!(company_service::get(&conn, &allowed).unwrap().status, "Active Customer");
-    assert_eq!(company_service::get(&conn, &blocked).unwrap().status, "Inactive", "a rejected bulk status change must leave the record exactly as it was");
+    assert!(
+        allowed_result.ok,
+        "Prospect -> Active Customer is the one rule explicitly permitted"
+    );
+    assert!(
+        !blocked_result.ok,
+        "Inactive -> Active Customer has no rule permitting it"
+    );
+    assert_eq!(
+        company_service::get(&conn, &allowed).unwrap().status,
+        "Active Customer"
+    );
+    assert_eq!(
+        company_service::get(&conn, &blocked).unwrap().status,
+        "Inactive",
+        "a rejected bulk status change must leave the record exactly as it was"
+    );
 }
 
 #[test]
@@ -276,22 +486,52 @@ fn bulk_tag_merges_rather_than_overwrites() {
     let (conn, ws, admin) = setup_workspace();
     let company = make_company(&conn, &ws, &admin, "Acme");
     company_service::update(
-        &conn, &company,
+        &conn,
+        &company,
         &CompanyInput {
-            name: "Acme".into(), status: "Prospect".into(), owner_user_id: None, tax_number: None,
-            billing_address: None, shipping_address: None, tags: Some("vip".into()), notes: None, phone: None,
-            email: None, website: None, annual_revenue_cents: None, employee_count: None, preferred_contact_method: None,
+            name: "Acme".into(),
+            status: "Prospect".into(),
+            owner_user_id: None,
+            tax_number: None,
+            billing_address: None,
+            shipping_address: None,
+            tags: Some("vip".into()),
+            notes: None,
+            phone: None,
+            email: None,
+            website: None,
+            annual_revenue_cents: None,
+            employee_count: None,
+            preferred_contact_method: None,
         },
         Some(&admin),
     )
     .unwrap();
 
-    bulk_action_service::bulk_update_tags(&conn, &ws, "Company", &[company.clone()], &["west-region".to_string()], true, Some(&admin)).unwrap();
+    bulk_action_service::bulk_update_tags(
+        &conn,
+        &ws,
+        "Company",
+        std::slice::from_ref(&company),
+        &["west-region".to_string()],
+        true,
+        Some(&admin),
+    )
+    .unwrap();
     let tags_after_add = company_service::get(&conn, &company).unwrap().tags.unwrap();
     assert!(tags_after_add.contains("vip"));
     assert!(tags_after_add.contains("west-region"));
 
-    bulk_action_service::bulk_update_tags(&conn, &ws, "Company", &[company.clone()], &["vip".to_string()], false, Some(&admin)).unwrap();
+    bulk_action_service::bulk_update_tags(
+        &conn,
+        &ws,
+        "Company",
+        std::slice::from_ref(&company),
+        &["vip".to_string()],
+        false,
+        Some(&admin),
+    )
+    .unwrap();
     let tags_after_remove = company_service::get(&conn, &company).unwrap().tags.unwrap();
     assert!(!tags_after_remove.contains("vip"));
     assert!(tags_after_remove.contains("west-region"));
@@ -299,7 +539,16 @@ fn bulk_tag_merges_rather_than_overwrites() {
     // Contact has tags too, but Product doesn't - the bulk tag action
     // itself (unlike other bulk operations) never extends to Custom
     // Objects either, since CustomRecordUpdate has no tags field.
-    let err = bulk_action_service::bulk_update_tags(&conn, &ws, "Product", &["nonexistent".into()], &["x".into()], true, Some(&admin)).unwrap_err();
+    let err = bulk_action_service::bulk_update_tags(
+        &conn,
+        &ws,
+        "Product",
+        &["nonexistent".into()],
+        &["x".into()],
+        true,
+        Some(&admin),
+    )
+    .unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
 }
 
@@ -309,18 +558,37 @@ fn bulk_archive_works_across_a_built_in_entity_and_a_custom_object() {
     let company = make_company(&conn, &ws, &admin, "Acme");
     let (object_key, record_id) = make_custom_object_and_record(&conn, &ws, &admin);
 
-    let company_results = bulk_action_service::bulk_archive(&conn, &ws, "Company", &[company.clone()], Some(&admin)).unwrap();
+    let company_results = bulk_action_service::bulk_archive(
+        &conn,
+        &ws,
+        "Company",
+        std::slice::from_ref(&company),
+        Some(&admin),
+    )
+    .unwrap();
     assert!(company_results[0].ok);
-    assert_eq!(company_service::get(&conn, &company).unwrap().status, "Archived");
+    assert_eq!(
+        company_service::get(&conn, &company).unwrap().status,
+        "Archived"
+    );
 
-    let custom_results = bulk_action_service::bulk_archive(&conn, &ws, &object_key, &[record_id.clone()], Some(&admin)).unwrap();
+    let custom_results = bulk_action_service::bulk_archive(
+        &conn,
+        &ws,
+        &object_key,
+        std::slice::from_ref(&record_id),
+        Some(&admin),
+    )
+    .unwrap();
     assert!(custom_results[0].ok);
 }
 
 #[test]
 fn an_unsupported_object_key_fails_the_whole_call_rather_than_per_record() {
     let (conn, ws, admin) = setup_workspace();
-    let err = bulk_action_service::bulk_archive(&conn, &ws, "Quote", &["whatever".into()], Some(&admin)).unwrap_err();
+    let err =
+        bulk_action_service::bulk_archive(&conn, &ws, "Quote", &["whatever".into()], Some(&admin))
+            .unwrap_err();
     assert!(matches!(err, AppError::Validation(_)));
     assert!(err.to_string().contains("Quote"));
 }

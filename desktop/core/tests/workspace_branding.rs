@@ -44,7 +44,10 @@ fn administrator_can_update_workspace_profile() {
     let updated = workspace_service::update(&conn, &update_input(), Some(&admin)).unwrap();
     assert_eq!(updated.business_name, "Renamed Co");
     assert_eq!(updated.legal_name.as_deref(), Some("Renamed Co LLC"));
-    assert_eq!(updated.business_address.as_deref(), Some("1 Main Street, Springfield"));
+    assert_eq!(
+        updated.business_address.as_deref(),
+        Some("1 Main Street, Springfield")
+    );
     assert_eq!(updated.phone.as_deref(), Some("+1 555-0100"));
     assert_eq!(updated.default_tax_rate_bp, 500);
 }

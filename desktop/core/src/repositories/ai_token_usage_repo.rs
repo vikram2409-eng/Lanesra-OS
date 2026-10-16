@@ -16,7 +16,14 @@ fn today_date() -> String {
 /// gateway (or plain `ai_service::complete_with_tools`) call that
 /// actually reached a provider, from the usage the provider's own
 /// response returned, never estimated.
-pub fn increment(conn: &Connection, workspace_id: &str, agent_id: &str, user_id: &str, input_tokens: i64, output_tokens: i64) -> rusqlite::Result<()> {
+pub fn increment(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: &str,
+    user_id: &str,
+    input_tokens: i64,
+    output_tokens: i64,
+) -> rusqlite::Result<()> {
     let today = today_date();
     conn.execute(
         "INSERT INTO ai_token_usage (workspace_id, agent_id, user_id, usage_date, input_tokens, output_tokens)
@@ -31,7 +38,10 @@ pub fn increment(conn: &Connection, workspace_id: &str, agent_id: &str, user_id:
 
 /// The "System" tier: every token spent by this workspace today, across
 /// every agent and user.
-pub fn today_totals_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<(i64, i64)> {
+pub fn today_totals_for_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<(i64, i64)> {
     conn.query_row(
         "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0) FROM ai_token_usage WHERE workspace_id = ?1 AND usage_date = ?2",
         rusqlite::params![workspace_id, today_date()],
@@ -41,7 +51,11 @@ pub fn today_totals_for_workspace(conn: &Connection, workspace_id: &str) -> rusq
 
 /// The "Agent" tier: every token spent by one agent today, across every
 /// user who ran it.
-pub fn today_totals_for_agent(conn: &Connection, workspace_id: &str, agent_id: &str) -> rusqlite::Result<(i64, i64)> {
+pub fn today_totals_for_agent(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: &str,
+) -> rusqlite::Result<(i64, i64)> {
     conn.query_row(
         "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0) FROM ai_token_usage WHERE workspace_id = ?1 AND agent_id = ?2 AND usage_date = ?3",
         rusqlite::params![workspace_id, agent_id, today_date()],
@@ -52,7 +66,11 @@ pub fn today_totals_for_agent(conn: &Connection, workspace_id: &str, agent_id: &
 /// The "User" tier - recorded today for visibility in the Gateway health
 /// view, not yet an enforced cap (no per-user budget dial exists this
 /// phase - stated plainly rather than pretending one is enforced).
-pub fn today_totals_for_user(conn: &Connection, workspace_id: &str, user_id: &str) -> rusqlite::Result<(i64, i64)> {
+pub fn today_totals_for_user(
+    conn: &Connection,
+    workspace_id: &str,
+    user_id: &str,
+) -> rusqlite::Result<(i64, i64)> {
     conn.query_row(
         "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0) FROM ai_token_usage WHERE workspace_id = ?1 AND user_id = ?2 AND usage_date = ?3",
         rusqlite::params![workspace_id, user_id, today_date()],

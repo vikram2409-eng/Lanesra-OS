@@ -8,7 +8,13 @@ use rusqlite::Connection;
 use crate::domain::ids::{new_uuid, now_iso};
 use crate::models::ai::AiGatewayFailoverEvent;
 
-pub fn record(conn: &Connection, workspace_id: &str, agent_id: &str, served_by: &str, reason: &str) -> rusqlite::Result<()> {
+pub fn record(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: &str,
+    served_by: &str,
+    reason: &str,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO ai_gateway_failover_events (id, workspace_id, agent_id, served_by, reason, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         rusqlite::params![new_uuid(), workspace_id, agent_id, served_by, reason, now_iso()],
@@ -16,7 +22,11 @@ pub fn record(conn: &Connection, workspace_id: &str, agent_id: &str, served_by: 
     Ok(())
 }
 
-pub fn list_recent(conn: &Connection, workspace_id: &str, limit: i64) -> rusqlite::Result<Vec<AiGatewayFailoverEvent>> {
+pub fn list_recent(
+    conn: &Connection,
+    workspace_id: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<AiGatewayFailoverEvent>> {
     let mut stmt = conn.prepare(
         "SELECT e.id, e.agent_id, a.name AS agent_name, e.served_by, e.reason, e.created_at
          FROM ai_gateway_failover_events e

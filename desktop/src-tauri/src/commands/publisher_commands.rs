@@ -16,5 +16,10 @@ pub fn list_publishers(state: State<AppState>) -> AppResult<Vec<Publisher>> {
 pub fn create_publisher(state: State<AppState>, input: PublisherInput) -> AppResult<Publisher> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    publisher_service::create(&conn, &workspace_id, &input, current_actor(&state).as_deref())
+    publisher_service::create(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }

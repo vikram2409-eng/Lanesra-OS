@@ -1,7 +1,7 @@
 //! Raw CRUD for `ai_memory_items` (migration `0063_memory_architecture.sql`)
 //! - the three itemized memory types (Session/Working/Entity). See
-//! `services::ai_memory_service` for the write-side policy gate and the
-//! context-scoped read this repo's `list_for_context` exists for.
+//!   `services::ai_memory_service` for the write-side policy gate and the
+//!   context-scoped read this repo's `list_for_context` exists for.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -57,47 +57,80 @@ pub fn create(
 }
 
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<MemoryItem>> {
-    conn.query_row("SELECT * FROM ai_memory_items WHERE id = ?1", [id], map_row).optional()
+    conn.query_row("SELECT * FROM ai_memory_items WHERE id = ?1", [id], map_row)
+        .optional()
 }
 
 /// Non-expired Entity Memory for one record - every agent's items, since
 /// a durable fact about a record isn't scoped to whichever agent first
 /// observed it.
-pub fn list_entity(conn: &Connection, workspace_id: &str, entity_type: &str, entity_id: &str) -> rusqlite::Result<Vec<MemoryItem>> {
+pub fn list_entity(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+) -> rusqlite::Result<Vec<MemoryItem>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM ai_memory_items WHERE workspace_id = ?1 AND memory_type = 'entity' AND entity_type = ?2 AND entity_id = ?3
          AND (expires_at IS NULL OR expires_at > ?4) ORDER BY created_at DESC",
     )?;
-    let rows = stmt.query_map(rusqlite::params![workspace_id, entity_type, entity_id, now_iso()], map_row)?.collect();
+    let rows = stmt
+        .query_map(
+            rusqlite::params![workspace_id, entity_type, entity_id, now_iso()],
+            map_row,
+        )?
+        .collect();
     rows
 }
 
 /// Non-expired Session Memory for one agent's ongoing relationship with
 /// one user - see `models::ai_memory::AgentMemoryContext`'s own doc
 /// comment on why `session_key` is that pair, not a real conversation id.
-pub fn list_session(conn: &Connection, agent_id: &str, session_key: &str, limit: i64) -> rusqlite::Result<Vec<MemoryItem>> {
+pub fn list_session(
+    conn: &Connection,
+    agent_id: &str,
+    session_key: &str,
+    limit: i64,
+) -> rusqlite::Result<Vec<MemoryItem>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM ai_memory_items WHERE memory_type = 'session' AND agent_id = ?1 AND session_key = ?2
          AND (expires_at IS NULL OR expires_at > ?3) ORDER BY created_at DESC LIMIT ?4",
     )?;
-    let rows = stmt.query_map(rusqlite::params![agent_id, session_key, now_iso(), limit], map_row)?.collect();
+    let rows = stmt
+        .query_map(
+            rusqlite::params![agent_id, session_key, now_iso(), limit],
+            map_row,
+        )?
+        .collect();
     rows
 }
 
 /// Non-expired Working Memory for one real run.
-pub fn list_working(conn: &Connection, agent_id: &str, run_id: &str) -> rusqlite::Result<Vec<MemoryItem>> {
+pub fn list_working(
+    conn: &Connection,
+    agent_id: &str,
+    run_id: &str,
+) -> rusqlite::Result<Vec<MemoryItem>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM ai_memory_items WHERE memory_type = 'working' AND agent_id = ?1 AND run_id = ?2
          AND (expires_at IS NULL OR expires_at > ?3) ORDER BY created_at DESC",
     )?;
-    let rows = stmt.query_map(rusqlite::params![agent_id, run_id, now_iso()], map_row)?.collect();
+    let rows = stmt
+        .query_map(rusqlite::params![agent_id, run_id, now_iso()], map_row)?
+        .collect();
     rows
 }
 
 /// Every memory item in a workspace, optionally narrowed by type and/or
 /// entity - the admin Memory Inspector's own listing, unfiltered by
 /// expiry so an admin can see (and clean up) an already-expired item too.
-pub fn list_all(conn: &Connection, workspace_id: &str, memory_type: Option<&str>, entity_type: Option<&str>, entity_id: Option<&str>) -> rusqlite::Result<Vec<MemoryItem>> {
+pub fn list_all(
+    conn: &Connection,
+    workspace_id: &str,
+    memory_type: Option<&str>,
+    entity_type: Option<&str>,
+    entity_id: Option<&str>,
+) -> rusqlite::Result<Vec<MemoryItem>> {
     let mut sql = "SELECT * FROM ai_memory_items WHERE workspace_id = ?1".to_string();
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(workspace_id.to_string())];
     if let Some(t) = memory_type {
@@ -120,11 +153,17 @@ pub fn list_all(conn: &Connection, workspace_id: &str, memory_type: Option<&str>
 }
 
 pub fn delete(conn: &Connection, workspace_id: &str, id: &str) -> rusqlite::Result<usize> {
-    conn.execute("DELETE FROM ai_memory_items WHERE id = ?1 AND workspace_id = ?2", rusqlite::params![id, workspace_id])
+    conn.execute(
+        "DELETE FROM ai_memory_items WHERE id = ?1 AND workspace_id = ?2",
+        rusqlite::params![id, workspace_id],
+    )
 }
 
 pub fn touch_last_used(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute("UPDATE ai_memory_items SET last_used_at = ?1 WHERE id = ?2", rusqlite::params![now_iso(), id])?;
+    conn.execute(
+        "UPDATE ai_memory_items SET last_used_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_iso(), id],
+    )?;
     Ok(())
 }
 

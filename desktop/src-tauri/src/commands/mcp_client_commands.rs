@@ -10,7 +10,9 @@ use crate::commands::integration_commands::run_with_own_connection;
 use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
-use lanesra_core::models::ai_mcp::{AgentMcpToolOption, McpServer, McpServerInput, McpServerUpdate, McpTool};
+use lanesra_core::models::ai_mcp::{
+    AgentMcpToolOption, McpServer, McpServerInput, McpServerUpdate, McpTool,
+};
 use lanesra_core::services::mcp_client_service;
 
 #[tauri::command]
@@ -18,7 +20,13 @@ pub fn create_mcp_server(state: State<AppState>, input: McpServerInput) -> AppRe
     let master_key = crate::commands::resolve_master_key(&state)?;
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    mcp_client_service::create_server(&conn, &workspace_id, &master_key, &input, current_actor(&state).as_deref())
+    mcp_client_service::create_server(
+        &conn,
+        &workspace_id,
+        &master_key,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -36,11 +44,22 @@ pub fn get_mcp_server(state: State<AppState>, id: String) -> AppResult<McpServer
 }
 
 #[tauri::command]
-pub fn update_mcp_server(state: State<AppState>, id: String, input: McpServerUpdate) -> AppResult<McpServer> {
+pub fn update_mcp_server(
+    state: State<AppState>,
+    id: String,
+    input: McpServerUpdate,
+) -> AppResult<McpServer> {
     let master_key = crate::commands::resolve_master_key(&state)?;
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    mcp_client_service::update_server(&conn, &workspace_id, &master_key, &id, &input, current_actor(&state).as_deref())
+    mcp_client_service::update_server(
+        &conn,
+        &workspace_id,
+        &master_key,
+        &id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -58,10 +77,24 @@ pub fn list_mcp_tools(state: State<AppState>, id: String) -> AppResult<Vec<McpTo
 }
 
 #[tauri::command]
-pub fn set_mcp_tool_flags(state: State<AppState>, id: String, tool_name: String, is_write: bool, enabled: bool) -> AppResult<()> {
+pub fn set_mcp_tool_flags(
+    state: State<AppState>,
+    id: String,
+    tool_name: String,
+    is_write: bool,
+    enabled: bool,
+) -> AppResult<()> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    mcp_client_service::set_tool_flags(&conn, &workspace_id, &id, &tool_name, is_write, enabled, current_actor(&state).as_deref())
+    mcp_client_service::set_tool_flags(
+        &conn,
+        &workspace_id,
+        &id,
+        &tool_name,
+        is_write,
+        enabled,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -79,5 +112,9 @@ pub async fn discover_mcp_tools(state: State<'_, AppState>, id: String) -> AppRe
         let conn = state.conn.lock().unwrap();
         (require_workspace_id(&conn)?, current_actor(&state))
     };
-    run_with_own_connection(db_path, move |conn| async move { mcp_client_service::discover_tools(&conn, &workspace_id, &master_key, &id, actor.as_deref()).await }).await
+    run_with_own_connection(db_path, move |conn| async move {
+        mcp_client_service::discover_tools(&conn, &workspace_id, &master_key, &id, actor.as_deref())
+            .await
+    })
+    .await
 }

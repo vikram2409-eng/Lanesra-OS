@@ -5,11 +5,15 @@
 //! comment for why a template has no draft/published/roles lifecycle.
 
 use lanesra_core::db::open_in_memory_db;
-use lanesra_core::models::page_layout::{NodeLayout, PageDefinition, PageLayoutInput, PageLayoutUpdate, PageNode};
+use lanesra_core::models::page_layout::{
+    NodeLayout, PageDefinition, PageLayoutInput, PageLayoutUpdate, PageNode,
+};
 use lanesra_core::models::page_template::PageTemplateInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
-use lanesra_core::services::{page_layout_service, page_template_service, user_service, workspace_service};
+use lanesra_core::services::{
+    page_layout_service, page_template_service, user_service, workspace_service,
+};
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
     let conn = open_in_memory_db().unwrap();
@@ -31,8 +35,14 @@ fn setup_workspace() -> (rusqlite::Connection, String, String) {
 
 fn sales_user(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
     user_service::create(
-        conn, ws,
-        &NewUser { username: "sam".into(), display_name: "Sam".into(), password: "anothersecretpw".into(), roles: vec!["Sales".into()] },
+        conn,
+        ws,
+        &NewUser {
+            username: "sam".into(),
+            display_name: "Sam".into(),
+            password: "anothersecretpw".into(),
+            roles: vec!["Sales".into()],
+        },
         Some(admin),
     )
     .unwrap()
@@ -45,7 +55,12 @@ fn leaf(component_type: &str) -> PageNode {
         component_type: component_type.into(),
         config: serde_json::json!({}),
         children: vec![],
-        layout: NodeLayout { column_span: 6, tablet_column_span: None, mobile_column_span: None, order: 0 },
+        layout: NodeLayout {
+            column_span: 6,
+            tablet_column_span: None,
+            mobile_column_span: None,
+            order: 0,
+        },
     }
 }
 
@@ -53,25 +68,46 @@ fn leaf(component_type: &str) -> PageNode {
 /// draft, returning its id.
 fn page_with_one_node(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
     page_layout_service::list_layouts(conn, ws, "Company").unwrap();
-    let layout = page_layout_service::create_layout(conn, ws, &PageLayoutInput { entity_type: "Company".into(), name: "Sales page".into() }, Some(admin)).unwrap();
+    let layout = page_layout_service::create_layout(
+        conn,
+        ws,
+        &PageLayoutInput {
+            entity_type: "Company".into(),
+            name: "Sales page".into(),
+        },
+        Some(admin),
+    )
+    .unwrap();
     let update = PageLayoutUpdate {
         name: layout.name.clone(),
         roles: vec![],
-        draft: PageDefinition { root: vec![leaf("record_header")] },
+        draft: PageDefinition {
+            root: vec![leaf("record_header")],
+        },
     };
     page_layout_service::update_layout(conn, &layout.id, &update, Some(admin)).unwrap();
     layout.id
 }
 
 fn template_input(name: &str) -> PageTemplateInput {
-    PageTemplateInput { name: name.into(), description: Some("A saved template".into()) }
+    PageTemplateInput {
+        name: name.into(),
+        description: Some("A saved template".into()),
+    }
 }
 
 #[test]
 fn creating_a_template_snapshots_the_pages_current_draft() {
     let (conn, ws, admin) = setup_workspace();
     let page_id = page_with_one_node(&conn, &ws, &admin);
-    let template = page_template_service::create_template_from_page(&conn, &ws, &page_id, &template_input("Exec 360"), Some(&admin)).unwrap();
+    let template = page_template_service::create_template_from_page(
+        &conn,
+        &ws,
+        &page_id,
+        &template_input("Exec 360"),
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(template.name, "Exec 360");
     assert_eq!(template.entity_type, "Company");
     assert_eq!(template.definition.root.len(), 1);
@@ -82,15 +118,32 @@ fn creating_a_template_snapshots_the_pages_current_draft() {
 fn editing_the_page_after_saving_a_template_does_not_change_the_template() {
     let (conn, ws, admin) = setup_workspace();
     let page_id = page_with_one_node(&conn, &ws, &admin);
-    let template = page_template_service::create_template_from_page(&conn, &ws, &page_id, &template_input("Exec 360"), Some(&admin)).unwrap();
+    let template = page_template_service::create_template_from_page(
+        &conn,
+        &ws,
+        &page_id,
+        &template_input("Exec 360"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let page = page_layout_service::get_layout(&conn, &page_id).unwrap();
-    let update = PageLayoutUpdate { name: page.name, roles: vec![], draft: PageDefinition { root: vec![leaf("owner"), leaf("note")] } };
+    let update = PageLayoutUpdate {
+        name: page.name,
+        roles: vec![],
+        draft: PageDefinition {
+            root: vec![leaf("owner"), leaf("note")],
+        },
+    };
     page_layout_service::update_layout(&conn, &page_id, &update, Some(&admin)).unwrap();
 
     let templates = page_template_service::list_templates(&conn, &ws, "Company").unwrap();
     let still = templates.iter().find(|t| t.id == template.id).unwrap();
-    assert_eq!(still.definition.root.len(), 1, "a template is an immutable snapshot, not a live reference to the page");
+    assert_eq!(
+        still.definition.root.len(),
+        1,
+        "a template is an immutable snapshot, not a live reference to the page"
+    );
     assert_eq!(still.definition.root[0].component_type, "record_header");
 }
 
@@ -99,7 +152,13 @@ fn a_non_administrator_cannot_create_a_template() {
     let (conn, ws, admin) = setup_workspace();
     let page_id = page_with_one_node(&conn, &ws, &admin);
     let sam = sales_user(&conn, &ws, &admin);
-    let result = page_template_service::create_template_from_page(&conn, &ws, &page_id, &template_input("Exec 360"), Some(&sam));
+    let result = page_template_service::create_template_from_page(
+        &conn,
+        &ws,
+        &page_id,
+        &template_input("Exec 360"),
+        Some(&sam),
+    );
     assert!(result.is_err());
 }
 
@@ -107,7 +166,16 @@ fn a_non_administrator_cannot_create_a_template() {
 fn a_template_name_is_required() {
     let (conn, ws, admin) = setup_workspace();
     let page_id = page_with_one_node(&conn, &ws, &admin);
-    let result = page_template_service::create_template_from_page(&conn, &ws, &page_id, &PageTemplateInput { name: "   ".into(), description: None }, Some(&admin));
+    let result = page_template_service::create_template_from_page(
+        &conn,
+        &ws,
+        &page_id,
+        &PageTemplateInput {
+            name: "   ".into(),
+            description: None,
+        },
+        Some(&admin),
+    );
     assert!(result.is_err());
 }
 
@@ -123,7 +191,13 @@ fn a_template_name_is_required() {
 fn a_page_cannot_be_templated_under_the_wrong_workspace_id() {
     let (conn, ws, admin) = setup_workspace();
     let page_id = page_with_one_node(&conn, &ws, &admin);
-    let result = page_template_service::create_template_from_page(&conn, "not-the-real-workspace-id", &page_id, &template_input("Stolen"), Some(&admin));
+    let result = page_template_service::create_template_from_page(
+        &conn,
+        "not-the-real-workspace-id",
+        &page_id,
+        &template_input("Stolen"),
+        Some(&admin),
+    );
     assert!(result.is_err());
 }
 
@@ -131,7 +205,14 @@ fn a_page_cannot_be_templated_under_the_wrong_workspace_id() {
 fn listing_templates_is_scoped_to_entity_type() {
     let (conn, ws, admin) = setup_workspace();
     let page_id = page_with_one_node(&conn, &ws, &admin);
-    page_template_service::create_template_from_page(&conn, &ws, &page_id, &template_input("Exec 360"), Some(&admin)).unwrap();
+    page_template_service::create_template_from_page(
+        &conn,
+        &ws,
+        &page_id,
+        &template_input("Exec 360"),
+        Some(&admin),
+    )
+    .unwrap();
 
     let company_templates = page_template_service::list_templates(&conn, &ws, "Company").unwrap();
     assert_eq!(company_templates.len(), 1);
@@ -143,7 +224,14 @@ fn listing_templates_is_scoped_to_entity_type() {
 fn deleting_a_template_removes_it() {
     let (conn, ws, admin) = setup_workspace();
     let page_id = page_with_one_node(&conn, &ws, &admin);
-    let template = page_template_service::create_template_from_page(&conn, &ws, &page_id, &template_input("Exec 360"), Some(&admin)).unwrap();
+    let template = page_template_service::create_template_from_page(
+        &conn,
+        &ws,
+        &page_id,
+        &template_input("Exec 360"),
+        Some(&admin),
+    )
+    .unwrap();
     page_template_service::delete_template(&conn, &template.id, &ws, Some(&admin)).unwrap();
     let remaining = page_template_service::list_templates(&conn, &ws, "Company").unwrap();
     assert!(remaining.is_empty());
@@ -158,7 +246,14 @@ fn templates_and_page_layouts_are_completely_independent() {
     let page_id = page_with_one_node(&conn, &ws, &admin);
     let before = page_layout_service::get_layout(&conn, &page_id).unwrap();
 
-    let template = page_template_service::create_template_from_page(&conn, &ws, &page_id, &template_input("Exec 360"), Some(&admin)).unwrap();
+    let template = page_template_service::create_template_from_page(
+        &conn,
+        &ws,
+        &page_id,
+        &template_input("Exec 360"),
+        Some(&admin),
+    )
+    .unwrap();
     page_template_service::delete_template(&conn, &template.id, &ws, Some(&admin)).unwrap();
 
     let after = page_layout_service::get_layout(&conn, &page_id).unwrap();

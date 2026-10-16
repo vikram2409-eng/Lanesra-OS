@@ -17,7 +17,16 @@ pub struct PendingEvent {
     pub correlation_id: Option<String>,
 }
 
-pub fn insert(conn: &Connection, id: &str, workspace_id: &str, event_type: &str, object_key: &str, record_id: &str, payload_json: &str, correlation_id: Option<&str>) -> rusqlite::Result<()> {
+pub fn insert(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+    event_type: &str,
+    object_key: &str,
+    record_id: &str,
+    payload_json: &str,
+    correlation_id: Option<&str>,
+) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO integration_pending_events (id, workspace_id, event_type, object_key, record_id, payload_json, correlation_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         rusqlite::params![id, workspace_id, event_type, object_key, record_id, payload_json, correlation_id, now_iso()],
@@ -40,7 +49,8 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<PendingEvent> {
 /// Oldest-first, capped - a drain pass processes a bounded batch rather
 /// than risking an unbounded backlog in one call.
 pub fn list_batch(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<PendingEvent>> {
-    let mut stmt = conn.prepare("SELECT * FROM integration_pending_events ORDER BY created_at LIMIT ?1")?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM integration_pending_events ORDER BY created_at LIMIT ?1")?;
     let rows = stmt.query_map([limit], map_row)?;
     rows.collect()
 }

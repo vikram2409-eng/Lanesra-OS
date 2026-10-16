@@ -1,12 +1,14 @@
 use tauri::State;
 
-use lanesra_core::domain::AppResult;
-use lanesra_core::models::user::User;
-use lanesra_core::models::workspace::{DashboardKpiPrefs, Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate};
-use lanesra_core::repositories::workspace_repo;
-use lanesra_core::services::workspace_service;
 use crate::commands::current_actor;
 use crate::state::AppState;
+use lanesra_core::domain::AppResult;
+use lanesra_core::models::user::User;
+use lanesra_core::models::workspace::{
+    DashboardKpiPrefs, Workspace, WorkspaceLogo, WorkspaceSetup, WorkspaceUpdate,
+};
+use lanesra_core::repositories::workspace_repo;
+use lanesra_core::services::workspace_service;
 
 #[tauri::command]
 pub fn workspace_status(state: State<AppState>) -> AppResult<Option<Workspace>> {
@@ -44,7 +46,10 @@ pub fn clear_workspace_logo(state: State<AppState>) -> AppResult<Workspace> {
 }
 
 #[tauri::command]
-pub fn set_dashboard_kpis(state: State<AppState>, prefs: DashboardKpiPrefs) -> AppResult<Workspace> {
+pub fn set_dashboard_kpis(
+    state: State<AppState>,
+    prefs: DashboardKpiPrefs,
+) -> AppResult<Workspace> {
     let conn = state.conn.lock().unwrap();
     workspace_service::set_dashboard_kpis(&conn, &prefs, current_actor(&state).as_deref())
 }

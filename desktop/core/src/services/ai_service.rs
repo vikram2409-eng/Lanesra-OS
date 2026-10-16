@@ -40,7 +40,10 @@ use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::ai::{AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings, AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS};
+use crate::models::ai::{
+    AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings,
+    AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS,
+};
 use crate::models::chat::ChatMessage;
 use crate::repositories::{ai_settings_repo, ai_token_usage_repo, integration_secret_repo};
 
@@ -71,7 +74,11 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max { s.to_string() } else { format!("{}...", &s[..max]) }
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max])
+    }
 }
 
 /// Read-only - lazily creates the default (`unconfigured`) row on first
@@ -90,13 +97,26 @@ pub fn get_settings(conn: &Connection, workspace_id: &str) -> AppResult<AiSettin
 /// Any settings change resets `status` back to `unconfigured`: a test
 /// result against the old configuration isn't meaningful evidence about
 /// the new one.
-pub fn save_settings(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], input: &AiSettingsInput, actor_user_id: Option<&str>) -> AppResult<AiSettings> {
+pub fn save_settings(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    input: &AiSettingsInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiSettings> {
     require_admin(conn, actor_user_id)?;
     if !AI_PROVIDERS.contains(&input.provider.as_str()) {
-        return Err(AppError::Validation(format!("Unknown AI provider '{}'", input.provider)));
+        return Err(AppError::Validation(format!(
+            "Unknown AI provider '{}'",
+            input.provider
+        )));
     }
-    if input.provider == "openai_compatible" && input.base_url.as_deref().unwrap_or("").trim().is_empty() {
-        return Err(AppError::Validation("An OpenAI-compatible provider needs a base URL".into()));
+    if input.provider == "openai_compatible"
+        && input.base_url.as_deref().unwrap_or("").trim().is_empty()
+    {
+        return Err(AppError::Validation(
+            "An OpenAI-compatible provider needs a base URL".into(),
+        ));
     }
     ai_settings_repo::ensure_default(conn, workspace_id)?;
     let existing_secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?;
@@ -110,7 +130,15 @@ pub fn save_settings(conn: &Connection, workspace_id: &str, master_key: &[u8; 32
                 }
                 None => {
                     let id = new_uuid();
-                    integration_secret_repo::insert(conn, &id, workspace_id, "AI provider API key", &ciphertext, &nonce, actor_user_id)?;
+                    integration_secret_repo::insert(
+                        conn,
+                        &id,
+                        workspace_id,
+                        "AI provider API key",
+                        &ciphertext,
+                        &nonce,
+                        actor_user_id,
+                    )?;
                     Some(id)
                 }
             }
@@ -135,27 +163,55 @@ pub fn save_settings(conn: &Connection, workspace_id: &str, master_key: &[u8; 32
 /// former means there's nothing to test yet, the latter is a real,
 /// recorded outcome, matching `connection_service::test_connection`'s own
 /// `Err` vs. `ok: false` distinction.
-pub async fn test_key(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], actor_user_id: Option<&str>) -> AppResult<AiTestResult> {
+pub async fn test_key(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    actor_user_id: Option<&str>,
+) -> AppResult<AiTestResult> {
     require_admin(conn, actor_user_id)?;
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
-    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| AppError::Validation("Configure an API key before testing it".into()))?;
-    let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
+    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?
+        .ok_or_else(|| AppError::Validation("Configure an API key before testing it".into()))?;
+    let stored = integration_secret_repo::get(conn, &secret_id)?
+        .ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
     let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
 
     let started = Instant::now();
     let result = match settings.provider.as_str() {
-        "anthropic" => test_anthropic(settings.base_url.as_deref(), &settings.model, &api_key).await,
+        "anthropic" => {
+            test_anthropic(settings.base_url.as_deref(), &settings.model, &api_key).await
+        }
         "openai_compatible" => test_openai_compatible(settings.base_url.as_deref(), &api_key).await,
         "google_gemini" => test_gemini(settings.base_url.as_deref(), &api_key).await,
-        other => Err(AppError::Validation(format!("No test implemented for provider '{other}'"))),
+        other => Err(AppError::Validation(format!(
+            "No test implemented for provider '{other}'"
+        ))),
     };
     let latency_ms = started.elapsed().as_millis() as u64;
 
     let test_result = match result {
-        Ok(message) => AiTestResult { ok: true, latency_ms, message },
-        Err(e) => AiTestResult { ok: false, latency_ms, message: e.to_string() },
+        Ok(message) => AiTestResult {
+            ok: true,
+            latency_ms,
+            message,
+        },
+        Err(e) => AiTestResult {
+            ok: false,
+            latency_ms,
+            message: e.to_string(),
+        },
     };
-    ai_settings_repo::set_test_result(conn, workspace_id, if test_result.ok { "connected" } else { "failed" }, &test_result.message)?;
+    ai_settings_repo::set_test_result(
+        conn,
+        workspace_id,
+        if test_result.ok {
+            "connected"
+        } else {
+            "failed"
+        },
+        &test_result.message,
+    )?;
     Ok(test_result)
 }
 
@@ -164,7 +220,12 @@ pub async fn test_key(conn: &Connection, workspace_id: &str, master_key: &[u8; 3
 /// action, not part of the main form payload" shape `ai_agent_service::
 /// set_model_routing` uses for the Agent tier - this is a Gateway health-
 /// view dial, not an LLM connection-config field.
-pub fn set_daily_token_budget(conn: &Connection, workspace_id: &str, input: &AiDailyTokenBudgetInput, actor_user_id: Option<&str>) -> AppResult<AiSettings> {
+pub fn set_daily_token_budget(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiDailyTokenBudgetInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiSettings> {
     require_admin(conn, actor_user_id)?;
     ai_settings_repo::ensure_default(conn, workspace_id)?;
     ai_settings_repo::set_daily_token_budget(conn, workspace_id, input.daily_token_budget)?;
@@ -177,19 +238,37 @@ pub fn set_daily_token_budget(conn: &Connection, workspace_id: &str, input: &AiD
 /// value clears it, matching this codebase's "blank means unset"
 /// convention rather than storing an empty string as if it were a real
 /// endpoint.
-pub fn set_otlp_endpoint(conn: &Connection, workspace_id: &str, input: &AiObservabilitySettingsInput, actor_user_id: Option<&str>) -> AppResult<AiSettings> {
+pub fn set_otlp_endpoint(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiObservabilitySettingsInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiSettings> {
     require_admin(conn, actor_user_id)?;
     ai_settings_repo::ensure_default(conn, workspace_id)?;
-    let endpoint = input.otlp_endpoint.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let endpoint = input
+        .otlp_endpoint
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     ai_settings_repo::set_otlp_endpoint(conn, workspace_id, endpoint)?;
     Ok(ai_settings_repo::ensure_default(conn, workspace_id)?)
 }
 
 /// Phase 7g: same shape as `set_otlp_endpoint` above.
-pub fn set_embedding_model(conn: &Connection, workspace_id: &str, input: &AiEmbeddingSettingsInput, actor_user_id: Option<&str>) -> AppResult<AiSettings> {
+pub fn set_embedding_model(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &AiEmbeddingSettingsInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiSettings> {
     require_admin(conn, actor_user_id)?;
     ai_settings_repo::ensure_default(conn, workspace_id)?;
-    let model = input.embedding_model.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let model = input
+        .embedding_model
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     ai_settings_repo::set_embedding_model(conn, workspace_id, model)?;
     Ok(ai_settings_repo::ensure_default(conn, workspace_id)?)
 }
@@ -200,8 +279,13 @@ pub fn set_embedding_model(conn: &Connection, workspace_id: &str, input: &AiEmbe
 /// already documents.
 pub fn token_usage_today(conn: &Connection, workspace_id: &str) -> AppResult<AiTokenUsageSummary> {
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
-    let (input_tokens, output_tokens) = ai_token_usage_repo::today_totals_for_workspace(conn, workspace_id)?;
-    Ok(AiTokenUsageSummary { today_input_tokens: input_tokens, today_output_tokens: output_tokens, daily_token_budget: settings.daily_token_budget })
+    let (input_tokens, output_tokens) =
+        ai_token_usage_repo::today_totals_for_workspace(conn, workspace_id)?;
+    Ok(AiTokenUsageSummary {
+        today_input_tokens: input_tokens,
+        today_output_tokens: output_tokens,
+        daily_token_budget: settings.daily_token_budget,
+    })
 }
 
 /// AI & Agentic Layer, Phase 4 (Agent Actions): the generic completion
@@ -218,24 +302,75 @@ pub fn token_usage_today(conn: &Connection, workspace_id: &str) -> AppResult<AiT
 /// numbers already does (`custom_report_service::run`) - the caller
 /// decides its own access model, same as every other read-mostly
 /// service function in this codebase.
-pub async fn complete(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], system_prompt: &str, user_message: &str) -> AppResult<String> {
+pub async fn complete(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    system_prompt: &str,
+    user_message: &str,
+) -> AppResult<String> {
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
-    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?
-        .ok_or_else(|| AppError::Validation("Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into()))?;
-    let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
+    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| {
+        AppError::Validation(
+            "Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into(),
+        )
+    })?;
+    let stored = integration_secret_repo::get(conn, &secret_id)?
+        .ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
     let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
 
     match settings.provider.as_str() {
-        "anthropic" => complete_anthropic(settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, user_message).await,
-        "openai_compatible" => complete_openai_compatible(settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, user_message).await,
-        "google_gemini" => complete_gemini(settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, user_message).await,
-        other => Err(AppError::Validation(format!("No completion implemented for provider '{other}'"))),
+        "anthropic" => {
+            complete_anthropic(
+                settings.base_url.as_deref(),
+                &settings.model,
+                &api_key,
+                system_prompt,
+                user_message,
+            )
+            .await
+        }
+        "openai_compatible" => {
+            complete_openai_compatible(
+                settings.base_url.as_deref(),
+                &settings.model,
+                &api_key,
+                system_prompt,
+                user_message,
+            )
+            .await
+        }
+        "google_gemini" => {
+            complete_gemini(
+                settings.base_url.as_deref(),
+                &settings.model,
+                &api_key,
+                system_prompt,
+                user_message,
+            )
+            .await
+        }
+        other => Err(AppError::Validation(format!(
+            "No completion implemented for provider '{other}'"
+        ))),
     }
 }
 
-async fn complete_anthropic(base_url: Option<&str>, model: &str, api_key: &str, system_prompt: &str, user_message: &str) -> AppResult<String> {
-    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
-    let model = if model.trim().is_empty() { DEFAULT_ANTHROPIC_MODEL } else { model };
+async fn complete_anthropic(
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    system_prompt: &str,
+    user_message: &str,
+) -> AppResult<String> {
+    let base = base_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
+    let model = if model.trim().is_empty() {
+        DEFAULT_ANTHROPIC_MODEL
+    } else {
+        model
+    };
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -255,24 +390,41 @@ async fn complete_anthropic(base_url: Option<&str>, model: &str, api_key: &str, 
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     value
         .get("content")
         .and_then(|c| c.get(0))
         .and_then(|b| b.get("text"))
         .and_then(|t| t.as_str())
         .map(|s| s.to_string())
-        .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "Unexpected response shape from {base}: {}",
+                truncate(&text, 200)
+            ))
+        })
 }
 
-async fn complete_openai_compatible(base_url: Option<&str>, model: &str, api_key: &str, system_prompt: &str, user_message: &str) -> AppResult<String> {
-    let base = base_url
-        .filter(|u| !u.trim().is_empty())
-        .ok_or_else(|| AppError::Validation("An OpenAI-compatible provider needs a base URL".into()))?;
+async fn complete_openai_compatible(
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    system_prompt: &str,
+    user_message: &str,
+) -> AppResult<String> {
+    let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| {
+        AppError::Validation("An OpenAI-compatible provider needs a base URL".into())
+    })?;
     if model.trim().is_empty() {
-        return Err(AppError::Validation("An OpenAI-compatible provider needs a model name configured".into()));
+        return Err(AppError::Validation(
+            "An OpenAI-compatible provider needs a model name configured".into(),
+        ));
     }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -293,9 +445,13 @@ async fn complete_openai_compatible(base_url: Option<&str>, model: &str, api_key
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     value
         .get("choices")
         .and_then(|c| c.get(0))
@@ -303,7 +459,12 @@ async fn complete_openai_compatible(base_url: Option<&str>, model: &str, api_key
         .and_then(|m| m.get("content"))
         .and_then(|t| t.as_str())
         .map(|s| s.to_string())
-        .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "Unexpected response shape from {base}: {}",
+                truncate(&text, 200)
+            ))
+        })
 }
 
 // --- AI & Agentic Layer, Phase 5 (LLM Chat Assistant): tool-calling ---
@@ -350,7 +511,10 @@ pub struct RequestedToolCall {
 #[derive(Debug, Clone)]
 pub enum CompletionOutcome {
     Text(String),
-    ToolCalls { raw_assistant: serde_json::Value, calls: Vec<RequestedToolCall> },
+    ToolCalls {
+        raw_assistant: serde_json::Value,
+        calls: Vec<RequestedToolCall>,
+    },
 }
 
 /// Same settings/secret resolution as `complete`, then one tool-calling
@@ -371,12 +535,25 @@ pub async fn complete_with_tools(
     history: &[ChatMessage],
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
-    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?
-        .ok_or_else(|| AppError::Validation("Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into()))?;
-    let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
+    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| {
+        AppError::Validation(
+            "Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into(),
+        )
+    })?;
+    let stored = integration_secret_repo::get(conn, &secret_id)?
+        .ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
     let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
 
-    dispatch_with_tools(&settings.provider, settings.base_url.as_deref(), &settings.model, &api_key, system_prompt, tools, history).await
+    dispatch_with_tools(
+        &settings.provider,
+        settings.base_url.as_deref(),
+        &settings.model,
+        &api_key,
+        system_prompt,
+        tools,
+        history,
+    )
+    .await
 }
 
 /// Phase 7a: the provider-matching logic `complete_with_tools` used to
@@ -397,10 +574,21 @@ pub(crate) async fn dispatch_with_tools(
     history: &[ChatMessage],
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     match provider {
-        "anthropic" => complete_anthropic_with_tools(base_url, model, api_key, system_prompt, tools, history).await,
-        "openai_compatible" => complete_openai_with_tools(base_url, model, api_key, system_prompt, tools, history).await,
-        "google_gemini" => complete_gemini_with_tools(base_url, model, api_key, system_prompt, tools, history).await,
-        other => Err(AppError::Validation(format!("No tool-calling completion implemented for provider '{other}'"))),
+        "anthropic" => {
+            complete_anthropic_with_tools(base_url, model, api_key, system_prompt, tools, history)
+                .await
+        }
+        "openai_compatible" => {
+            complete_openai_with_tools(base_url, model, api_key, system_prompt, tools, history)
+                .await
+        }
+        "google_gemini" => {
+            complete_gemini_with_tools(base_url, model, api_key, system_prompt, tools, history)
+                .await
+        }
+        other => Err(AppError::Validation(format!(
+            "No tool-calling completion implemented for provider '{other}'"
+        ))),
     }
 }
 
@@ -453,8 +641,14 @@ async fn complete_anthropic_with_tools(
     tools: &[ToolSpec],
     history: &[ChatMessage],
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
-    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
-    let model = if model.trim().is_empty() { DEFAULT_ANTHROPIC_MODEL } else { model };
+    let base = base_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
+    let model = if model.trim().is_empty() {
+        DEFAULT_ANTHROPIC_MODEL
+    } else {
+        model
+    };
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -475,14 +669,29 @@ async fn complete_anthropic_with_tools(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     let usage = TokenUsage {
-        input_tokens: value.get("usage").and_then(|u| u.get("input_tokens")).and_then(|v| v.as_i64()).unwrap_or(0),
-        output_tokens: value.get("usage").and_then(|u| u.get("output_tokens")).and_then(|v| v.as_i64()).unwrap_or(0),
+        input_tokens: value
+            .get("usage")
+            .and_then(|u| u.get("input_tokens"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        output_tokens: value
+            .get("usage")
+            .and_then(|u| u.get("output_tokens"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
     };
-    let content = value.get("content").cloned().unwrap_or(serde_json::Value::Null);
+    let content = value
+        .get("content")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
     let blocks = content.as_array().cloned().unwrap_or_default();
     let calls: Vec<RequestedToolCall> = blocks
         .iter()
@@ -496,9 +705,19 @@ async fn complete_anthropic_with_tools(
         })
         .collect();
     if !calls.is_empty() {
-        return Ok((CompletionOutcome::ToolCalls { raw_assistant: content, calls }, usage));
+        return Ok((
+            CompletionOutcome::ToolCalls {
+                raw_assistant: content,
+                calls,
+            },
+            usage,
+        ));
     }
-    let text_reply = blocks.iter().filter_map(|b| b.get("text").and_then(|t| t.as_str())).collect::<Vec<_>>().join("\n");
+    let text_reply = blocks
+        .iter()
+        .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n");
     Ok((CompletionOutcome::Text(text_reply), usage))
 }
 
@@ -539,11 +758,13 @@ async fn complete_openai_with_tools(
     tools: &[ToolSpec],
     history: &[ChatMessage],
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
-    let base = base_url
-        .filter(|u| !u.trim().is_empty())
-        .ok_or_else(|| AppError::Validation("An OpenAI-compatible provider needs a base URL".into()))?;
+    let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| {
+        AppError::Validation("An OpenAI-compatible provider needs a base URL".into())
+    })?;
     if model.trim().is_empty() {
-        return Err(AppError::Validation("An OpenAI-compatible provider needs a model name configured".into()));
+        return Err(AppError::Validation(
+            "An OpenAI-compatible provider needs a model name configured".into(),
+        ));
     }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
@@ -565,19 +786,36 @@ async fn complete_openai_with_tools(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     let usage = TokenUsage {
-        input_tokens: value.get("usage").and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_i64()).unwrap_or(0),
-        output_tokens: value.get("usage").and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0),
+        input_tokens: value
+            .get("usage")
+            .and_then(|u| u.get("prompt_tokens"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        output_tokens: value
+            .get("usage")
+            .and_then(|u| u.get("completion_tokens"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
     };
     let message = value
         .get("choices")
         .and_then(|c| c.get(0))
         .and_then(|c| c.get("message"))
         .cloned()
-        .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))?;
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "Unexpected response shape from {base}: {}",
+                truncate(&text, 200)
+            ))
+        })?;
     if let Some(tool_calls_value) = message.get("tool_calls").filter(|v| v.is_array()) {
         let calls: Vec<RequestedToolCall> = tool_calls_value
             .as_array()
@@ -594,10 +832,20 @@ async fn complete_openai_with_tools(
             })
             .collect();
         if !calls.is_empty() {
-            return Ok((CompletionOutcome::ToolCalls { raw_assistant: tool_calls_value.clone(), calls }, usage));
+            return Ok((
+                CompletionOutcome::ToolCalls {
+                    raw_assistant: tool_calls_value.clone(),
+                    calls,
+                },
+                usage,
+            ));
         }
     }
-    let text_reply = message.get("content").and_then(|c| c.as_str()).unwrap_or_default().to_string();
+    let text_reply = message
+        .get("content")
+        .and_then(|c| c.as_str())
+        .unwrap_or_default()
+        .to_string();
     Ok((CompletionOutcome::Text(text_reply), usage))
 }
 
@@ -632,7 +880,9 @@ fn gemini_contents_json(history: &[ChatMessage]) -> Vec<serde_json::Value> {
         let m = &history[i];
         match m.role.as_str() {
             "assistant" => {
-                let parts = m.tool_calls.clone().unwrap_or_else(|| serde_json::json!([{"text": m.content.clone().unwrap_or_default()}]));
+                let parts = m.tool_calls.clone().unwrap_or_else(
+                    || serde_json::json!([{"text": m.content.clone().unwrap_or_default()}]),
+                );
                 contents.push(serde_json::json!({"role": "model", "parts": parts}));
                 i += 1;
             }
@@ -666,8 +916,14 @@ async fn complete_gemini_with_tools(
     tools: &[ToolSpec],
     history: &[ChatMessage],
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
-    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_GEMINI_BASE_URL);
-    let model = if model.trim().is_empty() { DEFAULT_GEMINI_MODEL } else { model };
+    let base = base_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_GEMINI_BASE_URL);
+    let model = if model.trim().is_empty() {
+        DEFAULT_GEMINI_MODEL
+    } else {
+        model
+    };
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -678,7 +934,12 @@ async fn complete_gemini_with_tools(
         "tools": gemini_tools_json(tools),
     });
     let response = client
-        .post(format!("{}/v1beta/models/{}:generateContent?key={}", base.trim_end_matches('/'), model, api_key))
+        .post(format!(
+            "{}/v1beta/models/{}:generateContent?key={}",
+            base.trim_end_matches('/'),
+            model,
+            api_key
+        ))
         .json(&body)
         .send()
         .await
@@ -686,33 +947,74 @@ async fn complete_gemini_with_tools(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     let usage = TokenUsage {
-        input_tokens: value.get("usageMetadata").and_then(|u| u.get("promptTokenCount")).and_then(|v| v.as_i64()).unwrap_or(0),
-        output_tokens: value.get("usageMetadata").and_then(|u| u.get("candidatesTokenCount")).and_then(|v| v.as_i64()).unwrap_or(0),
+        input_tokens: value
+            .get("usageMetadata")
+            .and_then(|u| u.get("promptTokenCount"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        output_tokens: value
+            .get("usageMetadata")
+            .and_then(|u| u.get("candidatesTokenCount"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
     };
-    let content = value.get("candidates").and_then(|c| c.get(0)).and_then(|c| c.get("content")).cloned().unwrap_or(serde_json::Value::Null);
-    let parts = content.get("parts").and_then(|p| p.as_array()).cloned().unwrap_or_default();
+    let content = value
+        .get("candidates")
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("content"))
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    let parts = content
+        .get("parts")
+        .and_then(|p| p.as_array())
+        .cloned()
+        .unwrap_or_default();
     let calls: Vec<RequestedToolCall> = parts
         .iter()
         .filter_map(|p| p.get("functionCall"))
         .filter_map(|fc| {
             let name = fc.get("name")?.as_str()?.to_string();
-            Some(RequestedToolCall { id: name.clone(), name, arguments: fc.get("args").cloned().unwrap_or(serde_json::json!({})) })
+            Some(RequestedToolCall {
+                id: name.clone(),
+                name,
+                arguments: fc.get("args").cloned().unwrap_or(serde_json::json!({})),
+            })
         })
         .collect();
     if !calls.is_empty() {
-        return Ok((CompletionOutcome::ToolCalls { raw_assistant: serde_json::Value::Array(parts), calls }, usage));
+        return Ok((
+            CompletionOutcome::ToolCalls {
+                raw_assistant: serde_json::Value::Array(parts),
+                calls,
+            },
+            usage,
+        ));
     }
-    let text_reply = parts.iter().filter_map(|p| p.get("text").and_then(|t| t.as_str())).collect::<Vec<_>>().join("\n");
+    let text_reply = parts
+        .iter()
+        .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n");
     Ok((CompletionOutcome::Text(text_reply), usage))
 }
 
 async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> AppResult<String> {
-    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
-    let model = if model.trim().is_empty() { DEFAULT_ANTHROPIC_MODEL } else { model };
+    let base = base_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_ANTHROPIC_BASE_URL);
+    let model = if model.trim().is_empty() {
+        DEFAULT_ANTHROPIC_MODEL
+    } else {
+        model
+    };
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
@@ -731,14 +1033,17 @@ async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> A
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
         let text = response.text().await.unwrap_or_default();
-        Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))))
+        Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )))
     }
 }
 
 async fn test_openai_compatible(base_url: Option<&str>, api_key: &str) -> AppResult<String> {
-    let base = base_url
-        .filter(|u| !u.trim().is_empty())
-        .ok_or_else(|| AppError::Validation("An OpenAI-compatible provider needs a base URL".into()))?;
+    let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| {
+        AppError::Validation("An OpenAI-compatible provider needs a base URL".into())
+    })?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
@@ -754,7 +1059,10 @@ async fn test_openai_compatible(base_url: Option<&str>, api_key: &str) -> AppRes
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
         let text = response.text().await.unwrap_or_default();
-        Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))))
+        Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )))
     }
 }
 
@@ -764,13 +1072,19 @@ async fn test_openai_compatible(base_url: Option<&str>, api_key: &str) -> AppRes
 /// own `GET /models` already uses, not a 1-token generation charge like
 /// `test_anthropic` has to fall back to.
 async fn test_gemini(base_url: Option<&str>, api_key: &str) -> AppResult<String> {
-    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_GEMINI_BASE_URL);
+    let base = base_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_GEMINI_BASE_URL);
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
     let response = client
-        .get(format!("{}/v1beta/models?key={}", base.trim_end_matches('/'), api_key))
+        .get(format!(
+            "{}/v1beta/models?key={}",
+            base.trim_end_matches('/'),
+            api_key
+        ))
         .send()
         .await
         .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
@@ -779,13 +1093,28 @@ async fn test_gemini(base_url: Option<&str>, api_key: &str) -> AppResult<String>
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
         let text = response.text().await.unwrap_or_default();
-        Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))))
+        Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )))
     }
 }
 
-async fn complete_gemini(base_url: Option<&str>, model: &str, api_key: &str, system_prompt: &str, user_message: &str) -> AppResult<String> {
-    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_GEMINI_BASE_URL);
-    let model = if model.trim().is_empty() { DEFAULT_GEMINI_MODEL } else { model };
+async fn complete_gemini(
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    system_prompt: &str,
+    user_message: &str,
+) -> AppResult<String> {
+    let base = base_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_GEMINI_BASE_URL);
+    let model = if model.trim().is_empty() {
+        DEFAULT_GEMINI_MODEL
+    } else {
+        model
+    };
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -795,7 +1124,12 @@ async fn complete_gemini(base_url: Option<&str>, model: &str, api_key: &str, sys
         "systemInstruction": {"parts": [{"text": system_prompt}]},
     });
     let response = client
-        .post(format!("{}/v1beta/models/{}:generateContent?key={}", base.trim_end_matches('/'), model, api_key))
+        .post(format!(
+            "{}/v1beta/models/{}:generateContent?key={}",
+            base.trim_end_matches('/'),
+            model,
+            api_key
+        ))
         .json(&body)
         .send()
         .await
@@ -803,9 +1137,13 @@ async fn complete_gemini(base_url: Option<&str>, model: &str, api_key: &str, sys
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     value
         .get("candidates")
         .and_then(|c| c.get(0))
@@ -815,7 +1153,12 @@ async fn complete_gemini(base_url: Option<&str>, model: &str, api_key: &str, sys
         .and_then(|p| p.get("text"))
         .and_then(|t| t.as_str())
         .map(|s| s.to_string())
-        .ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "Unexpected response shape from {base}: {}",
+                truncate(&text, 200)
+            ))
+        })
 }
 
 /// Phase 7a: the same provider-matching shape `dispatch_with_tools`
@@ -823,12 +1166,19 @@ async fn complete_gemini(base_url: Option<&str>, model: &str, api_key: &str, sys
 /// `ai_provider_service::test_key` calls this directly for a named
 /// `ai_providers` row, exactly like `test_key` above does for the plain
 /// workspace `ai_settings` row.
-pub(crate) async fn test_provider(provider: &str, base_url: Option<&str>, model: &str, api_key: &str) -> AppResult<String> {
+pub(crate) async fn test_provider(
+    provider: &str,
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+) -> AppResult<String> {
     match provider {
         "anthropic" => test_anthropic(base_url, model, api_key).await,
         "openai_compatible" => test_openai_compatible(base_url, api_key).await,
         "google_gemini" => test_gemini(base_url, api_key).await,
-        other => Err(AppError::Validation(format!("No test implemented for provider '{other}'"))),
+        other => Err(AppError::Validation(format!(
+            "No test implemented for provider '{other}'"
+        ))),
     }
 }
 
@@ -862,16 +1212,30 @@ fn default_embedding_model(provider: &str) -> &'static str {
 /// through, the same "one place every call funnels through" shape
 /// `ai_orchestration_service::run_step` already established for agent
 /// calls. Resolves settings/secret exactly like `complete` above.
-pub async fn embed_texts(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], texts: &[String]) -> AppResult<Vec<Vec<f32>>> {
+pub async fn embed_texts(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    texts: &[String],
+) -> AppResult<Vec<Vec<f32>>> {
     if texts.is_empty() {
         return Ok(Vec::new());
     }
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
-    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?
-        .ok_or_else(|| AppError::Validation("Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into()))?;
-    let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
+    let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| {
+        AppError::Validation(
+            "Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into(),
+        )
+    })?;
+    let stored = integration_secret_repo::get(conn, &secret_id)?
+        .ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
     let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
-    let model = settings.embedding_model.as_deref().filter(|m| !m.trim().is_empty()).unwrap_or_else(|| default_embedding_model(&settings.provider)).to_string();
+    let model = settings
+        .embedding_model
+        .as_deref()
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| default_embedding_model(&settings.provider))
+        .to_string();
 
     match settings.provider.as_str() {
         "openai_compatible" => embed_openai_compatible(settings.base_url.as_deref(), &model, &api_key, texts).await,
@@ -883,8 +1247,15 @@ pub async fn embed_texts(conn: &Connection, workspace_id: &str, master_key: &[u8
     }
 }
 
-async fn embed_openai_compatible(base_url: Option<&str>, model: &str, api_key: &str, texts: &[String]) -> AppResult<Vec<Vec<f32>>> {
-    let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| AppError::Validation("An OpenAI-compatible provider needs a base URL".into()))?;
+async fn embed_openai_compatible(
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    texts: &[String],
+) -> AppResult<Vec<Vec<f32>>> {
+    let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| {
+        AppError::Validation("An OpenAI-compatible provider needs a base URL".into())
+    })?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -900,22 +1271,51 @@ async fn embed_openai_compatible(base_url: Option<&str>, model: &str, api_key: &
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
-    let data = value.get("data").and_then(|d| d.as_array()).ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let data = value
+        .get("data")
+        .and_then(|d| d.as_array())
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "Unexpected response shape from {base}: {}",
+                truncate(&text, 200)
+            ))
+        })?;
     data.iter()
         .map(|d| {
             d.get("embedding")
                 .and_then(|e| e.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).map(|v| v as f32).collect::<Vec<f32>>())
-                .ok_or_else(|| AppError::Validation(format!("Unexpected embedding shape from {base}: {}", truncate(&text, 200))))
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_f64())
+                        .map(|v| v as f32)
+                        .collect::<Vec<f32>>()
+                })
+                .ok_or_else(|| {
+                    AppError::Validation(format!(
+                        "Unexpected embedding shape from {base}: {}",
+                        truncate(&text, 200)
+                    ))
+                })
         })
         .collect()
 }
 
-async fn embed_gemini(base_url: Option<&str>, model: &str, api_key: &str, texts: &[String]) -> AppResult<Vec<Vec<f32>>> {
-    let base = base_url.filter(|u| !u.is_empty()).unwrap_or(DEFAULT_GEMINI_BASE_URL);
+async fn embed_gemini(
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    texts: &[String],
+) -> AppResult<Vec<Vec<f32>>> {
+    let base = base_url
+        .filter(|u| !u.is_empty())
+        .unwrap_or(DEFAULT_GEMINI_BASE_URL);
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -923,7 +1323,12 @@ async fn embed_gemini(base_url: Option<&str>, model: &str, api_key: &str, texts:
     let requests: Vec<serde_json::Value> = texts.iter().map(|t| serde_json::json!({"model": format!("models/{model}"), "content": {"parts": [{"text": t}]}})).collect();
     let body = serde_json::json!({"requests": requests});
     let response = client
-        .post(format!("{}/v1beta/models/{}:batchEmbedContents?key={}", base.trim_end_matches('/'), model, api_key))
+        .post(format!(
+            "{}/v1beta/models/{}:batchEmbedContents?key={}",
+            base.trim_end_matches('/'),
+            model,
+            api_key
+        ))
         .json(&body)
         .send()
         .await
@@ -931,17 +1336,39 @@ async fn embed_gemini(base_url: Option<&str>, model: &str, api_key: &str, texts:
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!("{base} responded with HTTP {status}: {}", truncate(&text, 200))));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
-    let embeddings = value.get("embeddings").and_then(|e| e.as_array()).ok_or_else(|| AppError::Validation(format!("Unexpected response shape from {base}: {}", truncate(&text, 200))))?;
+    let value: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
+    let embeddings = value
+        .get("embeddings")
+        .and_then(|e| e.as_array())
+        .ok_or_else(|| {
+            AppError::Validation(format!(
+                "Unexpected response shape from {base}: {}",
+                truncate(&text, 200)
+            ))
+        })?;
     embeddings
         .iter()
         .map(|e| {
             e.get("values")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).map(|v| v as f32).collect::<Vec<f32>>())
-                .ok_or_else(|| AppError::Validation(format!("Unexpected embedding shape from {base}: {}", truncate(&text, 200))))
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_f64())
+                        .map(|v| v as f32)
+                        .collect::<Vec<f32>>()
+                })
+                .ok_or_else(|| {
+                    AppError::Validation(format!(
+                        "Unexpected embedding shape from {base}: {}",
+                        truncate(&text, 200)
+                    ))
+                })
         })
         .collect()
 }

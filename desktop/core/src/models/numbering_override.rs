@@ -4,7 +4,15 @@ use serde::{Deserialize, Serialize};
 /// format can be customized - mirrors domain::numbering's lowercase,
 /// lifecycle-internal entity_type strings via numbering_service::config_for.
 pub const NUMBERING_ENTITY_TYPES: &[&str] = &[
-    "Company", "Contact", "Opportunity", "Product", "Quote", "Order", "Invoice", "Contract", "Task",
+    "Company",
+    "Contact",
+    "Opportunity",
+    "Product",
+    "Quote",
+    "Order",
+    "Invoice",
+    "Contract",
+    "Task",
 ];
 
 #[derive(Debug, Clone, Serialize)]

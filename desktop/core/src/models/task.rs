@@ -39,7 +39,13 @@ pub struct TaskInput {
 }
 
 pub const TASK_PRIORITIES: &[&str] = &["Low", "Normal", "High", "Urgent"];
-pub const TASK_STATUSES: &[&str] = &["Not Started", "In Progress", "Waiting", "Completed", "Cancelled"];
+pub const TASK_STATUSES: &[&str] = &[
+    "Not Started",
+    "In Progress",
+    "Waiting",
+    "Completed",
+    "Cancelled",
+];
 pub const TASK_RELATED_TYPES: &[&str] = &[
     "Company",
     "Contact",

@@ -33,11 +33,19 @@ No automated checks run on pull requests today (only a Windows release build on 
 - Rust and npm caching; total wall-clock target under 15 minutes
 - Turn on branch protection for `main` (owner decision, ADR-0004: Claude Code does it) - required checks, PR required, no force-push, no deletion. Claude Code applies it through the GitHub API or, if its tools cannot, gives the owner the exact settings to click. Record the final settings in PROTOCOL.md
 
+- Tiered testing rule (owner decision, 2026-10-16), written into `program/testing/TEST-STRATEGY.md`, PROTOCOL §5 and the finish checklist:
+  - while building, the AI runs only the tests for the crates and files it touched (minutes)
+  - every pull request runs the full regression suite automatically in CI, sharded and cached; it must be green to merge
+  - a full local run is only for changes that touch everything (formatting, toolchain, migrations framework) or when CI is down
+  - nightly scheduled run for slow extras (full E2E, performance)
+- `programctl brief` and BRIEFING tell the AI which targeted test command fits its files
+
 ## Acceptance criteria
 
 - [ ] AC-1: CI runs on every PR and push to main and is green on main
 - [ ] AC-2: A deliberately failing test in a throwaway PR turns CI red (screenshot or run link in PR)
 - [ ] AC-3: Required-check names are listed in `program/PROTOCOL.md` and enabled by the owner
+- [ ] AC-5: TEST-STRATEGY, PROTOCOL §5 and FINISH-CHECKLIST state the tiered rule; the full suite is required in CI, not in the AI's session
 - [ ] AC-4: Median CI duration recorded in `program/testing/REGRESSION.md`
 
 ## Test plan

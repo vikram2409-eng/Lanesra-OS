@@ -46,10 +46,18 @@ fn validate_scopes(scopes: &[String]) -> AppResult<()> {
 }
 
 fn generate_client_id() -> String {
-    format!("client_{}", super::secret_service::generate_random_secret(8))
+    format!(
+        "client_{}",
+        super::secret_service::generate_random_secret(8)
+    )
 }
 
-pub fn create(conn: &Connection, workspace_id: &str, input: &ApiClientInput, actor_user_id: Option<&str>) -> AppResult<IssuedApiClient> {
+pub fn create(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &ApiClientInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<IssuedApiClient> {
     require_admin(conn, actor_user_id)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("API client name is required".into()));
@@ -72,22 +80,34 @@ pub fn create(conn: &Connection, workspace_id: &str, input: &ApiClientInput, act
     let secret = super::secret_service::generate_random_secret(24);
     let hash = super::secret_service::hash_api_secret(&secret);
     integration_api_client_repo::insert_credential(conn, &new_uuid(), workspace_id, &id, &hash)?;
-    Ok(IssuedApiClient { client, api_key: format!("{client_id}.{secret}") })
+    Ok(IssuedApiClient {
+        client,
+        api_key: format!("{client_id}.{secret}"),
+    })
 }
 
 /// Issues a fresh secret for an already-existing client, invalidating the
 /// old one - spec table 22's "Rotate Secret".
-pub fn rotate_secret(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<IssuedApiClient> {
+pub fn rotate_secret(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<IssuedApiClient> {
     require_admin(conn, actor_user_id)?;
     let client = get_owned(conn, workspace_id, id)?;
     let secret = super::secret_service::generate_random_secret(24);
     let hash = super::secret_service::hash_api_secret(&secret);
     integration_api_client_repo::insert_credential(conn, &new_uuid(), workspace_id, id, &hash)?;
-    Ok(IssuedApiClient { api_key: format!("{}.{secret}", client.client_id), client })
+    Ok(IssuedApiClient {
+        api_key: format!("{}.{secret}", client.client_id),
+        client,
+    })
 }
 
 fn get_owned(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<ApiClient> {
-    let client = integration_api_client_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("API client".into()))?;
+    let client = integration_api_client_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("API client".into()))?;
     if client.workspace_id != workspace_id {
         return Err(AppError::NotFound("API client".into()));
     }
@@ -95,22 +115,50 @@ fn get_owned(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<ApiCl
 }
 
 pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<ApiClient>> {
-    Ok(integration_api_client_repo::list_for_workspace(conn, workspace_id)?)
+    Ok(integration_api_client_repo::list_for_workspace(
+        conn,
+        workspace_id,
+    )?)
 }
 
-pub fn revoke(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn revoke(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, workspace_id, id)?;
-    Ok(integration_api_client_repo::set_status(conn, id, "revoked", actor_user_id)?)
+    Ok(integration_api_client_repo::set_status(
+        conn,
+        id,
+        "revoked",
+        actor_user_id,
+    )?)
 }
 
-pub fn reactivate(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn reactivate(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, workspace_id, id)?;
-    Ok(integration_api_client_repo::set_status(conn, id, "active", actor_user_id)?)
+    Ok(integration_api_client_repo::set_status(
+        conn,
+        id,
+        "active",
+        actor_user_id,
+    )?)
 }
 
-pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+pub fn delete(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     get_owned(conn, workspace_id, id)?;
     Ok(integration_api_client_repo::delete(conn, id)?)
@@ -120,18 +168,27 @@ pub fn delete(conn: &Connection, workspace_id: &str, id: &str, actor_user_id: Op
 /// value against this workspace's active clients, returning the matched
 /// client and its scopes - what the new `/api/v1` axum auth middleware
 /// calls on every request. Touches `last_used_at` on success.
-pub fn authenticate(conn: &Connection, workspace_id: &str, presented_key: &str) -> AppResult<ApiClient> {
+pub fn authenticate(
+    conn: &Connection,
+    workspace_id: &str,
+    presented_key: &str,
+) -> AppResult<ApiClient> {
     let (client_id, secret) = presented_key
         .split_once('.')
         .ok_or_else(|| AppError::Validation("Malformed API key".into()))?;
-    let client = integration_api_client_repo::get_by_client_id(conn, client_id)?.ok_or_else(|| AppError::Validation("Invalid API key".into()))?;
+    let client = integration_api_client_repo::get_by_client_id(conn, client_id)?
+        .ok_or_else(|| AppError::Validation("Invalid API key".into()))?;
     if client.workspace_id != workspace_id {
         return Err(AppError::Validation("Invalid API key".into()));
     }
     if client.status != "active" {
-        return Err(AppError::Validation(format!("This API client is {}", client.status)));
+        return Err(AppError::Validation(format!(
+            "This API client is {}",
+            client.status
+        )));
     }
-    let expected_hash = integration_api_client_repo::current_hash_for(conn, &client.id)?.ok_or_else(|| AppError::Validation("Invalid API key".into()))?;
+    let expected_hash = integration_api_client_repo::current_hash_for(conn, &client.id)?
+        .ok_or_else(|| AppError::Validation("Invalid API key".into()))?;
     if super::secret_service::hash_api_secret(secret) != expected_hash {
         return Err(AppError::Validation("Invalid API key".into()));
     }

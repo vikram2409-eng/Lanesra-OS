@@ -14,10 +14,23 @@ use crate::services::{access_service, app_service, status_transition_service, wo
 /// Orders have no owner of their own, so a workflow rule assigning to "the
 /// record's owner" resolves via the Order's Company owner - the same
 /// attribution invoice_service and quote_service use.
-fn fire_workflow(conn: &Connection, order: &Order, old_status: Option<&str>, new_status: &str, actor_user_id: Option<&str>) -> AppResult<()> {
+fn fire_workflow(
+    conn: &Connection,
+    order: &Order,
+    old_status: Option<&str>,
+    new_status: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
     let owner_user_id = company_repo::get(conn, &order.company_id)?.and_then(|c| c.owner_user_id);
     workflow_service::fire_event(
-        conn, &order.workspace_id, "Order", &order.id, old_status, new_status, owner_user_id.as_deref(), actor_user_id,
+        conn,
+        &order.workspace_id,
+        "Order",
+        &order.id,
+        old_status,
+        new_status,
+        owner_user_id.as_deref(),
+        actor_user_id,
     )?;
     Ok(())
 }
@@ -64,7 +77,14 @@ pub fn create(
     let calculations: Vec<_> = input
         .lines
         .iter()
-        .map(|l| money::compute_line(l.quantity_milli, l.unit_price_cents, l.discount_bp, l.tax_rate_bp))
+        .map(|l| {
+            money::compute_line(
+                l.quantity_milli,
+                l.unit_price_cents,
+                l.discount_bp,
+                l.tax_rate_bp,
+            )
+        })
         .collect();
     let totals: DocumentTotals = money::aggregate_lines(&calculations);
 
@@ -90,7 +110,14 @@ pub fn create(
         order_repo::insert_line(conn, &id, line_input, calc.line_total_cents, idx as i64)?;
     }
 
-    super::ownership_service::set_default_owner_on_create(conn, &workspace_id, "Order", &id, actor_user_id, None)?;
+    super::ownership_service::set_default_owner_on_create(
+        conn,
+        &workspace_id,
+        "Order",
+        &id,
+        actor_user_id,
+        None,
+    )?;
 
     audit_repo::record(
         conn,
@@ -104,7 +131,13 @@ pub fn create(
     )?;
 
     let created = load(conn, &id)?;
-    fire_workflow(conn, &created.order, None, &created.order.status, actor_user_id)?;
+    fire_workflow(
+        conn,
+        &created.order,
+        None,
+        &created.order.status,
+        actor_user_id,
+    )?;
     Ok(created)
 }
 
@@ -123,12 +156,25 @@ pub fn set_status(
     actor_user_id: Option<&str>,
 ) -> AppResult<OrderWithLines> {
     if !ORDER_STATUSES.contains(&status) {
-        return Err(AppError::Validation(format!("Invalid order status '{status}'")));
+        return Err(AppError::Validation(format!(
+            "Invalid order status '{status}'"
+        )));
     }
     let existing = load(conn, id)?;
-    app_service::require_object_write_access(conn, &existing.order.workspace_id, "Order", actor_user_id)?;
+    app_service::require_object_write_access(
+        conn,
+        &existing.order.workspace_id,
+        "Order",
+        actor_user_id,
+    )?;
     access_service::require_capability(conn, actor_user_id, "Order", Capability::Update, Some(id))?;
-    status_transition_service::validate_transition(conn, &existing.order.workspace_id, "Order", &existing.order.status, status)?;
+    status_transition_service::validate_transition(
+        conn,
+        &existing.order.workspace_id,
+        "Order",
+        &existing.order.status,
+        status,
+    )?;
     order_repo::update_status(conn, id, status, actor_user_id)?;
     audit_repo::record(
         conn,
@@ -137,10 +183,19 @@ pub fn set_status(
         "status_change",
         Some("order"),
         Some(id),
-        &format!("Order {} status changed to {}", existing.order.order_number, status),
+        &format!(
+            "Order {} status changed to {}",
+            existing.order.order_number, status
+        ),
         None,
     )?;
-    fire_workflow(conn, &existing.order, Some(&existing.order.status), status, actor_user_id)?;
+    fire_workflow(
+        conn,
+        &existing.order,
+        Some(&existing.order.status),
+        status,
+        actor_user_id,
+    )?;
     load(conn, id)
 }
 
@@ -156,7 +211,12 @@ pub fn convert_to_invoice(
     // The result is a new Invoice, not a write to the source Order (which
     // is never mutated), so the gate is on Invoice write access, the same
     // as calling invoice_service::create directly would require.
-    app_service::require_object_write_access(conn, &source.order.workspace_id, "Invoice", actor_user_id)?;
+    app_service::require_object_write_access(
+        conn,
+        &source.order.workspace_id,
+        "Invoice",
+        actor_user_id,
+    )?;
     access_service::require_capability(conn, actor_user_id, "Invoice", Capability::Create, None)?;
 
     let invoice_id = new_uuid();
@@ -200,7 +260,13 @@ pub fn convert_to_invoice(
             discount_bp: line.discount_bp,
             tax_rate_bp: line.tax_rate_bp,
         };
-        invoice_repo::insert_line(conn, &invoice_id, &line_input, line.line_total_cents, idx as i64)?;
+        invoice_repo::insert_line(
+            conn,
+            &invoice_id,
+            &line_input,
+            line.line_total_cents,
+            idx as i64,
+        )?;
     }
 
     audit_repo::record(
@@ -217,8 +283,13 @@ pub fn convert_to_invoice(
         None,
     )?;
 
-    let invoice = invoice_repo::get(conn, &invoice_id)?.ok_or_else(|| AppError::NotFound("Invoice".into()))?;
+    let invoice = invoice_repo::get(conn, &invoice_id)?
+        .ok_or_else(|| AppError::NotFound("Invoice".into()))?;
     let lines = invoice_repo::list_lines(conn, &invoice_id)?;
     let payments = invoice_repo::list_payments(conn, &invoice_id)?;
-    Ok(crate::models::invoice::InvoiceWithLines { invoice, lines, payments })
+    Ok(crate::models::invoice::InvoiceWithLines {
+        invoice,
+        lines,
+        payments,
+    })
 }

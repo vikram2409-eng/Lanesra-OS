@@ -22,16 +22,29 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<IntegrationSettings> {
 }
 
 pub fn get(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Option<IntegrationSettings>> {
-    conn.query_row("SELECT * FROM integration_settings WHERE workspace_id = ?1", [workspace_id], map_row)
-        .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+    conn.query_row(
+        "SELECT * FROM integration_settings WHERE workspace_id = ?1",
+        [workspace_id],
+        map_row,
+    )
+    .map(Some)
+    .or_else(|e| {
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            Ok(None)
+        } else {
+            Err(e)
+        }
+    })
 }
 
 /// Creates the default row for a workspace that has never touched
 /// Integration Hub settings before - called lazily rather than at
 /// workspace-creation time, so every existing workspace picks up sane
 /// defaults without a data migration.
-pub fn ensure_default(conn: &Connection, workspace_id: &str) -> rusqlite::Result<IntegrationSettings> {
+pub fn ensure_default(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<IntegrationSettings> {
     if let Some(existing) = get(conn, workspace_id)? {
         return Ok(existing);
     }

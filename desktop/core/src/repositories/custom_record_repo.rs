@@ -45,34 +45,57 @@ pub fn create(
 pub fn get(conn: &Connection, id: &str) -> rusqlite::Result<Option<CustomRecord>> {
     conn.query_row("SELECT * FROM custom_records WHERE id = ?1", [id], map_row)
         .map(Some)
-        .or_else(|e| if e == rusqlite::Error::QueryReturnedNoRows { Ok(None) } else { Err(e) })
+        .or_else(|e| {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        })
 }
 
 /// All non-archived records for one custom object, newest first - the
 /// same "hide archived by default" convention every list screen in the
 /// product already follows.
-pub fn list(conn: &Connection, workspace_id: &str, object_key: &str) -> rusqlite::Result<Vec<CustomRecord>> {
+pub fn list(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> rusqlite::Result<Vec<CustomRecord>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM custom_records
          WHERE workspace_id = ?1 AND object_key = ?2 AND archived_at IS NULL
          ORDER BY created_at DESC",
     )?;
-    let rows = stmt.query_map((workspace_id, object_key), map_row)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, object_key), map_row)?
+        .collect();
     rows
 }
 
 /// Every record for the object, including archived - used by
 /// custom_object_service to decide whether a definition can be
 /// hard-deleted (only when this list is empty).
-pub fn list_all(conn: &Connection, workspace_id: &str, object_key: &str) -> rusqlite::Result<Vec<CustomRecord>> {
+pub fn list_all(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> rusqlite::Result<Vec<CustomRecord>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM custom_records WHERE workspace_id = ?1 AND object_key = ?2 ORDER BY created_at DESC",
     )?;
-    let rows = stmt.query_map((workspace_id, object_key), map_row)?.collect();
+    let rows = stmt
+        .query_map((workspace_id, object_key), map_row)?
+        .collect();
     rows
 }
 
-pub fn update(conn: &Connection, id: &str, input: &CustomRecordUpdate, actor_user_id: Option<&str>) -> rusqlite::Result<CustomRecord> {
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    input: &CustomRecordUpdate,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<CustomRecord> {
     conn.execute(
         "UPDATE custom_records
          SET primary_name = ?1, status = ?2, owner_user_id = ?3, notes = ?4, updated_at = ?5, updated_by = ?6
@@ -82,7 +105,11 @@ pub fn update(conn: &Connection, id: &str, input: &CustomRecordUpdate, actor_use
     get(conn, id).map(|d| d.expect("just updated"))
 }
 
-pub fn archive(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> rusqlite::Result<CustomRecord> {
+pub fn archive(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<CustomRecord> {
     let now = now_iso();
     conn.execute(
         "UPDATE custom_records SET archived_at = ?1, updated_at = ?1, updated_by = ?2 WHERE id = ?3",

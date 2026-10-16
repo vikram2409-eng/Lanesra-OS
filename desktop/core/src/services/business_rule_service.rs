@@ -22,18 +22,25 @@ use serde::Serialize;
 
 use crate::domain::{builtin_fields, AppError, AppResult};
 use crate::models::business_rule::{
-    BusinessRule, BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput, BusinessRuleUpdate,
-    BusinessRuleVersion, ACTION_TYPES, BRANCH_ROLES, CONDITION_OPERATORS, FIELD_TARGETED_ACTIONS, MATCH_TYPES,
-    MESSAGE_ACTIONS, TRIGGER_SOURCES,
+    BusinessRule, BusinessRuleActionInput, BusinessRuleConditionInput, BusinessRuleInput,
+    BusinessRuleUpdate, BusinessRuleVersion, ACTION_TYPES, BRANCH_ROLES, CONDITION_OPERATORS,
+    FIELD_TARGETED_ACTIONS, MATCH_TYPES, MESSAGE_ACTIONS, TRIGGER_SOURCES,
 };
 use crate::repositories::{audit_repo, business_rule_repo, custom_field_repo, relationship_repo};
-use crate::services::{access_service, builtin_field_service, custom_object_service, entity_registry};
+use crate::services::{
+    access_service, builtin_field_service, custom_object_service, entity_registry,
+};
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
 /// passes with an explicit Access Role grant on "BusinessRule" - see
 /// `access_service::require_admin_or_explicit_update`'s own doc comment.
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    access_service::require_admin_or_explicit_update(conn, actor_user_id, "BusinessRule", "Only an Administrator can manage business rules")
+    access_service::require_admin_or_explicit_update(
+        conn,
+        actor_user_id,
+        "BusinessRule",
+        "Only an Administrator can manage business rules",
+    )
 }
 
 /// Per-app scoped automation: `app_id`, if set, must reference an existing
@@ -41,23 +48,34 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
 /// and is in this workspace, else 404-shaped Validation error" check
 /// `app_service::validate_object_keys_and_dashboard` already uses for
 /// `dashboard_id`. `None` (workspace-wide) always passes.
-fn require_valid_app_id(conn: &Connection, workspace_id: &str, app_id: Option<&str>) -> AppResult<()> {
+fn require_valid_app_id(
+    conn: &Connection,
+    workspace_id: &str,
+    app_id: Option<&str>,
+) -> AppResult<()> {
     let Some(app_id) = app_id else { return Ok(()) };
-    let app = super::app_service::get(conn, app_id).map_err(|_| AppError::Validation("App not found".into()))?;
+    let app = super::app_service::get(conn, app_id)
+        .map_err(|_| AppError::Validation("App not found".into()))?;
     if app.workspace_id != workspace_id {
         return Err(AppError::Validation("App not found".into()));
     }
     Ok(())
 }
 
-fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<()> {
+fn require_valid_entity_type(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<()> {
     if entity_registry::CORE_ENTITY_TYPES.contains(&entity_type) {
         return Ok(());
     }
     if custom_object_service::is_valid_dynamic_entity_type(conn, workspace_id, entity_type)? {
         return Ok(());
     }
-    Err(AppError::Validation(format!("'{entity_type}' is not a recognized object type")))
+    Err(AppError::Validation(format!(
+        "'{entity_type}' is not a recognized object type"
+    )))
 }
 
 /// The related type a condition's `relationship_definition_id` resolves
@@ -67,10 +85,16 @@ fn require_valid_entity_type(conn: &Connection, workspace_id: &str, entity_type:
 /// eligibility `resolve_related_field` checks at evaluation time. Kept in
 /// sync with that function rather than shared, since one resolves a type
 /// (authoring time) and the other a value (evaluation time).
-fn related_field_owner_type(conn: &Connection, entity_type: &str, relationship_definition_id: &str) -> AppResult<String> {
+fn related_field_owner_type(
+    conn: &Connection,
+    entity_type: &str,
+    relationship_definition_id: &str,
+) -> AppResult<String> {
     let def = relationship_repo::get_definition(conn, relationship_definition_id)?
         .ok_or_else(|| AppError::Validation("Selected relationship does not exist".into()))?;
-    if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
+    if def.source_entity_type == entity_type
+        && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one")
+    {
         Ok(def.target_entity_type)
     } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
         Ok(def.source_entity_type)
@@ -95,29 +119,62 @@ fn validate_conditions(
         if allow_empty {
             return Ok(());
         }
-        return Err(AppError::Validation("A rule needs at least one condition".into()));
+        return Err(AppError::Validation(
+            "A rule needs at least one condition".into(),
+        ));
     }
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
-    let active_keys: Vec<&str> = defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
+    let active_keys: Vec<&str> = defs
+        .iter()
+        .filter(|d| d.is_active)
+        .map(|d| d.key.as_str())
+        .collect();
     for c in conditions {
         if !TRIGGER_SOURCES.contains(&c.field_source.as_str()) {
-            return Err(AppError::Validation(format!("Invalid condition source '{}'", c.field_source)));
+            return Err(AppError::Validation(format!(
+                "Invalid condition source '{}'",
+                c.field_source
+            )));
         }
         if !CONDITION_OPERATORS.contains(&c.operator.as_str()) {
-            return Err(AppError::Validation(format!("Invalid condition operator '{}'", c.operator)));
+            return Err(AppError::Validation(format!(
+                "Invalid condition operator '{}'",
+                c.operator
+            )));
         }
         // A condition reading a related record's field (relationship_
         // definition_id set) validates field_key against *that* type's
         // fields instead of the triggering entity_type's own.
         if let Some(rel_id) = &c.relationship_definition_id {
             let related_type = related_field_owner_type(conn, entity_type, rel_id)?;
-            let related_defs = custom_field_repo::list_definitions(conn, workspace_id, &related_type)?;
-            let related_active_keys: Vec<&str> = related_defs.iter().filter(|d| d.is_active).map(|d| d.key.as_str()).collect();
-            if !crate::domain::conditions::field_ref_is_valid(&related_type, &c.field_source, &c.field_key, related_active_keys.iter().copied()) {
-                return Err(AppError::Validation(format!("'{}' is not a valid field on the related {related_type} record", c.field_key)));
+            let related_defs =
+                custom_field_repo::list_definitions(conn, workspace_id, &related_type)?;
+            let related_active_keys: Vec<&str> = related_defs
+                .iter()
+                .filter(|d| d.is_active)
+                .map(|d| d.key.as_str())
+                .collect();
+            if !crate::domain::conditions::field_ref_is_valid(
+                &related_type,
+                &c.field_source,
+                &c.field_key,
+                related_active_keys.iter().copied(),
+            ) {
+                return Err(AppError::Validation(format!(
+                    "'{}' is not a valid field on the related {related_type} record",
+                    c.field_key
+                )));
             }
-        } else if !crate::domain::conditions::field_ref_is_valid(entity_type, &c.field_source, &c.field_key, active_keys.iter().copied()) {
-            return Err(AppError::Validation(format!("'{}' is not a valid field to trigger on", c.field_key)));
+        } else if !crate::domain::conditions::field_ref_is_valid(
+            entity_type,
+            &c.field_source,
+            &c.field_key,
+            active_keys.iter().copied(),
+        ) {
+            return Err(AppError::Validation(format!(
+                "'{}' is not a valid field to trigger on",
+                c.field_key
+            )));
         }
         // Addendum §2.2: field-to-field comparison - either both compare_*
         // are set (validated the same way as the primary field) or both
@@ -125,68 +182,119 @@ fn validate_conditions(
         match (&c.compare_field_source, &c.compare_field_key) {
             (Some(src), Some(key)) => {
                 if !TRIGGER_SOURCES.contains(&src.as_str()) {
-                    return Err(AppError::Validation(format!("Invalid comparison field source '{src}'")));
+                    return Err(AppError::Validation(format!(
+                        "Invalid comparison field source '{src}'"
+                    )));
                 }
-                if !crate::domain::conditions::field_ref_is_valid(entity_type, src, key, active_keys.iter().copied()) {
-                    return Err(AppError::Validation(format!("'{key}' is not a valid field to compare against")));
+                if !crate::domain::conditions::field_ref_is_valid(
+                    entity_type,
+                    src,
+                    key,
+                    active_keys.iter().copied(),
+                ) {
+                    return Err(AppError::Validation(format!(
+                        "'{key}' is not a valid field to compare against"
+                    )));
                 }
             }
             (None, None) => {}
-            _ => return Err(AppError::Validation("A comparison field needs both a source and a key".into())),
+            _ => {
+                return Err(AppError::Validation(
+                    "A comparison field needs both a source and a key".into(),
+                ))
+            }
         }
     }
     Ok(())
 }
 
-fn validate_actions(conn: &Connection, workspace_id: &str, entity_type: &str, actions: &[crate::models::business_rule::BusinessRuleActionInput]) -> AppResult<()> {
+fn validate_actions(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    actions: &[crate::models::business_rule::BusinessRuleActionInput],
+) -> AppResult<()> {
     if actions.is_empty() {
-        return Err(AppError::Validation("A rule needs at least one action".into()));
+        return Err(AppError::Validation(
+            "A rule needs at least one action".into(),
+        ));
     }
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
     for a in actions {
         if !ACTION_TYPES.contains(&a.action_type.as_str()) {
-            return Err(AppError::Validation(format!("Invalid action type '{}'", a.action_type)));
+            return Err(AppError::Validation(format!(
+                "Invalid action type '{}'",
+                a.action_type
+            )));
         }
         if FIELD_TARGETED_ACTIONS.contains(&a.action_type.as_str()) {
             let target = a.target_field_key.as_deref().unwrap_or("");
             if !TRIGGER_SOURCES.contains(&a.target_field_source.as_str()) {
-                return Err(AppError::Validation(format!("Invalid target field source '{}'", a.target_field_source)));
+                return Err(AppError::Validation(format!(
+                    "Invalid target field source '{}'",
+                    a.target_field_source
+                )));
             }
             if a.target_field_source == "builtin" {
                 if !builtin_fields::is_actionable_builtin_field(entity_type, target) {
-                    return Err(AppError::Validation(format!("'{target}' is not an actionable built-in field on {entity_type}")));
+                    return Err(AppError::Validation(format!(
+                        "'{target}' is not an actionable built-in field on {entity_type}"
+                    )));
                 }
             } else if !defs.iter().any(|d| d.key == target && d.is_active) {
-                return Err(AppError::Validation(format!("'{target}' is not an active custom field to target")));
+                return Err(AppError::Validation(format!(
+                    "'{target}' is not an active custom field to target"
+                )));
             }
-            if crate::models::business_rule::VALUE_REQUIRED_ACTIONS.contains(&a.action_type.as_str()) && a.action_value.is_none() {
-                return Err(AppError::Validation("A value is required for this action".into()));
+            if crate::models::business_rule::VALUE_REQUIRED_ACTIONS
+                .contains(&a.action_type.as_str())
+                && a.action_value.is_none()
+            {
+                return Err(AppError::Validation(
+                    "A value is required for this action".into(),
+                ));
             }
             if a.action_type == "restrict_choices" {
                 let is_select = if a.target_field_source == "builtin" {
-                    builtin_fields::find_builtin_field(entity_type, target).is_some_and(|f| f.field_type == "select")
+                    builtin_fields::find_builtin_field(entity_type, target)
+                        .is_some_and(|f| f.field_type == "select")
                 } else {
-                    defs.iter().any(|d| d.key == target && d.field_type == "select")
+                    defs.iter()
+                        .any(|d| d.key == target && d.field_type == "select")
                 };
                 if !is_select {
-                    return Err(AppError::Validation(format!("'{target}' is not a select field with a fixed set of options")));
+                    return Err(AppError::Validation(format!(
+                        "'{target}' is not a select field with a fixed set of options"
+                    )));
                 }
             }
         }
-        if MESSAGE_ACTIONS.contains(&a.action_type.as_str()) && a.message.as_deref().unwrap_or("").trim().is_empty() {
-            return Err(AppError::Validation("A message is required for this action".into()));
+        if MESSAGE_ACTIONS.contains(&a.action_type.as_str())
+            && a.message.as_deref().unwrap_or("").trim().is_empty()
+        {
+            return Err(AppError::Validation(
+                "A message is required for this action".into(),
+            ));
         }
     }
     Ok(())
 }
 
-fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, input: &BusinessRuleInput) -> AppResult<()> {
+fn validate_shape(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    input: &BusinessRuleInput,
+) -> AppResult<()> {
     require_valid_entity_type(conn, workspace_id, entity_type)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Rule name is required".into()));
     }
     if !MATCH_TYPES.contains(&input.match_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid match type '{}'", input.match_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid match type '{}'",
+            input.match_type
+        )));
     }
     validate_conditions(conn, workspace_id, entity_type, &input.conditions, false)?;
     validate_actions(conn, workspace_id, entity_type, &input.actions)?;
@@ -205,18 +313,42 @@ fn sync_graph_node(conn: &Connection, workspace_id: &str, rule: &BusinessRule) -
         &rule.id,
         &rule.name,
         "{}",
-        &[crate::models::system_graph::SystemEdgeTarget { edge_type: "depends_on".into(), to_node_type: "custom_object".into(), to_component_id: rule.entity_type.clone() }],
+        &[crate::models::system_graph::SystemEdgeTarget {
+            edge_type: "depends_on".into(),
+            to_node_type: "custom_object".into(),
+            to_component_id: rule.entity_type.clone(),
+        }],
     )
 }
 
-pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleInput, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+pub fn create_rule(
+    conn: &Connection,
+    workspace_id: &str,
+    input: &BusinessRuleInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<BusinessRule> {
     require_admin(conn, actor_user_id)?;
     validate_shape(conn, workspace_id, &input.entity_type, input)?;
     let id = crate::domain::ids::new_uuid();
     let created = business_rule_repo::create(conn, &id, workspace_id, input, actor_user_id)?;
-    super::solution_component_service::tag_local(conn, workspace_id, "business_rule", &created.id, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        workspace_id,
+        "business_rule",
+        &created.id,
+        actor_user_id,
+    )?;
     sync_graph_node(conn, workspace_id, &created)?;
-    audit_repo::record(conn, workspace_id, actor_user_id, "create", Some("business_rule"), Some(&created.id), &format!("Created business rule '{}'", created.name), None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "create",
+        Some("business_rule"),
+        Some(&created.id),
+        &format!("Created business rule '{}'", created.name),
+        None,
+    )?;
     Ok(created)
 }
 
@@ -233,14 +365,22 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleIn
 ///   and the parent's own match_type.
 /// - "else" gets zero conditions - see `rule_matches`'s doc comment for why
 ///   that's allowed and what it means.
-/// Both get one default action (`default_branch_action`), since
-/// `validate_actions` requires at least one regardless of branch role.
-pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+///   Both get one default action (`default_branch_action`), since
+///   `validate_actions` requires at least one regardless of branch role.
+pub fn create_rule_branch(
+    conn: &Connection,
+    parent_rule_id: &str,
+    role: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<BusinessRule> {
     require_admin(conn, actor_user_id)?;
     if role == "if" || !BRANCH_ROLES.contains(&role) {
-        return Err(AppError::Validation("Branch role must be 'else_if' or 'else'".into()));
+        return Err(AppError::Validation(
+            "Branch role must be 'else_if' or 'else'".into(),
+        ));
     }
-    let parent = business_rule_repo::get(conn, parent_rule_id)?.ok_or_else(|| AppError::NotFound("Business rule".into()))?;
+    let parent = business_rule_repo::get(conn, parent_rule_id)?
+        .ok_or_else(|| AppError::NotFound("Business rule".into()))?;
     let branch_group_id = match &parent.branch_group_id {
         Some(g) => g.clone(),
         None => {
@@ -254,7 +394,10 @@ pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, a
         (
             vec![BusinessRuleConditionInput {
                 field_source: "builtin".to_string(),
-                field_key: crate::models::business_rule::builtin_trigger_field_for(&parent.entity_type).to_string(),
+                field_key: crate::models::business_rule::builtin_trigger_field_for(
+                    &parent.entity_type,
+                )
+                .to_string(),
                 operator: "equals".to_string(),
                 value: String::new(),
                 compare_field_source: None,
@@ -265,7 +408,11 @@ pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, a
             parent.match_type.clone(),
         )
     };
-    let actions = vec![default_branch_action(conn, &parent.workspace_id, &parent.entity_type)?];
+    let actions = vec![default_branch_action(
+        conn,
+        &parent.workspace_id,
+        &parent.entity_type,
+    )?];
     let suffix = if role == "else" { "Else" } else { "Else if" };
     let name = format!("{} — {suffix}", parent.name);
     // Every new sibling sorts to run *before* every rule already in the
@@ -280,7 +427,10 @@ pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, a
     let chain_rules = business_rule_repo::list(conn, &parent.workspace_id, &parent.entity_type)?;
     let chain_min_priority = chain_rules
         .iter()
-        .filter(|r| r.id == branch_group_id || r.branch_group_id.as_deref() == Some(branch_group_id.as_str()))
+        .filter(|r| {
+            r.id == branch_group_id
+                || r.branch_group_id.as_deref() == Some(branch_group_id.as_str())
+        })
         .map(|r| r.priority)
         .min()
         .unwrap_or(parent.priority);
@@ -300,7 +450,13 @@ pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, a
         &actions,
         actor_user_id,
     )?;
-    super::solution_component_service::tag_local(conn, &parent.workspace_id, "business_rule", &created.id, actor_user_id)?;
+    super::solution_component_service::tag_local(
+        conn,
+        &parent.workspace_id,
+        "business_rule",
+        &created.id,
+        actor_user_id,
+    )?;
     sync_graph_node(conn, &parent.workspace_id, &created)?;
     Ok(created)
 }
@@ -310,7 +466,11 @@ pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, a
 /// own `emptyAction` already uses for "+ Add action" - kept in sync by hand
 /// since one is a Rust service default and the other a TS form default,
 /// not by sharing code across the language boundary.
-fn default_branch_action(conn: &Connection, workspace_id: &str, entity_type: &str) -> AppResult<BusinessRuleActionInput> {
+fn default_branch_action(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+) -> AppResult<BusinessRuleActionInput> {
     let defs = custom_field_repo::list_definitions(conn, workspace_id, entity_type)?;
     if let Some(d) = defs.iter().find(|d| d.is_active) {
         return Ok(BusinessRuleActionInput {
@@ -321,7 +481,10 @@ fn default_branch_action(conn: &Connection, workspace_id: &str, entity_type: &st
             message: None,
         });
     }
-    if let Some(f) = builtin_fields::builtin_fields_for(entity_type).iter().find(|f| f.actionable) {
+    if let Some(f) = builtin_fields::builtin_fields_for(entity_type)
+        .iter()
+        .find(|f| f.actionable)
+    {
         return Ok(BusinessRuleActionInput {
             action_type: "require".to_string(),
             target_field_key: Some(f.key.to_string()),
@@ -342,9 +505,18 @@ fn default_branch_action(conn: &Connection, workspace_id: &str, entity_type: &st
 /// Any authenticated user can list active rules (the form needs them to
 /// evaluate live via `test_rules`/save-time enforcement); only an
 /// Administrator sees inactive ones, via the admin screen.
-pub fn list_rules(conn: &Connection, workspace_id: &str, entity_type: &str, active_only: bool) -> AppResult<Vec<BusinessRule>> {
+pub fn list_rules(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    active_only: bool,
+) -> AppResult<Vec<BusinessRule>> {
     let all = business_rule_repo::list(conn, workspace_id, entity_type)?;
-    Ok(if active_only { all.into_iter().filter(|r| r.is_active).collect() } else { all })
+    Ok(if active_only {
+        all.into_iter().filter(|r| r.is_active).collect()
+    } else {
+        all
+    })
 }
 
 /// See `custom_object_service::get`'s doc comment - same export use case.
@@ -352,45 +524,87 @@ pub fn get_rule(conn: &Connection, id: &str) -> AppResult<Option<BusinessRule>> 
     Ok(business_rule_repo::get(conn, id)?)
 }
 
-pub fn update_rule(conn: &Connection, id: &str, input: &BusinessRuleUpdate, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+pub fn update_rule(
+    conn: &Connection,
+    id: &str,
+    input: &BusinessRuleUpdate,
+    actor_user_id: Option<&str>,
+) -> AppResult<BusinessRule> {
     require_admin(conn, actor_user_id)?;
-    let existing = business_rule_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Business rule".into()))?;
+    let existing = business_rule_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Business rule".into()))?;
     if existing.is_protected {
-        return Err(AppError::Validation("This rule is protected by the system and cannot be modified".into()));
+        return Err(AppError::Validation(
+            "This rule is protected by the system and cannot be modified".into(),
+        ));
     }
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Rule name is required".into()));
     }
     if !MATCH_TYPES.contains(&input.match_type.as_str()) {
-        return Err(AppError::Validation(format!("Invalid match type '{}'", input.match_type)));
+        return Err(AppError::Validation(format!(
+            "Invalid match type '{}'",
+            input.match_type
+        )));
     }
-    validate_conditions(conn, &existing.workspace_id, &existing.entity_type, &input.conditions, existing.branch_role == "else")?;
-    validate_actions(conn, &existing.workspace_id, &existing.entity_type, &input.actions)?;
+    validate_conditions(
+        conn,
+        &existing.workspace_id,
+        &existing.entity_type,
+        &input.conditions,
+        existing.branch_role == "else",
+    )?;
+    validate_actions(
+        conn,
+        &existing.workspace_id,
+        &existing.entity_type,
+        &input.actions,
+    )?;
     require_valid_app_id(conn, &existing.workspace_id, input.app_id.as_deref())?;
     // Admin UX polish (spec §10): snapshot the pre-edit state before it's
     // overwritten, so an admin can review or restore it later. `existing`
     // is always serializable (plain String/bool/i64/Vec fields), so this
     // can't fail the way parsing untrusted JSON can.
-    let snapshot_json = serde_json::to_string(&existing).expect("BusinessRule is always serializable");
+    let snapshot_json =
+        serde_json::to_string(&existing).expect("BusinessRule is always serializable");
     business_rule_repo::insert_version(conn, id, &snapshot_json)?;
     let updated = business_rule_repo::update(conn, id, input, actor_user_id)?;
     sync_graph_node(conn, &existing.workspace_id, &updated)?;
-    audit_repo::record(conn, &existing.workspace_id, actor_user_id, "update", Some("business_rule"), Some(id), &format!("Updated business rule '{}'", updated.name), None)?;
+    audit_repo::record(
+        conn,
+        &existing.workspace_id,
+        actor_user_id,
+        "update",
+        Some("business_rule"),
+        Some(id),
+        &format!("Updated business rule '{}'", updated.name),
+        None,
+    )?;
     Ok(updated)
 }
 
 /// Admin UX polish (spec §10): every saved-version snapshot for a rule,
 /// newest first. `require_admin` first, then confirm the rule itself
 /// exists, so a bad id reads as 404 rather than an empty list.
-pub fn list_versions(conn: &Connection, rule_id: &str, actor_user_id: Option<&str>) -> AppResult<Vec<BusinessRuleVersion>> {
+pub fn list_versions(
+    conn: &Connection,
+    rule_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<BusinessRuleVersion>> {
     require_admin(conn, actor_user_id)?;
-    business_rule_repo::get(conn, rule_id)?.ok_or_else(|| AppError::NotFound("Business rule".into()))?;
+    business_rule_repo::get(conn, rule_id)?
+        .ok_or_else(|| AppError::NotFound("Business rule".into()))?;
     business_rule_repo::list_version_rows(conn, rule_id)?
         .into_iter()
         .map(|(version_id, snapshot_json, saved_at)| {
-            let snapshot: BusinessRule =
-                serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt rule version snapshot: {e}")))?;
-            Ok(BusinessRuleVersion { id: version_id, business_rule_id: rule_id.to_string(), snapshot, saved_at })
+            let snapshot: BusinessRule = serde_json::from_str(&snapshot_json)
+                .map_err(|e| AppError::Validation(format!("Corrupt rule version snapshot: {e}")))?;
+            Ok(BusinessRuleVersion {
+                id: version_id,
+                business_rule_id: rule_id.to_string(),
+                snapshot,
+                saved_at,
+            })
         })
         .collect()
 }
@@ -399,14 +613,19 @@ pub fn list_versions(conn: &Connection, rule_id: &str, actor_user_id: Option<&st
 /// normal update path, so a restore is validated exactly like a hand-edited
 /// save and (since `update_rule` always snapshots first) the state it
 /// replaces is itself recoverable.
-pub fn restore_version(conn: &Connection, rule_id: &str, version_id: &str, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+pub fn restore_version(
+    conn: &Connection,
+    rule_id: &str,
+    version_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<BusinessRule> {
     require_admin(conn, actor_user_id)?;
     let (_, snapshot_json, _) = business_rule_repo::list_version_rows(conn, rule_id)?
         .into_iter()
         .find(|(vid, _, _)| vid == version_id)
         .ok_or_else(|| AppError::NotFound("Rule version".into()))?;
-    let snapshot: BusinessRule =
-        serde_json::from_str(&snapshot_json).map_err(|e| AppError::Validation(format!("Corrupt rule version snapshot: {e}")))?;
+    let snapshot: BusinessRule = serde_json::from_str(&snapshot_json)
+        .map_err(|e| AppError::Validation(format!("Corrupt rule version snapshot: {e}")))?;
     let update = BusinessRuleUpdate {
         name: snapshot.name,
         description: snapshot.description,
@@ -451,9 +670,14 @@ pub fn restore_version(conn: &Connection, rule_id: &str, version_id: &str, actor
 /// starting from a known-good rule instead of from scratch. Created active
 /// (via the normal `create` path) then immediately flipped inactive, rather
 /// than adding a second insert variant just for that one flag.
-pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
+pub fn duplicate_rule(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<BusinessRule> {
     require_admin(conn, actor_user_id)?;
-    let existing = business_rule_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Business rule".into()))?;
+    let existing = business_rule_repo::get(conn, id)?
+        .ok_or_else(|| AppError::NotFound("Business rule".into()))?;
     let input = BusinessRuleInput {
         entity_type: existing.entity_type.clone(),
         name: format!("{} (Copy)", existing.name),
@@ -490,7 +714,8 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
             .collect(),
     };
     let new_id = crate::domain::ids::new_uuid();
-    let created = business_rule_repo::create(conn, &new_id, &existing.workspace_id, &input, actor_user_id)?;
+    let created =
+        business_rule_repo::create(conn, &new_id, &existing.workspace_id, &input, actor_user_id)?;
     sync_graph_node(conn, &existing.workspace_id, &created)?;
     let deactivate = BusinessRuleUpdate {
         name: created.name.clone(),
@@ -504,7 +729,12 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
         conditions: input.conditions,
         actions: input.actions,
     };
-    Ok(business_rule_repo::update(conn, &created.id, &deactivate, actor_user_id)?)
+    Ok(business_rule_repo::update(
+        conn,
+        &created.id,
+        &deactivate,
+        actor_user_id,
+    )?)
 }
 
 /// Admin UX polish (spec §10): human-readable descriptions of every active
@@ -513,7 +743,12 @@ pub fn duplicate_rule(conn: &Connection, id: &str, actor_user_id: Option<&str>) 
 /// `custom_field_service` before letting an admin deactivate a custom
 /// field, since a rule referencing a deactivated field just silently stops
 /// finding it and never fires that clause again.
-pub fn describe_active_rules_referencing_field(conn: &Connection, workspace_id: &str, entity_type: &str, field_key: &str) -> AppResult<Vec<String>> {
+pub fn describe_active_rules_referencing_field(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    field_key: &str,
+) -> AppResult<Vec<String>> {
     let rules = business_rule_repo::list(conn, workspace_id, entity_type)?;
     Ok(rules
         .iter()
@@ -523,17 +758,22 @@ pub fn describe_active_rules_referencing_field(conn: &Connection, workspace_id: 
 }
 
 fn rule_references_field(rule: &BusinessRule, field_key: &str) -> bool {
-    rule.conditions.iter().any(|c| c.field_key == field_key || c.compare_field_key.as_deref() == Some(field_key))
-        || rule.actions.iter().any(|a| a.target_field_key.as_deref() == Some(field_key))
+    rule.conditions
+        .iter()
+        .any(|c| c.field_key == field_key || c.compare_field_key.as_deref() == Some(field_key))
+        || rule
+            .actions
+            .iter()
+            .any(|a| a.target_field_key.as_deref() == Some(field_key))
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RuleEvaluation {
     /// custom target_field_key -> "require" | "hide" | "show" | "lock" | "editable"
     /// - "last matching rule wins" per target field (a later `show`
-    /// correctly overrides an earlier `hide` on the same field, same for
-    /// `editable` over `lock`), same map-insert-overwrite semantics the
-    /// original require/hide/lock pair already had.
+    ///   correctly overrides an earlier `hide` on the same field, same for
+    ///   `editable` over `lock`), same map-insert-overwrite semantics the
+    ///   original require/hide/lock pair already had.
     pub field_effects: HashMap<String, String>,
     /// custom target_field_key -> value to apply before validation
     /// (set_default/set_value/clear_value all land here - clear_value just
@@ -541,9 +781,9 @@ pub struct RuleEvaluation {
     pub set_values: HashMap<String, String>,
     /// Same as `field_effects`/`set_values` but for built-in-field targets
     /// - kept in separate maps (rather than merged by key) so a custom
-    /// field that happens to share a key with a built-in one (e.g. an
-    /// admin-defined "Notes" custom field on an entity that already has a
-    /// built-in `notes` column) can never collide with it.
+    ///   field that happens to share a key with a built-in one (e.g. an
+    ///   admin-defined "Notes" custom field on an entity that already has a
+    ///   built-in `notes` column) can never collide with it.
     pub builtin_field_effects: HashMap<String, String>,
     /// Applied immediately via `builtin_field_service::set_field` once
     /// evaluation completes and nothing blocked the save - unlike
@@ -574,7 +814,10 @@ pub struct RuleEvaluation {
 /// set_entity_values`'s trigger_context), so this is the same lookup
 /// `condition_matches` already does for the primary field, just applied to
 /// the compare-to field instead of a literal.
-fn resolve_condition_value<'a>(c: &'a crate::models::business_rule::BusinessRuleCondition, ctx: &'a HashMap<String, String>) -> &'a str {
+fn resolve_condition_value<'a>(
+    c: &'a crate::models::business_rule::BusinessRuleCondition,
+    ctx: &'a HashMap<String, String>,
+) -> &'a str {
     match &c.compare_field_key {
         Some(key) => ctx.get(key).map(|s| s.as_str()).unwrap_or(""),
         None => c.value.as_str(),
@@ -602,14 +845,30 @@ fn resolve_related_field(
     let Some(def) = relationship_repo::get_definition(conn, relationship_definition_id)? else {
         return Ok(None);
     };
-    let (related_id, other_type) = if def.source_entity_type == entity_type && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one") {
-        (relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.target_id), def.target_entity_type)
+    let (related_id, other_type) = if def.source_entity_type == entity_type
+        && matches!(def.relationship_type.as_str(), "many_to_one" | "one_to_one")
+    {
+        (
+            relationship_repo::list_instances_where_source(conn, &def.id, entity_id)?
+                .into_iter()
+                .next()
+                .map(|i| i.target_id),
+            def.target_entity_type,
+        )
     } else if def.target_entity_type == entity_type && def.relationship_type == "one_to_one" {
-        (relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?.into_iter().next().map(|i| i.source_id), def.source_entity_type)
+        (
+            relationship_repo::list_instances_where_target(conn, &def.id, entity_id)?
+                .into_iter()
+                .next()
+                .map(|i| i.source_id),
+            def.source_entity_type,
+        )
     } else {
         (None, String::new())
     };
-    let Some(related_id) = related_id else { return Ok(None) };
+    let Some(related_id) = related_id else {
+        return Ok(None);
+    };
     let values = if field_source == "builtin" {
         builtin_field_service::field_values(conn, &other_type, &related_id)?
     } else {
@@ -626,7 +885,13 @@ fn resolve_related_field(
 /// `evaluate` below is never mutated, since a sibling rule's own related-
 /// field conditions (if any) may need a different resolved value under the
 /// same field key.
-fn rule_matches(conn: &Connection, entity_type: &str, entity_id: &str, rule: &BusinessRule, ctx: &HashMap<String, String>) -> AppResult<bool> {
+fn rule_matches(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    rule: &BusinessRule,
+    ctx: &HashMap<String, String>,
+) -> AppResult<bool> {
     // Business Rule Board 2.0: an empty conditions list always matches -
     // the one way to express "else" (run when nothing earlier in this
     // rule's chain did) without inventing a second, parallel evaluation
@@ -637,23 +902,49 @@ fn rule_matches(conn: &Connection, entity_type: &str, entity_id: &str, rule: &Bu
     if rule.conditions.is_empty() {
         return Ok(true);
     }
-    if !rule.conditions.iter().any(|c| c.relationship_definition_id.is_some()) {
+    if !rule
+        .conditions
+        .iter()
+        .any(|c| c.relationship_definition_id.is_some())
+    {
         return Ok(crate::domain::conditions::conditions_match(
             &rule.match_type,
-            rule.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, ctx))),
+            rule.conditions.iter().map(|c| {
+                (
+                    c.group_id.as_deref(),
+                    c.field_key.as_str(),
+                    c.operator.as_str(),
+                    resolve_condition_value(c, ctx),
+                )
+            }),
             ctx,
         ));
     }
     let mut scratch = ctx.clone();
     for c in &rule.conditions {
         if let Some(rel_id) = &c.relationship_definition_id {
-            let value = resolve_related_field(conn, entity_type, entity_id, rel_id, &c.field_source, &c.field_key)?.unwrap_or_default();
+            let value = resolve_related_field(
+                conn,
+                entity_type,
+                entity_id,
+                rel_id,
+                &c.field_source,
+                &c.field_key,
+            )?
+            .unwrap_or_default();
             scratch.insert(c.field_key.clone(), value);
         }
     }
     Ok(crate::domain::conditions::conditions_match(
         &rule.match_type,
-        rule.conditions.iter().map(|c| (c.group_id.as_deref(), c.field_key.as_str(), c.operator.as_str(), resolve_condition_value(c, &scratch))),
+        rule.conditions.iter().map(|c| {
+            (
+                c.group_id.as_deref(),
+                c.field_key.as_str(),
+                c.operator.as_str(),
+                resolve_condition_value(c, &scratch),
+            )
+        }),
         &scratch,
     ))
 }
@@ -679,12 +970,21 @@ fn is_effective_today(rule: &BusinessRule, today: &str) -> bool {
 /// later-evaluated (higher priority number) rule wins - the same "last one
 /// wins" rule the original engine documented, now scoped per rule instead
 /// of per condition.
-pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, entity_id: &str, ctx: &HashMap<String, String>) -> AppResult<RuleEvaluation> {
+pub fn evaluate(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+    ctx: &HashMap<String, String>,
+) -> AppResult<RuleEvaluation> {
     let today = Utc::now().format("%Y-%m-%d").to_string();
     let rules = business_rule_repo::list(conn, workspace_id, entity_type)?;
     let mut result = RuleEvaluation::default();
 
-    for rule in rules.iter().filter(|r| r.is_active && is_effective_today(r, &today)) {
+    for rule in rules
+        .iter()
+        .filter(|r| r.is_active && is_effective_today(r, &today))
+    {
         if !rule_matches(conn, entity_type, entity_id, rule, ctx)? {
             continue;
         }
@@ -697,14 +997,23 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, entity
                 // earlier hide/lock on the same field.
                 "require" | "hide" | "show" | "lock" | "editable" => {
                     if let Some(t) = &action.target_field_key {
-                        let map = if is_builtin { &mut result.builtin_field_effects } else { &mut result.field_effects };
+                        let map = if is_builtin {
+                            &mut result.builtin_field_effects
+                        } else {
+                            &mut result.field_effects
+                        };
                         map.insert(t.clone(), action.action_type.clone());
                     }
                 }
                 "set_default" => {
                     if let (Some(t), Some(v)) = (&action.target_field_key, &action.action_value) {
-                        let currently_empty = ctx.get(t).map(|s| s.trim().is_empty()).unwrap_or(true);
-                        let map = if is_builtin { &mut result.builtin_set_values } else { &mut result.set_values };
+                        let currently_empty =
+                            ctx.get(t).map(|s| s.trim().is_empty()).unwrap_or(true);
+                        let map = if is_builtin {
+                            &mut result.builtin_set_values
+                        } else {
+                            &mut result.set_values
+                        };
                         if currently_empty && !map.contains_key(t) {
                             map.insert(t.clone(), v.clone());
                         }
@@ -712,7 +1021,11 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, entity
                 }
                 "set_value" => {
                     if let (Some(t), Some(v)) = (&action.target_field_key, &action.action_value) {
-                        let map = if is_builtin { &mut result.builtin_set_values } else { &mut result.set_values };
+                        let map = if is_builtin {
+                            &mut result.builtin_set_values
+                        } else {
+                            &mut result.set_values
+                        };
                         map.insert(t.clone(), v.clone());
                     }
                 }
@@ -720,7 +1033,11 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, entity
                 // needs no action_value at all.
                 "clear_value" => {
                     if let Some(t) = &action.target_field_key {
-                        let map = if is_builtin { &mut result.builtin_set_values } else { &mut result.set_values };
+                        let map = if is_builtin {
+                            &mut result.builtin_set_values
+                        } else {
+                            &mut result.set_values
+                        };
                         map.insert(t.clone(), String::new());
                     }
                 }
@@ -731,7 +1048,9 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, entity
                 }
                 "block_save" => {
                     if result.blocked.is_none() {
-                        result.blocked = Some(action.message.clone().unwrap_or_else(|| format!("'{}' blocks saving this record", rule.name)));
+                        result.blocked = Some(action.message.clone().unwrap_or_else(|| {
+                            format!("'{}' blocks saving this record", rule.name)
+                        }));
                     }
                 }
                 "show_error" => {
@@ -761,7 +1080,13 @@ pub fn evaluate(conn: &Connection, workspace_id: &str, entity_type: &str, entity
 /// record (same as any other never-yet-linked record would), so such a
 /// condition evaluates against an empty related value here, same as every
 /// other hypothetical field this tester can't fully simulate.
-pub fn test_rules(conn: &Connection, workspace_id: &str, entity_type: &str, ctx: &HashMap<String, String>, actor_user_id: Option<&str>) -> AppResult<RuleEvaluation> {
+pub fn test_rules(
+    conn: &Connection,
+    workspace_id: &str,
+    entity_type: &str,
+    ctx: &HashMap<String, String>,
+    actor_user_id: Option<&str>,
+) -> AppResult<RuleEvaluation> {
     require_admin(conn, actor_user_id)?;
     evaluate(conn, workspace_id, entity_type, "", ctx)
 }
