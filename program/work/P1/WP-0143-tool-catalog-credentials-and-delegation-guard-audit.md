@@ -42,6 +42,7 @@ Confirm and lock in with tests that every tool source passes the full firewall c
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0009 error taxonomy; ADR-0010 migration conventions. ADR-0010 applies to any migration this work package adds.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log

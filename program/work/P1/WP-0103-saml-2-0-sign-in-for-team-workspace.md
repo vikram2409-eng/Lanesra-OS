@@ -5,7 +5,7 @@ phase: 1
 epic: E1.1 Enterprise sign-in
 status: proposed
 owner: unassigned
-depends_on: [WP-0101, WP-0010]
+depends_on: [WP-0101, WP-0010, WP-0106]
 requirements: [REQ-GOV-001]
 estimate: L
 editions: [workspace]
@@ -42,6 +42,7 @@ Users sign in with the customer's SAML 2.0 IdP.
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0009 error taxonomy; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 - Use a maintained SAML library; record it in THIRD_PARTY_NOTICES. Never hand-roll XML-DSig.
 

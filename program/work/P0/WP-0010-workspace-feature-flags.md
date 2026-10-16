@@ -6,7 +6,7 @@ epic: E0.1 Program and engineering readiness
 status: proposed
 owner: unassigned
 depends_on: [WP-0009]
-requirements: [REQ-PRE-006]
+requirements: [REQ-PRE-006, REQ-PRE-021]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
@@ -41,6 +41,10 @@ The build spans ~7 months. Unfinished capabilities must merge to `main` behind f
 - `desktop/core/tests/feature_flags.rs`, one vitest for the hook, one E2E toggle spec
 - Tag every new test with `Covers: <REQ-ID>` (and this WP id) so `programctl trace` finds it
 - Full regression suite green; test count not lower than before (see testing/REGRESSION.md)
+
+## Notes
+
+- Must follow (WP-0009): ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 
 ## Progress log
 

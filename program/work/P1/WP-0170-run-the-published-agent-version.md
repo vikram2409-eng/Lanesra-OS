@@ -45,6 +45,7 @@ Found by the gap audit (WP-0008, RAID I-18): a run reads only the published vers
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0007 run and step states; ADR-0008 trace and events; ADR-0010 migration conventions. ADR-0010 applies to any migration this work package adds. Not behind a feature flag: this is a correctness fix (ADR-0012 §4).
 - Refine at the Gate 0 review: confirm scope against the ADRs (WP-0009), then set status to ready.
 
 ## Progress log

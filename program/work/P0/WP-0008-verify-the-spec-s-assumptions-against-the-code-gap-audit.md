@@ -3,7 +3,7 @@ id: WP-0008
 title: Verify the spec's assumptions against the code (gap audit)
 phase: 0
 epic: E0.3 Architecture decisions
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-008]
@@ -52,3 +52,5 @@ The spec says 'most of the plumbing already exists'. Before designing on top of 
   - AC-3: scope notes added to WP-0100, 0112, 0121, 0123, 0132, 0141, 0143, 0146, 0150 (Phase 1), plus WP-0009, WP-0013 and WP-0306; new proposed WP-0170 (run the published agent version).
   - State: in_review on PR #626, documentation only. Next: a second agent or the owner reviews (test plan); then WP-0009 (foundational ADRs) can start with RAID I-23 as input.
   - Gotcha: the code comment at `graph_runtime_service.rs:33-37` points to a "three legacy paths" note that does not exist; the audit's §2 has the real list.
+
+- 2026-10-16 claude: PR #626 merged by the owner (072433e); WP-0008 done. WP-0009 starts next.

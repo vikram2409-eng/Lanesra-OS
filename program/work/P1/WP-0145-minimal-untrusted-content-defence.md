@@ -47,6 +47,7 @@ defence forward (ADR-0004) so prompt injection through tool results is contained
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0008 trace and events; ADR-0010 migration conventions; ADR-0011 prompt catalog; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Threats: indirect prompt injection, excessive agency, data exfiltration (WP-0011 threat model).
 
 ## Progress log

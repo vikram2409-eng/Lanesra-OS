@@ -40,6 +40,8 @@ and Record Scope), and every action is attributed to them.
 - Gap audit findings (WP-0008, `program/research/gap-audit.md`):
   - Replace the `actor = None` defaults for AI and API-client writes, which currently skip Access Control (RAID I-20)
   - Webhook trigger routes must check their `ai_agent_triggers` row and run as that trigger's Agent Identity; today any `agents.trigger` client runs any agent as the client's owner (I-14)
+- Owner decisions (ADR-0013, ADR-0014, 2026-10-16):
+  - Several workspaces per server and a future SaaS edition (ADR-0014): design with WP-0181. Human accounts live in the server's control database and can belong to several workspaces; principals (human profile, Agent Identity, API client) stay inside one workspace
 
 ## Out of scope
 
@@ -62,6 +64,7 @@ and Record Scope), and every action is attributed to them.
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Threats: privilege escalation through unattended runs, credential leakage to models, confused deputy (threat model, WP-0011).
 - Built before SSO and the run model so neither is reworked later (ADR-0006).
 

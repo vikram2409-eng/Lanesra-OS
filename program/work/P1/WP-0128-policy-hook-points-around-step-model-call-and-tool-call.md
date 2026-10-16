@@ -39,6 +39,7 @@ Admins attach policies and guardrails at three points in the loop, configured as
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0008 trace and events; ADR-0009 error taxonomy; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log

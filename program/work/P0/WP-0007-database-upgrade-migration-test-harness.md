@@ -27,6 +27,7 @@ This build adds many tables and columns to a schema that customers already hold 
 - A test that opens each fixture, runs migrations, and checks row counts and key invariants are preserved
 - A test that migration numbers are contiguous, unique and that `MIGRATIONS` lists every file
 - Script to regenerate fixtures, documented
+- From ADR-0010 (WP-0009): run each migration and its `schema_migrations` row in one transaction (`run_migrations` has none today, so a failed migration leaves a half-applied schema); add the migration header check to `check_migrations.py` for migrations above 0079
 
 ## Acceptance criteria
 
@@ -39,6 +40,10 @@ This build adds many tables and columns to a schema that customers already hold 
 - `desktop/core/tests/migration_upgrade.rs`
 - Tag every new test with `Covers: <REQ-ID>` (and this WP id) so `programctl trace` finds it
 - Full regression suite green; test count not lower than before (see testing/REGRESSION.md)
+
+## Notes
+
+- Must follow (WP-0009): ADR-0010 migration conventions. ADR-0010 applies to any migration this work package adds.
 
 ## Progress log
 

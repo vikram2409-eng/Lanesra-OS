@@ -47,6 +47,7 @@ Tauri desktop app, reusing the server's validation code in `core`.
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0009 error taxonomy; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Refine at the Gate 0 review together with WP-0101.
 
 ## Progress log

@@ -6,7 +6,7 @@ epic: E0.3 Architecture decisions
 status: ready
 owner: unassigned
 depends_on: []
-requirements: [REQ-PRE-010]
+requirements: [REQ-PRE-010, REQ-PRE-021]
 estimate: M
 editions: [demo]
 delivered: []
@@ -30,6 +30,8 @@ The spec ships the Playground in the online demo with simulated runs using the s
 - Output: ADR with the decision and a JSON Schema for the Team format shared by both
 - Gap audit findings (WP-0008, `program/research/gap-audit.md`):
   - The demo already simulates agents, pipelines, an Agent Teams canvas with approvals, evals and per-agent chat (`app.js:11526-13642`), but stores camelCase data while desktop uses snake_case; decide a shared, versioned format (gap audit §11)
+- Owner decisions (ADR-0013, ADR-0014, 2026-10-16):
+  - The online demo shows a feature in the same release as desktop and Team Workspace, never earlier (REQ-PRE-021, ADR-0012): the demo is built alongside each feature but stays hidden until release
 
 ## Acceptance criteria
 

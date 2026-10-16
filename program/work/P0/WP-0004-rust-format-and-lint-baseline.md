@@ -60,3 +60,5 @@ commits on the branch touch only tracker and workflow files. All criteria met; i
 
 ### 2026-10-16 claude (after merge)
 Merged in PR #622 (merge commit 8327e44, merge strategy kept the rustfmt SHA 971ba7f in main, so .git-blame-ignore-revs is valid). Status done.
+
+- 2026-10-16 claude: Regression found later by the Team Workspace review. `[lints] workspace = true` on each crate broke the Docker image build, which compiles `server/` without the workspace manifest (RAID I-24). No CI job built the image, so it went unnoticed. The fix is WP-0020. Lesson: a change to the workspace manifest must be checked against every build that uses the crates, including the Dockerfile.

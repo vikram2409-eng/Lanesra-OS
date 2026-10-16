@@ -26,6 +26,8 @@ Simulated runs on sample data with write tools always simulated, per the demo AD
 ## Scope
 
 - Shared Team format
+- Owner decisions (ADR-0013, ADR-0014, 2026-10-16):
+  - The Playground appears in the online demo in the same release as desktop and Team Workspace, never earlier (REQ-PRE-021)
 
 ## Acceptance criteria
 

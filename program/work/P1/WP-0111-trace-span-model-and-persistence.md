@@ -29,6 +29,8 @@ Record a span tree for every run: run → step → round → model call and tool
 - Attributes: agent version, model, provider, tokens in/out, cost, latency, policy and guardrail verdicts, context receipt hash
 - Instrumentation in chat_service agent loop, pipeline topologies and graph runtime agent nodes
 - Performance budget from WP-0015
+- Owner decisions (ADR-0013, ADR-0014, 2026-10-16):
+  - Admin setting `trace_bodies`: `off` (default), `redacted` or `full`, per workspace with a per-Team override; applied to storage, live events and OTLP export; AI Admin only; audited; each trace records the setting in force (ADR-0008 §4)
 
 ## Acceptance criteria
 
@@ -44,6 +46,7 @@ Record a span tree for every run: run → step → round → model call and tool
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0008 trace and events; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log

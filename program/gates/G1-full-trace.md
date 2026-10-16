@@ -19,7 +19,8 @@ Each check needs evidence: a CI run link, test names, `programctl` output or a d
 | 7 | OIDC and SAML sign-in working with negative tests (WP-0102, WP-0103) | | ☐ |
 | 8 | `programctl trace` shows every Phase 1 requirement with a tagged test | | ☐ |
 | 9 | Threat model updated for Phase 1; no open high-severity findings | | ☐ |
-| 10 | Phase 2 WPs refined and `ready`; re-forecast written below | | ☐ |
+| 10 | Team Workspace safe to expose and recoverable: setup token, sign-in throttling, public URL (WP-0106); backups with key recovery, pre-upgrade backup, readiness check (WP-0180) | | ☐ |
+| 11 | Phase 2 WPs refined and `ready`; re-forecast written below | | ☐ |
 
 ## Open RAID items at the gate
 
