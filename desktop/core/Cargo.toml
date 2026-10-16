@@ -18,7 +18,7 @@ serde_yaml = "0.9"
 # build script always sets -DSQLITE_ENABLE_FTS5 for a bundled build) - no
 # separate feature flag needed for `record_search_fts` (Phase 7b's Context
 # Layer) to work.
-rusqlite = { version = "0.31", features = ["bundled", "chrono", "uuid", "backup"] }
+rusqlite = { version = "0.40", features = ["bundled", "chrono", "uuid", "backup"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 argon2 = "0.5"
