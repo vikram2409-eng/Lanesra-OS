@@ -45,7 +45,7 @@ It is enterprise grade: **no shortcuts**. Every acceptance criterion is proven b
 | Phase | Gate to pass | Size | Contents |
 |---|---|---|---|
 | 0 · Precursors | Engineering ready | 18 WPs · 34 pts | CI on every PR, green `main`, lockfiles, scripted model provider for tests, E2E and migration test harnesses, foundational ADRs, feature flags, threat model, clean-room controls, Issues mirror, Muse relay path |
-| 1 · Foundations | Every run produces a full trace | 33 WPs · 98 pts | SSO (OIDC + SAML, desktop and server), run/step model, trace spans and SSE events, step limits and partial results, task contracts, guardrails, prompt catalog, approvals unified, minimal prompt-injection defence, agent settings groups |
+| 1 · Foundations | Every run produces a full trace | 34 WPs · 102 pts | SSO (OIDC + SAML, desktop and server), bring-your-own-model provider coverage and model catalog, run/step model, trace spans and SSE events, step limits and partial results, task contracts, guardrails, prompt catalog, approvals unified, minimal prompt-injection defence, agent settings groups |
 | 2 · Playground | Templates pass their evaluation suites | 24 WPs · 90 pts | Three-pane Playground, live trace, step-through, simulate writes, fork/replay, compare, save as test case, publish gate, Guided Setup, three industry templates, online demo Playground |
 | 3 · Teams and modes | Security review signed off | 31 WPs · 124 pts | Teams, seats, compiler, run controller, Manager-led / Round Table / Handoff / Debate / Graph modes, Agent Identities, budgets, memory recall, team editor and canvas |
 | 4 · Enterprise scale | General availability | 19 WPs · 75 pts | Worker pool, hash-chained audit, retention, kill switch, four-eyes, content labels, Missions, shadow mode, A/B, team endpoints |
@@ -75,7 +75,9 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
   prompts fresh; use Lanesra words (Team, Playbook, Run, Step).
 - One WP per branch and PR; never push to `main`; the other agent reviews; the owner merges.
 - Migrations take the next free number above `main`'s maximum at rebase time (ADR-0003).
-- No paid model API keys exist for this build: tests use the scripted provider and recorded runs.
+- The product is **bring-your-own-model**: organisations connect OpenAI, Gemini, Claude, Ollama or on-prem
+  model servers with their own keys, and every feature must work with all of them. The *build team*
+  has no API keys, so tests use the scripted provider, recorded runs and contract fixtures - never a live hosted API.
 - Spec unclear? Add a `Q-` item to `program/RAID.md` and ask — do not guess.
 - Do not hand-edit `program/STATUS.md` or the mirrored GitHub Issues.
 

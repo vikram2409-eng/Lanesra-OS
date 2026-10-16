@@ -125,6 +125,8 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-LOOP-019** [P1] Head-and-tail trimming option keeps the first and most recent messages
 - **REQ-LOOP-020** [P1] Budget awareness: each agent turn is told remaining steps, tokens and dollars
 - **REQ-LOOP-021** [P1] Do-not-persist state fields are never written to checkpoints, traces or audit, and are re-fetched on resume
+- **REQ-LOOP-022** [P1] Bring your own model: every agent, team and Playground feature works with any provider an organisation configures - OpenAI, Anthropic Claude, Google Gemini, Ollama, and on-premises model servers (vLLM, LM Studio, TGI and other OpenAI-compatible endpoints) - including fully offline, with custom base URLs, private CA certificates, proxies and auth headers (owner decision, ADR-0004)
+- **REQ-LOOP-023** [P1] A model catalog records each configured model's capabilities (native tool calling, structured output, context window, streaming) and price per token (zero or an internal rate for on-premises models), and the loop, cost forecast and model routing use it rather than assuming one provider
 
 ## TOOL — Tools, connectors and MCP
 
@@ -261,7 +263,7 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-EVAL-008** [P2] Deeper evaluation: N repeats for variance, per-seat and whole-team scores, tool-argument checks
 - **REQ-EVAL-009** [P2] Recorded runs: save a run with its model responses; suites replay them at no model cost with identical results
 - **REQ-EVAL-010** [P2] Impact analysis before Publish lists dependent Teams, Workflows, Solutions, Action Types and suites that will rerun
-- **REQ-EVAL-012** [P2] Real-model evaluation evidence without paid API keys: suites can run against a local open-weight model through Ollama, and recorded runs make results replayable in CI (owner decision, ADR-0004)
+- **REQ-EVAL-012** [P2] Provider verification without program-owned API keys: every provider adapter has contract tests from its published API format, suites can run against a local model (Ollama or vLLM) for real-model evidence, recorded runs replay in CI, and a provider conformance suite lets an organisation verify its own model and key from the product (owner decision, ADR-0004)
 - **REQ-EVAL-011** [P4] Shadow mode: a new version runs alongside the published one on real triggers with writes simulated, compared before promotion
 
 ## API — Data model, APIs and interop

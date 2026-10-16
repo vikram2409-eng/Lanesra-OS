@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 18 | 0 | 4 | 7 | 0 | 7 | 0 / 34 | `░░░░░░░░░░` 0% |
-| 1 · Foundations | 33 | 0 | 0 | 0 | 0 | 33 | 0 / 98 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 34 | 0 | 0 | 0 | 0 | 34 | 0 / 102 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 124 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 19 | 0 | 0 | 0 | 0 | 19 | 0 / 75 | `░░░░░░░░░░` 0% |
@@ -35,8 +35,8 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 ## Requirement coverage
 
-- Spec requirements tracked: **226**
-- Mapped to a work package: **226**
+- Spec requirements tracked: **228**
+- Mapped to a work package: **228**
 - Delivered (every mapped work package done): **0**
 
 ## Phase 0 · Precursors
@@ -94,6 +94,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | ⚪ proposed | S | WP-0008 |
 | [WP-0144](work/P1/WP-0144-test-button-on-every-model-tool-connector-agent-and-team.md) | Test button on every model, tool, connector, agent and team | E1.5 Tools and firewall | ⚪ proposed | M | WP-0010 |
 | [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | ⚪ proposed | L | WP-0122, WP-0128, WP-0011, WP-0130 |
+| [WP-0146](work/P1/WP-0146-bring-your-own-model-provider-coverage.md) | Bring-your-own-model provider coverage and model catalog | E1.3 Agent loop | ⚪ proposed | L | WP-0005, WP-0122 |
 | [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | E1.6 Approvals | ⚪ proposed | L | WP-0110, WP-0007 |
 | [WP-0151](work/P1/WP-0151-four-review-responses.md) | Four review responses | E1.6 Approvals | ⚪ proposed | M | WP-0150 |
 | [WP-0152](work/P1/WP-0152-approvals-bound-to-exact-arguments.md) | Approvals bound to exact arguments | E1.6 Approvals | ⚪ proposed | M | WP-0150 |
@@ -127,7 +128,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0221](work/P2/WP-0221-three-industry-templates-with-evaluation-suites.md) | Three industry templates with evaluation suites | E2.5 Templates and demo | ⚪ proposed | L | WP-0213, WP-0224 |
 | [WP-0222](work/P2/WP-0222-accessibility-pass-for-phase-2-screens.md) | Accessibility pass for Phase 2 screens | E2.4 Setup and screens | ⚪ proposed | M | WP-0203, WP-0217, WP-0218 |
 | [WP-0223](work/P2/WP-0223-playground-in-the-online-demo.md) | Playground in the online demo | E2.5 Templates and demo | ⚪ proposed | XL | WP-0013, WP-0203 |
-| [WP-0224](work/P2/WP-0224-real-model-evaluation-without-api-keys.md) | Real-model evaluation without paid API keys | E2.3 Evaluation and publish | ⚪ proposed | M | WP-0210, WP-0211 |
+| [WP-0224](work/P2/WP-0224-provider-verification-without-program-owned-api-keys.md) | Provider verification without program-owned API keys | E2.3 Evaluation and publish | ⚪ proposed | M | WP-0210, WP-0211, WP-0146 |
 
 ## Phase 3 · Teams and modes
 

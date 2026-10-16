@@ -12,7 +12,8 @@ suite only grows.
 4. **Never skip to pass.** No new `#[ignore]`, `.skip`, `.only`, `todo!()`, or weakened assertions.
    A flaky test is a bug: fix it or raise a RAID issue; never retry-until-green.
 5. **Deterministic by default.** No live model calls, network or wall-clock sleeps in CI tests. The
-   program has no paid model API keys (ADR-0004); nothing may depend on one.
+   build team has no model API keys (ADR-0004); nothing may depend on one. The *product* supports
+   every provider an organisation brings (REQ-LOOP-022), so each adapter needs contract tests.
    Agent behaviour uses the scripted model provider; time uses a controllable clock.
 6. **Traceable.** Each test that proves a requirement carries a tag comment:
    `// Covers: REQ-LOOP-008 (WP-0121 AC-1)`. `programctl trace` builds the matrix from these tags.
@@ -30,7 +31,8 @@ suite only grows.
 | End to end | Playwright + pre-installed Chromium (WP-0006) | `desktop/e2e/` | PRs touching UI/server/demo; nightly full | User journeys in server mode and the online demo |
 | Security | Negative tests, authz matrix, injection corpus, `cargo deny`, `npm audit`, secret scan | Throughout + CI | Every PR; corpus nightly | Threat model mitigations hold |
 | Performance | Benchmarks / timed tests (WP-0015) | `desktop/core/benches/` | Nightly | Budgets in `PERFORMANCE.md` |
-| Real-model evaluation | Local open-weight model via Ollama (no paid API keys, ADR-0004), recorded for replay | Evaluation suites | On demand on a contributor machine; CI replays the recordings | Template quality (G2 evidence, WP-0224) |
+| Provider contracts | Fixtures from each provider's published API format (OpenAI, Anthropic, Gemini, OpenAI-compatible, Ollama) | `desktop/core/tests/provider_contracts.rs` | Every PR | Every bring-your-own-model provider works (WP-0146) |
+| Real-model evaluation | Local model via Ollama or vLLM, recorded for replay; organisations run the in-product conformance suite with their own keys | Evaluation suites | On demand; CI replays the recordings | Template quality (G2 evidence, WP-0224) |
 | Program | `programctl` self-tests, validate, status --check | `program/tools/` | Every PR | Tracker integrity |
 
 ## What a work package must add

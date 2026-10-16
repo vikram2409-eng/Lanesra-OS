@@ -38,6 +38,7 @@ Use each provider's native tool calling (Anthropic, OpenAI-compatible, Gemini, O
 
 ## Notes
 
+- Must hold for every provider an organisation brings (REQ-LOOP-022); capabilities come from the model catalog in WP-0146.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log

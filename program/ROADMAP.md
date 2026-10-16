@@ -9,7 +9,7 @@ size is shown in estimate points and forecast as described under "Forecasting".
 ```mermaid
 flowchart LR
   P0["Phase 0 · Precursors<br/>18 WPs · 34 pts"] --> G0{{"G0 · Engineering ready"}}
-  G0 --> P1["Phase 1 · Foundations<br/>33 WPs · 98 pts"] --> G1{{"G1 · Every run produces a full trace"}}
+  G0 --> P1["Phase 1 · Foundations<br/>34 WPs · 102 pts"] --> G1{{"G1 · Every run produces a full trace"}}
   G1 --> P2["Phase 2 · Playground<br/>24 WPs · 90 pts"] --> G2{{"G2 · Templates pass their eval suites"}}
   G2 --> P3["Phase 3 · Teams and modes<br/>31 WPs · 124 pts"] --> G3{{"G3 · Security review signed off"}}
   G3 --> P4["Phase 4 · Enterprise scale<br/>19 WPs · 75 pts"] --> G4{{"G4 · GA"}}
@@ -104,5 +104,5 @@ measured throughput:
 4. Write the forecast in the gate file. If the budget is short, cut or defer scope explicitly
    (an ADR), never quality.
 
-Rough order of magnitude for planning only: about 425 points in total. The spec's own proposal
+Rough order of magnitude for planning only: about 429 points in total. The spec's own proposal
 was 28 weeks for Phases 1–4 with a human team; it is not a commitment here.
