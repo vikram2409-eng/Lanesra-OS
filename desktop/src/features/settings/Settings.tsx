@@ -16,6 +16,8 @@ import { BusinessRulesAdmin } from "./BusinessRulesAdmin";
 import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
 import { StatusTransitionsAdmin } from "./StatusTransitionsAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
+import { FeatureFlagsAdmin } from "./FeatureFlagsAdmin";
+import { useShowFeatureFlagsAdmin } from "../../lib/useFeature";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import { AppsAdmin } from "./AppsAdmin";
@@ -90,6 +92,7 @@ export type AdminTab =
   | "workflow"
   | "transitions"
   | "numbering"
+  | "featureFlags"
   | "kpis"
   | "dashboards"
   | "apps"
@@ -128,6 +131,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "workflow", label: "Workflow automation" },
   { key: "transitions", label: "Status transitions" },
   { key: "numbering", label: "Numbering" },
+  { key: "featureFlags", label: "Feature flags" },
   { key: "kpis", label: "Dashboard KPIs" },
   { key: "dashboards", label: "Dashboards" },
   { key: "apps", label: "Apps" },
@@ -335,7 +339,7 @@ function AdminHomeExtras({ onOpenTab }: { onOpenTab: (key: AdminTab) => void }) 
 // tool) - building an empty category that routes nowhere would be worse
 // than leaving it out until that consolidation actually happens.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
-  { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering"] },
+  { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "featureFlags"] },
   { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles"] },
   { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields", "dependencyExplorer", "businessGlossary"] },
   {
@@ -402,6 +406,9 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
   const [depExplorerRoot, setDepExplorerRoot] = useState<{ nodeType: "custom_object"; componentId: string } | null>(null);
   const queryClient = useQueryClient();
   const workspace = useQuery({ queryKey: ["workspaceStatus"], queryFn: () => api.workspaceStatus() });
+  // WP-0010: the Feature flags screen is listed only when it has
+  // something an Administrator can change (or in developer mode).
+  const showFeatureFlags = useShowFeatureFlagsAdmin();
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["workspaceStatus"] });
@@ -460,7 +467,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
                 </div>
               </div>
               <div className="admin-cat-items">
-                {cat.items.map((key) => (
+                {cat.items.filter((key) => key !== "featureFlags" || showFeatureFlags).map((key) => (
                   <button key={key} className="admin-cat-item" onClick={() => openTab(key)}>
                     {tabLabel(key)}
                     <span className="admin-cat-arrow">→</span>
@@ -517,6 +524,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "workflow" && <WorkflowAutomationAdmin />}
       {tab === "transitions" && <StatusTransitionsAdmin />}
       {tab === "numbering" && <NumberingAdmin />}
+      {tab === "featureFlags" && <FeatureFlagsAdmin />}
       {tab === "kpis" && <DashboardKpiAdmin />}
       {tab === "dashboards" && <DashboardLayoutsAdmin />}
       {tab === "apps" && <AppsAdmin />}
