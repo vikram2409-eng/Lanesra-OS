@@ -37,8 +37,8 @@ python3 program/tools/programctl.py next          # ready + dependencies done + 
 ```
 
 1. Read `AGENTS.md`, this file, `AGENT-PROFILES.md` and `STATUS.md`. The agents work in sequence,
-   so also open the program dashboard (`program/dashboard/README.md`) to see where the previous AI
-   stopped. Claude Code: refresh the dashboard now and again at the end of the session.
+   so also open the program dashboard (https://vikram2409-eng.github.io/Lanesra-OS/, rebuilt on every merge) to see where the
+   previous AI stopped. Claude Code: refresh the dashboard now and again at the end of the session.
    Work is not pre-assigned to an AI (ADR-0005): take the next ready item, or continue the work
    package you are handed. Muse AI: the owner gives you `BRIEFING.md` and the task card; you work
    through GitHub, so treat CI as your test run and say "untested locally — see CI" in your entries.
