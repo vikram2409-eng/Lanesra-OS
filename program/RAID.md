@@ -62,7 +62,7 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | I-01 | `npm ci` fails: `desktop/package-lock.json` out of sync with `package.json`; the release workflow runs `npm ci` and would fail | 2026-10-16 | WP-0002 | Fixed 2026-10-16 |
 | I-02 | `desktop/Cargo.lock` records lanesra-os 0.14.0 while the crate is 0.15.0 | 2026-10-16 | WP-0002 | Fixed 2026-10-16 |
 | I-03 | 7 tests failing on `main` (of 1,004): six industry reference-package workflows that should update a related record (auto service, field service, property management, real estate ×2, recruitment) and one System Graph hard-delete test. List in `testing/REGRESSION.md` | 2026-10-16 | WP-0016 | Fixed 2026-10-16 (root cause: lookup-field cache, see WP-0016) |
-| I-04 | No pull-request CI | 2026-10-16 | WP-0003 | Open |
+| I-04 | No pull-request CI | 2026-10-16 | WP-0003: `ci.yml` on every PR and push to `main`, required checks enforced by branch protection | Fixed 2026-10-16 (PRs #624, #625) |
 | I-05 | Spec says a THIRD_PARTY_NOTICES file exists; it does not | 2026-10-16 | WP-0012 | Open |
 | I-06 | Migration runner skips any version below the max applied; out-of-order merges lose migrations | 2026-10-16 | ADR-0003; CI check in WP-0003; test in WP-0007 | Open |
 | I-07 | jsdom 30 requires Node ≥ 22.22.2; the dev container has 22.22.0 (warning only today) | 2026-10-16 | WP-0002 pins Node | Fixed 2026-10-16 |
@@ -97,6 +97,6 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 
 | ID | Dependency | Needed by | Status |
 |---|---|---|---|
-| D-01 | Branch protection and required checks on `main` | After WP-0003 | Claude Code enables it (ADR-0004); owner clicks if the API is unavailable |
+| D-01 | Branch protection and required checks on `main` | After WP-0003 | Done 2026-10-16: the owner enabled it with the seven required checks (PROTOCOL §13) |
 | D-02 | IdP test tenants or a containerised IdP (Keycloak) for SSO tests | WP-0102, WP-0103 | Open |
 | D-03 | Model API keys as GitHub secrets | — | Closed 2026-10-16: none will be provided (ADR-0004); see WP-0224 |
