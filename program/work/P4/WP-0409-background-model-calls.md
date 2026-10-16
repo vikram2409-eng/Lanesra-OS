@@ -5,7 +5,6 @@ phase: 4
 epic: E4.3 Advanced capabilities
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0304]
 requirements: [REQ-ORCH-025]
 estimate: M

@@ -5,7 +5,6 @@ phase: 2
 epic: E2.4 Setup and screens
 status: proposed
 owner: unassigned
-agent: muse
 depends_on: [WP-0160]
 requirements: [REQ-UI-001, REQ-UI-002]
 estimate: M

@@ -5,7 +5,6 @@ phase: 0
 epic: E0.3 Architecture decisions
 status: ready
 owner: unassigned
-agent: claude
 depends_on: []
 requirements: [REQ-PRE-008]
 estimate: M

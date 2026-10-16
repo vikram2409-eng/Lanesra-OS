@@ -1,6 +1,6 @@
 # ADR-0004: Owner decisions of 2026-10-16
 
-- Status: Accepted (decided by the program owner, Vikram Grover, 2026-10-16)
+- Status: Accepted (decided by the program owner, Vikram Grover, 2026-10-16); decisions 1 and 2 amended by ADR-0005 (no fixed roles)
 - Answers RAID questions Q-01 to Q-11
 - Requirements added: REQ-PRE-013, REQ-PRE-014, REQ-GOV-028, REQ-TOOL-015, REQ-EVAL-012, REQ-LOOP-022, REQ-LOOP-023
 - Work packages added or changed: WP-0003, WP-0013, WP-0017, WP-0018, WP-0101, WP-0105, WP-0145, WP-0221, WP-0224, WP-0319, WP-0406
@@ -10,7 +10,7 @@
 | # | Question | Decision | Consequence in the plan |
 |---|---|---|---|
 | 1 | Which AI tools build this? | **Muse AI and Claude Code.** | Agent profiles in `program/AGENT-PROFILES.md`. Muse works through GitHub (its past commits arrive through the `apply-ontology-pr.yml` Action), so CI is where its changes get tested; WP-0018 adds a validated relay path. |
-| 2 | Who reviews, merges and protects `main`? | **Claude Code turns branch protection on** once CI exists. | WP-0003 includes enabling protection. Cross-review: Claude Code reviews Muse's PRs and Muse reviews Claude Code's, wherever Muse can read the PR. The owner keeps the final merge. |
+| 2 | Who reviews, merges and protects `main`? | **Claude Code turns branch protection on** once CI exists. | WP-0003 includes enabling protection. Review by an agent other than the author when available, else the owner (ADR-0005). The owner keeps the final merge. |
 | 3 | GitHub Issues / Project mirror? | **Yes.** | One-way mirror (WP-0017): one issue per work package, milestones per phase, status labels. Files stay the source of truth. |
 | 4 | Public build plan OK? | **Yes.** | No change; `program/` stays out of the website build. |
 | 5 | How far may the online demo change? | **Whatever is necessary** to host the Playground. | WP-0013 unblocked; a build step for the demo is allowed. |

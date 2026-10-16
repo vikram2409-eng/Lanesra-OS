@@ -5,7 +5,6 @@ phase: 3
 epic: E3.5 Team experience
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0212, WP-0304]
 requirements: [REQ-EVAL-003]
 estimate: M

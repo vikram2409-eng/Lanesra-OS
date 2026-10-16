@@ -5,7 +5,6 @@ phase: 4
 epic: E4.1 Scale
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0305, WP-0318]
 requirements: [REQ-ORCH-031, REQ-MEM-011]
 estimate: L

@@ -5,7 +5,6 @@ phase: 3
 epic: E3.3 Graph and flow control
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0304]
 requirements: [REQ-ORCH-013, REQ-ORCH-034]
 estimate: L

@@ -5,7 +5,6 @@ phase: 2
 epic: E2.2 Run control
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0111, WP-0203]
 requirements: [REQ-ORCH-018, REQ-ORCH-019, REQ-PG-009]
 estimate: L

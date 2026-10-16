@@ -5,7 +5,6 @@ phase: 1
 epic: E1.x Epic name
 status: proposed
 owner: unassigned
-agent: either          # claude | muse | either - who this suits (AGENT-PROFILES.md)
 depends_on: []
 requirements: [REQ-AREA-NNN]
 estimate: M

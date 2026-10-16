@@ -3,7 +3,7 @@
 Give this file (and the work package you want done) to any AI at the start of a session. It is
 self-contained; the files it links to have the detail.
 
-Repository: `github.com/vikram2409-eng/Lanesra-OS` · Owner: Vikram Grover · Builders: Claude Code and Muse AI
+Repository: `github.com/vikram2409-eng/Lanesra-OS` · Owner: Vikram Grover · Builders: Claude Code and Muse AI, used in turn as usage limits allow — neither owns any part of the work
 
 ---
 
@@ -31,7 +31,7 @@ It is enterprise grade: **no shortcuts**. Every acceptance criterion is proven b
 | You need | Read |
 |---|---|
 | The rules you must follow | `AGENTS.md`, then `program/PROTOCOL.md` |
-| Your role (Claude Code or Muse AI) | `program/AGENT-PROFILES.md` |
+| How you work, and how to take over from the other AI | `program/AGENT-PROFILES.md` |
 | What is done, in flight, ready | `program/STATUS.md` (generated) or GitHub Issues labelled `program` (mirror) |
 | Order of work and why | `program/ROADMAP.md` |
 | Your task | `program/work/P<phase>/WP-XXXX-*.md` — Goal, Scope, Acceptance criteria, Test plan, **Progress log** |
@@ -61,7 +61,8 @@ python3 program/tools/programctl.py next            # ready, dependencies done, 
 python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencies and requirements
 ```
 
-1. Read the WP's **Progress log** — the previous agent's handoff note is the last entry.
+1. Read the WP's **Progress log** — the previous agent's handoff note is the last entry. The previous
+   agent may be a different AI; continue on its branch and PR, and set `owner:` to yourself.
 2. Claim it: branch `wp/WP-XXXX-short-name` (or a claim marker), status `in_progress`, draft PR `[WP-XXXX] Title`.
 3. Write tests from the acceptance criteria first, then implement. Tag tests `// Covers: REQ-… (WP-XXXX AC-n)`.
 4. Before you stop, **always**: append a Progress log entry (done / state / next / gotchas /
@@ -97,16 +98,18 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
 **For Claude Code** (it reads `CLAUDE.md` → `AGENTS.md` automatically):
 
 > Work on the Lanesra OS Agent Playground build. Follow AGENTS.md and program/PROTOCOL.md exactly.
-> Take work package WP-XXXX (or, if none is named, the first item from `programctl next` on the
-> critical path). Read its Progress log first. Build it to its acceptance criteria with tests, keep
+> Take work package WP-XXXX (or, if none is named, continue the work package in progress, else the
+> first item from `programctl next`). If another AI worked on it before, continue from its last
+> Progress log entry on the same branch. Read its Progress log first. Build it to its acceptance criteria with tests, keep
 > the full regression suite green, update the Progress log, session log and STATUS.md, push, and
 > open a draft PR titled "[WP-XXXX] …". Stop and ask me if the spec is unclear.
 
 **For Muse AI** (give it this file and the task card from `programctl brief WP-XXXX`):
 
-> You are working on the Lanesra OS Agent Playground build with Claude Code. Read the briefing and
+> You are working on the Lanesra OS Agent Playground build; Claude Code may have worked on this task
+> before you, and may continue after you. Read the briefing and
 > the task card I have attached; follow its acceptance criteria and the hard rules in the
 > briefing. You cannot run tests, so make your change as small and reviewable as possible, include
 > the tests the work package asks for, and write a Progress log entry that says what you changed,
-> what is untested locally, and what the next agent should do. Deliver one patch that contains the code,
+> what is untested locally, and exactly what the next agent (possibly a different AI) should do next. Deliver one patch that contains the code,
 > the tests and the work package file edits listed under "What you must deliver" on the card.

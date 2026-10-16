@@ -12,7 +12,7 @@ lives in this folder and is version-controlled with the code.
 program/
 ├── BRIEFING.md          Self-contained briefing to give any AI at the start of a session
 ├── PROTOCOL.md          How work is claimed, built, tested, reviewed and handed over (binding)
-├── AGENT-PROFILES.md    Claude Code and Muse AI: capabilities, roles, handoff
+├── AGENT-PROFILES.md    How each AI works and how to switch between them
 ├── STATUS.md            Generated dashboard: phase progress, active, ready, every WP
 ├── ROADMAP.md           Phases, gates, critical path, parallel lanes, sequencing rationale
 ├── RAID.md              Risks, assumptions, issues, dependencies, questions for the owner

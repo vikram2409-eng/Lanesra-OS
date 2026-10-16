@@ -17,7 +17,7 @@ REQS = textwrap.dedent("""\
 
 
 def wp_text(wid="WP-0001", phase="0", status="ready", deps="", reqs="REQ-AAA-001, REQ-AAA-002",
-            owner="unassigned", agent="either", pr="", acs="- [ ] AC-1: something", extra=""):
+            owner="unassigned", pr="", acs="- [ ] AC-1: something", extra=""):
     return textwrap.dedent(f"""\
         ---
         id: {wid}
@@ -26,7 +26,6 @@ def wp_text(wid="WP-0001", phase="0", status="ready", deps="", reqs="REQ-AAA-001
         epic: E0.1 Test
         status: {status}
         owner: {owner}
-        agent: {agent}
         depends_on: [{deps}]
         requirements: [{reqs}]
         estimate: M
@@ -159,22 +158,19 @@ class ProgramctlTest(unittest.TestCase):
         self.assertEqual(pc.main(["status", "--check"]), 1)
 
 
-class AgentRoutingTest(ProgramctlTest):
-    def test_agent_filter_and_brief(self):
-        self.add(wp_text(wid="WP-0001", reqs="REQ-AAA-001", agent="muse"), wid="WP-0001")
-        self.add(wp_text(wid="WP-0002", reqs="REQ-AAA-002", agent="claude"), wid="WP-0002")
+class BriefTest(ProgramctlTest):
+    def test_brief_is_self_contained(self):
+        self.add(wp_text(reqs="REQ-AAA-001, REQ-AAA-002"))
         wps = pc.load_work_packages()
-        self.assertEqual(pc.ready_to_start(wps, "muse"), ["WP-0001"])
-        self.assertEqual(pc.ready_to_start(wps, "claude"), ["WP-0002"])
         reqs, _ = pc.load_requirements()
         card = pc.render_brief(wps["WP-0001"], wps, reqs)
         self.assertIn("REQ-AAA-001: First requirement", card)
         self.assertIn("## What you must deliver", card)
         self.assertIn("No previous entry", card)
 
-    def test_unknown_agent_rejected(self):
-        self.add(wp_text(agent="gpt"))
-        self.assertTrue(any("agent 'gpt'" in e for e in self.check()[0]))
+    def test_agent_field_is_rejected(self):
+        self.add(wp_text().replace("owner: unassigned\n", "owner: unassigned\nagent: muse\n"))
+        self.assertTrue(any("not pre-assigned" in e for e in self.check()[0]))
 
 
 if __name__ == "__main__":

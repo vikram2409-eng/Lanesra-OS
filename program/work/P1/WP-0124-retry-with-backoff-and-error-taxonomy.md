@@ -5,7 +5,6 @@ phase: 1
 epic: E1.3 Agent loop
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0009, WP-0005]
 requirements: [REQ-ORCH-033]
 estimate: M

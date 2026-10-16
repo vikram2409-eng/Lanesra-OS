@@ -5,7 +5,6 @@ phase: 3
 epic: E3.6 Security gate
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0307, WP-0308, WP-0309, WP-0318, WP-0324]
 requirements: [REQ-PRE-009]
 estimate: L

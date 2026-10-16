@@ -37,8 +37,9 @@ python3 program/tools/programctl.py next          # ready + dependencies done + 
 ```
 
 1. Read `AGENTS.md`, this file, `AGENT-PROFILES.md` (what you are best used for) and `STATUS.md`.
-   Muse AI: the owner gives you `BRIEFING.md` and the WP file; you work through GitHub, so treat CI
-   as your test run and say "untested locally — see CI" in your Progress log entries.
+   Work is not pre-assigned to an AI (ADR-0005): take the next ready item, or continue the work
+   package you are handed. Muse AI: the owner gives you `BRIEFING.md` and the task card; you work
+   through GitHub, so treat CI as your test run and say "untested locally — see CI" in your entries.
 2. **Resuming a work package?** Check out its branch, run `programctl show WP-XXXX`, read its
    **Progress log** (newest last), the latest session log for it in `log/`, and every unresolved
    review comment on its PR. Run the test suite before changing anything, so you know the state you inherited.
@@ -59,9 +60,11 @@ A claim must be visible to every other agent immediately, without waiting for a 
    `programctl status`; commit `chore(program): claim WP-XXXX`.
 3. Open a **draft** pull request titled `[WP-XXXX] <title>` using the PR template.
 4. If `git push` of the branch is rejected because it exists, someone else has it. Pick another.
-5. Muse AI (no git): Claude Code claims on Muse's behalf (`owner: muse`) and produces the task card
-   with `programctl brief WP-XXXX`; Muse delivers a patch that Claude Code applies, or the Agent
-   apply Action applies once WP-0018 lands (`program/inbox/WP-XXXX/`). See AGENT-PROFILES.md.
+5. Muse AI (no git): the owner pushes the claim (or the Agent apply Action does, once WP-0018 lands)
+   and hands Muse the task card from `programctl brief WP-XXXX`. See AGENT-PROFILES.md.
+6. **Switching AI mid-work** (one AI's usage limit is reached): the new AI continues on the same
+   branch and PR from the last Progress log entry and sets `owner:` to itself. See AGENT-PROFILES.md
+   "Switching from one AI to the other".
 
 Abandoning a claim: set `status: ready`, `owner: unassigned`, write why in the Progress log, push,
 close the draft PR and delete the claim branch.
@@ -132,8 +135,8 @@ Assume the next session is a different AI that has never seen this conversation.
 ## 7. Review and merge
 
 - Move to `in_review`: CI green, Definition of Done met except review, PR marked ready, `pr:` set.
-- **Cross-review:** a different agent or a person reviews. Prefer a different AI vendor than the
-  author — it catches different mistakes. The reviewer checks the diff against the acceptance
+- **Cross-review:** an agent other than the author reviews when one has usage left, otherwise the
+  owner does. A different AI vendor catches different mistakes. The reviewer checks the diff against the acceptance
   criteria and the spec, not just that tests pass, and tries to break it.
 - Review findings are answered on the PR; fixes go on the same branch.
 - The owner merges. After merge, the author (or next agent) sets `status: done` in a follow-up

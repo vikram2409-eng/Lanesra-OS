@@ -5,7 +5,6 @@ phase: 0
 epic: E0.1 Program and engineering readiness
 status: in_progress
 owner: claude
-agent: claude
 depends_on: [WP-0001]
 requirements: [REQ-PRE-013]
 estimate: S

@@ -5,7 +5,6 @@ phase: 2
 epic: E2.1 Playground core
 status: proposed
 owner: unassigned
-agent: muse
 depends_on: [WP-0202, WP-0160, WP-0201]
 requirements: [REQ-PG-001, REQ-PG-002, REQ-PG-003, REQ-UI-005, REQ-UI-009]
 estimate: XL

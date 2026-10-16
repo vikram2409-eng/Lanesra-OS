@@ -5,7 +5,6 @@ phase: 3
 epic: E3.1 Teams and compiler
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0131]
 requirements: [REQ-CORE-005, REQ-CORE-006, REQ-CORE-009]
 estimate: L

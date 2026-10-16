@@ -5,7 +5,6 @@ phase: 2
 epic: E2.5 Templates and demo
 status: proposed
 owner: unassigned
-agent: muse
 depends_on: [WP-0013, WP-0203]
 requirements: [REQ-PG-016]
 estimate: XL

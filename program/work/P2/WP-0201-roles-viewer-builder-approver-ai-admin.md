@@ -5,7 +5,6 @@ phase: 2
 epic: E2.1 Playground core
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0104]
 requirements: [REQ-GOV-004]
 estimate: M

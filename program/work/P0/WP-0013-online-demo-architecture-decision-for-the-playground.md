@@ -5,7 +5,6 @@ phase: 0
 epic: E0.3 Architecture decisions
 status: ready
 owner: unassigned
-agent: muse
 depends_on: []
 requirements: [REQ-PRE-010]
 estimate: M
@@ -40,7 +39,7 @@ The spec ships the Playground in the online demo with simulated runs using the s
 
 ## Notes
 
-- Dependency on the gap audit (WP-0008) removed 2026-10-16 so Muse AI can start in parallel; the demo is self-contained in `app.js`.
+- Dependency on the gap audit (WP-0008) removed 2026-10-16 so it can start in parallel with the critical path; the demo is self-contained in `app.js`.
 
 ## Progress log
 

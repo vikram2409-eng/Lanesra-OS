@@ -5,7 +5,6 @@ phase: 0
 epic: E0.2 Test infrastructure
 status: proposed
 owner: unassigned
-agent: claude
 depends_on: [WP-0003]
 requirements: [REQ-PRE-005]
 estimate: M
