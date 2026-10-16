@@ -1,6 +1,6 @@
 # ADR-0009: Five error classes decide retry, failover and what the user sees
 
-- Status: Proposed. Accepted when the owner merges the WP-0009 pull request.
+- Status: Accepted (program owner, 2026-10-16, PR #628)
 - Date: 2026-10-16
 - Work package: WP-0009
 - Requirements: REQ-PRE-007, REQ-ORCH-033, REQ-LOOP-006, REQ-LOOP-010

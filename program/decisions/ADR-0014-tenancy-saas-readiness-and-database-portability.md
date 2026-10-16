@@ -1,6 +1,6 @@
 # ADR-0014: Tenancy, SaaS readiness and database portability
 
-- Status: Proposed. Accepted when the owner merges the pull request that carries it.
+- Status: Accepted (program owner, 2026-10-16, PR #628)
 - Date: 2026-10-16
 - Work package: WP-0009 (decided with the owner, ADR-0013 #4)
 - Requirements: REQ-PRE-022, REQ-PRE-023

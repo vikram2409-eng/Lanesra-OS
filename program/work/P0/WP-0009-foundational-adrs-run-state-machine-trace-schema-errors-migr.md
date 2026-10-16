@@ -3,7 +3,7 @@ id: WP-0009
 title: Foundational ADRs: run state machine, trace schema, errors, migrations, prompt catalog
 phase: 0
 epic: E0.3 Architecture decisions
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0008]
 requirements: [REQ-PRE-007]
@@ -35,7 +35,7 @@ Phase 1 has ~25 work packages that all touch runs, steps, events and prompts. If
 
 ## Acceptance criteria
 
-- [ ] AC-1: Six ADRs merged with status Accepted
+- [x] AC-1: Six ADRs merged with status Accepted
 - [x] AC-2: Each ADR has at least one example (JSON event, transition table, migration header)
 - [x] AC-3: Phase 1 work packages reference the ADRs they must follow
 
@@ -59,3 +59,5 @@ Phase 1 has ~25 work packages that all touch runs, steps, events and prompts. If
   - AC-2: each ADR has an example. AC-3: 39 work packages (all of Phase 1, plus WP-0005, WP-0007 and WP-0010) now have a "Must follow" line; BRIEFING has a hard rule.
   - State: in_review on PR #628. AC-1 is met when the owner merges, which accepts the ADRs; the merging agent then sets each to Accepted.
   - Next: WP-0010 (flags), WP-0110 (run schema), and WP-0007 (migration runner transaction and header check).
+
+- 2026-10-16 claude: PR #628 merged by the owner (69cfe1e). ADR-0007 to ADR-0012 and ADR-0014 set to Accepted; WP-0009 done. Next: WP-0020.

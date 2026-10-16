@@ -1,6 +1,6 @@
 # ADR-0012: Feature flags: code-defined, workspace-scoped, short-lived
 
-- Status: Proposed. Accepted when the owner merges the WP-0009 pull request.
+- Status: Accepted (program owner, 2026-10-16, PR #628)
 - Date: 2026-10-16
 - Work package: WP-0009 (implemented by WP-0010)
 - Requirements: REQ-PRE-006, REQ-PRE-007, REQ-PRE-015 (editions)
