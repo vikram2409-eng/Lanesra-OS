@@ -13,7 +13,7 @@ delivered: []
 editions_reason: architecture decision for the online demo itself
 docs: [multi-target-architecture]
 branch: wp/WP-0013-demo-architecture
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/638
 updated: 2026-10-16
 ---
 
