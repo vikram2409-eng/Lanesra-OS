@@ -1,0 +1,40 @@
+name: Program tracker
+
+# Validates the build program's tracking files (program/) on every pull
+# request and push to main: every work package well-formed, every spec
+# requirement covered, STATUS.md regenerated, and programctl's own tests.
+# The full product CI (Rust, frontend, demo) arrives with WP-0003.
+
+on:
+  pull_request:
+    paths:
+      - "program/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - ".github/pull_request_template.md"
+      - ".github/workflows/program.yml"
+  push:
+    branches: [main]
+    paths:
+      - "program/**"
+
+permissions:
+  contents: read
+
+jobs:
+  program:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: programctl self-tests
+        run: python3 -m unittest discover -s program/tools -p 'test_*.py' -v
+      - name: Validate work packages and requirement coverage
+        run: python3 program/tools/programctl.py validate
+      - name: STATUS.md is up to date
+        run: python3 program/tools/programctl.py status --check
+      - name: Requirement trace (report only)
+        run: python3 program/tools/programctl.py trace >> "$GITHUB_STEP_SUMMARY"
