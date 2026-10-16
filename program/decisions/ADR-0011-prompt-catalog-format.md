@@ -1,6 +1,6 @@
 # ADR-0011: Platform prompts live in a versioned catalog of files
 
-- Status: Proposed. Accepted when the owner merges the WP-0009 pull request.
+- Status: Accepted (program owner, 2026-10-16, PR #628)
 - Date: 2026-10-16
 - Work package: WP-0009
 - Requirements: REQ-PRE-007, REQ-LOOP-016, REQ-CLEAN-001..005 (clean room)

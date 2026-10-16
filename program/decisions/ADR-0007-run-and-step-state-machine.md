@@ -1,6 +1,6 @@
 # ADR-0007: One state machine for runs and steps
 
-- Status: Proposed. Accepted when the owner merges the WP-0009 pull request.
+- Status: Accepted (program owner, 2026-10-16, PR #628)
 - Date: 2026-10-16
 - Work package: WP-0009
 - Requirements: REQ-PRE-007, REQ-ORCH-016 (`waiting_budget`), REQ-ORCH-025 (`waiting_model`), REQ-ORCH-044, REQ-LOOP-008 (`completed_partial`), REQ-GOV-010, REQ-GOV-023, REQ-API-003

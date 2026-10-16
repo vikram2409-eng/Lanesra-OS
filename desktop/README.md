@@ -104,6 +104,8 @@ LANESRA_DATA_DIR=./data LANESRA_FRONTEND_DIR=../dist cargo run
 
 ### Running it with Docker (recommended for a small team)
 
+Full guide, covering first run, internet exposure, settings, backing up the database **and its encryption key**, and upgrades: https://lanesraos.com/help/set-up-team-workspace. Each release also publishes the image to `ghcr.io/vikram2409-eng/lanesra-os-server`.
+
 ```bash
 cd desktop
 docker build -t lanesra-os-server .

@@ -217,5 +217,5 @@ do not depend on the answer.
 - Commits: Conventional Commits with the WP id, e.g. `feat(core): step round limit and partial results [WP-0121]`.
 - Branches: `wp/WP-XXXX-short-name`. PR titles: `[WP-XXXX] Title`.
 - Dates: ISO `YYYY-MM-DD`, UTC.
-- Required status checks on `main` (WP-0003): `rust (format and lint)`, `rust (tests)`, `tauri (desktop shell)`, `web (frontend)`, `demo (website and online demo)`, `migrations (order and numbering)`, `program`. All run on every pull request; none is path-filtered.
+- Required status checks on `main` (WP-0003): `rust (format and lint)`, `rust (tests)`, `tauri (desktop shell)`, `web (frontend)`, `demo (website and online demo)`, `migrations (order and numbering)`, `program`. All run on every pull request; none is path-filtered. `server image (Team Workspace)` (WP-0020) also runs on every pull request; the owner adds it to the required list once it has been green for a week.
 - GitHub Issues labelled `program` are a read-only mirror of the work package files (WP-0017). Never edit them; edit the file.

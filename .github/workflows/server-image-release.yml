@@ -1,0 +1,75 @@
+name: Release Team Workspace server image
+
+# Builds and publishes the Team Workspace server image to GitHub Container
+# Registry (WP-0020). It is triggered by the same `desktop-v*` tag as the
+# desktop release, so desktop and Team Workspace always ship together
+# (owner decision, ADR-0013 #3, REQ-PRE-021). Before the image is published,
+# it must pass the same smoke test that CI runs on every pull request.
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.15.0); normally taken from the tag"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: build, smoke-test and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version and image name
+        id: meta
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#desktop-v}"
+          fi
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$owner/lanesra-os-server" >> "$GITHUB_OUTPUT"
+
+      - name: Image versions match the repo pins
+        run: python3 program/tools/check_toolchain_pins.py
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: desktop
+          load: true
+          tags: lanesra-os-server:release
+          cache-from: type=gha,scope=server-image
+
+      - name: Smoke test before publishing
+        run: desktop/scripts/server-image-smoke.sh lanesra-os-server:release
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        run: |
+          docker tag lanesra-os-server:release "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker tag lanesra-os-server:release "${{ steps.meta.outputs.image }}:latest"
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker push "${{ steps.meta.outputs.image }}:latest"
+
+      - name: Server log
+        if: always()
+        run: cat /tmp/lanesra-smoke.log || true

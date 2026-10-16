@@ -1,6 +1,6 @@
 # ADR-0010: Migration and schema conventions
 
-- Status: Proposed. Accepted when the owner merges the WP-0009 pull request.
+- Status: Accepted (program owner, 2026-10-16, PR #628)
 - Date: 2026-10-16
 - Work package: WP-0009 (extends ADR-0003)
 - Requirements: REQ-PRE-005, REQ-PRE-007
