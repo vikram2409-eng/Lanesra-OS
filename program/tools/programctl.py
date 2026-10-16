@@ -13,11 +13,13 @@ only, so it runs anywhere Python 3.9+ does.
     python3 program/tools/programctl.py trace           # requirement -> WP -> test coverage
     python3 program/tools/programctl.py new-log --agent claude --wp WP-0101
     python3 program/tools/programctl.py brief WP-0160       # self-contained task card to hand an AI
+    python3 program/tools/programctl.py export --out data.json  # all program data for the dashboard page
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import re
 import subprocess
 import sys
@@ -391,7 +393,180 @@ Phase {w['phase']} · Estimate {w['estimate']} · Status now: {w['status']}
      ```
 3. A new session log `program/log/{today[:4]}/{today[5:7]}/{today[8:10]}-0000-<agent>-{wid}.md` (short: goal, done, next, points, tokens used if known).
 4. Do not edit `program/STATUS.md` or GitHub Issues - they are regenerated automatically.
+5. Before you call it finished, go through `program/FINISH-CHECKLIST.md` (prove it, record it,
+   publish it). The items you cannot do without a shell (running the suite, opening the PR,
+   regenerating STATUS.md) are done by CI, the Agent apply Action or the next Claude Code session.
 """
+
+
+# ----------------------------------------------------------------- export ---
+
+WEIGHT = {"S": 1, "M": 2, "L": 4, "XL": 8}
+PHASE_TITLES = {"0": "Precursors", "1": "Foundations", "2": "Playground", "3": "Teams and modes",
+                "4": "Enterprise scale", "v2": "Open interop"}
+LOG_HEAD = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(.+)$")
+
+
+def progress_entries(body):
+    text = section(body, "## Progress log")
+    out = []
+    for chunk in text.split("\n### ")[1:]:
+        head, _, rest = chunk.partition("\n")
+        m = LOG_HEAD.match(head.strip())
+        date, who = (m.group(1), m.group(2)) if m else ("", head.strip())
+        agent = who.split()[0].strip("()").lower() if who else ""
+        out.append({"date": date, "agent": agent, "heading": who, "text": rest.strip()})
+    return out
+
+
+def criteria(body):
+    out = []
+    for line in section(body, "## Acceptance criteria").splitlines():
+        m = re.match(r"^- \[([ xX])\] (.+)$", line.strip())
+        if m:
+            out.append({"done": m.group(1) != " ", "text": m.group(2)})
+    return out
+
+
+def sequence(wps):
+    """Wave = longest dependency chain below a WP; critical path = heaviest chain by points."""
+    wave, heavy, nxt = {}, {}, {}
+
+    def depth(w):
+        if w in wave:
+            return wave[w]
+        deps = [d for d in wps[w].get("depends_on") or [] if d in wps]
+        wave[w] = 1 + max((depth(d) for d in deps), default=0)
+        return wave[w]
+
+    def weight(w):
+        if w in heavy:
+            return heavy[w]
+        deps = [d for d in wps[w].get("depends_on") or [] if d in wps]
+        best = max(deps, key=weight, default=None)
+        heavy[w] = WEIGHT.get(wps[w].get("estimate"), 2) + (weight(best) if best else 0)
+        nxt[w] = best
+        return heavy[w]
+
+    for w in wps:
+        depth(w)
+        weight(w)
+    end = max(wps, key=lambda w: heavy[w])
+    critical = []
+    while end:
+        critical.append(end)
+        end = nxt.get(end)
+    phase_rank = {ph: i for i, ph in enumerate(PHASES)}
+    order = sorted(wps, key=lambda w: (phase_rank.get(str(wps[w].get("phase")), 9), wave[w], w))
+    return order, wave, list(reversed(critical))
+
+
+def load_checklist():
+    path = PROGRAM / "FINISH-CHECKLIST.md"
+    groups, cur = [], None
+    if not path.exists():
+        return groups
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            cur = {"group": line[3:].strip(), "items": []}
+            groups.append(cur)
+        m = re.match(r"^- \[ \] \*\*(.+?)\*\* — (.+)$", line)
+        if m and cur is not None:
+            cur["items"].append({"name": m.group(1), "detail": m.group(2)})
+    return groups
+
+
+def load_gates():
+    out = []
+    gates_dir = PROGRAM / "gates"
+    for p in sorted(gates_dir.glob("G*.md")) if gates_dir.exists() else []:
+        text = p.read_text(encoding="utf-8")
+        title = text.splitlines()[0].lstrip("# ").strip()
+        m = re.search(r"Status: \*\*(.+?)\*\*", text)
+        checks = re.findall(r"^\| \d+ \| (.+?) \|.*\| (☐|☑|✅|✔) \|$", text, re.M)
+        out.append({"id": p.stem.split("-")[0], "title": title, "status": m.group(1) if m else "",
+                    "file": rel(p), "checks": [{"text": c, "done": mark != "☐"} for c, mark in checks]})
+    return out
+
+
+def load_raid_open():
+    path = PROGRAM / "RAID.md"
+    out = []
+    if not path.exists():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if cells and re.match(r"^[QRAID]-\d{2}$", cells[0]) and len(cells) >= 3:
+            status = cells[-1]
+            if status.startswith(("Open", "Mitigation")):
+                out.append({"id": cells[0], "text": cells[1], "status": status})
+    return out
+
+
+def git_info():
+    def run(*a):
+        try:
+            return subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True, timeout=10).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+    return {"commit": run("rev-parse", "--short", "HEAD"), "branch": run("rev-parse", "--abbrev-ref", "HEAD"),
+            "remote": run("config", "--get", "remote.origin.url")}
+
+
+def export_data(wps, reqs):
+    order, wave, critical = sequence(wps)
+    tags = scan_test_tags()
+    unblocks = {w: [] for w in wps}
+    for w, wp in wps.items():
+        for d in wp.get("depends_on") or []:
+            if d in unblocks:
+                unblocks[d].append(w)
+    out_wps = []
+    for i, w in enumerate(order, 1):
+        wp = wps[w]
+        entries = progress_entries(wp["_body"])
+        built_by = []
+        for e in entries:
+            if e["agent"] and e["agent"] not in built_by:
+                built_by.append(e["agent"])
+        owner = wp.get("owner") or ""
+        if owner and owner != "unassigned" and owner not in built_by:
+            built_by.append(owner)
+        out_wps.append({
+            "seq": i, "wave": wave[w], "critical": w in critical, "id": w, "title": wp.get("title"),
+            "phase": str(wp.get("phase")), "epic": wp.get("epic"), "status": wp.get("status"),
+            "owner": owner, "estimate": wp.get("estimate"), "points": WEIGHT.get(wp.get("estimate"), 2),
+            "depends_on": wp.get("depends_on") or [], "unblocks": sorted(unblocks[w]),
+            "requirements": wp.get("requirements") or [], "branch": wp.get("branch") or "",
+            "pr": wp.get("pr") or "", "updated": str(wp.get("updated")), "file": rel(wp["_path"]),
+            "goal": section(wp["_body"], "## Goal").strip(), "scope": section(wp["_body"], "## Scope").strip(),
+            "out_of_scope": section(wp["_body"], "## Out of scope").strip(),
+            "criteria": criteria(wp["_body"]), "test_plan": section(wp["_body"], "## Test plan").strip(),
+            "notes": section(wp["_body"], "## Notes").strip(), "blocker": section(wp["_body"], "## Blocker").strip(),
+            "progress": entries, "built_by": built_by,
+            "ready_now": w in ready_to_start(wps),
+        })
+    by_req = {}
+    for wp in out_wps:
+        for r in wp["requirements"]:
+            by_req.setdefault(r, []).append(wp)
+    out_reqs = []
+    for r in reqs.values():
+        ws = by_req.get(r["id"], [])
+        if ws and all(x["status"] == "done" for x in ws):
+            state = "delivered"
+        elif any(x["status"] in ("in_progress", "in_review", "done") for x in ws):
+            state = "in progress"
+        else:
+            state = "planned"
+        out_reqs.append({"id": r["id"], "area": r["id"].split("-")[1], "phase": r["phase"], "text": r["text"],
+                         "wps": [x["id"] for x in ws], "state": state, "tests": sorted(tags.get(r["id"], []))})
+    return {
+        "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "git": git_info(), "phases": [{"id": p, "title": PHASE_TITLES[p]} for p in PHASES],
+        "critical_path": critical, "work_packages": out_wps, "requirements": out_reqs,
+        "checklist": load_checklist(), "gates": load_gates(), "raid_open": load_raid_open(),
+    }
 
 
 # ------------------------------------------------------------------ trace ---
@@ -431,6 +606,8 @@ def main(argv=None):
     s.add_argument("--check", action="store_true", help="fail if STATUS.md is out of date")
     n = sub.add_parser("next", help="list work packages ready to start and not yet claimed")
     n.add_argument("--offline", action="store_true", help="skip the git ls-remote claim check")
+    ex = sub.add_parser("export", help="write all program data as JSON for the dashboard page")
+    ex.add_argument("--out", required=True)
     b = sub.add_parser("brief", help="print a self-contained task card for handing a WP to an AI")
     b.add_argument("wp")
     sh = sub.add_parser("show", help="show one work package")
@@ -488,6 +665,11 @@ def main(argv=None):
             shown += 1
         if not shown:
             print("No unclaimed work package is ready. Check STATUS.md 'Active now' and blocked items.")
+        return 0
+
+    if args.cmd == "export":
+        Path(args.out).write_text(json.dumps(export_data(wps, reqs), ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"wrote {args.out}")
         return 0
 
     if args.cmd == "brief":

@@ -16,6 +16,8 @@ program/
 ├── STATUS.md            Generated dashboard: phase progress, active, ready, every WP
 ├── ROADMAP.md           Phases, gates, critical path, parallel lanes, sequencing rationale
 ├── RAID.md              Risks, assumptions, issues, dependencies, questions for the owner
+├── FINISH-CHECKLIST.md  What every AI updates when a work package finishes
+├── dashboard/           Source of the one-page program dashboard (data from `programctl export`)
 ├── spec/                The design spec (immutable copy) and REQUIREMENTS.md (stable IDs)
 ├── work/P0..P4, Pv2/    One file per work package (YAML front matter + body + progress log)
 ├── gates/               G0..G4 checklists with evidence and sign-off

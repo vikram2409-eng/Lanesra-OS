@@ -158,6 +158,22 @@ class ProgramctlTest(unittest.TestCase):
         self.assertEqual(pc.main(["status", "--check"]), 1)
 
 
+class ExportTest(ProgramctlTest):
+    def test_export_sequences_and_attributes_builders(self):
+        self.add(wp_text(wid="WP-0001", reqs="REQ-AAA-001"), wid="WP-0001")
+        log = "\n## Progress log\n\n### 2026-10-16 muse\nDid the first half.\n\n### 2026-10-17 claude\nFinished it.\n"
+        self.add(wp_text(wid="WP-0002", deps="WP-0001", reqs="REQ-AAA-002") + log, wid="WP-0002")
+        reqs, _ = pc.load_requirements()
+        data = pc.export_data(pc.load_work_packages(), reqs)
+        by = {w["id"]: w for w in data["work_packages"]}
+        self.assertEqual([w["id"] for w in data["work_packages"]], ["WP-0001", "WP-0002"])
+        self.assertEqual((by["WP-0001"]["wave"], by["WP-0002"]["wave"]), (1, 2))
+        self.assertEqual(by["WP-0002"]["built_by"], ["muse", "claude"])
+        self.assertEqual(by["WP-0001"]["unblocks"], ["WP-0002"])
+        self.assertEqual(data["critical_path"], ["WP-0001", "WP-0002"])
+        self.assertEqual({r["id"]: r["state"] for r in data["requirements"]}["REQ-AAA-001"], "planned")
+
+
 class BriefTest(ProgramctlTest):
     def test_brief_is_self_contained(self):
         self.add(wp_text(reqs="REQ-AAA-001, REQ-AAA-002"))

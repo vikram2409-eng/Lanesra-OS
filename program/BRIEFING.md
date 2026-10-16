@@ -32,7 +32,9 @@ It is enterprise grade: **no shortcuts**. Every acceptance criterion is proven b
 |---|---|
 | The rules you must follow | `AGENTS.md`, then `program/PROTOCOL.md` |
 | How you work, and how to take over from the other AI | `program/AGENT-PROFILES.md` |
+| Everything on one page | Program dashboard: https://claude.ai/artifact/TANp9Vzmur4A37bsgHEtKg (`program/dashboard/`) |
 | What is done, in flight, ready | `program/STATUS.md` (generated) or GitHub Issues labelled `program` (mirror) |
+| What to update when you finish | `program/FINISH-CHECKLIST.md` |
 | Order of work and why | `program/ROADMAP.md` |
 | Your task | `program/work/P<phase>/WP-XXXX-*.md` — Goal, Scope, Acceptance criteria, Test plan, **Progress log** |
 | What the spec requires | `program/spec/REQUIREMENTS.md` (stable IDs, e.g. `REQ-LOOP-008`) |

@@ -134,6 +134,9 @@ Assume the next session is a different AI that has never seen this conversation.
 
 ## 7. Review and merge
 
+Before asking for review, run `program/FINISH-CHECKLIST.md` (prove it, record it, publish it).
+
+
 - Move to `in_review`: CI green, Definition of Done met except review, PR marked ready, `pr:` set.
 - **Cross-review:** an agent other than the author reviews when one has usage left, otherwise the
   owner does. A different AI vendor catches different mistakes. The reviewer checks the diff against the acceptance
@@ -170,7 +173,8 @@ review signed off; G4 GA. G0 (engineering readiness) is added by this plan.
 | Make a design decision that others must follow | New ADR (`decisions/`), link from WP |
 | Add tests | `Covers:` tags; `testing/REGRESSION.md` totals when the WP completes |
 | WP ready for review | status `in_review`, `pr:` link, `programctl status` |
-| WP merged | status `done`; delete branch; `programctl status` |
+| WP merged | status `done`; delete branch; `programctl status`; Claude Code republishes the dashboard (`program/dashboard/README.md`) |
+| Any WP finishes | Run the whole of `program/FINISH-CHECKLIST.md` |
 | Phase complete | Gate file with evidence; owner sign-off; refine next phase |
 | Spec meaning changes | ADR, then `spec/REQUIREMENTS.md` |
 
