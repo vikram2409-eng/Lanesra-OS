@@ -7,10 +7,10 @@ package completes. Linux, Rust 1.97.0, Node 22.22.0.
 
 | Suite | Total | Passing | Failing | Notes |
 |---|---|---|---|---|
-| Rust (core, server, cli), `cargo test --locked --no-fail-fast` | 1,009 (122 binaries) | 1,008 | 0 | 1 ignored. +5 lookup-cache regression tests. Clean build + run ≈ 75 min on the agent sandbox |
+| Rust (core, server, cli), `cargo test --locked --no-fail-fast` | 1,009 (122 binaries) | 1,008 | 0 | 1 ignored. Re-run after WP-0004's rustfmt and clippy changes: identical. Clean build + run ≈ 75 min on the agent sandbox |
 | Frontend unit (`npm ci` then `npx vitest run`) | 40 (5 files) | 40 | 0 | `npm ci` works again |
 | TypeScript / production build | — | clean / ok | — | |
-| Program tools (`unittest discover program/tools`) | 17 | 17 | 0 | |
+| Program tools (`unittest discover program/tools`) | 28 | 28 | 0 | |
 
 ## Original baseline on `main` @ `5cfc96c` (before fixes)
 
@@ -39,6 +39,6 @@ Static count before the run: 963 `#[test]`/`#[tokio::test]` functions in `deskto
 
 Six of the seven are industry-package workflows that should update a *related* record and do not — likely one shared regression in cross-record workflow actions.
 
-## Known warnings
+## Lint and format
 
-- `core/src/services/ontology_service.rs:16` unused import `entity_registry` (clippy `-D warnings` will fail; WP-0004).
+- `cargo fmt --all --check` and `cargo clippy -p lanesra-core -p lanesra-server -p lanesra-cli --all-targets -- -D warnings` are clean (WP-0004); documented allow-list in `desktop/Cargo.toml`.

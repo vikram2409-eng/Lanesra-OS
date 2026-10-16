@@ -3,7 +3,7 @@ id: WP-0019
 title: Always-current program dashboard
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_progress
+status: in_review
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-017]
@@ -11,7 +11,7 @@ estimate: S
 editions: []
 delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/622
 updated: 2026-10-16
 ---
 
