@@ -27,6 +27,7 @@ pub mod dashboard_commands;
 pub mod dashboard_layout_commands;
 pub mod dashboard_widget_commands;
 pub mod execution_graph_commands;
+pub mod feature_flag_commands;
 pub mod glossary_commands;
 pub mod industry_package_commands;
 pub mod integration_commands;

@@ -7,10 +7,11 @@ package completes. Linux, Rust 1.97.0, Node 22.22.0.
 
 | Suite | Total | Passing | Failing | Notes |
 |---|---|---|---|---|
-| Rust (core, server, cli), `cargo test --locked --no-fail-fast` | 1,009 (122 binaries) | 1,008 | 0 | 1 ignored. Re-run after WP-0004's rustfmt and clippy changes: identical. Clean build + run ≈ 75 min on the agent sandbox |
-| Frontend unit (`npm ci` then `npx vitest run`) | 40 (5 files) | 40 | 0 | `npm ci` works again |
+| Rust (core, server, cli), `cargo test --locked --no-fail-fast` | 1,020 (124 binaries) | 1,019 | 0 | +11 feature-flag tests (WP-0010: 6 core integration, 2 core unit, 3 server HTTP). Before WP-0010: 1,009 / 122 binaries. |
+| Rust baseline before WP-0010 | 1,009 (122 binaries) | 1,008 | 0 | 1 ignored. Re-run after WP-0004's rustfmt and clippy changes: identical. Clean build + run ≈ 75 min on the agent sandbox |
+| Frontend unit (`npm ci` then `npx vitest run`) | 46 (6 files) | 46 | 0 | +6 feature-flag tests (WP-0010) |
 | TypeScript / production build | — | clean / ok | — | |
-| Program tools (`unittest discover program/tools`) | 45 | 45 | 0 | +7 migration-order, +5 binary-asset self-tests (WP-0003); +5 toolchain-pin self-tests (WP-0020) |
+| Program tools (`unittest discover program/tools`) | 52 | 52 | 0 | +7 migration-order, +5 binary-asset self-tests (WP-0003); +5 toolchain-pin self-tests (WP-0020); +7 feature-flag self-tests (WP-0010) |
 | Team Workspace server image (`server image` CI job) | 1 smoke test (7 checks) | — | — | health, empty-volume status, first run, sign-in, create a record, restart, sign-in and record still present (WP-0020) |
 
 ## CI duration (WP-0003 AC-4)

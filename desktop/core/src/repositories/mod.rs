@@ -31,6 +31,7 @@ pub mod custom_record_repo;
 pub mod custom_report_repo;
 pub mod dashboard_layout_repo;
 pub mod execution_graph_repo;
+pub mod feature_flag_repo;
 pub mod glossary_repo;
 pub mod graph_pending_run_repo;
 pub mod graph_run_repo;

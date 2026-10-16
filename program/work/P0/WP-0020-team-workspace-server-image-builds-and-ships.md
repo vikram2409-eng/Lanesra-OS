@@ -103,3 +103,8 @@ Every Playground feature has to ship in Team Workspace too (REQ-PRE-015), so the
   - AC-3: the temporary commit b26fdff made the smoke test expect a missing record. Run 38967056285 went red with "FAIL: record created before the restart is missing", after every earlier step passed. Reverted. With a warm layer cache the job takes about 1 minute.
   - State: in_review. AC-4 is proven on the first `desktop-v*` tag, and AC-5 when the help article goes live on merge.
   - Next: after merge, mark this done once AC-4 and AC-5 hold (or record that AC-4 waits on the next release); close RAID I-24 and I-25; then WP-0010.
+
+- 2026-10-16 claude: PR #636 merged by the owner (f76daee). The image builds, is pinned, and is smoke-tested on every PR (AC-1 to AC-3). Two criteria remain open, so the status stays `in_review`:
+  - AC-4 needs the first `desktop-v*` tag to publish to GHCR.
+  - AC-5 needs the help article live after the Netlify deploy. This sandbox cannot reach lanesraos.com; the owner can check https://lanesraos.com/help/set-up-team-workspace.
+  The agent that sees both should set this to done.

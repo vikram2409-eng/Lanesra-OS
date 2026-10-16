@@ -134,6 +134,8 @@ pub fn run() {
             commands::notification_commands::list_notifications,
             commands::notification_commands::mark_notification_read,
             commands::notification_commands::mark_all_notifications_read,
+            commands::feature_flag_commands::list_feature_flags,
+            commands::feature_flag_commands::set_feature_flag_override,
             commands::numbering_commands::list_numbering_formats,
             commands::numbering_commands::set_numbering_format,
             commands::numbering_commands::reset_numbering_format,

@@ -115,6 +115,14 @@ const seed = {
  voiceLlmSettings:{enabled:false,providerId:null}
 };
 const storeKey='lanesra-os-demo-v10';
+// Workspace feature flags (WP-0010, ADR-0012). The online demo shows a
+// flagged feature only once the release that turns it on for desktop and
+// Team Workspace is published - never earlier (owner decision, ADR-0013 #3).
+// List a key here in the release that ships it; every key must be a `ga`
+// flag in desktop/core/src/services/feature_flag_service.rs
+// (program/tools/check_feature_flags.py fails CI otherwise).
+const DEMO_RELEASED_FEATURES=[];
+function demoFeature(key){return DEMO_RELEASED_FEATURES.includes(key);}
 let data = JSON.parse(localStorage.getItem(storeKey)||'null') || structuredClone(seed);
 let current='dashboard';
 let onboardBannerSeen=false;

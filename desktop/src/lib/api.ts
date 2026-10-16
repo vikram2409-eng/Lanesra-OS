@@ -173,6 +173,8 @@ import type {
   CustomReportUpdate,
   DashboardKpiPrefs,
   EffectiveNumbering,
+  FeatureFlagList,
+  FeatureFlagOverrideInput,
   ImportPackageInput,
   InstalledApp,
   InstalledAppDetail,
@@ -779,6 +781,11 @@ export const api = {
   markNotificationRead: (id: string) => call<void>("mark_notification_read", { id }),
   markAllNotificationsRead: () => call<void>("mark_all_notifications_read"),
 
+  // Workspace feature flags (WP-0010, ADR-0012): readable by every
+  // signed-in user; changing one is Administrator-only and audited.
+  listFeatureFlags: () => call<FeatureFlagList>("list_feature_flags"),
+  setFeatureFlagOverride: (input: FeatureFlagOverrideInput) =>
+    call<FeatureFlagList>("set_feature_flag_override", { input }),
   listNumberingFormats: () => call<EffectiveNumbering[]>("list_numbering_formats"),
   setNumberingFormat: (input: NumberingOverrideInput) => call<EffectiveNumbering>("set_numbering_format", { input }),
   resetNumberingFormat: (entityType: string) =>

@@ -4530,3 +4530,25 @@ export interface ActionTypeDefinitionInput {
   effect: ActionEffect;
   effect_config_json: string;
 }
+
+/** Workspace feature flags (WP-0010, ADR-0012). */
+export interface FeatureFlag {
+  key: string;
+  description: string;
+  work_package: string;
+  stage: "building" | "preview" | "ga";
+  enabled: boolean;
+  overridden: boolean;
+  can_toggle: boolean;
+}
+
+export interface FeatureFlagList {
+  developer_mode: boolean;
+  flags: FeatureFlag[];
+}
+
+/** `enabled: null` clears the override, back to the edition default. */
+export interface FeatureFlagOverrideInput {
+  key: string;
+  enabled: boolean | null;
+}

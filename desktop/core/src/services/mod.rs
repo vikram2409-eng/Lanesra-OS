@@ -51,6 +51,7 @@ pub mod entity_registry;
 pub mod event_hooks;
 pub mod execution_graph_service;
 pub mod external_object_service;
+pub mod feature_flag_service;
 pub mod glossary_service;
 pub mod graph_runtime_service;
 pub mod industry_package_service;

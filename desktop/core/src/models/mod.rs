@@ -30,6 +30,7 @@ pub mod custom_report;
 pub mod dashboard;
 pub mod dashboard_layout;
 pub mod execution_graph;
+pub mod feature_flag;
 pub mod graph_run;
 pub mod industry_package;
 pub mod integration;

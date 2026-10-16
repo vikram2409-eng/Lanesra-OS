@@ -1025,6 +1025,27 @@ pub fn dispatch(
             Ok(Value::Null)
         }
 
+        // Workspace feature flags (WP-0010, ADR-0012). Readable by every
+        // signed-in user (the UI's useFeature hook); changing one is
+        // Administrator-only and audited inside the service.
+        "list_feature_flags" => to_value(lanesra_core::services::feature_flag_service::list(
+            conn,
+            &require_workspace_id(conn)?,
+            lanesra_core::models::feature_flag::Edition::Workspace,
+            lanesra_core::services::feature_flag_service::developer_mode(),
+        )?),
+        "set_feature_flag_override" => {
+            let input: lanesra_core::models::feature_flag::FeatureFlagOverrideInput =
+                arg(args, "input")?;
+            to_value(lanesra_core::services::feature_flag_service::set_override(
+                conn,
+                &require_workspace_id(conn)?,
+                lanesra_core::models::feature_flag::Edition::Workspace,
+                &input,
+                actor,
+                lanesra_core::services::feature_flag_service::developer_mode(),
+            )?)
+        }
         "list_numbering_formats" => to_value(numbering_service::list_effective(
             conn,
             &require_workspace_id(conn)?,
