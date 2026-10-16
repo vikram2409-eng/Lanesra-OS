@@ -3,14 +3,14 @@ id: WP-0008
 title: Verify the spec's assumptions against the code (gap audit)
 phase: 0
 epic: E0.3 Architecture decisions
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: []
 requirements: [REQ-PRE-008]
 estimate: M
 editions: []
 delivered: []
-branch: 
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
 updated: 2026-10-16
 ---
