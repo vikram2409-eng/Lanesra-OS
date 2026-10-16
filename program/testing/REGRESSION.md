@@ -1,12 +1,23 @@
 # Regression baseline
 
 The regression suite is everything CI runs. Totals may only go up; record new totals when a work
-package completes. Measured on `main` @ `5cfc96c` (2026-10-16), Linux, Rust 1.97.0, Node 22.22.0.
+package completes. Linux, Rust 1.97.0, Node 22.22.0.
+
+## Current baseline (after WP-0016 and WP-0002, branch `claude/enterprise-build-planning-jxy2kq`, 2026-10-16)
+
+| Suite | Total | Passing | Failing | Notes |
+|---|---|---|---|---|
+| Rust (core, server, cli), `cargo test --locked --no-fail-fast` | 1,009 (122 binaries) | 1,008 | 0 | 1 ignored. +5 lookup-cache regression tests. Clean build + run ≈ 75 min on the agent sandbox |
+| Frontend unit (`npm ci` then `npx vitest run`) | 40 (5 files) | 40 | 0 | `npm ci` works again |
+| TypeScript / production build | — | clean / ok | — | |
+| Program tools (`unittest discover program/tools`) | 17 | 17 | 0 | |
+
+## Original baseline on `main` @ `5cfc96c` (before fixes)
 
 | Suite | Command | Total | Passing | Failing | Notes |
 |---|---|---|---|---|---|
 | Rust (core, server, cli) | `cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli` | 1,004 (122 binaries) | 996 | 7 | 1 ignored. Reference-package suites take 65–205 s each; plan CI around that |
-| Frontend unit | `npx vitest run` (in `desktop/`) | 40 (5 files) | 40 | 0 | Needs `npm install` until WP-0002 fixes `npm ci` |
+| Frontend unit | `npx vitest run` (in `desktop/`) | 40 (5 files) | 40 | 0 | `npm ci` was broken (fixed by WP-0002) |
 | TypeScript | `npx tsc --noEmit` | — | clean | — | |
 | Online demo syntax | `node --check app.js` | — | clean | — | |
 | Program tracker | `python3 -m unittest discover -s program/tools -p 'test_*.py'` | 13 | 13 | 0 | |
@@ -14,7 +25,7 @@ package completes. Measured on `main` @ `5cfc96c` (2026-10-16), Linux, Rust 1.97
 
 Static count before the run: 963 `#[test]`/`#[tokio::test]` functions in `desktop/core/tests` and `desktop/server/tests`.
 
-## Known failures on main (must be fixed by WP-0016 before CI is required)
+## Failures on main at `5cfc96c` (all fixed by WP-0016)
 
 | Test | Failure |
 |---|---|
