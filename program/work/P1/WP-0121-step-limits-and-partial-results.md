@@ -28,6 +28,9 @@ Every limit ends gracefully: round limit (default 8, max 25) and token limit ask
 - Token accounting per step
 - Cancellation of provider calls on timeout
 - Fallback retry once
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - At the round limit the loop returns an error and discards `produced` (`chat_service.rs:1973`); keep the partial output as `completed_partial`
+  - Make model-routing `temperature` and `max_tokens` take effect (T-03)
 
 ## Acceptance criteria
 

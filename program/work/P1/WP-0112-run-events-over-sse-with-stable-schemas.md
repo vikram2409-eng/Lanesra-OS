@@ -29,6 +29,8 @@ Stream run events live to the browser over the existing `/api/v1/events/stream`,
 - JSON Schemas in `program/spec/schemas/events/`, envelope with schema version and sequence number
 - Authorisation: a client only receives events for runs it may see
 - Tauri equivalent for the desktop edition
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - No usable channel exists today: the SSE stream is API-key only, polls `integration_executions` and has no consumer (I-21). Build an in-process event bus, session-cookie auth for the UI, a Tauri event channel for desktop, and the first frontend consumer (the UI polls with react-query today)
 
 ## Acceptance criteria
 

@@ -25,6 +25,8 @@ Automatic conversion; aliases keep APIs working.
 ## Scope
 
 - team_commands.rs replaces ai_agent_pipeline_commands.rs
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Solution exports do not include pipelines or execution graphs today (I-22): add both so retired pipelines and Agent Teams can ship in a Solution
 
 ## Acceptance criteria
 

@@ -27,6 +27,10 @@ Retire the three older pause mechanisms in ai_orchestration_service; every human
 - Map each legacy path (found in WP-0008)
 - Migration of pending legacy pauses
 - Resume semantics unchanged for users
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Legacy paths found by the audit: (a) pipeline `requires_approval` in all three topologies (`ai_orchestration_service.rs:449,508,644` → `ai_agent_runs.awaiting_approval`), (b) voice plans (`voice_execution_service.rs:257-262`; no resolver for `awaiting_approval`)
+  - Policy `RequireApproval` writes an `ai_approvals` row but drops the tool call: make it pause and resume
+  - Fix the stuck graph run when its approval is resolved from the generic inbox command (I-13)
 
 ## Acceptance criteria
 

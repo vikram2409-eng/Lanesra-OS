@@ -27,6 +27,9 @@ Route each step to a model by tier or exact model, through the gateway's fallbac
 - Model tier mapping (Fast, Balanced, Best, Local only)
 - Data-class → provider allow-list policy
 - Routing decision recorded on the span
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Forced air-gap must fail closed when no local provider is configured, and check that the chosen provider is local (I-17)
+  - Route the records and admin chat loop (`chat_service.rs:978-1140`) through the AI Gateway; it bypasses budgets, fallback and DLP today (I-15)
 
 ## Acceptance criteria
 

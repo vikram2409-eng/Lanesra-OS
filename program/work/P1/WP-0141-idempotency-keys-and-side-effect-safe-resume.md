@@ -29,6 +29,9 @@ Write tools receive an idempotency key per step attempt; on resume after a pause
 - Key derivation
 - Write ledger
 - Native writes, connector writes and MCP writes honour the key
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Resume is not wired today (I-12): add a startup sweep over `list_resumable_runs`, a `resume_due_delays` tick on server and desktop, and a recovery rule for runs that crashed while `running`
+  - Desktop advances unattended work only while the UI polls (I-19): add a background ticker in the Tauri shell
 
 ## Acceptance criteria
 

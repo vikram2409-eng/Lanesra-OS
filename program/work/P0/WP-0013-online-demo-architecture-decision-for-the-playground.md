@@ -28,6 +28,8 @@ The spec ships the Playground in the online demo with simulated runs using the s
 - Options to compare: (a) hand-port into app.js, (b) a small shared TypeScript package built to a single ES module the demo loads, (c) the desktop frontend compiled for the web with a mock backend
 - Consider: drift risk, demo load size, no-build-step constraint, testability, Netlify deploy
 - Output: ADR with the decision and a JSON Schema for the Team format shared by both
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - The demo already simulates agents, pipelines, an Agent Teams canvas with approvals, evals and per-agent chat (`app.js:11526-13642`), but stores camelCase data while desktop uses snake_case; decide a shared, versioned format (gap audit §11)
 
 ## Acceptance criteria
 

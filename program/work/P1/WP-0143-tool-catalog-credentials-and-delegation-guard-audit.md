@@ -24,6 +24,9 @@ Confirm and lock in with tests that every tool source passes the full firewall c
 ## Scope
 
 - Tests only, plus fixes for any gap the tests reveal
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Agent tool dispatch does not check the agent's own `action_names` (I-16, security): write a test proving an agent cannot call an unlisted tool (including admin tools), then enforce membership before dispatch
+  - Detect A→B→A cycles in nested `run_agent_team` nodes (only direct self-recursion is blocked)
 
 ## Acceptance criteria
 

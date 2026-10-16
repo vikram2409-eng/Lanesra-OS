@@ -37,6 +37,9 @@ and Record Scope), and every action is attributed to them.
 - Existing unattended triggers (schedules, webhooks, workflow actions) are migrated: each is assigned an Agent Identity created with the narrowest role that keeps it working, and the admin is shown what changed
 - UI: an Agent Identities screen and an identity picker on agents and triggers, in the eight-group editor (WP-0160)
 - Split at refinement (XL): (a) principal model and effective-identity rules, (b) Agent Identities and credentials, (c) trigger migration and UI
+- Gap audit findings (WP-0008, `program/research/gap-audit.md`):
+  - Replace the `actor = None` defaults for AI and API-client writes, which currently skip Access Control (RAID I-20)
+  - Webhook trigger routes must check their `ai_agent_triggers` row and run as that trigger's Agent Identity; today any `agents.trigger` client runs any agent as the client's owner (I-14)
 
 ## Out of scope
 
