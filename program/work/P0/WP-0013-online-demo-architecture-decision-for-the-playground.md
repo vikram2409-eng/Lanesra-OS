@@ -3,8 +3,8 @@ id: WP-0013
 title: Online demo architecture decision for the Playground
 phase: 0
 epic: E0.3 Architecture decisions
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: []
 requirements: [REQ-PRE-010, REQ-PRE-021]
 estimate: M
@@ -12,7 +12,7 @@ editions: [demo]
 delivered: []
 editions_reason: architecture decision for the online demo itself
 docs: [multi-target-architecture]
-branch: 
+branch: wp/WP-0013-demo-architecture
 pr: 
 updated: 2026-10-16
 ---
@@ -52,3 +52,10 @@ The spec ships the Playground in the online demo with simulated runs using the s
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+### 2026-10-16 muse
+Done: Claimed WP-0013 (branch wp/WP-0013-demo-architecture). Wrote ADR-0015 (`program/decisions/ADR-0015-online-demo-architecture-for-the-playground.md`, status Proposed) deciding option (b): a shared versioned TypeScript package built to a single ES module, with the Team format as a versioned JSON Schema as the contract; hand-porting rejected (drift by design, gap audit §11 camelCase/snake_case split), desktop-frontend-for-web rejected (disproportionate). Committed the schema at `program/spec/schemas/team-format.schema.json` (snake_case, format_version semver, 8 modes, seats, task contracts). Updated WP-0223 scope + acceptance criteria (AC-2..AC-5) to match the decision.
+State: ADR-0015 is Proposed, not Accepted — AC-1 needs the owner's acceptance. AC-2 done (schema committed, JSON-validated locally). AC-3 done (WP-0223 updated). Nothing is testable beyond CI here: this WP is "not a code change" per its test plan; untested locally — see CI (`programctl validate` must pass on the PR).
+Next: open the draft PR "[WP-0013] Online demo architecture decision for the Playground" with the repo PR template; ask the owner to accept ADR-0015 (AC-1). After acceptance, flip ADR-0015 status to Accepted and move WP-0013 toward in_review per FINISH-CHECKLIST.
+Gotchas: AGENT-PROFILES.md is empty (nothing to read there). No PR template issue — used `.github/pull_request_template.md`. Do NOT edit program/STATUS.md (CI regenerates it).
+Commands: python3 -c "import json; json.load(open('program/spec/schemas/team-format.schema.json'))" (schema validity check)
