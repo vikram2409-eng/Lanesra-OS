@@ -10,6 +10,7 @@ requirements: [REQ-GOV-009, REQ-GOV-010]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [governance-controls]
 branch: 
 pr: 
 updated: 2026-10-16

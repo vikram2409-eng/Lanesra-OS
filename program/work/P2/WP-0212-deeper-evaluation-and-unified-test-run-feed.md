@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0211]
 requirements: [REQ-EVAL-007, REQ-EVAL-008]
 estimate: M
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [evaluation-harness]
 branch: 
 pr: 
 updated: 2026-10-16

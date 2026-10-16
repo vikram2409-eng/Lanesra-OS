@@ -10,6 +10,7 @@ requirements: [REQ-PG-001, REQ-PG-002, REQ-PG-003, REQ-UI-005, REQ-UI-009]
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [agent-playground]
 branch: 
 pr: 
 updated: 2026-10-16

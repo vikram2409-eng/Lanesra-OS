@@ -10,6 +10,7 @@ requirements: [REQ-GOV-012, REQ-GOV-024]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [approvals-inbox]
 branch: 
 pr: 
 updated: 2026-10-16

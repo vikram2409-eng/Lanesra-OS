@@ -3,13 +3,15 @@ id: WP-0016
 title: Fix tests failing on main
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-001]
 estimate: M
 editions: [desktop, workspace]
-delivered: []
+delivered: [desktop, workspace]
+editions_reason: bug fix in the shared Rust core; whether the online demo's own lookup logic has the same bug is checked in WP-0008
+docs: [custom-relationships]
 branch: claude/enterprise-build-planning-jxy2kq
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492
 updated: 2026-10-16
@@ -96,3 +98,6 @@ State: all ACs met; waiting for owner review and a PR. Then status -> done.
 
 ### 2026-10-16 claude
 PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.
+
+### 2026-10-16 claude (after merge)
+Merged in PR #492 (c85e620): desktop and Team Workspace share the fixed core. Help article /help/custom-relationships updated in the follow-up PR and names WP-0016. Status done.

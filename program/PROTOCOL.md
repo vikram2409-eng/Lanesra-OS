@@ -89,7 +89,8 @@ dependencies listed; requirement IDs listed; relevant ADRs exist and are Accepte
 **Definition of Done** (a WP may move to `done` only when all hold):
 
 - [ ] Every acceptance criterion ticked, each proven by a test tagged `Covers: REQ-…`
-- [ ] Delivered in every edition in `editions:` (desktop, Team Workspace, online demo) and listed in `delivered:` (REQ-PRE-015)
+- [ ] Delivered in every edition in `editions:` (desktop, Team Workspace, online demo) and listed in `delivered:` (REQ-PRE-015); most features ship in all three, and anything less needs an `editions_reason:`
+- [ ] Website help updated for every slug in `docs:` - article in `app.js`, `sitemap.xml`, `llms.txt`, Releases page (REQ-PRE-016, FINISH-CHECKLIST "Help and docs")
 - [ ] Full regression suite green in CI; test count not lower than before
 - [ ] No new `#[ignore]`, `.skip`, `todo!()`, `unimplemented!()` or commented-out tests
 - [ ] Lint, format and typecheck clean; no new warnings
@@ -136,6 +137,11 @@ Assume the next session is a different AI that has never seen this conversation.
 ## 7. Review and merge
 
 Before asking for review, run `program/FINISH-CHECKLIST.md` (prove it, record it, publish it).
+
+**Before every push to a PR's branch, check the PR is still open.** Once a PR has merged, anything
+pushed to its branch never reaches `main` and never deploys. Follow-up work goes on a branch restarted
+from the latest `main` (`git fetch origin main && git checkout -B <branch> origin/main`, then carry
+any unmerged commits across) and a new PR. This happened once, on PR #492 (RAID I-10).
 
 
 - Move to `in_review`: CI green, Definition of Done met except review, PR marked ready, `pr:` set.

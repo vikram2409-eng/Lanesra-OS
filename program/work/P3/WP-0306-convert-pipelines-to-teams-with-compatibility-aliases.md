@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-020, REQ-ORCH-021, REQ-API-009]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [orchestration-pipelines, teams-and-modes]
 branch: 
 pr: 
 updated: 2026-10-16

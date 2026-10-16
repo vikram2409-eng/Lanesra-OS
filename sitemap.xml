@@ -56,4 +56,29 @@
   <url><loc>https://lanesraos.com/help/logs-monitoring-settings</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/workspace-essentials</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/multi-target-architecture</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/agent-versioning-and-approvals</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/policy-engine-tool-call-firewall</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/execution-graph-agent-teams</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/memory-architecture-document-rag</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/mcp-client-connect-external-server</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/voice-pin-and-sessions</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/voice-access-controls-and-risk</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/natural-language-record-resolution</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/voice-actions-and-business-rules</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/response-preferences</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/voice-audit-and-undo</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/conversational-fallback</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/ontology-layer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/ontology-graph-interactions</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/simulate-change-preview</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/object-360-record-graph</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/admin-status-strip</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/theme-studio</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/system-graph-semantic-metadata</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/organization-and-org-units</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/work-teams-and-ownership</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/ownership-modes</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/access-roles-and-record-scopes</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/access-inspector</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/access-foundation-whats-next</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 </urlset>

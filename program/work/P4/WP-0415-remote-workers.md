@@ -10,6 +10,8 @@ requirements: [REQ-ORCH-042]
 estimate: XL
 editions: [workspace]
 delivered: []
+editions_reason: remote workers connect to the Team Workspace server
+docs: [remote-workers]
 branch: 
 pr: 
 updated: 2026-10-16

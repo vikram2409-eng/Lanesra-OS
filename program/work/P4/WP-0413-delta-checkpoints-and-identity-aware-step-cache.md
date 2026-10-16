@@ -10,6 +10,9 @@ requirements: [REQ-ORCH-031, REQ-MEM-011]
 estimate: L
 editions: [desktop, workspace]
 delivered: []
+editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
+docs: []
+docs_reason: internal checkpoint and cache format
 branch: 
 pr: 
 updated: 2026-10-16

@@ -10,6 +10,8 @@ requirements: [REQ-PRE-011]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: []
+docs_reason: internal design tokens and accessibility tooling; no user-facing behaviour
 branch: 
 pr: 
 updated: 2026-10-16

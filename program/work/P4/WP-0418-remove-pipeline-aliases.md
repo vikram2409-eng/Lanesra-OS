@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0306]
 requirements: [REQ-ORCH-022]
 estimate: S
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [orchestration-pipelines]
 branch: 
 pr: 
 updated: 2026-10-16

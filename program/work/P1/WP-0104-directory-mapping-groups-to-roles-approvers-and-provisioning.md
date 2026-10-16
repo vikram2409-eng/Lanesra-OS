@@ -10,6 +10,8 @@ requirements: [REQ-GOV-001]
 estimate: M
 editions: [workspace]
 delivered: []
+editions_reason: directory mapping happens on the Team Workspace server
+docs: [single-sign-on, access-roles-and-record-scopes]
 branch: 
 pr: 
 updated: 2026-10-16

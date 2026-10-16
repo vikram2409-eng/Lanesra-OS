@@ -10,6 +10,9 @@ requirements: [REQ-AREA-NNN]
 estimate: M
 editions: [desktop, workspace, demo]   # where it must ship: desktop, workspace (Team Workspace server), demo (online demo); [] for program/test infrastructure
 delivered: []                         # editions where it has shipped (merged); done needs all of them
+editions_reason:                      # required when editions is not all three: why not
+docs: [agent-playground]              # help slugs (https://lanesraos.com/help/<slug>) to create or update
+docs_reason:                          # only if it ships to users but needs no help article: why
 branch:
 pr:
 updated: YYYY-MM-DD

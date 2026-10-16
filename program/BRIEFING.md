@@ -27,8 +27,12 @@ We are adding the **Agent Playground and Orchestration layer** from the design s
 It is enterprise grade: **no shortcuts**. Every acceptance criterion is proven by a test.
 
 It ships in **three editions**: the desktop app, the Team Workspace server, and the online demo
-(simulated on sample data). Each work package's `editions:` says where it must ship, and it is not
-done until `delivered:` lists all of them.
+(simulated on sample data). Each work package's `editions:` says where it must ship (most features: all
+three), and it is not done until `delivered:` lists all of them.
+
+**Every build updates the website help:** each work package's `docs:` names the
+`https://lanesraos.com/help/<slug>` articles it must create or update, and the tracker refuses `done`
+until they exist, name the work package and are in the sitemap (`program/FINISH-CHECKLIST.md`).
 
 **Identity first:** humans, Agent Identities and API clients are one principal model, built at the
 start of Phase 1 (WP-0100, ADR-0006). Agents get their own identity and Lanesra-issued credentials,

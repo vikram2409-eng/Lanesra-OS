@@ -10,6 +10,8 @@ requirements: [REQ-GOV-001]
 estimate: L
 editions: [workspace]
 delivered: []
+editions_reason: server sign-in; desktop sign-in is WP-0105; the online demo has no real accounts
+docs: [single-sign-on]
 branch: 
 pr: 
 updated: 2026-10-16

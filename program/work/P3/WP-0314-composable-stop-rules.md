@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-036]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [teams-and-modes]
 branch: 
 pr: 
 updated: 2026-10-16

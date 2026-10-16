@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0128, WP-0305]
 requirements: [REQ-GOV-025]
 estimate: M
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [policy-engine-tool-call-firewall]
 branch: 
 pr: 
 updated: 2026-10-16

@@ -10,6 +10,8 @@ requirements: [REQ-API-008]
 estimate: M
 editions: [desktop, workspace]
 delivered: []
+editions_reason: a server API; the online demo has no server
+docs: [team-endpoints]
 branch: 
 pr: 
 updated: 2026-10-16

@@ -10,6 +10,7 @@ requirements: [REQ-MEM-009]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [team-drive]
 branch: 
 pr: 
 updated: 2026-10-16

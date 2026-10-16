@@ -10,6 +10,9 @@ requirements: [REQ-LOOP-016]
 estimate: L
 editions: [desktop, workspace]
 delivered: []
+editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
+docs: []
+docs_reason: internal prompt assets
 branch: 
 pr: 
 updated: 2026-10-16

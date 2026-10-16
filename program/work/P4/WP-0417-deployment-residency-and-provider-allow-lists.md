@@ -10,6 +10,8 @@ requirements: [REQ-GOV-019]
 estimate: M
 editions: [desktop, workspace]
 delivered: []
+editions_reason: a deployment setting of the desktop app and server
+docs: [data-residency]
 branch: 
 pr: 
 updated: 2026-10-16

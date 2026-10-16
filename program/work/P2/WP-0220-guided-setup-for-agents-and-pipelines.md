@@ -10,6 +10,7 @@ requirements: [REQ-SETUP-006, REQ-SETUP-007, REQ-SETUP-008, REQ-SETUP-009, REQ-S
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [guided-setup]
 branch: 
 pr: 
 updated: 2026-10-16

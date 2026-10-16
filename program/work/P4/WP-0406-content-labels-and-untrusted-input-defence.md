@@ -10,6 +10,7 @@ requirements: [REQ-GOV-026, REQ-TOOL-014]
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [prompt-injection-defence]
 branch: 
 pr: 
 updated: 2026-10-16

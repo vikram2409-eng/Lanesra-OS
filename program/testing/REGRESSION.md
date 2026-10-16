@@ -3,7 +3,7 @@
 The regression suite is everything CI runs. Totals may only go up; record new totals when a work
 package completes. Linux, Rust 1.97.0, Node 22.22.0.
 
-## Current baseline (after WP-0016 and WP-0002, branch `claude/enterprise-build-planning-jxy2kq`, 2026-10-16)
+## Current baseline (on `main` from merge c85e620 of PR #492, 2026-10-16)
 
 | Suite | Total | Passing | Failing | Notes |
 |---|---|---|---|---|

@@ -3,12 +3,12 @@ id: WP-0002
 title: Repair dependency lockfiles and pin toolchains
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-002]
 estimate: S
-editions: [desktop, workspace]
+editions: []
 delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492
@@ -64,3 +64,6 @@ builds need ~30 GB of disk - `cargo clean` if "No space left on device".
 
 ### 2026-10-16 claude
 PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.
+
+### 2026-10-16 claude (after merge)
+Merged in PR #492 (c85e620). `npm ci` and `cargo build --locked` work on main. Status done.

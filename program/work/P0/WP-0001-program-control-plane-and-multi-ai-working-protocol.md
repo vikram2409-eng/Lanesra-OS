@@ -3,10 +3,10 @@ id: WP-0001
 title: Program control plane and multi-AI working protocol
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: []
-requirements: [REQ-PRE-015]
+requirements: [REQ-PRE-015, REQ-PRE-016]
 estimate: M
 editions: []
 delivered: []
@@ -37,7 +37,7 @@ Give every AI agent and human one place in the repo that says what to build, in 
 - [x] AC-3: `programctl next` lists ready, unclaimed work packages using remote `wp/*` branches as claims
 - [x] AC-4: programctl self-tests pass (`python3 -m unittest discover program/tools`)
 - [x] AC-5: Protocol covers session start, claim, build, test, handoff, tracker updates, conflicts and escalation
-- [ ] AC-6: Program owner has reviewed the plan and answered the open questions in RAID log Q-items
+- [x] AC-6: Program owner has reviewed the plan and answered the open questions in RAID log Q-items
 
 ## Test plan
 
@@ -61,3 +61,6 @@ unrelated WPs; WP-0002 fixes it. Use `--no-fail-fast` or failures hide later tes
 
 ### 2026-10-16 claude
 PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.
+
+### 2026-10-16 claude (after merge)
+Merged in PR #492 (merge commit c85e620); the owner reviewed the plan and answered RAID Q-01 to Q-13. Status done.

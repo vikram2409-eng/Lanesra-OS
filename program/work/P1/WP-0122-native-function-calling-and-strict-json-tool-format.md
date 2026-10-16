@@ -10,6 +10,8 @@ requirements: [REQ-LOOP-004]
 estimate: L
 editions: [desktop, workspace]
 delivered: []
+editions_reason: provider wire formats; the online demo uses a simulated model
+docs: [unified-ai-gateway]
 branch: 
 pr: 
 updated: 2026-10-16

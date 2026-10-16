@@ -15,20 +15,29 @@ Format (parsed by `programctl export`, keep it): `## Group` headings, then `- [ 
 - [ ] **Full regression suite green** — Rust, frontend, demo and program checks pass (CI, or locally for Claude Code); a Muse change says "untested locally - see CI" until CI is green
 - [ ] **Regression totals recorded** — new test counts written in `program/testing/REGRESSION.md`; totals never go down without a written reason
 
+## Help and docs on the website
+
+- [ ] **Help article updated** — for every slug in the work package's `docs:`, the article at `https://lanesraos.com/help/<slug>` (a topic in `HELP_CATEGORIES` in `app.js`) is created or updated to describe the change, and the work package id is added to its `wps:'…'` field; `programctl validate` refuses `done` without this
+- [ ] **Sitemap updated** — every help URL is in `sitemap.xml`; `programctl docs --check` fails CI otherwise
+- [ ] **AI-readable summaries updated** — the "Current status" and capability lines in `llms.txt` and `llms-full.txt` say what shipped and in which editions
+- [ ] **Releases and roadmap updated** — an entry on the Releases page (`releasesPage` in `app.js`) for the release that ships it, and the item moved from planned to shipped on the Roadmap page (`roadmapPage`)
+- [ ] **In-product help links** — any "Guide me", help or "Learn more" link in the desktop UI and the online demo points at the article
+- [ ] **Docs reviewed for all editions** — the article says which editions have the feature (desktop, Team Workspace, online demo) and anything that differs between them
+
 ## Record it
 
 - [ ] **Work package file updated** — `status: in_review`, `owner`, `pr`, `updated`; a final Progress log entry (done, state, next, gotchas)
 - [ ] **Session log written** — `programctl new-log`; include points completed and tokens used if visible
 - [ ] **Decisions captured** — an ADR in `program/decisions/` for any design choice others must follow
 - [ ] **Risks and questions logged** — new risks, issues or owner questions in `program/RAID.md`; resolved ones closed with a date
-- [ ] **Docs updated** — user-facing docs, API reference and README feature list where behaviour changed
+- [ ] **Repo docs updated** — `README.md` feature list, `desktop/README.md` ("What's here") and the API reference where behaviour changed
 - [ ] **Licences and security** — `THIRD_PARTY_NOTICES` for any new dependency; threat model updated if tools, approvals, auth or data access changed
 - [ ] **Follow-up work captured** — anything found but out of scope becomes a new work package (status `proposed`), never a widened PR
 
 ## Publish it
 
 - [ ] **Tracker regenerated** — `programctl status` and `programctl validate` pass; `STATUS.md` committed
-- [ ] **Pushed** — everything committed and pushed to the work package branch
+- [ ] **Pushed** — everything committed and pushed to the work package branch, after checking its PR is still open (a merged PR's branch never reaches `main`)
 - [ ] **Pull request ready** — PR titled `[WP-XXXX] Title`, template filled (requirements, criteria, clean-room and security checks), marked ready for review
 - [ ] **Review requested** — from the other AI if it has usage left, otherwise the owner
 

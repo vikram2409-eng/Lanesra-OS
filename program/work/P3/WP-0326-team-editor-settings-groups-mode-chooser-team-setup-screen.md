@@ -10,6 +10,7 @@ requirements: [REQ-SETUP-011, REQ-SETUP-012, REQ-SETUP-015, REQ-UI-003]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [teams-and-modes, guided-setup]
 branch: 
 pr: 
 updated: 2026-10-16

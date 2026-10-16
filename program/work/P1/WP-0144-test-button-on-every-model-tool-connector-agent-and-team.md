@@ -10,6 +10,7 @@ requirements: [REQ-TOOL-013]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [testing-agents-and-connections]
 branch: 
 pr: 
 updated: 2026-10-16

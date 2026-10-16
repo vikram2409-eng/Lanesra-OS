@@ -10,6 +10,7 @@ requirements: [REQ-EVAL-005, REQ-EVAL-006, REQ-EVAL-011]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [shadow-mode-and-ab-tests]
 branch: 
 pr: 
 updated: 2026-10-16

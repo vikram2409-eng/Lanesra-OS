@@ -8,8 +8,9 @@ owner: unassigned
 depends_on: [WP-0009, WP-0005]
 requirements: [REQ-ORCH-033]
 estimate: M
-editions: [desktop, workspace]
+editions: [desktop, workspace, demo]
 delivered: []
+docs: [agent-limits-and-partial-results]
 branch: 
 pr: 
 updated: 2026-10-16

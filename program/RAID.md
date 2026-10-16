@@ -67,6 +67,8 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | I-06 | Migration runner skips any version below the max applied; out-of-order merges lose migrations | 2026-10-16 | ADR-0003; CI check in WP-0003; test in WP-0007 | Open |
 | I-07 | jsdom 30 requires Node ≥ 22.22.2; the dev container has 22.22.0 (warning only today) | 2026-10-16 | WP-0002 pins Node | Fixed 2026-10-16 |
 | I-08 | Frontend has 5 test files (40 tests) for 134 `.tsx` files; no E2E | 2026-10-16 | WP-0006, WP-0014 | Open |
+| I-09 | 25 of 58 live help articles (e.g. /help/access-roles-and-record-scopes, /help/policy-engine-tool-call-firewall, all four voice articles) were missing from `sitemap.xml` | 2026-10-16 | Added on PR #492; `programctl docs --check` now fails CI if it happens again (REQ-PRE-016) | Fixed 2026-10-16 |
+| I-10 | PR #492 merged while work was still being pushed; commit f28e869 (help/sitemap and editions rules) landed on the merged branch and never reached `main` or the live site | 2026-10-16 | Carried onto a branch restarted from `main` and opened as a new PR; PROTOCOL §7 now requires checking the PR is open before every push | Fixed 2026-10-16 |
 
 ## Dependencies (external)
 

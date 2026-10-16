@@ -10,6 +10,8 @@ requirements: [REQ-TOOL-009, REQ-TOOL-012]
 estimate: XL
 editions: [desktop, workspace]
 delivered: []
+editions_reason: code runs in a real sandbox; the online demo cannot execute code safely in the browser
+docs: [sandboxed-code]
 branch: 
 pr: 
 updated: 2026-10-16

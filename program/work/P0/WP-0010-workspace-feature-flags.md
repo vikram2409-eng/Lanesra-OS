@@ -10,6 +10,8 @@ requirements: [REQ-PRE-006]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
+docs: []
+docs_reason: developer-only setting; documented in desktop/README.md
 branch: 
 pr: 
 updated: 2026-10-16

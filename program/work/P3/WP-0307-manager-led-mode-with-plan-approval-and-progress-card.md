@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-006, REQ-ORCH-007, REQ-ORCH-008, REQ-PG-005, REQ-GOV-006
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [manager-led-mode]
 branch: 
 pr: 
 updated: 2026-10-16

@@ -10,6 +10,7 @@ requirements: [REQ-SETUP-013, REQ-UI-004]
 estimate: XL
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [graph-mode-and-canvas]
 branch: 
 pr: 
 updated: 2026-10-16

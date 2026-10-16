@@ -10,6 +10,7 @@ requirements: [REQ-ORCH-043]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
+docs: [missions]
 branch: 
 pr: 
 updated: 2026-10-16

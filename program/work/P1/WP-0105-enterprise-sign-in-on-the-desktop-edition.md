@@ -10,6 +10,8 @@ requirements: [REQ-GOV-028]
 estimate: L
 editions: [desktop]
 delivered: []
+editions_reason: desktop-edition sign-in
+docs: [single-sign-on]
 branch: 
 pr: 
 updated: 2026-10-16
