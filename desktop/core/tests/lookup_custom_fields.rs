@@ -273,3 +273,128 @@ fn deleting_a_relationship_with_no_links_deactivates_its_lookup_field_and_succee
     let field = policy_fields.iter().find(|f| f.field_type == "lookup").expect("the field record itself must survive a hard delete of the relationship");
     assert!(!field.is_active);
 }
+
+// ---------------------------------------------------------------------
+// Links made or removed outside the lookup field itself (a workflow's
+// create_record action, the Related-list UI, imports, the API) must keep
+// the field's cached value in step. Before this was enforced, such a link
+// left the cache empty and the next ordinary save of the record wrote the
+// empty value back and deleted the link - seven tests across the industry
+// reference packages and the System Graph failed on main because of it.
+// Covers: REQ-PRE-001 (WP-0016)
+
+#[test]
+fn a_link_made_outside_the_lookup_field_shows_in_its_value_and_survives_a_resave() {
+    let (conn, ws, admin) = setup_workspace();
+    let admin = Some(admin.as_str());
+    let policy = custom_object_service::create(&conn, &ws, &policy_object(), admin).unwrap();
+    let def = relationship_service::create(&conn, &ws, &many_to_one_def(&policy.key, "Company"), admin).unwrap();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), admin).unwrap();
+    let policy_1 = custom_record_service::create(&conn, &ws, &record_input(&policy.key, "Policy One"), admin).unwrap();
+
+    relationship_service::link(&conn, &ws, &def.id, &policy.key, &policy_1.id, "Company", &company.id, admin).unwrap();
+    let values = custom_field_service::get_entity_values(&conn, &policy_1.id).unwrap();
+    assert_eq!(values.get("customer"), Some(&company.id), "the lookup field must show a link made through the relationship API");
+
+    // Re-saving the record exactly as read (what every edit form does)
+    // must not unlink it.
+    custom_field_service::set_entity_values(&conn, &policy.key, &policy_1.id, &values, admin).unwrap();
+    let related = relationship_service::related_records_for(&conn, &ws, &policy.key, &policy_1.id).unwrap();
+    assert_eq!(related.len(), 1, "re-saving the record must keep the link");
+    assert_eq!(related[0].entity_id, company.id);
+}
+
+#[test]
+fn unlinking_outside_the_lookup_field_clears_its_value() {
+    let (conn, ws, admin) = setup_workspace();
+    let admin = Some(admin.as_str());
+    let policy = custom_object_service::create(&conn, &ws, &policy_object(), admin).unwrap();
+    let def = relationship_service::create(&conn, &ws, &many_to_one_def(&policy.key, "Company"), admin).unwrap();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), admin).unwrap();
+    let policy_1 = custom_record_service::create(&conn, &ws, &record_input(&policy.key, "Policy One"), admin).unwrap();
+
+    let link = relationship_service::link(&conn, &ws, &def.id, &policy.key, &policy_1.id, "Company", &company.id, admin).unwrap();
+    relationship_service::unlink(&conn, &link.id, admin).unwrap();
+    let values = custom_field_service::get_entity_values(&conn, &policy_1.id).unwrap();
+    assert!(!values.contains_key("customer"), "the lookup field must not keep pointing at a removed link");
+}
+
+#[test]
+fn a_one_to_one_link_made_outside_the_lookup_fields_fills_both_sides() {
+    let (conn, ws, admin) = setup_workspace();
+    let admin = Some(admin.as_str());
+    let policy = custom_object_service::create(&conn, &ws, &policy_object(), admin).unwrap();
+    let vendor = custom_object_service::create(&conn, &ws, &vendor_object(), admin).unwrap();
+    let def = relationship_service::create(
+        &conn, &ws,
+        &RelationshipDefinitionInput {
+            source_entity_type: policy.key.clone(), target_entity_type: vendor.key.clone(), target_is_polymorphic: false,
+            relationship_type: "one_to_one".into(), forward_label: "Underwriter".into(), reverse_label: "Underwritten Policy".into(),
+            is_required: false, show_related_list: true, delete_behavior: "restrict".into(), sort_order: 0,
+        },
+        admin,
+    )
+    .unwrap();
+    let policy_1 = custom_record_service::create(&conn, &ws, &record_input(&policy.key, "Policy One"), admin).unwrap();
+    let vendor_1 = custom_record_service::create(&conn, &ws, &record_input(&vendor.key, "Vendor One"), admin).unwrap();
+
+    relationship_service::link(&conn, &ws, &def.id, &policy.key, &policy_1.id, &vendor.key, &vendor_1.id, admin).unwrap();
+    let policy_values = custom_field_service::get_entity_values(&conn, &policy_1.id).unwrap();
+    let vendor_values = custom_field_service::get_entity_values(&conn, &vendor_1.id).unwrap();
+    assert_eq!(policy_values.get("underwriter"), Some(&vendor_1.id));
+    assert_eq!(vendor_values.get("underwritten_policy"), Some(&policy_1.id));
+}
+
+#[test]
+fn migration_0079_repairs_lookup_caches_left_out_of_step_by_older_versions() {
+    let (conn, ws, admin) = setup_workspace();
+    let admin = Some(admin.as_str());
+    let policy = custom_object_service::create(&conn, &ws, &policy_object(), admin).unwrap();
+    let def = relationship_service::create(&conn, &ws, &many_to_one_def(&policy.key, "Company"), admin).unwrap();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), admin).unwrap();
+    let linked = custom_record_service::create(&conn, &ws, &record_input(&policy.key, "Linked"), admin).unwrap();
+    let stale = custom_record_service::create(&conn, &ws, &record_input(&policy.key, "Stale"), admin).unwrap();
+    relationship_service::link(&conn, &ws, &def.id, &policy.key, &linked.id, "Company", &company.id, admin).unwrap();
+
+    // Recreate what an older version left behind: an empty cache on a
+    // linked record, and a cache pointing at a link that no longer exists.
+    let field_id: String = conn
+        .query_row("SELECT id FROM custom_field_definitions WHERE field_type = 'lookup' AND lookup_relationship_definition_id = ?1", [&def.id], |r| r.get(0))
+        .unwrap();
+    conn.execute("DELETE FROM custom_field_values WHERE definition_id = ?1", [&field_id]).unwrap();
+    conn.execute(
+        "INSERT INTO custom_field_values (id, definition_id, entity_id, value_text, created_at, updated_at) VALUES ('stale-row', ?1, ?2, ?3, 'x', 'x')",
+        (&field_id, &stale.id, &company.id),
+    )
+    .unwrap();
+
+    conn.execute_batch(include_str!("../src/db/migrations/0079_resync_lookup_field_caches.sql")).unwrap();
+
+    let linked_values = custom_field_service::get_entity_values(&conn, &linked.id).unwrap();
+    assert_eq!(linked_values.get("customer"), Some(&company.id), "an empty cache on a linked record is refilled");
+    let stale_values = custom_field_service::get_entity_values(&conn, &stale.id).unwrap();
+    assert!(!stale_values.contains_key("customer"), "a cache with no matching link is removed");
+}
+
+#[test]
+fn a_save_that_leaves_the_lookup_field_out_keeps_the_link() {
+    // Covers: REQ-PRE-001 (WP-0016)
+    let (conn, ws, admin) = setup_workspace();
+    let admin = Some(admin.as_str());
+    let policy = custom_object_service::create(&conn, &ws, &policy_object(), admin).unwrap();
+    relationship_service::create(&conn, &ws, &many_to_one_def(&policy.key, "Company"), admin).unwrap();
+    let company = company_service::create(&conn, &ws, &company_input("Acme"), admin).unwrap();
+    let policy_1 = custom_record_service::create(&conn, &ws, &record_input(&policy.key, "Policy One"), admin).unwrap();
+
+    let mut link_it = HashMap::new();
+    link_it.insert("customer".to_string(), company.id.clone());
+    custom_field_service::set_entity_values(&conn, &policy.key, &policy_1.id, &link_it, admin).unwrap();
+
+    // A partial save that does not mention the lookup field at all.
+    custom_field_service::set_entity_values(&conn, &policy.key, &policy_1.id, &HashMap::new(), admin).unwrap();
+
+    let values = custom_field_service::get_entity_values(&conn, &policy_1.id).unwrap();
+    assert_eq!(values.get("customer"), Some(&company.id));
+    let related = relationship_service::related_records_for(&conn, &ws, &policy.key, &policy_1.id).unwrap();
+    assert_eq!(related.len(), 1, "a save that omits the lookup field must not unlink the record");
+}

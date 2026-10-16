@@ -215,13 +215,28 @@ fn hard_delete_removes_the_node_and_cascades_its_edges_but_soft_deactivate_keeps
     .unwrap();
 
     assert!(system_graph_service::get_node(&conn, &ws, "relationship", &relationship.id).unwrap().is_some());
+    // A many_to_one relationship also auto-creates a "Client" lookup field
+    // on the vendor object (migration 0078), which is a dependent in its
+    // own right - so the object has exactly two: the relationship and that
+    // lookup field.
     let before = system_graph_service::get_dependents(&conn, &ws, "custom_object", &vendor.key).unwrap();
-    assert_eq!(before.len(), 1);
+    let mut before_types: Vec<&str> = before.iter().map(|h| h.node.node_type.as_str()).collect();
+    before_types.sort();
+    assert_eq!(before_types, vec!["custom_field", "relationship"]);
+    let lookup_field_node_id = before.iter().find(|h| h.node.node_type == "custom_field").unwrap().node.component_id.clone();
 
     relationship_service::delete(&conn, &relationship.id, admin).unwrap();
     assert!(system_graph_service::get_node(&conn, &ws, "relationship", &relationship.id).unwrap().is_none(), "a hard delete must remove the node");
     let after = system_graph_service::get_dependents(&conn, &ws, "custom_object", &vendor.key).unwrap();
-    assert!(after.is_empty(), "the relationship's own edge must be cascade-removed with it");
+    assert!(after.iter().all(|h| h.node.node_type != "relationship"), "the relationship's own edge must be cascade-removed with it");
+    // Deleting the relationship only deactivates its lookup field (a
+    // field's one removal path is soft, see below), so that field's node
+    // and edge survive - and nothing else does.
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0].node.component_id, lookup_field_node_id);
+    let lookup_field = custom_field_service::list_definitions(&conn, &ws, &vendor.key, false).unwrap()
+        .into_iter().find(|d| d.id == lookup_field_node_id).expect("lookup field row is kept");
+    assert!(!lookup_field.is_active, "deleting the relationship deactivates its lookup field");
 
     // A field's own only removal path is deactivate (soft) - the node
     // must survive with its data intact, since "what used to depend on

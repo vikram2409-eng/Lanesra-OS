@@ -14,7 +14,7 @@ use crate::models::relationship::{
     RelatedRecord, RelationshipDefinition, RelationshipDefinitionInput, RelationshipDefinitionUpdate, RelationshipInstance,
     DELETE_BEHAVIORS, RELATIONSHIP_TYPES,
 };
-use crate::repositories::{audit_repo, relationship_repo};
+use crate::repositories::{audit_repo, custom_field_repo, relationship_repo};
 use crate::services::{
     access_service, contact_service, contract_service, custom_field_service, custom_object_service, entity_registry, invoice_service,
     opportunity_service, order_service, quote_service, task_service,
@@ -285,18 +285,56 @@ pub fn link(
     }
 
     let id = crate::domain::ids::new_uuid();
-    relationship_repo::create_instance(conn, &id, workspace_id, definition_id, source_entity_type, source_id, target_entity_type, target_id, actor_user_id)
+    let instance = relationship_repo::create_instance(conn, &id, workspace_id, definition_id, source_entity_type, source_id, target_entity_type, target_id, actor_user_id)
         .map_err(|e| match e {
             rusqlite::Error::SqliteFailure(err, _) if err.code == rusqlite::ErrorCode::ConstraintViolation => {
                 AppError::Validation("These two records are already linked".into())
             }
             other => AppError::from(other),
-        })
+        })?;
+    sync_lookup_caches(conn, &def, source_id, target_id, true)?;
+    Ok(instance)
 }
 
 pub fn unlink(conn: &Connection, instance_id: &str, _actor_user_id: Option<&str>) -> AppResult<()> {
-    relationship_repo::get_instance(conn, instance_id)?.ok_or_else(|| AppError::NotFound("Link".into()))?;
+    let inst = relationship_repo::get_instance(conn, instance_id)?.ok_or_else(|| AppError::NotFound("Link".into()))?;
+    clear_lookup_caches_for_instance(conn, &inst)?;
     Ok(relationship_repo::delete_instance(conn, instance_id)?)
+}
+
+/// Keeps every Lookup field's `value_text` cache in step with the
+/// relationship_instances row it mirrors, whichever path made or removed
+/// the link - a lookup field save, a workflow's `create_record`, the
+/// Related-list UI, an import or the API. Without this a link made by
+/// anything other than a lookup field save left the field's cache empty,
+/// and the next ordinary save of that record wrote the empty value back
+/// through `set_lookup_value`, silently deleting the link.
+///
+/// A field on the definition's source type holds the target's id; the
+/// reverse field a one_to_one definition also creates on the target type
+/// holds the source's id - the same side rule `set_lookup_value` uses.
+/// On unlink a cache is cleared only if it still points at this link's
+/// other record, so it never wipes a value that already moved on.
+fn sync_lookup_caches(conn: &Connection, def: &RelationshipDefinition, source_id: &str, target_id: &str, linked: bool) -> AppResult<()> {
+    for field in custom_field_repo::find_by_lookup_relationship(conn, &def.id)? {
+        let (record_id, other_id) = if field.entity_type == def.source_entity_type { (source_id, target_id) } else { (target_id, source_id) };
+        if linked {
+            custom_field_repo::set_value(conn, &field.id, record_id, other_id)?;
+        } else {
+            let cached = custom_field_repo::get_values(conn, record_id)?.remove(&field.key);
+            if cached.as_deref() == Some(other_id) {
+                custom_field_repo::set_value(conn, &field.id, record_id, "")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn clear_lookup_caches_for_instance(conn: &Connection, inst: &RelationshipInstance) -> AppResult<()> {
+    if let Some(def) = relationship_repo::get_definition(conn, &inst.relationship_definition_id)? {
+        sync_lookup_caches(conn, &def, &inst.source_id, &inst.target_id, false)?;
+    }
+    Ok(())
 }
 
 /// Writes a Lookup Custom Field's value as a real relationship link -
@@ -528,6 +566,9 @@ pub fn enforce_delete_behavior(conn: &Connection, entity_type: &str, entity_id: 
         to_clear.push(inst.id.clone());
     }
     for id in to_clear {
+        if let Some(inst) = instances.iter().find(|i| i.id == id) {
+            clear_lookup_caches_for_instance(conn, inst)?;
+        }
         relationship_repo::delete_instance(conn, &id)?;
     }
     Ok(())
