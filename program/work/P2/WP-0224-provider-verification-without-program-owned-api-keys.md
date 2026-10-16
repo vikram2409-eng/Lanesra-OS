@@ -35,7 +35,7 @@ organisation runs from the product with its own key.
 
 - [ ] AC-1: One command runs a template suite on a local Ollama model and writes a recorded-run fixture
 - [ ] AC-2: CI replays that fixture with identical scores
-- [ ] AC-3: Each provider adapter (OpenAI, Anthropic, Gemini, OpenAI-compatible, Ollama) has fixture-based contract tests
+- [ ] AC-3: Each provider adapter (OpenAI, Anthropic, Gemini, Azure OpenAI, Vertex AI, Bedrock, OpenAI-compatible, vLLM, Ollama) has fixture-based contract tests
 - [ ] AC-4: The conformance suite runs against a local OpenAI-compatible server in CI and reports each capability
 
 ## Test plan

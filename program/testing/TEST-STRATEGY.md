@@ -31,8 +31,8 @@ suite only grows.
 | End to end | Playwright + pre-installed Chromium (WP-0006) | `desktop/e2e/` | PRs touching UI/server/demo; nightly full | User journeys in server mode and the online demo |
 | Security | Negative tests, authz matrix, injection corpus, `cargo deny`, `npm audit`, secret scan | Throughout + CI | Every PR; corpus nightly | Threat model mitigations hold |
 | Performance | Benchmarks / timed tests (WP-0015) | `desktop/core/benches/` | Nightly | Budgets in `PERFORMANCE.md` |
-| Provider contracts | Fixtures from each provider's published API format (OpenAI, Anthropic, Gemini, OpenAI-compatible, Ollama) | `desktop/core/tests/provider_contracts.rs` | Every PR | Every bring-your-own-model provider works (WP-0146) |
-| Real-model evaluation | Local model via Ollama or vLLM, recorded for replay; organisations run the in-product conformance suite with their own keys | Evaluation suites | On demand; CI replays the recordings | Template quality (G2 evidence, WP-0224) |
+| Provider contracts | Fixtures from each provider's published API format (OpenAI, Anthropic, Gemini, Azure OpenAI, Vertex AI, Bedrock incl. SigV4 test vectors, OpenAI-compatible, vLLM, Ollama) | `desktop/core/tests/provider_contracts.rs` | Every PR | Every bring-your-own-model provider works (WP-0146) |
+| Real-model evaluation | Local model via vLLM or Ollama, recorded for replay; organisations run the in-product conformance suite with their own keys | Evaluation suites | On demand; CI replays the recordings | Template quality (G2 evidence, WP-0224) |
 | Program | `programctl` self-tests, validate, status --check | `program/tools/` | Every PR | Tracker integrity |
 
 ## What a work package must add

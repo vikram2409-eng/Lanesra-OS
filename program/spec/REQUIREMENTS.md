@@ -125,7 +125,7 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-LOOP-019** [P1] Head-and-tail trimming option keeps the first and most recent messages
 - **REQ-LOOP-020** [P1] Budget awareness: each agent turn is told remaining steps, tokens and dollars
 - **REQ-LOOP-021** [P1] Do-not-persist state fields are never written to checkpoints, traces or audit, and are re-fetched on resume
-- **REQ-LOOP-022** [P1] Bring your own model: every agent, team and Playground feature works with any provider an organisation configures - OpenAI, Anthropic Claude, Google Gemini, Ollama, and on-premises model servers (vLLM, LM Studio, TGI and other OpenAI-compatible endpoints) - including fully offline, with custom base URLs, private CA certificates, proxies and auth headers (owner decision, ADR-0004)
+- **REQ-LOOP-022** [P1] Bring your own model: every agent, team and Playground feature works with any provider an organisation configures - OpenAI, Anthropic Claude, Google Gemini, Azure OpenAI, Google Vertex AI, AWS Bedrock, Ollama, and on-premises model servers (vLLM first-class; LM Studio, TGI and other OpenAI-compatible endpoints) - including fully offline, with custom base URLs, private CA certificates, proxies and auth headers (owner decision, ADR-0004)
 - **REQ-LOOP-023** [P1] A model catalog records each configured model's capabilities (native tool calling, structured output, context window, streaming) and price per token (zero or an internal rate for on-premises models), and the loop, cost forecast and model routing use it rather than assuming one provider
 
 ## TOOL — Tools, connectors and MCP
