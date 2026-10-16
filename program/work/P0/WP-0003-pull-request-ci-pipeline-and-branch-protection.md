@@ -57,3 +57,5 @@ No automated checks run on pull requests today (only a Windows release build on 
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-10-16 claude: First CI run on PR #624 (head 39f72b6): program, migrations, web and demo green; `tauri (desktop shell)` red — `failed to read icon icons/32x32.png: Invalid PNG signature`. Root cause (not this PR's code, but on `main` and a release blocker): the 2026-10-14 brand rollout committed 11 images as base64 text instead of binary (RAID I-11). Decoded all of them back (`base64 -d`), verified each opens as PNG/ICO, and added `program/tools/check_binary_assets.py` (+5 self-tests) to the `demo` check so it cannot recur. State: waiting on the rerun. Next: AC-2 red-run proof (temporary failing test, then revert), AC-4 CI duration. Gotcha: the dev container has no webkit2gtk, so the Tauri crate can only be checked in CI.

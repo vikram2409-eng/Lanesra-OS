@@ -134,6 +134,8 @@ jobs:
           node-version: 22
       - run: node --check app.js
       - run: node --check site-modern-pages.js
+      - name: Images and icons are real binaries
+        run: python3 program/tools/check_binary_assets.py
 
   migrations:
     name: migrations (order and numbering)
