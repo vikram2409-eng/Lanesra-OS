@@ -3,25 +3,15 @@ name: Program tracker
 # Validates the build program's tracking files (program/) on every pull
 # request and push to main: every work package well-formed, every spec
 # requirement covered, STATUS.md regenerated, and programctl's own tests.
-# The full product CI (Rust, frontend, demo) arrives with WP-0003.
+# The product checks (Rust, frontend, demo, migrations) are in ci.yml.
 
 on:
+  # Runs on every pull request (no path filter) because it is a required
+  # check on main: a path-filtered required check never starts on PRs that
+  # do not touch those paths, and the PR would wait for it forever.
   pull_request:
-    paths:
-      - "program/**"
-      - "AGENTS.md"
-      - "CLAUDE.md"
-      - "GEMINI.md"
-      - ".github/pull_request_template.md"
-      - ".github/workflows/program.yml"
-      - "app.js"
-      - "sitemap.xml"
   push:
     branches: [main]
-    paths:
-      - "program/**"
-      - "app.js"
-      - "sitemap.xml"
 
 permissions:
   contents: read

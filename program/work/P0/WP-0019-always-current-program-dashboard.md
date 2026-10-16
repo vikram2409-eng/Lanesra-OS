@@ -3,7 +3,7 @@ id: WP-0019
 title: Always-current program dashboard
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-017]
@@ -33,7 +33,7 @@ during a Muse week. Make a copy that updates itself on every merge, and make fre
 
 ## Acceptance criteria
 
-- [ ] AC-1: A merge to `main` updates the Pages dashboard within one workflow run, with the merge's commit shown on the page
+- [x] AC-1: A merge to `main` updates the Pages dashboard within one workflow run, with the merge's commit shown on the page
 - [x] AC-2: The workflow has least privilege (`pages: write`, `id-token: write`, `contents: read`) and runs only on `main`
 - [x] AC-3: The page renders the same on Pages as on claude.ai (same `index.html`, same data format)
 - [x] AC-4: PROTOCOL and BRIEFING name the Pages URL and the refresh rule
@@ -55,3 +55,6 @@ pages:write, id-token:write; main and manual only) - AC-2. `program/tools/dashbo
 HTML skeleton, with a self-test on the real page - AC-3 (rendered locally in Chromium: no errors,
 correct UTF-8). PROTOCOL, BRIEFING, FINISH-CHECKLIST and dashboard README name the Pages URL - AC-4.
 Next: AC-1 after merge - check the Pages URL shows the merge commit; link the Actions run here.
+
+### 2026-10-16 claude (after merge)
+Merged in PR #622. The Program dashboard workflow's first run (Actions run 38903530538) succeeded and deployed commit 8327e44 to https://vikram2409-eng.github.io/Lanesra-OS/ - AC-1 met. Status done.

@@ -3,14 +3,14 @@ id: WP-0003
 title: Pull request CI pipeline and branch protection
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0002, WP-0004, WP-0016]
 requirements: [REQ-PRE-001]
 estimate: M
 editions: []
 delivered: []
-branch: 
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
 updated: 2026-10-16
 ---

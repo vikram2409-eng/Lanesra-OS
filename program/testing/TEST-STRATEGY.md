@@ -18,6 +18,18 @@ suite only grows.
 6. **Traceable.** Each test that proves a requirement carries a tag comment:
    `// Covers: REQ-LOOP-008 (WP-0121 AC-1)`. `programctl trace` builds the matrix from these tags.
 
+## When each test runs (tiered, owner decision 2026-10-16)
+
+| Tier | When | What | Who waits |
+|---|---|---|---|
+| Targeted | While building, before each push | Tests for the crates and files touched: `cargo test -p lanesra-core --test <file>`, `npx vitest run <path>`, `programctl validate` | The AI, minutes |
+| Full regression | Every pull request and every push to `main` | Everything in `.github/workflows/ci.yml` and `program.yml`: fmt, clippy, all Rust tests in 4 parallel shards (`cargo nextest`), doc tests, Tauri clippy, frontend typecheck/tests/build, demo syntax, migration order, tracker | Nobody: CI runs it; merge is blocked until green |
+| Full local | Only for changes that touch everything (formatting, toolchain, migration framework, shared test helpers) or when CI is down | `cargo test --locked --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli` | The AI (about 75 minutes on the sandbox) |
+| Nightly | Scheduled, once the harnesses exist | Full end-to-end browser suite (WP-0006), performance benchmarks (WP-0015) | Nobody |
+
+A failing full regression on a pull request is fixed on that branch before merge. A red `main` stops
+the line (see below).
+
 ## Test layers
 
 | Layer | Tooling | Location | Runs | Proves |

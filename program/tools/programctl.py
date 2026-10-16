@@ -467,6 +467,8 @@ Help articles to create or update: {", ".join(HELP_BASE + d for d in (w.get("doc
      (create it if new; add this WP id to its `wps:'…'` field), its `sitemap.xml` entry, `llms.txt` and
      `llms-full.txt`, the Releases page entry and README feature lists (FINISH-CHECKLIST, "Help and docs").
      `programctl validate` refuses `done` until the article exists, names this WP and is in the sitemap
+   - test while building with the targeted commands for what you touched (`cargo test -p <crate> --test <file>`,
+     `npx vitest run <path>`); the full regression suite runs automatically on the pull request and must be green
    - you may stop part-way: then leave `status: in_progress` and make the Progress log entry precise enough
      that a different AI can continue from it tomorrow
    - append to `## Progress log`:
