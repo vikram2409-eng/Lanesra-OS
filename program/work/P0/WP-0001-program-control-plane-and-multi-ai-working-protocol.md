@@ -3,7 +3,7 @@ id: WP-0001
 title: Program control plane and multi-AI working protocol
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_progress
+status: in_review
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-015]
@@ -11,7 +11,7 @@ estimate: M
 editions: []
 delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492
 updated: 2026-10-16
 ---
 
@@ -58,3 +58,6 @@ Next: AC-6 needs the owner's review and answers to RAID Q-01..Q-11. On merge set
 (pr link) and mark ADR-0001..0003 Accepted.
 Gotchas: `cargo test` rewrites desktop/Cargo.lock (stale version) - do not commit that in
 unrelated WPs; WP-0002 fixes it. Use `--no-fail-fast` or failures hide later test binaries.
+
+### 2026-10-16 claude
+PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.

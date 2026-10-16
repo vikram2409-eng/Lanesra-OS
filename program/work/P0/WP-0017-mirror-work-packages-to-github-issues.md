@@ -3,7 +3,7 @@ id: WP-0017
 title: Mirror work packages to GitHub Issues
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_progress
+status: in_review
 owner: claude
 depends_on: [WP-0001]
 requirements: [REQ-PRE-013]
@@ -11,7 +11,7 @@ estimate: S
 editions: []
 delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492
 updated: 2026-10-16
 ---
 
@@ -44,3 +44,6 @@ GitHub while the work package files stay the single source of truth for every AI
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+### 2026-10-16 claude
+PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.

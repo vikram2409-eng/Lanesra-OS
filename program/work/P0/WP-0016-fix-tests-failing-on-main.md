@@ -3,7 +3,7 @@ id: WP-0016
 title: Fix tests failing on main
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_progress
+status: in_review
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-001]
@@ -11,7 +11,7 @@ estimate: M
 editions: [desktop, workspace]
 delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492
 updated: 2026-10-16
 ---
 
@@ -93,3 +93,6 @@ Clean build, `cargo test --locked --no-fail-fast -p lanesra-core -p lanesra-serv
 because it was bumped to 79 after the run started; re-run alone: core lib 32/32). Full suite run
 once (≈75 min); the 7 affected suites run twice. Remaining repeats for flakiness: CI (WP-0003).
 State: all ACs met; waiting for owner review and a PR. Then status -> done.
+
+### 2026-10-16 claude
+PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.

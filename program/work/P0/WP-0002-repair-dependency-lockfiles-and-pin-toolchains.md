@@ -3,7 +3,7 @@ id: WP-0002
 title: Repair dependency lockfiles and pin toolchains
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_progress
+status: in_review
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-002]
@@ -11,7 +11,7 @@ estimate: S
 editions: [desktop, workspace]
 delivered: []
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/492
 updated: 2026-10-16
 ---
 
@@ -61,3 +61,6 @@ Verified on Linux: `npm ci`, `npx tsc --noEmit` (clean), `npm test` (40/40), `np
 risk: none expected beyond the Node version change.
 Gotchas: the pinned toolchain makes rustup download 1.97.0 once per machine (~600 MB). Debug test
 builds need ~30 GB of disk - `cargo clean` if "No space left on device".
+
+### 2026-10-16 claude
+PR opened: https://github.com/vikram2409-eng/Lanesra-OS/pull/492 (shared planning PR, owner-requested). Status in_review. After merge: status done, `delivered:` filled for its editions.
