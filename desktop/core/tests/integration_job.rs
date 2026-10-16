@@ -7,7 +7,7 @@
 //! not a live third party, but the same request/response path a live
 //! REST API would hit. Push-direction jobs are a stated, deliberate gap
 //! - see `integration_job_service`'s own doc comment - so not tested
-//! here.
+//!   here.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;

@@ -1,7 +1,7 @@
 //! Raw CRUD for `ai_memory_items` (migration `0063_memory_architecture.sql`)
 //! - the three itemized memory types (Session/Working/Entity). See
-//! `services::ai_memory_service` for the write-side policy gate and the
-//! context-scoped read this repo's `list_for_context` exists for.
+//!   `services::ai_memory_service` for the write-side policy gate and the
+//!   context-scoped read this repo's `list_for_context` exists for.
 
 use rusqlite::{Connection, OptionalExtension};
 

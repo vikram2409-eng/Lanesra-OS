@@ -55,8 +55,8 @@ fn anthropic_text_body(text: &str) -> String {
 
 /// Same raw-socket stub as `ai_agent_foundry.rs`'s own `spawn_sequence_stub`
 /// - one canned `/v1/messages` response per request, in order (repeating
-/// the last once exhausted), capturing each request's raw body so a test
-/// can assert a tool's result actually reached the model.
+///   the last once exhausted), capturing each request's raw body so a test
+///   can assert a tool's result actually reached the model.
 fn spawn_sequence_stub(bodies: Vec<String>) -> (u16, Arc<Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -137,9 +137,9 @@ fn each_subsequent_admin_edit_snapshots_the_prior_value() {
     let (conn, ws, admin) = setup_workspace();
     let agent = make_agent(&conn, &ws, &admin, "Memory Keeper", vec![]);
 
-    ai_agent_service::set_memory(&conn, &agent.id, "v1".into(), Some(&admin)).unwrap();
-    ai_agent_service::set_memory(&conn, &agent.id, "v2".into(), Some(&admin)).unwrap();
-    ai_agent_service::set_memory(&conn, &agent.id, "v3".into(), Some(&admin)).unwrap();
+    ai_agent_service::set_memory(&conn, &agent.id, "v1", Some(&admin)).unwrap();
+    ai_agent_service::set_memory(&conn, &agent.id, "v2", Some(&admin)).unwrap();
+    ai_agent_service::set_memory(&conn, &agent.id, "v3", Some(&admin)).unwrap();
 
     let history = ai_agent_service::list_memory_history(&conn, &agent.id, Some(&admin)).unwrap();
     // Most-recent-first: the last snapshot taken was v2 (just before the
@@ -158,8 +158,8 @@ fn a_no_op_write_of_the_same_value_does_not_add_a_snapshot() {
     let (conn, ws, admin) = setup_workspace();
     let agent = make_agent(&conn, &ws, &admin, "Memory Keeper", vec![]);
 
-    ai_agent_service::set_memory(&conn, &agent.id, "steady state".into(), Some(&admin)).unwrap();
-    ai_agent_service::set_memory(&conn, &agent.id, "steady state".into(), Some(&admin)).unwrap();
+    ai_agent_service::set_memory(&conn, &agent.id, "steady state", Some(&admin)).unwrap();
+    ai_agent_service::set_memory(&conn, &agent.id, "steady state", Some(&admin)).unwrap();
 
     let history = ai_agent_service::list_memory_history(&conn, &agent.id, Some(&admin)).unwrap();
     assert!(history.is_empty());
@@ -169,7 +169,7 @@ fn a_no_op_write_of_the_same_value_does_not_add_a_snapshot() {
 async fn the_agents_own_update_memory_tool_is_snapshotted_as_changed_by_agent() {
     let (conn, ws, admin) = setup_workspace();
     let agent = make_agent(&conn, &ws, &admin, "Memory Keeper", vec![]);
-    ai_agent_service::set_memory(&conn, &agent.id, "seeded by admin".into(), Some(&admin)).unwrap();
+    ai_agent_service::set_memory(&conn, &agent.id, "seeded by admin", Some(&admin)).unwrap();
 
     let (port, _captured) = spawn_sequence_stub(vec![
         anthropic_tool_use_body("t1", "update_memory", serde_json::json!({"content": "revised by the agent itself"})),

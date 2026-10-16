@@ -190,11 +190,10 @@ fn validate_input_params(definition: &ActionTypeDefinition, input_params: &HashM
             "number" => {
                 value.parse::<f64>().map_err(|_| AppError::Validation(format!("'{}' must be a number", param.label)))?;
             }
-            "boolean" => {
-                if value != "true" && value != "false" {
+            "boolean"
+                if value != "true" && value != "false" => {
                     return Err(AppError::Validation(format!("'{}' must be true or false", param.label)));
                 }
-            }
             _ => {}
         }
     }

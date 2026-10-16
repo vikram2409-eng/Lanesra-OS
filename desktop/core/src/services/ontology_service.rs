@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use crate::domain::{AppError, AppResult};
 use crate::models::ontology::{LinkTypeSummary, ObjectTypeDetail, ObjectTypeSummary};
 use crate::repositories::{glossary_repo, semantic_mapping_repo};
-use crate::services::{custom_object_service, entity_registry, relationship_service};
+use crate::services::{custom_object_service, relationship_service};
 
 /// `(key, singular label, plural label, icon)` - the plural labels and
 /// icons already used throughout this codebase's own frontends
@@ -125,6 +125,7 @@ pub fn get_object_type_detail(conn: &Connection, workspace_id: &str, object_type
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::entity_registry;
 
     /// `BUILTIN_OBJECT_TYPES` is a separate, hand-maintained list (it
     /// carries a label/icon `entity_registry::CORE_ENTITY_TYPES` has no

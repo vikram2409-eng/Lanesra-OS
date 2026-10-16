@@ -207,7 +207,7 @@ fn bulk_update_custom_field_only_touches_the_targeted_key() {
     initial.insert(segment_def.key.clone(), "Enterprise".to_string());
     custom_field_service::set_entity_values(&conn, "Company", &company, &initial, Some(&admin)).unwrap();
 
-    bulk_action_service::bulk_update_custom_field(&conn, "Company", &[company.clone()], &region_def.key, "East", Some(&admin)).unwrap();
+    bulk_action_service::bulk_update_custom_field(&conn, "Company", std::slice::from_ref(&company), &region_def.key, "East", Some(&admin)).unwrap();
 
     let values = custom_field_service::get_entity_values(&conn, &company).unwrap();
     assert_eq!(values.get(&region_def.key).map(String::as_str), Some("East"));
@@ -224,7 +224,7 @@ fn bulk_reassign_owner_only_supports_entities_with_an_owner_column() {
     let sam = user_with_role(&conn, &ws, &admin, "sam", "Sales");
     let task = make_task(&conn, &ws, &admin, "Follow up");
 
-    let results = bulk_action_service::bulk_reassign_owner(&conn, &ws, "Task", &[task.clone()], Some(&sam), Some(&admin)).unwrap();
+    let results = bulk_action_service::bulk_reassign_owner(&conn, &ws, "Task", std::slice::from_ref(&task), Some(&sam), Some(&admin)).unwrap();
     assert!(results[0].ok);
     assert_eq!(task_service::get(&conn, &task).unwrap().owner_user_id.as_deref(), Some(sam.as_str()));
 
@@ -286,12 +286,12 @@ fn bulk_tag_merges_rather_than_overwrites() {
     )
     .unwrap();
 
-    bulk_action_service::bulk_update_tags(&conn, &ws, "Company", &[company.clone()], &["west-region".to_string()], true, Some(&admin)).unwrap();
+    bulk_action_service::bulk_update_tags(&conn, &ws, "Company", std::slice::from_ref(&company), &["west-region".to_string()], true, Some(&admin)).unwrap();
     let tags_after_add = company_service::get(&conn, &company).unwrap().tags.unwrap();
     assert!(tags_after_add.contains("vip"));
     assert!(tags_after_add.contains("west-region"));
 
-    bulk_action_service::bulk_update_tags(&conn, &ws, "Company", &[company.clone()], &["vip".to_string()], false, Some(&admin)).unwrap();
+    bulk_action_service::bulk_update_tags(&conn, &ws, "Company", std::slice::from_ref(&company), &["vip".to_string()], false, Some(&admin)).unwrap();
     let tags_after_remove = company_service::get(&conn, &company).unwrap().tags.unwrap();
     assert!(!tags_after_remove.contains("vip"));
     assert!(tags_after_remove.contains("west-region"));
@@ -309,11 +309,11 @@ fn bulk_archive_works_across_a_built_in_entity_and_a_custom_object() {
     let company = make_company(&conn, &ws, &admin, "Acme");
     let (object_key, record_id) = make_custom_object_and_record(&conn, &ws, &admin);
 
-    let company_results = bulk_action_service::bulk_archive(&conn, &ws, "Company", &[company.clone()], Some(&admin)).unwrap();
+    let company_results = bulk_action_service::bulk_archive(&conn, &ws, "Company", std::slice::from_ref(&company), Some(&admin)).unwrap();
     assert!(company_results[0].ok);
     assert_eq!(company_service::get(&conn, &company).unwrap().status, "Archived");
 
-    let custom_results = bulk_action_service::bulk_archive(&conn, &ws, &object_key, &[record_id.clone()], Some(&admin)).unwrap();
+    let custom_results = bulk_action_service::bulk_archive(&conn, &ws, &object_key, std::slice::from_ref(&record_id), Some(&admin)).unwrap();
     assert!(custom_results[0].ok);
 }
 

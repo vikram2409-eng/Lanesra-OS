@@ -319,11 +319,10 @@ pub fn validate_for_publish(graph: &ExecutionGraph) -> AppResult<()> {
                     return Err(AppError::Validation(format!("Parallel Split node '{}' needs at least two outgoing edges", node.node_key)));
                 }
             }
-            "join" => {
-                if incoming_count.get(node.id.as_str()).copied().unwrap_or(0) < 2 {
+            "join"
+                if incoming_count.get(node.id.as_str()).copied().unwrap_or(0) < 2 => {
                     return Err(AppError::Validation(format!("Join node '{}' needs at least two incoming edges", node.node_key)));
                 }
-            }
             _ => {}
         }
     }

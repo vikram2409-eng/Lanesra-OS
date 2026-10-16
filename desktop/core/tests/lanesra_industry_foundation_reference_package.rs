@@ -1,10 +1,10 @@
 //! The Lanesra Industry Foundation reference package
 //! (`services::reference_packages::lanesra_industry_foundation_manifest_json`)
 //! - shared cross-industry plumbing (Party, Party Role, Party
-//! Relationship, Location, Asset, Agreement, ...) other packages can
-//! optionally depend on, unlike the eleven business-vertical packages
-//! above it in that module. See that function's own doc comment for what
-//! it ships and what it deliberately leaves out.
+//!   Relationship, Location, Asset, Agreement, ...) other packages can
+//!   optionally depend on, unlike the eleven business-vertical packages
+//!   above it in that module. See that function's own doc comment for what
+//!   it ships and what it deliberately leaves out.
 
 use std::collections::HashMap;
 

@@ -2,7 +2,7 @@
 //! User/Team-owned object now carries record_owner_type/record_owner_id/
 //! owning_org_unit_id/assigned_at/ownership_version (0054_ownership_fields.sql)
 //! - this service is the one place that reads/writes them, via
-//! `ownership_repo`'s generic object_key dispatch.
+//!   `ownership_repo`'s generic object_key dispatch.
 //!
 //! `require_assign_capability` was a stated placeholder for Phase 1: the
 //! real per-object, per-scope "Assign" capability is Access Control v1's

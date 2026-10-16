@@ -10,16 +10,16 @@
 //!
 //! Every entry logged through this service today is `source: "manual"`
 //! - a person recording an interaction they just had. That's a
-//! complete, honest feature on its own, not a placeholder: nothing here
-//! pretends to auto-ingest anything. Deliberately **not** built this
-//! pass (named on the product backlog as its own proposed item, not
-//! silently dropped): a live email Connection (IMAP/Gmail/Microsoft
-//! Graph) auto-matching by address, call-transcript/recording upload,
-//! and a Slack connector - each needs its own external-service decision
-//! (accepted formats, OAuth app registration) this pass doesn't make.
-//! When one of those lands, it calls `log_activity` exactly like a
-//! human does today, just with `source` set to that connection's id
-//! instead of `"manual"` - the schema already has room for it.
+//!   complete, honest feature on its own, not a placeholder: nothing here
+//!   pretends to auto-ingest anything. Deliberately **not** built this
+//!   pass (named on the product backlog as its own proposed item, not
+//!   silently dropped): a live email Connection (IMAP/Gmail/Microsoft
+//!   Graph) auto-matching by address, call-transcript/recording upload,
+//!   and a Slack connector - each needs its own external-service decision
+//!   (accepted formats, OAuth app registration) this pass doesn't make.
+//!   When one of those lands, it calls `log_activity` exactly like a
+//!   human does today, just with `source` set to that connection's id
+//!   instead of `"manual"` - the schema already has room for it.
 
 use rusqlite::Connection;
 

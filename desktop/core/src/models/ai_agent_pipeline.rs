@@ -79,10 +79,10 @@ pub struct AiAgentPipeline {
 /// step order (`step_order: Some(n)` - who runs deterministically), and
 /// each step's agent's own dynamic `delegate_agent_ids` (`step_order: None`
 /// - who that agent *may* call at runtime via `delegate_to_agent`, per
-/// `services::ai_agent_hierarchy_service`'s own doc comment). Not a new
-/// concept - a narration of two existing ones together, the same "read off
-/// what enforcement already does" principle `access_service::explain_access`
-/// uses for the Access Inspector.
+///   `services::ai_agent_hierarchy_service`'s own doc comment). Not a new
+///   concept - a narration of two existing ones together, the same "read off
+///   what enforcement already does" principle `access_service::explain_access`
+///   uses for the Access Inspector.
 #[derive(Debug, Clone, Serialize)]
 pub struct AgentHierarchyNode {
     pub agent_id: String,
@@ -191,7 +191,7 @@ pub struct AiAgentRun {
     /// Phase 7e: persisted so a paused run can be resumed correctly from
     /// an entirely separate request, whenever the real approval comes in
     /// - a later step's template may reference `{{trigger_input}}`
-    /// directly, not only the immediately-prior step's output.
+    ///   directly, not only the immediately-prior step's output.
     pub trigger_input: String,
     pub started_at: String,
     pub finished_at: Option<String>,

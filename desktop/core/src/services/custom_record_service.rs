@@ -78,7 +78,7 @@ pub fn create(
 }
 
 pub fn get(conn: &Connection, id: &str) -> AppResult<CustomRecord> {
-    Ok(custom_record_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Record".into()))?)
+    custom_record_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Record".into()))
 }
 
 pub fn list(conn: &Connection, workspace_id: &str, object_key: &str) -> AppResult<Vec<CustomRecord>> {

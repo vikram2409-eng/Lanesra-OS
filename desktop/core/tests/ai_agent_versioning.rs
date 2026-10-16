@@ -1,11 +1,11 @@
 //! AI Agent Platform v2, Phase 1: migration `0059_ai_agent_versioning.sql`
 //! - the v1 backfill onto `ai_agent_versions` for an agent that already
-//! existed before this migration ran, and basic round-trips for the two
-//! new supporting tables (`ai_agent_model_refs`, `ai_approvals`). No
-//! service layer exists yet (`agent_version_service`/`approval_service`
-//! are later work), so this exercises the schema directly - the same
-//! "prove the migration/backfill itself is correct" scope every other
-//! migration-only test file in this codebase has.
+//!   existed before this migration ran, and basic round-trips for the two
+//!   new supporting tables (`ai_agent_model_refs`, `ai_approvals`). No
+//!   service layer exists yet (`agent_version_service`/`approval_service`
+//!   are later work), so this exercises the schema directly - the same
+//!   "prove the migration/backfill itself is correct" scope every other
+//!   migration-only test file in this codebase has.
 
 use lanesra_core::models::ai_agent::AiAgentInput;
 use lanesra_core::models::workspace::WorkspaceSetup;

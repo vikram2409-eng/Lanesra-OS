@@ -274,13 +274,12 @@ pub fn link(
                 )));
             }
         }
-        "one_to_one" => {
-            if relationship_repo::count_by_source(conn, definition_id, source_id)? > 0
-                || relationship_repo::count_by_target(conn, definition_id, target_id)? > 0
-            {
+        "one_to_one"
+            if (relationship_repo::count_by_source(conn, definition_id, source_id)? > 0
+                || relationship_repo::count_by_target(conn, definition_id, target_id)? > 0)
+            => {
                 return Err(AppError::Validation("One or both records are already linked through this one-to-one relationship".into()));
             }
-        }
         _ => {} // many_to_many: only the UNIQUE(definition, source, target) constraint applies
     }
 

@@ -102,14 +102,14 @@ fn apply_field_map(record: &Value, def: &ExternalObject) -> Value {
 
 /// Shared by `list_records` and `list_records_by_id`/`integration_job_service`
 /// - a real GET against `resource_path` on the bound Connection's base
-/// URL, not a cached/simulated response (spec §16: "read-only, live or
-/// cached per `cache_ttl_seconds`" - the cache layer itself is left to a
-/// future pass; every call here is live). `since`, when given, is
-/// appended as a plain `?since=<value>` (or `&since=...` if
-/// `resource_path` already has a query string) query parameter - this is
-/// the Integration Job checkpoint mechanism (spec §15); not URL-encoded,
-/// a stated simplification fine for the token/timestamp-shaped cursor
-/// values this build produces, not arbitrary user text.
+///   URL, not a cached/simulated response (spec §16: "read-only, live or
+///   cached per `cache_ttl_seconds`" - the cache layer itself is left to a
+///   future pass; every call here is live). `since`, when given, is
+///   appended as a plain `?since=<value>` (or `&since=...` if
+///   `resource_path` already has a query string) query parameter - this is
+///   the Integration Job checkpoint mechanism (spec §15); not URL-encoded,
+///   a stated simplification fine for the token/timestamp-shaped cursor
+///   values this build produces, not arbitrary user text.
 async fn fetch_records(conn: &Connection, workspace_id: &str, master_key: &[u8; 32], def: &ExternalObject, since: Option<&str>) -> AppResult<Vec<Value>> {
     let connection = super::connection_service::get(conn, workspace_id, &def.connection_id)?;
     let secret = super::connection_service::resolve_secret(conn, master_key, &def.connection_id)?;

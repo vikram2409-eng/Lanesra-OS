@@ -3,8 +3,8 @@
 //! criterion directly - querying any synced component returns its
 //! direct and transitive dependencies with no false missing references
 //! - plus sync idempotency, cycle safety, workspace isolation, and the
-//! hard-delete-cascades/soft-deactivate-keeps distinction
-//! `system_graph_repo::remove_node`'s own doc comment documents.
+//!   hard-delete-cascades/soft-deactivate-keeps distinction
+//!   `system_graph_repo::remove_node`'s own doc comment documents.
 
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::ai_agent::AiAgentInput;

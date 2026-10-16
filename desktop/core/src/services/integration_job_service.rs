@@ -4,11 +4,11 @@
 //! Lanesra object via `api_object_service`, the exact same generic
 //! create/update dispatcher the CSV wizard and the inbound REST API use
 //! - so the same validation/business-rule/permission checks fire here
-//! too. Progress is checkpointed with a simple string "cursor" (the max
-//! value seen of a configured `cursor_field`, compared lexicographically
+//!   too. Progress is checkpointed with a simple string "cursor" (the max
+//!   value seen of a configured `cursor_field`, compared lexicographically
 //! - correct for ISO-8601 timestamps and zero-padded sequence numbers,
-//! not for arbitrary unordered strings, a real but narrow limitation
-//! stated here rather than silently assumed away).
+//!   not for arbitrary unordered strings, a real but narrow limitation
+//!   stated here rather than silently assumed away).
 //!
 //! **Push** direction (Lanesra -> external system, one Connector Action
 //! call per outgoing record) is a deliberate, named gap in this pass:

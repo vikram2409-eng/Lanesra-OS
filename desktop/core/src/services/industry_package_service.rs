@@ -266,13 +266,13 @@ pub fn list_artifacts_for_workspace(conn: &Connection, workspace_id: &str) -> Ap
 ///   - `min_lanesra_version` is stamped as this build's own version
 ///     (the export is only ever validated against the workspace that just
 ///     produced it, or a workspace running the same or newer build).
-/// `version` is a synthetic `1.0.<unix timestamp>` so exporting the same
-/// workspace twice produces two importable versions rather than colliding
-/// on `(package_id, version)` - `package_id` is fixed as
-/// `"local.workspace_export"`, deliberately under the `local` publisher's
-/// own namespace so importing it back (into this workspace or any other
-/// that already auto-seeded `local`, i.e. every workspace) never needs a
-/// publisher registered first.
+///     `version` is a synthetic `1.0.<unix timestamp>` so exporting the same
+///     workspace twice produces two importable versions rather than colliding
+///     on `(package_id, version)` - `package_id` is fixed as
+///     `"local.workspace_export"`, deliberately under the `local` publisher's
+///     own namespace so importing it back (into this workspace or any other
+///     that already auto-seeded `local`, i.e. every workspace) never needs a
+///     publisher registered first.
 pub fn export_local_workspace(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<String> {
     require_admin(conn, actor_user_id)?;
     let components = super::solution_component_service::list_local(conn, workspace_id)?;

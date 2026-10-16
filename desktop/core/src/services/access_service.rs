@@ -185,7 +185,7 @@ pub fn explain_access(
         let granted = grant.as_ref().map(|g| g.allows(capability)).unwrap_or(false);
         if granted {
             let scope = grant.as_ref().expect("granted implies a grant exists").record_scope;
-            if best.map_or(true, |b| scope > b) {
+            if best.is_none_or(|b| scope > b) {
                 best = Some(scope);
                 best_role_name = Some(role.name.clone());
             }

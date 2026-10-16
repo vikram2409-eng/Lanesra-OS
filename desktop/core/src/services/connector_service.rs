@@ -96,8 +96,8 @@ fn is_locally_typed(schema: &serde_json::Value, depth: u8) -> bool {
         Some("object") => schema
             .get("properties")
             .and_then(|p| p.as_object())
-            .map_or(true, |props| props.values().all(|p| is_locally_typed(p, depth + 1))),
-        Some("array") => schema.get("items").map_or(true, |i| is_locally_typed(i, depth + 1)),
+            .is_none_or(|props| props.values().all(|p| is_locally_typed(p, depth + 1))),
+        Some("array") => schema.get("items").is_none_or(|i| is_locally_typed(i, depth + 1)),
         Some("string" | "integer" | "number" | "boolean" | "null") => true,
         _ => false,
     }

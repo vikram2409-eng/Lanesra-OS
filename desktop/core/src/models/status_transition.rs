@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 /// caller-supplied entry point - `Company`/`Contact`/`Opportunity`
 /// (stage)/`Contract`/`Task`'s `update()`, `Quote`/`Order`'s `set_status()`
 /// - which is what makes enforcing an administrator-configured allow-list
-/// straightforward. Deliberately excludes:
+///   straightforward. Deliberately excludes:
 /// - `Invoice`, whose status changes through several dedicated methods
 ///   with their own hardcoded semantics (`issue`, `void`,
 ///   `record_payment`'s automatic Paid/Partially Paid transition,

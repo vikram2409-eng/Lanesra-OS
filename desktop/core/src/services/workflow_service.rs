@@ -252,11 +252,10 @@ fn validate_shape(conn: &Connection, workspace_id: &str, entity_type: &str, inpu
                 }
             }
         }
-        "scheduled" => {
-            if input.trigger_offset_days <= 0 {
+        "scheduled"
+            if input.trigger_offset_days <= 0 => {
                 return Err(AppError::Validation("Scheduled workflows need a recurrence interval of at least 1 day".into()));
             }
-        }
         _ => {}
     }
     if !crate::domain::conditions::MATCH_TYPES.contains(&input.match_type.as_str()) {
@@ -715,13 +714,13 @@ pub fn changed_builtin_keys(before: &HashMap<String, String>, after: &HashMap<St
 
 /// Personal Workspace has no OS-level background scheduler (spec ADM-WF-11
 /// - "schedules execute while Lanesra is running; missed jobs are
-/// evaluated on next service start"); this is the whole engine for that:
-/// a scan the frontend calls periodically while the app is open, and once
-/// at startup so anything missed while closed fires promptly. Team
-/// Workspace's host service polling this on the same cadence covers
-/// ADM-WF-12 without any code difference - the server dispatch layer just
-/// needs a caller to invoke it on a timer, which is a deployment/ops
-/// concern rather than an engine one.
+///   evaluated on next service start"); this is the whole engine for that:
+///   a scan the frontend calls periodically while the app is open, and once
+///   at startup so anything missed while closed fires promptly. Team
+///   Workspace's host service polling this on the same cadence covers
+///   ADM-WF-12 without any code difference - the server dispatch layer just
+///   needs a caller to invoke it on a timer, which is a deployment/ops
+///   concern rather than an engine one.
 pub fn run_scheduled(conn: &Connection, workspace_id: &str, actor_user_id: Option<&str>) -> AppResult<usize> {
     let Some(_guard) = DepthGuard::enter() else { return Ok(0) };
     let today = Utc::now().format("%Y-%m-%d").to_string();

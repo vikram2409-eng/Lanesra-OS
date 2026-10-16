@@ -47,7 +47,7 @@ pub fn get_or_bootstrap(conn: &Connection, workspace_id: &str, actor_user_id: Op
         org.root_org_unit_id = root_unit.id;
     }
     if org.code.is_empty() {
-        let code = format!("ORG-{}", &crate::domain::ids::new_uuid()[..8].to_uppercase());
+        let code = format!("ORG-{}", crate::domain::ids::new_uuid()[..8].to_uppercase());
         org = organization_repo::update(conn, workspace_id, &OrganizationUpdate { code, status: org.status })?;
     }
     Ok(org)

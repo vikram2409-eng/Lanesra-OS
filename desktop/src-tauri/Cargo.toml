@@ -4,7 +4,7 @@ version = "0.15.0"
 description = "Lanesra OS Desktop - local-first business management application"
 license = "MIT"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.97"
 
 [lib]
 name = "lanesra_os_lib"
@@ -21,3 +21,6 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt"] }
 
 [dev-dependencies]
+
+[lints]
+workspace = true

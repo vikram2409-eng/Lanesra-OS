@@ -200,7 +200,7 @@ fn a_solution_export_round_trips_an_agent_its_skill_and_its_delegate_into_a_seco
         Some(&admin_a),
     )
     .unwrap();
-    ai_agent_service::set_memory(&conn_a, &lead_agent.id, "Tier 1 claims (<= $1,000) auto-approve.".into(), Some(&admin_a)).unwrap();
+    ai_agent_service::set_memory(&conn_a, &lead_agent.id, "Tier 1 claims (<= $1,000) auto-approve.", Some(&admin_a)).unwrap();
     ai_agent_service::set_guardrails(&conn_a, &lead_agent.id, "Never mark a claim Paid above $10,000 without executive approval.", Some(&admin_a)).unwrap();
 
     let solution = solution_service::create(&conn_a, &ws_a, &SolutionInput { name: "Claims AI Bundle".into(), description: None, version: None, publisher_id: None }, Some(&admin_a)).unwrap();

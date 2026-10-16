@@ -386,18 +386,18 @@ fn admin_tools() -> Vec<ToolSpec> {
 /// Integration Hub Tool Bridge: a connector-derived tool name is
 /// self-describing by prefix (`connector_tool_service`'s own doc comment)
 /// - "connector_read"/"connector_write" classify it without a DB round
-/// trip, same as the two fixed catalogs below. Whether the name actually
-/// resolves to a real, currently-enabled connector action is checked
-/// where it matters (`ai_agent_service::validate_action_names` at save
-/// time, `connector_tool_service::dispatch` at call time), not here.
-/// Agent Access Governance (issue #245): the Foundry-only tool names
-/// `execute_agent_tool` dispatches directly, never through
-/// `dispatch_record_tool`/`dispatch_admin_tool` - `tool_source` used to
-/// return `None` for every one of these (see `tool_registry_service::
+///   trip, same as the two fixed catalogs below. Whether the name actually
+///   resolves to a real, currently-enabled connector action is checked
+///   where it matters (`ai_agent_service::validate_action_names` at save
+///   time, `connector_tool_service::dispatch` at call time), not here.
+///   Agent Access Governance (issue #245): the Foundry-only tool names
+///   `execute_agent_tool` dispatches directly, never through
+///   `dispatch_record_tool`/`dispatch_admin_tool` - `tool_source` used to
+///   return `None` for every one of these (see `tool_registry_service::
 /// default_risk_for`'s old doc comment), the exact reason the Tool-Call
-/// Firewall never saw them. Classified as their own source so a workspace
-/// can still block/risk-gate `delegate_to_agent`, say, without this
-/// function pretending they're record/admin tools.
+///   Firewall never saw them. Classified as their own source so a workspace
+///   can still block/risk-gate `delegate_to_agent`, say, without this
+///   function pretending they're record/admin tools.
 const AGENT_INTERNAL_TOOLS: &[&str] = &["update_memory", "remember", "get_memory", "search_knowledge", "use_skill", "delegate_to_agent", "invoke_action"];
 
 pub(crate) fn tool_source(name: &str) -> Option<&'static str> {

@@ -1,7 +1,7 @@
 //! Saved Views & Bulk Actions (product backlog): a saved view is a
 //! persisted filter/sort/column/grouping preference for one `object_key`
 //! - see migration 0034's own comment for why `filters`/`columns` are
-//! plain JSON rather than a modeled query.
+//!   plain JSON rather than a modeled query.
 //!
 //! Scope is deliberately broader than Bulk Actions (`bulk_action_service`):
 //! any object `api_object_service::list_object_keys` knows about (every
@@ -22,7 +22,7 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
-fn require_actor<'a>(actor_user_id: Option<&'a str>) -> AppResult<&'a str> {
+fn require_actor(actor_user_id: Option<&str>) -> AppResult<&str> {
     actor_user_id.ok_or_else(|| AppError::Validation("A signed-in user is required".into()))
 }
 
@@ -122,11 +122,11 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
 /// Sets `id` as the object-wide default every user lands on when they
 /// first open this object's list with no view of their own selected yet
 /// - admin-only (a default is a workspace-wide policy choice, not a
-/// personal preference), and unsets whatever was previously the default
-/// for the same `object_key` first, so at most one row ever has
-/// `is_object_default = 1` per (workspace_id, object_key) - the
-/// invariant migration 0034's own comment documents as enforced here
-/// rather than by a schema constraint.
+///   personal preference), and unsets whatever was previously the default
+///   for the same `object_key` first, so at most one row ever has
+///   `is_object_default = 1` per (workspace_id, object_key) - the
+///   invariant migration 0034's own comment documents as enforced here
+///   rather than by a schema constraint.
 pub fn set_default(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<SavedView> {
     require_admin(conn, actor_user_id)?;
     let view = get_owned(conn, id)?;

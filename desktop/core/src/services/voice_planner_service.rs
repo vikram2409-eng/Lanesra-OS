@@ -743,7 +743,7 @@ fn normalize_answer(conn: &Connection, workspace_id: &str, object_key: &str, fie
 /// abandons the create outright (returned as `Unsupported`, which is what
 /// makes `voice_execution_service::submit_command` clear the pending state
 /// - see its own doc comment) rather than forcing the user to answer a
-/// question about a record they no longer want.
+///   question about a record they no longer want.
 fn continue_guided_create(conn: &Connection, workspace_id: &str, answer_text: &str, pending: &PendingCreate) -> AppResult<PlanOutcome> {
     let raw = answer_text.trim();
     let lower = raw.to_lowercase();

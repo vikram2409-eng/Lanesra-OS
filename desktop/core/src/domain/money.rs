@@ -111,7 +111,7 @@ pub fn format_bp_as_percent(bp: i64) -> String {
     let frac = abs % 100;
     if frac == 0 {
         format!("{}{}", if negative { "-" } else { "" }, whole)
-    } else if frac % 10 == 0 {
+    } else if frac.is_multiple_of(10) {
         format!("{}{}.{}", if negative { "-" } else { "" }, whole, frac / 10)
     } else {
         format!("{}{}.{:02}", if negative { "-" } else { "" }, whole, frac)
@@ -171,7 +171,7 @@ mod tests {
         let l2 = compute_line(2000, 500, 0, 1000);
         let totals = aggregate_lines(&[l1, l2]);
         assert_eq!(totals.subtotal_cents, 1000 + 1000);
-        assert_eq!(totals.tax_cents, 0 + 100);
+        assert_eq!(totals.tax_cents, 100);
         assert_eq!(totals.total_cents, 1000 + 1100);
     }
 

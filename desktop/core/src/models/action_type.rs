@@ -29,8 +29,8 @@
 ///   (`effect_config_json = {"field_sources": {"<custom_field_key>":
 ///   "<parameter_key>"}}`), through `custom_field_service::set_entity_values`
 ///   - the one place Business Rule evaluation actually fires in this
-///   codebase today, so this is the effect that gets real rule
-///   enforcement "for free."
+///     codebase today, so this is the effect that gets real rule
+///     enforcement "for free."
 /// - `reassign_owner`: writes the record's universal `owner_user_id`
 ///   field from a named input parameter
 ///   (`effect_config_json = {"owner_param": "<parameter_key>"}`) - an

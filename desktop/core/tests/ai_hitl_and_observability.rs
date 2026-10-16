@@ -505,11 +505,13 @@ async fn pushing_a_trace_posts_the_real_otlp_json_and_surfaces_a_collector_failu
 
     let ok_message = ai_orchestration_service::push_run_trace_to_otlp(&conn, &ws, &run.id, Some(&admin)).await.unwrap();
     assert!(ok_message.contains("200"), "{ok_message}");
-    let requests = collector_captured.lock().unwrap();
-    assert_eq!(requests.len(), 1);
-    let sent: serde_json::Value = serde_json::from_str(&requests[0]).unwrap();
-    assert_eq!(sent, expected_trace, "the collector should receive exactly the same trace run_to_otlp_json/export_run_as_otlp produces");
-    drop(requests);
+    {
+        // Scoped so the guard is released before the next await (the stub collector shares this lock).
+        let requests = collector_captured.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        let sent: serde_json::Value = serde_json::from_str(&requests[0]).unwrap();
+        assert_eq!(sent, expected_trace, "the collector should receive exactly the same trace run_to_otlp_json/export_run_as_otlp produces");
+    }
 
     let (failing_port, _failing_captured) = spawn_status_stub("500 Internal Server Error", "collector on fire");
     ai_service::set_otlp_endpoint(&conn, &ws, &AiObservabilitySettingsInput { otlp_endpoint: Some(format!("http://127.0.0.1:{failing_port}/v1/traces")) }, Some(&admin)).unwrap();

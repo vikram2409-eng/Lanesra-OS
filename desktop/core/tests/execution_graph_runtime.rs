@@ -428,7 +428,7 @@ async fn loop_node_bounds_iteration_and_exits_via_its_own_exit_edge_after_max_it
     // 4th visit exceeds max_iterations and takes the `exit` edge instead.
     assert_eq!(reviewer_runs, 3, "{run:?}");
     assert_eq!(loop_visits, 4, "{run:?}");
-    let last_loop_output = run.nodes.iter().filter(|n| n.node_key == "loop").last().unwrap().output_json.clone().unwrap_or_default();
+    let last_loop_output = run.nodes.iter().rfind(|n| n.node_key == "loop").unwrap().output_json.clone().unwrap_or_default();
     assert!(last_loop_output.contains("max_iterations_exceeded"), "{last_loop_output}");
 }
 

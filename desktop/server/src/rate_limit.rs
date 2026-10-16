@@ -7,9 +7,9 @@
 //! at the start of one minute and again at the start of the next, instead
 //! of a perfectly smoothed rate. That's a deliberate, stated scope limit
 //! - good enough for the "small team on a LAN / small self-hosted
-//! deployment" scale this server targets. A distributed limiter (shared
-//! across multiple server processes) is out of scope for a
-//! single-process, mutex-guarded server.
+//!   deployment" scale this server targets. A distributed limiter (shared
+//!   across multiple server processes) is out of scope for a
+//!   single-process, mutex-guarded server.
 
 use std::collections::HashMap;
 use std::sync::Mutex;

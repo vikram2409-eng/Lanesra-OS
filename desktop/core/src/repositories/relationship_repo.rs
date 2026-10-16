@@ -86,7 +86,7 @@ pub fn list_definitions(conn: &Connection, workspace_id: &str) -> rusqlite::Resu
 
 /// Every active definition where `entity_type` participates on either side
 /// - used to work out which related lists a given record's detail page
-/// should render.
+///   should render.
 pub fn list_definitions_for_entity(conn: &Connection, workspace_id: &str, entity_type: &str) -> rusqlite::Result<Vec<RelationshipDefinition>> {
     let mut stmt = conn.prepare(
         "SELECT * FROM relationship_definitions

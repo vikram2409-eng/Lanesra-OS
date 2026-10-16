@@ -7,7 +7,7 @@
 //!   in what shape", per `AiAgentPipeline::topology`).
 //! - Each step's agent's own `delegate_agent_ids` (dynamic, runtime-decided
 //!   - "who that agent *may* call", the same field `chat_service`'s
-//!   `delegate_to_agent` tool actually uses).
+//!     `delegate_to_agent` tool actually uses).
 //!
 //! `resolve` builds the tree; `describe_pipeline` narrates it in plain
 //! language, one paragraph per step plus a topology-level summary -

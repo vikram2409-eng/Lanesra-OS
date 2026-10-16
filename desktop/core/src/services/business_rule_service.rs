@@ -233,8 +233,8 @@ pub fn create_rule(conn: &Connection, workspace_id: &str, input: &BusinessRuleIn
 ///   and the parent's own match_type.
 /// - "else" gets zero conditions - see `rule_matches`'s doc comment for why
 ///   that's allowed and what it means.
-/// Both get one default action (`default_branch_action`), since
-/// `validate_actions` requires at least one regardless of branch role.
+///   Both get one default action (`default_branch_action`), since
+///   `validate_actions` requires at least one regardless of branch role.
 pub fn create_rule_branch(conn: &Connection, parent_rule_id: &str, role: &str, actor_user_id: Option<&str>) -> AppResult<BusinessRule> {
     require_admin(conn, actor_user_id)?;
     if role == "if" || !BRANCH_ROLES.contains(&role) {
@@ -531,9 +531,9 @@ fn rule_references_field(rule: &BusinessRule, field_key: &str) -> bool {
 pub struct RuleEvaluation {
     /// custom target_field_key -> "require" | "hide" | "show" | "lock" | "editable"
     /// - "last matching rule wins" per target field (a later `show`
-    /// correctly overrides an earlier `hide` on the same field, same for
-    /// `editable` over `lock`), same map-insert-overwrite semantics the
-    /// original require/hide/lock pair already had.
+    ///   correctly overrides an earlier `hide` on the same field, same for
+    ///   `editable` over `lock`), same map-insert-overwrite semantics the
+    ///   original require/hide/lock pair already had.
     pub field_effects: HashMap<String, String>,
     /// custom target_field_key -> value to apply before validation
     /// (set_default/set_value/clear_value all land here - clear_value just
@@ -541,9 +541,9 @@ pub struct RuleEvaluation {
     pub set_values: HashMap<String, String>,
     /// Same as `field_effects`/`set_values` but for built-in-field targets
     /// - kept in separate maps (rather than merged by key) so a custom
-    /// field that happens to share a key with a built-in one (e.g. an
-    /// admin-defined "Notes" custom field on an entity that already has a
-    /// built-in `notes` column) can never collide with it.
+    ///   field that happens to share a key with a built-in one (e.g. an
+    ///   admin-defined "Notes" custom field on an entity that already has a
+    ///   built-in `notes` column) can never collide with it.
     pub builtin_field_effects: HashMap<String, String>,
     /// Applied immediately via `builtin_field_service::set_field` once
     /// evaluation completes and nothing blocked the save - unlike

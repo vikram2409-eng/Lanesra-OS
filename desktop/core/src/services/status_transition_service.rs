@@ -88,7 +88,7 @@ pub fn delete(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppRe
 /// (fully unrestricted, the default). Once at least one active rule
 /// exists, `new_status` must be reachable from `old_status` per some rule
 /// - either an exact `from_status` match, or a wildcard rule
-/// (`from_status: None`, "from any status").
+///   (`from_status: None`, "from any status").
 pub fn validate_transition(
     conn: &Connection,
     workspace_id: &str,

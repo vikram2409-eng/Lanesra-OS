@@ -189,7 +189,7 @@ pub struct BusinessRuleInput {
     pub effective_end_date: Option<String>,
     /// `None` (the default, via `#[serde(default)]`) means workspace-wide
     /// - existing callers/tests that never set this keep getting exactly
-    /// that.
+    ///   that.
     #[serde(default)]
     pub app_id: Option<String>,
     pub conditions: Vec<BusinessRuleConditionInput>,
