@@ -90,6 +90,7 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
   prompts fresh; use Lanesra words (Team, Playbook, Run, Step).
 - One WP per branch and PR; never push to `main`; the other agent reviews; the owner merges.
 - Migrations take the next free number above `main`'s maximum at rebase time (ADR-0003).
+- Runs, events, errors, migrations, prompts and feature flags follow ADR-0007 to ADR-0012 in `program/decisions/`: use their statuses, event envelope, error classes, table conventions, prompt catalog and flag registry; never invent your own.
 - The product is **bring-your-own-model**: organisations connect OpenAI, Gemini, Claude, Azure OpenAI,
   Google Vertex AI, AWS Bedrock, Ollama or on-prem model servers (vLLM) with their own keys, and every feature must work with all of them. The *build team*
   has no API keys, so tests use the scripted provider, recorded runs and contract fixtures - never a live hosted API.

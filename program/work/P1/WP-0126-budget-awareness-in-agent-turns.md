@@ -38,6 +38,7 @@ Tell the agent each turn how many steps, tokens and dollars remain so it wraps u
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0007 run and step states; ADR-0008 trace and events; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log

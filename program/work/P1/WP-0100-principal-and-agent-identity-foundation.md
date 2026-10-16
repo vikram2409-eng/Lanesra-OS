@@ -62,6 +62,7 @@ and Record Scope), and every action is attributed to them.
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Threats: privilege escalation through unattended runs, credential leakage to models, confused deputy (threat model, WP-0011).
 - Built before SSO and the run model so neither is reworked later (ADR-0006).
 

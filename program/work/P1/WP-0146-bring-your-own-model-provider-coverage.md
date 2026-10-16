@@ -62,6 +62,7 @@ gaps and stop the loop from assuming one provider's behaviour.
 
 ## Notes
 
+- Must follow (WP-0009): ADR-0009 error taxonomy; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - XL: split at refinement (Gate 0 review), e.g. (a) catalog + on-prem connectivity + vLLM + Ollama, (b) Azure OpenAI, (c) Vertex AI, (d) Bedrock.
 - Use maintained, audited libraries for SigV4 and Google/Entra OAuth where possible; record them in THIRD_PARTY_NOTICES.
 - The build team has no hosted-provider keys (ADR-0004); hosted adapters are proven by contract fixtures and by organisations' own conformance runs (WP-0224).

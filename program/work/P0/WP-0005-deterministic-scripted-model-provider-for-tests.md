@@ -42,6 +42,10 @@ Every later work package tests agent behaviour (limits, retries, guardrails, del
 - Tag every new test with `Covers: <REQ-ID>` (and this WP id) so `programctl trace` finds it
 - Full regression suite green; test count not lower than before (see testing/REGRESSION.md)
 
+## Notes
+
+- Must follow (WP-0009): ADR-0009 error taxonomy; ADR-0010 migration conventions; ADR-0011 prompt catalog. ADR-0010 applies to any migration this work package adds.
+
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
