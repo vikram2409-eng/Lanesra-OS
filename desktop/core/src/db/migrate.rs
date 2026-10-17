@@ -179,8 +179,6 @@ pub fn schema_version(conn: &Connection) -> rusqlite::Result<i64> {
 }
 
 /// All migration version numbers, for the upgrade test harness (WP-0007).
-/// Gated on test-support so production builds don't expose internals.
-#[cfg(any(test, feature = "test-support"))]
 pub fn migration_versions() -> Vec<i64> {
     MIGRATIONS.iter().map(|(v, _)| *v).collect()
 }
@@ -206,7 +204,7 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         // ADR-0010: each migration and its schema_migrations row apply in
         // one transaction, so a failed migration never leaves a half-applied
         // schema.
-        let tx = conn.unchecked_transaction()?;
+        let tx = conn.transaction()?;
         tx.execute_batch(sql)?;
         tx.execute(
             "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
