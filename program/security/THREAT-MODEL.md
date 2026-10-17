@@ -52,16 +52,16 @@ Ratings: **L**ikelihood and **I**mpact, each High / Medium / Low, for the produc
 | T-13 | **Server-side request forgery**: a user-configured URL (OpenAI-compatible base URL, connector, webhook, MCP endpoint) makes the server call internal addresses or cloud metadata | Information disclosure / Elevation | M | H | Admin-only configuration (existing); address allow-list and metadata-IP block to add in WP-0143 | Open (RAID R-27) |
 | T-14 | **Malicious or compromised MCP server**: poisoned tool descriptions, or server-initiated sampling and elicitation requests | Tampering / LLM03 | M | H | Gate on server-initiated MCP requests WP-0142; tool catalog audit WP-0143; tool results treated as untrusted WP-0145 | Open |
 | T-15 | **Unsafe rendering of model output**: script or HTML in a model reply or record runs in the UI | Tampering / LLM05 | M | M | React escapes text by default; any Markdown or HTML renderer must sanitise (review rule for WP-0203 and the online demo) | Partial |
-| T-16 | **SFTP host-key not verified**: `sftp_service::QuietHandler::check_server_key` accepts any server key, so a network attacker can impersonate the SFTP host and capture the credential | Spoofing | M | H | Pin the host key on first use and require confirmation on change | Open (RAID R-28) |
+| T-16 | **SFTP host-key not verified**: `sftp_service::QuietHandler::check_server_key` accepts any server key, so a network attacker can impersonate the SFTP host and capture the credential | Spoofing | M | H | The connection must carry the server's `host_key_sha256` fingerprint; an unknown key is refused with the fingerprint shown for the Administrator to confirm, a changed key is refused (`core/tests/sftp_host_key.rs`) | Mitigated |
 | T-17 | **Data key or backup stolen**: whoever has `secret.key` and the database, or a backup holding both, can decrypt every stored credential | Information disclosure | L | H | Key kept apart from backups, key recovery and backup encryption WP-0180 | Open |
 | T-18 | **Audit trail altered or deleted** to hide an action | Repudiation | L | H | Hash-chained audit log and evidence export WP-0402; retention rules WP-0403 | Open |
-| T-19 | **CI or supply-chain compromise**: a third-party action or pull-request code steals secrets or pushes to `main` | Tampering | L | H | Branch protection with required checks (WP-0003); new actions pinned by commit SHA (WP-0011); agent workflows never run for forks and never push to `main` (WP-0018) | Partial (older workflows still use tags) |
+| T-19 | **CI or supply-chain compromise**: a third-party action or pull-request code steals secrets or pushes to `main` | Tampering | L | H | Branch protection with required checks (WP-0003); every action in `.github/workflows/` pinned by commit SHA (WP-0011); agent workflows never run for forks and never push to `main` (WP-0018) | Mitigated |
 
 ## Gaps tracked in RAID
 
 - **R-26** (T-02): indirect prompt injection has no defence until WP-0145 ships.
 - **R-27** (T-13): user-configured URLs are not checked against internal addresses.
-- **R-28** (T-16): SFTP accepts any host key.
+- **R-28** (T-16): closed; SFTP now requires a pinned host-key fingerprint.
 - **R-20 to R-25** (T-08): dated dependency-advisory exceptions in `desktop/deny.toml`.
 
 Review this file whenever a work package adds a new boundary (a new connector type, a new
