@@ -7,9 +7,7 @@ use lanesra_core::services::ai_service::CompletionOutcome;
 use lanesra_core::services::ai_service::RequestedToolCall;
 use lanesra_core::services::ai_service::TokenUsage;
 use lanesra_core::services::ai_service::ToolSpec;
-use lanesra_core::services::scripted_provider::{
-    self, CapturedRequest, ScriptedResponse,
-};
+use lanesra_core::services::scripted_provider::{self, CapturedRequest, ScriptedResponse};
 
 fn tool(name: &str) -> ToolSpec {
     ToolSpec {
@@ -76,7 +74,13 @@ async fn three_round_tool_calling_exchange() {
 
     // Round 1
     let (o1, _) = lanesra_core::services::ai_service::dispatch_with_tools_test(
-        "scripted", None, "m", "k", "sys", &[tool("search")], &[],
+        "scripted",
+        None,
+        "m",
+        "k",
+        "sys",
+        &[tool("search")],
+        &[],
     )
     .await
     .expect("round 1");
@@ -91,7 +95,13 @@ async fn three_round_tool_calling_exchange() {
 
     // Round 2
     let (o2, _) = lanesra_core::services::ai_service::dispatch_with_tools_test(
-        "scripted", None, "m", "k", "sys", &[tool("search"), tool("calculator")], &[],
+        "scripted",
+        None,
+        "m",
+        "k",
+        "sys",
+        &[tool("search"), tool("calculator")],
+        &[],
     )
     .await
     .expect("round 2");
@@ -106,7 +116,13 @@ async fn three_round_tool_calling_exchange() {
 
     // Round 3: final text
     let (o3, u3) = lanesra_core::services::ai_service::dispatch_with_tools_test(
-        "scripted", None, "m", "k", "sys", &[], &[],
+        "scripted",
+        None,
+        "m",
+        "k",
+        "sys",
+        &[],
+        &[],
     )
     .await
     .expect("round 3");
