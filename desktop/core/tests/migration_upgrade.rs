@@ -23,7 +23,10 @@ fn upgrade_preserves_data() {
     run_migrations(&conn).expect("migrations");
 
     let version = schema_version(&conn).expect("version");
-    assert!(version >= 80, "expected at least 80 migrations, got {version}");
+    assert!(
+        version >= 80,
+        "expected at least 80 migrations, got {version}"
+    );
 
     // Insert representative data into key tables.
     conn.execute(
@@ -68,11 +71,7 @@ fn migration_numbers_contiguous_and_unique() {
     let mut sorted = versions.clone();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(
-        sorted.len(),
-        versions.len(),
-        "duplicate migration versions"
-    );
+    assert_eq!(sorted.len(), versions.len(), "duplicate migration versions");
 
     // Contiguous from 1
     for (i, v) in sorted.iter().enumerate() {
