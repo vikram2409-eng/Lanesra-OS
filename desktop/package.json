@@ -12,7 +12,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5",
@@ -35,6 +36,7 @@
     "typescript": "^5",
     "vite": "^5",
     "vitest": "^2",
-    "axe-core": "^4.10.0"
+    "axe-core": "^4.10.0",
+    "@playwright/test": "^1.48.0"
   }
 }
