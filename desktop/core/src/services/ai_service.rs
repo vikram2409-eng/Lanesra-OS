@@ -1389,5 +1389,8 @@ pub async fn dispatch_with_tools_test(
     tools: &[ToolSpec],
     history: &[ChatMessage],
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
-    dispatch_with_tools(provider, base_url, model, api_key, system_prompt, tools, history).await
+    dispatch_with_tools(
+        provider, base_url, model, api_key, system_prompt, tools, history,
+    )
+    .await
 }
