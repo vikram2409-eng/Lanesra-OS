@@ -13,12 +13,14 @@ targets = [
 yanked = "warn"
 # Pre-existing exceptions (documented 2026-10-17, WP-0011 baseline):
 # - RUSTSEC-2026-0367, 0368, 0369: zip 0.6.6 vulnerabilities (upgrade to >=9.0.0 planned)
+# - RUSTSEC-2024-0449: unsafe-libyaml unmaintained (no safe upgrade available)
 # - chacha20 0.10.1 yanked (transitive via tokio-postgres; update planned)
 # These are NOT new findings; the baseline fails on NEW high-severity issues.
 ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
+    "RUSTSEC-2024-0449",
 ]
 
 [licenses]
@@ -32,8 +34,10 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "CC0-1.0",
     "MPL-2.0",
+    "Zlib",
 ]
 exceptions = []
 
