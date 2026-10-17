@@ -28,7 +28,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use lanesra_core::domain::AppError;
+use lanesra_core::domain::{AppError, ErrorClass};
 use lanesra_core::models::integration::{ApiClient, ApiListQuery};
 use lanesra_core::services::integration_log_service::{self, FinishOutcome};
 use lanesra_core::services::{api_client_service, api_object_service};
@@ -58,9 +58,14 @@ pub(crate) fn error_status(e: &AppError) -> StatusCode {
         AppError::Conflict(_) => StatusCode::CONFLICT,
         AppError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         AppError::PolicyBlocked(_) => StatusCode::FORBIDDEN,
-        AppError::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
-        AppError::Timeout(_) => StatusCode::GATEWAY_TIMEOUT,
-        AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        // ADR-0009: a missing setup (configuration) is the server's
+        // dependency being unavailable, like a transient failure.
+        AppError::Classified { class, .. } => match class {
+            ErrorClass::Transient | ErrorClass::Configuration => StatusCode::SERVICE_UNAVAILABLE,
+            ErrorClass::Policy => StatusCode::FORBIDDEN,
+            ErrorClass::Validation => StatusCode::BAD_REQUEST,
+            ErrorClass::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+        },
     }
 }
 

@@ -1,7 +1,8 @@
 //! Scripted model provider for deterministic offline tests (WP-0005, REQ-PRE-003).
 //!
-//! Available only under `cfg(test)` — never compiled into release builds,
-//! never selectable in the product UI or settings API.
+//! Compiled only for tests (`cfg(test)` or the `test-support` feature,
+//! which CI enables for the test run and no release build enables), so it
+//! is never selectable in the product UI or settings API.
 //!
 //! Tests script a sequence of responses; each `dispatch` call pops the next
 //! one. Requests are captured for assertion. Failures (429, timeout, 5xx,
@@ -14,7 +15,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use super::ai_service::{CompletionOutcome, RequestedToolCall, TokenUsage, ToolSpec};
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::chat::ChatMessage;
 
 /// One scripted response in the queue.
@@ -79,13 +80,17 @@ pub fn reset() {
 fn next_response() -> AppResult<ScriptedResponse> {
     SCRIPT.with(|s| {
         s.borrow_mut().pop_front().ok_or_else(|| {
-            AppError::Internal("scripted provider: no more scripted responses".into())
+            AppError::classified(
+                ErrorClass::Internal,
+                "internal",
+                "scripted provider: no more scripted responses",
+            )
         })
     })
 }
 
 /// The dispatch entry point, called from `ai_service::dispatch_with_tools`
-/// under `cfg(test)` when `provider == "scripted"`.
+/// in test builds when `provider == "scripted"`.
 pub async fn dispatch_scripted(
     model: &str,
     system_prompt: &str,
@@ -124,14 +129,45 @@ pub async fn dispatch_scripted(
             ))
         }
         ScriptedResponse::Failure { kind } => {
-            // Surface as the gateway's normal error types so retry logic
-            // can be tested against them.
+            // Surface as the ADR-0009 classes and codes a real provider
+            // adapter returns, so retry and failover can be tested.
+            let provider = |class, code, status, message: &str| AppError::Classified {
+                class,
+                code,
+                message: message.to_string(),
+                retry_after_ms: None,
+                http_status: status,
+            };
             Err(match kind.as_str() {
-                "rate_limit" => AppError::RateLimited("scripted 429".into()),
-                "timeout" => AppError::Timeout("scripted timeout".into()),
-                "server_error" => AppError::Internal("scripted 5xx".into()),
-                "malformed_json" => AppError::Validation("scripted malformed tool JSON".into()),
-                other => AppError::Internal(format!("unknown scripted failure '{other}'")),
+                "rate_limit" => provider(
+                    ErrorClass::Transient,
+                    "provider.rate_limited",
+                    Some(429),
+                    "scripted 429",
+                ),
+                "timeout" => provider(
+                    ErrorClass::Transient,
+                    "provider.timeout",
+                    None,
+                    "scripted timeout",
+                ),
+                "server_error" => provider(
+                    ErrorClass::Transient,
+                    "provider.unavailable",
+                    Some(503),
+                    "scripted 5xx",
+                ),
+                "malformed_json" => provider(
+                    ErrorClass::Validation,
+                    "validation.arguments",
+                    None,
+                    "scripted malformed tool JSON",
+                ),
+                other => AppError::classified(
+                    ErrorClass::Internal,
+                    "internal",
+                    format!("unknown scripted failure '{other}'"),
+                ),
             })
         }
     }

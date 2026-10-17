@@ -1378,7 +1378,7 @@ async fn embed_gemini(
 }
 
 /// Test-only public entry point for the scripted provider (WP-0005).
-/// Only compiled under `cfg(test)`; not available in release builds.
+/// Compiled only for tests (`cfg(test)` or the `test-support` feature).
 #[cfg(any(test, feature = "test-support"))]
 pub async fn dispatch_with_tools_test(
     provider: &str,
