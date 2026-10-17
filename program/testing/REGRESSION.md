@@ -61,3 +61,18 @@ Six of the seven are industry-package workflows that should update a *related* r
 ## Lint and format
 
 - `cargo fmt --all --check` and `cargo clippy -p lanesra-core -p lanesra-server -p lanesra-cli --all-targets -- -D warnings` are clean (WP-0004); documented allow-list in `desktop/Cargo.toml`.
+
+## Performance baseline (WP-0015)
+
+**Date:** 2026-10-17  
+**Method:** `cargo test --test perf_baseline --features lanesra-core/test-support -- --ignored --nocapture`  
+**Provider:** Scripted provider (WP-0005) for deterministic numbers.  
+**Machine:** CI ubuntu-latest (reported by perf-baseline.yml workflow).
+
+| Metric | Value | Notes |
+|---|---|---|
+| agent_loop_per_round_us | TBD (CI) | 100 rounds, scripted provider |
+| sqlite_bytes_per_run | TBD (CI) | Standard workload |
+| checkpoint_write_ms | TBD (CI) | Single checkpoint write |
+
+**Thresholds:** Not yet set (WP-0015 AC-2, pending owner). CI reports numbers but does not fail.
