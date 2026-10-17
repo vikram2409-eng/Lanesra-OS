@@ -8,8 +8,8 @@ targets = [
 
 [advisories]
 vulnerability = "deny"
-unmaintained = "warn"
-yanked = "warn"
+unmaintained = "all"
+yanked = "deny"
 notice = "warn"
 ignore = []
 
