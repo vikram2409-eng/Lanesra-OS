@@ -41,8 +41,9 @@ fn fixture_paths() -> Vec<PathBuf> {
 #[test]
 fn upgrade_fixtures_preserves_data() {
     for path in fixture_paths() {
-        let conn = Connection::open(&path)
-            .unwrap_or_else(|_| panic!("open fixture {}", path.display()));
+        let conn = Connection::open(&path).unwrap_or_else(|_| {
+            panic!("open fixture {}", path.display())
+        });
         conn.pragma_update(None, "foreign_keys", true)
             .expect("pragma");
 
@@ -62,8 +63,7 @@ fn upgrade_fixtures_preserves_data() {
             )
             .expect("canary name");
 
-        run_migrations(&conn)
-            .unwrap_or_else(|_| panic!("migrate {}", path.display()));
+        run_migrations(&conn).unwrap_or_else(|_| panic!("migrate {}", path.display()));
 
         let after_version = schema_version(&conn).expect("version");
         assert!(
@@ -145,17 +145,16 @@ fn dropping_populated_column_fails() {
     // SELECT would fail. This test asserts the canary column exists in the
     // fixtures as a precondition.
     for path in fixture_paths() {
-        let conn = Connection::open(&path)
-            .unwrap_or_else(|_| panic!("open fixture {}", path.display()));
+        let conn = Connection::open(&path).unwrap_or_else(|_| {
+            panic!("open fixture {}", path.display())
+        });
         let name: String = conn
             .query_row(
                 "SELECT name FROM companies WHERE id = 'c_fixture'",
                 [],
                 |r| r.get(0),
             )
-            .unwrap_or_else(|_| {
-                panic!("canary column missing in {}", path.display())
-            });
+            .unwrap_or_else(|_| panic!("canary column missing in {}", path.display()));
         assert_eq!(name, "Fixture Industries");
     }
 }
