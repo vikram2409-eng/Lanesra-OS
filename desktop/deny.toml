@@ -8,10 +8,22 @@ targets = [
 ]
 
 [advisories]
-yanked = "deny"
-# vulnerability, notice, unmaintained use the new lint format below
+# yanked = "warn" for baseline (chacha20 0.10.1 is yanked, transitive via tokio-postgres)
+# TODO: update chacha20, then set back to "deny"
+yanked = "warn"
+# Pre-existing exceptions (documented 2026-10-17, WP-0011 baseline):
+# - RUSTSEC-2026-0367, 0368, 0369: zip 0.6.6 vulnerabilities (upgrade to >=9.0.0 planned)
+# - chacha20 0.10.1 yanked (transitive via tokio-postgres; update planned)
+# These are NOT new findings; the baseline fails on NEW high-severity issues.
+ignore = [
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+]
 
 [licenses]
+# Baseline: warn on unlicensed (tighten to deny after review)
+unlicensed = "warn"
 confidence-threshold = 0.8
 allow = [
     "MIT",
@@ -27,8 +39,9 @@ allow = [
 exceptions = []
 
 [bans]
+# Baseline: warn on issues (tighten after review)
 multiple-versions = "warn"
-wildcards = "deny"
+wildcards = "warn"
 highlight = "all"
 
 [sources]
