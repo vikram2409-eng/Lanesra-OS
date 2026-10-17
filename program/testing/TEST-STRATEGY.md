@@ -37,6 +37,37 @@ the line (see below).
 | Rust unit | `#[test]` in modules | `desktop/*/src/**` | Every PR | Pure logic: compilers, state machines, parsers, rankers |
 | Rust integration | `cargo test`, in-memory SQLite | `desktop/core/tests/`, `desktop/server/tests/`, `desktop/cli/tests/` | Every PR | Services end to end through repos and the firewall |
 | Agent behaviour | Scripted model provider (WP-0005) | Same as integration | Every PR | Loop limits, retries, guardrails, delegation, modes, traces |
+
+### Scripted model provider (WP-0005)
+
+`lanesra_core::services::scripted_provider` (cfg(test) only) lets tests script
+deterministic model responses without API keys or network:
+
+```rust
+use lanesra_core::services::scripted_provider::{self, ScriptedResponse};
+
+// Queue responses: tool calls, then text, then an injected 429.
+scripted_provider::script_responses(vec![
+    ScriptedResponse::ToolCalls { calls: vec![...], usage },
+    ScriptedResponse::Text { text: "done".into(), usage },
+    ScriptedResponse::Failure { kind: "rate_limit".into() },
+]);
+
+// Dispatch through the gateway with provider "scripted".
+let (outcome, usage) = ai_service::dispatch_with_tools_test(
+    "scripted", None, "model", "key", "system", &tools, &history,
+).await?;
+
+// Assert on captured requests.
+let captured = scripted_provider::take_captured();
+assert_eq!(captured[0].tools.len(), 2);
+```
+
+Injected failures (`rate_limit`, `timeout`, `server_error`, `malformed_json`)
+surface as the gateway's normal `AppError` variants so retry logic can be
+tested. The provider is compiled out of release builds — the `scripted` arm
+in `dispatch_with_tools` only exists under `cfg(test)`.
+Covers: REQ-PRE-003 (WP-0005 AC-4)
 | API contract | JSON Schema validation, OpenAPI | `desktop/server/tests/` | Every PR | Event and endpoint shapes are stable |
 | Migration upgrade | Fixture databases (WP-0007) | `desktop/core/tests/migration_upgrade.rs` | Every PR | No data loss on upgrade; numbering rule |
 | Frontend unit | Vitest + Testing Library + axe | `desktop/src/**/__tests__`, `*.test.tsx` | Every PR | Components, hooks, accessibility |

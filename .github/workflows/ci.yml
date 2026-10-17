@@ -79,6 +79,7 @@ jobs:
         run: >
           cargo nextest run --locked --no-fail-fast
           -p lanesra-core -p lanesra-server -p lanesra-cli
+          --features lanesra-core/test-support
           --partition hash:${{ matrix.partition }}/4
       - name: Doc tests
         if: matrix.partition == 1

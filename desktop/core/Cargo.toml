@@ -10,6 +10,11 @@ rust-version = "1.97"
 name = "lanesra_core"
 path = "src/lib.rs"
 
+[features]
+# Test-support feature: enables the scripted model provider (WP-0005)
+# for integration tests. Never enabled in release builds.
+test-support = []
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -3,14 +3,14 @@ id: WP-0005
 title: Deterministic scripted model provider for tests
 phase: 0
 epic: E0.2 Test infrastructure
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: []
 requirements: [REQ-PRE-003]
 estimate: M
 editions: []
 delivered: []
-branch: 
+branch: wp/WP-0005-scripted-provider
 pr: 
 updated: 2026-10-16
 ---
