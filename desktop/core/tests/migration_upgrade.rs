@@ -30,12 +30,12 @@ fn upgrade_preserves_data() {
 
     // Insert representative data into key tables.
     conn.execute(
-        "INSERT INTO workspaces (id, name) VALUES ('ws1', 'Test')",
+        "INSERT INTO workspaces (id, business_name, created_at, updated_at) VALUES ('ws1', 'Test', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
         [],
     )
     .expect("workspace");
     conn.execute(
-        "INSERT INTO companies (id, workspace_id, customer_number, name, status) VALUES ('c1', 'ws1', 'C-001', 'Acme', 'Active Customer')",
+        "INSERT INTO companies (id, workspace_id, customer_number, name, status, created_at, updated_at) VALUES ('c1', 'ws1', 'C-001', 'Acme', 'Active Customer', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
         [],
     )
     .expect("company");
@@ -96,14 +96,14 @@ fn dropping_populated_column_fails() {
     run_migrations(&conn).expect("migrations");
 
     conn.execute(
-        "INSERT INTO workspaces (id, name) VALUES ('ws1', 'Test')",
+        "INSERT INTO workspaces (id, business_name, created_at, updated_at) VALUES ('ws1', 'Test', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
         [],
     )
     .expect("workspace");
     // Use the 'name' column as the canary: if a migration dropped it,
     // this select would fail.
     conn.execute(
-        "INSERT INTO companies (id, workspace_id, customer_number, name, status) VALUES ('c1', 'ws1', 'C-001', 'Acme', 'Active Customer')",
+        "INSERT INTO companies (id, workspace_id, customer_number, name, status, created_at, updated_at) VALUES ('c1', 'ws1', 'C-001', 'Acme', 'Active Customer', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
         [],
     )
     .expect("company");
