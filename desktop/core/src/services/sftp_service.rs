@@ -26,13 +26,12 @@ fn default_port() -> u16 {
 
 struct QuietHandler;
 
-#[async_trait::async_trait]
 impl russh::client::Handler for QuietHandler {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::key::PublicKey,
+        _server_public_key: &russh::keys::PublicKey,
     ) -> Result<bool, Self::Error> {
         // Self-hosted, admin-configured endpoints, same trust model the
         // rest of Integration Hub's "TLS verification enabled by default,
@@ -73,7 +72,7 @@ pub async fn test_connection(
         .authenticate_password(&config.username, password)
         .await
         .map_err(|e| AppError::Validation(format!("SSH authentication failed: {e}")))?;
-    if !authenticated {
+    if !authenticated.success() {
         return Err(AppError::Validation(
             "SSH authentication rejected - check the username/password".into(),
         ));
