@@ -17,6 +17,12 @@ pub enum AppError {
     /// counted deterministically, not inferred by matching on error text.
     #[error("{0}")]
     PolicyBlocked(String),
+    /// Rate limit (HTTP 429) from a model provider — retryable.
+    #[error("rate limited: {0}")]
+    RateLimited(String),
+    /// Request timeout — retryable.
+    #[error("timeout: {0}")]
+    Timeout(String),
 }
 
 // Tauri command errors must be Serialize; we expose them to the frontend as
