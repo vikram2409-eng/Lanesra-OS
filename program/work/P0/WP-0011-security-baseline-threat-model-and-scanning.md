@@ -4,7 +4,7 @@ title: Security baseline: threat model and scanning
 phase: 0
 epic: E0.4 Security and compliance baseline
 status: in_review
-owner: unassigned
+owner: muse
 depends_on: [WP-0003]
 requirements: [REQ-PRE-009]
 estimate: M
