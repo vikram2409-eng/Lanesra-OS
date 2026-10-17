@@ -41,15 +41,18 @@ jobs:
         run: npm run build
 
       - name: Build lanesra-server
+        working-directory: desktop
         run: cargo build -p lanesra-server --locked
 
       - name: Run Playwright tests
         working-directory: desktop
         env:
           E2E_BASE_URL: http://localhost:3000
+          PORT: 3000
+          LANESRA_DATA_DIR: /tmp/e2e-data
         run: |
           # Start the server on a temp data dir in the background
-          ./../target/debug/lanesra-server --data-dir /tmp/e2e-data --port 3000 &
+          ./target/debug/lanesra-server &
           SERVER_PID=$!
           # Wait for health check
           for i in $(seq 1 30); do
@@ -57,7 +60,7 @@ jobs:
             sleep 2
           done
           # Run the tests
-          npx playwright test
+          npx playwright test --config e2e/playwright.config.ts
           TEST_EXIT=$?
           kill $SERVER_PID || true
           exit $TEST_EXIT
