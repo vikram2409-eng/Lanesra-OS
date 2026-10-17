@@ -33,6 +33,21 @@ fn fixture_paths() -> Vec<PathBuf> {
     paths
 }
 
+/// Opens a private copy of a fixture, so a test run never migrates the
+/// committed file in place (which would leave the next run nothing to
+/// upgrade) and tests running in parallel never share a database file.
+fn open_copy(path: &std::path::Path) -> Connection {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let copy = std::env::temp_dir().join(format!(
+        "lanesra-fixture-{}-{n}-{}",
+        std::process::id(),
+        path.file_name().unwrap().to_string_lossy()
+    ));
+    std::fs::copy(path, &copy).unwrap_or_else(|e| panic!("copy fixture {}: {e}", path.display()));
+    Connection::open(&copy).unwrap_or_else(|_| panic!("open fixture copy {}", copy.display()))
+}
+
 /// AC-1: Upgrade test passes for the current HEAD.
 /// Opens each fixture database (created by the last released desktop version
 /// and by current main), runs migrations, and verifies row counts and key
@@ -41,8 +56,7 @@ fn fixture_paths() -> Vec<PathBuf> {
 #[test]
 fn upgrade_fixtures_preserves_data() {
     for path in fixture_paths() {
-        let conn =
-            Connection::open(&path).unwrap_or_else(|_| panic!("open fixture {}", path.display()));
+        let conn = open_copy(&path);
         conn.pragma_update(None, "foreign_keys", true)
             .expect("pragma");
 
@@ -144,8 +158,7 @@ fn dropping_populated_column_fails() {
     // SELECT would fail. This test asserts the canary column exists in the
     // fixtures as a precondition.
     for path in fixture_paths() {
-        let conn =
-            Connection::open(&path).unwrap_or_else(|_| panic!("open fixture {}", path.display()));
+        let conn = open_copy(&path);
         let name: String = conn
             .query_row(
                 "SELECT name FROM companies WHERE id = 'c_fixture'",
