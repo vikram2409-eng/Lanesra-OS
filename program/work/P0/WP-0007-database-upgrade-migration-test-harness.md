@@ -11,7 +11,7 @@ estimate: M
 editions: []
 delivered: []
 branch: wp/WP-0007-migration-test-harness
-pr: TBD
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/647
 updated: 2026-10-17
 ---
 
@@ -33,7 +33,7 @@ This build adds many tables and columns to a schema that customers already hold 
 
 - [ ] AC-1: Upgrade test passes for the current HEAD
 - [ ] AC-2: A canary migration that drops a populated column is added in the PR, the upgrade test fails on it, then the canary is removed before merge (failure shown in PR checks)
-- [ ] AC-3: Fixture regeneration documented in TEST-STRATEGY.md
+- [x] AC-3: Fixture regeneration documented in TEST-STRATEGY.md
 
 ## Test plan
 
@@ -56,3 +56,4 @@ This build adds many tables and columns to a schema that customers already hold 
 ## Progress log
 
 - 2026-10-17 muse: Claimed WP-0007. Building: desktop/core/tests/migration_upgrade.rs (AC-1/AC-2), migrate.rs transaction wrapping per ADR-0010 + migration_versions() test helper, check_migrations.py ADR-0010 header check for migrations >0079, TEST-STRATEGY.md fixture docs (AC-3), desktop/core/tests/fixtures/gen_fixtures.py. Untested locally — see CI.
+- 2026-10-17 claude: Review by Claude Code after merge of PR #647. Delivered: run_migrations wraps each migration and its schema_migrations row in one transaction (ADR-0010), migration_versions(), the numbering test, gen_fixtures.py and its TEST-STRATEGY.md section (AC-3 ticked). Not yet delivered, so status stays in_progress: (1) no fixture databases are committed under desktop/core/tests/fixtures/db/ (scope item 1), so `upgrade_preserves_data` migrates a fresh database and re-runs migrations; it never upgrades an older, populated schema. AC-1 needs a test that opens each committed fixture (last released desktop version, current main), runs migrations and checks row counts and invariants. (2) AC-2 has no recorded run: add the canary migration on the PR, link the red check run here, then remove it. Next: generate and commit the fixtures with gen_fixtures.py, rewrite the upgrade test to open them, record the AC-2 canary run.

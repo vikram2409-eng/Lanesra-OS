@@ -24,7 +24,7 @@ suite only grows.
 |---|---|---|---|
 | Targeted | While building, before each push | Tests for the crates and files touched: `cargo test -p lanesra-core --test <file>`, `npx vitest run <path>`, `programctl validate` | The AI, minutes |
 | Full regression | Every pull request and every push to `main` | Everything in `.github/workflows/ci.yml` and `program.yml`: fmt, clippy, all Rust tests in 4 parallel shards (`cargo nextest`), doc tests, Tauri clippy, frontend typecheck/tests/build, demo syntax, migration order, tracker | Nobody: CI runs it; merge is blocked until green |
-| Full local | Only for changes that touch everything (formatting, toolchain, migration framework, shared test helpers) or when CI is down | `cargo test --locked --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli` | The AI (about 75 minutes on the sandbox) |
+| Full local | Only for changes that touch everything (formatting, toolchain, migration framework, shared test helpers) or when CI is down | `cargo test --locked --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli --features lanesra-core/test-support` | The AI (about 75 minutes on the sandbox) |
 | Nightly | Scheduled, once the harnesses exist | Full end-to-end browser suite (WP-0006), performance benchmarks (WP-0015) | Nobody |
 
 A failing full regression on a pull request is fixed on that branch before merge. A red `main` stops
@@ -40,7 +40,7 @@ the line (see below).
 
 ### Scripted model provider (WP-0005)
 
-`lanesra_core::services::scripted_provider` (cfg(test) only) lets tests script
+`lanesra_core::services::scripted_provider` (only in test builds: run tests with `--features lanesra-core/test-support`) lets tests script
 deterministic model responses without API keys or network:
 
 ```rust
@@ -129,7 +129,7 @@ Usage examples will be added here when WP-0005 lands. Until then, do not write t
 
 ```bash
 cd desktop
-cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli
+cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli --features lanesra-core/test-support
 npm ci && npx tsc --noEmit && npm test && npm run build
 cd .. && node --check app.js
 python3 -m unittest discover -s program/tools -p 'test_*.py'

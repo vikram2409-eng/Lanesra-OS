@@ -52,7 +52,7 @@ If you are asked to do something that is not a work package, say so and ask whet
 
 ```bash
 cd desktop
-cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli   # Rust suite
+cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli --features lanesra-core/test-support   # Rust suite
 npm ci && npx tsc --noEmit && npm test && npm run build                       # frontend
 cd .. && node --check app.js                                                   # online demo
 python3 program/tools/programctl.py validate && python3 program/tools/programctl.py status --check

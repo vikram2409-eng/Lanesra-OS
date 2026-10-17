@@ -3,7 +3,7 @@ id: WP-0010
 title: Workspace feature flags
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0009]
 requirements: [REQ-PRE-006, REQ-PRE-021]
@@ -14,7 +14,7 @@ docs: []
 docs_reason: developer-only setting; documented in desktop/README.md
 branch: claude/enterprise-build-planning-jxy2kq
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/637
-updated: 2026-10-16
+updated: 2026-10-17
 ---
 
 # WP-0010 — Workspace feature flags
@@ -71,3 +71,4 @@ The build spans ~7 months. Unfinished capabilities must merge to `main` behind f
     - AC-3: both states tested for `playground.shell`.
   - **Local runs:** clippy (core and server, `-D warnings`) and fmt are clean; tsc, vitest (46/46) and the build pass. The Tauri crate cannot be compiled in this container (no webkit2gtk), so CI checks it.
   - **Next:** WP-0203 wraps the Playground behind `playground.shell`; WP-0007 (migration runner transaction and header check) and WP-0110 (run schema) can start.
+- 2026-10-17 claude: Merged in PR #637 (CI green, including the tauri desktop shell check). Closed out by the WP-0005 follow-up PR.
