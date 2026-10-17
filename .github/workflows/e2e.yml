@@ -1,0 +1,71 @@
+name: e2e (Playwright)
+
+# WP-0006: Browser end-to-end test harness.
+# This is a NEW check, NOT required (per PROTOCOL.md §13, the owner adds it to
+# the required list after a week of green runs).
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/src/**'
+      - 'desktop/server/**'
+      - 'desktop/e2e/**'
+      - 'app.js'
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    name: playwright (e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Install Playwright with Chromium
+        working-directory: desktop
+        run: npx playwright install --with-deps chromium
+
+      - name: Build frontend
+        working-directory: desktop
+        run: npm run build
+
+      - name: Build lanesra-server
+        run: cargo build -p lanesra-server --locked
+
+      - name: Run Playwright tests
+        working-directory: desktop
+        env:
+          E2E_BASE_URL: http://localhost:3000
+        run: |
+          # Start the server on a temp data dir in the background
+          ./../target/debug/lanesra-server --data-dir /tmp/e2e-data --port 3000 &
+          SERVER_PID=$!
+          # Wait for health check
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health; then break; fi
+            sleep 2
+          done
+          # Run the tests
+          npx playwright test
+          TEST_EXIT=$?
+          kill $SERVER_PID || true
+          exit $TEST_EXIT
+
+      - name: Upload trace artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: desktop/playwright-report/
+          retention-days: 7
