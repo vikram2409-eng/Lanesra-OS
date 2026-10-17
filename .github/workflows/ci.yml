@@ -9,6 +9,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Lets the program-bot re-trigger the suite after it pushes a regenerated
+  # STATUS.md (WP-0018): a GITHUB_TOKEN push does not start new runs, and
+  # workflow_dispatch is the documented exception a GITHUB_TOKEN can trigger.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -154,6 +158,11 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "${{ github.base_ref }}"
             python3 program/tools/check_migrations.py --base "origin/${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Bot re-trigger after a STATUS.md push (WP-0018): no PR context,
+            # so compare against main like a PR would.
+            git fetch --no-tags origin main
+            python3 program/tools/check_migrations.py --base "origin/main"
           else
             python3 program/tools/check_migrations.py
           fi
@@ -179,3 +188,72 @@ jobs:
       - name: Server log
         if: always()
         run: cat /tmp/lanesra-smoke.log || true
+
+  agent-report:
+    # The program-bot PR comment for AIs without a shell (WP-0018, REQ-PRE-014):
+    # validation result, the WP's acceptance criteria and editions, the
+    # requirement trace, and every job's result with links to failing logs.
+    # Updates one comment in place via the <!-- program-bot:report --> marker.
+    name: agent report (PR comment)
+    if: >-
+      always() &&
+      (
+        (github.event_name == 'pull_request' &&
+         github.event.pull_request.head.repo.full_name == github.repository &&
+         startsWith(github.event.pull_request.head.ref, 'wp/')) ||
+        (github.event_name == 'workflow_dispatch' &&
+         startsWith(github.ref_name, 'wp/'))
+      )
+    needs: [rust-lint, rust-tests-result, tauri, web, demo, migrations, server-image]
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Render and post the program-bot report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BRANCH="${{ github.event.pull_request.head.ref }}"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+            PR_NUMBER=$(gh api "repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${BRANCH}&state=open" -q '.[0].number')
+          fi
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+            echo "No open PR for branch $BRANCH; skipping report."
+            exit 0
+          fi
+          WP_ID=$(echo "$BRANCH" | grep -o 'WP-[0-9]*' | head -1)
+          WP_FILE=$(ls program/work/P*/${WP_ID}-*.md 2>/dev/null | head -1)
+          if [ -z "$WP_FILE" ]; then
+            echo "No work package file for $WP_ID; skipping report."
+            exit 0
+          fi
+          python3 program/tools/programctl.py validate > /tmp/validate.txt 2>&1 || true
+          python3 program/tools/programctl.py trace > /tmp/trace.txt 2>&1 || true
+          gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?per_page=100" \
+            -q '.jobs | map({name, conclusion, html_url})' > /tmp/jobs.json
+          python3 program/tools/pr_report.py \
+            --validate-output /tmp/validate.txt \
+            --wp-file "$WP_FILE" \
+            --trace-output /tmp/trace.txt \
+            --jobs-json /tmp/jobs.json \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            > /tmp/comment.md
+          EXISTING=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments?per_page=100" \
+            -q '[.[] | select(.body | startswith("<!-- program-bot:report -->"))][0].id')
+          if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/${EXISTING}" \
+              -f body="$(cat /tmp/comment.md)" > /dev/null
+            echo "Updated program-bot comment $EXISTING."
+          else
+            gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md
+            echo "Posted new program-bot comment."
+          fi

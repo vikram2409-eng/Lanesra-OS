@@ -68,7 +68,7 @@ never a human's login or an Administrator's rights.
 
 | Phase | Gate to pass | Size | Contents |
 |---|---|---|---|
-| 0 · Precursors | Engineering ready | 18 WPs · 34 pts | CI on every PR, green `main`, lockfiles, scripted model provider for tests, E2E and migration test harnesses, foundational ADRs, feature flags, threat model, clean-room controls, Issues mirror, Muse relay path |
+| 0 · Precursors | Engineering ready | 18 WPs · 34 pts | CI on every PR, green `main`, lockfiles, scripted model provider for tests, E2E and migration test harnesses, foundational ADRs, feature flags, threat model, clean-room controls, Issues mirror, Muse GitHub flow (tracker upkeep + PR report) |
 | 1 · Foundations | Every run produces a full trace | 35 WPs · 114 pts | Identity foundation (principals, Agent Identities, agent credentials), SSO (OIDC + SAML, desktop and server), bring-your-own-model provider coverage and model catalog, run/step model, trace spans and SSE events, step limits and partial results, task contracts, guardrails, prompt catalog, approvals unified, minimal prompt-injection defence, agent settings groups |
 | 2 · Playground | Templates pass their evaluation suites | 24 WPs · 90 pts | Three-pane Playground, live trace, step-through, simulate writes, fork/replay, compare, save as test case, publish gate, Guided Setup, three industry templates, online demo Playground |
 | 3 · Teams and modes | Security review signed off | 31 WPs · 120 pts | Teams, seats, compiler, run controller, Manager-led / Round Table / Handoff / Debate / Graph modes, team-level roles, budgets, memory recall, team editor and canvas |
@@ -115,7 +115,7 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
 - Next up (Phase 0, critical path first): **WP-0003** PR CI and branch protection, **WP-0008** gap
   audit → **WP-0009** foundational ADRs, **WP-0005** scripted model provider, **WP-0004** lint
   baseline, **WP-0012** clean-room controls, **WP-0013** online demo architecture,
-  **WP-0018** Muse relay path (after CI).
+  **WP-0018** tracker upkeep and test feedback for Muse (after CI).
 - Live state: `program/STATUS.md`.
 
 ## 7. Paste-in starter prompts

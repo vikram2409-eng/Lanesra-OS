@@ -12,6 +12,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Lets the program-bot re-trigger the tracker after it pushes a regenerated
+  # STATUS.md (WP-0018): a GITHUB_TOKEN push does not start new runs, and
+  # workflow_dispatch is the documented exception a GITHUB_TOKEN can trigger.
+  workflow_dispatch:
 
 permissions:
   contents: read

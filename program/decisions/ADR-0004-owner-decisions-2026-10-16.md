@@ -9,7 +9,7 @@
 
 | # | Question | Decision | Consequence in the plan |
 |---|---|---|---|
-| 1 | Which AI tools build this? | **Muse AI and Claude Code.** | Agent profiles in `program/AGENT-PROFILES.md`. Muse works through GitHub (its past commits arrive through the `apply-ontology-pr.yml` Action), so CI is where its changes get tested; WP-0018 adds a validated relay path. |
+| 1 | Which AI tools build this? | **Muse AI and Claude Code.** | Agent profiles in `program/AGENT-PROFILES.md`. Muse works through GitHub directly (reads the repo, creates branches, commits, opens PRs); CI is where its changes get tested, regenerates `STATUS.md` on its PR branch and posts validation, trace and test results as a PR comment (WP-0018). |
 | 2 | Who reviews, merges and protects `main`? | **Claude Code turns branch protection on** once CI exists. | WP-0003 includes enabling protection. Review by an agent other than the author when available, else the owner (ADR-0005). The owner keeps the final merge. |
 | 3 | GitHub Issues / Project mirror? | **Yes.** | One-way mirror (WP-0017): one issue per work package, milestones per phase, status labels. Files stay the source of truth. |
 | 4 | Public build plan OK? | **Yes.** | No change; `program/` stays out of the website build. |

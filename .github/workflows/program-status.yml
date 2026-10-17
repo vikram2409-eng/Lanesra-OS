@@ -1,0 +1,54 @@
+name: Program status upkeep
+
+# Regenerates program/STATUS.md on agent PR branches (WP-0018, REQ-PRE-014).
+# Muse AI works through GitHub without a shell and cannot run programctl,
+# so CI does the tracker upkeep for it and re-triggers the test suite.
+#
+# Scope guard (least privilege): same-repo wp/ branches only. Never forks,
+# never main. The push uses GITHUB_TOKEN, which cannot start new workflow
+# runs, so the bot re-triggers CI and the tracker explicitly via
+# workflow_dispatch (the documented exception a GITHUB_TOKEN can trigger).
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  upkeep:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'wp/') &&
+      github.event.pull_request.head.ref != 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Regenerate STATUS.md
+        run: python3 program/tools/programctl.py status
+      - name: Commit and push if changed, then re-trigger CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if git diff --quiet program/STATUS.md; then
+            echo "STATUS.md already up to date."
+            exit 0
+          fi
+          git config user.name "program-bot"
+          git config user.email "program-bot@lanesraos.com"
+          git add program/STATUS.md
+          git commit -m "chore(program): regenerate STATUS.md"
+          git push origin "HEAD:${HEAD_REF}"
+          # A GITHUB_TOKEN push does not start new workflow runs, so the
+          # required checks would never report on the bot's commit and the
+          # PR would hang. Re-trigger explicitly via workflow_dispatch.
+          gh workflow run ci.yml --ref "${HEAD_REF}"
+          gh workflow run program.yml --ref "${HEAD_REF}"
