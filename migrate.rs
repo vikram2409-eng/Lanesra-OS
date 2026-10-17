@@ -1,0 +1,249 @@
+use chrono::Utc;
+use rusqlite::Connection;
+
+/// Ordered list of (version, sql). Add new migrations by appending here and
+/// creating a new file under `migrations/`; never edit an already-released
+/// migration in place.
+const MIGRATIONS: &[(i64, &str)] = &[
+    (1, include_str!("migrations/0001_init.sql")),
+    (2, include_str!("migrations/0002_web_sessions.sql")),
+    (3, include_str!("migrations/0003_workspace_branding.sql")),
+    (4, include_str!("migrations/0004_custom_fields.sql")),
+    (5, include_str!("migrations/0005_field_rules.sql")),
+    (6, include_str!("migrations/0006_workflow_rules.sql")),
+    (7, include_str!("migrations/0007_broaden_entity_types.sql")),
+    (
+        8,
+        include_str!("migrations/0008_workspace_phone_and_kpi_prefs.sql"),
+    ),
+    (9, include_str!("migrations/0009_numbering_configs.sql")),
+    (10, include_str!("migrations/0010_custom_reports.sql")),
+    (11, include_str!("migrations/0011_custom_objects.sql")),
+    (12, include_str!("migrations/0012_relationships.sql")),
+    (13, include_str!("migrations/0013_business_rules.sql")),
+    (14, include_str!("migrations/0014_workflow_automation.sql")),
+    (
+        15,
+        include_str!("migrations/0015_custom_field_validation.sql"),
+    ),
+    (
+        16,
+        include_str!("migrations/0016_builtin_field_targeting.sql"),
+    ),
+    (
+        17,
+        include_str!("migrations/0017_condition_field_comparison.sql"),
+    ),
+    (18, include_str!("migrations/0018_status_transitions.sql")),
+    (
+        19,
+        include_str!("migrations/0019_custom_field_extensibility.sql"),
+    ),
+    (
+        20,
+        include_str!("migrations/0020_condition_groups_and_field_effects.sql"),
+    ),
+    (
+        21,
+        include_str!("migrations/0021_company_contact_extra_fields.sql"),
+    ),
+    (22, include_str!("migrations/0022_rule_version_history.sql")),
+    (23, include_str!("migrations/0023_screen_layouts.sql")),
+    (24, include_str!("migrations/0024_dashboard_layouts.sql")),
+    (25, include_str!("migrations/0025_app_definitions.sql")),
+    (26, include_str!("migrations/0026_audit_columns.sql")),
+    (27, include_str!("migrations/0027_industry_packages.sql")),
+    (
+        28,
+        include_str!("migrations/0028_app_scoped_automation.sql"),
+    ),
+    (29, include_str!("migrations/0029_solution_publishers.sql")),
+    (30, include_str!("migrations/0030_solution_components.sql")),
+    (31, include_str!("migrations/0031_solutions.sql")),
+    (32, include_str!("migrations/0032_integration_hub.sql")),
+    (
+        33,
+        include_str!("migrations/0033_workflow_connector_action.sql"),
+    ),
+    (34, include_str!("migrations/0034_saved_views.sql")),
+    (35, include_str!("migrations/0035_ai_settings.sql")),
+    (36, include_str!("migrations/0036_activities.sql")),
+    (37, include_str!("migrations/0037_chat.sql")),
+    (38, include_str!("migrations/0038_ai_agent_foundry.sql")),
+    (39, include_str!("migrations/0039_chat_agent_mode.sql")),
+    (
+        40,
+        include_str!("migrations/0040_ai_agent_orchestration.sql"),
+    ),
+    (41, include_str!("migrations/0041_ai_gateway.sql")),
+    (42, include_str!("migrations/0042_context_layer.sql")),
+    (43, include_str!("migrations/0043_agent_guardrails.sql")),
+    (44, include_str!("migrations/0044_pipeline_topologies.sql")),
+    (45, include_str!("migrations/0045_eval_harness.sql")),
+    (
+        46,
+        include_str!("migrations/0046_hitl_and_observability.sql"),
+    ),
+    (47, include_str!("migrations/0047_otlp_collector.sql")),
+    (48, include_str!("migrations/0048_vector_search.sql")),
+    (
+        49,
+        include_str!("migrations/0049_relationship_polymorphism_and_cross_record_conditions.sql"),
+    ),
+    (
+        50,
+        include_str!("migrations/0050_connector_agent_tools.sql"),
+    ),
+    (
+        51,
+        include_str!("migrations/0051_organization_and_org_units.sql"),
+    ),
+    (52, include_str!("migrations/0052_work_teams.sql")),
+    (53, include_str!("migrations/0053_users_org_units.sql")),
+    (54, include_str!("migrations/0054_ownership_fields.sql")),
+    (
+        55,
+        include_str!("migrations/0055_custom_object_ownership_mode.sql"),
+    ),
+    (56, include_str!("migrations/0056_access_roles.sql")),
+    (57, include_str!("migrations/0057_voice_mode_v1.sql")),
+    (58, include_str!("migrations/0058_voice_pending_create.sql")),
+    (59, include_str!("migrations/0059_ai_agent_versioning.sql")),
+    (60, include_str!("migrations/0060_voice_llm_settings.sql")),
+    (61, include_str!("migrations/0061_agent_policy_engine.sql")),
+    (
+        62,
+        include_str!("migrations/0062_execution_graph_runtime.sql"),
+    ),
+    (63, include_str!("migrations/0063_memory_architecture.sql")),
+    (64, include_str!("migrations/0064_mcp_client.sql")),
+    (
+        65,
+        include_str!("migrations/0065_eval_harness_expansion.sql"),
+    ),
+    (
+        66,
+        include_str!("migrations/0066_workspace_theme_studio.sql"),
+    ),
+    (67, include_str!("migrations/0067_workflow_studio_v2.sql")),
+    (68, include_str!("migrations/0068_business_rule_board.sql")),
+    (69, include_str!("migrations/0069_screen_builder_v2.sql")),
+    (70, include_str!("migrations/0070_page_templates.sql")),
+    (71, include_str!("migrations/0071_admin_nav_history.sql")),
+    (
+        72,
+        include_str!("migrations/0072_agent_access_governance.sql"),
+    ),
+    (73, include_str!("migrations/0073_system_graph.sql")),
+    (
+        74,
+        include_str!("migrations/0074_semantic_metadata_layer.sql"),
+    ),
+    (
+        75,
+        include_str!("migrations/0075_unified_test_eval_framework.sql"),
+    ),
+    (
+        76,
+        include_str!("migrations/0076_ontology_action_types.sql"),
+    ),
+    (
+        77,
+        include_str!("migrations/0077_ontology_agent_binding.sql"),
+    ),
+    (78, include_str!("migrations/0078_lookup_custom_fields.sql")),
+    (
+        79,
+        include_str!("migrations/0079_resync_lookup_field_caches.sql"),
+    ),
+    (
+        80,
+        include_str!("migrations/0080_feature_flag_overrides.sql"),
+    ),
+];
+
+/// The newest schema version this build knows about - used to reject
+/// restoring a backup that was made by a newer version of the app than
+/// this one (an older app can't safely open a schema it's never seen).
+pub fn current_schema_version() -> i64 {
+    MIGRATIONS.last().map(|(v, _)| *v).unwrap_or(0)
+}
+
+/// The schema version actually applied to `conn`.
+pub fn schema_version(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+        [],
+        |row| row.get(0),
+    )
+}
+
+/// All migration version numbers, for the upgrade test harness (WP-0007).
+/// Gated on test-support so production builds don't expose internals.
+#[cfg(any(test, feature = "test-support"))]
+pub fn migration_versions() -> Vec<i64> {
+    MIGRATIONS.iter().map(|(v, _)| *v).collect()
+}
+
+pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL
+        );",
+    )?;
+
+    let current_version: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+        [],
+        |row| row.get(0),
+    )?;
+
+    for (version, sql) in MIGRATIONS {
+        if *version <= current_version {
+            continue;
+        }
+        // ADR-0010: each migration and its schema_migrations row apply in
+        // one transaction, so a failed migration never leaves a half-applied
+        // schema.
+        let tx = conn.transaction()?;
+        tx.execute_batch(sql)?;
+        tx.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
+            (version, Utc::now().to_rfc3339()),
+        )?;
+        tx.commit()?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn applies_all_migrations_and_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", true).unwrap();
+
+        run_migrations(&conn).unwrap();
+        run_migrations(&conn).unwrap(); // must not fail or double-apply
+
+        let version: i64 = conn
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, 80);
+
+        let table_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'companies'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(table_count, 1);
+    }
+}
