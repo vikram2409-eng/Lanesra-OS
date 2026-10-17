@@ -47,6 +47,7 @@ jobs:
         working-directory: desktop
         env:
           E2E_BASE_URL: http://localhost:3000
+          LANESRA_FRONTEND_DIR: ./dist
         run: |
           # Start the server on a temp data dir in the background
           ./../target/debug/lanesra-server --data-dir /tmp/e2e-data --port 3000 &
