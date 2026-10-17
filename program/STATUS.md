@@ -91,7 +91,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0106](work/P1/WP-0106.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0107, WP-0108, WP-0020 |
 | [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
 | [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0100A |
-| [WP-0109](work/P1/WP-0109.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0100A, WP-0100B |
+| [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0100A, WP-0100B |
 | [WP-0110](work/P1/WP-0110.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0111 |
