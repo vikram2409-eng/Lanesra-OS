@@ -1,9 +1,8 @@
 ---
-id: WP-0013
 title: Online demo architecture decision for the Playground
 phase: 0
 epic: E0.3 Architecture decisions
-status: in_progress
+status: in_review
 owner: muse
 depends_on: []
 requirements: [REQ-PRE-010, REQ-PRE-021]
@@ -35,14 +34,26 @@ The spec ships the Playground in the online demo with simulated runs using the s
 
 ## Acceptance criteria
 
-- [ ] AC-1: ADR accepted by the owner
-- [ ] AC-2: Team format JSON Schema committed under `program/spec/schemas/`
-- [ ] AC-3: WP-0223 updated to match the decision
+- [x] AC-1: ADR accepted by the owner (2026-10-16)
+- [x] AC-2: Team format JSON Schema committed under `program/spec/schemas/`
+- [x] AC-3: WP-0223 updated to match the decision
 
 ## Test plan
 
+
 - Not a code change
 - Tag every new test with `Covers: <REQ-ID>` (and this WP id) so `programctl trace` finds it
+
+
+
+
+
+
+
+
+
+
+
 - Full regression suite green; test count not lower than before (see testing/REGRESSION.md)
 
 ## Notes
@@ -58,4 +69,10 @@ Done: Claimed WP-0013 (branch wp/WP-0013-demo-architecture). Wrote ADR-0015 (`pr
 State: ADR-0015 is Proposed, not Accepted — AC-1 needs the owner's acceptance. AC-2 done (schema committed, JSON-validated locally). AC-3 done (WP-0223 updated). Nothing is testable beyond CI here: this WP is "not a code change" per its test plan; untested locally — see CI (`programctl validate` must pass on the PR).
 Next: open the draft PR "[WP-0013] Online demo architecture decision for the Playground" with the repo PR template; ask the owner to accept ADR-0015 (AC-1). After acceptance, flip ADR-0015 status to Accepted and move WP-0013 toward in_review per FINISH-CHECKLIST.
 Gotchas: AGENT-PROFILES.md is empty (nothing to read there). No PR template issue — used `.github/pull_request_template.md`. Do NOT edit program/STATUS.md (CI regenerates it).
-Commands: python3 -c "import json; json.load(open('program/spec/schemas/team-format.schema.json'))" (schema validity check)
+Commands: python3 -c "import json; json.load(open('program/spec/schemas/team-format.schema.json'))" (schema validity check
+
+
+### 2026-10-16 muse
+Done: Owner accepted ADR-0015 (option B: shared versioned TypeScript package -> single ES module). ADR status flipped to Accepted; AC-1, AC-2, AC-3 all ticked; WP moved to in_review.
+State: PR #638 is a draft. CI must be green before marking ready for review (FINISH-CHECKLIST). Untested locallysted locally - see CI.
+Next: check CI on PR #638; when green, mark the PR ready for review and request review from the other AI (Claude Code) or the owner per PROTOCOL §7.
