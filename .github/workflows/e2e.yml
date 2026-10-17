@@ -41,6 +41,7 @@ jobs:
         run: npm run build
 
       - name: Build lanesra-server
+        working-directory: desktop
         run: cargo build -p lanesra-server --locked
 
       - name: Run Playwright tests
@@ -49,7 +50,7 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
         run: |
           # Start the server on a temp data dir in the background
-          ./../target/debug/lanesra-server --data-dir /tmp/e2e-data --port 3000 &
+          ./target/debug/lanesra-server --data-dir /tmp/e2e-data --port 3000 &
           SERVER_PID=$!
           # Wait for health check
           for i in $(seq 1 30); do
