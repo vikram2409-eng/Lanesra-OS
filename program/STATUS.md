@@ -30,7 +30,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/637 |
-| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | in_progress | muse | `wp/WP-0018-tracker-upkeep` | - |
+| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | in_review | muse | `wp/WP-0018-tracker-upkeep` | https://github.com/vikram2409-eng/Lanesra-OS/pull/641 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 
 ## Ready to start (all dependencies done)
@@ -71,7 +71,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0005 |
 | [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |
-| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | 🔨 in progress | S | — | WP-0003 |
+| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | 👀 in review | S | — | WP-0003 |
 | [WP-0019](work/P0/WP-0019-always-current-program-dashboard.md) | Always-current program dashboard | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | E0.1 Program and engineering readiness | 👀 in review | M | ○Team Workspace | WP-0003 |
 
