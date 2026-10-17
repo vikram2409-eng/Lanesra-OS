@@ -1,0 +1,50 @@
+name: security
+
+# WP-0011: Security baseline - threat model and scanning.
+# Runs on every PR: cargo-deny (Rust deps), npm audit (JS deps), gitleaks (secrets).
+# All actions pinned by commit SHA (per WP-0011 requirements).
+# Covers: REQ-PRE-009 (WP-0011 AC-2)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  cargo-deny:
+    name: cargo-deny (Rust dependencies)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Run cargo-deny
+        working-directory: desktop
+        run: cargo deny check
+
+  npm-audit:
+    name: npm audit (JS dependencies)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+      - name: Run npm audit
+        working-directory: desktop
+        run: npm audit --audit-level=high --omit=dev
+
+  gitleaks:
+    name: gitleaks (secret scanning)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
