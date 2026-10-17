@@ -13,9 +13,9 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::time::Duration;
 
+use super::ai_service::{CompletionOutcome, RequestedToolCall, TokenUsage, ToolSpec};
 use crate::domain::{AppError, AppResult};
 use crate::models::chat::ChatMessage;
-use super::ai_service::{CompletionOutcome, RequestedToolCall, TokenUsage, ToolSpec};
 
 /// One scripted response in the queue.
 #[derive(Debug, Clone)]
@@ -109,9 +109,7 @@ pub async fn dispatch_scripted(
     }
 
     match next_response()? {
-        ScriptedResponse::Text { text, usage } => {
-            Ok((CompletionOutcome::Text(text), usage))
-        }
+        ScriptedResponse::Text { text, usage } => Ok((CompletionOutcome::Text(text), usage)),
         ScriptedResponse::ToolCalls { calls, usage } => {
             let raw = serde_json::json!({
                 "scripted": true,
@@ -129,16 +127,10 @@ pub async fn dispatch_scripted(
             // Surface as the gateway's normal error types so retry logic
             // can be tested against them.
             Err(match kind.as_str() {
-                "rate_limit" => {
-                    AppError::RateLimited("scripted 429".into())
-                }
+                "rate_limit" => AppError::RateLimited("scripted 429".into()),
                 "timeout" => AppError::Timeout("scripted timeout".into()),
-                "server_error" => {
-                    AppError::Internal("scripted 5xx".into())
-                }
-                "malformed_json" => {
-                    AppError::Validation("scripted malformed tool JSON".into())
-                }
+                "server_error" => AppError::Internal("scripted 5xx".into()),
+                "malformed_json" => AppError::Validation("scripted malformed tool JSON".into()),
                 other => AppError::Internal(format!("unknown scripted failure '{other}'")),
             })
         }
