@@ -3,7 +3,7 @@ id: WP-0018
 title: Tracker upkeep and test feedback for AIs without a shell
 phase: 0
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: muse
 depends_on: [WP-0003]
 requirements: [REQ-PRE-014]
