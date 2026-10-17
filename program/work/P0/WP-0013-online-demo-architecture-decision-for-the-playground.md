@@ -3,7 +3,7 @@ id: WP-0013
 title: Online demo architecture decision for the Playground
 phase: 0
 epic: E0.3 Architecture decisions
-status: in_review
+status: done
 owner: muse
 depends_on: []
 requirements: [REQ-PRE-010, REQ-PRE-021]
