@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 9 | 9 | 1 | 0 | 1 | 16 / 36 | `████░░░░░░` 44% |
-| 1 · Foundations | 40 | 1 | 0 | 1 | 0 | 38 | 8 / 132 | `░░░░░░░░░░` 6% |
+| 1 · Foundations | 39 | 1 | 0 | 1 | 0 | 37 | 8 / 130 | `░░░░░░░░░░` 6% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 107 | 2 | 4 / 382 |
-| Team Workspace | 114 | 2 | 4 / 422 |
-| Online demo | 83 | 1 | 2 / 298 |
+| Desktop | 106 | 2 | 4 / 380 |
+| Team Workspace | 113 | 2 | 4 / 420 |
+| Online demo | 82 | 1 | 2 / 296 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -51,7 +51,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 - Spec requirements tracked: **238**
 - Mapped to a work package: **238**
-- Delivered (every mapped work package done): **9**
+- Delivered (every mapped work package done): **10**
 
 ## Phase 0 · Precursors
 
@@ -83,7 +83,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
 | [WP-0100](work/P1/WP-0100-principal-and-agent-identity-foundation.md) | Principal model, Agent Identities and agent credentials | E1.0 Identity foundation | ✅ done | XL | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
-| [WP-0100C](work/P1/WP-0100C-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0100A, WP-0100B |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | 🟢 ready | M | — | WP-0009, WP-0100A, WP-0100B |
 | [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
