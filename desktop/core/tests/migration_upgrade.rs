@@ -79,12 +79,14 @@ fn upgrade_fixtures_preserves_data() {
             .query_row("SELECT COUNT(*) FROM workspaces", [], |r| r.get(0))
             .expect("count workspaces");
         assert_eq!(
-            before_companies, after_companies,
+            before_companies,
+            after_companies,
             "companies row count changed in {}",
             path.display()
         );
         assert_eq!(
-            before_workspaces, after_workspaces,
+            before_workspaces,
+            after_workspaces,
             "workspaces row count changed in {}",
             path.display()
         );
@@ -97,7 +99,8 @@ fn upgrade_fixtures_preserves_data() {
             )
             .expect("canary name after migration");
         assert_eq!(
-            before_name, after_name,
+            before_name,
+            after_name,
             "canary data corrupted in {}",
             path.display()
         );
