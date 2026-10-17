@@ -21,7 +21,7 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 |---|---|---|---|
 | Desktop | 106 | 2 | 4 / 380 |
 | Team Workspace | 113 | 2 | 4 / 420 |
-| Online demo | 84 | 1 | 2 / 300 |
+| Online demo | 82 | 1 | 2 / 296 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -30,7 +30,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | in_review | muse | `wp/WP-0005-scripted-provider` | https://github.com/vikram2409-eng/Lanesra-OS/pull/648 |
-| [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | in_progress | muse | `wp/WP-0007-migration-test-harness` | https://github.com/vikram2409-eng/Lanesra-OS/pull/647 |
+| [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | in_progress | muse | `wp/WP-0007-fixtures-and-closeout` | https://github.com/vikram2409-eng/Lanesra-OS/pull/649 |
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | in_review | muse | `wp/WP-0013-demo-architecture` | https://github.com/vikram2409-eng/Lanesra-OS/pull/638 |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | in_review | muse | `wp/WP-0014-design-tokens-a11y` | https://github.com/vikram2409-eng/Lanesra-OS/pull/644 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
@@ -65,8 +65,8 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
 | [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | E0.4 Security and compliance baseline | ⚪ proposed | M | — | WP-0003 |
 | [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | ✅ done | S | — | - |
-| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 👀 in review | M | ○Online demo | - |
-| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | - |
+| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 👀 in review | M | — | - |
+| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | 👀 in review | M | ○Desktop ○Team Workspace | - |
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0005 |
 | [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |

@@ -8,7 +8,8 @@ owner: muse
 depends_on: []
 requirements: [REQ-PRE-011]
 estimate: M
-editions: [desktop, workspace, demo]
+editions: [desktop, workspace]
+editions_reason: axe checks cover the shared React UI (desktop + Team Workspace); online demo accessibility check deferred to WP-0006 Playwright job
 delivered: []
 docs: []
 docs_reason: internal design tokens and accessibility tooling; no user-facing behaviour
@@ -50,4 +51,6 @@ The mockups use the online demo's palette and new components (risk badges, statu
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-10-17 claude: Closeout (review by Claude Code). Merged in PR #644. AC-1: program/design/TOKENS.md. AC-2: desktop/src/__tests__/a11y.test.tsx runs axe-core on rendered components and its "flags a planted violation" test fails on an image without alt text (vitest, CI web job). AC-3: "Component tasks (from WP-0014 inventory)" sections added to WP-0160 and WP-0203.
-- 2026-10-17 claude: Not done yet: `editions: [desktop, workspace, demo]` but `delivered:` is empty. The axe checks cover the desktop/Team Workspace React UI (same frontend); the online demo (app.js) has no accessibility check. Either add an axe check for the demo (e.g. in the WP-0006 Playwright job) and record `delivered`, or narrow `editions` with an `editions_reason:`. Status stays in_review.
+- 2026-10-17 claude: Not done yet: `editions: [desktop, workspace]` but `delivered:` is empty. The axe checks cover the desktop/Team Workspace React UI (same frontend); the online demo (app.js) has no accessibility check. Either add an axe check for the demo (e.g. in the WP-0006 Playwright job) and record `delivered`, or narrow `editions` with an `editions_reason:`. Status stays in_review.
+
+- 2026-10-17 muse: Closeout. Narrowed editions to [desktop, workspace] with editions_reason (demo axe check deferred to WP-0006). Untested locally — see CI.

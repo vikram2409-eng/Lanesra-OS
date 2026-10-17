@@ -1,62 +1,109 @@
 //! Database upgrade (migration) test harness (WP-0007, REQ-PRE-005).
 //!
 //! Proves every migration upgrades a real older database without data loss.
+//! Opens each fixture database under `fixtures/db/`, runs migrations, and
+//! verifies row counts and key invariants are preserved.
 //! Covers: REQ-PRE-005 (WP-0007 AC-1, AC-2)
 
 use lanesra_core::db::migrate::{run_migrations, schema_version};
 use rusqlite::Connection;
+use std::path::PathBuf;
 
-fn setup_db() -> Connection {
-    let conn = Connection::open_in_memory().expect("in-memory db");
-    conn.pragma_update(None, "foreign_keys", true)
-        .expect("pragma");
-    conn
+fn fixture_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("db")
+}
+
+fn fixture_paths() -> Vec<PathBuf> {
+    let dir = fixture_dir();
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|_| panic!("fixture dir not found: {}", dir.display()))
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().map(|e| e == "db").unwrap_or(false))
+        .collect();
+    paths.sort();
+    assert!(
+        !paths.is_empty(),
+        "no fixture databases in {}",
+        dir.display()
+    );
+    paths
 }
 
 /// AC-1: Upgrade test passes for the current HEAD.
-/// Creates a database, runs all migrations, inserts representative data,
-/// runs migrations again (idempotency), and verifies data is preserved.
+/// Opens each fixture database (created by the last released desktop version
+/// and by current main), runs migrations, and verifies row counts and key
+/// invariants are preserved.
 /// Covers: REQ-PRE-005 (WP-0007 AC-1)
 #[test]
-fn upgrade_preserves_data() {
-    let conn = setup_db();
-    run_migrations(&conn).expect("migrations");
+fn upgrade_fixtures_preserves_data() {
+    for path in fixture_paths() {
+        let conn =
+            Connection::open(&path).unwrap_or_else(|_| panic!("open fixture {}", path.display()));
+        conn.pragma_update(None, "foreign_keys", true)
+            .expect("pragma");
 
-    let version = schema_version(&conn).expect("version");
-    assert!(
-        version >= 80,
-        "expected at least 80 migrations, got {version}"
-    );
+        let before_version = schema_version(&conn).expect("version");
+        let before_companies: i64 = conn
+            .query_row("SELECT COUNT(*) FROM companies", [], |r| r.get(0))
+            .expect("count companies");
+        let before_workspaces: i64 = conn
+            .query_row("SELECT COUNT(*) FROM workspaces", [], |r| r.get(0))
+            .expect("count workspaces");
+        // Canary: the companies.name column must hold its data.
+        let before_name: String = conn
+            .query_row(
+                "SELECT name FROM companies WHERE id = 'c_fixture'",
+                [],
+                |r| r.get(0),
+            )
+            .expect("canary name");
 
-    // Insert representative data into key tables.
-    conn.execute(
-        "INSERT INTO workspaces (id, business_name, created_at, updated_at) VALUES ('ws1', 'Test', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
-        [],
-    )
-    .expect("workspace");
-    conn.execute(
-        "INSERT INTO companies (id, workspace_id, customer_number, name, status, created_at, updated_at) VALUES ('c1', 'ws1', 'C-001', 'Acme', 'Active Customer', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
-        [],
-    )
-    .expect("company");
-    let before: i64 = conn
-        .query_row("SELECT COUNT(*) FROM companies", [], |r| r.get(0))
-        .expect("count");
-    assert_eq!(before, 1);
+        run_migrations(&conn).unwrap_or_else(|_| panic!("migrate {}", path.display()));
 
-    // Re-run migrations (must be idempotent, must preserve data).
-    run_migrations(&conn).expect("re-run migrations");
-    let after: i64 = conn
-        .query_row("SELECT COUNT(*) FROM companies", [], |r| r.get(0))
-        .expect("count");
-    assert_eq!(after, 1, "data loss on migration re-run");
+        let after_version = schema_version(&conn).expect("version");
+        assert!(
+            after_version >= before_version,
+            "version went backwards in {}",
+            path.display()
+        );
 
-    let name: String = conn
-        .query_row("SELECT name FROM companies WHERE id = 'c1'", [], |r| {
-            r.get(0)
-        })
-        .expect("name");
-    assert_eq!(name, "Acme");
+        let after_companies: i64 = conn
+            .query_row("SELECT COUNT(*) FROM companies", [], |r| r.get(0))
+            .expect("count companies");
+        let after_workspaces: i64 = conn
+            .query_row("SELECT COUNT(*) FROM workspaces", [], |r| r.get(0))
+            .expect("count workspaces");
+        assert_eq!(
+            before_companies,
+            after_companies,
+            "companies row count changed in {}",
+            path.display()
+        );
+        assert_eq!(
+            before_workspaces,
+            after_workspaces,
+            "workspaces row count changed in {}",
+            path.display()
+        );
+
+        let after_name: String = conn
+            .query_row(
+                "SELECT name FROM companies WHERE id = 'c_fixture'",
+                [],
+                |r| r.get(0),
+            )
+            .expect("canary name after migration");
+        assert_eq!(
+            before_name,
+            after_name,
+            "canary data corrupted in {}",
+            path.display()
+        );
+    }
 }
 
 /// AC-1 (contiguity): Migration numbers are contiguous, unique, and every
@@ -92,27 +139,20 @@ fn migration_numbers_contiguous_and_unique() {
 /// Covers: REQ-PRE-005 (WP-0007 AC-2)
 #[test]
 fn dropping_populated_column_fails() {
-    let conn = setup_db();
-    run_migrations(&conn).expect("migrations");
-
-    conn.execute(
-        "INSERT INTO workspaces (id, business_name, created_at, updated_at) VALUES ('ws1', 'Test', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
-        [],
-    )
-    .expect("workspace");
-    // Use the 'name' column as the canary: if a migration dropped it,
-    // this select would fail.
-    conn.execute(
-        "INSERT INTO companies (id, workspace_id, customer_number, name, status, created_at, updated_at) VALUES ('c1', 'ws1', 'C-001', 'Acme', 'Active Customer', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')",
-        [],
-    )
-    .expect("company");
-
-    // Verify the column exists and holds data (fails if dropped).
-    let name: String = conn
-        .query_row("SELECT name FROM companies WHERE id = 'c1'", [], |r| {
-            r.get(0)
-        })
-        .expect("canary column 'name' must exist with data");
-    assert_eq!(name, "Acme", "canary data corrupted");
+    // The fixture-based test above (upgrade_fixtures_preserves_data) fails
+    // if any migration drops the companies.name column, because the canary
+    // SELECT would fail. This test asserts the canary column exists in the
+    // fixtures as a precondition.
+    for path in fixture_paths() {
+        let conn =
+            Connection::open(&path).unwrap_or_else(|_| panic!("open fixture {}", path.display()));
+        let name: String = conn
+            .query_row(
+                "SELECT name FROM companies WHERE id = 'c_fixture'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|_| panic!("canary column missing in {}", path.display()));
+        assert_eq!(name, "Fixture Industries");
+    }
 }
