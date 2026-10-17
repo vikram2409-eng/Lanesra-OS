@@ -13,8 +13,8 @@ editions_reason: axe checks cover the shared React UI (desktop + Team Workspace)
 delivered: []
 docs: []
 docs_reason: internal design tokens and accessibility tooling; no user-facing behaviour
-branch: wp/WP-0007-fixtures-and-closeout
-pr: TBD
+branch: wp/WP-0014-design-tokens-a11y
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/644
 updated: 2026-10-17
 ---
 

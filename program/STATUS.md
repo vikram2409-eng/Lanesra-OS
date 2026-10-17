@@ -6,7 +6,7 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 20 | 9 | 9 | 1 | 0 | 1 | 16 / 36 | `████░░░░░░` 44% |
+| 0 · Precursors | 20 | 12 | 6 | 1 | 0 | 1 | 20 / 36 | `█████░░░░░` 56% |
 | 1 · Foundations | 42 | 0 | 0 | 1 | 0 | 41 | 0 / 136 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
@@ -29,14 +29,11 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | in_progress | muse | `wp/WP-0005-scripted-provider` | - |
+| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | in_review | muse | `wp/WP-0005-scripted-provider` | https://github.com/vikram2409-eng/Lanesra-OS/pull/648 |
 | [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | in_progress | muse | `wp/WP-0006-e2e-harness` | TBD |
-| [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | in_progress | muse | `wp/WP-0007-fixtures-and-closeout` | TBD |
-| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/637 |
-| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | in_progress | muse | `wp/WP-0012-clean-room-controls` | - |
-| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | in_review | muse | `wp/WP-0007-fixtures-and-closeout` | TBD |
-| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | in_review | muse | `wp/WP-0007-fixtures-and-closeout` | TBD |
-| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | in_review | muse | `wp/WP-0018-tracker-upkeep` | https://github.com/vikram2409-eng/Lanesra-OS/pull/641 |
+| [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | in_progress | muse | `wp/WP-0007-fixtures-and-closeout` | https://github.com/vikram2409-eng/Lanesra-OS/pull/649 |
+| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | in_review | muse | `wp/WP-0013-demo-architecture` | https://github.com/vikram2409-eng/Lanesra-OS/pull/638 |
+| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | in_review | muse | `wp/WP-0014-design-tokens-a11y` | https://github.com/vikram2409-eng/Lanesra-OS/pull/644 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 
 ## Ready to start (all dependencies done)
@@ -51,7 +48,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 - Spec requirements tracked: **238**
 - Mapped to a work package: **238**
-- Delivered (every mapped work package done): **7**
+- Delivered (every mapped work package done): **14**
 
 ## Phase 0 · Precursors
 
@@ -61,20 +58,20 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | ✅ done | M | — | WP-0002, WP-0004, WP-0016 |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | E0.1 Program and engineering readiness | ✅ done | S | — | - |
-| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 🔨 in progress | M | — | - |
+| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 👀 in review | M | — | - |
 | [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | E0.2 Test infrastructure | 🔨 in progress | M | — | WP-0003 |
 | [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | E0.2 Test infrastructure | 🔨 in progress | M | — | WP-0003 |
 | [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | E0.3 Architecture decisions | ✅ done | M | — | - |
 | [WP-0009](work/P0/WP-0009-foundational-adrs-run-state-machine-trace-schema-errors-migr.md) | Foundational ADRs: run state machine, trace schema, errors, migrations, prompt catalog | E0.3 Architecture decisions | ✅ done | L | — | WP-0008 |
-| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
+| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
 | [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | E0.4 Security and compliance baseline | 🟢 ready | M | — | WP-0003 |
-| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | 🔨 in progress | S | — | - |
+| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | ✅ done | S | — | - |
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | 👀 in review | M | — | - |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | 👀 in review | M | ○Desktop ○Team Workspace | - |
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0005 |
 | [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |
-| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | 👀 in review | S | — | WP-0003 |
+| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0003 |
 | [WP-0019](work/P0/WP-0019-always-current-program-dashboard.md) | Always-current program dashboard | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | E0.1 Program and engineering readiness | 👀 in review | M | ○Team Workspace | WP-0003 |
 

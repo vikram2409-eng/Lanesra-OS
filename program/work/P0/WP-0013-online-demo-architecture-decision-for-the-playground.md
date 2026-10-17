@@ -12,8 +12,8 @@ editions: []
 delivered: []
 editions_reason: architecture decision record; ships no demo feature
 docs: [multi-target-architecture]
-branch: wp/WP-0007-fixtures-and-closeout
-pr: TBD
+branch: wp/WP-0013-demo-architecture
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/638
 updated: 2026-10-17
 ---
 id: WP-0013

@@ -48,3 +48,4 @@ Transient failures (rate limits, timeouts, 5xx) retry with exponential backoff a
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-17 claude: `AppError::Classified` and `ErrorClass` (ADR-0009 §2) now exist in `core/src/domain/errors.rs` (added in the WP-0005 follow-up), and the scripted provider returns classified transient errors. This work package adds retry with backoff and failover on top of them; it does not need to add the variant.

@@ -1,9 +1,9 @@
 #![cfg(feature = "test-support")]
 //! Scripted model provider tests (WP-0005, REQ-PRE-003).
 //!
-//! Covers: REQ-PRE-003 (WP-0005 AC-1, AC-2, AC-3)
+//! Covers: REQ-PRE-003 (WP-0005 AC-1, AC-2). AC-3 is in scripted_provider_gate.rs.
 
-use lanesra_core::domain::AppError;
+use lanesra_core::domain::{AppError, ErrorClass};
 use lanesra_core::services::ai_service::CompletionOutcome;
 use lanesra_core::services::ai_service::RequestedToolCall;
 use lanesra_core::services::ai_service::TokenUsage;
@@ -139,66 +139,43 @@ async fn three_round_tool_calling_exchange() {
     assert_eq!(captured[0].tools.len(), 1);
 }
 
-/// AC-2: Injected 429 and timeout errors surface as the gateway's normal
-/// error types so retry logic can be tested.
+/// AC-2: Injected 429, timeout and 5xx errors surface as the ADR-0009
+/// classes and codes a real provider adapter returns, so retry and
+/// failover can be tested against them.
 /// Covers: REQ-PRE-003 (WP-0005 AC-2)
 #[tokio::test]
 async fn injected_failures_surface_as_gateway_errors() {
-    // 429 rate limit
-    let err = dispatch_scripted(vec![ScriptedResponse::Failure {
-        kind: "rate_limit".to_string(),
-    }])
-    .await
-    .expect_err("expected rate limit error");
-    assert!(
-        matches!(err, AppError::RateLimited(_)),
-        "expected RateLimited, got {err:?}"
-    );
-
-    // Timeout
-    let err = dispatch_scripted(vec![ScriptedResponse::Failure {
-        kind: "timeout".to_string(),
-    }])
-    .await
-    .expect_err("expected timeout error");
-    assert!(
-        matches!(err, AppError::Timeout(_)),
-        "expected Timeout, got {err:?}"
-    );
-
-    // 5xx
-    let err = dispatch_scripted(vec![ScriptedResponse::Failure {
-        kind: "server_error".to_string(),
-    }])
-    .await
-    .expect_err("expected server error");
-    assert!(
-        matches!(err, AppError::Internal(_)),
-        "expected Internal, got {err:?}"
-    );
-}
-
-/// AC-3: The scripted provider cannot be configured through ai_settings or
-/// any API in a release build.
-///
-/// The `scripted` provider arm and the entire `scripted_provider` module are
-/// gated behind `#[cfg(test)]`: in a release build they do not exist, so
-/// `dispatch_with_tools("scripted", …)` falls through to the "No tool-calling
-/// completion implemented" validation error. This test proves the gate by
-/// asserting the module is only compiled in test mode — if this test
-/// compiles, the gate holds; a release build would fail to compile any
-/// reference to the module.
-/// Covers: REQ-PRE-003 (WP-0005 AC-3)
-#[test]
-fn scripted_provider_is_test_only() {
-    // This function only exists under cfg(test). The compile-time gate is
-    // the proof: release builds cannot name this module.
-    #[cfg(test)]
-    {
-        // Verify the provider string is recognised in test builds…
-        let _ = scripted_provider::reset as fn();
+    for (kind, class, code, status) in [
+        (
+            "rate_limit",
+            ErrorClass::Transient,
+            "provider.rate_limited",
+            Some(429),
+        ),
+        ("timeout", ErrorClass::Transient, "provider.timeout", None),
+        (
+            "server_error",
+            ErrorClass::Transient,
+            "provider.unavailable",
+            Some(503),
+        ),
+        (
+            "malformed_json",
+            ErrorClass::Validation,
+            "validation.arguments",
+            None,
+        ),
+    ] {
+        let err = dispatch_scripted(vec![ScriptedResponse::Failure {
+            kind: kind.to_string(),
+        }])
+        .await
+        .expect_err("expected an injected failure");
+        assert_eq!(err.class(), class, "{kind}: {err:?}");
+        assert_eq!(err.code(), Some(code), "{kind}: {err:?}");
+        match err {
+            AppError::Classified { http_status, .. } => assert_eq!(http_status, status, "{kind}"),
+            other => panic!("{kind}: expected Classified, got {other:?}"),
+        }
     }
-    // …and that no production settings API exposes it. The ai_settings
-    // provider field is a free-form string; the gateway dispatch is the
-    // enforcement point, and its "scripted" arm is cfg(test)-gated above.
 }
