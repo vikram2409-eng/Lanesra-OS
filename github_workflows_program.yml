@@ -1,0 +1,40 @@
+name: Program tracker
+
+# Validates the build program's tracking files (program/) on every pull
+# request and push to main: every work package well-formed, every spec
+# requirement covered, STATUS.md regenerated, and programctl's own tests.
+# The product checks (Rust, frontend, demo, migrations) are in ci.yml.
+
+on:
+  # Runs on every pull request (no path filter) because it is a required
+  # check on main: a path-filtered required check never starts on PRs that
+  # do not touch those paths, and the PR would wait for it forever.
+  pull_request:
+  push:
+    branches: [main]
+  # Lets the program-bot re-trigger the tracker after it pushes a regenerated
+  # STATUS.md (WP-0018): a GITHUB_TOKEN push does not start new runs, and
+  # workflow_dispatch is the documented exception a GITHUB_TOKEN can trigger.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  program:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: programctl self-tests
+        run: python3 -m unittest discover -s program/tools -p 'test_*.py' -v
+      - name: Validate work packages and requirement coverage
+        run: python3 program/tools/programctl.py validate
+      - name: Every help article is in the sitemap
+        run: python3 program/tools/programctl.py docs --check
+      - name: STATUS.md is up to date
+        run: python3 program/tools/programctl.py status --check
+      - name: Requirement trace (report only)
+        run: python3 program/tools/programctl.py trace >> "$GITHUB_STEP_SUMMARY"
