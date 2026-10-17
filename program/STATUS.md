@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 9 | 9 | 1 | 0 | 1 | 16 / 36 | `████░░░░░░` 44% |
-| 1 · Foundations | 38 | 0 | 0 | 1 | 0 | 37 | 0 / 122 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 37 | 0 | 0 | 0 | 0 | 37 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -82,7 +82,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
-| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | 🟢 ready | M | — | WP-0009, WP-0100A, WP-0100B |
 | [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
