@@ -17,8 +17,6 @@ pub mod ai_memory_service;
 pub mod ai_orchestration_service;
 pub mod ai_provider_service;
 pub mod ai_service;
-#[cfg(test)]
-pub mod scripted_provider;
 pub mod api_client_service;
 pub mod api_object_service;
 pub mod app_service;
