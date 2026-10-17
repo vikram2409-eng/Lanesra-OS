@@ -35,6 +35,6 @@
     "typescript": "^5",
     "vite": "^5",
     "vitest": "^2",
-    "vitest-axe": "^0.1.0"
+    "axe-core": "^4.10.0"
   }
 }
