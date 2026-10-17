@@ -83,6 +83,8 @@ pub mod report_service;
 pub mod saved_view_service;
 pub mod screen_layout_service;
 pub mod search_service;
+#[cfg(test)]
+pub mod scripted_provider;
 pub mod secret_service;
 pub mod semantic_mapping_service;
 pub mod sftp_service;
