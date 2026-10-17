@@ -45,9 +45,9 @@ pub struct CapturedRequest {
 }
 
 thread_local! {
-    static SCRIPT: RefCell<VecDeque<ScriptedResponse>> = RefCell::new(VecDeque::new());
-    static CAPTURED: RefCell<Vec<CapturedRequest>> = RefCell::new(Vec::new());
-    static LATENCY: RefCell<Duration> = RefCell::new(Duration::ZERO);
+    static SCRIPT: RefCell<VecDeque<ScriptedResponse>> = const { RefCell::new(VecDeque::new()) };
+    static CAPTURED: RefCell<Vec<CapturedRequest>> = const { RefCell::new(Vec::new()) };
+    static LATENCY: RefCell<Duration> = const { RefCell::new(Duration::ZERO) };
 }
 
 /// Queue scripted responses. Each `dispatch` pops the next one.
