@@ -1,0 +1,36 @@
+THIRD PARTY NOTICES
+===================
+LanesraOS incorporates the following third-party software. This file lists
+notable direct dependencies and their licences. It is updated when
+dependencies change (REQ-CLEAN-004).
+
+Rust (crates.io)
+----------------
+- serde / serde_json / serde_yaml ........... MIT OR Apache-2.0
+- rusqlite .................................. MIT
+- uuid ...................................... MIT OR Apache-2.0
+- chrono .................................... MIT OR Apache-2.0
+- argon2, rand_core ......................... MIT OR Apache-2.0
+- thiserror ................................. MIT OR Apache-2.0
+- zip ....................................... MIT OR Apache-2.0
+- base64 .................................... MIT OR Apache-2.0
+- regex ..................................... MIT OR Apache-2.0
+- tokio ..................................... MIT
+- reqwest ................................... MIT OR Apache-2.0
+- aes-gcm, hmac, sha2, hex .................. MIT OR Apache-2.0
+- tauri (desktop shell) ..................... MIT OR Apache-2.0
+
+JavaScript / TypeScript (npm)
+-----------------------------
+- react, react-dom .......................... MIT
+- @tanstack/react-query ..................... MIT
+- @tauri-apps/api ........................... MIT OR Apache-2.0
+- class-variance-authority, clsx,
+  tailwind-merge ............................ MIT
+
+No third-party agent-framework code (CrewAI, Microsoft Agent Framework,
+LangGraph, AutoGen) is used anywhere in this repository. All orchestration
+and agent behaviour is implemented from the LanesraOS spec under clean-room
+rules (see AGENTS.md). Ideas from those projects were studied only as
+plain-language behaviour notes in program/research/; no source code, prompts
+or structure were copied.

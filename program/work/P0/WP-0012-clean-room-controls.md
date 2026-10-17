@@ -3,14 +3,14 @@ id: WP-0012
 title: Clean-room controls
 phase: 0
 epic: E0.4 Security and compliance baseline
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: []
 requirements: [REQ-CLEAN-001, REQ-CLEAN-002, REQ-CLEAN-003, REQ-CLEAN-004, REQ-CLEAN-005]
 estimate: S
 editions: []
 delivered: []
-branch: 
+branch: wp/WP-0012-clean-room-controls
 pr: 
 updated: 2026-10-16
 ---
