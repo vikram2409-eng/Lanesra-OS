@@ -1,25 +1,30 @@
 /**
  * Accessibility tests for UI primitives (WP-0014, REQ-PRE-011).
  *
- * Uses vitest-axe to run axe-core against rendered components.
+ * Uses axe-core directly against rendered components.
  * Covers: REQ-PRE-011 (WP-0014 AC-2)
  */
 import { render } from "@testing-library/react";
+import axe from "axe-core";
 import { describe, expect, it } from "vitest";
-import { axe } from "vitest-axe";
 
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 
+async function checkA11y(container: HTMLElement) {
+  const results = await axe.run(container);
+  return results.violations;
+}
+
 describe("UI primitives accessibility", () => {
   it("Badge has no axe violations", async () => {
     const { container } = render(<Badge>Active</Badge>);
-    expect(await axe(container)).toHaveNoViolations();
+    expect(await checkA11y(container)).toEqual([]);
   });
 
   it("Button has no axe violations", async () => {
     const { container } = render(<Button>Save</Button>);
-    expect(await axe(container)).toHaveNoViolations();
+    expect(await checkA11y(container)).toEqual([]);
   });
 
   it("flags a planted violation (image without alt)", async () => {
@@ -32,8 +37,8 @@ describe("UI primitives accessibility", () => {
         <img src="x.png" />
       </div>,
     );
-    const results = await axe(container);
-    expect(results.violations.length).toBeGreaterThan(0);
-    expect(results.violations.some((v) => v.id === "image-alt")).toBe(true);
+    const violations = await checkA11y(container);
+    expect(violations.length).toBeGreaterThan(0);
+    expect(violations.some((v) => v.id === "image-alt")).toBe(true);
   });
 });
