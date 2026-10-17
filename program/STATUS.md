@@ -6,7 +6,7 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 20 | 9 | 9 | 1 | 0 | 1 | 16 / 36 | `████░░░░░░` 44% |
+| 0 · Precursors | 20 | 9 | 9 | 0 | 0 | 2 | 16 / 36 | `████░░░░░░` 44% |
 | 1 · Foundations | 42 | 0 | 0 | 1 | 0 | 41 | 0 / 136 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
