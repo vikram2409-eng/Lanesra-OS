@@ -58,6 +58,9 @@ pub(crate) fn error_status(e: &AppError) -> StatusCode {
         AppError::Conflict(_) => StatusCode::CONFLICT,
         AppError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         AppError::PolicyBlocked(_) => StatusCode::FORBIDDEN,
+        AppError::RateLimited(_) => StatusCode::TOO_MANY_REQUESTS,
+        AppError::Timeout(_) => StatusCode::GATEWAY_TIMEOUT,
+        AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
