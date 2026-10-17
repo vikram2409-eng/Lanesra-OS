@@ -22,8 +22,7 @@ ignore = [
 ]
 
 [licenses]
-# Baseline: warn on unlicensed (tighten to deny after review)
-unlicensed = "warn"
+# Baseline: allowlist of licenses (unlicensed check removed in cargo-deny 0.14)
 confidence-threshold = 0.8
 allow = [
     "MIT",
