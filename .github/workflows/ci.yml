@@ -53,7 +53,8 @@ jobs:
           workspaces: desktop
           shared-key: lint
       - run: cargo fmt --all --check
-      - run: cargo clippy --locked -p lanesra-core -p lanesra-server -p lanesra-cli --all-targets -- -D warnings
+      # test-support compiles the scripted model provider (WP-0005) for tests.
+      - run: cargo clippy --locked -p lanesra-core -p lanesra-server -p lanesra-cli --all-targets --features lanesra-core/test-support -- -D warnings
 
   rust-tests:
     name: rust (tests ${{ matrix.partition }}/4)
@@ -84,6 +85,9 @@ jobs:
       - name: Doc tests
         if: matrix.partition == 1
         run: cargo test --locked --doc -p lanesra-core -p lanesra-server -p lanesra-cli
+      - name: Scripted provider is unreachable without test-support (WP-0005 AC-3)
+        if: matrix.partition == 1
+        run: cargo test --locked -p lanesra-core --test scripted_provider_gate
 
   rust-tests-result:
     # One stable required check for branch protection, whatever the shard count.

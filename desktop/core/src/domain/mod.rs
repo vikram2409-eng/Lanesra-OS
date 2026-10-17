@@ -5,4 +5,4 @@ pub mod ids;
 pub mod money;
 pub mod numbering;
 
-pub use errors::{AppError, AppResult};
+pub use errors::{AppError, AppResult, ErrorClass};

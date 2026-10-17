@@ -11,7 +11,7 @@ estimate: M
 editions: []
 delivered: []
 branch: wp/WP-0007-fixtures-and-closeout
-pr: TBD
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/649
 updated: 2026-10-17
 ---
 
@@ -59,3 +59,4 @@ This build adds many tables and columns to a schema that customers already hold 
 - 2026-10-17 claude: Review by Claude Code after merge of PR #647. Delivered: run_migrations wraps each migration and its schema_migrations row in one transaction (ADR-0010), migration_versions(), the numbering test, gen_fixtures.py and its TEST-STRATEGY.md section (AC-3 ticked). Not yet delivered, so status stays in_progress: (1) no fixture databases are committed under desktop/core/tests/fixtures/db/ (scope item 1), so `upgrade_preserves_data` migrates a fresh database and re-runs migrations; it never upgrades an older, populated schema. AC-1 needs a test that opens each committed fixture (last released desktop version, current main), runs migrations and checks row counts and invariants. (2) AC-2 has no recorded run: add the canary migration on the PR, link the red check run here, then remove it. Next: generate and commit the fixtures with gen_fixtures.py, rewrite the upgrade test to open them, record the AC-2 canary run.
 
 - 2026-10-17 muse: Closeout (fixtures and AC-2 canary). Generated fixture databases with gen_fixtures.py: 0078_v0_15_0.db (last released desktop v0.15.0, 78 migrations) and 0080_main.db (current main, 80 migrations), committed under desktop/core/tests/fixtures/db/. Rewrote migration_upgrade.rs to open each fixture, run migrations, and verify row counts + canary column data. Untested locally — see CI.
+- 2026-10-17 claude: The upgrade test opened the committed fixtures and migrated them in place, so after one local run `0078_v0_15_0.db` was already at the latest schema and later runs upgraded nothing (and the two tests shared one file). It now migrates a private temp copy of each fixture (`open_copy` in migration_upgrade.rs). AC-2 still needs the red canary CI run linked here.
