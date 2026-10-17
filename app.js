@@ -9441,7 +9441,7 @@ const REFERENCE_PACKAGES={
  // new engine gap.
  field_service:{
   packageId:'lanesra.field_service',name:'Field Service',industry:'Field Service',version:'1.0.0',
-  description:'Sites, assets, work orders and appointments for a field service crew - dispatch work, track what was serviced, and close out completed jobs.',
+  description:'Sites, assets, work orders and appointments for a field service team - dispatch work, track what was serviced, and close out completed jobs.',
   appIcon:'🔧',
   objects:[
    {key:'service_site',label:'Service Site',labelPlural:'Service Sites',icon:'📍',prefix:'SITE',digits:4},
