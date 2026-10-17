@@ -17,28 +17,38 @@ test('admin completes first-run setup and opens feature flags', async ({
   page,
 }) => {
   // 1. First-run setup: the app shows the FirstRun form when no workspace exists.
-  // The root URL renders the FirstRun component (desktop/src/features/firstRun/FirstRun.tsx).
   await page.goto('/');
 
-  // Fill the first-run form using label selectors (the form has no data-testids).
-  await page.getByLabel('Business name').fill('E2E Test Business');
-  await page.getByLabel('Administrator username').fill('admin');
-  await page.getByLabel('Administrator display name').fill('E2E Admin');
-  await page
-    .getByLabel('Administrator password (min 8 characters)')
-    .fill('e2e-test-password-123');
+  // The FirstRun form (desktop/src/features/firstRun/FirstRun.tsx) uses
+  // .form-field divs with a label and input, but labels are not programmatically
+  // associated (no for/id). Use structural selectors.
+  const businessNameInput = page.locator(
+    '.form-field:has-text("Business name") input'
+  );
+  const usernameInput = page.locator(
+    '.form-field:has-text("Administrator username") input'
+  );
+  const displayNameInput = page.locator(
+    '.form-field:has-text("Administrator display name") input'
+  );
+  const passwordInput = page.locator(
+    '.form-field:has-text("Administrator password") input'
+  );
+
+  await businessNameInput.fill('E2E Test Business');
+  await usernameInput.fill('admin');
+  await displayNameInput.fill('E2E Admin');
+  await passwordInput.fill('e2e-test-password-123');
 
   // Submit the form.
   await page.getByRole('button', { name: /set up|create|continue/i }).click();
 
   // 2. After setup, the app should show the main UI (auto-signed in as admin).
-  // Wait for the dashboard or app shell to appear.
   await expect(page.getByText('E2E Test Business').first()).toBeVisible({
     timeout: 30000,
   });
 
   // 3. Navigate to Settings → Feature flags.
-  // The Settings is accessed via the AdminPanel (desktop/src/features/settings/Settings.tsx).
   await page.getByRole('button', { name: /settings/i }).click();
   await page.getByText('Feature flags').click();
 
