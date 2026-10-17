@@ -17,21 +17,21 @@ yanked = "warn"
 # RUSTSEC-2026-0367, 0368, 0369 (zip 0.6.6):
 #   Reason: Fixed in 9.0.0 (major bump). Cargo.toml pins zip to "0.6"; no fixed
 #     version exists within the 0.6 range. Upgrading to 9.x requires API migration.
-#   RAID: R-18 | Review: 2026-11-17
+#   RAID: R-24 | Review: 2026-11-17
 # RUSTSEC-2023-0071 (rsa 0.9.10, Marvin Attack):
 #   Reason: No patched version exists (advisory states "no patched versions" as of 2026-09-12).
-#   RAID: R-19 | Review: 2026-11-17
+#   RAID: R-23 | Review: 2026-11-17
 # RUSTSEC-2024-0449 (unsafe-libyaml unmaintained):
 #   Reason: No safe upgrade available (repository archived).
-#   RAID: R-20 | Review: 2026-11-17
+#   RAID: R-24 | Review: 2026-11-17
 # RUSTSEC-2026-0258 (h2 0.4.15):
 #   Reason: Fix available in 0.4.16 (patch bump). Manual Cargo.lock edit failed
 #     checksum verification; needs `cargo update -p h2` by agent with toolchain.
-#   RAID: R-21 | Review: 2026-11-17
+#   RAID: R-23 | Review: 2026-11-17
 # RUSTSEC-2026-0285, 0346, 0348, 0349 (rustls 0.23.43):
 #   Reason: Fix available in 0.23.46 (patch bump). Manual Cargo.lock edit failed
 #     checksum verification; needs `cargo update -p rustls` by agent with toolchain.
-#   RAID: R-22 | Review: 2026-11-17
+#   RAID: R-24 | Review: 2026-11-17
 ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
