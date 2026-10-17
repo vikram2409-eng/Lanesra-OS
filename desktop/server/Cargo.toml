@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 lanesra-core = { path = "../core" }
-axum = "0.7"
+axum = "0.8"
 axum-extra = { version = "0.9", features = ["cookie"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs"] }
 tower-http = { version = "0.5", features = ["fs", "trace", "cors"] }
