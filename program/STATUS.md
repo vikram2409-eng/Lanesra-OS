@@ -83,7 +83,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
 | [WP-0100](work/P1/WP-0100-principal-and-agent-identity-foundation.md) | Principal model, Agent Identities and agent credentials | E1.0 Identity foundation | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
-| [WP-0101](work/P1/WP-0101.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | 🟢 ready | M | — | WP-0009, WP-0107, WP-0108 |
+| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | 🟢 ready | M | — | WP-0009, WP-0107, WP-0108 |
 | [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
