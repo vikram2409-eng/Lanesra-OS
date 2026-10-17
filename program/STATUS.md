@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 9 | 9 | 1 | 0 | 1 | 16 / 36 | `████░░░░░░` 44% |
-| 1 · Foundations | 35 | 0 | 0 | 0 | 0 | 35 | 0 / 116 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 42 | 0 | 0 | 1 | 0 | 41 | 0 / 136 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 103 | 2 | 4 / 368 |
-| Team Workspace | 110 | 2 | 4 / 408 |
-| Online demo | 81 | 1 | 2 / 288 |
+| Desktop | 109 | 2 | 4 / 386 |
+| Team Workspace | 116 | 2 | 4 / 426 |
+| Online demo | 85 | 1 | 2 / 302 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -50,7 +50,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 ## Requirement coverage
 
 - Spec requirements tracked: **238**
-- Mapped to a work package: **232**
+- Mapped to a work package: **238**
 - Delivered (every mapped work package done): **7**
 
 ## Phase 0 · Precursors
@@ -82,10 +82,17 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
+| [WP-0100](work/P1/WP-0100.md) | Principal model, Agent Identities and agent credentials | E1.0 Identity foundation | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
+| [WP-0101](work/P1/WP-0101.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | 🟢 ready | M | — | WP-0009, WP-0107, WP-0108 |
 | [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
 | [WP-0105](work/P1/WP-0105-enterprise-sign-in-on-the-desktop-edition.md) | Enterprise sign-in on the desktop edition | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Desktop | WP-0102, WP-0103 |
+| [WP-0106](work/P1/WP-0106.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0107, WP-0108, WP-0020 |
+| [WP-0107](work/P1/WP-0107.md) | Principal model and effective-identity rules | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
+| [WP-0108](work/P1/WP-0108.md) | Agent Identities and credentials | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0100A |
+| [WP-0109](work/P1/WP-0109.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0100A, WP-0100B |
+| [WP-0110](work/P1/WP-0110.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0111 |
 | [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | ⚪ proposed | M | — | WP-0112, WP-0122, WP-0150, WP-0100 |
