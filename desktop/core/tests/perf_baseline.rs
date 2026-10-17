@@ -18,7 +18,6 @@ use std::time::Instant;
 /// Baseline: agent loop overhead per round (scripted provider).
 /// Measures the time for one agent loop iteration with deterministic responses.
 #[test]
-#[ignore]
 fn perf_agent_loop_overhead() {
     // TODO: Wire up to the actual agent loop once the API is stable.
     // For now, measure the overhead of the test harness itself as a placeholder.
@@ -43,7 +42,6 @@ fn perf_agent_loop_overhead() {
 /// Baseline: SQLite bytes per run.
 /// Measures the database size after a standard workload.
 #[test]
-#[ignore]
 fn perf_sqlite_bytes_per_run() {
     // TODO: Wire up to actual workload once the API is stable.
     // Placeholder: report the metric name for CI parsing.
@@ -53,7 +51,6 @@ fn perf_sqlite_bytes_per_run() {
 /// Baseline: checkpoint write time.
 /// Measures the time to write a checkpoint.
 #[test]
-#[ignore]
 fn perf_checkpoint_write_time() {
     // TODO: Wire up to actual checkpoint API once stable.
     println!("PERF-BASELINE checkpoint_write_ms: 0 (TODO: implement)");
