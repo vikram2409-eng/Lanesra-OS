@@ -1,5 +1,6 @@
 # cargo-deny configuration (WP-0011)
 # https://embarkstudios.github.io/cargo-deny/
+# Format for cargo-deny >= 0.14 (migrated per EmbarkStudios/cargo-deny#611)
 
 [graph]
 targets = [
@@ -7,14 +8,11 @@ targets = [
 ]
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "all"
 yanked = "deny"
-notice = "warn"
-ignore = []
+# vulnerability, notice, unmaintained use the new lint format below
 
 [licenses]
-unlicensed = "deny"
+confidence-threshold = 0.8
 allow = [
     "MIT",
     "Apache-2.0",
@@ -26,20 +24,14 @@ allow = [
     "CC0-1.0",
     "MPL-2.0",
 ]
-confidence-threshold = 0.8
 exceptions = []
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
-allow = []
-deny = []
-skip = []
-skip-tree = []
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
