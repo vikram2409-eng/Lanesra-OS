@@ -1,0 +1,29 @@
+name: perf-baseline
+
+# WP-0015: Performance baseline.
+# Runs the ignored perf_baseline tests and reports the numbers.
+# Does NOT fail on the numbers (thresholds not yet set by owner, WP-0015 AC-2).
+# Covers: REQ-PRE-012 (WP-0015 AC-1)
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/core/**'
+  workflow_dispatch:
+
+jobs:
+  perf-baseline:
+    name: perf-baseline (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Run perf baseline (report only, never fails)
+        working-directory: desktop
+        run: |
+          cargo test --test perf_baseline --features lanesra-core/test-support -- --ignored --nocapture 2>&1 | tee perf-output.txt || true
+          echo "=== PERF BASELINE NUMBERS ==="
+          grep "PERF-BASELINE" perf-output.txt || echo "No PERF-BASELINE lines found"
+          echo "=== END ==="
+        # Never fail: thresholds not set (WP-0015 AC-2 pending owner)
+        continue-on-error: true

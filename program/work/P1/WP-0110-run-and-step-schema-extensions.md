@@ -5,7 +5,7 @@ phase: 1
 epic: E1.2 Run model and trace
 status: proposed
 owner: unassigned
-depends_on: [WP-0009, WP-0007, WP-0100]
+depends_on: [WP-0009, WP-0007, WP-0107]
 requirements: [REQ-CORE-008, REQ-API-001]
 estimate: M
 editions: [desktop, workspace]
