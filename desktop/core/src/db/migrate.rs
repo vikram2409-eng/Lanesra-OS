@@ -204,7 +204,7 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
         // ADR-0010: each migration and its schema_migrations row apply in
         // one transaction, so a failed migration never leaves a half-applied
         // schema.
-        let tx = conn.transaction()?;
+        let tx = conn.unchecked_transaction()?;
         tx.execute_batch(sql)?;
         tx.execute(
             "INSERT INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
