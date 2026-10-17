@@ -35,10 +35,14 @@ def migrations_up_to(max_version: int) -> list[tuple[int, str]]:
 
 def seed(conn: sqlite3.Connection) -> None:
     """Insert representative data; text columns act as canaries."""
-    conn.execute("INSERT INTO workspaces (id, name) VALUES ('ws_fixture', 'Fixture Co')")
     conn.execute(
-        "INSERT INTO companies (id, workspace_id, customer_number, name, status)"
-        " VALUES ('c_fixture', 'ws_fixture', 'C-FIXTURE', 'Fixture Industries', 'Active Customer')"
+        "INSERT INTO workspaces (id, business_name, created_at, updated_at)"
+        " VALUES ('ws_fixture', 'Fixture Co', '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO companies (id, workspace_id, customer_number, name, status, created_at, updated_at)"
+        " VALUES ('c_fixture', 'ws_fixture', 'C-FIXTURE', 'Fixture Industries', 'Active Customer',"
+        " '2026-10-17T00:00:00Z', '2026-10-17T00:00:00Z')"
     )
     conn.commit()
 
