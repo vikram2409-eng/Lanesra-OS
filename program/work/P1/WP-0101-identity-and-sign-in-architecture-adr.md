@@ -3,16 +3,16 @@ id: WP-0101
 title: Identity and sign-in architecture ADR
 phase: 1
 epic: E1.1 Enterprise sign-in
-status: proposed
+status: ready
 owner: unassigned
-depends_on: [WP-0009, WP-0100]
+depends_on: [WP-0009, WP-0107, WP-0108]
 requirements: [REQ-GOV-001]
 estimate: M
 editions: []
 delivered: []
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-10-17
 ---
 
 # WP-0101 — Identity and sign-in architecture ADR
@@ -47,3 +47,7 @@ Decide how OIDC and SAML fit both editions - the owner requires SSO on desktop a
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+## Refinement log
+
+- 2026-10-17 muse: Moved proposed → ready. Depends on WP-0107 (principal model) and WP-0108 (agent identities) for the ADR. AC-1 (ADR accepted) is manual; AC-2 (WP-0102..0104 ACs updated) is verifiable. REQ-GOV-001 listed. Size M. Note: owner decides who builds identity code (per 2026-10-17 instruction).
