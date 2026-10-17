@@ -29,7 +29,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | in_progress | muse | `wp/WP-0005-scripted-provider` | - |
+| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | in_review | muse | `wp/WP-0005-scripted-provider` | https://github.com/vikram2409-eng/Lanesra-OS/pull/648 |
 | [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | in_progress | muse | `wp/WP-0007-migration-test-harness` | https://github.com/vikram2409-eng/Lanesra-OS/pull/647 |
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | in_review | muse | `wp/WP-0013-demo-architecture` | https://github.com/vikram2409-eng/Lanesra-OS/pull/638 |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | in_review | muse | `wp/WP-0014-design-tokens-a11y` | https://github.com/vikram2409-eng/Lanesra-OS/pull/644 |
@@ -57,7 +57,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | ✅ done | M | — | WP-0002, WP-0004, WP-0016 |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | E0.1 Program and engineering readiness | ✅ done | S | — | - |
-| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 🔨 in progress | M | — | - |
+| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 👀 in review | M | — | - |
 | [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | E0.2 Test infrastructure | 🟢 ready | M | — | WP-0003 |
 | [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | E0.2 Test infrastructure | 🔨 in progress | M | — | WP-0003 |
 | [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | E0.3 Architecture decisions | ✅ done | M | — | - |

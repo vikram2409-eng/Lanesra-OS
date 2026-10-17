@@ -3,7 +3,7 @@ id: WP-0005
 title: Deterministic scripted model provider for tests
 phase: 0
 epic: E0.2 Test infrastructure
-status: in_progress
+status: in_review
 owner: muse
 depends_on: []
 requirements: [REQ-PRE-003]
@@ -11,7 +11,7 @@ estimate: M
 editions: []
 delivered: []
 branch: wp/WP-0005-scripted-provider
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/648
 updated: 2026-10-17
 ---
 
