@@ -160,6 +160,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         80,
         include_str!("migrations/0080_feature_flag_overrides.sql"),
     ),
+    (
+        81,
+        include_str!("migrations/0081_canary_drop_companies_name.sql"),
+    ),
 ];
 
 /// The newest schema version this build knows about - used to reject
