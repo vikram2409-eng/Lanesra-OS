@@ -32,7 +32,10 @@ fn perf_agent_loop_overhead() {
     let per_round_us = elapsed.as_micros() / 100;
 
     println!("PERF-BASELINE agent_loop_per_round_us: {}", per_round_us);
-    println!("PERF-BASELINE agent_loop_100_rounds_ms: {}", elapsed.as_millis());
+    println!(
+        "PERF-BASELINE agent_loop_100_rounds_ms: {}",
+        elapsed.as_millis()
+    );
 
     // No assertion - CI reports, does not fail (per WP-0015)
 }
