@@ -129,9 +129,13 @@ pub async fn dispatch_scripted(
             // Surface as the gateway's normal error types so retry logic
             // can be tested against them.
             Err(match kind.as_str() {
-                "rate_limit" => AppError::RateLimited("scripted 429".into()),
+                "rate_limit" => {
+                    AppError::RateLimited("scripted 429".into())
+                }
                 "timeout" => AppError::Timeout("scripted timeout".into()),
-                "server_error" => AppError::Internal("scripted 5xx".into()),
+                "server_error" => {
+                    AppError::Internal("scripted 5xx".into())
+                }
                 "malformed_json" => {
                     AppError::Validation("scripted malformed tool JSON".into())
                 }
