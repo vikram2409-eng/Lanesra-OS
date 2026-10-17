@@ -24,12 +24,25 @@ yanked = "warn"
 # RUSTSEC-2024-0449 (unsafe-libyaml unmaintained):
 #   Reason: No safe upgrade available (repository archived).
 #   RAID: R-20 | Review: 2026-11-17
+# RUSTSEC-2026-0258 (h2 0.4.15):
+#   Reason: Fix available in 0.4.16 (patch bump). Manual Cargo.lock edit failed
+#     checksum verification; needs `cargo update -p h2` by agent with toolchain.
+#   RAID: R-21 | Review: 2026-11-17
+# RUSTSEC-2026-0285, 0346, 0348, 0349 (rustls 0.23.43):
+#   Reason: Fix available in 0.23.46 (patch bump). Manual Cargo.lock edit failed
+#     checksum verification; needs `cargo update -p rustls` by agent with toolchain.
+#   RAID: R-22 | Review: 2026-11-17
 ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
     "RUSTSEC-2023-0071",
     "RUSTSEC-2024-0449",
+    "RUSTSEC-2026-0258",
+    "RUSTSEC-2026-0285",
+    "RUSTSEC-2026-0346",
+    "RUSTSEC-2026-0348",
+    "RUSTSEC-2026-0349",
 ]
 
 [licenses]
