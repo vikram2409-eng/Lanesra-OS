@@ -3,7 +3,7 @@ id: WP-0007
 title: Database upgrade (migration) test harness
 phase: 0
 epic: E0.2 Test infrastructure
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0003]
 requirements: [REQ-PRE-005]
@@ -32,7 +32,7 @@ This build adds many tables and columns to a schema that customers already hold 
 ## Acceptance criteria
 
 - [ ] AC-1: Upgrade test passes for the current HEAD
-- [ ] AC-2: Adding a migration that drops a populated column makes the test fail (shown in PR)
+- [ ] AC-2: A canary migration that drops a populated column is added in the PR, the upgrade test fails on it, then the canary is removed before merge (failure shown in PR checks)
 - [ ] AC-3: Fixture regeneration documented in TEST-STRATEGY.md
 
 ## Test plan
@@ -48,3 +48,7 @@ This build adds many tables and columns to a schema that customers already hold 
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+## Refinement log
+
+- 2026-10-17 muse: Moved proposed → ready. AC-2 made precise (canary migration pattern). ADR-0010 accepted; WP-0003 done; test file named; size M.

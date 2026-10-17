@@ -3,7 +3,7 @@ id: WP-0006
 title: Browser end-to-end test harness
 phase: 0
 epic: E0.2 Test infrastructure
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0003]
 requirements: [REQ-PRE-004]
@@ -45,3 +45,7 @@ The Playground is a UI-heavy deliverable and the frontend has only 5 unit test f
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+## Refinement log
+
+- 2026-10-17 muse: Moved proposed → ready. WP-0003 done; WP-0005 (scripted provider) merged — smoke specs can use it. ACs testable; size M.
