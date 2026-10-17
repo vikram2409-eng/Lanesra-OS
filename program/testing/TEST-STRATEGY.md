@@ -92,6 +92,35 @@ Covers: REQ-PRE-003 (WP-0005 AC-4)
 - Test names read as behaviour: `round_limit_requests_final_answer_without_tools`.
 - E2E specs by journey: `playground-run-template.spec.ts`.
 
+## Migration upgrade fixtures (from WP-0007)
+
+The upgrade harness (`desktop/core/tests/migration_upgrade.rs`) proves every
+migration upgrades a real older database without data loss. Fixtures live under
+`desktop/core/tests/fixtures/db/` as SQLite files named `<version>_<label>.db`
+(e.g. `0079_pre_0080.db`), each created at the named schema version with
+representative data in the key tables (workspaces, companies, contacts).
+
+### Regenerating fixtures
+
+When a migration is added that changes a table the fixtures cover:
+
+1. Check out main at the commit before the new migration.
+2. Run `python3 desktop/core/tests/fixtures/gen_fixtures.py --out desktop/core/tests/fixtures/db/`.
+3. Commit the new fixture files alongside the migration.
+
+The script applies migrations 1..N-1 to a fresh SQLite database, inserts
+representative rows (one workspace, companies with populated text columns as
+canaries for destructive changes), and saves the file. It uses only the
+standard library.
+
+### The canary pattern (AC-2)
+
+To prove the harness catches data loss: temporarily add a migration that
+drops a populated column (e.g. `ALTER TABLE companies DROP COLUMN name`),
+run `cargo nextest run --test migration_upgrade`, observe the failure,
+then remove the canary before merging. The failure must appear in the PR
+checks.
+
 ## The scripted model provider (from WP-0005)
 
 Usage examples will be added here when WP-0005 lands. Until then, do not write tests that call a real provider.

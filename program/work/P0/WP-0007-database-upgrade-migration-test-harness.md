@@ -3,16 +3,16 @@ id: WP-0007
 title: Database upgrade (migration) test harness
 phase: 0
 epic: E0.2 Test infrastructure
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: [WP-0003]
 requirements: [REQ-PRE-005]
 estimate: M
 editions: []
 delivered: []
-branch: 
-pr: 
-updated: 2026-10-16
+branch: wp/WP-0007-migration-test-harness
+pr: TBD
+updated: 2026-10-17
 ---
 
 # WP-0007 — Database upgrade (migration) test harness
@@ -52,3 +52,7 @@ This build adds many tables and columns to a schema that customers already hold 
 ## Refinement log
 
 - 2026-10-17 muse: Moved proposed → ready. AC-2 made precise (canary migration pattern). ADR-0010 accepted; WP-0003 done; test file named; size M.
+
+## Progress log
+
+- 2026-10-17 muse: Claimed WP-0007. Building: desktop/core/tests/migration_upgrade.rs (AC-1/AC-2), migrate.rs transaction wrapping per ADR-0010 + migration_versions() test helper, check_migrations.py ADR-0010 header check for migrations >0079, TEST-STRATEGY.md fixture docs (AC-3), desktop/core/tests/fixtures/gen_fixtures.py. Untested locally — see CI.
