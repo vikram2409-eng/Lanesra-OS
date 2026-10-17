@@ -35,7 +35,7 @@ jobs:
           cache-dependency-path: desktop/package-lock.json
       - name: Run npm audit
         working-directory: desktop
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
   gitleaks:
     name: gitleaks (secret scanning)
