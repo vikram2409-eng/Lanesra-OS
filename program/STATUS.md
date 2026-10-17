@@ -6,7 +6,7 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 20 | 9 | 3 | 4 | 0 | 4 | 16 / 36 | `████░░░░░░` 44% |
+| 0 · Precursors | 20 | 9 | 4 | 3 | 0 | 4 | 16 / 36 | `████░░░░░░` 44% |
 | 1 · Foundations | 39 | 0 | 0 | 0 | 0 | 39 | 0 / 130 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
@@ -30,8 +30,8 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/637 |
-| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | in_review | muse | `wp/WP-0018-tracker-upkeep` | https://github.com/vikram2409-eng/Lanesra-OS/pull/641 |
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | in_review | muse | `wp/WP-0013-demo-architecture` | https://github.com/vikram2409-eng/Lanesra-OS/pull/638 |
+| [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | in_review | muse | `wp/WP-0018-tracker-upkeep` | https://github.com/vikram2409-eng/Lanesra-OS/pull/641 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 
 ## Ready to start (all dependencies done)
