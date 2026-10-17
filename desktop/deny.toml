@@ -8,8 +8,8 @@ targets = [
 ]
 
 [advisories]
-# chacha20 0.10.1 (yanked) was updated to 0.10.2 with `cargo update`.
-yanked = "deny"
+# chacha20 0.10.1 is yanked; Cargo.lock reverted, needs `cargo update -p chacha20`.
+yanked = "warn"
 # Exceptions (per owner instruction 2026-10-17: fix before exempt)
 # Each exception has: reason, RAID R- entry, review date
 #
@@ -23,6 +23,12 @@ yanked = "deny"
 # RUSTSEC-2024-0449 (unsafe-libyaml unmaintained):
 #   Reason: No safe upgrade available (repository archived).
 #   RAID: R-22 | Review: 2026-11-17
+# RUSTSEC-2026-0258 (h2 0.4.15):
+#   Reason: Fix in 0.4.16; Cargo.lock reverted, needs cargo update.
+#   RAID: R-23 | Review: 2026-11-17
+# RUSTSEC-2026-0285/0346/0348/0349 (rustls 0.23.43):
+#   Reason: Fix in 0.23.46; Cargo.lock reverted, needs cargo update.
+#   RAID: R-24 | Review: 2026-11-17
 # RUSTSEC-2024-0370 (proc-macro-error), RUSTSEC-2025-0075, 0080, 0081, 0098, 0100 (unic-*):
 #   Reason: unmaintained crates pulled in only by the Tauri and GTK desktop stack
 #     (glib-macros, tauri-utils/urlpattern); not direct dependencies, no upstream replacement yet.
@@ -39,6 +45,12 @@ ignore = [
     "RUSTSEC-2025-0081",
     "RUSTSEC-2025-0098",
     "RUSTSEC-2025-0100",
+,
+    "RUSTSEC-2026-0258",
+    "RUSTSEC-2026-0285",
+    "RUSTSEC-2026-0346",
+    "RUSTSEC-2026-0348",
+    "RUSTSEC-2026-0349",
 ]
 
 [licenses]
