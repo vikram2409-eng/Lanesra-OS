@@ -26,6 +26,15 @@ The three-pane Playground per mockup 5, opening any run read-only.
 
 - Panes, record picker, input form from schema, unsaved edits scoped to Playground runs
 
+## Component tasks (from WP-0014 inventory)
+
+- [ ] Build `StatusDot` in `desktop/src/components/ui`
+- [ ] Build `EffectNote` in `desktop/src/components/ui`
+- [ ] Build `Toast` in `desktop/src/components/ui`
+- [ ] Build `BudgetMeter` in `desktop/src/components/ui`
+- [ ] Build `TraceItem` in `desktop/src/components/ui`
+- [ ] Build `ProgressRail` in `desktop/src/components/ui`
+
 ## Acceptance criteria
 
 - [ ] AC-1: Matches mockup tokens in light and dark; keyboard navigable

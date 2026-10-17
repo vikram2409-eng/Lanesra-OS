@@ -3,8 +3,8 @@ id: WP-0014
 title: Design token inventory and accessibility tooling
 phase: 0
 epic: E0.2 Test infrastructure
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: []
 requirements: [REQ-PRE-011]
 estimate: M
@@ -12,7 +12,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: []
 docs_reason: internal design tokens and accessibility tooling; no user-facing behaviour
-branch: 
+branch: wp/WP-0014-design-tokens-a11y
 pr: 
 updated: 2026-10-16
 ---
