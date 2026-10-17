@@ -23,6 +23,9 @@ pub enum AppError {
     /// Request timeout — retryable.
     #[error("timeout: {0}")]
     Timeout(String),
+    /// Internal error.
+    #[error("internal: {0}")]
+    Internal(String),
 }
 
 // Tauri command errors must be Serialize; we expose them to the frontend as
@@ -39,6 +42,9 @@ impl Serialize for AppError {
             AppError::Validation(_) => "validation",
             AppError::Conflict(_) => "conflict",
             AppError::PolicyBlocked(_) => "policy_blocked",
+            AppError::RateLimited(_) => "rate_limited",
+            AppError::Timeout(_) => "timeout",
+            AppError::Internal(_) => "internal",
         };
         let mut state = serializer.serialize_struct("AppError", 2)?;
         state.serialize_field("kind", kind)?;
