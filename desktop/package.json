@@ -35,7 +35,7 @@
     "jsdom": "^30.1.2",
     "typescript": "^5",
     "vite": "^5",
-    "vitest": "^2",
+    "vitest": "^5",
     "axe-core": "^4.10.0",
     "@playwright/test": "^1.48.0"
   }
