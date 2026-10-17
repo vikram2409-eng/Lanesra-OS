@@ -62,8 +62,7 @@ fn upgrade_fixtures_preserves_data() {
             )
             .expect("canary name");
 
-        run_migrations(&conn)
-            .unwrap_or_else(|_| panic!("migrate {}", path.display()));
+        run_migrations(&conn).unwrap_or_else(|_| panic!("migrate {}", path.display()));
 
         let after_version = schema_version(&conn).expect("version");
         assert!(
@@ -153,9 +152,7 @@ fn dropping_populated_column_fails() {
                 [],
                 |r| r.get(0),
             )
-            .unwrap_or_else(|_| {
-                panic!("canary column missing in {}", path.display())
-            });
+            .unwrap_or_else(|_| panic!("canary column missing in {}", path.display()));
         assert_eq!(name, "Fixture Industries");
     }
 }
