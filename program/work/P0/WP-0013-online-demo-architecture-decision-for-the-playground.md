@@ -1,4 +1,5 @@
 ---
+id: WP-0013
 title: Online demo architecture decision for the Playground
 phase: 0
 epic: E0.3 Architecture decisions
@@ -15,7 +16,7 @@ branch: wp/WP-0013-demo-architecture
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/638
 updated: 2026-10-16
 ---
-
+id: WP-0013
 # WP-0013 — Online demo architecture decision for the Playground
 
 ## Goal
