@@ -3,10 +3,11 @@ id: WP-0145
 title: Minimal untrusted-content defence for tool results
 phase: 1
 epic: E1.5 Tools and firewall
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0122, WP-0128, WP-0011, WP-0130]
 requirements: [REQ-TOOL-015]
+threats: [T-02, T-14]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
@@ -51,5 +52,7 @@ defence forward (ADR-0004) so prompt injection through tool results is contained
 - Threats: indirect prompt injection, excessive agency, data exfiltration (WP-0011 threat model).
 
 ## Progress log
+
+- 2026-10-17 muse: Refined to ready per PROTOCOL.md §4. Threats linked (WP-0011 AC-3). ACs testable, test plan names files, dependencies and requirements listed.
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->

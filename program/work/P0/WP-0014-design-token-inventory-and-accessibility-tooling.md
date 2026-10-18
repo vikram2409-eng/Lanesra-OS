@@ -3,19 +3,19 @@ id: WP-0014
 title: Design token inventory and accessibility tooling
 phase: 0
 epic: E0.2 Test infrastructure
-status: in_review
+status: done
 owner: muse
 depends_on: []
 requirements: [REQ-PRE-011]
 estimate: M
 editions: [desktop, workspace]
 editions_reason: axe checks cover the shared React UI (desktop + Team Workspace); online demo accessibility check deferred to WP-0006 Playwright job
-delivered: []
+delivered: [desktop, workspace]
 docs: []
 docs_reason: internal design tokens and accessibility tooling; no user-facing behaviour
 branch: wp/WP-0014-design-tokens-a11y
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/644
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # WP-0014 — Design token inventory and accessibility tooling
@@ -54,3 +54,4 @@ The mockups use the online demo's palette and new components (risk badges, statu
 - 2026-10-17 claude: Not done yet: `editions: [desktop, workspace]` but `delivered:` is empty. The axe checks cover the desktop/Team Workspace React UI (same frontend); the online demo (app.js) has no accessibility check. Either add an axe check for the demo (e.g. in the WP-0006 Playwright job) and record `delivered`, or narrow `editions` with an `editions_reason:`. Status stays in_review.
 
 - 2026-10-17 muse: Closeout. Narrowed editions to [desktop, workspace] with editions_reason (demo axe check deferred to WP-0006). Untested locally — see CI.
+- 2026-10-18 claude: Done: PR #644 and closeout #649 merged; editions narrowed to desktop and workspace with an editions_reason.

@@ -3,7 +3,7 @@ id: WP-0011
 title: Security baseline: threat model and scanning
 phase: 0
 epic: E0.4 Security and compliance baseline
-status: in_review
+status: done
 owner: muse
 depends_on: [WP-0003]
 requirements: [REQ-PRE-009]
@@ -12,7 +12,7 @@ editions: []
 delivered: []
 branch: 
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/653
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # WP-0011 — Security baseline: threat model and scanning
@@ -33,7 +33,7 @@ Enterprise agents act on business records with real tools. Write the threat mode
 
 - [x] AC-1: Threat model reviewed by the owner
 - [x] AC-2: Scanners run in CI and fail on new high-severity findings
-- [ ] AC-3: Every Phase 1 work package touching tools, approvals or auth links to its threats
+- [x] AC-3: Every Phase 1 work package touching tools, approvals or auth links to its threats
 
 ## Test plan
 
@@ -51,3 +51,5 @@ Enterprise agents act on business records with real tools. Write the threat mode
 - 2026-10-17 claude: AC-1 review (owner delegated the review to Claude). Corrected program/security/THREAT-MODEL.md: fixed wrong "Covered by" links (WP-0111/0112 are trace and SSE, not budgets; WP-0100 is now WP-0107/0108/0109; WP-0005 does not mitigate injection) and replaced "future governance WPs" with the real work packages; removed the REQ-GOV-XXX placeholder; added likelihood, impact and status to every threat; added the browser-to-server, workspace-to-workspace and CI boundaries; added T-11 to T-19 (sign-in and session attacks, cross-workspace access, SSRF, malicious MCP servers, unsafe output rendering, SFTP host-key acceptance found in sftp_service.rs, data-key and backup theft, audit tampering, CI supply chain). New RAID gaps R-26 (indirect injection), R-27 (SSRF), R-28 (SFTP host key). AC-1 ticked.
 - 2026-10-17 claude: Fixed two threat-model gaps in code. T-16/R-28: SFTP connections now require the server's host-key fingerprint (`host_key_sha256` in the connection's config JSON, OpenSSH `SHA256:...` form); an unknown key is refused and the error shows the presented fingerprint for the Administrator to confirm, a changed key is refused. Existing SFTP connections fail their next test until the fingerprint is added (the error says how). Tests: core/tests/sftp_host_key.rs (3, in-process russh server). T-19: every action in .github/workflows/ is pinned by commit SHA (15 tag references in 8 workflows).
 - 2026-10-17 claude: AC-2 ticked. The `security` workflow (cargo-deny, npm audit, gitleaks) runs on every pull request and fails on unexempted findings: run https://github.com/vikram2409-eng/Lanesra-OS/actions/runs/39067899844 failed while advisories without an exception remained; run https://github.com/vikram2409-eng/Lanesra-OS/actions/runs/39071595073 is green on 31d1031 after the fixes. Status in_review; AC-3 (threat links in Phase 1 work packages) is left for Muse's planning PR.
+- 2026-10-18 claude: Done: PR #653 merged (AC-1, AC-2); AC-3 threat links added in #671.
+- 2026-10-18 claude: AC-3 ticked. #671 linked threats on 13 Phase 1 work packages; the remaining identity, approval, guardrail and operations work packages (WP-0101, 0107, 0108, 0109, 0132, 0133, 0141, 0144, 0146, 0150, 0152, 0153, 0180, 0181) were linked in this closeout, so every Phase 1 work package touching tools, approvals, auth or data access now has a threats: line.

@@ -3,7 +3,7 @@ id: WP-0007
 title: Database upgrade (migration) test harness
 phase: 0
 epic: E0.2 Test infrastructure
-status: in_progress
+status: done
 owner: muse
 depends_on: [WP-0003]
 requirements: [REQ-PRE-005]
@@ -12,7 +12,7 @@ editions: []
 delivered: []
 branch: wp/WP-0007-fixtures-and-closeout
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/649
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # WP-0007 — Database upgrade (migration) test harness
@@ -62,3 +62,4 @@ This build adds many tables and columns to a schema that customers already hold 
 
 - 2026-10-17 muse: Closeout (fixtures and AC-2 canary). Generated fixture databases with gen_fixtures.py: 0078_v0_15_0.db (last released desktop v0.15.0, 78 migrations) and 0080_main.db (current main, 80 migrations), committed under desktop/core/tests/fixtures/db/. Rewrote migration_upgrade.rs to open each fixture, run migrations, and verify row counts + canary column data. Untested locally — see CI.
 - 2026-10-17 claude: The upgrade test opened the committed fixtures and migrated them in place, so after one local run `0078_v0_15_0.db` was already at the latest schema and later runs upgraded nothing (and the two tests shared one file). It now migrates a private temp copy of each fixture (`open_copy` in migration_upgrade.rs). AC-2 still needs the red canary CI run linked here.
+- 2026-10-18 claude: Done: PRs #647 and #649 merged, AC-2 canary proven in #650 (red CI, closed unmerged), ticked in #659; the upgrade test migrates temp copies of the fixtures (#648).

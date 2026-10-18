@@ -7,6 +7,7 @@ status: proposed
 owner: unassigned
 depends_on: [WP-0100, WP-0020, WP-0007]
 requirements: [REQ-PRE-022]
+threats: [T-12]
 estimate: XL
 editions: [workspace]
 editions_reason: The desktop edition stays a single local workspace (ADR-0014 §2), and the online demo has one sample workspace

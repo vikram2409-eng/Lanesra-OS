@@ -7,13 +7,14 @@ status: proposed
 owner: unassigned
 depends_on: [WP-0107]
 requirements: [REQ-GOV-002, REQ-GOV-029]
+threats: [T-03, T-09]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [agent-identities]
 branch: 
 pr: 
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 
@@ -69,3 +70,4 @@ Implement Agent Identity management (CRUD) and Lanesra-issued agent credentials 
 
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-18 claude: Owner decision 2026-10-18: Muse builds this work package following ADR-0016 (Accepted); Claude reviews the PR before the owner merges it. Refine to ready first (Muse batch 5).

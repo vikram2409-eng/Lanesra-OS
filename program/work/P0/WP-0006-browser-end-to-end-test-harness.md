@@ -11,8 +11,8 @@ estimate: M
 editions: []
 delivered: []
 branch: wp/WP-0006-e2e-harness
-pr: TBD
-updated: 2026-10-17
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/651
+updated: 2026-10-18
 ---
 
 # WP-0006 — Browser end-to-end test harness
@@ -51,3 +51,4 @@ The Playground is a UI-heavy deliverable and the frontend has only 5 unit test f
 - 2026-10-17 muse: Moved proposed → ready. WP-0003 done; WP-0005 (scripted provider) merged — smoke specs can use it. ACs testable; size M.
 
 - 2026-10-17 muse: Claimed WP-0006. Built: desktop/e2e/playwright.config.ts, desktop/e2e/tests/admin-first-run.spec.ts (first-run setup → sign-in → Settings → Feature flags as Administrator, Covers: REQ-PRE-004), .github/workflows/e2e.yml (new non-required check, Playwright with chromium), PROTOCOL.md §13 note (owner adds to required after a week of green runs). Untested locally — see CI.
+- 2026-10-18 claude: PR #651 merged with the Playwright harness, but no criterion is ticked yet. Muse batch 1 proves AC-1 (green `playwright (e2e)` run on main), AC-2 (a deliberately failing spec uploads a trace) and AC-3 (no network or API keys), then marks it done.

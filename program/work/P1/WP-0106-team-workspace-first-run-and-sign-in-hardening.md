@@ -7,6 +7,7 @@ status: proposed
 owner: unassigned
 depends_on: [WP-0107, WP-0108, WP-0020]
 requirements: [REQ-PRE-019]
+threats: [T-11]
 estimate: M
 editions: [workspace, desktop]
 editions_reason: Server-side protections; the desktop shares the throttling and session settings, and the online demo has no real sign-in
