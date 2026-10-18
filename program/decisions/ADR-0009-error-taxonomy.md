@@ -61,8 +61,8 @@ Provider adapters (WP-0146) must return `Classified` with an HTTP-status mapping
 Codes are stable strings, recorded on the span (`lanesra.error.code`), on the step row and in the `run.failed` event:
 
 - **transient:** `provider.timeout`, `provider.rate_limited`, `provider.unavailable`, `provider.network`, `db.busy`
-- **policy:** `policy.denied`, `policy.approval_required`, `policy.budget_exhausted`, `policy.data_boundary`, `policy.scope`, `policy.access_denied`
-- **validation:** `validation.arguments`, `validation.output_schema`, `validation.guardrail`, `validation.unknown_tool`, `validation.ssrf_blocked`
+- **policy:** `policy.denied`, `policy.approval_required`, `policy.budget_exhausted`, `policy.data_boundary`, `policy.scope`, `policy.access_denied`, `policy.network_blocked`
+- **validation:** `validation.arguments`, `validation.output_schema`, `validation.guardrail`, `validation.unknown_tool`
 - **configuration:** `config.missing_key`, `config.provider_disabled`, `config.model_not_found`, `config.not_local`
 - **internal:** `internal`
 
