@@ -1458,11 +1458,7 @@ fn agent_system_prompt(
 ) -> AppResult<String> {
     let mut prompt = agent.system_prompt.clone();
     if !agent.memory_md.trim().is_empty() {
-        let section = render_catalog_section(
-            "loop/memory-section",
-            "memory_md",
-            &agent.memory_md,
-        )?;
+        let section = render_catalog_section("loop/memory-section", "memory_md", &agent.memory_md)?;
         prompt.push_str("\n\n");
         prompt.push_str(&section);
     }
@@ -1474,11 +1470,8 @@ fn agent_system_prompt(
                 .iter()
                 .map(|item| format!("- {}\n", item.content))
                 .collect();
-            let section = render_catalog_section(
-                "loop/session-memory-section",
-                "items",
-                &items_text,
-            )?;
+            let section =
+                render_catalog_section("loop/session-memory-section", "items", &items_text)?;
             prompt.push_str("\n\n");
             prompt.push_str(&section);
         }
@@ -1499,11 +1492,7 @@ fn agent_system_prompt(
                 skills_text.push_str(&format!("- {}: {}\n", skill.name, skill.description));
             }
         }
-        let section = render_catalog_section(
-            "loop/skills-section",
-            "skills",
-            &skills_text,
-        )?;
+        let section = render_catalog_section("loop/skills-section", "skills", &skills_text)?;
         prompt.push_str("\n\n");
         prompt.push_str(&section);
     }

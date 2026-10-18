@@ -294,19 +294,9 @@ pub async fn run_suite(
                 )?;
             }
             _ => {
-                let system_prompt = judge_system_prompt(
-                    &case.input_text,
-                    &case.success_criteria,
-                    &actual_output,
-                )?;
-                match ai_service::complete(
-                    conn,
-                    workspace_id,
-                    master_key,
-                    &system_prompt,
-                    "",
-                )
-                .await
+                let system_prompt =
+                    judge_system_prompt(&case.input_text, &case.success_criteria, &actual_output)?;
+                match ai_service::complete(conn, workspace_id, master_key, &system_prompt, "").await
                 {
                     Ok(reply) => {
                         let (passed, reasoning) = parse_judge_reply(&reply);
