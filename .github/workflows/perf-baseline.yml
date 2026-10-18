@@ -18,12 +18,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Run perf baseline (report only, never fails)
+      - name: Run perf baseline (build failures fail the job)
         working-directory: desktop
         run: |
-          cargo test --test perf_baseline --features lanesra-core/test-support -- --ignored --nocapture 2>&1 | tee perf-output.txt || true
+          cargo test --test perf_baseline --features lanesra-core/test-support --nocapture 2>&1 | tee perf-output.txt
           echo "=== PERF BASELINE NUMBERS ==="
           grep "PERF-BASELINE" perf-output.txt || echo "No PERF-BASELINE lines found"
           echo "=== END ==="
-        # Never fail: thresholds not set (WP-0015 AC-2 pending owner)
-        continue-on-error: true
+        # Build failures and panics fail the job. Timing numbers are report-only
+        # (thresholds not set, WP-0015 AC-2 pending owner decision 2026-10-17).

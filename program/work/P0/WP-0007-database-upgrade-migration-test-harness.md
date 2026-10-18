@@ -32,7 +32,7 @@ This build adds many tables and columns to a schema that customers already hold 
 ## Acceptance criteria
 
 - [x] AC-1: Upgrade test passes for the current HEAD
-- [ ] AC-2: A canary migration that drops a populated column is added in the PR, the upgrade test fails on it, then the canary is removed before merge (failure shown in PR checks)
+- [x] AC-2: A canary migration that drops a populated column is added in the PR, the upgrade test fails on it, then the canary is removed before merge (failure shown in PR checks)
 - [x] AC-3: Fixture regeneration documented in TEST-STRATEGY.md
 
 ## Test plan
@@ -46,6 +46,8 @@ This build adds many tables and columns to a schema that customers already hold 
 - Must follow (WP-0009): ADR-0010 migration conventions. ADR-0010 applies to any migration this work package adds.
 
 ## Progress log
+
+- 2026-10-17 muse: AC-2 proven. Canary migration 0081_canary_drop_companies_name.sql (ALTER TABLE companies DROP COLUMN name) added on branch wp/WP-0007-canary-ac2 (PR #650, closed unmerged). CI rust (tests) FAILED as expected with exit 100 ("no such column: companies.name"), proving the harness catches destructive migrations. Red CI run: https://github.com/vikram2409-eng/Lanesra-OS/pull/650/checks
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 
