@@ -36,7 +36,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | in_review | muse | `wp/WP-0013-demo-architecture` | https://github.com/vikram2409-eng/Lanesra-OS/pull/638 |
 | [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | in_review | muse | `wp/WP-0014-design-tokens-a11y` | https://github.com/vikram2409-eng/Lanesra-OS/pull/644 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
-| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `-` | - |
+| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/670 |
 
 ## Ready to start (all dependencies done)
 
