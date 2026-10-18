@@ -98,7 +98,11 @@ pub fn retry_delay_for(error: &AppError, attempt: u32, policy: &RetryPolicy) -> 
         return Some(*ms);
     }
 
-    Some(backoff_delay_ms(attempt, policy.base_delay_ms, policy.max_delay_ms))
+    Some(backoff_delay_ms(
+        attempt,
+        policy.base_delay_ms,
+        policy.max_delay_ms,
+    ))
 }
 
 /// Retry an operation with exponential backoff.
