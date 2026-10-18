@@ -37,6 +37,13 @@ fn validate(input: &AiProviderInput) -> AppResult<()> {
             "An OpenAI-compatible provider needs a base URL".into(),
         ));
     }
+    // WP-0143 (T-13): SSRF protection on the base URL
+    if let Some(url) = input.base_url.as_deref() {
+        if !url.trim().is_empty() {
+            // TODO: load admin allow-list from settings; empty for now
+            super::ssrf_guard::validate_outbound_url(url, "base URL", &[])?;
+        }
+    }
     Ok(())
 }
 
