@@ -39,7 +39,7 @@ use std::time::{Duration, Instant};
 use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::ai::{
     AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings,
     AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS,
@@ -57,6 +57,46 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 // through `openai_compatible`.
 const DEFAULT_GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_MODEL: &str = "gemini-1.5-pro";
+
+/// Classify an HTTP error response per ADR-0009.
+/// - 429, 500, 502, 503, 504 → transient (retryable)
+/// - 408 → transient (timeout)
+/// - Others → validation (client error, not retryable)
+fn classify_http_error(
+    base: &str,
+    status: reqwest::StatusCode,
+    body: &str,
+) -> AppError {
+    let msg = format!(
+        "{base} responded with HTTP {status}: {}",
+        truncate(body, 200)
+    );
+    let status_u16 = status.as_u16();
+    match status_u16 {
+        429 => AppError::Classified {
+            class: ErrorClass::Transient,
+            code: "provider.rate_limited",
+            message: msg,
+            retry_after_ms: None,
+            http_status: Some(status_u16),
+        },
+        500 | 502 | 503 | 504 => AppError::Classified {
+            class: ErrorClass::Transient,
+            code: "provider.unavailable",
+            message: msg,
+            retry_after_ms: None,
+            http_status: Some(status_u16),
+        },
+        408 => AppError::Classified {
+            class: ErrorClass::Transient,
+            code: "provider.timeout",
+            message: msg,
+            retry_after_ms: None,
+            http_status: Some(status_u16),
+        },
+        _ => AppError::Validation(msg),
+    }
+}
 
 /// Real per-call token counts, taken straight from whichever provider's
 /// own response reported them - never estimated. `ai_gateway_service`
@@ -390,10 +430,8 @@ async fn complete_anthropic(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -445,10 +483,8 @@ async fn complete_openai_compatible(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -673,10 +709,8 @@ async fn complete_anthropic_with_tools(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -790,10 +824,8 @@ async fn complete_openai_with_tools(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -951,10 +983,8 @@ async fn complete_gemini_with_tools(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1037,10 +1067,7 @@ async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> A
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
         let text = response.text().await.unwrap_or_default();
-        Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )))
+        Err(classify_http_error(base, status, &text))
     }
 }
 
@@ -1063,10 +1090,7 @@ async fn test_openai_compatible(base_url: Option<&str>, api_key: &str) -> AppRes
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
         let text = response.text().await.unwrap_or_default();
-        Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )))
+        Err(classify_http_error(base, status, &text))
     }
 }
 
@@ -1097,10 +1121,7 @@ async fn test_gemini(base_url: Option<&str>, api_key: &str) -> AppResult<String>
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
         let text = response.text().await.unwrap_or_default();
-        Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )))
+        Err(classify_http_error(base, status, &text))
     }
 }
 
@@ -1141,10 +1162,8 @@ async fn complete_gemini(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1275,10 +1294,8 @@ async fn embed_openai_compatible(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1340,10 +1357,8 @@ async fn embed_gemini(
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(classify_http_error(base, status, &text));
+    }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;

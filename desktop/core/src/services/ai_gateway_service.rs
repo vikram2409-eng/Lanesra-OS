@@ -36,7 +36,7 @@
 
 use rusqlite::Connection;
 
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::ai::AiGatewayFailoverEvent;
 use crate::models::ai_agent::AiAgentDefinition;
 use crate::models::chat::ChatMessage;
@@ -47,6 +47,7 @@ use crate::repositories::{
 
 use super::ai_service::{self, CompletionOutcome, TokenUsage, ToolSpec};
 use super::dlp_service;
+use super::retry::{backoff_delay_ms, is_retryable, RetryPolicy};
 
 /// What `dispatch` actually did, beyond the raw model outcome - the
 /// caller (`chat_service::run_agent_once`) doesn't need `served_by` today,
@@ -232,25 +233,83 @@ pub async fn dispatch(
     };
 
     let mut last_err: Option<AppError> = None;
+    let retry_policy = RetryPolicy::default();
+
     for (idx, (tier_name, provider_id)) in tiers.iter().enumerate() {
         let resolved = match resolve_tier(conn, workspace_id, master_key, *provider_id) {
             Ok(r) => r,
             Err(e) => {
-                last_err = Some(e);
-                continue;
+                // Configuration errors during tier resolution move to next tier
+                // (except under forced air-gap, handled below)
+                if forced_air_gap {
+                    return Err(AppError::classified(
+                        ErrorClass::Configuration,
+                        "config.not_local",
+                        "Forced air-gap is enabled but no local provider is configured",
+                    ));
+                }
+                // Check if this is a configuration error that should fail over
+                let should_failover = matches!(
+                    &e,
+                    AppError::Classified {
+                        class: ErrorClass::Configuration,
+                        ..
+                    }
+                );
+                if should_failover {
+                    last_err = Some(e);
+                    continue;
+                } else {
+                    return Err(e);
+                }
             }
         };
-        match ai_service::dispatch_with_tools(
-            &resolved.provider,
-            resolved.base_url.as_deref(),
-            &resolved.model,
-            &resolved.api_key,
-            system_prompt,
-            tools,
-            history,
-        )
-        .await
-        {
+
+        // Attempt the dispatch with retry for transient errors (ADR-0009 §1)
+        let mut attempt = 0;
+        let dispatch_result = loop {
+            let result = ai_service::dispatch_with_tools(
+                &resolved.provider,
+                resolved.base_url.as_deref(),
+                &resolved.model,
+                &resolved.api_key,
+                system_prompt,
+                tools,
+                history,
+            )
+            .await;
+
+            match result {
+                Ok(success) => break Ok(success),
+                Err(e) => {
+                    // Only transient errors are retried
+                    if !is_retryable(&e) {
+                        break Err(e);
+                    }
+                    attempt += 1;
+                    if attempt >= retry_policy.max_attempts {
+                        break Err(e);
+                    }
+                    // Calculate backoff delay, honouring retry_after_ms
+                    let delay_ms = if let AppError::Classified {
+                        retry_after_ms: Some(ms),
+                        ..
+                    } = &e
+                    {
+                        *ms
+                    } else {
+                        backoff_delay_ms(
+                            attempt - 1,
+                            retry_policy.base_delay_ms,
+                            retry_policy.max_delay_ms,
+                        )
+                    };
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+            }
+        };
+
+        match dispatch_result {
             Ok((outcome, usage)) => {
                 ai_token_usage_repo::increment(
                     conn,
@@ -291,7 +350,33 @@ pub async fn dispatch(
                     served_by: tier_name,
                 });
             }
-            Err(e) => last_err = Some(e),
+            Err(e) => {
+                // ADR-0009 §4 failover rules (fixes RAID I-17):
+                // - transient (after retries) → next tier
+                // - configuration → next tier (except forced air-gap → fail closed)
+                // - policy, validation, internal → stop at once (no failover)
+                let error_class = e.class();
+                match error_class {
+                    ErrorClass::Transient | ErrorClass::Configuration => {
+                        if forced_air_gap && error_class == ErrorClass::Configuration {
+                            // Under forced air-gap, configuration errors fail closed
+                            // with config.not_local (never fall back to cloud)
+                            return Err(AppError::classified(
+                                ErrorClass::Configuration,
+                                "config.not_local",
+                                "Forced air-gap is enabled but no local provider is available",
+                            ));
+                        }
+                        // Move to next tier
+                        last_err = Some(e);
+                        continue;
+                    }
+                    ErrorClass::Policy | ErrorClass::Validation | ErrorClass::Internal => {
+                        // Stop immediately, no failover
+                        return Err(e);
+                    }
+                }
+            }
         }
     }
 
