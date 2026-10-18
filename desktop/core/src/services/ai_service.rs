@@ -463,7 +463,6 @@ async fn complete_anthropic(
     if !status.is_success() {
         return Err(classify_provider_status(base, status, retry_after, &text));
     }
-    }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     value
@@ -516,7 +515,6 @@ async fn complete_openai_compatible(
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(classify_provider_status(base, status, retry_after, &text));
-    }
     }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
@@ -746,7 +744,6 @@ async fn complete_anthropic_with_tools(
         return Err(classify_provider_status(base, status, retry_after, &text));
     }
     }
-    }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     let usage = TokenUsage {
@@ -861,7 +858,6 @@ async fn complete_openai_with_tools(
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(classify_provider_status(base, status, retry_after, &text));
-    }
     }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
@@ -1022,7 +1018,6 @@ async fn complete_gemini_with_tools(
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(classify_provider_status(base, status, retry_after, &text));
-    }
     }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
@@ -1208,7 +1203,6 @@ async fn complete_gemini(
         return Err(classify_provider_status(base, status, retry_after, &text));
     }
     }
-    }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     value
@@ -1342,7 +1336,6 @@ async fn embed_openai_compatible(
         return Err(classify_provider_status(base, status, retry_after, &text));
     }
     }
-    }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
     let data = value
@@ -1405,7 +1398,6 @@ async fn embed_gemini(
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(classify_provider_status(base, status, retry_after, &text));
-    }
     }
     }
     let value: serde_json::Value = serde_json::from_str(&text)
