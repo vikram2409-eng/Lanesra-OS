@@ -3,7 +3,7 @@ id: WP-0013
 title: Online demo architecture decision for the Playground
 phase: 0
 epic: E0.3 Architecture decisions
-status: in_review
+status: done
 owner: muse
 depends_on: []
 requirements: [REQ-PRE-010, REQ-PRE-021]
@@ -81,3 +81,4 @@ Next: check CI on PR #638; when green, mark the PR ready for review and request 
 - 2026-10-17 claude: Not done yet: (1) the website help article /help/multi-target-architecture must name WP-0013 in its wps:'…' field (app.js HELP_CATEGORIES) and describe the ADR-0015 decision; (2) `editions: []` needs `delivered: [demo]` - as a decision record it delivers no demo feature, so either set `editions: []` with an `editions_reason:` or keep it until WP-0223. Status stays in_review.
 
 - 2026-10-17 muse: Closeout. Named WP-0013 in /help/multi-target-architecture article (app.js HELP_CATEGORIES wps field) and described ADR-0015 decision there. Set editions: [] with editions_reason (decision record, ships no feature). Untested locally — see CI.
+- 2026-10-18 claude: Closed out (PR #643). Merged in PR #638 (ADR-0015 accepted), help article /help/multi-target-architecture names WP-0013 (PR #649), editions [] with editions_reason (decision record). Status done.

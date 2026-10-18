@@ -7,6 +7,7 @@ status: proposed
 owner: unassigned
 depends_on: [WP-0110]
 requirements: [REQ-TOOL-005, REQ-GOV-023]
+threats: [T-03, T-06]
 estimate: L
 editions: [desktop, workspace]
 delivered: []

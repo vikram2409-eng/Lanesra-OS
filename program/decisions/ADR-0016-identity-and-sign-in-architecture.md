@@ -1,6 +1,6 @@
 # ADR-0016: Identity and sign-in architecture (OIDC/SAML)
 
-- Status: Proposed. Drafted by Muse (PR #670), revised by Claude after review (2026-10-18). Awaiting owner acceptance before WP-0107, WP-0108 or WP-0109 build on it.
+- Status: Accepted by the owner on 2026-10-18. Drafted by Muse (PR #670), revised by Claude after review (PR #672).
 - Date: 2026-10-17, revised 2026-10-18
 - Work package: WP-0101
 - Requirements: REQ-GOV-001, REQ-GOV-028, REQ-GOV-029
@@ -109,4 +109,5 @@ These events are written to the workspace audit log under the principal's own na
 
 ## Review
 
-- 2026-10-18 Claude: reviewed. Fixed a conflict with ADR-0014: the draft put accounts and sessions in each workspace database. Replaced email-based account linking with (issuer, subject) plus proof of ownership. Made just-in-time creation opt-in and domain-limited. Added PKCE, `state`, the algorithm allow-list and JWKS rotation, the SAML signature-wrapping and replay checks, session-id renewal and revocation rules, audit events and API-client principals. Status stays **Proposed** until the owner accepts it.
+- 2026-10-18 Claude: reviewed. Fixed a conflict with ADR-0014: the draft put accounts and sessions in each workspace database. Replaced email-based account linking with (issuer, subject) plus proof of ownership. Made just-in-time creation opt-in and domain-limited. Added PKCE, `state`, the algorithm allow-list and JWKS rotation, the SAML signature-wrapping and replay checks, session-id renewal and revocation rules, audit events and API-client principals. Status stayed Proposed until the owner accepted it.
+- 2026-10-18 owner: Accepted. Muse builds WP-0107, WP-0108 and WP-0109; Claude reviews each identity PR before merge.

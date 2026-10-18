@@ -7,6 +7,7 @@ status: proposed
 owner: unassigned
 depends_on: [WP-0020, WP-0007]
 requirements: [REQ-PRE-020]
+threats: [T-17]
 estimate: L
 editions: [workspace, desktop]
 editions_reason: Operating real data on a server or a desktop; the online demo keeps its sample data in the browser
