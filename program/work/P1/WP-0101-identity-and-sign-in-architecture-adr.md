@@ -10,8 +10,8 @@ requirements: [REQ-GOV-001]
 estimate: M
 editions: []
 delivered: []
-branch: 
-pr: 
+branch: wp/WP-0101-identity-adr
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/670
 updated: 2026-10-17
 ---
 
