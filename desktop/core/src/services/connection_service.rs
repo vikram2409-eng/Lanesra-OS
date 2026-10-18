@@ -105,6 +105,13 @@ pub fn create(
         return Err(AppError::Validation("Connection name is required".into()));
     }
     validate_types(&input.connection_type, &input.auth_mode)?;
+    // WP-0143 (T-13): SSRF protection on the base URL
+    if let Some(url) = input.base_url.as_deref() {
+        if !url.trim().is_empty() {
+            // TODO: load admin allow-list from settings; empty for now
+            super::ssrf_guard::validate_outbound_url(url, "base URL", &[])?;
+        }
+    }
     let id = new_uuid();
     let secret_id = store_secret(
         conn,
@@ -200,6 +207,13 @@ pub fn update(
         )?,
         _ => integration_connection_repo::secret_id_for(conn, id)?,
     };
+    // WP-0143 (T-13): SSRF protection on the base URL
+    if let Some(url) = input.base_url.as_deref() {
+        if !url.trim().is_empty() {
+            // TODO: load admin allow-list from settings; empty for now
+            super::ssrf_guard::validate_outbound_url(url, "base URL", &[])?;
+        }
+    }
     let updated = integration_connection_repo::update(
         conn,
         id,
