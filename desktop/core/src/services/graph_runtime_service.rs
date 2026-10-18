@@ -885,17 +885,17 @@ async fn execute_node(
                 .and_then(|v| v.as_str())
                 .unwrap_or_default();
             let actual_output = lookup_token(source_node_key, &run.trigger_input, context);
-            let judge_message = ai_eval_service::build_judge_message(
+            let system_prompt = ai_eval_service::judge_system_prompt(
                 &run.trigger_input,
                 success_criteria,
                 &actual_output,
-            );
+            )?;
             match ai_service::complete(
                 conn,
                 workspace_id,
                 master_key,
-                ai_eval_service::JUDGE_SYSTEM_PROMPT,
-                &judge_message,
+                &system_prompt,
+                "",
             )
             .await
             {

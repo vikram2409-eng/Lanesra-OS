@@ -609,17 +609,17 @@ async fn execute_case(
                         .last()
                         .and_then(|s| s.output_text.clone())
                         .unwrap_or_default();
-                    let judge_message = ai_eval_service::build_judge_message(
+                    let system_prompt = ai_eval_service::judge_system_prompt(
                         &dataset.input_text,
                         &dataset.success_criteria,
                         &actual_output,
-                    );
+                    )?;
                     let reply = super::ai_service::complete(
                         conn,
                         workspace_id,
                         master_key,
-                        ai_eval_service::JUDGE_SYSTEM_PROMPT,
-                        &judge_message,
+                        &system_prompt,
+                        "",
                     )
                     .await?;
                     let (passed, reasoning) = ai_eval_service::parse_judge_reply(&reply);
@@ -677,17 +677,17 @@ async fn execute_case(
             .await;
             match run {
                 Ok(r) if r.status == "completed" => {
-                    let judge_message = ai_eval_service::build_judge_message(
+                    let system_prompt = ai_eval_service::judge_system_prompt(
                         &dataset.input_text,
                         &dataset.success_criteria,
                         &r.context_json,
-                    );
+                    )?;
                     let reply = super::ai_service::complete(
                         conn,
                         workspace_id,
                         master_key,
-                        ai_eval_service::JUDGE_SYSTEM_PROMPT,
-                        &judge_message,
+                        &system_prompt,
+                        "",
                     )
                     .await?;
                     let (passed, reasoning) = ai_eval_service::parse_judge_reply(&reply);
