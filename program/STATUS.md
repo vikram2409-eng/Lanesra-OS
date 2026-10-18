@@ -6,8 +6,8 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 20 | 17 | 2 | 0 | 0 | 1 | 30 / 36 | `████████░░` 83% |
-| 1 · Foundations | 42 | 0 | 1 | 3 | 0 | 38 | 0 / 136 | `░░░░░░░░░░` 0% |
+| 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
+| 1 · Foundations | 42 | 0 | 2 | 2 | 0 | 38 | 0 / 136 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,7 +19,7 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 109 | 3 | 6 / 386 |
+| Desktop | 110 | 4 | 8 / 388 |
 | Team Workspace | 116 | 3 | 6 / 426 |
 | Online demo | 85 | 1 | 2 / 302 |
 
@@ -29,9 +29,9 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | in_progress | muse | `wp/WP-0006-e2e-harness` | https://github.com/vikram2409-eng/Lanesra-OS/pull/651 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
+| [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | in_progress | muse | `wp/WP-0143-ssrf-protection` | - |
 
 ## Ready to start (all dependencies done)
 
@@ -40,13 +40,12 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | WP | Title | Phase | Estimate |
 |---|---|---|---|
 | [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | 1 | M |
-| [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | 1 | S |
 
 ## Requirement coverage
 
 - Spec requirements tracked: **238**
 - Mapped to a work package: **238**
-- Delivered (every mapped work package done): **19**
+- Delivered (every mapped work package done): **20**
 
 ## Phase 0 · Precursors
 
@@ -57,7 +56,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | ✅ done | M | — | WP-0002, WP-0004, WP-0016 |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | ✅ done | M | — | - |
-| [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | E0.2 Test infrastructure | 🔨 in progress | M | — | WP-0003 |
+| [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | E0.2 Test infrastructure | ✅ done | M | ✓Desktop | WP-0003 |
 | [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | E0.2 Test infrastructure | ✅ done | M | — | WP-0003 |
 | [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | E0.3 Architecture decisions | ✅ done | M | — | - |
 | [WP-0009](work/P0/WP-0009-foundational-adrs-run-state-machine-trace-schema-errors-migr.md) | Foundational ADRs: run state machine, trace schema, errors, migrations, prompt catalog | E0.3 Architecture decisions | ✅ done | L | — | WP-0008 |
@@ -107,7 +106,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0140](work/P1/WP-0140-per-tool-caps-and-rate-limits.md) | Per-tool caps and rate limits | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0122 |
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | E1.5 Tools and firewall | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0142](work/P1/WP-0142-gate-on-server-initiated-mcp-requests.md) | Gate on server-initiated MCP requests | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
-| [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | 🟢 ready | S | — | WP-0008 |
+| [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | 🔨 in progress | S | — | WP-0008 |
 | [WP-0144](work/P1/WP-0144-test-button-on-every-model-tool-connector-agent-and-team.md) | Test button on every model, tool, connector, agent and team | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0010 |
 | [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0122, WP-0128, WP-0011, WP-0130 |
 | [WP-0146](work/P1/WP-0146-bring-your-own-model-provider-coverage.md) | Bring-your-own-model provider coverage and model catalog | E1.3 Agent loop | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0005, WP-0122 |
