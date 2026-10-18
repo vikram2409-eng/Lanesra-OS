@@ -1507,7 +1507,6 @@ fn agent_system_prompt(
         prompt.push_str("\n\n");
         prompt.push_str(&section);
     }
-    }
     Ok(prompt)
 }
 
