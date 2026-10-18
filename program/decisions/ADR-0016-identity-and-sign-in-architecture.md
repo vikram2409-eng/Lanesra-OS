@@ -1,122 +1,112 @@
 # ADR-0016: Identity and sign-in architecture (OIDC/SAML)
 
-- Status: Proposed (awaiting owner and Claude review before WP-0107/WP-0108/WP-0109 build)
-- Date: 2026-10-17
+- Status: Proposed. Drafted by Muse (PR #670), revised by Claude after review (2026-10-18). Awaiting owner acceptance before WP-0107, WP-0108 or WP-0109 build on it.
+- Date: 2026-10-17, revised 2026-10-18
 - Work package: WP-0101
-- Requirements: REQ-GOV-001
-- Follows: ADR-0006 (identity foundation, principals), ADR-0014 (one database and data key per workspace)
-- Threats: T-03 (excessive agency), T-11 (account takeover), T-12 (cross-workspace data access)
-- Editions: Desktop, Team Workspace, Cloud SaaS (future)
+- Requirements: REQ-GOV-001, REQ-GOV-028, REQ-GOV-029
+- Follows: ADR-0006 (identity foundation, principals), ADR-0014 (control database, one database and data key per workspace)
+- Threats: T-03 (excessive agency), T-11 (account takeover), T-12 (cross-workspace data access), T-18 (audit tampering)
+- Editions: Desktop, Team Workspace; a future Cloud SaaS edition builds on the same model (ADR-0014 §7)
 
 ## Context
 
-The owner requires SSO on both Desktop and Team Workspace (ADR-0004, Q-07). Desktop is a single-user Tauri app; Team Workspace is a multi-user self-hosted server. A future Cloud SaaS edition will need the same identity foundation.
+The owner requires enterprise sign-in on both Desktop and Team Workspace (ADR-0004, REQ-GOV-001, REQ-GOV-028). Desktop is a single-user Tauri app. Team Workspace is a self-hosted server that will host several workspaces (ADR-0014). A future Cloud SaaS edition needs the same foundation.
 
-ADR-0006 established that agents get Agent Identities (WP-0100) with the same access model as humans but different credentials. OIDC/SAML (WP-0101 to WP-0105) must map directory users onto the same principal model.
+ADR-0006: humans, Agent Identities and API clients are all principals with an Access Role and a Record Scope. Agents never use passwords, OIDC or SAML; they use Lanesra-issued, short-lived, scoped credentials.
 
-ADR-0014 established: one database and one data key per workspace. No row, key, file, event or cache entry may be shared between workspaces, except account identity.
+ADR-0014: a Team Workspace server keeps a **control database** holding accounts, memberships, sessions and the workspace registry. Each workspace has its own database and data key. One account can belong to several workspaces with a different role in each.
 
 ## Decision
 
-### 1. Principal model (from ADR-0006)
+### 1. Accounts, principals and where each lives
 
-Every actor — human user or Agent Identity — is a **principal** with:
-- An Access Role (capability set)
-- A Record Scope (Owner, Team, Org Unit and below, Organization)
-- An audit identity (actions recorded in the principal's own name)
+| Thing | Lives in | Notes |
+|---|---|---|
+| **Account** (a person who can sign in: email, password hash, SSO links, MFA later) | Control database (Team Workspace); the local database (Desktop) | One account, many workspace memberships (ADR-0014 §3) |
+| **Membership** (account × workspace → Access Role, Record Scope, status) | Control database | Removing a membership ends access to that workspace at once |
+| **Human principal** inside a workspace | Workspace database, referring to the account by id | All audit rows name this principal |
+| **Agent Identity and API client principals** | Workspace database only | Belong to exactly one workspace; never cross it; never sign in with a password, OIDC or SAML (ADR-0006) |
+| **Session** | Control database | Bound to one account and one workspace at a time |
+| **Identity-provider configuration** (OIDC or SAML) | Workspace database, with secrets under the workspace data key | Admin-only; each workspace chooses which provider it trusts |
 
-Human principals authenticate via:
-- Local password (with rate limiting, lockout per T-11)
-- OIDC (Okta, Microsoft Entra ID, Google)
-- SAML (Okta, Microsoft Entra ID)
+SSO is an authentication method for an account, not a new principal type.
 
-Agent principals (WP-0108) authenticate via Lanesra-issued short-lived scoped credentials. They never use passwords, OIDC or SAML.
+### 2. Sign-in flows
 
-### 2. Session model
+**Local password.** Argon2id hashes. Limits on failed attempts apply per account and per source address together: 5 failures in 15 minutes on one account slows that account; many failures from one address block that address. Neither lets an outsider lock a real user out for long.
 
-**Team Workspace / Cloud SaaS (server):**
-- Sessions are server-side, stored in the workspace database
-- Session cookie: `HttpOnly`, `Secure`, `SameSite=Lax` (T-11)
-- CSRF protection on all state-changing endpoints (T-11)
-- Session revocation: admin can revoke any session; user can revoke own sessions
-- Idle timeout: 30 minutes; absolute timeout: 8 hours (configurable)
+**OIDC (Team Workspace).** Authorization-code flow with **PKCE** (RFC 7636), a one-time `state` value and a `nonce`.
+- Validate the ID token's signature against the provider's JWKS. Only RS256, PS256 and ES256 are accepted; `none` and symmetric algorithms are refused.
+- Refetch the JWKS when a key id is unknown, and cache it otherwise.
+- Check issuer, audience, expiry, issued-at and nonce, allowing 60 seconds of clock skew.
 
-**Desktop (Tauri):**
-- Single user, no server session
-- OIDC flow uses system browser + loopback redirect (RFC 8252)
-- Tokens stored in OS keychain (not in SQLite)
-- No session cookie; the app holds tokens in memory
+**SAML 2.0 (Team Workspace).** SP-initiated, using a maintained library only (RAID R-10). Not hand-written XML signature code.
+- Require a signed assertion, not just a signed response.
+- Reject documents with more than one assertion, or with an assertion outside the signed element (signature-wrapping).
+- Check `InResponseTo`, audience, recipient, `NotBefore` and `NotOnOrAfter`.
+- Keep a replay cache of assertion ids until they expire.
 
-### 3. OIDC/SAML provider configuration
+**Desktop (REQ-GOV-028).** OIDC through the system browser with a loopback redirect (RFC 8252) and PKCE.
+- The refresh token is stored in the OS keychain.
+- ID and access tokens are held only in memory, never written to SQLite.
+- SAML on desktop goes through the same system-browser hand-off; WP-0105 decides whether it uses a broker.
 
-**Supported providers:**
-- OIDC: Okta, Microsoft Entra ID, Google
-- SAML: Okta, Microsoft Entra ID
-- Test: Keycloak (local, for CI)
+### 3. Linking a sign-in to an account
 
-**Configuration (per workspace, admin-only):**
-- Provider type (OIDC/SAML), issuer URL, client ID
-- SAML: IdP metadata URL or XML
-- Attribute mapping: directory `email` → user email, `name` → display name, `groups` → role mapping
+- An SSO identity is the pair **(issuer, subject)**, stored as an account link. Email is never the key, because some providers let users choose or change it.
+- **First SSO sign-in for an account that already exists** (same verified email): the link is created only after the person proves they own the account, by signing in with its password or by an admin approving the link. An unverified email (`email_verified` false or missing) never links.
+- **Just-in-time account creation is off by default.** An admin can turn it on per workspace, restricted to listed email domains. New accounts get the workspace's lowest-privilege role (Viewer once REQ-GOV-004 lands), never an admin role.
 
-**Account linking:**
-- Existing local user with matching email is linked on first SSO sign-in (with confirmation)
-- New SSO user creates a new local user with default Standard User role
-- Break-glass local admin account always exists (cannot be disabled via SSO)
+### 4. Directory groups to roles
 
-### 4. Directory-to-principal mapping
+- An admin maps named directory groups to Access Roles. Directory membership never grants an admin or AI Admin role implicitly.
+- Roles from groups are recomputed at every sign-in. A user removed from a group loses the matching role at the next sign-in, and their open sessions in that workspace are ended.
+- If the provider omits groups because there are too many (Entra ID "group overage"), sign-in keeps the user's current roles and records a warning. It never upgrades.
 
-When a user signs in via OIDC/SAML:
-1. Verify token signature against provider JWKS/metadata
-2. Extract email, name, groups from claims/assertion
-3. Find or create local user by email (within the workspace)
-4. Map groups to Access Roles via admin-configured mapping table
-5. Create session for the principal
+### 5. Sessions (Team Workspace)
 
-Group-to-role mapping is explicit (admin configures which directory group maps to which Access Role). No implicit admin grant from directory membership.
+- Server-side sessions in the control database. The cookie is an opaque random id: `HttpOnly`, `Secure`, `SameSite=Lax`, `__Host-` prefix.
+- A new session id is issued at sign-in and whenever privileges change (no session fixation).
+- CSRF protection on every state-changing request.
+- Idle timeout 30 minutes, absolute timeout 8 hours; both configurable per workspace.
+- All of an account's sessions end on password change, membership removal, role change from the directory, or admin revocation. Users can end their own sessions.
+- A session names exactly one workspace. Switching workspace issues a new session, and a request whose session names another workspace is refused before any workspace database is opened (T-12).
 
-### 5. Tenancy and isolation (ADR-0014, T-12)
+### 6. Break-glass access
 
-- Each workspace has its own database and data key
-- User accounts are per-workspace (no shared user table across workspaces)
-- SSO provider configuration is per-workspace
-- A user in Workspace A cannot access Workspace B, even with the same email
-- Session tokens are scoped to the workspace database that issued them
+Each workspace keeps at least one local Administrator who can sign in with a password when the identity provider is down. SSO configuration cannot disable or delete it. Every break-glass sign-in is audited and shown to the other Administrators. MFA for it comes with MFA generally.
 
-**Exception:** Cloud SaaS (future) may have a central account directory for billing, but workspace data isolation remains absolute. This ADR does not decide the SaaS account model.
+### 7. Audit (T-18)
 
-### 6. Threat mitigations
+These events are written to the workspace audit log under the principal's own name:
+- sign-in success and failure, and the method used;
+- SSO link created or removed;
+- just-in-time account creation;
+- roles granted or removed from directory groups;
+- session revocation;
+- break-glass use;
+- changes to identity-provider configuration.
 
-**T-11 (Account takeover):**
-- Rate limiting on password attempts (5 failures → 15 min lockout)
-- Session cookie flags (HttpOnly, Secure, SameSite)
-- CSRF tokens on state-changing requests
-- SAML: verify assertion signature, check `NotBefore`/`NotOnOrAfter`, validate audience
-- OIDC: verify JWT signature, issuer, audience, expiry; use `nonce` for replay protection
+### 8. Threat coverage
 
-**T-12 (Cross-workspace access):**
-- One database per workspace (ADR-0014)
-- Sessions bound to workspace; token from Workspace A rejected by Workspace B
-- No shared session store
-
-**T-03 (Excessive agency):**
-- SSO maps to human principals only, never to Agent Identities
-- Agent credentials are Lanesra-issued, never derived from SSO tokens
-- An agent cannot escalate via SSO; its permissions come from its Access Role (WP-0108)
+- **T-11 (account takeover):** §2 attempt limits and protocol checks, §3 linking by (issuer, subject) with proof of ownership, §5 session rules.
+- **T-12 (cross-workspace access):** accounts and sessions in the control database, data in per-workspace databases (ADR-0014); a session is bound to one workspace and checked before that workspace's database is opened.
+- **T-03 (excessive agency):** SSO authenticates human accounts only. Agent Identities and API clients never derive credentials or roles from SSO tokens, and an agent never sees more than its user (REQ-GOV-002).
+- **T-18 (audit tampering):** §7 events, made tamper-evident later by WP-0402.
 
 ## Consequences
 
-- WP-0102 (OIDC) and WP-0103 (SAML) build on this ADR
-- WP-0105 (Desktop SSO) uses system browser + loopback per §2
-- WP-0106 (sign-in hardening) implements T-11 mitigations
-- The principal model (ADR-0006) is unchanged; SSO is an authentication method, not a new principal type
-- No identity code in this ADR (per WP-0101 scope)
+- WP-0107 (principal model) builds the account, membership and principal split in §1. WP-0181 (several workspaces) moves accounts and sessions into the control database.
+- WP-0102 (OIDC) and WP-0103 (SAML) implement §2 to §4, each with negative tests for every check in §2. WP-0106 implements §2 attempt limits and §5. WP-0105 implements the desktop flow.
+- The online demo shows the sign-in settings screens with simulated providers, in the same release as desktop and Team Workspace (ADR-0012).
+- No identity code in this ADR (WP-0101 scope).
 
 ## Open questions
 
-- Q: Should Cloud SaaS have a central account directory, or per-workspace accounts like Team Workspace? (Deferred to SaaS planning)
-- Q: SAML single logout (SLO) — required for MVP or later? (Default: later; local session revocation suffices for MVP)
+- Cloud SaaS: central account directory or per-region control databases? Deferred to WP-0422.
+- SAML single logout: deferred. Local session revocation is enough for the first release.
+- MFA for local accounts, including break-glass: separate work package, not yet planned. To be added to RAID.
 
 ## Review
 
-Status is **Proposed**. Requires review by the owner and Claude before WP-0107, WP-0108 or WP-0109 build on it.
+- 2026-10-18 Claude: reviewed. Fixed a conflict with ADR-0014: the draft put accounts and sessions in each workspace database. Replaced email-based account linking with (issuer, subject) plus proof of ownership. Made just-in-time creation opt-in and domain-limited. Added PKCE, `state`, the algorithm allow-list and JWKS rotation, the SAML signature-wrapping and replay checks, session-id renewal and revocation rules, audit events and API-client principals. Status stays **Proposed** until the owner accepts it.
