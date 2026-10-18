@@ -3,13 +3,15 @@ id: WP-0006
 title: Browser end-to-end test harness
 phase: 0
 epic: E0.2 Test infrastructure
-status: in_progress
+status: done
 owner: muse
 depends_on: [WP-0003]
 requirements: [REQ-PRE-004]
 estimate: M
-editions: []
-delivered: []
+editions: [desktop]
+editions_reason: E2E harness tests the desktop Team Workspace server and its bundled frontend; the online demo is covered by the same Playwright project but ships as static files, not an edition.
+delivered: [desktop]
+docs_reason: Test infrastructure; no user-facing help article needed.
 branch: wp/WP-0006-e2e-harness
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/651
 updated: 2026-10-18
@@ -32,9 +34,9 @@ The Playground is a UI-heavy deliverable and the frontend has only 5 unit test f
 
 ## Acceptance criteria
 
-- [ ] AC-1: `npx playwright test` passes locally and in CI
-- [ ] AC-2: A failing spec uploads a trace artifact
-- [ ] AC-3: Running E2E needs no network access and no API keys
+- [x] AC-1: `npx playwright test` passes locally and in CI — proven by green run #21 on main (https://github.com/vikram2409-eng/Lanesra-OS/actions/runs/39092033777), 2m 24s, manually triggered via workflow_dispatch
+- [x] AC-2: A failing spec uploads a trace artifact — proven by canary PR #673 (deliberately failing spec), red e2e run with 818 KB playwright-traces artifact uploaded, PR closed unmerged (like #650 pattern)
+- [x] AC-3: Running E2E needs no network access and no API keys — workflow uses http://localhost:3000 only, no API key env vars; test file documents "No network access beyond localhost; no API keys"
 
 ## Test plan
 
@@ -45,6 +47,7 @@ The Playground is a UI-heavy deliverable and the frontend has only 5 unit test f
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-18 muse: Batch 1 proofs complete. AC-1: triggered e2e workflow on main via workflow_dispatch, run #21 green (2m 24s). AC-2: opened canary PR #673 with deliberately failing spec, e2e run failed red with 818 KB playwright-traces artifact uploaded, closed PR unmerged. AC-3: verified workflow uses localhost:3000 only, no API keys in env, test file documents no-network/no-keys. All ACs ticked, marking done.
 
 ## Refinement log
 
