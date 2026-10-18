@@ -27,8 +27,10 @@ If you are asked to do something that is not a work package, say so and ask whet
   cannot finish, leave it unfinished and say so in the Progress log — never fake, stub or weaken a test to pass.
 - **Never skip, ignore, delete or loosen an existing test** to get green. If a test is wrong, fix it in
   a separate commit that explains why, and record it in the work package.
-- **Clean room.** Do not open, fetch or search the source code of CrewAI, Microsoft Agent Framework,
-  LangGraph or AutoGen while writing Lanesra code. Use only the spec and `program/research/` notes.
+- **Clean room.** Analysts and implementers are separate roles. Implementers never open, fetch or
+  search the source code of CrewAI, Microsoft Agent Framework, LangGraph or AutoGen while writing
+  Lanesra code. Analysts study those projects only as plain-language behaviour notes in
+  `program/research/` (no code, prompts or structure copied). Use only the spec and those notes.
   Write all prompts fresh. Use Lanesra vocabulary (Team, Playbook, Run, Step), never Crew, Kickoff,
   Flow, Superstep, Magentic, StateGraph, Send, Command, Swarm or GraphFlow in code.
 - **One work package per branch and pull request.** Do not mix work packages.
@@ -50,7 +52,7 @@ If you are asked to do something that is not a work package, say so and ask whet
 
 ```bash
 cd desktop
-cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli   # Rust suite
+cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli --features lanesra-core/test-support   # Rust suite
 npm ci && npx tsc --noEmit && npm test && npm run build                       # frontend
 cd .. && node --check app.js                                                   # online demo
 python3 program/tools/programctl.py validate && python3 program/tools/programctl.py status --check

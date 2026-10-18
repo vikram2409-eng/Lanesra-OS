@@ -6,8 +6,8 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 20 | 11 | 2 | 3 | 0 | 4 | 19 / 36 | `█████░░░░░` 53% |
-| 1 · Foundations | 39 | 0 | 0 | 0 | 0 | 39 | 0 / 130 | `░░░░░░░░░░` 0% |
+| 0 · Precursors | 20 | 13 | 6 | 0 | 0 | 1 | 22 / 36 | `██████░░░░` 61% |
+| 1 · Foundations | 42 | 0 | 1 | 0 | 0 | 41 | 0 / 136 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 106 | 2 | 4 / 380 |
-| Team Workspace | 113 | 2 | 4 / 420 |
-| Online demo | 84 | 2 | 4 / 300 |
+| Desktop | 109 | 2 | 4 / 386 |
+| Team Workspace | 116 | 2 | 4 / 426 |
+| Online demo | 85 | 1 | 2 / 302 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -29,24 +29,23 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/637 |
+| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | in_review | muse | `wp/WP-0005-scripted-provider` | https://github.com/vikram2409-eng/Lanesra-OS/pull/648 |
+| [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | in_progress | muse | `wp/WP-0006-e2e-harness` | TBD |
+| [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | in_progress | muse | `wp/WP-0007-fixtures-and-closeout` | https://github.com/vikram2409-eng/Lanesra-OS/pull/649 |
+| [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | in_review | muse | `-` | https://github.com/vikram2409-eng/Lanesra-OS/pull/653 |
+| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | in_review | muse | `wp/WP-0014-design-tokens-a11y` | https://github.com/vikram2409-eng/Lanesra-OS/pull/644 |
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
+| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/670 |
 
 ## Ready to start (all dependencies done)
 
-Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXXX-*` branch or a draft PR means claimed). Hand it over with `programctl brief WP-XXXX`.
-
-| WP | Title | Phase | Estimate |
-|---|---|---|---|
-| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | 0 | M |
-| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | 0 | S |
-| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | 0 | M |
+None.
 
 ## Requirement coverage
 
 - Spec requirements tracked: **238**
 - Mapped to a work package: **238**
-- Delivered (every mapped work package done): **9**
+- Delivered (every mapped work package done): **16**
 
 ## Phase 0 · Precursors
 
@@ -56,16 +55,16 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0002](work/P0/WP-0002-repair-dependency-lockfiles-and-pin-toolchains.md) | Repair dependency lockfiles and pin toolchains | E0.1 Program and engineering readiness | ✅ done | S | — | - |
 | [WP-0003](work/P0/WP-0003-pull-request-ci-pipeline-and-branch-protection.md) | Pull request CI pipeline and branch protection | E0.1 Program and engineering readiness | ✅ done | M | — | WP-0002, WP-0004, WP-0016 |
 | [WP-0004](work/P0/WP-0004-rust-format-and-lint-baseline.md) | Rust format and lint baseline | E0.1 Program and engineering readiness | ✅ done | S | — | - |
-| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 🟢 ready | M | — | - |
-| [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0003 |
-| [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0003 |
+| [WP-0005](work/P0/WP-0005-deterministic-scripted-model-provider-for-tests.md) | Deterministic scripted model provider for tests | E0.2 Test infrastructure | 👀 in review | M | — | - |
+| [WP-0006](work/P0/WP-0006-browser-end-to-end-test-harness.md) | Browser end-to-end test harness | E0.2 Test infrastructure | 🔨 in progress | M | — | WP-0003 |
+| [WP-0007](work/P0/WP-0007-database-upgrade-migration-test-harness.md) | Database upgrade (migration) test harness | E0.2 Test infrastructure | 🔨 in progress | M | — | WP-0003 |
 | [WP-0008](work/P0/WP-0008-verify-the-spec-s-assumptions-against-the-code-gap-audit.md) | Verify the spec's assumptions against the code (gap audit) | E0.3 Architecture decisions | ✅ done | M | — | - |
 | [WP-0009](work/P0/WP-0009-foundational-adrs-run-state-machine-trace-schema-errors-migr.md) | Foundational ADRs: run state machine, trace schema, errors, migrations, prompt catalog | E0.3 Architecture decisions | ✅ done | L | — | WP-0008 |
-| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
-| [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | E0.4 Security and compliance baseline | ⚪ proposed | M | — | WP-0003 |
-| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | 🟢 ready | S | — | - |
-| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | ✅ done | M | ✓Online demo | - |
-| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | 🟢 ready | M | ○Desktop ○Team Workspace ○Online demo | - |
+| [WP-0010](work/P0/WP-0010-workspace-feature-flags.md) | Workspace feature flags | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
+| [WP-0011](work/P0/WP-0011-security-baseline-threat-model-and-scanning.md) | Security baseline: threat model and scanning | E0.4 Security and compliance baseline | 👀 in review | M | — | WP-0003 |
+| [WP-0012](work/P0/WP-0012-clean-room-controls.md) | Clean-room controls | E0.4 Security and compliance baseline | ✅ done | S | — | - |
+| [WP-0013](work/P0/WP-0013-online-demo-architecture-decision-for-the-playground.md) | Online demo architecture decision for the Playground | E0.3 Architecture decisions | ✅ done | M | — | - |
+| [WP-0014](work/P0/WP-0014-design-token-inventory-and-accessibility-tooling.md) | Design token inventory and accessibility tooling | E0.2 Test infrastructure | 👀 in review | M | ○Desktop ○Team Workspace | - |
 | [WP-0015](work/P0/WP-0015-performance-baseline.md) | Performance baseline | E0.2 Test infrastructure | ⚪ proposed | M | — | WP-0005 |
 | [WP-0016](work/P0/WP-0016-fix-tests-failing-on-main.md) | Fix tests failing on main | E0.1 Program and engineering readiness | ✅ done | M | ✓Desktop ✓Team Workspace | - |
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |
@@ -78,13 +77,16 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
 | [WP-0100](work/P1/WP-0100-principal-and-agent-identity-foundation.md) | Principal model, Agent Identities and agent credentials | E1.0 Identity foundation | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
-| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | ⚪ proposed | M | — | WP-0009, WP-0100 |
+| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | 👀 in review | M | — | WP-0009, WP-0107, WP-0108 |
 | [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
 | [WP-0105](work/P1/WP-0105-enterprise-sign-in-on-the-desktop-edition.md) | Enterprise sign-in on the desktop edition | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Desktop | WP-0102, WP-0103 |
-| [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0100, WP-0020 |
-| [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0100 |
+| [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0107, WP-0108, WP-0020 |
+| [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
+| [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0107 |
+| [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0107, WP-0108 |
+| [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0111 |
 | [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | ⚪ proposed | M | — | WP-0112, WP-0122, WP-0150, WP-0100 |

@@ -3,19 +3,23 @@ id: WP-0101
 title: Identity and sign-in architecture ADR
 phase: 1
 epic: E1.1 Enterprise sign-in
-status: proposed
-owner: unassigned
-depends_on: [WP-0009, WP-0100]
+status: in_review
+owner: muse
+depends_on: [WP-0009, WP-0107, WP-0108]
 requirements: [REQ-GOV-001]
 estimate: M
 editions: []
 delivered: []
-branch: 
-pr: 
-updated: 2026-10-16
+branch: wp/WP-0101-identity-adr
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/670
+updated: 2026-10-17
 ---
 
 # WP-0101 — Identity and sign-in architecture ADR
+
+## ADR
+
+ADR-0016 (Proposed): program/decisions/ADR-0016-identity-and-sign-in-architecture.md
 
 ## Goal
 
@@ -46,4 +50,10 @@ Decide how OIDC and SAML fit both editions - the owner requires SSO on desktop a
 
 ## Progress log
 
+- 2026-10-17 muse: Wrote ADR-0016 as Proposed (not Accepted). Covers Desktop, Team Workspace, Cloud SaaS. Follows ADR-0006 (principals) and ADR-0014 (one DB/key per workspace). Links T-03, T-11, T-12. No identity code. Awaiting owner and Claude review before WP-0107/WP-0108/WP-0109 build.
+
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+## Refinement log
+
+- 2026-10-17 muse: Moved proposed → ready. Depends on WP-0107 (principal model) and WP-0108 (agent identities) for the ADR. AC-1 (ADR accepted) is manual; AC-2 (WP-0102..0104 ACs updated) is verifiable. REQ-GOV-001 listed. Size M. Note: owner decides who builds identity code (per 2026-10-17 instruction).

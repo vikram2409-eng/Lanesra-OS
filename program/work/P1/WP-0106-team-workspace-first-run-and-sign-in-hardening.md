@@ -5,7 +5,7 @@ phase: 1
 epic: E1.1 Enterprise sign-in
 status: proposed
 owner: unassigned
-depends_on: [WP-0100, WP-0020]
+depends_on: [WP-0107, WP-0108, WP-0020]
 requirements: [REQ-PRE-019]
 estimate: M
 editions: [workspace, desktop]

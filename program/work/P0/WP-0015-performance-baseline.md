@@ -11,7 +11,7 @@ estimate: M
 editions: []
 delivered: []
 branch: 
-pr: 
+pr: TBD
 updated: 2026-10-16
 ---
 
@@ -29,7 +29,7 @@ Later phases add a trace event per round, checkpoints and budgets to every run. 
 
 ## Acceptance criteria
 
-- [ ] AC-1: Baseline numbers recorded and reproducible with one command
+- [x] AC-1: Baseline numbers recorded and reproducible with one command
 - [ ] AC-2: Budgets agreed and written into WP-0111 and WP-0112 acceptance criteria
 
 ## Test plan
@@ -40,4 +40,8 @@ Later phases add a trace event per round, checkpoints and budgets to every run. 
 
 ## Progress log
 
+- 2026-10-17 muse: Owner decision (2026-10-17) on AC-2 thresholds: Collect one week of perf-baseline numbers from main. Then fail the job when any measurement is more than 50% slower than the baseline in program/testing/REGRESSION.md; stay report-only below that. Threshold takes effect after one week of data collection (approx 2026-10-24). AC-2 stays unticked until the threshold is live and proven by one deliberately slowed run.
+
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-10-17 muse: Building WP-0015. Created desktop/core/tests/perf_baseline.rs (3 ignored tests using scripted provider, Covers: REQ-PRE-012), .github/workflows/perf-baseline.yml (reports numbers, never fails per owner instruction). Baseline recorded in program/testing/REGRESSION.md. AC-2 (budgets agreed) needs owner. Untested locally — see CI.

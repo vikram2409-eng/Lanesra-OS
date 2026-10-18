@@ -10,6 +10,7 @@ This check fails when:
   with the matching version number,
 - (with --base REF) a migration added on this branch is not numbered
   above the highest migration on the base branch.
+- a migration numbered above 0079 lacks the ADR-0010 header block.
 
     python3 program/tools/check_migrations.py
     python3 program/tools/check_migrations.py --base origin/main
@@ -46,6 +47,30 @@ def listed(migrate_rs: Path) -> list[tuple[int, str]]:
     return [(int(v), f"{num}_{name}.sql", int(num)) for v, num, name in LIST_RE.findall(text)]
 
 
+HEADER_RE = re.compile(
+    r"^-- Migration (\d{4}): .+\n"
+    r"-- Work package: WP-\d+\n"
+    r"-- Change: (additive|data|destructive)( \(.+\))?\n"
+    r"-- Data touched: .+\n"
+    r"-- Re-run safe: (yes|no)( \(.+\))?\n",
+    re.MULTILINE,
+)
+
+
+def check_header(path: Path, num: int) -> str | None:
+    """ADR-0010 header check for migrations numbered above 0079 (WP-0007)."""
+    if num <= 79:
+        return None
+    text = path.read_text(encoding="utf-8")
+    m = HEADER_RE.match(text)
+    if not m:
+        return (f"{path.name}: missing or malformed ADR-0010 header; "
+                "migrations above 0079 must start with the 5-line header block")
+    if int(m.group(1)) != num:
+        return f"{path.name}: header says migration {m.group(1)}, file is {num:04d}"
+    return None
+
+
 def check(mig_dir: Path, migrate_rs: Path, base_max: int | None = None, added: list[int] | None = None) -> list[str]:
     errors = []
     disk = files_on_disk(mig_dir)
@@ -57,6 +82,9 @@ def check(mig_dir: Path, migrate_rs: Path, base_max: int | None = None, added: l
     if sorted(set(numbers)) != expected:
         missing = sorted(set(expected) - set(numbers))
         errors.append(f"migration numbers must run 1..N without gaps; missing {missing}")
+    for n, name in disk:
+        if err := check_header(mig_dir / name, n):
+            errors.append(err)
     lst = listed(migrate_rs)
     if [(v, f) for v, f, _ in lst] != [(n, f) for n, f in disk]:
         disk_names = {f for _, f in disk}

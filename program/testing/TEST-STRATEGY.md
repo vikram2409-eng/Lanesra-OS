@@ -24,7 +24,7 @@ suite only grows.
 |---|---|---|---|
 | Targeted | While building, before each push | Tests for the crates and files touched: `cargo test -p lanesra-core --test <file>`, `npx vitest run <path>`, `programctl validate` | The AI, minutes |
 | Full regression | Every pull request and every push to `main` | Everything in `.github/workflows/ci.yml` and `program.yml`: fmt, clippy, all Rust tests in 4 parallel shards (`cargo nextest`), doc tests, Tauri clippy, frontend typecheck/tests/build, demo syntax, migration order, tracker | Nobody: CI runs it; merge is blocked until green |
-| Full local | Only for changes that touch everything (formatting, toolchain, migration framework, shared test helpers) or when CI is down | `cargo test --locked --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli` | The AI (about 75 minutes on the sandbox) |
+| Full local | Only for changes that touch everything (formatting, toolchain, migration framework, shared test helpers) or when CI is down | `cargo test --locked --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli --features lanesra-core/test-support` | The AI (about 75 minutes on the sandbox) |
 | Nightly | Scheduled, once the harnesses exist | Full end-to-end browser suite (WP-0006), performance benchmarks (WP-0015) | Nobody |
 
 A failing full regression on a pull request is fixed on that branch before merge. A red `main` stops
@@ -37,6 +37,37 @@ the line (see below).
 | Rust unit | `#[test]` in modules | `desktop/*/src/**` | Every PR | Pure logic: compilers, state machines, parsers, rankers |
 | Rust integration | `cargo test`, in-memory SQLite | `desktop/core/tests/`, `desktop/server/tests/`, `desktop/cli/tests/` | Every PR | Services end to end through repos and the firewall |
 | Agent behaviour | Scripted model provider (WP-0005) | Same as integration | Every PR | Loop limits, retries, guardrails, delegation, modes, traces |
+
+### Scripted model provider (WP-0005)
+
+`lanesra_core::services::scripted_provider` (only in test builds: run tests with `--features lanesra-core/test-support`) lets tests script
+deterministic model responses without API keys or network:
+
+```rust
+use lanesra_core::services::scripted_provider::{self, ScriptedResponse};
+
+// Queue responses: tool calls, then text, then an injected 429.
+scripted_provider::script_responses(vec![
+    ScriptedResponse::ToolCalls { calls: vec![...], usage },
+    ScriptedResponse::Text { text: "done".into(), usage },
+    ScriptedResponse::Failure { kind: "rate_limit".into() },
+]);
+
+// Dispatch through the gateway with provider "scripted".
+let (outcome, usage) = ai_service::dispatch_with_tools_test(
+    "scripted", None, "model", "key", "system", &tools, &history,
+).await?;
+
+// Assert on captured requests.
+let captured = scripted_provider::take_captured();
+assert_eq!(captured[0].tools.len(), 2);
+```
+
+Injected failures (`rate_limit`, `timeout`, `server_error`, `malformed_json`)
+surface as the gateway's normal `AppError` variants so retry logic can be
+tested. The provider is compiled out of release builds — the `scripted` arm
+in `dispatch_with_tools` only exists under `cfg(test)`.
+Covers: REQ-PRE-003 (WP-0005 AC-4)
 | API contract | JSON Schema validation, OpenAPI | `desktop/server/tests/` | Every PR | Event and endpoint shapes are stable |
 | Migration upgrade | Fixture databases (WP-0007) | `desktop/core/tests/migration_upgrade.rs` | Every PR | No data loss on upgrade; numbering rule |
 | Frontend unit | Vitest + Testing Library + axe | `desktop/src/**/__tests__`, `*.test.tsx` | Every PR | Components, hooks, accessibility |
@@ -61,6 +92,35 @@ the line (see below).
 - Test names read as behaviour: `round_limit_requests_final_answer_without_tools`.
 - E2E specs by journey: `playground-run-template.spec.ts`.
 
+## Migration upgrade fixtures (from WP-0007)
+
+The upgrade harness (`desktop/core/tests/migration_upgrade.rs`) proves every
+migration upgrades a real older database without data loss. Fixtures live under
+`desktop/core/tests/fixtures/db/` as SQLite files named `<version>_<label>.db`
+(e.g. `0079_pre_0080.db`), each created at the named schema version with
+representative data in the key tables (workspaces, companies, contacts).
+
+### Regenerating fixtures
+
+When a migration is added that changes a table the fixtures cover:
+
+1. Check out main at the commit before the new migration.
+2. Run `python3 desktop/core/tests/fixtures/gen_fixtures.py --out desktop/core/tests/fixtures/db/`.
+3. Commit the new fixture files alongside the migration.
+
+The script applies migrations 1..N-1 to a fresh SQLite database, inserts
+representative rows (one workspace, companies with populated text columns as
+canaries for destructive changes), and saves the file. It uses only the
+standard library.
+
+### The canary pattern (AC-2)
+
+To prove the harness catches data loss: temporarily add a migration that
+drops a populated column (e.g. `ALTER TABLE companies DROP COLUMN name`),
+run `cargo nextest run --test migration_upgrade`, observe the failure,
+then remove the canary before merging. The failure must appear in the PR
+checks.
+
 ## The scripted model provider (from WP-0005)
 
 Usage examples will be added here when WP-0005 lands. Until then, do not write tests that call a real provider.
@@ -69,7 +129,7 @@ Usage examples will be added here when WP-0005 lands. Until then, do not write t
 
 ```bash
 cd desktop
-cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli
+cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli --features lanesra-core/test-support
 npm ci && npx tsc --noEmit && npm test && npm run build
 cd .. && node --check app.js
 python3 -m unittest discover -s program/tools -p 'test_*.py'

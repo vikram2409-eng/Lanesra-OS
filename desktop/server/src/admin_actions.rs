@@ -32,7 +32,7 @@ use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use lanesra_core::domain::AppError;
+use lanesra_core::domain::{AppError, ErrorClass};
 use lanesra_core::models::agent::NlReportQuery;
 use lanesra_core::models::ai_knowledge::KnowledgeSourceInput;
 use lanesra_core::models::voice::ConfirmVoicePlanInput;
@@ -144,6 +144,14 @@ fn error_status(e: &AppError) -> StatusCode {
         AppError::Conflict(_) => StatusCode::CONFLICT,
         AppError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         AppError::PolicyBlocked(_) => StatusCode::FORBIDDEN,
+        // ADR-0009: a missing setup (configuration) is the server's
+        // dependency being unavailable, like a transient failure.
+        AppError::Classified { class, .. } => match class {
+            ErrorClass::Transient | ErrorClass::Configuration => StatusCode::SERVICE_UNAVAILABLE,
+            ErrorClass::Policy => StatusCode::FORBIDDEN,
+            ErrorClass::Validation => StatusCode::BAD_REQUEST,
+            ErrorClass::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+        },
     }
 }
 

@@ -8,13 +8,13 @@ owner: muse
 depends_on: []
 requirements: [REQ-PRE-010, REQ-PRE-021]
 estimate: M
-editions: [demo]
-delivered: [demo]
-editions_reason: architecture decision for the online demo itself
+editions: []
+delivered: []
+editions_reason: architecture decision record; ships no demo feature
 docs: [multi-target-architecture]
 branch: wp/WP-0013-demo-architecture
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/638
-updated: 2026-10-16
+updated: 2026-10-17
 ---
 id: WP-0013
 # WP-0013 — Online demo architecture decision for the Playground
@@ -77,3 +77,8 @@ Commands: python3 -c "import json; json.load(open('program/spec/schemas/team-for
 Done: Owner accepted ADR-0015 (option B: shared versioned TypeScript package -> single ES module). ADR status flipped to Accepted; AC-1, AC-2, AC-3 all ticked; WP moved to in_review.
 State: PR #638 is a draft. CI must be green before marking ready for review (FINISH-CHECKLIST). Untested locallysted locally - see CI.
 Next: check CI on PR #638; when green, mark the PR ready for review and request review from the other AI (Claude Code) or the owner per PROTOCOL §7.
+- 2026-10-17 claude: Merged in PR #638. ADR-0015 accepted by the owner. Closed out by the WP-0005 follow-up PR.
+- 2026-10-17 claude: Not done yet: (1) the website help article /help/multi-target-architecture must name WP-0013 in its wps:'…' field (app.js HELP_CATEGORIES) and describe the ADR-0015 decision; (2) `editions: []` needs `delivered: [demo]` - as a decision record it delivers no demo feature, so either set `editions: []` with an `editions_reason:` or keep it until WP-0223. Status stays in_review.
+
+- 2026-10-17 muse: Closeout. Named WP-0013 in /help/multi-target-architecture article (app.js HELP_CATEGORIES wps field) and described ADR-0015 decision there. Set editions: [] with editions_reason (decision record, ships no feature). Untested locally — see CI.
+- 2026-10-18 claude: Closed out (PR #643). Merged in PR #638 (ADR-0015 accepted), help article /help/multi-target-architecture names WP-0013 (PR #649), editions [] with editions_reason (decision record). Status done.

@@ -34,7 +34,7 @@
 ## Verification
 
 <!-- How did you confirm this works? Test output, commands run, screenshots for UI changes. -->
-- [ ] `cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli` passes (desktop changes)
+- [ ] `cargo test --no-fail-fast -p lanesra-core -p lanesra-server -p lanesra-cli --features lanesra-core/test-support` passes (desktop changes)
 - [ ] `npm run build` and `npm test` pass (desktop frontend changes)
 - [ ] `node --check app.js` passes (website changes)
 - [ ] `python3 program/tools/programctl.py validate` passes (program changes)

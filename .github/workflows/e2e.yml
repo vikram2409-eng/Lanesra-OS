@@ -1,0 +1,75 @@
+name: e2e (Playwright)
+
+# WP-0006: Browser end-to-end test harness.
+# This is a NEW check, NOT required (per PROTOCOL.md §13, the owner adds it to
+# the required list after a week of green runs).
+
+on:
+  pull_request:
+    paths:
+      - 'desktop/src/**'
+      - 'desktop/server/**'
+      - 'desktop/e2e/**'
+      - 'app.js'
+  workflow_dispatch:
+
+jobs:
+  playwright:
+    name: playwright (e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Install Playwright with Chromium
+        working-directory: desktop
+        run: npx playwright install --with-deps chromium
+
+      - name: Build frontend
+        working-directory: desktop
+        run: npm run build
+
+      - name: Build lanesra-server
+        working-directory: desktop
+        run: cargo build -p lanesra-server --locked
+
+      - name: Run Playwright tests
+        working-directory: desktop
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          PORT: 3000
+          LANESRA_DATA_DIR: /tmp/e2e-data
+          LANESRA_FRONTEND_DIR: ./dist
+        run: |
+          # Start the server on a temp data dir in the background
+          ./target/debug/lanesra-server &
+          SERVER_PID=$!
+          # Wait for health check
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health; then break; fi
+            sleep 2
+          done
+          # Run the tests
+          npx playwright test --config e2e/playwright.config.ts
+          TEST_EXIT=$?
+          kill $SERVER_PID || true
+          exit $TEST_EXIT
+
+      - name: Upload trace artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-traces
+          path: desktop/playwright-report/
+          retention-days: 7

@@ -18,6 +18,8 @@ updated: 2026-10-16
 
 # WP-0100 — Principal model, Agent Identities and agent credentials
 
+**SPLIT on 2026-10-17 into WP-0100A, WP-0100B, WP-0100C (XL → 3×M). This file is retained for history; do not build.**
+
 ## Goal
 
 Give agents an identity of their own before anything else in Phase 1 records "who acted"

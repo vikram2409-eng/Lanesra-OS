@@ -586,6 +586,10 @@ pub(crate) async fn dispatch_with_tools(
             complete_gemini_with_tools(base_url, model, api_key, system_prompt, tools, history)
                 .await
         }
+        #[cfg(any(test, feature = "test-support"))]
+        "scripted" => {
+            super::scripted_provider::dispatch_scripted(model, system_prompt, tools, history).await
+        }
         other => Err(AppError::Validation(format!(
             "No tool-calling completion implemented for provider '{other}'"
         ))),
@@ -1371,4 +1375,28 @@ async fn embed_gemini(
                 })
         })
         .collect()
+}
+
+/// Test-only public entry point for the scripted provider (WP-0005).
+/// Compiled only for tests (`cfg(test)` or the `test-support` feature).
+#[cfg(any(test, feature = "test-support"))]
+pub async fn dispatch_with_tools_test(
+    provider: &str,
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    system_prompt: &str,
+    tools: &[ToolSpec],
+    history: &[ChatMessage],
+) -> AppResult<(CompletionOutcome, TokenUsage)> {
+    dispatch_with_tools(
+        provider,
+        base_url,
+        model,
+        api_key,
+        system_prompt,
+        tools,
+        history,
+    )
+    .await
 }

@@ -3,16 +3,16 @@ id: WP-0006
 title: Browser end-to-end test harness
 phase: 0
 epic: E0.2 Test infrastructure
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: [WP-0003]
 requirements: [REQ-PRE-004]
 estimate: M
 editions: []
 delivered: []
-branch: 
-pr: 
-updated: 2026-10-16
+branch: wp/WP-0006-e2e-harness
+pr: TBD
+updated: 2026-10-17
 ---
 
 # WP-0006 — Browser end-to-end test harness
@@ -45,3 +45,9 @@ The Playground is a UI-heavy deliverable and the frontend has only 5 unit test f
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+## Refinement log
+
+- 2026-10-17 muse: Moved proposed → ready. WP-0003 done; WP-0005 (scripted provider) merged — smoke specs can use it. ACs testable; size M.
+
+- 2026-10-17 muse: Claimed WP-0006. Built: desktop/e2e/playwright.config.ts, desktop/e2e/tests/admin-first-run.spec.ts (first-run setup → sign-in → Settings → Feature flags as Administrator, Covers: REQ-PRE-004), .github/workflows/e2e.yml (new non-required check, Playwright with chromium), PROTOCOL.md §13 note (owner adds to required after a week of green runs). Untested locally — see CI.

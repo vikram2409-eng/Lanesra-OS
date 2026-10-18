@@ -28,6 +28,11 @@ Rebuild the agent editor around the eight plain-language groups with essentials,
 - Three-field minimum agent
 - One home per setting with read-only links elsewhere
 
+## Component tasks (from WP-0014 inventory)
+
+- [ ] Build `RiskBadge` (low/medium/high/critical) in `desktop/src/components/ui`
+- [ ] Build `LifecyclePill` (draft/active/paused/archived) in `desktop/src/components/ui`
+
 ## Acceptance criteria
 
 - [ ] AC-1: A new agent with name, job and one tool runs
