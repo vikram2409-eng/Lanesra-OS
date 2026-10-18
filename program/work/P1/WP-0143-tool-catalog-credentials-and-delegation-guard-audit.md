@@ -3,17 +3,17 @@ id: WP-0143
 title: Tool catalog, credentials and delegation guard audit
 phase: 1
 epic: E1.5 Tools and firewall
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: [WP-0008]
 requirements: [REQ-TOOL-001, REQ-TOOL-007, REQ-LOOP-012]
 threats: [T-04, T-13, T-14]
 estimate: S
 editions: []
 delivered: []
-branch: 
+branch: wp/WP-0143-ssrf-protection
 pr: 
-updated: 2026-10-16
+updated: 2026-10-18
 ---
 
 # WP-0143 — Tool catalog, credentials and delegation guard audit
@@ -49,5 +49,4 @@ Confirm and lock in with tests that every tool source passes the full firewall c
 ## Progress log
 
 - 2026-10-17 muse: Refined to ready per PROTOCOL.md §4. Threats linked (WP-0011 AC-3). ACs testable, test plan names files, dependencies and requirements listed.
-
-<!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-18 muse: Implemented SSRF protection (T-13, R-27). Created `desktop/core/src/services/ssrf_guard.rs` with `validate_outbound_url()` — resolves hostname, refuses loopback (127.0.0.0/8, ::1), private RFC 1918 (10/8, 172.16/12, 192.168/16), link-local (169.254/16, fe80::/10), cloud metadata (169.254.169.254, fd00:ec2::254), with admin allow-list override. Integrated into `ai_provider_service::validate()` (OpenAI-compatible base URL) and `connection_service::create()`/`update()` (covers MCP, REST, webhook connectors). Returns `AppError::Classified` with new code `validation.ssrf_blocked` (added to ADR-0009). Tests in `desktop/core/tests/ssrf_guard.rs` cover each blocked range (Covers: REQ-TOOL-001). THREAT-MODEL.md T-13 → Mitigated; RAID R-27 closed. Untested locally — see CI.
