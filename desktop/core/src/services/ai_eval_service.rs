@@ -23,6 +23,7 @@ use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent::validate_output_schema;
 use crate::models::ai_agent_pipeline::TRIGGER_TARGET_TYPES;
 use crate::models::ai_eval::{AiEvalRun, AiEvalSuite, AiEvalSuiteInput, EVALUATOR_TYPES};
+use crate::prompts;
 use crate::repositories::{ai_agent_version_repo, ai_eval_repo};
 use crate::services::{ai_agent_service, ai_orchestration_service, ai_service};
 
@@ -126,7 +127,18 @@ pub fn list_runs(conn: &Connection, suite_id: &str, limit: i64) -> AppResult<Vec
     Ok(ai_eval_repo::list_runs_for_suite(conn, suite_id, limit)?)
 }
 
-pub(crate) const JUDGE_SYSTEM_PROMPT: &str = "You are a strict, impartial grader for an AI system's test suite. You will be given a task the AI was asked to do, a stated success criteria, and the AI's actual response. Decide whether the response satisfies the criteria - do not reward a well-written answer that misses the criteria, and do not penalize a correct answer for an unrelated style choice. Respond with exactly one word on the first line, PASS or FAIL, followed by exactly one sentence of reasoning on the next line. Output nothing else.";
+/// Render the judge system prompt from the catalog (WP-0130, ADR-0011).
+/// Returns the full prompt with task/criteria/response substituted.
+pub(crate) fn judge_system_prompt(task: &str, criteria: &str, response: &str) -> AppResult<String> {
+    let prompt = prompts::get_active("eval/judge")
+        .ok_or_else(|| AppError::Validation("prompt catalog: eval/judge not found".into()))?;
+    let body = prompts::body_only(prompt.body);
+    let mut vars = std::collections::HashMap::new();
+    vars.insert("task", task);
+    vars.insert("criteria", criteria);
+    vars.insert("response", response);
+    prompts::render(body, &vars).map_err(AppError::Validation)
+}
 
 /// `pub(crate)`: also the judge call Workflow Studio 2.0's `evaluate_result`
 /// graph node type uses (`graph_runtime_service.rs`) to grade an upstream
@@ -282,14 +294,17 @@ pub async fn run_suite(
                 )?;
             }
             _ => {
-                let judge_message =
-                    build_judge_message(&case.input_text, &case.success_criteria, &actual_output);
+                let system_prompt = judge_system_prompt(
+                    &case.input_text,
+                    &case.success_criteria,
+                    &actual_output,
+                )?;
                 match ai_service::complete(
                     conn,
                     workspace_id,
                     master_key,
-                    JUDGE_SYSTEM_PROMPT,
-                    &judge_message,
+                    &system_prompt,
+                    "",
                 )
                 .await
                 {

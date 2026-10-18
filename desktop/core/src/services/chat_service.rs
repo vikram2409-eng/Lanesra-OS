@@ -879,30 +879,15 @@ fn tools_for_mode(mode: &str) -> AppResult<Vec<ToolSpec>> {
     }
 }
 
-fn system_prompt(mode: &str) -> &'static str {
-    match mode {
-        "records" => {
-            "You are Lanesra OS's assistant for finding and working with this workspace's records - \
-             companies, contacts, opportunities, and every other built-in or custom object. Use the \
-             tools available to look things up before answering, and to make the changes a person asks \
-             for - get_object_metadata for an object's fields and relationships, get_related_records to \
-             follow one for a specific record, and get_platform_overview if you're unsure how this \
-             product's own pieces fit together. Be concise. When you create, update, or archive \
-             something, say plainly what you did."
-        }
-        "admin" => {
-            "You are Lanesra OS's assistant for administrators - helping build and configure workflows, \
-             business rules, custom objects and fields, integrations, and the rest of the admin surface. \
-             Call get_platform_overview first if you're unsure how this product's own primitives fit \
-             together or what order to build them in. Use the tools available to look at what's already \
-             configured before proposing or creating something new (list_objects/get_object_metadata/ \
-             get_related_records included, not just the admin-catalog list_* tools), and to make the \
-             changes an admin asks for. Never ask for or accept a Connection's or API client's credential \
-             in chat - create_connection never takes one; tell the admin to add it afterward through the \
-             existing secure form. Be concise, and say plainly what you created."
-        }
-        _ => "",
-    }
+fn system_prompt(mode: &str) -> String {
+    let id = match mode {
+        "records" => "assistant/records",
+        "admin" => "assistant/admin",
+        _ => return String::new(),
+    };
+    crate::prompts::get_active(id)
+        .map(|p| crate::prompts::body_only(p.body).to_string())
+        .unwrap_or_default()
 }
 
 /// Redacts a `create_connection` tool call's `secret_value` argument out
@@ -1005,11 +990,12 @@ pub async fn send_message(
 
     for _round in 0..MAX_ROUNDS {
         let history = chat_repo::list_messages(conn, &conversation.id)?;
+        let sys_prompt = system_prompt(mode);
         let (outcome, usage) = ai_service::complete_with_tools(
             conn,
             workspace_id,
             master_key,
-            system_prompt(mode),
+            &sys_prompt,
             &tools,
             &history,
         )
@@ -1454,6 +1440,16 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
 /// deliberately NOT dumped in here - they're queried on demand via
 /// `get_memory` - the "never dump an entire table into a prompt"
 /// structured-retrieval discipline this issue's own scope text asks for;
+/// Render a catalog section template with a single variable (WP-0130, ADR-0011).
+fn render_catalog_section(id: &str, var_name: &str, var_value: &str) -> AppResult<String> {
+    let prompt = crate::prompts::get_active(id)
+        .ok_or_else(|| AppError::Validation(format!("prompt catalog: {id} not found")))?;
+    let body = crate::prompts::body_only(prompt.body);
+    let mut vars = std::collections::HashMap::new();
+    vars.insert(var_name, var_value);
+    crate::prompts::render(body, &vars).map_err(AppError::Validation)
+}
+
 /// unlike Session Memory, they aren't naturally singular/small per turn.
 fn agent_system_prompt(
     conn: &Connection,
@@ -1462,32 +1458,55 @@ fn agent_system_prompt(
 ) -> AppResult<String> {
     let mut prompt = agent.system_prompt.clone();
     if !agent.memory_md.trim().is_empty() {
-        prompt.push_str("\n\nYour persistent memory from prior runs (revise it with update_memory whenever something worth remembering happens):\n\n");
-        prompt.push_str(&agent.memory_md);
+        let section = render_catalog_section(
+            "loop/memory-section",
+            "memory_md",
+            &agent.memory_md,
+        )?;
+        prompt.push_str("\n\n");
+        prompt.push_str(&section);
     }
     if let Ok(items) =
         ai_memory_service::list_context(conn, &agent.id, "session", None, None, memory_context)
     {
         if !items.is_empty() {
-            prompt.push_str("\n\nThings you remember about this specific conversation (from remember, memory_type='session'):\n");
-            for item in &items {
-                prompt.push_str(&format!("- {}\n", item.content));
-            }
+            let items_text: String = items
+                .iter()
+                .map(|item| format!("- {}\n", item.content))
+                .collect();
+            let section = render_catalog_section(
+                "loop/session-memory-section",
+                "items",
+                &items_text,
+            )?;
+            prompt.push_str("\n\n");
+            prompt.push_str(&section);
         }
     }
     if !agent.guardrails_md.trim().is_empty() {
-        prompt.push_str("\n\nOperational guardrails (must not be violated):\n\n");
-        prompt.push_str(&agent.guardrails_md);
+        let section = render_catalog_section(
+            "loop/guardrails-section",
+            "guardrails_md",
+            &agent.guardrails_md,
+        )?;
+        prompt.push_str("\n\n");
+        prompt.push_str(&section);
     }
     if !agent.skill_ids.is_empty() {
-        prompt.push_str(
-            "\n\nSkills available to you - call use_skill by name when one is relevant:\n",
-        );
+        let mut skills_text = String::new();
         for skill_id in &agent.skill_ids {
             if let Some(skill) = ai_agent_repo::get_skill(conn, skill_id).map_err(AppError::from)? {
-                prompt.push_str(&format!("- {}: {}\n", skill.name, skill.description));
+                skills_text.push_str(&format!("- {}: {}\n", skill.name, skill.description));
             }
         }
+        let section = render_catalog_section(
+            "loop/skills-section",
+            "skills",
+            &skills_text,
+        )?;
+        prompt.push_str("\n\n");
+        prompt.push_str(&section);
+    }
     }
     Ok(prompt)
 }
