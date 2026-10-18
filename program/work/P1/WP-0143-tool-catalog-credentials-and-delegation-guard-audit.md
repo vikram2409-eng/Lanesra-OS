@@ -3,10 +3,11 @@ id: WP-0143
 title: Tool catalog, credentials and delegation guard audit
 phase: 1
 epic: E1.5 Tools and firewall
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0008]
 requirements: [REQ-TOOL-001, REQ-TOOL-007, REQ-LOOP-012]
+threats: [T-04, T-13, T-14]
 estimate: S
 editions: []
 delivered: []
@@ -46,5 +47,7 @@ Confirm and lock in with tests that every tool source passes the full firewall c
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log
+
+- 2026-10-17 muse: Refined to ready per PROTOCOL.md §4. Threats linked (WP-0011 AC-3). ACs testable, test plan names files, dependencies and requirements listed.
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->

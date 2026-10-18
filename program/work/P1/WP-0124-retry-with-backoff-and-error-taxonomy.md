@@ -3,10 +3,11 @@ id: WP-0124
 title: Retry with backoff and error taxonomy
 phase: 1
 epic: E1.3 Agent loop
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0009, WP-0005]
 requirements: [REQ-ORCH-033]
+threats: [T-06]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
@@ -46,6 +47,8 @@ Transient failures (rate limits, timeouts, 5xx) retry with exponential backoff a
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log
+
+- 2026-10-17 muse: Refined to ready per PROTOCOL.md §4. Threats linked (WP-0011 AC-3). ACs testable, test plan names files, dependencies and requirements listed.
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-10-17 claude: `AppError::Classified` and `ErrorClass` (ADR-0009 §2) now exist in `core/src/domain/errors.rs` (added in the WP-0005 follow-up), and the scripted provider returns classified transient errors. This work package adds retry with backoff and failover on top of them; it does not need to add the variant.
