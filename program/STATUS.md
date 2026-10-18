@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 42 | 0 | 1 | 3 | 0 | 38 | 0 / 136 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 42 | 0 | 2 | 3 | 0 | 37 | 0 / 136 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -31,6 +31,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
+| [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
 
 ## Ready to start (all dependencies done)
 
@@ -99,7 +100,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0111 |
 | [WP-0128](work/P1/WP-0128-policy-hook-points-around-step-model-call-and-tool-call.md) | Policy hook points around step, model call and tool call | E1.3 Agent loop | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0122, WP-0133 |
-| [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0009 |
+| [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | E1.4 Task contracts and guardrails | 🔨 in progress | L | ○Desktop ○Team Workspace | WP-0009 |
 | [WP-0131](work/P1/WP-0131-task-contracts-and-context-bindings.md) | Task contracts and context bindings | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
 | [WP-0132](work/P1/WP-0132-output-validation-guardrail-retries-and-on-fail.md) | Output validation, guardrail retries and on_fail | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0131, WP-0133 |
 | [WP-0133](work/P1/WP-0133-guardrails-as-versioned-policy-objects.md) | Guardrails as versioned policy objects | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
