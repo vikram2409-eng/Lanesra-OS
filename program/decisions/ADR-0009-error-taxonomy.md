@@ -62,7 +62,7 @@ Codes are stable strings, recorded on the span (`lanesra.error.code`), on the st
 
 - **transient:** `provider.timeout`, `provider.rate_limited`, `provider.unavailable`, `provider.network`, `db.busy`
 - **policy:** `policy.denied`, `policy.approval_required`, `policy.budget_exhausted`, `policy.data_boundary`, `policy.scope`, `policy.access_denied`
-- **validation:** `validation.arguments`, `validation.output_schema`, `validation.guardrail`, `validation.unknown_tool`
+- **validation:** `validation.arguments`, `validation.output_schema`, `validation.guardrail`, `validation.unknown_tool`, `validation.ssrf_blocked`
 - **configuration:** `config.missing_key`, `config.provider_disabled`, `config.model_not_found`, `config.not_local`
 - **internal:** `internal`
 
