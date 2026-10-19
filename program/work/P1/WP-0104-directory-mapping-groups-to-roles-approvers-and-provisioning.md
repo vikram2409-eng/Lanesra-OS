@@ -34,6 +34,8 @@ Map directory users and groups onto Lanesra users, Access Roles, Work Teams and 
 
 - [ ] AC-1: Mapped group grants the configured role; removing the group removes it at next sign-in
 - [ ] AC-2: Approver routing can target a directory group
+- [ ] AC-3: JIT provisioning off by default; when enabled, restricted to listed email domains and new accounts get lowest-privilege role (never admin) per ADR-0016 §3
+- [ ] AC-4: Account linking for existing local users requires proof of ownership (password sign-in or admin approval); unverified email never links (ADR-0016 §3)
 
 ## Test plan
 
