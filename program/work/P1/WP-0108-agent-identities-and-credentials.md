@@ -3,7 +3,7 @@ id: WP-0108
 title: Agent Identities and credentials
 phase: 1
 epic: E1.0 Identity foundation
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0107]
 requirements: [REQ-GOV-002, REQ-GOV-029]
