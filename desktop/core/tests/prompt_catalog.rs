@@ -51,11 +51,11 @@ fn prompt_files_have_valid_front_matter() {
         );
         // Must contain required fields
         assert!(content.contains("id:"), "missing id in {:?}", entry);
-    assert!(
-        content.contains("version:"),
-        "missing version in {:?}",
-        entry
-    );
+        assert!(
+            content.contains("version:"),
+            "missing version in {:?}",
+            entry
+        );
         assert!(content.contains("status:"), "missing status in {:?}", entry);
         assert!(
             content.contains("work_package:"),
