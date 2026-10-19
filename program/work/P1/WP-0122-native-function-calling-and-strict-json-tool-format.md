@@ -3,8 +3,8 @@ id: WP-0122
 title: Native function calling and strict JSON tool format
 phase: 1
 epic: E1.3 Agent loop
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: [WP-0005]
 requirements: [REQ-LOOP-004]
 threats: [T-03, T-14]
@@ -13,9 +13,9 @@ editions: [desktop, workspace]
 delivered: []
 editions_reason: provider wire formats; the online demo uses a simulated model
 docs: [unified-ai-gateway]
-branch: 
+branch: wp/WP-0122-tool-calling
 pr: 
-updated: 2026-10-16
+updated: 2026-10-18
 ---
 
 # WP-0122 — Native function calling and strict JSON tool format
@@ -50,3 +50,4 @@ Use each provider's native tool calling (Anthropic, OpenAI-compatible, Gemini, O
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+2026-10-18 muse: Refined to ready. Scope confirmed: native tool calling for Anthropic/OpenAI-compatible/Gemini, strict JSON fallback, malformed → validation.arguments error to model (never executes). AC-1 (round-trip per provider via scripted provider) and AC-2 (malformed JSON → error, no execution) are testable. Test plan: desktop/core/tests/tool_calling_formats.rs. Threats T-03, T-14 linked.
