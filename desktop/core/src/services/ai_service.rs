@@ -823,56 +823,60 @@ async fn complete_openai_with_tools(
     if let Some(tool_calls_value) = message.get("tool_calls").filter(|v| v.is_array()) {
         let mut calls = Vec::new();
         for c in tool_calls_value.as_array().unwrap() {
-            let function = c.get("function").ok_or_else(|| {
-                AppError::Classified {
-                    class: crate::domain::ErrorClass::Validation,
-                    code: "validation.arguments",
-                    message: format!("Tool call missing 'function' field: {}", truncate(&c.to_string(), 200)),
-                    retry_after_ms: None,
-                    http_status: None,
-                }
+            let function = c.get("function").ok_or_else(|| AppError::Classified {
+                class: crate::domain::ErrorClass::Validation,
+                code: "validation.arguments",
+                message: format!(
+                    "Tool call missing 'function' field: {}",
+                    truncate(&c.to_string(), 200)
+                ),
+                retry_after_ms: None,
+                http_status: None,
             })?;
-            let arguments_str = function.get("arguments").and_then(|v| v.as_str()).ok_or_else(|| {
-                AppError::Classified {
+            let arguments_str = function
+                .get("arguments")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Classified {
                     class: crate::domain::ErrorClass::Validation,
                     code: "validation.arguments",
                     message: "Tool call 'arguments' must be a JSON string".to_string(),
                     retry_after_ms: None,
                     http_status: None,
-                }
-            })?;
+                })?;
             // AC-2: Malformed JSON returns an error, never executes with default args.
-            let arguments: serde_json::Value = serde_json::from_str(arguments_str).map_err(|e| {
-                AppError::Classified {
+            let arguments: serde_json::Value =
+                serde_json::from_str(arguments_str).map_err(|e| AppError::Classified {
                     class: crate::domain::ErrorClass::Validation,
                     code: "validation.arguments",
                     message: format!("Malformed tool call arguments JSON: {e}"),
                     retry_after_ms: None,
                     http_status: None,
-                }
-            })?;
-            let id = c.get("id").and_then(|v| v.as_str()).ok_or_else(|| {
-                AppError::Classified {
+                })?;
+            let id = c
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Classified {
                     class: crate::domain::ErrorClass::Validation,
                     code: "validation.arguments",
                     message: "Tool call missing 'id' field".to_string(),
                     retry_after_ms: None,
                     http_status: None,
-                }
-            })?;
-            let name = function.get("name").and_then(|v| v.as_str()).ok_or_else(|| {
-                AppError::Classified {
+                })?;
+            let name = function
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Classified {
                     class: crate::domain::ErrorClass::Validation,
                     code: "validation.arguments",
                     message: "Tool call missing 'name' field".to_string(),
                     retry_after_ms: None,
                     http_status: None,
-                }
-            })?;
+                })?;
             calls.push(RequestedToolCall {
                 id: id.to_string(),
                 name: name.to_string(),
                 arguments,
+            });
             });
         }
         if !calls.is_empty() {
