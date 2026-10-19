@@ -23,11 +23,8 @@ fn effective_role_is_least_privileged() {
     for (human_role, agent_role, expect_role) in cases {
         let human = Principal::human("h1", "w1", "acc1", human_role);
         let agent = Principal::agent_identity("a1", "w1", "agent1", agent_role);
-        let effective = EffectiveIdentity::interactive(
-            human,
-            agent,
-            serde_json::json!({"type": "all"}),
-        );
+        let effective =
+            EffectiveIdentity::interactive(human, agent, serde_json::json!({"type": "all"}));
         assert_eq!(
             effective.acting_as.access_role, expect_role,
             "human={human_role}, agent={agent_role}"
