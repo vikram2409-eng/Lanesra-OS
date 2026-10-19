@@ -11,8 +11,8 @@
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
-use crate::domain::{AppError, AppResult};
 use crate::domain::ids::new_uuid;
+use crate::domain::{AppError, AppResult};
 
 /// Token lifetime: 24 hours by default (short-lived).
 const DEFAULT_TOKEN_LIFETIME_SECS: i64 = 24 * 60 * 60;
@@ -49,7 +49,11 @@ pub fn generate_token() -> String {
     seed ^= seed >> 27;
     seed = seed.wrapping_mul(0x94D049BB133111EB);
     seed ^= seed >> 31;
-    format!("lanesra_{:016x}{:016x}", nanos & 0xFFFF_FFFF_FFFF_FFFF, seed & 0xFFFF_FFFF_FFFF_FFFF)
+    format!(
+        "lanesra_{:016x}{:016x}",
+        nanos & 0xFFFF_FFFF_FFFF_FFFF,
+        seed & 0xFFFF_FFFF_FFFF_FFFF
+    )
 }
 
 /// Issue a new credential for an agent identity.
@@ -141,7 +145,9 @@ pub fn validate_credential(conn: &Connection, token: &str) -> AppResult<Validate
 
     // AC-2: Revoked credentials are refused immediately.
     if revoked_at.is_some() {
-        return Err(AppError::Validation("Credential has been revoked".to_string()));
+        return Err(AppError::Validation(
+            "Credential has been revoked".to_string(),
+        ));
     }
 
     // AC-2: Expired credentials are refused immediately.
@@ -176,10 +182,7 @@ pub fn validate_credential(conn: &Connection, token: &str) -> AppResult<Validate
     // Update last_used_at (fire and forget — not critical)
     let _ = conn.execute(
         "UPDATE ai_agent_credentials SET last_used_at = ?1 WHERE id = ?2",
-        rusqlite::params![
-            chrono::Utc::now().to_rfc3339(),
-            credential_id
-        ],
+        rusqlite::params![chrono::Utc::now().to_rfc3339(), credential_id],
     );
 
     let scope: serde_json::Value =
