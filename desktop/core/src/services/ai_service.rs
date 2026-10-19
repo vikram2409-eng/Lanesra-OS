@@ -877,7 +877,6 @@ async fn complete_openai_with_tools(
                 name: name.to_string(),
                 arguments,
             });
-            });
         }
         if !calls.is_empty() {
             return Ok((
