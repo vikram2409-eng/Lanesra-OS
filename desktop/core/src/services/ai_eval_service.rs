@@ -145,13 +145,6 @@ pub(crate) fn judge_system_prompt(task: &str, criteria: &str, response: &str) ->
 /// node's output against an admin-supplied success criteria - the same
 /// grading primitive this module's own `run_suite` uses for a Suite Case,
 /// generalized to a one-off piece of text instead of a re-run target.
-pub(crate) fn build_judge_message(
-    input_text: &str,
-    success_criteria: &str,
-    actual_output: &str,
-) -> String {
-    format!("Task input:\n{input_text}\n\nSuccess criteria:\n{success_criteria}\n\nActual response:\n{actual_output}\n\nDoes the actual response satisfy the success criteria?")
-}
 
 /// Parses the judge call's own response - the first non-empty line
 /// decides pass/fail; anything that isn't a clean "PASS" is treated as a
