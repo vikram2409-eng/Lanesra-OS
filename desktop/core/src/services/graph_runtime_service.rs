@@ -891,7 +891,6 @@ async fn execute_node(
                 &actual_output,
             )?;
             match ai_service::complete(conn, workspace_id, master_key, &system_prompt, "").await {
-            {
                 Ok(reply) => {
                     let (passed, reasoning) = ai_eval_service::parse_judge_reply(&reply);
                     let label = if passed { "pass" } else { "fail" };
