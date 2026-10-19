@@ -33,9 +33,10 @@ Users sign in to the Team Workspace server with the customer's OpenID Connect pr
 ## Acceptance criteria
 
 - [ ] AC-1: Sign-in works against a local mock OIDC provider in tests
-- [ ] AC-2: Invalid signature, wrong audience, expired token, replayed nonce are all rejected (tested)
+- [ ] AC-2: Each protocol check in ADR-0016 §2 (OIDC) is a negative test: invalid signature, wrong audience, expired token, replayed nonce, `none` algorithm, symmetric algorithm, unknown kid without JWKS refetch, issuer mismatch, clock skew >60s — all rejected
 - [ ] AC-3: Client secret never returned by any API
 - [ ] AC-4: Audit entries for sign-in success, failure and config change
+- [ ] AC-5: SSO identity linked by (issuer, subject) pair, never by email alone (ADR-0016 §3); unverified email never links
 
 ## Test plan
 

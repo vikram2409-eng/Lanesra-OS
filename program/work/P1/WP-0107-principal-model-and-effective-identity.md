@@ -3,7 +3,7 @@ id: WP-0107
 title: Principal model and effective-identity rules
 phase: 1
 epic: E1.0 Identity foundation
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0009]
 requirements: [REQ-GOV-002, REQ-GOV-003]
