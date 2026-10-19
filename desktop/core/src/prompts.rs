@@ -123,10 +123,12 @@ pub fn render(body: &str, vars: &HashMap<&str, &str>) -> Result<String, String> 
     while let Some(open) = out[start..].find("{{") {
         let abs_open = start + open;
         let rest = &out[abs_open + 2..];
-        let close = rest.find("}}")
+        let close = rest
+            .find("}}")
             .ok_or_else(|| format!("unclosed placeholder starting at byte {abs_open}"))?;
         let var_name = rest[..close].trim();
-        let value = vars.get(var_name)
+        let value = vars
+            .get(var_name)
             .ok_or_else(|| format!("missing required variable: {var_name}"))?;
         let abs_close = abs_open + 2 + close + 2;
         out.replace_range(abs_open..abs_close, value);
