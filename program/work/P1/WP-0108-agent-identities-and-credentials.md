@@ -3,8 +3,8 @@ id: WP-0108
 title: Agent Identities and credentials
 phase: 1
 epic: E1.0 Identity foundation
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: [WP-0107]
 requirements: [REQ-GOV-002, REQ-GOV-029]
 threats: [T-03, T-09]
@@ -12,9 +12,9 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [agent-identities]
-branch: 
+branch: wp/WP-0108-agent-identities
 pr: 
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 
 
