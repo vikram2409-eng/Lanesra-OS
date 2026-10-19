@@ -6,9 +6,7 @@
 //! Covers: REQ-GOV-002, REQ-GOV-029 (WP-0108 AC-1, AC-2)
 //! Threats: T-03 (credential theft), T-09 (leakage to models)
 
-use lanesra_core::services::agent_credential_service::{
-    hash_token, redact_credential_material,
-};
+use lanesra_core::services::agent_credential_service::{hash_token, redact_credential_material};
 
 /// AC-1: Token hashes are one-way; the plaintext never appears in storage.
 #[test]
@@ -54,7 +52,12 @@ fn ac1_validated_credential_has_no_token_field() {
     // This is a compile-time property: ValidatedCredential contains
     // credential_id, agent_identity_id, workspace_id, scope — no token.
     // The test documents the invariant.
-    let fields = ["credential_id", "agent_identity_id", "workspace_id", "scope"];
+    let fields = [
+        "credential_id",
+        "agent_identity_id",
+        "workspace_id",
+        "scope",
+    ];
     for field in fields {
         assert_ne!(field, "token");
         assert_ne!(field, "token_hash");
