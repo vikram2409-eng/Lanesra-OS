@@ -51,11 +51,11 @@ fn prompt_files_have_valid_front_matter() {
         );
         // Must contain required fields
         assert!(content.contains("id:"), "missing id in {:?}", entry);
-        assert!(
-            content.contains("version:"),
-            "missing version in {:?}",
-            entry
-        );
+    assert!(
+        content.contains("version:"),
+        "missing version in {:?}",
+        entry
+    );
         assert!(content.contains("status:"), "missing status in {:?}", entry);
         assert!(
             content.contains("work_package:"),
@@ -65,10 +65,10 @@ fn prompt_files_have_valid_front_matter() {
         count += 1;
     }
     assert!(
-            count >= 8,
-            "expected at least 8 prompt files, found {}",
-            count
-        );
+        count >= 8,
+        "expected at least 8 prompt files, found {}",
+        count
+    );
 }
 
 /// AC-2: Verify that prompt versions are contiguous (v1, v2, ...) with no gaps.
@@ -122,9 +122,9 @@ fn prompt_version_bump_is_visible_as_diff() {
     // For now, we just verify v1 exists and has content.
     let content = fs::read_to_string(&v1_path).unwrap();
     assert!(
-            content.len() > 100,
-            "prompt should have substantial content"
-        );
+        content.len() > 100,
+        "prompt should have substantial content"
+    );
 }
 
 fn walkdir(dir: &Path) -> Vec<std::path::PathBuf> {
