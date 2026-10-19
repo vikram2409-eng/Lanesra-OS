@@ -63,8 +63,13 @@ fn gemini_tool_call_round_trips() {
             }
         }]
     });
-    let parts = wire["candidates"][0]["content"]["parts"].as_array().unwrap();
-    let fn_calls: Vec<_> = parts.iter().filter(|p| p.get("functionCall").is_some()).collect();
+    let parts = wire["candidates"][0]["content"]["parts"]
+        .as_array()
+        .unwrap();
+    let fn_calls: Vec<_> = parts
+        .iter()
+        .filter(|p| p.get("functionCall").is_some())
+        .collect();
     assert_eq!(fn_calls.len(), 1);
     assert_eq!(fn_calls[0]["functionCall"]["name"], "get_record");
     assert_eq!(fn_calls[0]["functionCall"]["args"]["id"], "123");
