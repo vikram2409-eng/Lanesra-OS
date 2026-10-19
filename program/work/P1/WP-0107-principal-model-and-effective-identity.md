@@ -3,8 +3,8 @@ id: WP-0107
 title: Principal model and effective-identity rules
 phase: 1
 epic: E1.0 Identity foundation
-status: ready
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: [WP-0009]
 requirements: [REQ-GOV-002, REQ-GOV-003]
 threats: [T-03, T-12]
@@ -12,9 +12,9 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [agent-identities, access-roles-and-record-scopes]
-branch: 
+branch: wp/WP-0107-principal-model
 pr: 
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 
 # WP-0107 — Principal model and effective-identity rules
