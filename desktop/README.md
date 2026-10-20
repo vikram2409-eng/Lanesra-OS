@@ -185,6 +185,17 @@ Team Workspace beyond a trusted LAN:
    listed origins to call the API with credentials (the session cookie)
    included.
 
+4. **`LANESRA_OUTBOUND_ALLOW`** (optional, comma-separated IP addresses
+   or CIDR blocks, e.g. `10.0.4.0/24,192.168.1.20`) - the server refuses
+   to call addresses on its own network (loopback, private ranges) from
+   admin-configured URLs: model providers, connectors, webhooks, MCP
+   servers, trace exporters. List the internal services it may reach,
+   such as an Ollama host. Cloud metadata and link-local addresses are
+   always refused, whatever is listed. A malformed entry stops the
+   server at startup; every entry is logged when the server starts. The
+   desktop app does not need this: it can reach the user's own machine
+   and network.
+
 Every response also now carries a conservative, always-on header set
 (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 `Referrer-Policy: strict-origin-when-cross-origin`) regardless of any of

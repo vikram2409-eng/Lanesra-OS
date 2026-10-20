@@ -73,6 +73,13 @@ fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()
     super::user_service::require_admin(conn, actor_user_id)
 }
 
+/// A request that got no answer. The SSRF guard's refusal is reported as
+/// such (`policy.network_blocked`), not as an unreachable host.
+fn unreachable(base: &str, e: &reqwest::Error) -> AppError {
+    super::ssrf_guard::blocked_in(e)
+        .unwrap_or_else(|| AppError::Validation(format!("Could not reach {base}: {e}")))
+}
+
 fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
@@ -371,7 +378,8 @@ async fn complete_anthropic(
     } else {
         model
     };
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -386,7 +394,7 @@ async fn complete_anthropic(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -426,7 +434,8 @@ async fn complete_openai_compatible(
             "An OpenAI-compatible provider needs a model name configured".into(),
         ));
     }
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -441,7 +450,7 @@ async fn complete_openai_compatible(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -653,7 +662,8 @@ async fn complete_anthropic_with_tools(
     } else {
         model
     };
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -669,7 +679,7 @@ async fn complete_anthropic_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -770,7 +780,8 @@ async fn complete_openai_with_tools(
             "An OpenAI-compatible provider needs a model name configured".into(),
         ));
     }
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -786,7 +797,7 @@ async fn complete_openai_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -971,7 +982,8 @@ async fn complete_gemini_with_tools(
     } else {
         model
     };
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -990,7 +1002,7 @@ async fn complete_gemini_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -1062,7 +1074,8 @@ async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> A
     } else {
         model
     };
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -1074,7 +1087,7 @@ async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> A
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     if status.is_success() {
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
@@ -1091,7 +1104,8 @@ async fn test_openai_compatible(base_url: Option<&str>, api_key: &str) -> AppRes
     let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| {
         AppError::Validation("An OpenAI-compatible provider needs a base URL".into())
     })?;
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -1100,7 +1114,7 @@ async fn test_openai_compatible(base_url: Option<&str>, api_key: &str) -> AppRes
         .header("Authorization", format!("Bearer {api_key}"))
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     if status.is_success() {
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
@@ -1122,7 +1136,8 @@ async fn test_gemini(base_url: Option<&str>, api_key: &str) -> AppResult<String>
     let base = base_url
         .filter(|u| !u.is_empty())
         .unwrap_or(DEFAULT_GEMINI_BASE_URL);
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -1134,7 +1149,7 @@ async fn test_gemini(base_url: Option<&str>, api_key: &str) -> AppResult<String>
         ))
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     if status.is_success() {
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
@@ -1162,7 +1177,8 @@ async fn complete_gemini(
     } else {
         model
     };
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -1180,7 +1196,7 @@ async fn complete_gemini(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -1303,7 +1319,8 @@ async fn embed_openai_compatible(
     let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| {
         AppError::Validation("An OpenAI-compatible provider needs a base URL".into())
     })?;
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -1314,7 +1331,7 @@ async fn embed_openai_compatible(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
@@ -1363,7 +1380,8 @@ async fn embed_gemini(
     let base = base_url
         .filter(|u| !u.is_empty())
         .unwrap_or(DEFAULT_GEMINI_BASE_URL);
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -1379,7 +1397,7 @@ async fn embed_gemini(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| unreachable(base, &e))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {

@@ -179,7 +179,8 @@ async fn build_and_send(
         AppError::Validation(format!("Invalid HTTP method '{}'", action.http_method))
     })?;
 
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(&url)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -226,7 +227,8 @@ async fn build_and_send(
             None,
             Value::Null,
             false,
-            format!("Could not reach {url}: {e}"),
+            super::ssrf_guard::blocked_in(&e)
+                .map_or_else(|| format!("Could not reach {url}: {e}"), |b| b.to_string()),
         )),
     }
 }
