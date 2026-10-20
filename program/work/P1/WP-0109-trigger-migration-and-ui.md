@@ -3,7 +3,7 @@ id: WP-0109
 title: Trigger migration and Agent Identity UI
 phase: 1
 epic: E1.0 Identity foundation
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0107, WP-0108]
 requirements: [REQ-GOV-003]

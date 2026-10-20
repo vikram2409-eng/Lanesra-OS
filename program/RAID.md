@@ -23,6 +23,7 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | Q-15 | Should the desktop app be able to connect to a Team Workspace server as a client, or is the browser the only Team client? | Decides whether desktop needs a "connect to server" mode (sign-in, events over HTTP instead of Tauri) in WP-0105 and WP-0112 | The browser is the Team client; desktop stays a standalone single-user app | Answered 2026-10-16: the browser is the only way a team uses Team Workspace; the desktop stays standalone (ADR-0013 #5) |
 | Q-12 | Confirm how Muse AI works: can it read the repo and open PRs itself, or do you relay its scripts into `scripts/` by hand? | Decides whether Muse can take work packages alone | — | Answered 2026-10-16: Muse reads the repo and opens issues and PRs itself; WP-0018 rescoped to tracker upkeep and test feedback in CI |
 | Q-16 | WP-0018 design notes say "ADR-0004 rows 1 and 25" need updating for the GitHub-only flow, but ADR-0004's decision table has only 9 rows — which row did "25" mean? | Row 1 was updated (relay path → GitHub-only flow); the second intended row is unidentified | — | Open |
+| Q-17 | Should local (password) accounts support MFA (TOTP/WebAuthn), and is it required for admin/break-glass accounts? ADR-0016 mentions "MFA later" but does not specify scope or timeline. | Affects WP-0102/WP-0105 design; admin accounts without MFA are a high-value target (T-11) | Optional for now; required for break-glass admin | Open |
 
 ## Risks
 

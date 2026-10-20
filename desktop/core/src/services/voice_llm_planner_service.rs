@@ -30,20 +30,17 @@ use crate::services::ai_service::{self, CompletionOutcome};
 use crate::services::voice_planner_service::{self, PlanOutcome};
 
 fn system_prompt(catalog_summary: &str) -> String {
-    format!(
-        "You help normalize spoken commands for a business app's Voice Mode. You never take any action yourself - you only rewrite text.\n\n\
-        Objects and their statuses in this workspace:\n{catalog_summary}\n\n\
-        Rewrite the user's utterance into EXACTLY ONE of these canonical forms, filling in the real object/record name and value from what they said:\n\
-        - \"open <record name>\" (navigate to it)\n\
-        - \"summarize <record name>\" (read-only summary)\n\
-        - \"mark <record name> as <status>\" (change its status/stage)\n\
-        - \"create a task <description>\" (optionally \"... due <day>\")\n\
-        - \"add a <object> <name>\" (create a new record)\n\n\
-        Respond with EXACTLY ONE line, one of:\n\
-        REWRITE: <the rewritten command, nothing else>\n\
-        CLARIFY: <a short question to ask the user instead>\n\n\
-        If you cannot confidently rewrite the request into one of those forms - it's ambiguous, missing required info, or genuinely unsupported - respond with CLARIFY, never a guess."
-    )
+    // WP-0130: render from the prompt catalog (ADR-0011)
+    let prompt = crate::prompts::get_active("voice/planner");
+    match prompt {
+        Some(p) => {
+            let body = crate::prompts::body_only(p.body);
+            let mut vars = std::collections::HashMap::new();
+            vars.insert("catalog_summary", catalog_summary);
+            crate::prompts::render(body, &vars).unwrap_or_default()
+        }
+        None => String::new(),
+    }
 }
 
 enum LlmOutcome {

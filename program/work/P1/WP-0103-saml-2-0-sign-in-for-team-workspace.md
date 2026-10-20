@@ -31,9 +31,10 @@ Users sign in with the customer's SAML 2.0 IdP.
 
 ## Acceptance criteria
 
-- [ ] AC-1: Valid signed assertion signs in; unsigned, wrong-audience, expired and replayed assertions are rejected
+- [ ] AC-1: Valid signed assertion signs in; each protocol check in ADR-0016 §2 (SAML) is a negative test: unsigned assertion, multiple assertions, assertion outside signed element (wrapping), wrong audience, wrong recipient, expired (NotOnOrAfter), not-yet-valid (NotBefore), replayed assertion ID, missing InResponseTo — all rejected
 - [ ] AC-2: XML signature wrapping attacks covered by test vectors
 - [ ] AC-3: Audit entries as for OIDC
+- [ ] AC-4: SSO identity linked by (issuer, subject) pair, never by email alone (ADR-0016 §3)
 
 ## Test plan
 

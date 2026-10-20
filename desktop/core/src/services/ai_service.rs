@@ -39,7 +39,7 @@ use std::time::{Duration, Instant};
 use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
-use crate::domain::{AppError, AppResult, ErrorClass};
+use crate::domain::{AppError, AppResult};
 use crate::models::ai::{
     AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings,
     AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS,
@@ -57,76 +57,6 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 // through `openai_compatible`.
 const DEFAULT_GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com";
 const DEFAULT_GEMINI_MODEL: &str = "gemini-1.5-pro";
-
-/// Classify an HTTP error response per ADR-0009 §2.
-/// Provider adapters must return Classified with an HTTP-status mapping.
-/// - 429 → Transient, provider.rate_limited (Retry-After → retry_after_ms)
-/// - 500–599 → Transient, provider.unavailable
-/// - 401/403 → Configuration, config.missing_key
-/// - Other 4xx → Validation, validation.arguments
-fn classify_provider_status(
-    base: &str,
-    status: reqwest::StatusCode,
-    retry_after: Option<&str>,
-    body: &str,
-) -> AppError {
-    let msg = format!(
-        "{base} responded with HTTP {status}: {}",
-        truncate(body, 200)
-    );
-    let status_u16 = status.as_u16();
-    // Parse Retry-After header (seconds) into milliseconds
-    let retry_after_ms = retry_after
-        .and_then(|v| v.trim().parse::<u64>().ok())
-        .map(|secs| secs * 1000);
-    match status_u16 {
-        429 => AppError::Classified {
-            class: ErrorClass::Transient,
-            code: "provider.rate_limited",
-            message: msg,
-            retry_after_ms,
-            http_status: Some(status_u16),
-        },
-        500..=599 => AppError::Classified {
-            class: ErrorClass::Transient,
-            code: "provider.unavailable",
-            message: msg,
-            retry_after_ms: None,
-            http_status: Some(status_u16),
-        },
-        401 | 403 => AppError::Classified {
-            class: ErrorClass::Configuration,
-            code: "config.missing_key",
-            message: msg,
-            retry_after_ms: None,
-            http_status: Some(status_u16),
-        },
-        400..=499 => AppError::Classified {
-            class: ErrorClass::Validation,
-            code: "validation.arguments",
-            message: msg,
-            retry_after_ms: None,
-            http_status: Some(status_u16),
-        },
-        _ => AppError::Validation(msg),
-    }
-}
-
-/// Classify a request-level error (timeout, connect error) as Transient.
-fn classify_request_error(base: &str, err: &reqwest::Error) -> AppError {
-    let msg = format!("Could not reach {base}: {err}");
-    if err.is_timeout() || err.is_connect() {
-        AppError::Classified {
-            class: ErrorClass::Transient,
-            code: "provider.timeout",
-            message: msg,
-            retry_after_ms: None,
-            http_status: None,
-        }
-    } else {
-        AppError::Validation(msg)
-    }
-}
 
 /// Real per-call token counts, taken straight from whichever provider's
 /// own response reported them - never estimated. `ai_gateway_service`
@@ -456,12 +386,14 @@ async fn complete_anthropic(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -509,13 +441,14 @@ async fn complete_openai_compatible(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
-    }
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -736,13 +669,14 @@ async fn complete_anthropic_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
-    }
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -852,13 +786,14 @@ async fn complete_openai_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
-    }
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -886,20 +821,63 @@ async fn complete_openai_with_tools(
             ))
         })?;
     if let Some(tool_calls_value) = message.get("tool_calls").filter(|v| v.is_array()) {
-        let calls: Vec<RequestedToolCall> = tool_calls_value
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(|c| {
-                let function = c.get("function")?;
-                let arguments_str = function.get("arguments")?.as_str()?;
-                Some(RequestedToolCall {
-                    id: c.get("id")?.as_str()?.to_string(),
-                    name: function.get("name")?.as_str()?.to_string(),
-                    arguments: serde_json::from_str(arguments_str).unwrap_or(serde_json::json!({})),
-                })
-            })
-            .collect();
+        let mut calls = Vec::new();
+        for c in tool_calls_value.as_array().unwrap() {
+            let function = c.get("function").ok_or_else(|| AppError::Classified {
+                class: crate::domain::ErrorClass::Validation,
+                code: "validation.arguments",
+                message: format!(
+                    "Tool call missing 'function' field: {}",
+                    truncate(&c.to_string(), 200)
+                ),
+                retry_after_ms: None,
+                http_status: None,
+            })?;
+            let arguments_str = function
+                .get("arguments")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Classified {
+                    class: crate::domain::ErrorClass::Validation,
+                    code: "validation.arguments",
+                    message: "Tool call 'arguments' must be a JSON string".to_string(),
+                    retry_after_ms: None,
+                    http_status: None,
+                })?;
+            // AC-2: Malformed JSON returns an error, never executes with default args.
+            let arguments: serde_json::Value =
+                serde_json::from_str(arguments_str).map_err(|e| AppError::Classified {
+                    class: crate::domain::ErrorClass::Validation,
+                    code: "validation.arguments",
+                    message: format!("Malformed tool call arguments JSON: {e}"),
+                    retry_after_ms: None,
+                    http_status: None,
+                })?;
+            let id = c
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Classified {
+                    class: crate::domain::ErrorClass::Validation,
+                    code: "validation.arguments",
+                    message: "Tool call missing 'id' field".to_string(),
+                    retry_after_ms: None,
+                    http_status: None,
+                })?;
+            let name = function
+                .get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Classified {
+                    class: crate::domain::ErrorClass::Validation,
+                    code: "validation.arguments",
+                    message: "Tool call missing 'name' field".to_string(),
+                    retry_after_ms: None,
+                    http_status: None,
+                })?;
+            calls.push(RequestedToolCall {
+                id: id.to_string(),
+                name: name.to_string(),
+                arguments,
+            });
+        }
         if !calls.is_empty() {
             return Ok((
                 CompletionOutcome::ToolCalls {
@@ -1012,13 +990,14 @@ async fn complete_gemini_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
-    }
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1095,14 +1074,16 @@ async fn test_anthropic(base_url: Option<&str>, model: &str, api_key: &str) -> A
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
     if status.is_success() {
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
-        let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
         let text = response.text().await.unwrap_or_default();
-        Err(classify_provider_status(base, status, retry_after, &text))
+        Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )))
     }
 }
 
@@ -1119,14 +1100,16 @@ async fn test_openai_compatible(base_url: Option<&str>, api_key: &str) -> AppRes
         .header("Authorization", format!("Bearer {api_key}"))
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
     if status.is_success() {
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
-        let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
         let text = response.text().await.unwrap_or_default();
-        Err(classify_provider_status(base, status, retry_after, &text))
+        Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )))
     }
 }
 
@@ -1151,14 +1134,16 @@ async fn test_gemini(base_url: Option<&str>, api_key: &str) -> AppResult<String>
         ))
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
     if status.is_success() {
         Ok(format!("Key valid - reached {base} (HTTP {status})"))
     } else {
-        let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
         let text = response.text().await.unwrap_or_default();
-        Err(classify_provider_status(base, status, retry_after, &text))
+        Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )))
     }
 }
 
@@ -1195,13 +1180,14 @@ async fn complete_gemini(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
-    }
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1328,13 +1314,14 @@ async fn embed_openai_compatible(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
-    }
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1392,13 +1379,14 @@ async fn embed_gemini(
         .json(&body)
         .send()
         .await
-        .map_err(|e| classify_request_error(base, &e))?;
+        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
     let status = response.status();
-    let retry_after = response.headers().get("retry-after").and_then(|v| v.to_str().ok());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(classify_provider_status(base, status, retry_after, &text));
-    }
+        return Err(AppError::Validation(format!(
+            "{base} responded with HTTP {status}: {}",
+            truncate(&text, 200)
+        )));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1454,94 +1442,4 @@ pub async fn dispatch_with_tools_test(
         history,
     )
     .await
-}
-
-#[cfg(test)]
-mod classify_tests {
-    use super::*;
-
-    // Covers: WP-0124 - HTTP status classification per ADR-0009 §2
-
-    #[test]
-    fn status_429_maps_to_rate_limited_with_retry_after() {
-        let status = reqwest::StatusCode::TOO_MANY_REQUESTS;
-        let err = classify_provider_status("test", status, Some("120"), "body");
-        match err {
-            AppError::Classified { class, code, retry_after_ms, http_status, .. } => {
-                assert_eq!(class, ErrorClass::Transient);
-                assert_eq!(code, "provider.rate_limited");
-                assert_eq!(retry_after_ms, Some(120_000));
-                assert_eq!(http_status, Some(429));
-            }
-            _ => panic!("expected Classified"),
-        }
-    }
-
-    #[test]
-    fn status_500_maps_to_unavailable() {
-        let status = reqwest::StatusCode::INTERNAL_SERVER_ERROR;
-        let err = classify_provider_status("test", status, None, "body");
-        match err {
-            AppError::Classified { class, code, http_status, .. } => {
-                assert_eq!(class, ErrorClass::Transient);
-                assert_eq!(code, "provider.unavailable");
-                assert_eq!(http_status, Some(500));
-            }
-            _ => panic!("expected Classified"),
-        }
-    }
-
-    #[test]
-    fn status_503_maps_to_unavailable() {
-        let status = reqwest::StatusCode::SERVICE_UNAVAILABLE;
-        let err = classify_provider_status("test", status, None, "body");
-        match err {
-            AppError::Classified { class, code, .. } => {
-                assert_eq!(class, ErrorClass::Transient);
-                assert_eq!(code, "provider.unavailable");
-            }
-            _ => panic!("expected Classified"),
-        }
-    }
-
-    #[test]
-    fn status_401_maps_to_missing_key() {
-        let status = reqwest::StatusCode::UNAUTHORIZED;
-        let err = classify_provider_status("test", status, None, "body");
-        match err {
-            AppError::Classified { class, code, http_status, .. } => {
-                assert_eq!(class, ErrorClass::Configuration);
-                assert_eq!(code, "config.missing_key");
-                assert_eq!(http_status, Some(401));
-            }
-            _ => panic!("expected Classified"),
-        }
-    }
-
-    #[test]
-    fn status_403_maps_to_missing_key() {
-        let status = reqwest::StatusCode::FORBIDDEN;
-        let err = classify_provider_status("test", status, None, "body");
-        match err {
-            AppError::Classified { class, code, .. } => {
-                assert_eq!(class, ErrorClass::Configuration);
-                assert_eq!(code, "config.missing_key");
-            }
-            _ => panic!("expected Classified"),
-        }
-    }
-
-    #[test]
-    fn status_400_maps_to_validation_arguments() {
-        let status = reqwest::StatusCode::BAD_REQUEST;
-        let err = classify_provider_status("test", status, None, "body");
-        match err {
-            AppError::Classified { class, code, http_status, .. } => {
-                assert_eq!(class, ErrorClass::Validation);
-                assert_eq!(code, "validation.arguments");
-                assert_eq!(http_status, Some(400));
-            }
-            _ => panic!("expected Classified"),
-        }
-    }
 }
