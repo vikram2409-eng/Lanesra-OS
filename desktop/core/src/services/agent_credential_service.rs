@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
 use crate::domain::ids::new_uuid;
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 
 /// Token lifetime: 24 hours by default (short-lived).
 const DEFAULT_TOKEN_LIFETIME_SECS: i64 = 24 * 60 * 60;
@@ -108,7 +108,7 @@ pub fn issue_credential(
             created_by,
         ],
     )
-    .map_err(|e| AppError::Internal(format!("Failed to issue credential: {e}")))?;
+    .map_err(|e| AppError::classified(ErrorClass::Internal, "internal.database", format!("Failed to issue credential: {e}")))?;
 
     // Return the plaintext token ONCE. The caller must display it to the admin
     // and never store it. Only the hash is in the database.
@@ -157,10 +157,10 @@ pub fn validate_credential(conn: &Connection, token: &str) -> AppResult<Validate
             rusqlite::params![credential_id],
             |row| row.get(0),
         )
-        .map_err(|e| AppError::Internal(format!("Failed to check expiry: {e}")))?;
+        .map_err(|e| AppError::classified(ErrorClass::Internal, "internal.database", format!("Failed to check expiry: {e}")))?;
 
     let expiry = chrono::DateTime::parse_from_rfc3339(&expires_at)
-        .map_err(|e| AppError::Internal(format!("Invalid expiry format: {e}")))?;
+        .map_err(|e| AppError::classified(ErrorClass::Internal, "internal.database", format!("Invalid expiry format: {e}")))?;
     if chrono::Utc::now() > expiry.with_timezone(&chrono::Utc) {
         return Err(AppError::Validation("Credential has expired".to_string()));
     }
@@ -211,7 +211,7 @@ pub fn revoke_credential(
              WHERE id = ?3 AND revoked_at IS NULL",
             rusqlite::params![now, revoked_by, credential_id],
         )
-        .map_err(|e| AppError::Internal(format!("Failed to revoke credential: {e}")))?;
+        .map_err(|e| AppError::classified(ErrorClass::Internal, "internal.database", format!("Failed to revoke credential: {e}")))?;
 
     if updated == 0 {
         return Err(AppError::Validation(
