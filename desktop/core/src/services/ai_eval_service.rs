@@ -192,7 +192,7 @@ pub async fn run_suite(
             master_key,
             &suite.target_type,
             &suite.target_id,
-            actor_user_id,
+            &crate::principals::EffectiveIdentity::from_actor(actor_user_id),
             &case.input_text,
             Some("eval"),
             None,
