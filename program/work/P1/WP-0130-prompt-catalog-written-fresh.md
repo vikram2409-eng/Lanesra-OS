@@ -3,8 +3,8 @@ id: WP-0130
 title: Prompt catalog, written fresh
 phase: 1
 epic: E1.4 Task contracts and guardrails
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 depends_on: [WP-0009]
 requirements: [REQ-LOOP-016]
 estimate: L
@@ -13,9 +13,9 @@ delivered: []
 editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
 docs: []
 docs_reason: internal prompt assets
-branch: 
+branch: wp/WP-0130-prompt-catalog
 pr: 
-updated: 2026-10-16
+updated: 2026-10-18
 ---
 
 # WP-0130 — Prompt catalog, written fresh

@@ -36,7 +36,7 @@ Decide how OIDC and SAML fit both editions - the owner requires SSO on desktop a
 ## Acceptance criteria
 
 - [x] AC-1: ADR accepted
-- [ ] AC-2: WP-0102..0104 acceptance criteria updated from it
+- [x] AC-2: WP-0102..0104 acceptance criteria updated from it — WP-0102 AC-2/AC-5, WP-0103 AC-1/AC-4, WP-0104 AC-3/AC-4 now reference ADR-0016 §2–§3 protocol checks as negative-test criteria
 
 ## Test plan
 
