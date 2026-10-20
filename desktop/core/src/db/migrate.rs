@@ -234,7 +234,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 80);
+        assert_eq!(version, 81);
 
         let table_count: i64 = conn
             .query_row(

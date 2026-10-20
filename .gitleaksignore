@@ -1,0 +1,3 @@
+# Placeholder test token ("lanesra_abcdef...") in an early WP-0108 test
+# commit; never a real credential, and removed from the file in ef323a2.
+a2fa632948cdb99cace6903440bf45bea2311577:desktop/core/tests/agent_identity_credentials.rs:generic-api-key:17
