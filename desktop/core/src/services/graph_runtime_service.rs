@@ -835,7 +835,7 @@ async fn execute_node(
                 master_key,
                 "pipeline",
                 pipeline_id,
-                actor,
+                &crate::principals::EffectiveIdentity::from_actor(actor),
                 &input_text,
                 Some("execution_graph"),
                 run.source_entity_type.as_deref(),

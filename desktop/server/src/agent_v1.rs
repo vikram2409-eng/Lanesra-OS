@@ -69,12 +69,11 @@ async fn trigger(
     let (client, workspace_id) = authorize(&state, &headers, "agents.trigger")?;
     let db_path = state.db_path.clone();
     let master_key = crate::dispatch::resolve_master_key(&state.db_path).map_err(app_err)?;
-    // An API client "acts as" its owner for authorization purposes -
-    // the same reasoning `ai_orchestration_service::run_triggered`'s own
-    // doc comment names for why an admin-scoped agent/pipeline can run
-    // unattended at all: only when `actor` genuinely resolves to a real
-    // Administrator.
-    let actor = client.owner_user_id.clone();
+    // WP-0107: a webhook run is unattended. Its records are limited by the
+    // API client owner's Access Roles, but it never borrows the owner's
+    // Administrator rights (`EffectiveIdentity::require_admin`).
+    let identity =
+        lanesra_core::principals::EffectiveIdentity::unattended(client.owner_user_id.as_deref());
     let workspace_id_for_log = workspace_id.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
         logged(
@@ -86,7 +85,7 @@ async fn trigger(
                 &master_key,
                 target_type,
                 &target_id,
-                actor.as_deref(),
+                &identity,
                 &body.input,
                 Some("webhook"),
                 None,

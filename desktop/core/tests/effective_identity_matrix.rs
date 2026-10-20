@@ -1,43 +1,121 @@
-//! WP-0107: Effective-identity matrix — extended authorisation tests.
+//! WP-0107 AC-1 and AC-2: the full authorisation matrix for admin-scoped
+//! work, over real users and Access Control v1's `Administrator` role.
+//! Every principal in a run must hold Administrator; none can lend it.
 //!
-//! AC-2: An interactive run never exceeds the starting user's access, even when
-//!       the agent's identity has more.
-//!
-//! Covers: REQ-GOV-002, REQ-GOV-003 (WP-0107 AC-2)
-//! Threats: T-03, T-12
+//! Covers: REQ-GOV-002, REQ-GOV-003 (WP-0107 AC-1, AC-2). Threats: T-03.
 
-use lanesra_core::principals::{EffectiveIdentity, Principal};
+use lanesra_core::models::user::NewUser;
+use lanesra_core::models::workspace::WorkspaceSetup;
+use lanesra_core::principals::{AgentIdentityGrant, EffectiveIdentity, PrincipalType};
+use lanesra_core::services::{user_service, workspace_service};
 
-/// The effective role is always the least privileged of human and agent.
+#[derive(Clone, Copy, Debug)]
+enum Person {
+    Administrator,
+    NonAdministrator,
+    Nobody,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Identity {
+    Administrator,
+    NonAdministrator,
+    Missing,
+}
+
 #[test]
-fn effective_role_is_least_privileged() {
-    // Covers: REQ-GOV-002 (WP-0107 AC-2)
-    let cases = vec![
-        ("Viewer", "Administrator", "Viewer"),
-        ("Administrator", "Viewer", "Viewer"),
-        ("Editor", "Manager", "Editor"),
-        ("Manager", "Editor", "Editor"),
-        ("Viewer", "Viewer", "Viewer"),
-    ];
+fn every_principal_must_hold_administrator() {
+    // Covers: REQ-GOV-002, REQ-GOV-003 (WP-0107 AC-1, AC-2)
+    let conn = lanesra_core::db::open_in_memory_db().unwrap();
+    let (workspace, admin) = workspace_service::first_run_setup(
+        &conn,
+        &WorkspaceSetup {
+            business_name: "Matrix Co".into(),
+            legal_name: None,
+            currency_code: "USD".into(),
+            locale: "en-US".into(),
+            timezone: "UTC".into(),
+            default_tax_rate_bp: 0,
+            admin_username: "admin".into(),
+            admin_display_name: "Admin".into(),
+            admin_password: "supersecretpassword".into(),
+            load_sample_data: false,
+        },
+    )
+    .unwrap();
+    let ws = workspace.id;
+    let rep = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "rep".into(),
+            display_name: "Sales Rep".into(),
+            password: "supersecretpassword".into(),
+            roles: vec!["Sales".into()],
+        },
+        Some(&admin.id),
+    )
+    .unwrap()
+    .id;
 
-    for (human_role, agent_role, expect_role) in cases {
-        let human = Principal::human("h1", "w1", "acc1", human_role);
-        let agent = Principal::agent_identity("a1", "w1", "agent1", agent_role);
-        let effective =
-            EffectiveIdentity::interactive(human, agent, serde_json::json!({"type": "all"}));
+    use Identity as I;
+    use Person as P;
+    // (person who started the run, the run's agent identity, allowed?)
+    let cases = [
+        (P::Administrator, I::Missing, true),
+        (P::Administrator, I::Administrator, true),
+        (P::Administrator, I::NonAdministrator, false),
+        (P::NonAdministrator, I::Missing, false),
+        (P::NonAdministrator, I::Administrator, false),
+        (P::NonAdministrator, I::NonAdministrator, false),
+        (P::Nobody, I::Missing, false),
+        (P::Nobody, I::Administrator, true),
+        (P::Nobody, I::NonAdministrator, false),
+    ];
+    for (person, identity, allowed) in cases {
+        let who = match person {
+            P::Administrator => EffectiveIdentity::interactive(&admin.id),
+            P::NonAdministrator => EffectiveIdentity::interactive(&rep),
+            // Unattended, even with an Administrator's records behind it.
+            P::Nobody => EffectiveIdentity::unattended(Some(&admin.id)),
+        };
+        let who = match identity {
+            I::Missing => who,
+            I::Administrator | I::NonAdministrator => who.with_agent_identity(AgentIdentityGrant {
+                id: "identity-1".into(),
+                workspace_id: ws.clone(),
+                is_administrator: matches!(identity, I::Administrator),
+            }),
+        };
         assert_eq!(
-            effective.acting_as.access_role, expect_role,
-            "human={human_role}, agent={agent_role}"
+            who.require_admin(&conn, &ws).is_ok(),
+            allowed,
+            "person={person:?} identity={identity:?}"
         );
     }
 }
 
-/// Unattended runs have no starting human.
 #[test]
-fn unattended_run_has_no_starter() {
-    // Covers: REQ-GOV-002 (WP-0107 AC-1)
-    let agent = Principal::agent_identity("a1", "w1", "agent1", "Editor");
-    let effective = EffectiveIdentity::unattended(agent);
-    assert!(effective.unattended);
-    assert!(effective.started_by.is_none());
+fn a_run_acts_as_the_person_or_as_its_agent_identity() {
+    // Covers: REQ-GOV-003 (WP-0107 AC-1)
+    let interactive = EffectiveIdentity::interactive("u1");
+    assert_eq!(interactive.principal_type(), PrincipalType::Human);
+    assert_eq!(interactive.record_actor(), Some("u1"));
+    assert!(!interactive.is_unattended());
+
+    let unattended = EffectiveIdentity::unattended(None);
+    assert_eq!(unattended.principal_type(), PrincipalType::AgentIdentity);
+    assert_eq!(unattended.record_actor(), None);
+    assert!(unattended.is_unattended());
+
+    // `from_actor` keeps today's callers' meaning: a user id is the
+    // person who started the run, `None` is no person at all.
+    assert_eq!(
+        EffectiveIdentity::from_actor(Some("u1")),
+        EffectiveIdentity::interactive("u1")
+    );
+    assert_eq!(
+        EffectiveIdentity::from_actor(None),
+        EffectiveIdentity::unattended(None)
+    );
 }

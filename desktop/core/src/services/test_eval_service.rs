@@ -593,7 +593,7 @@ async fn execute_case(
                 master_key,
                 "agent",
                 &case.target_id,
-                actor_user_id,
+                &crate::principals::EffectiveIdentity::from_actor(actor_user_id),
                 &dataset.input_text,
                 Some("test_eval"),
                 None,
