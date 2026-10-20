@@ -5,6 +5,7 @@ pub mod admin_home;
 pub mod admin_nav;
 pub mod agent;
 pub mod agent_access_inspection;
+pub mod agent_identity;
 pub mod ai;
 pub mod ai_agent;
 pub mod ai_agent_pipeline;

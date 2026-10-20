@@ -6,7 +6,7 @@ pub mod admin_home_service;
 pub mod admin_nav_service;
 pub mod admin_search_service;
 pub mod agent_access_inspector_service;
-pub mod agent_credential_service;
+pub mod agent_identity_service;
 pub mod agent_service;
 pub mod agent_version_service;
 pub mod ai_agent_hierarchy_service;
